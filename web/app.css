@@ -1,0 +1,1053 @@
+/* =========================================================
+   ANTICIPY — THE APP SCREEN ("The Board")
+   Token-only. Reuses styles.css verbatim. No new colors,
+   fonts, or radii. The welcome page's demo card, made real.
+   ========================================================= */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Topbar date (right slot, quiet, no underline) ---------- */
+.topbar-date {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--ink-50);
+  letter-spacing: 0.01em;
+}
+
+.topbar-date-val {
+  color: var(--ink);
+}
+
+/* ---------- The shell: one calm centered column ---------- */
+.app-shell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+  padding-block: clamp(96px, 14vh, 160px) clamp(140px, 22vh, 220px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(40px, 7vh, 72px);
+}
+
+/* =========================================================
+   ZONE 1 · LISTEN / PASTE
+   ========================================================= */
+.listen {
+  width: 100%;
+}
+
+.listen-card {
+  width: 100%;
+  background: #FBF9F4;
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  padding: 26px 28px;
+}
+
+.listen-field-wrap {
+  position: relative;
+  padding-bottom: 4px;
+  transition: opacity 0.6s var(--ease);
+}
+
+.listen-field-wrap.is-thinking {
+  opacity: 0.5;
+}
+
+.listen-field {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  resize: none;
+  font-family: var(--sans);
+  font-size: 18px;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  outline: none;
+  min-height: calc(3 * 1.7em);
+  max-height: calc(8 * 1.7em);
+  overflow-y: auto;
+}
+
+.listen-field::placeholder {
+  color: var(--ink-40);
+}
+
+/* gold underline draws in left-to-right on focus */
+.listen-underline {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s var(--ease);
+}
+
+.listen-field:focus ~ .listen-underline {
+  transform: scaleX(1);
+}
+
+.listen-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+/* Listen affordance — a breathing gold promise of the pendant */
+.listen-dot-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+
+.listen-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  opacity: 0.85;
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* a single ring pulses outward once when listening toggles on */
+.listen-dot-btn.is-listening .listen-dot {
+  opacity: 1;
+}
+
+.listen-dot-btn.is-listening .listen-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid var(--gold);
+  opacity: 0;
+  animation: listenRing 1.6s var(--ease) forwards;
+}
+
+@keyframes listenRing {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+.listen-dot-label {
+  font-size: 14px;
+  color: var(--ink-70);
+  letter-spacing: 0.01em;
+}
+
+/* Submit — quiet text button, the act of handing the day over */
+.listen-submit {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 16px;
+  color: var(--ink-85);
+  cursor: pointer;
+  position: relative;
+  padding: 6px 0 8px;
+}
+
+.listen-submit::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+
+.listen-submit:hover::after {
+  transform: scaleX(1);
+}
+
+.listen-submit .arrow {
+  display: inline-block;
+  transition: transform 0.3s var(--ease);
+}
+
+.listen-submit:hover .arrow {
+  transform: translateX(3px);
+}
+
+.listen-submit[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.listen-submit[disabled]:hover::after {
+  transform: scaleX(0);
+}
+
+/* the single gold think-dot while ingest is in flight */
+.listen-think {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  margin: 0 4px 4px;
+  animation: heardPulse 0.9s var(--ease) infinite;
+}
+
+/* =========================================================
+   ZONE 2 · THE DECK
+   ========================================================= */
+.deck-zone {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+
+.deck {
+  position: relative;
+  width: 360px;
+  max-width: 100%;
+  /* room for 2 cards peeking behind the top one */
+  min-height: 290px;
+  display: flex;
+  justify-content: center;
+}
+
+/* a card in the deck — the demo card, now interactive */
+.deck-card {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 360px;
+  max-width: 100%;
+  background: #FBF9F4;
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  padding: 28px 28px 26px;
+  transform: translateX(-50%);
+  transform-origin: center bottom;
+  will-change: transform, opacity;
+  touch-action: pan-y;
+}
+
+/* stack depth — only the top card is interactive */
+.deck-card[data-depth="0"] {
+  z-index: 30;
+  cursor: grab;
+}
+
+.deck-card[data-depth="0"].is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.deck-card[data-depth="1"] {
+  z-index: 20;
+  transform: translateX(-50%) translateY(10px) scale(0.97);
+  box-shadow: 0 20px 44px -28px rgba(23, 22, 21, 0.16);
+  pointer-events: none;
+}
+
+.deck-card[data-depth="2"] {
+  z-index: 10;
+  transform: translateX(-50%) translateY(20px) scale(0.94);
+  opacity: 0.6;
+  box-shadow: 0 16px 36px -28px rgba(23, 22, 21, 0.14);
+  pointer-events: none;
+}
+
+.deck-card[data-depth="hidden"] {
+  z-index: 1;
+  transform: translateX(-50%) translateY(26px) scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* settle / spring transition for non-drag movement */
+.deck-card.is-settling {
+  transition: transform 0.5s var(--ease), opacity 0.45s var(--ease), box-shadow 0.45s var(--ease);
+}
+
+/* deal-in: arrive from below-right */
+.deck-card.is-dealing {
+  transform: translateX(calc(-50% + 12px)) translateY(28px) rotate(2deg);
+  opacity: 0;
+}
+
+/* CONFIRM exit — fly up-and-out */
+.deck-card.is-confirm-out {
+  transition: transform 0.45s var(--ease), opacity 0.4s var(--ease);
+  transform: translateX(-50%) translateY(-120%) rotate(-3deg);
+  opacity: 0;
+}
+
+/* DENY exit — quiet sweep left, a hairline traces the edge */
+.deck-card.is-deny-out {
+  transition: transform 0.4s var(--ease), opacity 0.4s var(--ease);
+  transform: translateX(calc(-50% - 110%)) rotate(-4deg);
+  opacity: 0;
+}
+.deck-card.is-deny-out::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-right: 1px solid var(--ink-30);
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+/* dismiss up (do/remember archive) */
+.deck-card.is-dismiss-up {
+  transition: transform 0.4s var(--ease), opacity 0.35s var(--ease);
+  transform: translateX(-50%) translateY(-90%) scale(0.98);
+  opacity: 0;
+}
+
+/* CONFIRM gold bloom behind the card */
+.deck-card .card-bloom {
+  position: absolute;
+  inset: -30px;
+  border-radius: 24px;
+  background: radial-gradient(circle at center, var(--gold) 0%, rgba(184, 146, 74, 0) 62%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.deck-card.is-bloom .card-bloom {
+  animation: cardBloom 0.75s var(--ease) forwards;
+}
+@keyframes cardBloom {
+  0% { opacity: 0; }
+  33% { opacity: 0.08; }
+  100% { opacity: 0; }
+}
+
+/* the warming "yes" edge that grows as you drag right */
+.deck-card .drag-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 40%;
+  border-radius: 0 14px 14px 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.deck-card .drag-edge--yes {
+  background: linear-gradient(to right, rgba(184, 146, 74, 0), rgba(184, 146, 74, 0.16));
+}
+.deck-card .drag-edge--no {
+  left: 0;
+  right: auto;
+  width: 40%;
+  border-radius: 14px 0 0 14px;
+  background: linear-gradient(to left, rgba(23, 22, 21, 0), rgba(23, 22, 21, 0.10));
+}
+
+/* ---------- card anatomy ---------- */
+.card-eyebrow {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 14px;
+}
+
+.card-title {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: 0.005em;
+}
+
+.card-title--quiet {
+  color: var(--ink-80);
+}
+
+.card-why {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-50);
+  margin: 7px 0 0;
+  letter-spacing: 0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-money-line {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-60);
+  margin: 12px 0 0;
+}
+
+.card-divider {
+  height: 1px;
+  background: var(--ink-wash);
+  margin: 20px 0 16px;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.5s var(--ease);
+}
+.card-divider.is-draw {
+  transform: scaleX(1);
+}
+
+.card-source {
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 0;
+  color: var(--ink-70);
+}
+.card-source .heard-label {
+  font-style: normal;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-40);
+  margin-right: 6px;
+}
+.card-source .heard-text {
+  font-style: italic;
+}
+.card-source.is-clamped .heard-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-source-toggle {
+  display: block;
+  margin-top: 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--ink-40);
+  cursor: pointer;
+  letter-spacing: 0.01em;
+}
+.card-source-toggle:hover {
+  color: var(--ink-70);
+}
+
+.card-action-hint {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-40);
+  margin: 12px 0 0;
+  letter-spacing: 0.01em;
+}
+
+/* HANDLED stamp row */
+.card-stamp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-40);
+  margin: 14px 0 0;
+  letter-spacing: 0.02em;
+}
+.card-stamp .confirm-check {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+}
+.card-stamp .confirm-check path {
+  stroke: var(--gold);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: drawCheck 0.3s var(--ease) 0.1s forwards;
+}
+
+/* ---------- in-card note field ---------- */
+.note-field {
+  margin-top: 14px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.35s var(--ease), opacity 0.3s var(--ease), margin-top 0.35s var(--ease);
+}
+.note-field.is-open {
+  max-height: 120px;
+  opacity: 1;
+}
+.note-field-inner {
+  position: relative;
+  padding-bottom: 4px;
+}
+.note-input {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  outline: none;
+  padding: 4px 0;
+}
+.note-input::placeholder {
+  color: var(--ink-40);
+}
+.note-input-underline {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s var(--ease);
+}
+.note-input:focus ~ .note-input-underline {
+  transform: scaleX(1);
+}
+.note-confirm {
+  font-size: 12.5px;
+  color: var(--ink-40);
+  margin: 8px 0 0;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease);
+}
+.note-confirm.is-show {
+  opacity: 1;
+}
+
+/* =========================================================
+   THE ACTION ROW (the four verbs, under the deck)
+   ========================================================= */
+.action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px 22px;
+  min-height: 44px;
+}
+.action-row.is-busy {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* CONFIRM — the one gold fill, extends .demo-confirm */
+.act-confirm {
+  flex: 0 0 auto;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: var(--paper);
+  background: var(--gold);
+  border: none;
+  border-radius: 999px;
+  padding: 11px 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  position: relative;
+  animation: confirmBreathe 2s ease-in-out infinite;
+}
+.act-confirm:hover {
+  filter: brightness(1.04);
+}
+.act-confirm.is-done {
+  animation: none;
+}
+.act-confirm .confirm-check {
+  width: 14px;
+  height: 14px;
+  display: none;
+}
+.act-confirm.is-done .confirm-check {
+  display: inline-block;
+}
+.act-confirm .confirm-check path {
+  stroke: var(--paper);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: drawCheck 0.3s var(--ease) forwards;
+}
+
+/* DENY — ink-outline pill, fills ink on hover. NEVER red. */
+.act-deny {
+  flex: 0 0 auto;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: var(--ink-70);
+  background: transparent;
+  border: 1px solid var(--ink-30);
+  border-radius: 999px;
+  padding: 11px 24px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: color 0.25s var(--ease), border-color 0.25s var(--ease);
+  z-index: 0;
+}
+.act-deny::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+  z-index: -1;
+}
+.act-deny:hover {
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.act-deny:hover::before {
+  transform: scaleX(1);
+}
+
+/* ALLOW — quietest resolving verb, a text control */
+.act-allow {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--ink-60);
+  cursor: pointer;
+  position: relative;
+  padding: 6px 0 8px;
+}
+.act-allow::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+.act-allow:hover::after {
+  transform: scaleX(1);
+}
+.act-allow[disabled] {
+  color: var(--ink-30);
+  cursor: default;
+}
+.act-allow[disabled]:hover::after {
+  transform: scaleX(0);
+}
+
+/* NOTE — small text control */
+.act-note {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--ink-50);
+  cursor: pointer;
+  position: relative;
+  padding: 6px 0 8px;
+}
+.act-note::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+.act-note:hover::after {
+  transform: scaleX(1);
+}
+
+/* the humble note under the deck (ignored lines / inline status) */
+.deck-aside {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-40);
+  margin: 0;
+  text-align: center;
+  letter-spacing: 0.01em;
+  max-width: 360px;
+}
+
+/* =========================================================
+   EMPTY ROOM — whitespace is the empty state
+   ========================================================= */
+.empty-room {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding-block: clamp(28px, 6vh, 56px);
+  max-width: 460px;
+}
+.empty-room .framing {
+  margin: 0;
+}
+.empty-line {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-50);
+  margin: 0;
+  max-width: 360px;
+}
+.empty-line--engine {
+  font-size: 16px;
+  color: var(--ink-50);
+}
+.empty-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  margin-top: 6px;
+  opacity: 0.85;
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* =========================================================
+   ZONE 3 · AUTONOMY DIAL (fixed, lower-right)
+   ========================================================= */
+.autonomy-dial {
+  position: fixed;
+  right: clamp(24px, 4vw, 48px);
+  bottom: clamp(24px, 4vw, 48px);
+  z-index: 40;
+  width: 264px;
+  background: #FBF9F4;
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  padding: 16px 22px 18px;
+}
+
+.dial-eyebrow {
+  margin: 0 0 16px;
+}
+
+.autonomy-dial .dial-track {
+  position: relative;
+  height: 1px;
+  background: var(--ink-wash);
+  margin: 22px 9px 42px;
+  max-width: none;
+}
+
+.autonomy-dial .dial-node {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--gold);
+  transform: translate(-50%, -50%);
+  transition: left 0.3s var(--ease);
+  pointer-events: none;
+  z-index: 2;
+}
+.autonomy-dial .dial-node.is-thread {
+  box-shadow: 0 0 0 0 rgba(184, 146, 74, 0.5);
+  animation: dialThread 0.7s var(--ease) forwards;
+}
+@keyframes dialThread {
+  0% { box-shadow: 0 0 0 0 rgba(184, 146, 74, 0.45); }
+  60% { box-shadow: 0 0 0 7px rgba(184, 146, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(184, 146, 74, 0); }
+}
+
+.dial-stop {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  z-index: 3;
+}
+.dial-stop::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-30);
+  transform: translate(-50%, -50%);
+  transition: background 0.25s var(--ease);
+}
+.dial-stop:hover::before {
+  background: var(--ink-50);
+}
+.dial-stop.is-active::before {
+  background: transparent;
+}
+
+/* the labels sit under their stops */
+.dial-stop .mode-label {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  color: var(--ink-40);
+  transition: color 0.25s var(--ease);
+  pointer-events: none;
+}
+.dial-stop--mid .mode-label {
+  /* recommended sits center; keep it readable */
+  left: 50%;
+}
+.dial-stop--end .mode-label {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.dial-stop[data-mode="limited"] .mode-label {
+  left: 0;
+  transform: none;
+}
+.dial-stop.is-active .mode-label {
+  color: var(--ink);
+}
+.dial-stop .recommended {
+  display: block;
+  margin-top: 3px;
+  font-size: 8px;
+  color: var(--ink-30);
+  letter-spacing: 0.05em;
+}
+
+.dial-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-60);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+.dial-brake {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--gold);
+  margin: 8px 0 0;
+  letter-spacing: 0.01em;
+}
+
+/* =========================================================
+   MOBILE AUTONOMY (pill + sheet)
+   ========================================================= */
+.dial-pill {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(16px, 4vw, 28px);
+  transform: translateX(-50%);
+  z-index: 40;
+}
+.dial-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: #FBF9F4;
+  border: none;
+  border-radius: 999px;
+  box-shadow: var(--shadow-card);
+  padding: 12px 22px;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+.dial-pill-btn .dial-eyebrow {
+  margin: 0;
+}
+.dial-pill-mode {
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.dial-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+.dial-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(23, 22, 21, 0.28);
+  opacity: 0;
+  transition: opacity 0.3s var(--ease);
+}
+.dial-sheet.is-open .dial-sheet-scrim {
+  opacity: 1;
+}
+.dial-sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--paper);
+  border-radius: 18px 18px 0 0;
+  padding: 28px var(--gutter) clamp(28px, 6vh, 44px);
+  transform: translateY(100%);
+  transition: transform 0.4s var(--ease);
+}
+.dial-sheet.is-open .dial-sheet-panel {
+  transform: translateY(0);
+}
+.dial-sheet-panel .dial-eyebrow {
+  margin: 0 0 20px;
+}
+.dial-sheet-stop {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--ink-wash);
+  padding: 20px 0;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+.dial-sheet-stop:first-of-type {
+  border-top: none;
+}
+.dial-sheet-stop .mode-label {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--ink-40);
+}
+.dial-sheet-stop.is-active .mode-label {
+  color: var(--ink);
+}
+.dial-sheet-desc {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-60);
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+@media (max-width: 640px) {
+  body {
+    font-size: 18px;
+  }
+  .app-shell {
+    max-width: none;
+  }
+  .listen-field {
+    font-size: 16px;
+  }
+  .deck,
+  .deck-card {
+    width: 100%;
+  }
+  /* desktop dial hidden; pill takes over */
+  .autonomy-dial {
+    display: none;
+  }
+  .dial-pill {
+    display: block;
+  }
+}
+
+@media (min-width: 641px) {
+  .dial-pill,
+  .dial-sheet {
+    display: none !important;
+  }
+}
+
+/* =========================================================
+   REDUCED MOTION — collapse to quiet crossfades
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .listen-dot,
+  .empty-dot,
+  .act-confirm,
+  .listen-think {
+    animation: none !important;
+  }
+  .deck-card.is-settling,
+  .deck-card.is-confirm-out,
+  .deck-card.is-deny-out,
+  .deck-card.is-dismiss-up {
+    transition: opacity 0.2s linear !important;
+    transform: translateX(-50%) !important;
+  }
+  .autonomy-dial .dial-node {
+    transition: none !important;
+  }
+  .card-divider {
+    transition: none !important;
+  }
+}

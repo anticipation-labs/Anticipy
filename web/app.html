@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anticipy — The Board</title>
+  <meta name="description" content="The calm room. Hand over your day; the loose ends close behind you. Anticipy never spends your money, or your trust, without asking." />
+  <meta name="theme-color" content="#F5F1E8" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Shared design system (tokens + welcome-page classes) -->
+  <link rel="stylesheet" href="styles.css" />
+  <!-- App-only additions -->
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <!-- Same atmosphere as the welcome page -->
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- ===================== TOPBAR ===================== -->
+  <header class="topbar">
+    <a class="wordmark" href="index.html" aria-label="Anticipy home">ANTICIPY</a>
+    <span class="topbar-date">
+      the day <span class="topbar-date-val" data-today>·</span>
+    </span>
+  </header>
+
+  <main class="app-shell" id="top">
+
+    <!-- ===================== ZONE 1 · LISTEN / PASTE ===================== -->
+    <section class="listen" aria-label="Hand over your day">
+      <div class="listen-card">
+        <p class="eyebrow">What happened today</p>
+
+        <label class="sr-only" for="listen-field">Paste your day</label>
+        <div class="listen-field-wrap" data-listen-wrap>
+          <textarea
+            id="listen-field"
+            class="listen-field"
+            rows="3"
+            placeholder="Paste your day, or just start talking it out — the venting, the “ugh I still have to,” all of it."
+            aria-label="Paste your day"
+          ></textarea>
+          <span class="listen-underline" aria-hidden="true"></span>
+        </div>
+
+        <div class="listen-footer">
+          <button class="listen-dot-btn" type="button" data-listen aria-pressed="false" aria-label="Listen">
+            <span class="listen-dot" aria-hidden="true"></span>
+            <span class="listen-dot-label">Listen</span>
+          </button>
+          <button class="listen-submit" type="button" data-submit>Hand it over <span class="arrow" aria-hidden="true">&rarr;</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ZONE 2 · THE DECK ===================== -->
+    <section class="deck-zone" aria-label="Your cards">
+      <div class="deck" data-deck aria-live="polite"></div>
+
+      <!-- empty / engine states render into here -->
+      <div class="empty-room" data-empty hidden></div>
+
+      <!-- the four verbs live under the deck, stable across cards -->
+      <div class="action-row" data-actions hidden></div>
+
+      <!-- humble ignored-line note + inline status -->
+      <p class="deck-aside" data-aside hidden></p>
+    </section>
+
+  </main>
+
+  <!-- ===================== ZONE 3 · AUTONOMY DIAL ===================== -->
+  <aside class="autonomy-dial" data-dial aria-label="Autonomy">
+    <p class="eyebrow dial-eyebrow">Autonomy</p>
+
+    <div class="dial-track" data-dial-track>
+      <span class="dial-node" data-dial-node></span>
+      <button class="dial-stop" type="button" data-mode="limited" style="left:0%">
+        <span class="mode-label">Limited</span>
+      </button>
+      <button class="dial-stop dial-stop--mid" type="button" data-mode="regular" style="left:50%">
+        <span class="mode-label">Regular <span class="recommended">· recommended</span></span>
+      </button>
+      <button class="dial-stop dial-stop--end" type="button" data-mode="full_send" style="left:100%">
+        <span class="mode-label">Full-Send</span>
+      </button>
+    </div>
+
+    <p class="dial-desc" data-dial-desc>Handles the small, safe things. Asks on what matters.</p>
+    <p class="dial-brake" data-dial-brake hidden>Money and irreversible still always ask.</p>
+  </aside>
+
+  <!-- Mobile autonomy pill + sheet -->
+  <div class="dial-pill" data-dial-pill>
+    <button class="dial-pill-btn" type="button" data-dial-pill-btn>
+      <span class="eyebrow dial-eyebrow">Autonomy</span>
+      <span class="dial-pill-mode" data-dial-pill-mode>Regular</span>
+    </button>
+  </div>
+  <div class="dial-sheet" data-dial-sheet hidden>
+    <div class="dial-sheet-scrim" data-dial-sheet-scrim></div>
+    <div class="dial-sheet-panel">
+      <p class="eyebrow dial-eyebrow">Autonomy</p>
+      <button class="dial-sheet-stop" type="button" data-mode="limited">
+        <span class="mode-label">Limited</span>
+        <span class="dial-sheet-desc">Prepares everything. Acts only on your yes.</span>
+      </button>
+      <button class="dial-sheet-stop" type="button" data-mode="regular">
+        <span class="mode-label">Regular <span class="recommended">· recommended</span></span>
+        <span class="dial-sheet-desc">Handles the small, safe things. Asks on what matters.</span>
+      </button>
+      <button class="dial-sheet-stop" type="button" data-mode="full_send">
+        <span class="mode-label">Full-Send</span>
+        <span class="dial-sheet-desc">Moves fast for you — still stops for money and the irreversible.</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

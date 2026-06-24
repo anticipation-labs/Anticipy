@@ -1792,3 +1792,16 @@ async def ws_extension(ws: WebSocket) -> None:
     finally:
         await core.browser_link.detach(ws)
         core.glassbox.log("extension", {"event": "disconnected"})
+
+
+# ---- M7: serve the premium frontend (welcome + app) from the engine's OWN origin ----
+# The app's fetches are same-origin (ENGINE=""), and the engine has no CORS — so the app is served
+# from http://127.0.0.1:8787 itself. Mounted LAST so every API route above is matched FIRST;
+# StaticFiles only catches leftover paths (/, /app.html, /styles.css, /app.js, ...). html=True -> "/" = index.html.
+try:
+    from fastapi.staticfiles import StaticFiles
+    _web_dir = Path(__file__).resolve().parents[2] / "web"
+    if _web_dir.is_dir():
+        app.mount("/", StaticFiles(directory=str(_web_dir), html=True), name="web")
+except Exception:
+    pass
