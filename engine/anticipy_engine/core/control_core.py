@@ -1421,6 +1421,13 @@ class ControlCore:
         # (it carries no company+issue pair). Runs only on the executing spine path (not preview).
         from ..shared.support_chore import match_support_chore
         if match_support_chore(line.text) is not None:
+            # VENT FLOOR (sweep r2 #21): a service chore voiced inside a vent ("ugh I should just call
+            # them and scream about it") must NEVER AUTO-START — that is the cardinal sin. If the line
+            # reads as a vent shape, force it confirm-first instead of AUTO_DO_WITH_OPT_OUT.
+            from ..live_memory.review_infer import is_vent_shape as _ivs_sc
+            if _ivs_sc(line.text):
+                self.glassbox.log("support_chore_vent_held", {"line": line.text[:140]})
+                return self._generic_force_ask_card(line, source)
             self.glassbox.log("support_chore_opt_out",
                               {"line": line.text[:140], "reason": "reversible service chore -> AUTO_DO_WITH_OPT_OUT"})
             return self._support_chore_opt_out(line, source)
