@@ -2280,7 +2280,14 @@ class WebVoyagerAgent:
 
             prev_url = out.get("url")
             label = next((e.get("name", "") for e in els if e.get("idx") == action.get("index")), action.get("text", ""))
-            await self._act(_clean_action(action, item_text))
+            act_res = await self._act(_clean_action(action, item_text))
+            # SURFACE a deterministic block (sweep r2): the link refuses a navigate to a banking/credential/
+            # private host with needs_human — don't swallow that and keep looping; hand it back honestly.
+            if isinstance(act_res, dict) and act_res.get("status") == "needs_human":
+                _why = ((act_res.get("output") or {}).get("reason")
+                        or "the bridge refused a navigation to a sensitive site")
+                return self._done(out, step + 1, history, needs_human=True,
+                                  answer=f"STOPPED — {_why}. Handed back to you with the tab open.")
             out, shot = await self._observe_ready()
             self._cur_shot = shot
             sub_steps += 1
