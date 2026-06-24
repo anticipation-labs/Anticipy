@@ -50,7 +50,13 @@
     return out;
   }
 
-  /* ----- the one network helper: relative path, JSON, honest errors ----- */
+  // engine base: same-origin in local dev; the hosted Railway engine when served from Vercel (NOT the
+  // visitor's localhost). Overridable via window.ANTICIPY_ENGINE_URL.
+  var SAME_ORIGIN = /^https?:$/.test(location.protocol) &&
+    (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+  var ENGINE = SAME_ORIGIN ? "" : (window.ANTICIPY_ENGINE_URL || "https://engine-production-eb43.up.railway.app");
+
+  /* ----- the one network helper: engine base + path, JSON, honest errors ----- */
   function api(path, opts) {
     opts = opts || {};
     var init = { method: opts.method || "GET", headers: {} };
@@ -58,7 +64,7 @@
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(opts.body);
     }
-    return fetch(path, init).then(function (res) {
+    return fetch(ENGINE + path, init).then(function (res) {
       if (!res.ok) {
         var e = new Error("engine_status_" + res.status);
         e.status = res.status;
@@ -545,6 +551,10 @@
     span.setAttribute("data-edit-key", key);
     if (sub != null) span.setAttribute("data-edit-sub", sub);
     span.textContent = text;
+    // remember the original so persistCorrections can diff against it — a field
+    // is only "corrected" if its text actually changed (not just because the
+    // editing toggle happens to be on/off at confirm time).
+    span.setAttribute("data-edit-orig", text == null ? "" : String(text));
     return span;
   }
 
@@ -729,12 +739,15 @@
   // the engine already wrote the dossier — corrections amend it). Best-effort,
   // never blocks the calm completion.
   function persistCorrections() {
-    if (!editing) return;
+    // Persist based on whether the text actually CHANGED vs. the rendered
+    // original — never on the transient `editing` toggle. Clicking "Done fixing"
+    // (which flips editing back to false) must not silently discard real edits.
     var notes = [];
     $all(".ob-edit", dossierBody).forEach(function (n) {
       var key = n.getAttribute("data-edit-key");
       var val = (n.textContent || "").trim();
-      if (key && val) notes.push(key.replace(/\./g, " ") + ": " + val);
+      var orig = (n.getAttribute("data-edit-orig") || "").trim();
+      if (key && val && val !== orig) notes.push(key.replace(/\./g, " ") + ": " + val);
     });
     if (!notes.length) return;
     var text = "Correction to my profile — " + notes.join("; ") + ".";

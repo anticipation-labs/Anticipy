@@ -17,7 +17,9 @@
      calm "engine is resting" state covers any block gracefully. */
   var SAME_ORIGIN = /^https?:$/.test(location.protocol) &&
     (location.hostname === "127.0.0.1" || location.hostname === "localhost");
-  var ENGINE = SAME_ORIGIN ? "" : "http://127.0.0.1:8787";
+  // Off-origin (the hosted Vercel site), talk to the cloud engine on Railway — NOT the visitor's own
+  // laptop. Overridable via window.ANTICIPY_ENGINE_URL. (Always the full HTTPS host, never a :port.)
+  var ENGINE = SAME_ORIGIN ? "" : (window.ANTICIPY_ENGINE_URL || "https://engine-production-eb43.up.railway.app");
 
   // Optional owner token: window.ANTICIPY_OWNER_TOKEN or ?token=… or localStorage.
   var OWNER_TOKEN =
