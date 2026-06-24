@@ -103,6 +103,12 @@ BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha
                  "enter the code", "one-time code", "we texted you", "we sent you a code",
                  "approve this sign-in", "approve the sign-in", "check your phone", "6-digit code")
 LOGIN_URL_RE = re.compile(r"/(?:login|signin|sign-in)(?:[/?#]|$)|[?&](?:login|signin|sign_in)\b", re.I)
+# CREDENTIAL FIELD hard stop (sweep r2): never TYPE into a password / OTP / card field — symmetric with
+# the money stop. The user enters their own credentials; the agent pauses and hands back. Code-enforced,
+# not just a prompt instruction.
+_CREDENTIAL_FIELD = re.compile(
+    r"password|passwd|\bpwd\b|\botp\b|one[- ]time (?:code|pass)|verification code|security code|"
+    r"2fa|two[- ]factor|authenticator|\bpin\b|card ?number|\bcvv\b|\bcvc\b|credit ?card", re.I)
 COMMERCE_STOP = {
     "the", "and", "for", "with", "that", "this", "thing", "item", "product", "cart", "basket",
     "bag", "add", "added", "shipping", "pickup", "delivery", "cheapest", "lowest", "least",
@@ -2236,6 +2242,16 @@ class WebVoyagerAgent:
                     return self._done(out, step + 1, history, stopped_for_safety=True,
                                       answer="STOPPED at a checkout/payment page — did NOT place the order or "
                                              "pay. Handed back for your confirmation (money is the hard stop).")
+
+            # CREDENTIAL HARD STOP (deterministic, sweep r2): NEVER type into a password / OTP / card
+            # field. The "I never type your credentials" promise is now code-enforced, not prompt-only.
+            if action.get("action") == "type":
+                _cel = next((e for e in els if e.get("idx") == action.get("index")), None)
+                _clab = " ".join(str(_cel.get(k, "")) for k in ("name", "type", "role", "placeholder")) if _cel else ""
+                if _CREDENTIAL_FIELD.search(_clab):
+                    return self._done(out, step + 1, history, stopped_for_safety=True,
+                                      answer="STOPPED before typing into a password/verification field — I never "
+                                             "enter your credentials. Please complete it yourself in the open tab, then say go.")
 
             if action.get("action") == "click":
                 el = next((e for e in els if e.get("idx") == action.get("index")), None)

@@ -29,9 +29,22 @@ class ResumeStore:
         return {}
 
     def _save(self, data: dict) -> None:
+        # ATOMIC (sweep r2): write a temp file then os.replace — a crash mid-write can never leave a
+        # half-written / corrupt resume_state.json (a partial write would strand every paused wall).
+        import os
+        import tempfile
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps(data), encoding="utf-8")
+            fd, tmp = tempfile.mkstemp(dir=str(self.path.parent), suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(json.dumps(data))
+                os.replace(tmp, self.path)  # atomic on POSIX
+            except Exception:
+                try:
+                    os.unlink(tmp)
+                except Exception:
+                    pass
         except Exception:
             pass
 
