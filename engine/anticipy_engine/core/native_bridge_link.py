@@ -442,10 +442,14 @@ class NativeBridgeLink:
         if not isinstance(pages, list):
             return ""
         page_items = [p for p in pages if isinstance(p, dict) and p.get("type") == "page"]
-        chosen = None
         if self._cdp_target_id:
+            # PINNED target is REQUIRED (sweep r2): if OUR tab is gone, do NOT silently hijack a random
+            # tab the user opened — return empty so the caller relaunches/re-pins instead of driving theirs.
             chosen = next((p for p in page_items if str(p.get("id") or "") == self._cdp_target_id), None)
-        if chosen is None and self._url_prefix:
+            return str((chosen or {}).get("webSocketDebuggerUrl") or "").replace("127.0.0.1", "localhost")
+        # No pinned target yet (the first navigation): pick by url prefix, else the most recent page.
+        chosen = None
+        if self._url_prefix:
             matches = [p for p in page_items if str(p.get("url") or "").startswith(self._url_prefix)]
             if matches:
                 chosen = matches[-1]

@@ -2335,13 +2335,23 @@ class WebVoyagerAgent:
 
 
 async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] = None) -> dict:
+    # HONEST about evidence (sweep r2): only claim a screenshot when one is actually attached. With NO
+    # screenshot the judge has weaker evidence (answer + URL only) and must lean FALSE unless the answer
+    # itself plainly satisfies the task — we never bless an unverifiable claim as success.
+    has_shot = bool(image)
     prompt = (
-        "You are grading a web agent, with the FINAL page screenshot attached. "
-        "Reply ONLY JSON {\"success\":true|false,\"reason\":\"...\"}.\n"
-        f"TASK: {task}\nAGENT ANSWER: {result.get('answer')!r}\nFINAL URL: {result.get('final_url')}\n"
-        "Decide ONLY from substance: does the answer, corroborated by what is visible in the final screenshot, "
-        "satisfy what the task asked for? Judge on correctness, not phrasing, and apply the SAME standard to every "
-        "site. If the task itself instructed the agent to stop at a particular step, stopping there is success."
+        "You are grading a web agent"
+        + (", with the FINAL page screenshot attached"
+           if has_shot else " — NO screenshot is available, so judge from the answer and URL only")
+        + ". Reply ONLY JSON {\"success\":true|false,\"reason\":\"...\"}.\n"
+        + f"TASK: {task}\nAGENT ANSWER: {result.get('answer')!r}\nFINAL URL: {result.get('final_url')}\n"
+        + ("Decide ONLY from substance: does the answer, corroborated by what is visible in the final "
+           "screenshot, satisfy what the task asked for? "
+           if has_shot else
+           "Without a screenshot to corroborate, be CONSERVATIVE: return success:true ONLY if the answer "
+           "itself plainly and verifiably satisfies the task; if it cannot be corroborated, return false. ")
+        + "Judge on correctness, not phrasing, and apply the SAME standard to every site. If the task "
+          "itself instructed the agent to stop at a particular step, stopping there is success."
     )
     # temperature=0 so identical (answer, screenshot) gets an identical verdict —
     # the general judge must be deterministic, not flip on a re-grade.
