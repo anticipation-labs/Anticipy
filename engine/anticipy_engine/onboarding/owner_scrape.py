@@ -61,6 +61,61 @@ _SCROLL_JS = (
 )
 
 
+# STRUCTURED extractors (sweep #1): catalogue PER-ITEM records (one email/event/contact = one record),
+# not a flat innerText smear. Each returns a JSON array; selectors have an innerText fallback (Gmail's
+# class names are obfuscated + drift, so we always keep the row's raw text). If an extractor returns
+# nothing, the read falls back to the flat-line path — so it never returns empty on a logged-in surface.
+_GMAIL_JS = (
+    "JSON.stringify([...document.querySelectorAll('tr.zA, tr[role=row]')].slice(0,80).map(r=>{"
+    "const g=s=>{const e=r.querySelector(s);return e?((e.getAttribute('email')||e.getAttribute('title')||e.innerText||'').trim()):'';};"
+    "const from=g('.yW span[email]')||g('.yW span')||g('.zF')||g('.yP');"
+    "const subj=g('.y6')||g('.bog');const snip=g('.y2');const time=g('.xW span[title]')||g('.xW span');"
+    "const raw=(r.innerText||'').replace(/\\s+/g,' ').trim();"
+    "return {type:'email',from:from,subject:subj,snippet:snip,time:time,raw:raw.slice(0,200)};"
+    "}).filter(x=>x.raw))"
+)
+_CAL_JS = (
+    "JSON.stringify([...document.querySelectorAll('[role=button][aria-label],div[jsname] [role=button]')]"
+    ".map(e=>(e.getAttribute('aria-label')||e.innerText||'').replace(/\\s+/g,' ').trim())"
+    ".filter(s=>s&&/\\d/.test(s)&&s.length>4).slice(0,80).map(s=>({type:'event',text:s.slice(0,180)})))"
+)
+_CONTACTS_JS = (
+    "JSON.stringify([...document.querySelectorAll('[role=row],[data-member-id],a[href*=\"/person/\"]')]"
+    ".map(r=>(r.innerText||r.getAttribute('aria-label')||'').replace(/\\s+/g,' ').trim())"
+    ".filter(s=>s&&s.length>2).slice(0,120).map(s=>({type:'contact',text:s.slice(0,140)})))"
+)
+_LINKEDIN_JS = (
+    "JSON.stringify([...document.querySelectorAll('div.feed-shared-update-v2, article, li.artdeco-card')]"
+    ".map(r=>(r.innerText||'').replace(/\\s+/g,' ').trim()).filter(s=>s&&s.length>20).slice(0,40)"
+    ".map(s=>({type:'post',text:s.slice(0,300)})))"
+)
+_EXTRACTORS = {"gmail_inbox": _GMAIL_JS, "gmail_sent": _GMAIL_JS, "calendar": _CAL_JS,
+               "contacts": _CONTACTS_JS, "linkedin": _LINKEDIN_JS}
+
+
+def _record_key(rec: dict) -> str:
+    if rec.get("type") == "email":
+        return ("email|" + (rec.get("from") or "") + "|" + (rec.get("subject") or "")
+                + "|" + (rec.get("raw") or "")[:60]).lower()
+    return (str(rec.get("type")) + "|" + (rec.get("text") or rec.get("raw") or ""))[:140].lower()
+
+
+def _render_records(records: list) -> str:
+    by: dict = {}
+    for r in records:
+        by.setdefault(r.get("type", "item"), []).append(r)
+    out: list = []
+    for typ, items in by.items():
+        out.append(f"=== {typ.upper()}S ({len(items)}) ===")
+        for r in items[:60]:
+            if typ == "email":
+                fields = [x for x in [r.get("from"), r.get("subject"), r.get("time")] if x]
+                out.append("- " + (" | ".join(fields) if fields else (r.get("raw") or "")))
+            else:
+                out.append("- " + (r.get("text") or r.get("raw") or ""))
+    return "\n".join(out)
+
+
 def _page_ws_url(cdp_url: str) -> str | None:
     base = (cdp_url or "http://127.0.0.1:9222").rstrip("/")
     try:
@@ -105,36 +160,62 @@ async def _read_surface(call, surface: dict, max_chars: int, scroll_steps: int,
             return {**surface, "status": "needs_login", "needs_login": True, "title": title,
                     "final_url": final_url, "text": "", "chars": 0, "scrolls": 0}
 
-        # THOROUGH PASS: scroll through, dwelling so more loads, cataloguing UNIQUE lines.
-        seen: set = set()
-        catalogued: list = []
+        # THOROUGH PASS: scroll through, dwelling so lazy content loads, cataloguing per-ITEM RECORDS
+        # (emails/events/contacts/posts) via the surface extractor; fall back to unique LINES when no
+        # extractor matches, so a logged-in surface is never returned empty.
+        extractor = _EXTRACTORS.get(surface.get("key"))
+        seen_keys: set = set()
+        records: list = []
+        seen_lines: set = set()
+        flat: list = []
 
-        def _ingest(blob: str):
+        def _ingest_records(raw_json):
+            try:
+                arr = json.loads(raw_json) if raw_json else []
+            except Exception:
+                arr = []
+            for rec in arr if isinstance(arr, list) else []:
+                if not isinstance(rec, dict):
+                    continue
+                k = _record_key(rec)
+                if k and k not in seen_keys:
+                    seen_keys.add(k)
+                    records.append(rec)
+
+        def _ingest_lines(blob):
             for ln in (blob or "").splitlines():
                 ln = ln.strip()
-                if ln and ln not in seen:
-                    seen.add(ln)
-                    catalogued.append(ln)
+                if ln and ln not in seen_lines:
+                    seen_lines.add(ln)
+                    flat.append(ln)
 
-        _ingest(first)
+        if extractor:
+            _ingest_records(await _eval(call, extractor))
+        if not records:
+            _ingest_lines(first)
         last_top = -1.0
         for _ in range(max(1, scroll_steps)):
             pos = json.loads(await _eval(call, _SCROLL_JS) or "{}")
             await asyncio.sleep(dwell)  # let lazily-loaded rows render
-            _ingest(await _eval(call, _TEXT_JS) or "")
+            if extractor:
+                _ingest_records(await _eval(call, extractor))
+            if not records:
+                _ingest_lines(await _eval(call, _TEXT_JS) or "")
             top = float(pos.get("top") or 0)
             if top <= last_top + 2 and top >= float(pos.get("max") or 0) - 2:
-                break  # reached the bottom — nothing more to catalogue
+                break  # reached the bottom
             last_top = top
-            if sum(len(x) + 1 for x in catalogued) > max_chars:
+            if len(records) > 200 or sum(len(x) + 1 for x in flat) > max_chars:
                 break
+
+        text = (_render_records(records) if records else "\n".join(flat))[:max_chars]
     except Exception as e:
         return {**surface, "status": "error", "reason": str(e)[:160], "needs_login": False,
-                "text": "", "chars": 0, "final_url": "", "scrolls": 0}
+                "text": "", "chars": 0, "final_url": "", "scrolls": 0, "records": []}
 
-    text = "\n".join(catalogued)[:max_chars]
     return {**surface, "status": "ok", "needs_login": False, "title": title, "final_url": final_url,
-            "text": text, "chars": len(text), "scrolls": scroll_steps, "lines": len(catalogued)}
+            "text": text, "chars": len(text), "records": records[:200], "record_count": len(records),
+            "scrolls": scroll_steps, "lines": len(flat)}
 
 
 async def _scrape_async(ws_url: str, surfaces: list, max_chars: int, scroll_steps: int,
