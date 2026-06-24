@@ -70,11 +70,19 @@ class CallChannel(Channel):
         public wss URL exists for the /cr endpoint."""
         url = escape(ws_url, {'"': "&quot;"})
         greet = escape(greeting[:1500], {'"': "&quot;"})
-        return (
-            "<Response><Connect>"
-            f'<ConversationRelay url="{url}" welcomeGreeting="{greet}" />'
-            "</Connect></Response>"
-        )
+        # PREMIUM VOICE: Twilio ConversationRelay has ElevenLabs TTS built in (no separate ElevenLabs key —
+        # Twilio bills it), so we default to a natural ElevenLabs voice for the "can't tell it's AI" bar.
+        # Both are env-overridable; voice may be "<voiceId>" or "<voiceId>-<modelId>" (turbo/flash = low
+        # latency, sub-second turns). Set ANTICIPY_CR_TTS_PROVIDER="" to fall back to Twilio's basic voice.
+        tts = escape((os.environ.get("ANTICIPY_CR_TTS_PROVIDER", "ElevenLabs")).strip(), {'"': "&quot;"})
+        voice = escape((os.environ.get("ANTICIPY_CR_VOICE", "21m00Tcm4TlvDq8ikWAM-eleven_turbo_v2_5")).strip(),
+                       {'"': "&quot;"})
+        attrs = f'url="{url}" welcomeGreeting="{greet}"'
+        if tts:
+            attrs += f' ttsProvider="{tts}"'
+        if voice:
+            attrs += f' voice="{voice}"'
+        return f"<Response><Connect><ConversationRelay {attrs} /></Connect></Response>"
 
     def call_twiml(self, message: str) -> str:
         """Pick the TwiML for an outbound call: two-way ConversationRelay when a public
