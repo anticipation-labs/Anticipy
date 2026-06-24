@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anticipy — Vibe your life.</title>
+  <meta name="description" content="An always-listening assistant. Anticipy listens to your real, messy day and quietly takes care of the loose ends — and never spends your money, or your trust, without asking." />
+  <meta name="theme-color" content="#F5F1E8" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Anticipy — Vibe your life." />
+  <meta property="og:description" content="An always-listening assistant that quietly handles your loose ends — and never acts on the things that matter without asking." />
+  <meta property="og:type" content="website" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Film-grain overlay -->
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- ===================== HERO ===================== -->
+  <header class="topbar" data-reveal>
+    <a class="wordmark" href="#top" aria-label="Anticipy home">ANTICIPY</a>
+    <a class="topbar-link" href="#footer-cta">Request access</a>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-headline">
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow" data-reveal>An always-listening assistant</p>
+          <h1 class="hero-headline" id="hero-headline" data-reveal>
+            <span class="line-1">Vibe your life.</span>
+            <span class="line-2">Let the rest be handled.</span>
+          </h1>
+          <p class="hero-subhead" data-reveal>
+            Anticipy listens to your real, messy day — the half-thoughts, the
+            “ugh I still have to,” the things you’d never write down — and quietly
+            takes care of them. No dashboards. No setup ritual. You just live, and
+            the loose ends close behind you.
+          </p>
+          <div class="hero-cta" data-reveal>
+            <a class="btn-ink" href="#footer-cta">Request access</a>
+            <a class="link-quiet" href="#how">See how it listens <span class="arrow">&#8595;</span></a>
+          </div>
+        </div>
+
+        <!-- Empty right third: presence hairline + demo card (desktop) -->
+        <div class="hero-presence" aria-hidden="false">
+          <div class="presence-rail" aria-hidden="true">
+            <span class="presence-line"></span>
+            <span class="presence-dot"></span>
+          </div>
+          <!-- The looping micro-demo card lives here on desktop -->
+          <div class="demo-mount" data-demo-mount></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== HOW IT WORKS ===================== -->
+    <section class="how" id="how" aria-labelledby="how-eyebrow">
+      <div class="container">
+        <p class="eyebrow eyebrow-center" id="how-eyebrow" data-reveal>How it works</p>
+        <p class="framing" data-reveal>
+          It works the way a great assistant would — by paying attention.
+        </p>
+
+        <div class="beats">
+          <article class="beat" data-reveal>
+            <div class="beat-num"><span class="num-tick"></span>01</div>
+            <div class="beat-body">
+              <h2 class="beat-title">It hears what you actually meant.</h2>
+              <p class="beat-text">
+                You talk the way people talk — venting, joking, trailing off.
+                Anticipy follows the thread and separates the signal from the
+                noise. A sarcastic “oh perfect, another dentist reminder” isn’t a
+                task. “I really need to move that flight” is. It learns the
+                difference, and it remembers what you told it last week.
+              </p>
+            </div>
+          </article>
+
+          <article class="beat" data-reveal>
+            <div class="beat-num"><span class="num-tick"></span>02</div>
+            <div class="beat-body">
+              <h2 class="beat-title">It does the quiet work.</h2>
+              <p class="beat-text">
+                Then it just… handles it. Drafts the email in your voice. Books
+                the table. Fills the form in your own Chrome, signed in as you, the
+                way you would have. When something needs a real call, it can pick
+                up the phone in a voice you genuinely can’t tell from a person —
+                and speak for you.
+              </p>
+            </div>
+          </article>
+
+          <article class="beat" data-reveal>
+            <div class="beat-num"><span class="num-tick"></span>03</div>
+            <div class="beat-body">
+              <h2 class="beat-title">It closes the loop with you.</h2>
+              <p class="beat-text">
+                You stay in the room. Before anything is spent, sent, or made
+                permanent, Anticipy comes back with a plain-language summary and
+                waits for your nod. The work is done in the background; the
+                decision stays yours. You end the day lighter, not managing an app.
+              </p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== THE PROMISE (INK) ===================== -->
+    <section class="promise" aria-labelledby="promise-headline">
+      <div class="container container-narrow">
+        <p class="eyebrow eyebrow-center eyebrow-gold" data-reveal>The promise</p>
+        <h2 class="promise-headline" id="promise-headline" data-reveal>
+          It never spends your money, or your trust, without asking.
+        </h2>
+        <span class="signature-line" data-reveal aria-hidden="true"></span>
+        <p class="promise-body" data-reveal>
+          Anticipy can do a great deal on its own — but it knows the difference
+          between a chore and a choice. Anything that costs money, sends in your
+          name, or can’t be undone stops and waits for one word from you.
+          Everything it remembers about your life stays yours, private, and
+          revocable. The autonomy is real. So is the brake.
+        </p>
+        <p class="promise-reinforce" data-reveal>
+          Confirm before spend&nbsp;&nbsp;·&nbsp;&nbsp;Confirm before irreversible&nbsp;&nbsp;·&nbsp;&nbsp;Yours to revoke
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== THREE MODES ===================== -->
+    <section class="modes" id="modes" aria-labelledby="modes-eyebrow">
+      <div class="container">
+        <p class="eyebrow eyebrow-center" id="modes-eyebrow" data-reveal>You set the leash</p>
+        <p class="framing" data-reveal>
+          One assistant. Three settings. You hold the dial.
+        </p>
+
+        <div class="dial-wrap" data-reveal>
+          <div class="dial-track" aria-hidden="true">
+            <span class="dial-node" data-dial-node></span>
+          </div>
+
+          <div class="mode-cards">
+            <article class="mode-card" data-mode="0">
+              <p class="mode-label">Minimal autonomy</p>
+              <h3 class="mode-name">Limited</h3>
+              <p class="mode-text">
+                It listens and prepares, but acts only with your say-so. Nothing
+                leaves, nothing changes, until you tap yes. The cautious place to
+                begin.
+              </p>
+            </article>
+
+            <article class="mode-card mode-card--default" data-mode="1">
+              <p class="mode-label">Everyday balance <span class="recommended">· recommended</span></p>
+              <h3 class="mode-name">Regular</h3>
+              <p class="mode-text">
+                It quietly handles the small, safe, reversible things on its own,
+                and checks in on anything that matters. The way most people live
+                with it.
+              </p>
+            </article>
+
+            <article class="mode-card" data-mode="2">
+              <p class="mode-label">Maximum trust</p>
+              <h3 class="mode-name">Full-Send</h3>
+              <p class="mode-text">
+                It moves fast on your behalf and only stops for the two lines it
+                will never cross: spending your money, and the truly irreversible.
+                For when you’ve learned to trust it.
+              </p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== FOOTER CTA ===================== -->
+    <section class="footer-cta" id="footer-cta" aria-labelledby="footer-headline">
+      <div class="container container-narrow">
+        <h2 class="footer-headline" id="footer-headline" data-reveal>
+          Vibe your life. We’ll handle the rest.
+        </h2>
+        <p class="footer-body" data-reveal>
+          Anticipy is rolling out slowly, to a small number of people at a time.
+          Leave your email and we’ll reach out when there’s a place for you.
+        </p>
+
+        <form class="access-form" data-reveal novalidate>
+          <div class="access-row" data-access-row>
+            <input
+              class="access-input"
+              type="email"
+              name="email"
+              placeholder="you@example.com"
+              aria-label="Your email address"
+              autocomplete="email"
+              required
+            />
+            <button class="access-submit" type="submit">Request access</button>
+          </div>
+          <p class="access-success" data-access-success hidden>
+            You’re on the list. We’ll be in touch.
+          </p>
+        </form>
+
+        <p class="download-line" data-reveal>
+          The engine runs locally, on your own machine.
+          <a class="link-underline" href="#">Download Anticipy</a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== FOOTER ===================== -->
+  <footer class="site-footer" id="footer">
+    <div class="container">
+      <hr class="footer-rule" />
+      <div class="footer-row">
+        <span class="footer-wordmark">ANTICIPY</span>
+        <span class="footer-tagline">Vibe your life.</span>
+        <span class="footer-links">
+          <a href="#">Privacy</a> · <a href="#">Contact</a>
+        </span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
