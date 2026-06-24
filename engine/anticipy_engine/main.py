@@ -20,7 +20,6 @@ import ipaddress
 import os
 import secrets
 import socket
-import sys
 import tempfile
 import time
 from contextlib import asynccontextmanager, suppress
@@ -72,12 +71,11 @@ REQUEST_SIZE_EXEMPT_PATHS = {"/owner/ingest-file"}
 core = ControlCore()
 extension_hello_seen = False
 _mic_source = None  # the always-on Mac-mic CaptureSource when /listen/start is on (None when off)
-# Live health of the anticipatory clock, stamped at startup. The proactive engine must NEVER
-# go dark in silence: this is read by /status (so the UI/ops can see it) and printed loudly at
-# boot. armed=False => reminders/follow-ups will NOT fire on their own (ANTICIPY_TICK_SECONDS=0);
-# outreach='mock' => the engine fires but nothing reaches the phone (not ANTICIPY_CHANNELS_MODE=live).
-_proactive_health = {"armed": False, "tick_seconds": 0, "outreach": "mock",
-                     "reason": "not_started_yet"}
+_proactive_health = {
+    "armed": False,
+    "interval_s": 0.0,
+    "reason": "Manual-only: background anticipation clock is disabled.",
+}
 # Real reasoning+vision model for the web-agent loop (kept separate from the
 # core's default gateway so the engine/hands tests stay free + deterministic).
 gateway_agent = ModelGateway(
@@ -85,32 +83,6 @@ gateway_agent = ModelGateway(
     cheap_model="google/gemini-3.1-flash-lite",   # routine see-and-locate steps
     smart_model="google/gemini-3.5-flash",        # planning / recovery / stuck / judge
 )
-
-
-def _arm_proactive_health(interval_s: float, armed: bool) -> None:
-    """Stamp + announce the anticipatory clock's state so it can never go dark unnoticed.
-    Records health for /status and prints ONE unmissable line at boot: ARMED (it will fire on
-    its own every N s) or *** DARK *** (ANTICIPY_TICK_SECONDS=0 -> nothing fires until a manual
-    POST /trigger/tick). Also reports whether outreach is LIVE (reaches the phone) or MOCK
-    (fires, but no real send) — the second silent-failure mode."""
-    live = (os.environ.get("ANTICIPY_CHANNELS_MODE") == "live") and core.text_channel.configured()
-    _proactive_health.update({
-        "armed": bool(armed),
-        "tick_seconds": interval_s if armed else 0,
-        "outreach": "live" if live else "mock",
-        "reason": ("scheduler running" if armed
-                   else "ANTICIPY_TICK_SECONDS=0 — self-firing disabled (manual /trigger/tick only)"),
-    })
-    with suppress(Exception):
-        core.glassbox.log("proactive_health", dict(_proactive_health))
-    if armed:
-        reach = "LIVE (reaches phone)" if live else "MOCK (no real send until ANTICIPY_CHANNELS_MODE=live)"
-        banner = (f"[anticipy] PROACTIVE ENGINE ARMED — anticipating every {interval_s:g}s; "
-                  f"outreach={reach}")
-    else:
-        banner = ("[anticipy] *** PROACTIVE ENGINE DARK *** ANTICIPY_TICK_SECONDS=0 — reminders "
-                  "and follow-ups will NOT fire on their own (manual POST /trigger/tick only)")
-    print(banner, file=sys.stderr, flush=True)
 
 
 async def _trigger_scheduler(interval_s: float) -> None:
@@ -133,6 +105,21 @@ async def _inbound_scheduler(poller: InboundPoller, interval_s: float) -> None:
             await poller.poll_once()
         except Exception as e:  # noqa: BLE001 — the poller must outlive any one pass
             core.glassbox.log("inbound_poll_error", {"error": f"{type(e).__name__}: {e}"})
+
+
+def _arm_proactive_health(interval_s: float, armed: bool) -> dict:
+    """Record whether the background anticipation clock is armed. Status only; no side effects."""
+    global _proactive_health
+    _proactive_health = {
+        "armed": bool(armed),
+        "interval_s": float(interval_s or 0),
+        "reason": (
+            f"Self-firing every {float(interval_s):g}s."
+            if armed
+            else "Manual-only: background anticipation clock is disabled."
+        ),
+    }
+    return _proactive_health
 
 
 @asynccontextmanager
@@ -620,6 +607,8 @@ def health() -> dict:
 @app.get("/status")
 def status() -> dict:
     channels = core.channel_status()
+    proactive = dict(_proactive_health)
+    proactive["outreach"] = channels.get("mode", "mock")
     return {
         "engine": "ok",
         "core": "control_core",
@@ -629,8 +618,8 @@ def status() -> dict:
         "pending_count": len(core.pending_asks()),
         "memory_recovered": bool(getattr(core.memory.db, "recovered_corruption", False)),
         "channels": channels,
+        "proactive": proactive,
         "readiness": _readiness(channels),
-        "proactive": dict(_proactive_health),
     }
 
 
@@ -858,21 +847,147 @@ async def listen_status() -> dict:
             "utterances": getattr(s, "utterances", 0), "last_error": getattr(s, "last_error", None)}
 
 
+@app.websocket("/listen/stream")
+async def listen_stream_ws(ws: WebSocket):
+    """Real-time streaming transcription via Deepgram.
+    Browser sends raw audio (WebM/Opus or linear16). We proxy to Deepgram's
+    streaming API with speaker diarization, smart formatting, and endpointing.
+    Returns real-time transcript chunks with speaker labels.
+    When silence is detected (endpointing), we auto-feed the accumulated
+    transcript into the owner ingest pipeline."""
+    await ws.accept()
+
+    dg_key = os.environ.get("DEEPGRAM_API_KEY", "")
+    if not dg_key:
+        await ws.send_json({"type": "error", "message": "DEEPGRAM_API_KEY not configured"})
+        await ws.close()
+        return
+
+    import websockets as _ws
+
+    dg_url = (
+        "wss://api.deepgram.com/v1/listen?"
+        "model=nova-2&language=en&smart_format=true&diarize=true"
+        "&interim_results=true&utterance_end_ms=1500&vad_events=true"
+        "&endpointing=500&encoding=linear16&sample_rate=16000&channels=1"
+    )
+    dg_headers = {"Authorization": f"Token {dg_key}"}
+
+    accumulated_transcript = []
+    last_final_time = time.time()
+
+    try:
+        async with _ws.connect(dg_url, additional_headers=dg_headers) as dg_ws:
+            core.glassbox.log("listen_stream", {"event": "deepgram_connected"})
+
+            async def _dg_recv():
+                """Read from Deepgram and forward transcription to the browser."""
+                nonlocal last_final_time
+                try:
+                    async for raw in dg_ws:
+                        import json as _json
+                        try:
+                            msg = _json.loads(raw)
+                        except Exception:
+                            continue
+                        msg_type = msg.get("type", "")
+                        if msg_type == "Results":
+                            channel = msg.get("channel", {})
+                            alt = (channel.get("alternatives") or [{}])[0]
+                            transcript = alt.get("transcript", "")
+                            is_final = msg.get("is_final", False)
+                            speech_final = msg.get("speech_final", False)
+                            words = alt.get("words", [])
+                            # Build speaker-labeled segments
+                            segments = []
+                            cur_speaker = None
+                            cur_text = []
+                            for w in words:
+                                sp = w.get("speaker", 0)
+                                if sp != cur_speaker and cur_text:
+                                    segments.append({"speaker": cur_speaker, "text": " ".join(cur_text)})
+                                    cur_text = []
+                                cur_speaker = sp
+                                cur_text.append(w.get("punctuated_word", w.get("word", "")))
+                            if cur_text:
+                                segments.append({"speaker": cur_speaker, "text": " ".join(cur_text)})
+
+                            await ws.send_json({
+                                "type": "transcript",
+                                "transcript": transcript,
+                                "is_final": is_final,
+                                "speech_final": speech_final,
+                                "segments": segments,
+                            })
+                            if is_final and transcript.strip():
+                                speaker_text = " | ".join(
+                                    f"[Speaker {s['speaker']}] {s['text']}" for s in segments
+                                ) if segments else transcript
+                                accumulated_transcript.append(speaker_text)
+                                last_final_time = time.time()
+                        elif msg_type == "UtteranceEnd":
+                            await ws.send_json({"type": "utterance_end"})
+                            # Auto-ingest after utterance end if we have content
+                            if accumulated_transcript:
+                                full = "\n".join(accumulated_transcript)
+                                accumulated_transcript.clear()
+                                await ws.send_json({"type": "processing", "text": full})
+                                try:
+                                    result = await core.owner_ingest(
+                                        "start_listening", full,
+                                        {"capture": "deepgram_stream"},
+                                        execute_actions=True
+                                    )
+                                    await ws.send_json({"type": "ingest_result", "result": result})
+                                except Exception as exc:
+                                    await ws.send_json({"type": "ingest_error", "error": str(exc)})
+                except _ws.exceptions.ConnectionClosed:
+                    pass
+
+            async def _browser_send():
+                """Read audio from browser and send to Deepgram."""
+                try:
+                    while True:
+                        data = await ws.receive_bytes()
+                        await dg_ws.send(data)
+                except WebSocketDisconnect:
+                    # Browser disconnected — close Deepgram too
+                    await dg_ws.send(b'')  # empty byte to signal end
+                except Exception:
+                    pass
+
+            # Run both directions concurrently
+            recv_task = asyncio.create_task(_dg_recv())
+            send_task = asyncio.create_task(_browser_send())
+            done, pending = await asyncio.wait(
+                [recv_task, send_task], return_when=asyncio.FIRST_COMPLETED
+            )
+            for t in pending:
+                t.cancel()
+                with suppress(asyncio.CancelledError):
+                    await t
+
+    except Exception as exc:
+        core.glassbox.log("listen_stream", {"event": "error", "error": str(exc)})
+        with suppress(Exception):
+            await ws.send_json({"type": "error", "message": str(exc)})
+    finally:
+        # If there's leftover transcript, ingest it
+        if accumulated_transcript:
+            full = "\n".join(accumulated_transcript)
+            try:
+                await core.owner_ingest("start_listening", full,
+                                        {"capture": "deepgram_stream"},
+                                        execute_actions=True)
+            except Exception:
+                pass
+        core.glassbox.log("listen_stream", {"event": "disconnected"})
+
+
 @app.get("/owner/cards")
 def owner_cards(limit: int = 50) -> dict:
     """Recent durable owner cards, so the app board survives reloads."""
     return core.owner_cards(limit=limit)
-
-
-class OwnerStopIn(BaseModel):
-    card_id: str
-
-
-@app.post("/owner/stop")
-def owner_stop(body: OwnerStopIn) -> dict:
-    """STOP control for an AUTO_DO_WITH_OPT_OUT chore: the owner pressed STOP / replied 'stop'.
-    Halts the in-flight reversible chore and flips the durable card to 'stopped'."""
-    return core.stop_owner_card(body.card_id)
 
 
 @app.post("/owner/onboard")
@@ -911,12 +1026,66 @@ async def onboard_scan(body: ScanIn) -> dict:
             "/onboard/discover" if triggered else "no browser extension connected")}
 
 
-@app.post("/onboard/scan_api")
-async def onboard_scan_api() -> dict:
-    """SERVER-SIDE onboarding (no Chrome-extension dependency): discover the user's connected
-    accounts straight from the live API mesh and feed the per-person mesh. The reliable 'it knows
-    you' step — works even when the extension round-trip doesn't."""
-    return await core.onboard_scan_api()
+class OwnerScrapeIn(BaseModel):
+    cdp_url: Optional[str] = None
+    max_chars: int = 6000
+
+
+@app.post("/onboard/owner-scrape")
+async def onboard_owner_scrape(body: OwnerScrapeIn) -> dict:
+    """FULL-BROWSER owner self-scrape (the 'Anticipy scrapes YOU' step).
+
+    Reads the owner's OWN logged-in Gmail / sent mail / Calendar / Contacts /
+    LinkedIn over CDP (read-only, money nav-wall still on), then the REAL smart
+    model synthesizes a graded dossier — identity, work, the people who matter,
+    family, tools, the sites the browser arm will ACT on (full-browser, NOT an
+    API), and the gaps to ask about — which is written to memory (stated facts ->
+    profile drawer, inferred -> derived drawer). Honest by construction: a surface
+    that bounced to a sign-in wall is reported needs_login, never faked, and with
+    no usable signals the dossier is empty + carries a clarifying question."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from .onboarding import dossier as _dossier
+    from .onboarding.owner_scrape import scrape_owner
+
+    signals = await run_in_threadpool(scrape_owner, body.cdp_url, None, max_chars=body.max_chars)
+    doss = await _dossier.synthesize_dossier(signals, core.gateway)
+    counts = _dossier.write_dossier_to_memory(doss, core.memory)
+    status = signals.summary()
+    core.glassbox.log("owner_scrape", {"usable": status["usable_count"],
+                                       "needs_login": status["needs_login"], "wrote": counts})
+    return {"dossier": doss.as_dict(), "scrape": status, "memory_written": counts}
+
+
+class ComposeEmailIn(BaseModel):
+    to: str
+    subject: str = ""
+    body: str = ""
+    send: bool = False
+    cdp_url: Optional[str] = None
+
+
+@app.post("/hands/compose-email")
+async def hands_compose_email(body: ComposeEmailIn) -> dict:
+    """FULL-BROWSER Gmail action in the owner's logged-in Chrome — the human way.
+
+    Opens Gmail, clicks Compose, types To / Subject / Body at a human cadence, then
+    DRAFTS (default, send=false) or SENDS (send=true). The code-level money guard
+    still applies (a card field / pay control is refused even here). Honest: if this
+    Chrome isn't signed into Gmail it returns ok=false with the real reason (bounced
+    to accounts.google.com), never a fake send."""
+    from fastapi.concurrency import run_in_threadpool
+
+    from .hands.cdp_client import run_cdp
+
+    req = {"op": "compose_gmail", "to": body.to, "subject": body.subject,
+           "body": body.body, "send": body.send}
+    if body.cdp_url:
+        req["cdp_url"] = body.cdp_url
+    res = await run_in_threadpool(run_cdp, req, 90.0)
+    core.glassbox.log("compose_email", {"to": body.to, "send": body.send,
+                                        "ok": res.get("ok"), "money_blocked": res.get("money_blocked")})
+    return res
 
 
 # Max public source URLs we will read per profile build (keep the read bounded).
@@ -1208,6 +1377,23 @@ async def resolve(body: ResolveIn) -> dict:
     return await core.resolve(body.ask_id, body.approved)
 
 
+class AutonomyModeIn(BaseModel):
+    mode: str
+
+
+@app.get("/owner/autonomy_mode")
+def owner_autonomy_mode_get() -> dict:
+    """M3: the user-facing autonomy dial — full_send / regular / limited (default regular)."""
+    return core.get_autonomy_mode()
+
+
+@app.post("/owner/autonomy_mode")
+def owner_autonomy_mode_set(body: AutonomyModeIn) -> dict:
+    """M3: set the dial. The two invariants (money/send/irreversible always confirm; low-confidence
+    drops a level) hold in EVERY mode — Full-Send only adds reach on reversible, no-money tasks."""
+    return core.set_autonomy_mode(body.mode)
+
+
 @app.get("/scorecard")
 def scorecard() -> dict:
     return core.scorecard.readout()
@@ -1313,7 +1499,6 @@ class AgentActIn(BaseModel):
     start_url: str
     max_steps: int = 16
     cdp_url: Optional[str] = None  # attach to the user's logged-in Chrome (--remote-debugging-port)
-    open_web: bool = False         # let the agent roam any PUBLIC site (no single-host wall)
 
 
 @app.post("/agent/act")
@@ -1326,7 +1511,7 @@ async def agent_act(body: AgentActIn) -> dict:
     _assert_public_agent_url(body.start_url)
     res = await asyncio.to_thread(
         browser_use_link.browse_act, body.task, url=body.start_url,
-        max_steps=body.max_steps, cdp_url=body.cdp_url, open_web=body.open_web)
+        max_steps=body.max_steps, cdp_url=body.cdp_url)
     return {
         "success": res.success,
         "answer": res.result,
@@ -1435,6 +1620,44 @@ def _cr_max_call_seconds() -> float:
     except (TypeError, ValueError):
         raw = CR_MAX_CALL_SECONDS
     return max(1.0, raw)
+
+
+
+# ---- ANTICIPATORY RESEARCH: hear a name → figure out who they are ----
+class PersonResearchIn(BaseModel):
+    name: str = Field(..., description="Person's name to research")
+    task_context: str = Field("", description="The task they were mentioned in")
+    people: list = Field(default_factory=list, description="List of people names to research")
+
+
+@app.post("/anticipate/research")
+async def anticipate_research(body: PersonResearchIn) -> dict:
+    """Research a person mentioned in conversation — search email, build context.
+
+    This is the anticipatory piece: the system figures out WHO someone is from the
+    owner's own email/contacts, without being asked."""
+    from .proactive.anticipate import anticipatory_research, research_person, format_human_notification
+
+    # Get remembered items from memory for person lookup
+    remembered = []
+    try:
+        remembered = core.live_memory.capturer.remember.all()
+    except Exception:
+        pass
+
+    if body.people:
+        results = await anticipatory_research(
+            body.task_context, body.people, core.gateway, remembered, caller="anticipate_api")
+        return {
+            "people": {name: ctx.as_dict() for name, ctx in results.items()},
+            "notification": format_human_notification(body.task_context, results),
+        }
+    else:
+        ctx = await research_person(body.name, body.task_context, core.gateway, remembered, caller="anticipate_api")
+        return {
+            "person": ctx.as_dict(),
+            "notification": format_human_notification(body.task_context, {body.name: ctx}),
+        }
 
 
 @app.websocket("/cr")

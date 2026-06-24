@@ -589,6 +589,15 @@ class ControlCore:
         load_local_env()  # make .env.local keys (Arcade, etc.) available
         base = _base(data_dir)
         self.data_dir = base
+        # M3: the user-facing autonomy DIAL (Full-Send/Regular/Limited) + per-task-type trust ledger.
+        from ..proactive.autonomy_mode import TrustLedger, DEFAULT_MODE
+        self.trust_ledger = TrustLedger(base / "trust_ledger.json")
+        self._autonomy_mode_path = base / "autonomy_mode.txt"
+        try:
+            self._autonomy_mode = (self._autonomy_mode_path.read_text(encoding="utf-8").strip()
+                                   or DEFAULT_MODE)
+        except Exception:
+            self._autonomy_mode = DEFAULT_MODE
         self.browser_link = BrowserLink()
         self.glassbox = GlassBox(base / "glassbox.jsonl")
         self.scorecard = Scorecard(base / "scorecard.jsonl")
@@ -2019,6 +2028,49 @@ class ControlCore:
             except Exception:
                 pass
 
+    def set_autonomy_mode(self, mode: str) -> dict:
+        """M3: set the global autonomy dial (full_send / regular / limited). Persisted across restarts."""
+        from ..proactive.autonomy_mode import MODES as _M, DEFAULT_MODE as _D
+        mode = mode if mode in _M else _D
+        self._autonomy_mode = mode
+        try:
+            self._autonomy_mode_path.write_text(mode, encoding="utf-8")
+        except Exception:
+            pass
+        return {"mode": mode}
+
+    def get_autonomy_mode(self) -> dict:
+        from ..proactive.autonomy_mode import MODES as _M, DEFAULT_MODE as _D
+        return {"mode": getattr(self, "_autonomy_mode", _D), "modes": list(_M)}
+
+    def _apply_autonomy_dial(self, card, line):
+        """M3: adjust the brain's safe decision to the user's mode + earned trust, under the hard
+        invariants (money/send/irreversible always confirm; low confidence drops a level). Money/send
+        cards are invariant-locked inside autonomy_mode.adjust(), so they pass through unchanged here."""
+        from ..proactive.autonomy_mode import adjust as _adj, task_type as _tt
+        mode = getattr(self, "_autonomy_mode", "regular")
+        cdict = {"disposition": getattr(card, "disposition", None),
+                 "action": getattr(card, "action", None), "route": getattr(card, "route", None)}
+        trust_tier = self.trust_ledger.tier(_tt(cdict))
+        conf = getattr(card, "confidence", None)
+        conf = 1.0 if conf is None else conf
+        r = _adj(cdict, mode, trust_tier=trust_tier, confidence=conf)
+        card.autonomy_mode = mode
+        if r.get("changed") and r.get("disposition") != getattr(card, "disposition", None):
+            nd = r["disposition"]
+            if nd == "ask":
+                # downgrade (Limited / low-confidence): become confirm-first, never auto-act
+                card.disposition = "ask"
+                card.execution = None
+                card.reason = r.get("why") or card.reason
+            elif nd == "do":
+                # upgrade (Full-Send, or Regular with earned trust): flag for auto-run; the executor
+                # block runs it and flips the disposition to do once it's actually executing.
+                card.reason = r.get("why") or card.reason
+                card.args = dict(getattr(card, "args", None) or {})
+                card.args["autonomy_auto_run"] = True
+        return card
+
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
@@ -2133,6 +2185,31 @@ class ControlCore:
             # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This
             # is the absolute lever that keeps a vent from ever producing an act (the cardinal sin).
             card = self._apply_force_ask(card, line)
+            # M3: apply the user's autonomy DIAL (Full-Send/Regular/Limited) + earned trust — but NEVER
+            # on a vent-adjacent (force_ask) card (acting on a vent is the cardinal sin). Money/send are
+            # invariant-locked inside the dial, so they pass through unchanged (always confirm).
+            if execute_actions and card is not None and not getattr(line, "force_ask", False):
+                card = self._apply_autonomy_dial(card, line)
+            # M3 EXECUTOR: a card the dial pre-approved (Full-Send, or Regular with earned trust) auto-runs
+            # now — for a reversible web ask that means running the browser + texting the result, exactly
+            # like a YES. Money/send are invariant-locked and never carry the auto_run flag.
+            if (execute_actions and card is not None
+                    and (getattr(card, "args", None) or {}).get("autonomy_auto_run")
+                    and getattr(card, "action", None) == "browser_action"
+                    and getattr(card, "disposition", None) == "ask"
+                    and not getattr(line, "force_ask", False)):
+                p = self.proactive.pending.pop(card.id, None)
+                self.proactive._persist_pending()
+                self._resolve_browser_card_record(card.id, True)
+                card.disposition = "do"
+                card.reason = card.reason or "I'm handling this for you (reversible, no money)"
+                asyncio.create_task(self._run_browser_and_confirm(
+                    (p or {}).get("browser_task") or (p or {}).get("action") or line.text,
+                    (p or {}).get("browser_url") or "https://www.google.com", card.id))
+                self.glassbox.log("autonomy_auto_run",
+                                  {"card_id": card.id, "mode": getattr(self, "_autonomy_mode", "regular")})
+                cards.append(card)
+                continue
             # BROWSER ACTION (Omar's centerpiece): a web task ("find me a standing desk on Amazon")
             # becomes a TEXTED plain-English ask; on YES (app or SMS) the browser agent runs on the
             # real site and texts the result. Money browser cards stay blocked (never reach here as
@@ -2211,6 +2288,7 @@ class ControlCore:
         out["middle_trace"] = middle_trace   # GATE MIDDLE-1 proof (captured memories + resolutions)
         # Autonomy mode per card (packet 02): the chosen mode + why, for product + certification.
         from ..proactive.autonomy import classify_autonomy
+        from ..proactive.autonomy_mode import adjust as _dial_adjust, task_type as _dial_task_type
         from ..proactive.follow_up import plan_follow_up
         import time as _time
         _now = _time.time()
@@ -3215,6 +3293,10 @@ class ControlCore:
             # Reflect the resolution on the durable owner card (card.id == ask_id) so the board shows
             # the outcome: YES -> running (the agent runs async + texts back), NO -> declined (F-011).
             self._resolve_browser_card_record(ask_id, approved)
+            # M3: a clean YES on a reversible web task BUILDS trust for that kind of task (promotes it
+            # toward auto under Regular/Full-Send); a NO demotes it. Money/send never reach here.
+            (self.trust_ledger.record_clean("browser") if approved
+             else self.trust_ledger.record_rejection("browser"))
             if approved:
                 asyncio.create_task(self._run_browser_and_confirm(
                     p.get("browser_task") or p.get("action") or "",

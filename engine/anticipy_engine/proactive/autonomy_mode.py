@@ -30,8 +30,15 @@ _FULLSEND_UPGRADE = {"research_or_find_item", "browser_action", "find_or_cart_wi
                      "browse_task", "execute_owner_task"}
 
 
+_BROWSERISH = {"research_or_find_item", "browser_action", "find_or_cart_without_purchase", "browse_task"}
+
+
 def task_type(card: dict) -> str:
-    return card.get("action") or card.get("route") or "generic"
+    """Stable trust key. Browser-ish actions normalize to "browser" so trust accrues consistently
+    whether the card is read before or after the browser-ask conversion (research_or_find_item ->
+    browser_action). This keeps the dial's tier lookup and the YES/NO trust record on the SAME key."""
+    a = card.get("action") or card.get("route") or "generic"
+    return "browser" if a in _BROWSERISH else a
 
 
 def is_invariant_locked(card: dict) -> bool:
