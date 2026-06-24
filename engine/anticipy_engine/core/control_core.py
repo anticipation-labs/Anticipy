@@ -592,6 +592,8 @@ class ControlCore:
         # M3: the user-facing autonomy DIAL (Full-Send/Regular/Limited) + per-task-type trust ledger.
         from ..proactive.autonomy_mode import TrustLedger, DEFAULT_MODE
         self.trust_ledger = TrustLedger(base / "trust_ledger.json")
+        from ..onboarding.permissions import Permissions as _OnbPerms
+        self.onboard_permissions = _OnbPerms(base / "onboard_permissions.json")
         self._autonomy_mode_path = base / "autonomy_mode.txt"
         try:
             self._autonomy_mode = (self._autonomy_mode_path.read_text(encoding="utf-8").strip()

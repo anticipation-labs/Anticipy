@@ -1060,6 +1060,35 @@ async def onboard_owner_scrape(body: OwnerScrapeIn) -> dict:
     return {"dossier": doss, "scrape": status, "memory_written": counts}
 
 
+class OnboardPermissionIn(BaseModel):
+    service: str
+    allowed: bool = True
+
+
+@app.get("/onboard/permissions")
+def onboard_permissions_get() -> dict:
+    """The per-service allow gate (allow Gmail, allow Calendar, ...). Nothing is read until allowed."""
+    return core.onboard_permissions.state()
+
+
+@app.post("/onboard/permissions")
+def onboard_permissions_set(body: OnboardPermissionIn) -> dict:
+    return core.onboard_permissions.set(body.service, body.allowed)
+
+
+class OnboardLoopIn(BaseModel):
+    cdp_url: Optional[str] = None
+    max_layers: int = 4
+
+
+@app.post("/onboard/loop")
+async def onboard_loop(body: OnboardLoopIn) -> dict:
+    """The four-layer onboarding loop: guided layer 1 (allow + login), then autonomous deeper passes —
+    scrape ONLY allowed services, rebuild the dossier, report what still needs login + the gaps."""
+    from .onboarding.loop import run_loop
+    return await run_loop(core, body.cdp_url, body.max_layers)
+
+
 class ComposeEmailIn(BaseModel):
     to: str
     subject: str = ""
