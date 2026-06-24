@@ -45,9 +45,40 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Callable, List, Optional
 
-# YES/NO, optional separator, optional short code, optional trailing punctuation.
-# Anchored end-to-end so conversational lines ("no way that works") never match.
-_REPLY = re.compile(r"^\s*(yes|no)\b(?:[\s,.:!-]+([A-Za-z0-9]{4,32}))?[\s.!]*$", re.I)
+# Natural-language affirmative/negative detection.
+# Accepts: "yes", "ye", "yeah", "yep", "yup", "ya", "yea", "sure", "go ahead",
+# "do it", "go for it", "sounds good", "oh yeah you should", "absolutely",
+# "definitely", "please do", "for sure", "of course", etc.
+# Negatives: "no", "nah", "nope", "don't", "skip", "hold off", "not yet", etc.
+# Falls back to the old exact regex for code-bearing replies.
+_REPLY_EXACT = re.compile(r"^\s*(yes|no)\b(?:[\s,.:!-]+([A-Za-z0-9]{4,32}))?[\s.!]*$", re.I)
+
+_AFFIRMATIVES = re.compile(
+    r"(?:^|\b)(?:yes|ye+ah?|yep|yup|ya|yea|sure|go\s*ahead|do\s*it|go\s*for\s*it|sounds\s*good|"
+    r"absolutely|definitely|please\s*do|for\s*sure|of\s*course|approved?|confirm|let'?s\s*do\s*it|"
+    r"you\s*should|make\s*it\s*happen|proceed|green\s*light|thumbs\s*up|ok(?:ay)?|alright|bet)"
+    r"(?:\b|$)", re.I)
+
+_NEGATIVES = re.compile(
+    r"(?:^|\b)(?:no(?:pe|t)?|nah|don'?t|skip(?:\s*it)?|hold\s*off|not\s*yet|cancel|stop|"
+    r"never\s*mind|forget\s*it|pass|decline|reject|negative)(?:\b|$)", re.I)
+
+
+def _parse_reply(body: str):
+    """Parse a natural-language reply. Returns (approved: bool, code: str|None) or None."""
+    # First try exact YES/NO + code format
+    m = _REPLY_EXACT.match(body)
+    if m:
+        return (m.group(1).lower() == "yes", (m.group(2) or "").lower() or None)
+    # Then try natural language — negatives checked first ("no don't do it" = no)
+    has_neg = _NEGATIVES.search(body)
+    has_aff = _AFFIRMATIVES.search(body)
+    if has_neg and not has_aff:
+        return (False, None)
+    if has_aff and not has_neg:
+        return (True, None)
+    # Both or neither — ambiguous, don't resolve
+    return None
 _SEEN_CAP = 1000
 # F20 clarification bounds: list at most this many pending asks, each action
 # snippet truncated — the reply must stay one bounded SMS, never a transcript dump.
@@ -111,8 +142,8 @@ class InboundPoller:
                 out["skipped"].append({"sid": sid, "reason": "stale"})
                 continue
             body = (m.get("body") or "").strip()
-            reply = _REPLY.match(body)
-            if reply:
+            reply = _parse_reply(body)
+            if reply is not None:
                 await self._resolve_reply(sid, reply, out, owner)
             else:
                 res = await self.core.owner_ingest(
@@ -124,9 +155,9 @@ class InboundPoller:
                 await self._reply_to_owner(body, res, owner, sid, out)
         return out
 
-    async def _resolve_reply(self, sid: str, reply: re.Match, out: dict, owner: str) -> None:
-        approved = reply.group(1).lower() == "yes"
-        code = (reply.group(2) or "").lower()
+    async def _resolve_reply(self, sid: str, reply: tuple, out: dict, owner: str) -> None:
+        approved, code = reply
+        code = (code or "").lower()
         pending = self.core.pending_asks()
         if code:   # the regex guarantees >= 4 chars — long enough to trust as a prefix
             matches = [p for p in pending if p["ask_id"].lower().startswith(code)]
@@ -199,18 +230,24 @@ class InboundPoller:
 
     @staticmethod
     def _clarify_text(code: str, pending: list) -> str:
-        """Bounded body: what didn't match, then the exact codes that WILL."""
+        """Bounded body: what didn't match, then the pending items described humanly."""
         if not pending:
-            return ("Anticipy: nothing is pending right now, so that reply didn't "
-                    "change anything (the ask may already be resolved).")
-        head = (f"Anticipy: code {code.upper()} doesn't match a pending ask." if code
-                else f"Anticipy: {len(pending)} asks are pending, so a bare reply is ambiguous.")
-        lines = [head + " Reply with the exact code:"]
-        for p in pending[:_CLARIFY_LIST_CAP]:
+            return "nothing is pending right now — that might already be taken care of."
+        if len(pending) == 1:
+            action = (pending[0].get("action") or "").strip()[:_CLARIFY_ACTION_CHARS]
+            pending_code = (pending[0].get("ask_id") or "")[:6]
+            missed = f"I didn't find {code.upper()}. " if code else ""
+            return (
+                f"{missed}I wasn't sure if that was about: {action}. "
+                f"Reply YES {pending_code} or NO {pending_code}."
+            )
+        lines = ["That reply is ambiguous. Which one were you replying about?"]
+        for i, p in enumerate(pending[:_CLARIFY_LIST_CAP], 1):
             action = (p.get("action") or "").strip()[:_CLARIFY_ACTION_CHARS]
-            lines.append(f"YES {p['ask_id'][:6]} / NO {p['ask_id'][:6]} — {action}")
+            code = (p.get("ask_id") or "")[:6]
+            lines.append(f"{i}. {action} — reply YES {code} or NO {code}")
         if len(pending) > _CLARIFY_LIST_CAP:
-            lines.append(f"...and {len(pending) - _CLARIFY_LIST_CAP} more in the app.")
+            lines.append(f"...plus {len(pending) - _CLARIFY_LIST_CAP} more in the app.")
         return "\n".join(lines)
 
     # ---- seen-sid persistence (atomic; lose-toward-silence) ----

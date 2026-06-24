@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anticipy — Getting set up</title>
+  <meta name="description" content="The guided first run. Before I can handle anything, I should know you — read-only, one account at a time, everything stays on your machine." />
+  <meta name="theme-color" content="#F5F1E8" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Shared design system (tokens + welcome-page classes) -->
+  <link rel="stylesheet" href="styles.css" />
+  <!-- The Board's additions (card anatomy, act-confirm, act-allow, note-field) -->
+  <link rel="stylesheet" href="app.css" />
+  <!-- Onboarding-only additions -->
+  <link rel="stylesheet" href="onboard.css" />
+</head>
+<body>
+  <!-- Same atmosphere as the welcome page -->
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- ===================== TOPBAR ===================== -->
+  <header class="topbar">
+    <a class="wordmark" href="index.html" aria-label="Anticipy home">ANTICIPY</a>
+    <span class="topbar-date">
+      getting set up · <span class="topbar-date-val" data-step-marker>one of four</span>
+    </span>
+  </header>
+
+  <!-- The quiet spine — the gold hairline + breathing dot, the only chrome -->
+  <div class="onboard-rail" aria-hidden="true">
+    <span class="presence-line"></span>
+    <span class="presence-dot"></span>
+  </div>
+
+  <main class="app-shell onboard-shell" id="top">
+
+    <!-- ============================================================
+         SCREEN 0 · THE WARM INTRO — "Let me learn you"
+         ============================================================ -->
+    <section class="ob-screen is-active" data-screen="intro" aria-label="A warm introduction">
+      <div class="ob-column">
+        <p class="eyebrow" data-reveal>First, let me learn you</p>
+        <h1 class="ob-headline ob-headline--lg" data-reveal>
+          Before I can handle anything, I should know you.
+        </h1>
+        <p class="ob-body" data-reveal>
+          I learn the way a good assistant would on their first day — by reading the
+          accounts you're already signed into. Your inbox, your calendar, the people you
+          keep close. Read-only. I never type, send, or change a thing while I'm learning.
+        </p>
+        <p class="ob-body ob-body--soft" data-reveal>
+          You approve each account, one at a time. Nothing is touched until you say so —
+          and everything I learn stays on this machine, yours to revoke.
+        </p>
+
+        <p class="ob-reinforce" data-reveal>
+          <span>Read-only</span><span class="ob-dot">·</span><span>You approve each account</span><span class="ob-dot">·</span><span>Stays on your machine</span>
+        </p>
+
+        <div class="ob-actions" data-reveal>
+          <button type="button" class="btn-ink" data-begin>Begin&nbsp;<span aria-hidden="true">&rarr;</span></button>
+        </div>
+
+        <p class="ob-learn" data-reveal>
+          <button type="button" class="link-quiet ob-learn-toggle" data-learn-toggle aria-expanded="false">
+            What does Anticipy read, exactly?
+          </button>
+        </p>
+        <div class="ob-learn-detail" data-learn-detail hidden>
+          <p class="ob-learn-text">
+            Four surfaces, all read-only. Your <strong>inbox and sent mail</strong>, to learn
+            who you talk to and what's on your plate. Your <strong>calendar</strong>, to learn
+            your week. Your <strong>contacts</strong>, to learn the people who matter. And your
+            <strong>LinkedIn</strong>, to learn your work and network. I read what's there, build
+            a picture, and stop. Nothing leaves this machine.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 1 · THE ALLOW GATE — "Approve each account"
+         ============================================================ -->
+    <section class="ob-screen" data-screen="allow" aria-label="Approve each account" hidden>
+      <div class="ob-column">
+        <p class="eyebrow" data-reveal>The accounts</p>
+        <h2 class="ob-headline" data-reveal>Allow the ones you're comfortable with.</h2>
+        <p class="ob-body" data-reveal>
+          Turn on what you want me to learn from. You can start with one. Each stays
+          read-only, and you can revoke any of them later in a single tap.
+        </p>
+
+        <!-- Service rows (rendered from GET /onboard/permissions) -->
+        <div class="ob-rows" data-allow-rows aria-live="polite">
+          <!-- a quiet loading line until the engine answers -->
+          <p class="ob-engine-line" data-allow-loading>Reading your consent settings&hellip;</p>
+        </div>
+
+        <!-- The honest second act -->
+        <div class="ob-framed" data-reveal>
+          <p class="framing ob-framing">Allowing isn't logging in.</p>
+          <p class="ob-body ob-body--soft ob-framed-body">
+            For me to actually read an account, you'll need to be signed into it in the
+            Anticipy browser. Open it now, sign into the ones you allowed, and leave them
+            open — I'll read them on the next step.
+          </p>
+          <p class="ob-framed-action">
+            <a class="link-quiet" href="#" data-open-browser>Open the Anticipy browser&nbsp;<span class="arrow" aria-hidden="true">&rarr;</span></a>
+          </p>
+        </div>
+
+        <!-- Footer action -->
+        <div class="ob-actions ob-actions--column" data-reveal>
+          <button type="button" class="btn-ink ob-gate-next" data-gate-next disabled>
+            I've allowed and signed in — read my world&nbsp;<span aria-hidden="true">&rarr;</span>
+          </button>
+          <p class="ob-aside" data-gate-aside>Allow at least one account to continue.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 2 · THE LOOP — "Reading your world"
+         ============================================================ -->
+    <section class="ob-screen" data-screen="loop" aria-label="Reading your world" hidden>
+      <div class="ob-column">
+
+        <!-- Live "reading" state -->
+        <div class="ob-loop-live" data-loop-live>
+          <p class="eyebrow" data-reveal>Reading your world</p>
+          <h2 class="ob-headline" data-reveal>Give me a moment with your accounts.</h2>
+          <div class="ob-think" data-reveal>
+            <span class="empty-dot"></span>
+            <p class="ob-think-line" data-think-line>Opening Gmail&hellip;</p>
+          </div>
+        </div>
+
+        <!-- Layer cards deal in here -->
+        <div class="ob-layers" data-loop-layers aria-live="polite"></div>
+
+        <!-- Tail state: some accounts weren't signed in (needs_login non-empty) -->
+        <div class="ob-loop-tail" data-loop-tail hidden>
+          <p class="framing ob-framing" data-tail-title>A few accounts weren't signed in.</p>
+          <p class="ob-body ob-body--soft" data-tail-body></p>
+          <div class="ob-actions ob-actions--row">
+            <a class="link-quiet" href="#" data-open-browser>Open the Anticipy browser&nbsp;<span class="arrow" aria-hidden="true">&rarr;</span></a>
+            <button type="button" class="btn-ink" data-loop-again>Read again&nbsp;<span aria-hidden="true">&rarr;</span></button>
+          </div>
+          <p class="ob-tail-continue">
+            <button type="button" class="act-allow" data-loop-continue>That's enough for now — continue&nbsp;&rarr;</button>
+          </p>
+        </div>
+
+        <!-- Honest floor: nothing readable at all -->
+        <div class="ob-loop-empty" data-loop-empty hidden>
+          <p class="eyebrow">Nothing to read yet</p>
+          <h2 class="ob-headline">I couldn't get into any of your accounts.</h2>
+          <p class="ob-body ob-body--soft">
+            Reading an account needs you to be signed into it in the Anticipy browser.
+            Open it, sign in to the accounts you allowed, and I'll try again.
+          </p>
+          <div class="ob-actions">
+            <button type="button" class="btn-ink" data-loop-retry>Open the browser and try again&nbsp;<span aria-hidden="true">&rarr;</span></button>
+          </div>
+        </div>
+
+        <!-- Calm offline state (engine unreachable) -->
+        <div class="ob-loop-offline" data-loop-offline hidden>
+          <p class="eyebrow">Not connected</p>
+          <h2 class="ob-headline">I can't reach the engine right now.</h2>
+          <p class="ob-body ob-body--soft">
+            Anticipy's local engine isn't responding. It's not logged in — that's all.
+            Start it, then try again whenever you're ready.
+          </p>
+          <div class="ob-actions">
+            <button type="button" class="btn-ink" data-loop-again>Try again&nbsp;<span aria-hidden="true">&rarr;</span></button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 3 · THE DOSSIER CONFIRM — "Here's what I learned"
+         ============================================================ -->
+    <section class="ob-screen" data-screen="dossier" aria-label="What I learned" hidden>
+      <div class="ob-column">
+
+        <div class="ob-dossier-stage" data-dossier-stage>
+          <p class="eyebrow" data-reveal>What I learned</p>
+          <h2 class="ob-headline ob-headline--md" data-reveal>This is you, as I read it.</h2>
+          <p class="ob-body" data-reveal>
+            Tell me where I'm right and where I'm off. I'd rather know now than guess later.
+            Nothing here is acted on — it's just what I'll remember.
+          </p>
+
+          <!-- The quiet editorial card -->
+          <article class="ob-dossier-card" data-dossier-card data-reveal>
+            <div class="card-bloom" aria-hidden="true"></div>
+            <div class="ob-dossier-body" data-dossier-body><!-- rendered from response --></div>
+          </article>
+
+          <!-- confidence hairline + felt caption -->
+          <div class="ob-conf" data-conf-wrap data-reveal>
+            <span class="ob-conf-tick" data-conf-tick></span>
+            <p class="ob-conf-caption" data-conf-caption></p>
+          </div>
+
+          <!-- gaps (honest, framed as a future call) -->
+          <div class="ob-gaps" data-gaps hidden data-reveal>
+            <p class="eyebrow">What I still don't know</p>
+            <p class="ob-body ob-body--soft">
+              A few things I couldn't learn from your accounts. We can cover them in a
+              two-minute call whenever you like — no rush.
+            </p>
+            <ul class="ob-gaps-list" data-gaps-list></ul>
+          </div>
+
+          <!-- the two acts -->
+          <div class="ob-confirm-row" data-reveal>
+            <button type="button" class="act-confirm" data-confirm>
+              This is right&nbsp;<span aria-hidden="true">&rarr;</span>
+              <svg class="confirm-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" /></svg>
+            </button>
+            <button type="button" class="act-note" data-correct>Something's off — let me fix it</button>
+          </div>
+          <p class="ob-edit-hint" data-edit-hint hidden>
+            Edit any line below, then confirm — your corrections amend what I remember.
+          </p>
+        </div>
+
+        <!-- The completion line (revealed after confirm) -->
+        <div class="ob-complete" data-complete hidden>
+          <p class="framing ob-framing">Good. Now I know you.</p>
+          <p class="ob-body ob-body--soft">I'll learn the rest as we go. Whenever you're ready —</p>
+          <div class="ob-actions">
+            <a class="btn-ink" href="app.html">Take me in&nbsp;<span aria-hidden="true">&rarr;</span></a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script src="onboard.js"></script>
+</body>
+</html>

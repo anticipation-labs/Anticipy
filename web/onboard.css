@@ -1,0 +1,683 @@
+/* =========================================================
+   ANTICIPY — ONBOARDING: "Let me learn you"
+   Token-only. Reuses styles.css + app.css verbatim.
+   No new colors, fonts, radii, or shadows. The welcome
+   page and The Board, made into a first run.
+   ========================================================= */
+
+/* ---------- The shell: one calm centered column ---------- */
+.onboard-shell {
+  /* app-shell already sets max-width 640px, centered, generous padding */
+  align-items: stretch;
+}
+
+.ob-column {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- The presence rail — the quiet spine ---------- */
+.onboard-rail {
+  position: fixed;
+  top: clamp(120px, 18vh, 200px);
+  bottom: clamp(120px, 18vh, 200px);
+  left: clamp(20px, 5vw, 64px);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.onboard-rail .presence-line {
+  /* inherits the welcome-page drawDown animation + gold hairline */
+  flex: 1;
+}
+
+/* hide the spine where the column would crowd it */
+@media (max-width: 900px) {
+  .onboard-rail {
+    display: none;
+  }
+}
+
+/* ---------- Screens (one visible at a time) ---------- */
+.ob-screen {
+  width: 100%;
+}
+.ob-screen[hidden] {
+  display: none;
+}
+
+/* ---------- Type ---------- */
+.ob-headline {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(34px, 5vw, 56px);
+  line-height: 1.06;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 0 0 1.6rem;
+}
+.ob-headline--lg {
+  font-size: clamp(40px, 6vw, 72px);
+}
+.ob-headline--md {
+  font-size: clamp(36px, 5.4vw, 60px);
+}
+
+.ob-body {
+  font-size: 19px;
+  line-height: 1.7;
+  color: var(--ink-85);
+  max-width: 520px;
+  margin: 0 0 1.4rem;
+}
+.ob-body--soft {
+  color: var(--ink-80);
+}
+
+/* the three quiet inline assurances (promise-reinforce idiom) */
+.ob-reinforce {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0.6rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+}
+.ob-reinforce .ob-dot {
+  color: var(--gold);
+  opacity: 0.6;
+}
+
+/* ---------- Actions ---------- */
+.ob-actions {
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 3vw, 36px);
+  flex-wrap: wrap;
+  margin-top: clamp(28px, 4vh, 44px);
+}
+.ob-actions--column {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+.ob-actions--row {
+  gap: clamp(18px, 3vw, 32px);
+}
+
+.ob-aside {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-40);
+  margin: 0;
+  letter-spacing: 0.01em;
+  transition: opacity 0.5s var(--ease);
+}
+.ob-aside[hidden] {
+  display: none;
+}
+
+/* ---------- The "what does it read" inline expander ---------- */
+.ob-learn {
+  margin: clamp(28px, 4vh, 44px) 0 0;
+}
+.ob-learn-toggle {
+  background: transparent;
+  border: none;
+  padding: 0 0 3px;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+.ob-learn-detail {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.45s var(--ease), opacity 0.4s var(--ease), margin-top 0.45s var(--ease);
+  margin-top: 0;
+}
+.ob-learn-detail.is-open {
+  max-height: 320px;
+  opacity: 1;
+  margin-top: 18px;
+}
+.ob-learn-text {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink-70);
+  max-width: 540px;
+  margin: 0;
+}
+.ob-learn-text strong {
+  font-weight: 600;
+  color: var(--ink-85);
+}
+
+/* =========================================================
+   SCREEN 1 · THE ALLOW GATE — the service rows
+   ========================================================= */
+.ob-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: clamp(28px, 4vh, 40px) 0 0;
+}
+
+.ob-engine-line {
+  font-size: 16px;
+  color: var(--ink-50);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+/* a settled paper card, the deck idiom */
+.ob-row {
+  background: #FBF9F4;
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  padding: 22px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+/* deal-in settle */
+.ob-row.is-dealing {
+  opacity: 0;
+  transform: translateY(10px);
+}
+.ob-row.is-settling {
+  transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ob-row-text {
+  min-width: 0;
+}
+.ob-row-name {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.3;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: 0.005em;
+}
+.ob-row-why {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-50);
+  margin: 6px 0 0;
+  letter-spacing: 0.01em;
+}
+
+/* the Allow control — off state: the act-allow text idiom */
+.ob-allow-ctl {
+  flex: 0 0 auto;
+}
+
+/* OFF: quiet text control (extends app.css .act-allow) */
+.ob-allow-off {
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--ink-60);
+  cursor: pointer;
+  position: relative;
+  padding: 6px 0 8px;
+}
+.ob-allow-off::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+.ob-allow-off:hover::after {
+  transform: scaleX(1);
+}
+
+/* ON: the gold affirmative pill (extends .demo-confirm / .act-confirm) */
+.ob-allow-on {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: var(--paper);
+  background: var(--gold);
+  border: none;
+  border-radius: 999px;
+  padding: 9px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  position: relative;
+}
+/* settle once then still */
+.ob-allow-on.is-blooming {
+  animation: confirmBreathe 2s ease-in-out 1;
+}
+.ob-allow-on .confirm-check {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+}
+.ob-allow-on .confirm-check path {
+  stroke: var(--paper);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: drawCheck 0.3s var(--ease) forwards;
+}
+/* a single soft gold breath behind the pill on confirm */
+.ob-allow-ctl {
+  position: relative;
+}
+.ob-allow-bloom {
+  position: absolute;
+  inset: -16px;
+  border-radius: 999px;
+  background: radial-gradient(circle at center, var(--gold) 0%, rgba(184, 146, 74, 0) 64%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.ob-allow-bloom.is-bloom {
+  animation: cardBloom 0.75s var(--ease) forwards;
+}
+
+/* ---------- the honest second act (framed) ---------- */
+.ob-framed {
+  margin: clamp(36px, 6vh, 64px) 0 0;
+  text-align: center;
+}
+.ob-framing {
+  font-size: clamp(20px, 2.6vw, 28px);
+  margin: 0 0 1rem;
+}
+.ob-framed-body {
+  max-width: 520px;
+  margin-inline: auto;
+  color: var(--ink-70);
+}
+.ob-framed-action {
+  margin: 0.4rem 0 0;
+}
+
+/* =========================================================
+   SCREEN 2 · THE LOOP
+   ========================================================= */
+.ob-think {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: clamp(24px, 4vh, 40px);
+}
+.ob-think-line {
+  font-size: 16px;
+  color: var(--ink-50);
+  margin: 0;
+  letter-spacing: 0.01em;
+  transition: opacity 0.5s var(--ease);
+}
+.ob-think-line.is-fading {
+  opacity: 0;
+}
+
+.ob-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: clamp(28px, 4vh, 40px) 0 0;
+}
+.ob-layers:empty {
+  margin: 0;
+}
+
+/* a layer card — the deck card idiom */
+.ob-layer {
+  background: #FBF9F4;
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  padding: 24px 28px 22px;
+}
+.ob-layer.is-dealing {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+}
+.ob-layer.is-settling {
+  transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.ob-layer-rows {
+  margin: 4px 0 0;
+}
+.ob-layer-row {
+  display: flex;
+  gap: 14px;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0 0 4px;
+}
+.ob-layer-label {
+  flex: 0 0 88px;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-40);
+  padding-top: 2px;
+}
+.ob-layer-val {
+  color: var(--ink);
+  margin: 0;
+}
+.ob-layer-val--soft {
+  color: var(--ink-50);
+}
+
+.ob-layer .card-divider {
+  /* drawn in via JS toggling .is-draw */
+}
+.ob-layer-felt {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-70);
+  margin: 0;
+}
+
+/* the confidence hairline under each layer (num-tick idiom) */
+.ob-layer-tick {
+  display: block;
+  width: 0;
+  height: 1px;
+  background: var(--gold);
+  margin-top: 16px;
+  transition: width 0.6s var(--ease) 0.2s;
+}
+
+.ob-loop-tail {
+  margin: clamp(32px, 5vh, 52px) 0 0;
+  text-align: center;
+}
+.ob-loop-tail .ob-framing {
+  margin-bottom: 1rem;
+}
+.ob-loop-tail .ob-body {
+  max-width: 520px;
+  margin-inline: auto;
+}
+.ob-loop-tail .ob-actions {
+  justify-content: center;
+}
+.ob-tail-continue {
+  margin: 1.4rem 0 0;
+  text-align: center;
+}
+
+/* =========================================================
+   SCREEN 3 · THE DOSSIER CONFIRM
+   ========================================================= */
+.ob-dossier-card {
+  position: relative;
+  background: #FBF9F4;
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  padding: 32px 34px;
+  margin: clamp(28px, 4vh, 40px) 0 0;
+  transition: transform 0.45s var(--ease), opacity 0.4s var(--ease);
+}
+.ob-dossier-card.is-confirm-out {
+  transform: translateY(-120%) rotate(-3deg);
+  opacity: 0;
+}
+.ob-dossier-card.is-bloom .card-bloom {
+  animation: cardBloom 0.75s var(--ease) forwards;
+}
+
+/* identity lead */
+.ob-ident-name {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1.05;
+  color: var(--ink);
+  margin: 0;
+}
+.ob-ident-meta {
+  font-size: 16px;
+  color: var(--ink-70);
+  margin: 8px 0 0;
+}
+.ob-ident-email {
+  font-size: 14.5px;
+  color: var(--ink-50);
+  margin: 4px 0 0;
+}
+
+/* a dossier section */
+.ob-section {
+  margin: 0;
+}
+.ob-section .card-eyebrow {
+  margin: 0 0 10px;
+}
+.ob-section-text {
+  font-size: 18px;
+  line-height: 1.66;
+  color: var(--ink-85);
+  margin: 0;
+}
+
+/* people */
+.ob-person {
+  margin: 0 0 12px;
+  line-height: 1.55;
+}
+.ob-person:last-child {
+  margin-bottom: 0;
+}
+.ob-person-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+.ob-person-rel {
+  color: var(--ink-70);
+}
+.ob-person-why {
+  display: block;
+  font-size: 14.5px;
+  color: var(--ink-50);
+  margin-top: 2px;
+}
+
+/* family / tools — restrained inline */
+.ob-inline {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-80);
+  margin: 0;
+}
+.ob-inline--light {
+  color: var(--ink-70);
+}
+
+.ob-noted {
+  font-size: 14.5px;
+  color: var(--ink-50);
+  margin: 0;
+  font-style: italic;
+}
+
+/* editable fields (note-field underline-on-focus idiom) */
+.ob-edit {
+  display: inline-block;
+  min-width: 60px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  outline: none;
+  border-bottom: 1px solid var(--ink-wash);
+  padding: 1px 2px;
+  transition: border-color 0.3s var(--ease);
+}
+.ob-edit:focus {
+  border-bottom-color: var(--gold);
+}
+.ob-dossier-card.is-editing .ob-edit {
+  border-bottom-color: var(--ink-30);
+}
+
+/* confidence hairline + caption */
+.ob-conf {
+  margin: clamp(20px, 3vh, 28px) 0 0;
+}
+.ob-conf-tick {
+  display: block;
+  width: 0;
+  height: 1px;
+  background: var(--gold);
+  transition: width 0.7s var(--ease) 0.2s;
+}
+.ob-conf-caption {
+  font-size: 13.5px;
+  color: var(--ink-50);
+  margin: 10px 0 0;
+  letter-spacing: 0.01em;
+}
+
+/* gaps */
+.ob-gaps {
+  margin: clamp(28px, 4vh, 40px) 0 0;
+}
+.ob-gaps[hidden] {
+  display: none;
+}
+.ob-gaps-list {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+}
+.ob-gaps-list li {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-60);
+  padding: 4px 0;
+}
+
+/* the two acts */
+.ob-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 3vw, 32px);
+  flex-wrap: wrap;
+  margin: clamp(28px, 4vh, 44px) 0 0;
+}
+.ob-edit-hint {
+  font-size: 13.5px;
+  color: var(--ink-50);
+  margin: 14px 0 0;
+  letter-spacing: 0.01em;
+}
+.ob-edit-hint[hidden] {
+  display: none;
+}
+
+/* completion */
+.ob-complete {
+  text-align: center;
+}
+.ob-complete[hidden] {
+  display: none;
+}
+.ob-complete .ob-framing {
+  margin-bottom: 1rem;
+}
+.ob-complete .ob-actions {
+  justify-content: center;
+}
+
+/* =========================================================
+   REVEAL stagger (welcome-page [data-reveal]); JS adds .is-in
+   ========================================================= */
+.ob-screen [data-reveal] {
+  transition-delay: var(--reveal-delay, 0s);
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+@media (max-width: 640px) {
+  .ob-row {
+    flex-direction: row;
+    align-items: center;
+  }
+  .ob-body,
+  .ob-learn-text {
+    font-size: 17.5px;
+  }
+  .ob-layer-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .ob-layer-label {
+    flex: none;
+  }
+}
+
+/* =========================================================
+   REDUCED MOTION — collapse to quiet crossfades
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .onboard-rail .presence-line,
+  .onboard-rail .presence-dot,
+  .empty-dot,
+  .ob-allow-on,
+  .ob-allow-bloom,
+  .ob-allow-on.is-blooming {
+    animation: none !important;
+  }
+  .ob-row.is-dealing,
+  .ob-row.is-settling,
+  .ob-layer.is-dealing,
+  .ob-layer.is-settling {
+    transition: opacity 0.2s linear !important;
+    transform: none !important;
+  }
+  .ob-layer-tick,
+  .ob-conf-tick {
+    transition: none !important;
+  }
+  .ob-dossier-card.is-confirm-out {
+    transition: opacity 0.2s linear !important;
+    transform: none !important;
+  }
+  .ob-learn-detail {
+    transition: none !important;
+  }
+}

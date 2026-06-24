@@ -13,7 +13,9 @@ from .owner_scrape import DEFAULT_SURFACES, scrape_owner
 from .permissions import SURFACE_SERVICE
 
 MAX_LAYERS = 4
-_DEPTH = {1: 2500, 2: 5000, 3: 8000, 4: 12000}  # each layer reads deeper
+# each layer reads DEEPER: (max_chars, scroll_steps). Layer 1 catalogues the surface; later layers
+# scroll further and dwell to pull in more emails/events/contacts/posts (it takes its time).
+_DEPTH = {1: (4000, 6), 2: (8000, 10), 3: (14000, 16), 4: (20000, 22)}
 _CONFIDENT = 0.7
 
 
@@ -30,8 +32,9 @@ async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYER
     doss: dict = {}
     last_conf = -1.0
     for layer in range(1, min(max_layers, MAX_LAYERS) + 1):
-        # GENUINE read of the allowed surfaces (honest needs_login; never faked)
-        signals = await run_in_threadpool(scrape_owner, cdp_url, allowed, _DEPTH.get(layer, 6000))
+        # GENUINE read of the allowed surfaces — deeper each layer (honest needs_login; never faked)
+        max_chars, scroll_steps = _DEPTH.get(layer, (8000, 10))
+        signals = await run_in_threadpool(scrape_owner, cdp_url, allowed, max_chars, scroll_steps)
         doss = await _dossier.synthesize_dossier(signals, core.gateway)
         counts = _dossier.write_dossier_to_memory(doss, core.memory)
         conf = float(doss.get("confidence", 0.0) or 0.0)
