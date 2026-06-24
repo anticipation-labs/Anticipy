@@ -1512,8 +1512,24 @@ async def agent_act(body: AgentActIn) -> dict:
     res = await asyncio.to_thread(
         browser_use_link.browse_act, body.task, url=body.start_url,
         max_steps=body.max_steps, cdp_url=body.cdp_url)
+    # M4 HONESTY — NEVER fake done. `res.success` is the agent's OWN "I called done" flag, not a
+    # verification the task was actually accomplished (returning it as success let a finished-but-
+    # WRONG task report success:true). Split the agent's self-report (agent_finished) from a
+    # JUDGE-verified outcome (task_succeeded). A finished-but-failed task returns needs_human, never
+    # a false success. A hard infra error stays a tool failure (not a human-clearable wall).
+    agent_finished = bool(res.success)
+    if res.error is None and agent_finished and res.result:
+        verdict = await judge(gateway_agent, body.task, {"answer": res.result, "final_url": res.url})
+    else:
+        verdict = {"success": False, "reason": "agent did not finish or returned no result"}
+    task_succeeded = bool(verdict.get("success")) and agent_finished and bool(res.result)
+    needs_human = (not task_succeeded) and (res.error is None) and agent_finished
     return {
-        "success": res.success,
+        "success": task_succeeded,          # back-compat key — now equals task_succeeded (judge-verified)
+        "task_succeeded": task_succeeded,    # the ONLY field that means "really done" (a judge blessed it)
+        "agent_finished": agent_finished,    # the agent stopped on its own — UNVERIFIED
+        "needs_human": needs_human,          # finished/stalled but not judge-verified -> a human should look
+        "judgment": verdict,
         "answer": res.result,
         "steps": res.steps,
         "final_url": res.url,
