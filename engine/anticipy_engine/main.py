@@ -152,6 +152,35 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS (sweep r2): the engine is local-first, but the app/onboard UI can be opened off-origin (a hosted
+# build, or a dev server on another localhost port) and still needs to reach the local engine from the
+# browser. This is a browser-enforced VISIBILITY policy only — it never authenticates anyone, so it does
+# NOT weaken the owner-token gate (every request still needs a valid token when one is set). Explicit
+# allowlist, never "*"; the owner token rides as a header (not a cookie), so credentials stay OFF.
+_DEFAULT_CORS_ORIGINS = (
+    "http://localhost:3000", "http://127.0.0.1:3000",
+    "https://anticipy.ai", "https://www.anticipy.ai", "https://app.anticipy.ai",
+    "https://anticipy-welcome.vercel.app",
+)
+
+
+def _cors_origins() -> list:
+    extra = (os.environ.get("ANTICIPY_CORS_ORIGINS", "") or "").replace(",", " ").split()
+    seen: dict = {}
+    for o in (*_DEFAULT_CORS_ORIGINS, *(x.strip().rstrip("/") for x in extra if x.strip())):
+        seen.setdefault(o, None)
+    return list(seen)
+
+
+try:
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware, allow_origins=_cors_origins(), allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "x-anticipy-owner-token"])
+except Exception:
+    pass
+
 
 def _owner_api_token() -> str:
     return (os.environ.get(OWNER_API_TOKEN_ENV) or "").strip()
