@@ -81,10 +81,15 @@ def _name_of(item) -> str:
     return ""
 
 
+def _k(s: str) -> str:
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())[:40]
+
+
 def write_dossier_to_memory(doss: dict, memory) -> dict:
     """Persist the dossier: STATED facts (identity/work/people/family) -> profile drawer (provenance
     'stated'), INFERRED (tools/sites) -> derived drawer (provenance 'inferred', confidence < 1).
-    Robust to model shape drift (string-or-dict people/family/tools); writes NOTHING when empty (honest)."""
+    IDEMPOTENT (sweep #8): each logical fact has a STABLE id, so a re-run/another layer REPLACES it in
+    place instead of duplicating. Robust to model shape drift; writes NOTHING when empty (honest)."""
     d = (doss or {}).get("dossier") or {}
     if not isinstance(d, dict) or not d:
         return {"profile": 0, "derived": 0}
@@ -95,14 +100,14 @@ def write_dossier_to_memory(doss: dict, memory) -> dict:
         bits = [f"{k}: {v}" for k, v in ident.items() if v]
         if bits:
             memory.profile.write_text("Owner identity — " + "; ".join(bits),
-                                      provenance="stated", confidence=0.9); p += 1
+                                      provenance="stated", confidence=0.9, id="onb:identity"); p += 1
     elif isinstance(ident, str) and ident.strip():
         memory.profile.write_text(f"Owner identity — {ident.strip()}",
-                                  provenance="stated", confidence=0.9); p += 1
+                                  provenance="stated", confidence=0.9, id="onb:identity"); p += 1
 
     if isinstance(d.get("work"), str) and d["work"].strip():
         memory.profile.write_text(f"Owner work: {d['work'].strip()}",
-                                  provenance="stated", confidence=0.85); p += 1
+                                  provenance="stated", confidence=0.85, id="onb:work"); p += 1
 
     for person in _as_list(d.get("people")):
         if isinstance(person, str):
@@ -115,21 +120,24 @@ def write_dossier_to_memory(doss: dict, memory) -> dict:
         rel = str(person.get("relationship") or "")
         why = str(person.get("why_they_matter") or "")
         txt = "Important person: " + name + (f" — {rel}" if rel else "") + (f"; {why}" if why else "")
-        memory.profile.write_text(txt, people=[name], provenance="stated", confidence=0.85); p += 1
+        memory.profile.write_text(txt, people=[name], provenance="stated", confidence=0.85,
+                                  id="onb:person:" + _k(name)); p += 1
 
     for fam in _as_list(d.get("family")):
         n = _name_of(fam)
         if n:
-            memory.profile.write_text(f"Family: {n}", provenance="stated", confidence=0.8); p += 1
+            memory.profile.write_text(f"Family: {n}", provenance="stated", confidence=0.8,
+                                      id="onb:family:" + _k(n)); p += 1
 
     for tool in _as_list(d.get("tools")):
         n = _name_of(tool)
         if n:
-            memory.derived.write_text(f"Tool the owner uses: {n}", provenance="inferred", confidence=0.6); c += 1
+            memory.derived.write_text(f"Tool the owner uses: {n}", provenance="inferred",
+                                      confidence=0.6, id="onb:tool:" + _k(n)); c += 1
 
     for site in _as_list(d.get("act_on_sites")):
         n = _name_of(site)
         if n:
             memory.derived.write_text(f"Site the browser arm may act on: {n}",
-                                      provenance="inferred", confidence=0.6); c += 1
+                                      provenance="inferred", confidence=0.6, id="onb:site:" + _k(n)); c += 1
     return {"profile": p, "derived": c}

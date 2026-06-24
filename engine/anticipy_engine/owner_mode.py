@@ -276,9 +276,11 @@ _REMINDER_LEAD = re.compile(
     r"make sure i|i need to|i have to|i gotta|i should|note to self:?|can you)\s+", re.I)
 _ACTION_LEAD = re.compile(
     r"^\s*(?:also\s+|then\s+|please\s+)?(call|e-?mail|email|text|message|dm|send|ping|book|schedule|"
-    r"reschedule|cancel|order|buy|purchase|pick ?up|grab|drop ?off|return|reserve|find|look ?up|"
-    r"search|pay|venmo|refund|remind|add|renew|sign ?up|rsvp|reply|follow ?up|print|confirm|"
-    r"submit|file|review|draft|forward|invite|set ?up)\b", re.I)
+    r"reschedule|rebook|cancel|order|reorder|restock|buy|purchase|pick ?up|grab|drop ?off|return|"
+    r"reserve|find|look ?up|search|pay|venmo|refund|remind|add|renew|sign|rsvp|reply|follow ?up|"
+    r"print|confirm|submit|file|review|draft|forward|invite|set ?up|water|feed|walk|wash|clean|fix|"
+    r"update|check|create|plan|prep|prepare|wrap ?up|ship|post|upload|download|scan|fill|complete|"
+    r"finish|wire|transfer|deposit|refill)\b", re.I)
 
 
 def _split_multi_action(text: str) -> list[str]:
@@ -290,6 +292,8 @@ def _split_multi_action(text: str) -> list[str]:
     inner = _REMINDER_LEAD.sub("", text or "").strip()
     parts = [p.strip(" ,.;") for p in re.split(r"\s+and\s+|\s*,\s*|\s+then\s+|\s*;\s*", inner)
              if p and p.strip(" ,.;")]
+    # strip a leftover leading connector so "X, Y, and Z" -> "Z" is testable (Oxford-comma fix #21)
+    parts = [c for c in (re.sub(r"^(?:and|then|also|plus)\s+", "", p, flags=re.I).strip() for p in parts) if c]
     if len(parts) < 2:
         return [text]
     actionable = [p for p in parts if _ACTION_LEAD.match(p)]

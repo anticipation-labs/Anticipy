@@ -1061,9 +1061,18 @@ async def onboard_owner_scrape(body: OwnerScrapeIn) -> dict:
     from fastapi.concurrency import run_in_threadpool
 
     from .onboarding import dossier as _dossier
-    from .onboarding.owner_scrape import scrape_owner
+    from .onboarding.owner_scrape import DEFAULT_SURFACES, scrape_owner
+    from .onboarding.permissions import SURFACE_SERVICE
 
-    signals = await run_in_threadpool(scrape_owner, body.cdp_url, None, max_chars=body.max_chars)
+    # CONSENT GATE (sweep #2/#5): read ONLY services the owner explicitly allowed — never all of them via
+    # None. Mirrors run_loop; an exposed route must not bypass the per-service allow gate the product promises.
+    allowed = [s for s in DEFAULT_SURFACES
+               if core.onboard_permissions.is_allowed(SURFACE_SERVICE.get(s.get("key"), ""))]
+    if not allowed:
+        return {"dossier": {}, "scrape": {"usable_count": 0, "needs_login": [], "surfaces": []},
+                "memory_written": {"profile": 0, "derived": 0},
+                "reason": "no service allowed yet — approve at least one account first"}
+    signals = await run_in_threadpool(scrape_owner, body.cdp_url, allowed, max_chars=body.max_chars)
     doss = await _dossier.synthesize_dossier(signals, core.gateway)
     counts = _dossier.write_dossier_to_memory(doss, core.memory)
     status = {"usable_count": len(signals.get("logged_in", [])),
@@ -1607,8 +1616,15 @@ async def agent_run(body: AgentRunIn) -> dict:
     shot = result.pop("final_shot", None)  # vision-judge in-process; don't ship the image over HTTP
     # The general judge decides success — but only for an actual answer. A safety
     # stop or a wall handoff is already a correct outcome and is not judged.
-    if body.judge and not result.get("needs_human") and not result.get("stopped_for_safety"):
+    # M4 HONESTY (sweep #14): JUDGE every answered run on the real model — not only when body.judge is set
+    # (it defaults False). A judge verdict of false flips the run to needs_human; never a silent fake done.
+    if (not result.get("needs_human") and not result.get("stopped_for_safety")
+            and (body.judge or getattr(gw, "provider", None) == PROVIDER_OPENROUTER)
+            and (result.get("answer") or result.get("final_url"))):
         result["judgment"] = await judge(gw, body.task, result, image=shot)
+        result["task_succeeded"] = bool(result["judgment"].get("success"))
+        if not result["task_succeeded"]:
+            result["needs_human"] = True
     # M4 (audit #5): a wall handoff mints a resume_token — PERSIST the run state under it so a later
     # /agent/resume can be VALIDATED and resumed with context, instead of a blind cold restart.
     if result.get("resume_token") and (result.get("needs_human") or result.get("paused")):
@@ -1652,8 +1668,20 @@ async def agent_resume(body: AgentResumeIn) -> dict:
     result["resumed"] = True
     result["resumed_cold"] = state is None
     shot = result.pop("final_shot", None)
-    if body.judge and not result.get("needs_human") and not result.get("stopped_for_safety"):
+    # M4 HONESTY (sweep #14): judge a resumed run the same fail-safe way (judge on the real model, not
+    # only when body.judge is set); an unverified resume becomes needs_human, never a fake done.
+    if (not result.get("needs_human") and not result.get("stopped_for_safety")
+            and (body.judge or getattr(gateway_agent, "provider", None) == PROVIDER_OPENROUTER)
+            and (result.get("answer") or result.get("final_url"))):
         result["judgment"] = await judge(gateway_agent, body.task, result, image=shot)
+        result["task_succeeded"] = bool(result["judgment"].get("success"))
+        if not result["task_succeeded"]:
+            result["needs_human"] = True
+    # sweep #17: re-persist resume state if the resumed run hit ANOTHER wall (multi-wall handoff)
+    if result.get("resume_token") and (result.get("needs_human") or result.get("paused")):
+        core.resume_store.put(str(result["resume_token"]), {
+            "task": body.task, "start_url": body.start_url, "wall_kind": result.get("wall_kind"),
+            "history": (result.get("history") or [])[-30:], "step": result.get("steps")})
     return result
 
 
