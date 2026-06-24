@@ -284,19 +284,36 @@ def _owner_ws_authorized(ws: WebSocket) -> bool:
 
 @app.middleware("http")
 async def owner_api_auth(request: Request, call_next):
-    """Optional public-deploy guard.
+    """Auth guard + per-user identity.
 
-    Local development and the deterministic suite keep ANTICIPY_OWNER_API_TOKEN
-    unset. When it is set, every owner/private engine route requires the server
-    held token; only /health remains public for liveness probes.
+    Local dev / the deterministic suite keep ANTICIPY_OWNER_API_TOKEN unset (everything open). When a
+    token IS set (the public deploy), a request is authorized by EITHER the owner token (local/admin) OR
+    a valid signed-in Supabase user (a Bearer access token). A valid Supabase login also tags
+    request.state.user_id / user_email so handlers can key per-user data. /health stays public.
     """
+    # Resolve the signed-in Supabase user, if a Bearer is present (cached + off-loop so it never blocks).
+    request.state.user_id = None
+    request.state.user_email = None
+    _auth = (request.headers.get("authorization") or "").strip()
+    _bearer = (request.headers.get(OWNER_TOKEN_HEADER) or "").strip()
+    if not _bearer and _auth.lower().startswith("bearer "):
+        _bearer = _auth[7:].strip()
+    if _bearer and _bearer.count(".") == 2:   # only JWTs (not the opaque owner token) hit Supabase
+        from fastapi.concurrency import run_in_threadpool
+        from .core.auth import verify_supabase_token
+        info = await run_in_threadpool(verify_supabase_token, _bearer)
+        if info:
+            request.state.user_id = info["user_id"]
+            request.state.user_email = info["email"]
+
     token = _owner_api_token()
-    if token and request.url.path not in PUBLIC_PATHS and not _owner_api_authorized(request, token):
-        return JSONResponse(
-            {"error": "unauthorized", "message": "Anticipy owner API token required."},
-            status_code=401,
-            headers={"www-authenticate": "Bearer"},
-        )
+    if token and request.url.path not in PUBLIC_PATHS:
+        if not (_owner_api_authorized(request, token) or request.state.user_id):
+            return JSONResponse(
+                {"error": "unauthorized", "message": "Sign in to use Anticipy."},
+                status_code=401,
+                headers={"www-authenticate": "Bearer"},
+            )
     return await call_next(request)
 
 

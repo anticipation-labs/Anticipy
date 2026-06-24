@@ -25,6 +25,7 @@ import tempfile
 
 # Force the free, deterministic stub brain + mock hands (no Twilio, no model spend).
 os.environ.setdefault("ANTICIPY_MODEL_PROVIDER", "stub")
+os.environ.setdefault("ANTICIPY_CR_BRAIN", "decider")  # this test asserts the decider verdict brain; the warm OnboardingCallBrain is the /cr default
 os.environ.setdefault("ANTICIPY_HANDS_MODE", "mock")
 os.environ.setdefault("ANTICIPY_NATIVE_BRIDGE_FALLBACK", "0")
 os.environ.setdefault("ANTICIPY_TICK_SECONDS", "0")
