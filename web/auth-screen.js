@@ -365,6 +365,14 @@
   function protect(opts) {
     opts = opts || {};
     var onReady = typeof opts.onReady === "function" ? opts.onReady : function () {};
+    // LOCAL single-user OWNER mode (127.0.0.1/localhost): the engine is open and there's one default
+    // brain — skip the sign-in gate entirely (no requireAuth, no onChange-reload). Sign-in is the cloud
+    // experience. This prevents the flash/reload loop that the no-session onChange listener caused locally.
+    if (/^https?:$/.test(location.protocol) &&
+        (location.hostname === "127.0.0.1" || location.hostname === "localhost")) {
+      onReady(null);
+      return;
+    }
     var shown = false;
     var refs = null;
 
@@ -420,6 +428,12 @@
      ========================================================= */
   function mountChip(container) {
     if (!container) return;
+    // LOCAL owner mode: no sign-in chip and — critically — no onChange→reload listener (that listener
+    // reloads whenever there's no signed-in user, which locally is always, causing the flash loop).
+    if (/^https?:$/.test(location.protocol) &&
+        (location.hostname === "127.0.0.1" || location.hostname === "localhost")) {
+      return;
+    }
     var u = auth && auth.available ? auth.user() : null;
     var email = u && u.email ? u.email : "";
 

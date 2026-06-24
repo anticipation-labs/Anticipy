@@ -152,6 +152,13 @@
      The page that uses this never proceeds to the product without a session. */
   function requireAuth(opts) {
     opts = opts || {};
+    // LOCAL single-user dev (served from 127.0.0.1 / localhost): the engine is open and there is one
+    // default brain, so skip the sign-in gate entirely. Sign-in + per-user is the HOSTED (cloud)
+    // experience; locally the app boots straight in and the extension drives THIS same default brain.
+    if (/^https?:$/.test(location.protocol) &&
+        (location.hostname === "127.0.0.1" || location.hostname === "localhost")) {
+      return Promise.resolve(null);
+    }
     return currentSession().then(function (session) {
       if (session) return session;
       if (typeof opts.onSignedOut === "function") opts.onSignedOut();
