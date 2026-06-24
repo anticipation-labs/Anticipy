@@ -271,6 +271,33 @@ def _split_intent_clauses(text: str) -> list[str]:
     return raw_clauses
 
 
+_REMINDER_LEAD = re.compile(
+    r"^\s*(?:please\s+)?(?:remind me to|remind me|remember to|don'?t forget to|make sure to|"
+    r"make sure i|i need to|i have to|i gotta|i should|note to self:?|can you)\s+", re.I)
+_ACTION_LEAD = re.compile(
+    r"^\s*(?:also\s+|then\s+|please\s+)?(call|e-?mail|email|text|message|dm|send|ping|book|schedule|"
+    r"reschedule|cancel|order|buy|purchase|pick ?up|grab|drop ?off|return|reserve|find|look ?up|"
+    r"search|pay|venmo|refund|remind|add|renew|sign ?up|rsvp|reply|follow ?up|print|confirm|"
+    r"submit|file|review|draft|forward|invite|set ?up)\b", re.I)
+
+
+def _split_multi_action(text: str) -> list[str]:
+    """Split a bundled multi-ACTION line ("remind me to call the dentist tomorrow and email Priya the
+    budget") into its independent tasks so neither is dropped. CONSERVATIVE: splits only when >=2
+    clauses EACH lead with a distinct strong action verb — so "call the dentist and tell them I'm late"
+    (one call) stays whole. Used by the explicit-reminder backstop, which otherwise emits the whole
+    line as ONE task and lets the model keep only the most salient action."""
+    inner = _REMINDER_LEAD.sub("", text or "").strip()
+    parts = [p.strip(" ,.;") for p in re.split(r"\s+and\s+|\s*,\s*|\s+then\s+|\s*;\s*", inner)
+             if p and p.strip(" ,.;")]
+    if len(parts) < 2:
+        return [text]
+    actionable = [p for p in parts if _ACTION_LEAD.match(p)]
+    if len(actionable) < 2:
+        return [text]
+    return actionable
+
+
 def _split_transcript(text: str) -> list[OwnerObservedLine]:
     raw_parts: list[str] = []
     for raw_line in (text or "").splitlines():

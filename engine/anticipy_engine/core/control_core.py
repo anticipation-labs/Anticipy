@@ -1694,12 +1694,18 @@ class ControlCore:
             # silenced just above; money is handled at the spine (blocked, never auto-acted). Emitting
             # deterministically here removes the model's coin-flip for the shapes Anticipy must never miss.
             if _is_explicit_reversible_task(line.text):
-                n += 1
-                _ot = OwnerObservedLine(line_no=n, text=line.text, moat_task=True)
-                _ot.src_idx = src_idx
-                _ot.money_src = _msrc
-                out.append(_ot)
-                self.glassbox.log("reminder_hold_backstop", {"line": line.text[:140]})
+                # M1b: a bundled "remind me to call the dentist AND email Priya" must yield BOTH tasks,
+                # not collapse to one (the backstop used to emit the whole line, so the model kept only
+                # the most salient action and the other was silently dropped). Split conservatively.
+                from ..owner_mode import _split_multi_action
+                for _cl in _split_multi_action(line.text):
+                    n += 1
+                    _ot = OwnerObservedLine(line_no=n, text=_cl, moat_task=True)
+                    _ot.src_idx = src_idx
+                    _ot.money_src = _is_money_action(_cl)   # per-clause money truth (M1a-consistent)
+                    out.append(_ot)
+                self.glassbox.log("reminder_hold_backstop",
+                                  {"line": line.text[:140], "clauses": len(_split_multi_action(line.text))})
                 continue
             try:
                 res = await extract(self.gateway, line.text, context=context)
