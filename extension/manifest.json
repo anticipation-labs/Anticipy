@@ -1,10 +1,22 @@
 {
   "manifest_version": 3,
   "name": "Anticipy (the hands)",
-  "version": "0.2.0",
-  "description": "Connects to the local Anticipy engine over an authenticated link and acts on pages on your behalf. Local and private.",
+  "version": "0.3.0",
+  "description": "Connects to the Anticipy engine and acts on pages on your behalf. Private and read-only during onboarding.",
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup.html", "default_title": "Anticipy" },
   "permissions": ["storage", "alarms", "scripting", "tabs", "tabGroups", "debugger"],
-  "host_permissions": ["http://127.0.0.1/*", "<all_urls>"]
+  "host_permissions": ["http://127.0.0.1/*", "<all_urls>"],
+  "content_scripts": [{
+    "matches": ["https://*.vercel.app/*", "http://localhost:3000/*", "http://127.0.0.1:3000/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "externally_connectable": {
+    "matches": [
+      "https://*.vercel.app/*",
+      "http://localhost:3000/*",
+      "http://127.0.0.1:3000/*"
+    ]
+  }
 }

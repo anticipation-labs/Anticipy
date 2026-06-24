@@ -4,8 +4,7 @@
 // chrome.storage (SW globals are lost when Chrome idle-kills the worker ~30s).
 // Browse-job execution (page read / input / screenshot) is wired in piece 3.
 
-const ENGINE_HTTP = "http://127.0.0.1:8787";
-const ENGINE_WS = "ws://127.0.0.1:8787/ws/extension";
+const DEFAULT_ENGINE_HTTP = "http://127.0.0.1:8787";
 const PING_MS = 20000;
 
 // Onboarding scrape: services to probe for an already-logged-in session (the engine may send its
@@ -18,6 +17,10 @@ const DEFAULT_DISCOVER_SERVICES = [
   { name: "Outlook", url: "https://outlook.live.com/mail/" },
   { name: "Slack", url: "https://app.slack.com/client" },
   { name: "Notion", url: "https://www.notion.so/" },
+  { name: "LinkedIn", url: "https://www.linkedin.com/feed/" },
+  { name: "GitHub", url: "https://github.com/" },
+  { name: "X (Twitter)", url: "https://x.com/home" },
+  { name: "Instagram", url: "https://www.instagram.com/" },
 ];
 
 let ws = null;
@@ -32,8 +35,18 @@ async function getState() {
   return (await chrome.storage.local.get("anticipy")).anticipy || { connected: false };
 }
 
+async function engineHttp() {
+  const st = await getState();
+  return (st.engine_http || DEFAULT_ENGINE_HTTP).replace(/\/+$/, "");
+}
+
+async function engineWs() {
+  const base = await engineHttp();
+  return base.replace(/^http:/, "ws:").replace(/^https:/, "wss:") + "/ws/extension";
+}
+
 async function fetchToken() {
-  const r = await fetch(ENGINE_HTTP + "/ws/token");
+  const r = await fetch((await engineHttp()) + "/ws/token");
   if (!r.ok) throw new Error("token fetch failed: " + r.status);
   return (await r.json()).token;
 }
@@ -41,9 +54,11 @@ async function fetchToken() {
 async function connect() {
   try {
     const token = await fetchToken();
-    ws = new WebSocket(ENGINE_WS + "?token=" + encodeURIComponent(token));
+    const wsUrl = await engineWs();
+    ws = new WebSocket(wsUrl + "?token=" + encodeURIComponent(token));
     ws.onopen = async () => {
       await setState({ connected: true, lastConnect: Date.now(), error: null });
+      sendHeartbeat().catch(() => {});
       startPing();
       console.log("[anticipy] engine link open");
     };
@@ -87,6 +102,10 @@ async function handleMessage(msg) {
     const r = await doDiscoverConnections(msg);
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(r));
   }
+  if (msg.type === "deep_scrape") {
+    const r = await doDeepScrape(msg);
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(r));
+  }
 }
 
 // Real execution: open the target page in a controlled tab, read it
@@ -102,7 +121,7 @@ async function executeBrowseJob(msg) {
   try {
     const tab = await openInGroup(url);    // ALWAYS operate inside the "Anticipy" tab group
     const groupId = (await getState()).groupId;
-    await waitForComplete(tab.id, 25000);  // hard sites can be slow
+    await waitForComplete(tab.id, 25000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl);  // hard sites can be slow
     await sleep(900);                      // let JS-heavy pages paint/settle
 
     const [{ result: page }] = await chrome.scripting.executeScript({
@@ -147,7 +166,7 @@ async function doDiscoverConnections(msg) {
     if (!url) continue;
     try {
       const tab = await openInGroup(url);
-      await waitForComplete(tab.id, 20000);
+      await waitForComplete(tab.id, 20000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl);
       await settle(tab.id);
       const [{ result: page }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
@@ -172,7 +191,7 @@ async function doDiscoverConnections(msg) {
   // Hand the discovery to the engine; it builds the per-person mesh via /onboard/discover (tested).
   let posted = false;
   try {
-    const resp = await fetch(ENGINE_HTTP + "/onboard/discover", {
+    const resp = await fetch((await engineHttp()) + "/onboard/discover", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ discovered: discovered, source: "chrome_scrape" }),
@@ -247,12 +266,19 @@ async function cdpKey(tabId, key) {
 // "Failed to capture tab: image" on heavy/backgrounded tabs). Falls back if needed.
 async function cdpScreenshot(tabId) {
   // Capture the WORKING tab only, via CDP. NEVER fall back to captureVisibleTab —
-  // that grabs whatever tab the user is looking at (e.g. a video call), which is a
-  // privacy + correctness bug. On failure return null; the engine re-observes.
+  // that can grab whatever tab the user is looking at. The only fallback allowed
+  // here first proves the requested tab is the active tab in its own window.
   try {
     await ensureDebugger(tabId);
     const r = await cdp(tabId, "Page.captureScreenshot", { format: "jpeg", quality: 55, captureBeyondViewport: false });
     if (r && r.data) return "data:image/jpeg;base64," + r.data;
+  } catch (e) {}
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const [active] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
+    if (active && active.id === tabId) {
+      return await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 55 });
+    }
   } catch (e) {}
   return null;
 }
@@ -275,11 +301,21 @@ async function settle(tabId, maxMs = 6000) {
 // --- agent primitive: OBSERVE (set-of-marks: numbered boxes + a11y info) ---
 async function doObserve(msg) {
   const args = msg.args || {};
+  const requestedUrl = args.url || msg.url || "";
+  const debug = { requested_url: requestedUrl, arg_keys: Object.keys(args) };
   try {
     let tab = await getWorkingTab();
-    if (args.url || !tab) {
-      tab = await openInGroup(args.url || (tab ? tab.url : "about:blank"));
-      await waitForComplete(tab.id, 25000);
+    debug.before_url = tab && tab.url ? tab.url : "";
+    if (requestedUrl || !tab) {
+      tab = await openInGroup(requestedUrl || (tab ? tab.url : "about:blank"));
+      debug.after_open_url = tab && tab.url ? tab.url : "";
+      debug.recreated = !!tab._anticipyRecreated;
+      await waitForComplete(tab.id, 25000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl);
+      try {
+        const afterWait = await chrome.tabs.get(tab.id);
+        debug.after_wait_url = afterWait && afterWait.url ? afterWait.url : "";
+        debug.after_wait_status = afterWait && afterWait.status ? afterWait.status : "";
+      } catch (e) {}
       await settle(tab.id);
     } else {
       await ensureGroup(tab.id);
@@ -300,7 +336,19 @@ async function doObserve(msg) {
           if (r.width <= 2 || r.height <= 2 || cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
           if (r.bottom < -50 || r.right < 0 || r.top > innerHeight + 1200 || r.left > innerWidth) continue;
           el.setAttribute('data-anticipy-idx', String(i));
-          let name = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || el.getAttribute('title') || el.innerText || '').trim();
+          let labelText = '';
+          try {
+            if (el.labels && el.labels.length) labelText = Array.from(el.labels).map(l => l.innerText || l.textContent || '').join(' ').trim();
+            if (!labelText && el.id) {
+              const lab = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+              if (lab) labelText = (lab.innerText || lab.textContent || '').trim();
+            }
+            if (!labelText) {
+              const parentLabel = el.closest('label');
+              if (parentLabel) labelText = (parentLabel.innerText || parentLabel.textContent || '').trim();
+            }
+          } catch (e) {}
+          let name = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || labelText || el.getAttribute('title') || el.innerText || '').trim();
           if (!name) { const img = el.querySelector('img'); if (img) name = (img.getAttribute('alt') || '').trim(); }
           if (!name) name = (el.textContent || '').trim();
           if (!name) { const anc = el.closest('li, article, section, [role="listitem"], [role="article"]'); if (anc) { const h = anc.querySelector('h1, h2, h3, [role="heading"]'); if (h) name = (h.innerText || '').trim(); } }
@@ -331,22 +379,26 @@ async function doObserve(msg) {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => { const e = document.getElementById('anticipy-som'); if (e) e.remove(); } });
     return result(msg, "success",
       { screenshot, url: page.url, title: page.title },
-      { url: page.url, title: page.title, text: page.text, elements: page.elements, group_id: (await getState()).groupId });
+      { url: page.url, title: page.title, text: page.text, elements: page.elements, group_id: (await getState()).groupId,
+        debug });
   } catch (e) {
-    return result(msg, "needs_human", null, { reason: "observe error: " + String(e) });
+    return result(msg, "needs_human", null, { reason: "observe error: " + String(e),
+      debug });
   }
 }
 
 // --- agent primitive: ACT (click / type / scroll / navigate / back) ---
 async function doAct(msg) {
   const a = msg.args || {};
+  let step = "start";
   try {
     let tab = await getWorkingTab();
+    step = "get_working_tab";
     if (!tab) return result(msg, "needs_human", null, { reason: "no working tab" });
 
     if (a.action === "navigate") {
       tab = await chrome.tabs.update(tab.id, { url: a.url, active: true });
-      await waitForComplete(tab.id, 25000); await settle(tab.id);
+      await waitForComplete(tab.id, 25000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl); await settle(tab.id);
       return result(msg, "success", null, { ok: true, action: "navigate", url: a.url });
     }
     if (a.action === "back") {
@@ -362,6 +414,7 @@ async function doAct(msg) {
     }
     if (a.action === "click" || a.action === "type") {
       // locate element, scroll it into view, get its viewport-center coords
+      step = "locate_element";
       const [{ result: rc }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id }, args: [a.index],
         func: (i) => {
@@ -374,32 +427,100 @@ async function doAct(msg) {
       });
       if (!rc) return result(msg, "needs_human", null, { ok: false, err: "no element " + a.index });
       await sleep(200);
-      await ensureDebugger(tab.id);
-      await cdpClick(tab.id, rc.x, rc.y);               // TRUSTED click (isTrusted=true)
+      let cdpReady = false;
+      let cdpError = "";
+      step = "ensure_debugger";
+      try {
+        await ensureDebugger(tab.id);
+        cdpReady = true;
+      } catch (e) {
+        cdpError = String(e);
+      }
+      if (cdpReady) {
+        try {
+          step = "cdp_click";
+          await cdpClick(tab.id, rc.x, rc.y);               // TRUSTED click (isTrusted=true)
+        } catch (e) {
+          cdpReady = false;
+          cdpError = String(e);
+        }
+      }
+      step = "js_focus_click";
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id }, args: [a.index],
+        func: (i) => {
+          const e = document.querySelector('[data-anticipy-idx="'+i+'"]');
+          if (e) { if (e.focus) e.focus(); if (e.click) e.click(); }
+        },
+      }).catch(() => {});
       if (a.action === "type") {
-        await sleep(120); await cdpType(tab.id, a.text || "");
+        await sleep(120);
+        if (cdpReady) {
+          step = "cdp_type";
+          await cdpType(tab.id, a.text || "");
+        }
+        step = "value_setter";
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id }, args: [a.index, a.text || ""],
+          func: (i, text) => {
+            const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
+            if (!e) return { ok: false, reason: 'missing element' };
+            const current = ('value' in e) ? String(e.value || '') : String(e.textContent || '');
+            if (text && current.includes(text)) return { ok: true, method: 'trusted', value: current };
+            if ('value' in e) {
+              const proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+              const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
+              if (setter) setter.call(e, text);
+              else e.value = text;
+              e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+              e.dispatchEvent(new Event('change', { bubbles: true }));
+              return { ok: true, method: 'value_setter', value: e.value };
+            }
+            if (e.isContentEditable) {
+              e.textContent = text;
+              e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+              e.dispatchEvent(new Event('change', { bubbles: true }));
+              return { ok: true, method: 'contenteditable', value: e.textContent };
+            }
+            return { ok: false, reason: 'not typeable' };
+          },
+        }).catch(() => {});
         if (a.enter) { await sleep(120); await cdpKey(tab.id, "Enter"); }
       }
       await sleep((a.enter || a.action === "click") ? 1400 : 400);
-      return result(msg, "success", null, { ok: true, action: a.action });
+      return result(msg, "success", null, { ok: true, action: a.action, step: "done", cdp_ready: cdpReady, cdp_error: cdpError });
     }
     return result(msg, "needs_human", null, { ok: false, err: "unknown action " + a.action });
   } catch (e) {
-    return result(msg, "needs_human", null, { reason: "act error: " + String(e) });
+    return result(msg, "needs_human", null, { reason: "act error at " + step + ": " + String(e), step });
   }
 }
 
 // --- the "Anticipy" tab group: always operate here, reusing one working tab ---
 async function openInGroup(url) {
   let tab = await getWorkingTab();
+  const beforeUrl = tab && tab.url ? tab.url : "";
+  let recreated = false;
   if (tab) {
     tab = await chrome.tabs.update(tab.id, { url, active: true });
+    await sleep(200);
+    const current = await chrome.tabs.get(tab.id);
+    if (url && beforeUrl && url !== beforeUrl && current.url === beforeUrl && current.status === "loading") {
+      try { await chrome.tabs.remove(tab.id); } catch (e) {}
+      tab = await chrome.tabs.create({ url, active: true });
+      await setState({ workTabId: tab.id });
+      recreated = true;
+    }
   } else {
     tab = await chrome.tabs.create({ url, active: true });
     await setState({ workTabId: tab.id });
   }
   await ensureGroup(tab.id);
-  return await chrome.tabs.get(tab.id);
+  const current = await chrome.tabs.get(tab.id);
+  current._anticipyBeforeUrl = beforeUrl;
+  current._anticipyTargetUrl = url;
+  current._anticipyRecreated = recreated;
+  return current;
 }
 async function getWorkingTab() {
   const st = await getState();
@@ -429,17 +550,58 @@ function extractUrl(task) {
   return m ? m[0] : null;
 }
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-function waitForComplete(tabId, timeout) {
+function navigationHasMoved(tab, beforeUrl, targetUrl) {
+  if (!beforeUrl) return true;
+  if (targetUrl && beforeUrl === targetUrl) return true;
+  if (tab && tab.url && tab.url !== beforeUrl) return true;
+  // Already sitting on the target (re-observe / no redirect / trailing-slash) = arrived, not stuck.
+  var norm = function (u) { return (u || "").replace(/[#?].*$/, "").replace(/\/+$/, ""); };
+  if (tab && targetUrl && tab.url && norm(tab.url) === norm(targetUrl)) return true;
+  return false;
+}
+function waitForComplete(tabId, timeout, beforeUrl, targetUrl) {
   return new Promise((resolve, reject) => {
-    const to = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error("load timeout")); }, timeout);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(to);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    };
+    const fail = (err) => {
+      if (done) return;
+      done = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(err || new Error("load timeout"));
+    };
+    const finishIfDomUsable = () => {
+      chrome.tabs.get(tabId, (tab) => {
+        const status = tab && tab.status ? tab.status : "unknown";
+        const currentUrl = tab && tab.url ? tab.url : "";
+        chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => document.readyState,
+        }, (rows) => {
+          const rs = rows && rows[0] && rows[0].result ? rows[0].result : "unknown";
+          if (navigationHasMoved(tab, beforeUrl, targetUrl) && (rs === "interactive" || rs === "complete")) finish();
+          else fail(new Error("load timeout status=" + status + " url=" + currentUrl + " readyState=" + rs));
+        });
+      });
+    };
+    const to = setTimeout(finishIfDomUsable, timeout);
     function listener(id, info) {
       if (id === tabId && info.status === "complete") {
-        clearTimeout(to);
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
+        chrome.tabs.get(tabId, (tab) => {
+          if (navigationHasMoved(tab, beforeUrl, targetUrl)) finish();
+        });
       }
     }
     chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(() => chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) return;
+      if (tab && tab.status === "complete" && navigationHasMoved(tab, beforeUrl, targetUrl)) finish();
+    }), 500);
   });
 }
 
@@ -447,6 +609,7 @@ function waitForComplete(tabId, timeout) {
 chrome.alarms.create("anticipy-keepalive", { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name !== "anticipy-keepalive") return;
+  sendHeartbeat().catch(() => {});
   if (!ws || ws.readyState !== WebSocket.OPEN) connect();
   else ws.send(JSON.stringify({ type: "ping" }));
 });
@@ -456,5 +619,205 @@ chrome.runtime.onInstalled.addListener(connect);
 connect();
 
 chrome.runtime.onMessage.addListener((m, _s, send) => {
-  if (m === "status") { getState().then(send); return true; }
+  if (m === "status" || (m && m.type === "status")) { getState().then(send); return true; }
+  if (m && m.type === "pair_device") {
+    pairDevice(m).then(send).catch((e) => send({ ok: false, error: String(e) }));
+    return true;
+  }
+  if (m && m.type === "heartbeat") {
+    sendHeartbeat().then(send).catch((e) => send({ ok: false, error: String(e) }));
+    return true;
+  }
 });
+
+// ── External messages from the frontend page (Vercel or localhost:3000) ──
+// This lets the scrape work WITHOUT a WebSocket connection to the engine.
+// The frontend page sends { type: "discover_connections" } directly to the
+// extension, and the extension does the scrape and sends results back.
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  if (msg.type === "ping") {
+    getState().then((state) => sendResponse({
+      ok: true,
+      version: "0.3.0",
+      paired: !!state.paired,
+      connected: !!state.connected,
+      device_id: state.device_id || "",
+    }));
+    return true;
+  }
+  if (msg.type === "pair_device") {
+    pairDevice(msg)
+      .then((r) => sendResponse(r))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+  if (msg.type === "heartbeat") {
+    sendHeartbeat()
+      .then((r) => sendResponse(r))
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+  if (msg.type === "discover_connections") {
+    const services = (msg.services && msg.services.length) ? msg.services : DEFAULT_DISCOVER_SERVICES;
+    doDiscoverConnections({ type: "discover_connections", services })
+      .then((r) => {
+        const discovered = (r.output && r.output.discovered) || [];
+        sendResponse({ ok: true, discovered, posted: !!(r.output && r.output.posted), count: (r.output && r.output.count) || discovered.length });
+      })
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+  if (msg.type === "deep_scrape") {
+    const services = msg.services || [];
+    doDeepScrape({ type: "deep_scrape", services })
+      .then((r) => {
+        const scraped = (r.output && r.output.scraped) || [];
+        sendResponse({ ok: true, scraped, count: (r.output && r.output.count) || scraped.length });
+      })
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+  sendResponse({ ok: false, error: "unknown message type" });
+});
+
+async function pairDevice(msg) {
+  const pairingCode = String(msg.pairing_code || msg.code || "").trim();
+  const base = String(msg.engine_http || msg.engineHttp || DEFAULT_ENGINE_HTTP).replace(/\/+$/, "");
+  if (!pairingCode) return { ok: false, error: "pairing_code_required" };
+  await setState({ engine_http: base, pairing_error: null });
+  const resp = await fetch(base + "/pairing/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      pairing_code: pairingCode,
+      label: msg.label || msg.device_name || "Chrome extension",
+      device_kind: "chrome_extension",
+      extension_id: chrome.runtime.id,
+      capabilities: ["browser", "onboarding_scrape", "deep_scrape", "prepare_then_park"],
+    }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || !data.ok) {
+    const error = (data.detail && (data.detail.reason || data.detail.status)) || data.reason || data.error || ("HTTP " + resp.status);
+    await setState({ paired: false, pairing_error: error });
+    return { ok: false, error, detail: data.detail || data };
+  }
+  await setState({
+    paired: true,
+    pairing_error: null,
+    device_id: data.device.device_id,
+    device_token: data.device_token,
+    device_label: data.device.label,
+    engine_http: base,
+    lastHeartbeat: Date.now(),
+  });
+  connect();
+  return { ok: true, paired: true, device: data.device };
+}
+
+async function sendHeartbeat() {
+  const st = await getState();
+  if (!st.device_id || !st.device_token) return { ok: false, skipped: true, reason: "not_paired" };
+  const resp = await fetch((await engineHttp()) + "/devices/heartbeat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_id: st.device_id, device_token: st.device_token }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || !data.ok) {
+    const error = (data.detail && (data.detail.reason || data.detail.status)) || data.reason || data.error || ("HTTP " + resp.status);
+    await setState({ lastHeartbeatError: error });
+    return { ok: false, error, detail: data.detail || data };
+  }
+  await setState({ paired: true, lastHeartbeat: Date.now(), lastHeartbeatError: null });
+  return { ok: true, device: data.device };
+}
+
+// ── Deep scrape: for each signed-in service, extract shallow metadata ──
+// Subjects/titles/times/senders only — no email bodies, no private message bodies.
+async function doDeepScrape(msg) {
+  const services = msg.services || [];
+  const scraped = [];
+  for (const svc of services) {
+    const url = svc && svc.url;
+    if (!url) continue;
+    try {
+      const tab = await openInGroup(url);
+      await waitForComplete(tab.id, 25000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl);
+      await settle(tab.id);
+      await sleep(1500);
+      const [{ result: pageData }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (serviceName) => {
+          const data = { service: serviceName, url: location.href, title: document.title, extracted: {} };
+          const blob = (location.href + " " + (document.body ? document.body.innerText : "")).toLowerCase().slice(0, 3000);
+          const isLogin = /\/login|\/signin|\/sign-in|accounts\.|enter your password|create (an )?account|continue with google|sign in with/.test(blob);
+          if (isLogin) { data.signed_in = false; return data; }
+          data.signed_in = true;
+          const sn = serviceName.toLowerCase();
+          if (sn.includes("gmail")) {
+            const rows = document.querySelectorAll('tr.zA, tr[role="row"]');
+            const emails = [];
+            rows.forEach((row, i) => {
+              if (i >= 20) return;
+              const sender = row.querySelector('.yW, .bA4, [email]');
+              const subject = row.querySelector('.bog, .y6, .xT .y6');
+              if (sender || subject) emails.push({ from: (sender ? sender.textContent : '').trim().slice(0, 60), subject: (subject ? subject.textContent : '').trim().slice(0, 120) });
+            });
+            data.extracted.emails = emails;
+          }
+          if (sn.includes("calendar")) {
+            const events = [];
+            document.querySelectorAll('[data-eventchip], [data-eventid]').forEach((el, i) => {
+              if (i >= 15) return;
+              const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+              if (text) events.push(text.slice(0, 150));
+            });
+            data.extracted.events = events;
+          }
+          if (sn.includes("drive")) {
+            const files = [];
+            document.querySelectorAll('[data-id][aria-label], .Q5txwe').forEach((el, i) => {
+              if (i >= 15) return;
+              const name = (el.getAttribute('aria-label') || el.textContent || '').trim();
+              if (name && name.length > 2) files.push(name.slice(0, 120));
+            });
+            data.extracted.recent_files = files;
+          }
+          if (sn.includes("linkedin")) {
+            const nameEl = document.querySelector('.text-heading-xlarge');
+            if (nameEl) data.extracted.profile_name = nameEl.textContent.trim().slice(0, 80);
+          }
+          if (sn.includes("outlook")) {
+            const emails = [];
+            document.querySelectorAll('[aria-label*="message" i], [role="option"]').forEach((el, i) => {
+              if (i >= 15) return;
+              const text = (el.textContent || el.getAttribute('aria-label') || '').trim();
+              if (text && text.length > 5) emails.push(text.slice(0, 200));
+            });
+            data.extracted.emails = emails;
+          }
+          if (sn.includes("slack")) {
+            const channels = [];
+            document.querySelectorAll('[data-qa="channel_sidebar_name_"]').forEach((el, i) => {
+              if (i >= 15) return;
+              const name = (el.textContent || '').trim();
+              if (name) channels.push(name.slice(0, 60));
+            });
+            data.extracted.channels = channels;
+          }
+          if (sn.includes("github")) {
+            const usernameEl = document.querySelector('.AppHeader-user .Button-label, [data-login]');
+            if (usernameEl) data.extracted.username = (usernameEl.textContent || usernameEl.getAttribute('data-login') || '').trim().slice(0, 40);
+          }
+          return data;
+        },
+        args: [svc.name],
+      });
+      scraped.push(pageData);
+    } catch (e) {
+      scraped.push({ service: svc.name, url, error: String(e) });
+    }
+  }
+  return result(msg, "success", null, { scraped, count: scraped.length });
+}

@@ -5,7 +5,7 @@
     <style>
       :root { color-scheme: dark; }
       body {
-        margin: 0; width: 240px; padding: 16px;
+        margin: 0; width: 280px; padding: 16px;
         font: 13px/1.4 -apple-system, "SF Pro Text", system-ui, sans-serif;
         background: #17191C; color: #F2F1ED;
       }
@@ -15,6 +15,18 @@
       .dot.on { background: #C8A96A; }
       .status { color: #A9ABB0; }
       .status.on { color: #F2F1ED; }
+      .pair { display: grid; gap: 8px; margin-top: 14px; }
+      input {
+        width: 100%; min-height: 34px; border: 1px solid #393C42;
+        background: #101216; color: #F2F1ED; padding: 0 10px;
+        border-radius: 6px; outline: none;
+      }
+      button {
+        min-height: 34px; border-radius: 6px; background: #C8A96A;
+        color: #111; font-weight: 700; cursor: pointer;
+      }
+      .hint { margin-top: 8px; color: #A9ABB0; font-size: 12px; }
+      .error { margin-top: 8px; color: #ffb4a8; font-size: 12px; }
     </style>
   </head>
   <body>
@@ -22,6 +34,12 @@
     <div class="row">
       <span id="dot" class="dot"></span>
       <span id="status" class="status">checking engine…</span>
+    </div>
+    <div id="pair" class="pair">
+      <input id="code" autocomplete="one-time-code" placeholder="Pairing code" />
+      <button id="pairButton" type="button">Pair this Chrome</button>
+      <div class="hint">Get the code from the Anticipy setup page.</div>
+      <div id="error" class="error"></div>
     </div>
     <script src="popup.js"></script>
   </body>
