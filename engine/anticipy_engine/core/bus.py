@@ -41,8 +41,15 @@ class Bus:
 
     # ---- lifecycle ----
     async def start(self) -> None:
+        self.start_sync()
+
+    def start_sync(self) -> None:
+        """Start the runner WITHOUT awaiting — usable from a sync caller that is already on
+        a running loop (the per-user core registry builds a core mid-request and must have the
+        runner draining the queue before the first submit_job awaits its future). Idempotent;
+        binds the runner to the RUNNING loop so it drains on the same loop submit_job awaits on."""
         if self._runner is None:
-            self._runner = asyncio.create_task(self._run())
+            self._runner = asyncio.get_running_loop().create_task(self._run())
 
     async def stop(self) -> None:
         if self._runner is not None:

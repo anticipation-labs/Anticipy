@@ -38,6 +38,8 @@ from .capture.transcribe import is_audio_file, transcribe_audio
 from .channels.conversation_relay import ConversationRelayBrain, OnboardingCallBrain, stream_tokens
 from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
+from .core import registry
+from .core.registry import current_core
 from .core.envelopes import EventSource, Job, new_id
 from .core.gateway import PROVIDER_OPENROUTER, ModelGateway
 from .hands import browser_use_link
@@ -68,7 +70,16 @@ MAX_REQUEST_BYTES_CEILING = 64 * 1024 * 1024
 # payloads): the local-file upload lane caps bytes off disk, not the request body.
 REQUEST_SIZE_EXEMPT_PATHS = {"/owner/ingest-file"}
 
+# The DEFAULT brain (unchanged): one global ControlCore at the existing base data_dir.
+# Per-user isolation routes signed-in REQUESTS to their own core via the registry, but THIS
+# object stays the default — so the suite (which imports `core` and also drives it over HTTP
+# unauthenticated), local dev, and the startup/proactive/background paths all keep hitting
+# this exact object exactly as before.
 core = ControlCore()
+# Wire the registry: any NON-default user's core is built by this factory at <base>/users/<id>;
+# the default user maps to the `core` above (so unauthenticated == the module-global core).
+registry.set_factory(lambda data_dir: ControlCore(data_dir=data_dir))
+registry.register_default(core)
 extension_hello_seen = False
 _mic_source = None  # the always-on Mac-mic CaptureSource when /listen/start is on (None when off)
 _proactive_health = {
@@ -142,7 +153,11 @@ async def lifespan(app: FastAPI):
                 task.cancel()
                 with suppress(asyncio.CancelledError):
                     await task
-        await core.stop()
+        # Stop the default core AND every per-user core built during this process's life so
+        # no bus runner task is left dangling on shutdown.
+        for c in registry.all_cores():
+            with suppress(Exception):
+                await c.stop()
 
 
 app = FastAPI(
@@ -314,7 +329,17 @@ async def owner_api_auth(request: Request, call_next):
                 status_code=401,
                 headers={"www-authenticate": "Bearer"},
             )
-    return await call_next(request)
+
+    # Per-user data isolation: bind THIS request to its user's core. A signed-in Supabase
+    # user gets their own (request.state.user_id); the owner-token/local/suite path leaves
+    # user_id None -> the DEFAULT core (registry maps None -> default_user()). current_core()
+    # in the handlers below then resolves to the right per-user ControlCore. Reset in finally
+    # so the binding never leaks to the next request on this task/thread.
+    _user_token = registry.set_current_user(request.state.user_id)
+    try:
+        return await call_next(request)
+    finally:
+        registry.reset_current_user(_user_token)
 
 
 def _max_request_bytes() -> int:
@@ -467,7 +492,7 @@ def _cleanup_upload(path: Path) -> None:
             parent.rmdir()
 
 
-def _readiness(channels: dict) -> dict:
+def _readiness(channels: dict, core) -> dict:
     browser_connected = bool(core.browser_link.connected or getattr(core.native_bridge_link, "connected", False))
     api_live = core.api_hand.mode == "live"
     inbound_status = (channels.get("inbound") or {}).get("status")
@@ -534,7 +559,7 @@ def _env_present(*names: str) -> bool:
     return any((os.environ.get(n) or "").strip() for n in names)
 
 
-def _user_vault_connected() -> bool:
+def _user_vault_connected(core) -> bool:
     """Has THIS engine's configured user connected any app through the per-user token
     vault? Reads only the vault's app-name index (never a token); returns False on any
     error so a missing/locked vault never throws into the readiness checklist."""
@@ -548,7 +573,7 @@ def _user_vault_connected() -> bool:
         return False
 
 
-def _connect_readiness() -> dict:
+def _connect_readiness(core) -> dict:
     """The guided 'Connect your accounts' checklist. For each capability that unlocks a
     LIVE owner action, report {capability, status: live|needs_connect, what_to_do} using
     PRESENCE/ABSENCE of config only — never a secret value, number, or token. This turns
@@ -559,7 +584,7 @@ def _connect_readiness() -> dict:
     # Google / Arcade — the API hand. Live needs the shared ARCADE_API_KEY OR this user's
     # per-user vault connection, AND the hand running in live mode.
     arcade_key = _env_present("ARCADE_API_KEY")
-    per_user_vault = _user_vault_connected()
+    per_user_vault = _user_vault_connected(core)
     api_live = core.api_hand.mode == "live" and (arcade_key or per_user_vault)
     if api_live:
         google_what = "Connected. Google Calendar / Gmail run as live API actions."
@@ -642,7 +667,7 @@ def readiness() -> dict:
     """Guided connect-your-accounts checklist: which live capabilities are connected vs
     need-connecting, with the honest one-liner of what to do — exposing PRESENCE/ABSENCE
     of config only, never any secret value. Read-only; grants and connects nothing."""
-    return _connect_readiness()
+    return _connect_readiness(current_core())
 
 
 @app.get("/health")
@@ -652,20 +677,21 @@ def health() -> dict:
 
 @app.get("/status")
 def status() -> dict:
-    channels = core.channel_status()
+    c = current_core()
+    channels = c.channel_status()
     proactive = dict(_proactive_health)
     proactive["outreach"] = channels.get("mode", "mock")
     return {
         "engine": "ok",
         "core": "control_core",
-        "extension_connected": extension_hello_seen or core.browser_link.connected,
-        "history_count": len(core.memory.history.all()),
-        "open_loop_count": core.memory_open_loops(limit=0)["count"],
-        "pending_count": len(core.pending_asks()),
-        "memory_recovered": bool(getattr(core.memory.db, "recovered_corruption", False)),
+        "extension_connected": extension_hello_seen or c.browser_link.connected,
+        "history_count": len(c.memory.history.all()),
+        "open_loop_count": c.memory_open_loops(limit=0)["count"],
+        "pending_count": len(c.pending_asks()),
+        "memory_recovered": bool(getattr(c.memory.db, "recovered_corruption", False)),
         "channels": channels,
         "proactive": proactive,
-        "readiness": _readiness(channels),
+        "readiness": _readiness(channels, c),
     }
 
 
@@ -673,32 +699,33 @@ def status() -> dict:
 async def capture(body: CaptureIn) -> dict:
     if body.source not in EventSource._value2member_map_:
         raise HTTPException(status_code=400, detail=f"unknown capture source: {body.source}")
-    return await core.feed(body.source, body.text, {"legacy_capture": True})
+    return await current_core().feed(body.source, body.text, {"legacy_capture": True})
 
 
 @app.get("/memory/history")
 def history() -> dict:
-    return {"items": [i.model_dump() for i in core.memory.history.all()]}
+    return {"items": [i.model_dump() for i in current_core().memory.history.all()]}
 
 
 @app.get("/memory/drawers")
 def memory_drawers() -> dict:
     """Read surface for all four memory drawers — count + recent items each (the dossier writes land in
     profile [stated] and derived [inferred]). Fixes the harness G4 read + the missing-read-surface gap."""
+    c = current_core()
     def snap(store):
         items = store.all()
         return {"count": len(items), "recent": [i.model_dump() for i in items[-15:]]}
     return {"drawers": {
-        "profile": snap(core.memory.profile),
-        "derived": snap(core.memory.derived),
-        "open_loops": snap(core.memory.open_loops),
-        "history": snap(core.memory.history),
+        "profile": snap(c.memory.profile),
+        "derived": snap(c.memory.derived),
+        "open_loops": snap(c.memory.open_loops),
+        "history": snap(c.memory.history),
     }}
 
 
 @app.get("/memory/open-loops")
 def memory_open_loops(limit: int = 50) -> dict:
-    return core.memory_open_loops(limit=limit)
+    return current_core().memory_open_loops(limit=limit)
 
 
 @app.get("/memory/remembered")
@@ -714,7 +741,7 @@ def memory_remembered(limit: int = 50) -> dict:
     inferred per pull). The enrichment is metadata for the review only: it carries no
     due_ts/remind_ts/trigger, creates no open_loop, and never reaches the decider /
     harm-line / TriggerWatcher — the raw line stays the ground truth the owner checks."""
-    cap = core.live_memory.capturer
+    cap = current_core().live_memory.capturer
     rows = cap.remember.recent(limit)
     rows = cap.review_enricher.enrich_rows(rows)
     return {"remembered": rows, "count": len(rows)}
@@ -733,7 +760,7 @@ async def memory_remembered_approve(body: RememberedApproveIn) -> dict:
     send, a message/Slack, money/binding, ambiguous) is prepared-and-handed-back, never
     executed. A vent returns approved=false with no goal. There is no yes/no body that can
     route a non-whitelisted item to execution."""
-    return await core.approve_remembered(body.line_id)
+    return await current_core().approve_remembered(body.line_id)
 
 
 @app.post("/memory/remembered/dryrun")
@@ -753,7 +780,7 @@ def memory_remembered_dryrun(body: RememberedApproveIn) -> dict:
     prepared for the owner to create himself until a drafts read-back is wired — it returns
     {would_execute:false, handback, why}. This lets the owner see his whole day's planned
     real actions before connecting anything."""
-    return core.dryrun_remembered(body.line_id)
+    return current_core().dryrun_remembered(body.line_id)
 
 
 @app.get("/memory/remembered/dryrun-day")
@@ -764,16 +791,17 @@ def memory_remembered_dryrun_day(limit: int = 50) -> dict:
     Reuses the inert remembered pull and dry-runs EACH line through the SAME press-go
     mapping (no execution, no Goal, no orchestrator call). Returns the per-line previews
     plus a count of how many WOULD execute on connect."""
-    cap = core.live_memory.capturer
+    c = current_core()
+    cap = c.live_memory.capturer
     rows = cap.remember.recent(limit)
-    previews = [core.dryrun_remembered(str(r.get("id"))) for r in rows]
+    previews = [c.dryrun_remembered(str(r.get("id"))) for r in rows]
     would = sum(1 for p in previews if p.get("would_execute"))
     return {"previews": previews, "count": len(previews), "would_execute_count": would}
 
 
 @app.post("/memory/open-loops/resolve")
 def memory_loop_resolve(body: MemoryLoopResolveIn) -> dict:
-    out = core.resolve_memory_loop(body.id, body.status)
+    out = current_core().resolve_memory_loop(body.id, body.status)
     if not out.get("resolved"):
         raise HTTPException(status_code=400, detail=out.get("reason") or "could not resolve memory loop")
     return out
@@ -781,7 +809,7 @@ def memory_loop_resolve(body: MemoryLoopResolveIn) -> dict:
 
 @app.post("/connections/authorize")
 def connection_authorize(body: ConnectionAuthorizeIn) -> dict:
-    out = core.authorize_connection_loop(body.id)
+    out = current_core().authorize_connection_loop(body.id)
     if not out.get("ok"):
         raise HTTPException(status_code=400, detail=out.get("reason") or "could not prepare connection")
     return out
@@ -791,25 +819,26 @@ def connection_authorize(body: ConnectionAuthorizeIn) -> dict:
 def extension_hello(body: ExtensionHello) -> dict:
     global extension_hello_seen
     extension_hello_seen = True
-    core.glassbox.log("extension_hello", {"client": body.client})
+    current_core().glassbox.log("extension_hello", {"client": body.client})
     return {"connected": True, "client": body.client, "core": "control_core"}
 
 
 # ---- control core ----
 @app.post("/event")
 async def event(body: EventIn) -> dict:
-    return await core.feed(body.source, body.text, body.meta)
+    return await current_core().feed(body.source, body.text, body.meta)
 
 
 @app.post("/owner/ingest")
 async def owner_ingest(body: OwnerIngestIn) -> dict:
     """One shared Action Engine intake for typed transcript, MP3, listening, and pay-to-try."""
-    return await core.owner_ingest(body.source, body.text, body.meta, execute_actions=body.execute_actions)
+    return await current_core().owner_ingest(body.source, body.text, body.meta, execute_actions=body.execute_actions)
 
 
 @app.post("/owner/ingest-file")
 async def owner_ingest_file(body: OwnerFileIngestIn) -> dict:
     """Read one uploaded local file, then use the same owner-ingest path as typed text."""
+    c = current_core()
     path = Path(body.path).expanduser().resolve()
     if not any(_under_root(path, root) for root in _upload_roots()):
         raise HTTPException(status_code=403, detail="uploaded file path is outside the Anticipy upload staging area")
@@ -834,7 +863,7 @@ async def owner_ingest_file(body: OwnerFileIngestIn) -> dict:
             try:
                 transcript = transcribe_audio(path)
             except Exception as exc:  # noqa: BLE001 - surface an honest product error
-                core.glassbox.log(
+                c.glassbox.log(
                     "owner_upload_error",
                     {"filename": filename, "path": str(path), "error": f"{type(exc).__name__}: {exc}"},
                 )
@@ -855,8 +884,8 @@ async def owner_ingest_file(body: OwnerFileIngestIn) -> dict:
     if not text.strip():
         raise HTTPException(status_code=400, detail=f"{filename} did not contain usable text")
 
-    core.glassbox.log("owner_upload_ingest", {"filename": filename, "source": source, "kind": meta["upload_kind"]})
-    return await core.owner_ingest(source, text, meta, execute_actions=body.execute_actions)
+    c.glassbox.log("owner_upload_ingest", {"filename": filename, "source": source, "kind": meta["upload_kind"]})
+    return await c.owner_ingest(source, text, meta, execute_actions=body.execute_actions)
 
 
 # ---- ALWAYS-ON LISTENING: the Mac mic, heard text -> the proactive brain ----
@@ -869,20 +898,24 @@ async def listen_start() -> dict:
     if _mic_source is not None and _mic_source.running:
         return {"listening": True, "already_running": True, "device": _mic_source._device}
     loop = asyncio.get_running_loop()
+    # Capture THIS caller's core now; the mic-thread sink fires later with NO request context
+    # (current_core() would resolve to the default there), so the stream must stay bound to
+    # the user who started it.
+    c = current_core()
 
     def _sink(event) -> None:  # called FROM the mic thread; bounce onto the engine loop
-        core.glassbox.log("mic_heard", {"text": (event.text or "")[:200]})
+        c.glassbox.log("mic_heard", {"text": (event.text or "")[:200]})
         try:
             asyncio.run_coroutine_threadsafe(
-                core.owner_ingest(event.source, event.text, {"capture": "mac_mic"}, execute_actions=True),
+                c.owner_ingest(event.source, event.text, {"capture": "mac_mic"}, execute_actions=True),
                 loop)
         except Exception as exc:  # noqa: BLE001 — a sink failure must not kill the mic loop
-            core.glassbox.log("mic_sink_error", {"error": f"{type(exc).__name__}: {exc}"})
+            c.glassbox.log("mic_sink_error", {"error": f"{type(exc).__name__}: {exc}"})
 
     from .capture.mac_mic import MacMicSource
     _mic_source = MacMicSource(_sink)
     _mic_source.start()
-    core.glassbox.log("listen", {"event": "started", "device": _mic_source._device,
+    c.glassbox.log("listen", {"event": "started", "device": _mic_source._device,
                                  "window_seconds": _mic_source._window})
     return {"listening": True, "device": _mic_source._device, "window_seconds": _mic_source._window,
             "note": "Anticipy is listening on your Mac mic now — just talk; it acts on what it hears."}
@@ -895,7 +928,7 @@ async def listen_stop() -> dict:
     utterances = getattr(_mic_source, "utterances", 0)
     if _mic_source is not None:
         _mic_source.stop()
-        core.glassbox.log("listen", {"event": "stopped", "windows": windows, "utterances": utterances})
+        current_core().glassbox.log("listen", {"event": "stopped", "windows": windows, "utterances": utterances})
     _mic_source = None
     return {"listening": False, "windows": windows, "utterances": utterances}
 
@@ -917,6 +950,10 @@ async def listen_stream_ws(ws: WebSocket):
     When silence is detected (endpointing), we auto-feed the accumulated
     transcript into the owner ingest pipeline."""
     await ws.accept()
+    # A WS upgrade does not pass through the HTTP auth middleware, so the per-user contextvar
+    # is unset here -> current_core() returns the DEFAULT (owner) core, which is correct for
+    # this local Mac-mic/Deepgram stream. Bind it once so the long-lived recv loop is stable.
+    c = current_core()
 
     dg_key = os.environ.get("DEEPGRAM_API_KEY", "")
     if not dg_key:
@@ -939,7 +976,7 @@ async def listen_stream_ws(ws: WebSocket):
 
     try:
         async with _ws.connect(dg_url, additional_headers=dg_headers) as dg_ws:
-            core.glassbox.log("listen_stream", {"event": "deepgram_connected"})
+            c.glassbox.log("listen_stream", {"event": "deepgram_connected"})
 
             async def _dg_recv():
                 """Read from Deepgram and forward transcription to the browser."""
@@ -994,7 +1031,7 @@ async def listen_stream_ws(ws: WebSocket):
                                 accumulated_transcript.clear()
                                 await ws.send_json({"type": "processing", "text": full})
                                 try:
-                                    result = await core.owner_ingest(
+                                    result = await c.owner_ingest(
                                         "start_listening", full,
                                         {"capture": "deepgram_stream"},
                                         execute_actions=True
@@ -1029,7 +1066,7 @@ async def listen_stream_ws(ws: WebSocket):
                     await t
 
     except Exception as exc:
-        core.glassbox.log("listen_stream", {"event": "error", "error": str(exc)})
+        c.glassbox.log("listen_stream", {"event": "error", "error": str(exc)})
         with suppress(Exception):
             await ws.send_json({"type": "error", "message": str(exc)})
     finally:
@@ -1037,24 +1074,24 @@ async def listen_stream_ws(ws: WebSocket):
         if accumulated_transcript:
             full = "\n".join(accumulated_transcript)
             try:
-                await core.owner_ingest("start_listening", full,
+                await c.owner_ingest("start_listening", full,
                                         {"capture": "deepgram_stream"},
                                         execute_actions=True)
             except Exception:
                 pass
-        core.glassbox.log("listen_stream", {"event": "disconnected"})
+        c.glassbox.log("listen_stream", {"event": "disconnected"})
 
 
 @app.get("/owner/cards")
 def owner_cards(limit: int = 50) -> dict:
     """Recent durable owner cards, so the app board survives reloads."""
-    return core.owner_cards(limit=limit)
+    return current_core().owner_cards(limit=limit)
 
 
 @app.post("/owner/onboard")
 async def owner_onboard(body: OwnerOnboardingIn) -> dict:
     """First-run setup writes people, preferences, apps, stores, and gates into memory."""
-    return await core.owner_onboard(body)
+    return await current_core().owner_onboard(body)
 
 
 class DiscoverConnectionsIn(BaseModel):
@@ -1068,7 +1105,7 @@ async def onboard_discover(body: DiscoverConnectionsIn) -> dict:
     and write the per-person mesh via the SAME path typed onboarding uses: each discovered
     logged-in service becomes a profile card + a 'Connect X' open-loop, and a service Anticipy
     already holds a vault token for is marked connected. Discovery only — no credentials entered."""
-    return await core.onboard_discover(body.discovered, source=body.source)
+    return await current_core().onboard_discover(body.discovered, source=body.source)
 
 
 class ScanIn(BaseModel):
@@ -1081,8 +1118,9 @@ async def onboard_scan(body: ScanIn) -> dict:
     'scrapes you' step was missing: the engine tells the extension to scan; the extension reads a
     logged-in-vs-signin signal per service and POSTs results back to /onboard/discover. Returns
     triggered=False (no error) when no extension is connected to drive."""
-    triggered = await core.browser_link.discover_connections(body.services or None)
-    core.glassbox.log("onboard_scan", {"triggered": triggered, "services": len(body.services or [])})
+    c = current_core()
+    triggered = await c.browser_link.discover_connections(body.services or None)
+    c.glassbox.log("onboard_scan", {"triggered": triggered, "services": len(body.services or [])})
     return {"triggered": triggered, "note": ("scan started in your Chrome; results arrive via "
             "/onboard/discover" if triggered else "no browser extension connected")}
 
@@ -1110,22 +1148,23 @@ async def onboard_owner_scrape(body: OwnerScrapeIn) -> dict:
     from .onboarding.owner_scrape import DEFAULT_SURFACES, scrape_owner
     from .onboarding.permissions import SURFACE_SERVICE
 
+    c = current_core()
     # CONSENT GATE (sweep #2/#5): read ONLY services the owner explicitly allowed — never all of them via
     # None. Mirrors run_loop; an exposed route must not bypass the per-service allow gate the product promises.
     allowed = [s for s in DEFAULT_SURFACES
-               if core.onboard_permissions.is_allowed(SURFACE_SERVICE.get(s.get("key"), ""))]
+               if c.onboard_permissions.is_allowed(SURFACE_SERVICE.get(s.get("key"), ""))]
     if not allowed:
         return {"dossier": {}, "scrape": {"usable_count": 0, "needs_login": [], "surfaces": []},
                 "memory_written": {"profile": 0, "derived": 0},
                 "reason": "no service allowed yet — approve at least one account first"}
     signals = await run_in_threadpool(scrape_owner, body.cdp_url, allowed, max_chars=body.max_chars)
-    doss = await _dossier.synthesize_dossier(signals, core.gateway)
-    counts = _dossier.write_dossier_to_memory(doss, core.memory)
+    doss = await _dossier.synthesize_dossier(signals, c.gateway)
+    counts = _dossier.write_dossier_to_memory(doss, c.memory)
     status = {"usable_count": len(signals.get("logged_in", [])),
               "needs_login": signals.get("needs_login", []),
               "surfaces": [{"key": s.get("key"), "status": s.get("status"), "chars": s.get("chars")}
                            for s in signals.get("surfaces", [])]}
-    core.glassbox.log("owner_scrape", {"usable": status["usable_count"],
+    c.glassbox.log("owner_scrape", {"usable": status["usable_count"],
                                        "needs_login": status["needs_login"], "wrote": counts})
     return {"dossier": doss, "scrape": status, "memory_written": counts}
 
@@ -1138,12 +1177,12 @@ class OnboardPermissionIn(BaseModel):
 @app.get("/onboard/permissions")
 def onboard_permissions_get() -> dict:
     """The per-service allow gate (allow Gmail, allow Calendar, ...). Nothing is read until allowed."""
-    return core.onboard_permissions.state()
+    return current_core().onboard_permissions.state()
 
 
 @app.post("/onboard/permissions")
 def onboard_permissions_set(body: OnboardPermissionIn) -> dict:
-    return core.onboard_permissions.set(body.service, body.allowed)
+    return current_core().onboard_permissions.set(body.service, body.allowed)
 
 
 class OnboardLoopIn(BaseModel):
@@ -1156,7 +1195,7 @@ async def onboard_loop(body: OnboardLoopIn) -> dict:
     """The four-layer onboarding loop: guided layer 1 (allow + login), then autonomous deeper passes —
     scrape ONLY allowed services, rebuild the dossier, report what still needs login + the gaps."""
     from .onboarding.loop import run_loop
-    return await run_loop(core, body.cdp_url, body.max_layers)
+    return await run_loop(current_core(), body.cdp_url, body.max_layers)
 
 
 class OnboardCompleteIn(BaseModel):
@@ -1166,7 +1205,7 @@ class OnboardCompleteIn(BaseModel):
 @app.get("/onboard/status")
 def onboard_status() -> dict:
     """First-run marker (sweep #12): has onboarding been completed/confirmed?"""
-    p = core.data_dir / "onboard_complete.json"
+    p = current_core().data_dir / "onboard_complete.json"
     try:
         return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"onboarding_complete": False}
     except Exception:
@@ -1180,7 +1219,7 @@ def onboard_complete(body: OnboardCompleteIn) -> dict:
     import time as _t
     data = {"onboarding_complete": bool(body.complete), "at": _t.time()}
     try:
-        (core.data_dir / "onboard_complete.json").write_text(json.dumps(data), encoding="utf-8")
+        (current_core().data_dir / "onboard_complete.json").write_text(json.dumps(data), encoding="utf-8")
     except Exception:
         pass
     return data
@@ -1212,7 +1251,7 @@ async def hands_compose_email(body: ComposeEmailIn) -> dict:
     if body.cdp_url:
         req["cdp_url"] = body.cdp_url
     res = await run_in_threadpool(run_cdp, req, 90.0)
-    core.glassbox.log("compose_email", {"to": body.to, "send": body.send,
+    current_core().glassbox.log("compose_email", {"to": body.to, "send": body.send,
                                         "ok": res.get("ok"), "money_blocked": res.get("money_blocked")})
     return res
 
@@ -1403,7 +1442,7 @@ async def onboarding_profile(body: OnboardingProfileIn) -> dict:
     # test reader counts as "available" for the purpose of the assembly proof.
     out["browser_available"] = browser_available
     out["browser_probe"] = {"ok": bool(probe.get("ok")), "runner_exists": bool(probe.get("runner_exists"))}
-    core.glassbox.log(
+    current_core().glassbox.log(
         "onboarding_profile_built",
         {
             "name": name,
@@ -1469,7 +1508,7 @@ async def onboarding_clarify(request: Request) -> dict:
     out["browser_available"] = browser_available
     out["browser_probe"] = {"ok": bool(probe.get("ok")), "runner_exists": bool(probe.get("runner_exists"))}
     out["blockers"] = list(getattr(profile, "blockers", []) or [])
-    core.glassbox.log(
+    current_core().glassbox.log(
         "onboarding_clarify_planned",
         {
             "name": name,
@@ -1485,25 +1524,25 @@ async def onboarding_clarify(request: Request) -> dict:
 @app.post("/trigger/tick")
 async def trigger_tick() -> dict:
     """Deterministic tick (tests/gates): one watcher pass, same path as the scheduler."""
-    fired = await core.proactive.trigger_tick()
+    fired = await current_core().proactive.trigger_tick()
     return {"fired": fired}
 
 
 @app.get("/glassbox")
 def glassbox(limit: int = 50) -> dict:
-    return {"entries": core.glassbox.summaries(limit)}
+    return {"entries": current_core().glassbox.summaries(limit)}
 
 
 @app.get("/pending")
 def pending() -> dict:
     """Room 6: the 'needs you' surface — detrimental actions paused awaiting approve/deny."""
-    return {"pending": core.pending_asks()}
+    return {"pending": current_core().pending_asks()}
 
 
 @app.post("/resolve")
 async def resolve(body: ResolveIn) -> dict:
     """Room 6: the app's approve/deny -> resolves the REAL paused goal (brain -> app -> back)."""
-    return await core.resolve(body.ask_id, body.approved)
+    return await current_core().resolve(body.ask_id, body.approved)
 
 
 class AutonomyModeIn(BaseModel):
@@ -1513,24 +1552,24 @@ class AutonomyModeIn(BaseModel):
 @app.get("/owner/autonomy_mode")
 def owner_autonomy_mode_get() -> dict:
     """M3: the user-facing autonomy dial — full_send / regular / limited (default regular)."""
-    return core.get_autonomy_mode()
+    return current_core().get_autonomy_mode()
 
 
 @app.post("/owner/autonomy_mode")
 def owner_autonomy_mode_set(body: AutonomyModeIn) -> dict:
     """M3: set the dial. The two invariants (money/send/irreversible always confirm; low-confidence
     drops a level) hold in EVERY mode — Full-Send only adds reach on reversible, no-money tasks."""
-    return core.set_autonomy_mode(body.mode)
+    return current_core().set_autonomy_mode(body.mode)
 
 
 @app.get("/scorecard")
 def scorecard() -> dict:
-    return core.scorecard.readout()
+    return current_core().scorecard.readout()
 
 
 @app.get("/goals/{goal_id}")
 def get_goal(goal_id: str) -> dict:
-    g = core.store.load(goal_id)
+    g = current_core().store.load(goal_id)
     return g.model_dump(mode="json") if g else {"error": "not found"}
 
 
@@ -1539,33 +1578,37 @@ def gateway_info() -> dict:
     # Cost counters PLUS the real run-mode signals, so a caller (e.g. the journey gauge's
     # precondition) can VERIFY the engine is actually live — real model + live API hand —
     # rather than assume it. These read the engine's actual wired objects, not env strings.
+    c = current_core()
     return {
-        "smart_calls": len(core.gateway.smart_calls),
-        "total_cost": core.gateway.total_cost(),
-        "provider": core.gateway.provider,
-        "cheap_model": core.gateway.cheap_model,
-        "smart_model": core.gateway.smart_model,
-        "api_hands_mode": core.api_hand.mode,
+        "smart_calls": len(c.gateway.smart_calls),
+        "total_cost": c.gateway.total_cost(),
+        "provider": c.gateway.provider,
+        "cheap_model": c.gateway.cheap_model,
+        "smart_model": c.gateway.smart_model,
+        "api_hands_mode": c.api_hand.mode,
     }
 
 
 # ---- browser hand link (authenticated WebSocket) ----
+# Note: browser_link drives a real Chrome over a WS the extension dials into /ws/extension
+# (which attaches to the DEFAULT core's link). A signed-in remote user gets THEIR OWN core's
+# (unconnected) link, so they can never pilot the owner's Chrome — correct isolation.
 @app.get("/ws/state")
 def ws_state() -> dict:
-    return {"connected": core.browser_link.connected}
+    return {"connected": current_core().browser_link.connected}
 
 
 @app.get("/ws/token")
 def ws_token() -> dict:
     # The extension (host-permitted for 127.0.0.1) can read this; a web page can't
     # (no CORS headers). The token gates the WS so no site/process can pilot Chrome.
-    return {"token": core.browser_link.token}
+    return {"token": current_core().browser_link.token}
 
 
 @app.post("/ws/reload")
 async def ws_reload() -> dict:
     # dev-only hot-reload trigger
-    sent = await core.browser_link.reload()
+    sent = await current_core().browser_link.reload()
     return {"reloaded": sent}
 
 
@@ -1577,13 +1620,14 @@ class BrowseIn(BaseModel):
 
 @app.post("/ws/browse")
 async def ws_browse(body: BrowseIn) -> dict:
+    c = current_core()
     if body.agent:
-        res = await core.browser_hand.handle(Job(intent=body.intent, args=body.args))
+        res = await c.browser_hand.handle(Job(intent=body.intent, args=body.args))
     else:
         # Transport diagnostic only. M3 evidence must use /event and real sites.
         from .hands.browser_hand import BrowserHand
 
-        res = await BrowserHand(core.browser_link, timeout=30.0).handle(Job(intent=body.intent, args=body.args))
+        res = await BrowserHand(c.browser_link, timeout=30.0).handle(Job(intent=body.intent, args=body.args))
     return res.model_dump(mode="json")
 
 
@@ -1605,14 +1649,14 @@ async def ws_observe(body: ObserveIn) -> dict:
     args = {k: v for k, v in body.model_dump().items() if v is not None}
     if body.url:
         _assert_public_agent_url(body.url)  # SSRF: never point the agent at a private/metadata host
-    return await core.browser_link.send_browse(new_id(), "observe", args, timeout=40.0)
+    return await current_core().browser_link.send_browse(new_id(), "observe", args, timeout=40.0)
 
 
 @app.post("/ws/act")
 async def ws_act(body: ActIn) -> dict:
     if str(body.action or "").strip() == "navigate" and body.url:
         _assert_public_agent_url(body.url)  # SSRF: a driven navigate must target a public host
-    return await core.browser_link.send_browse(new_id(), "act", body.model_dump(), timeout=40.0)
+    return await current_core().browser_link.send_browse(new_id(), "act", body.model_dump(), timeout=40.0)
 
 
 class AgentRunIn(BaseModel):
@@ -1682,9 +1726,10 @@ async def agent_run(body: AgentRunIn) -> dict:
     # (incl. 169.254.169.254 cloud-metadata)/private/file:// start_url is rejected (422)
     # before the live browser agent is ever pointed at it.
     _assert_public_agent_url(body.start_url)
+    c = current_core()
     gw = _gateway_for(body.model)
-    agent = WebVoyagerAgent(core.browser_link, gw, max_steps=body.max_steps,
-                            notifier=core.notify_user)
+    agent = WebVoyagerAgent(c.browser_link, gw, max_steps=body.max_steps,
+                            notifier=c.notify_user)
     result = await agent.run(body.task, body.start_url)
     shot = result.pop("final_shot", None)  # vision-judge in-process; don't ship the image over HTTP
     # The general judge decides success — but only for an actual answer. A safety
@@ -1701,7 +1746,7 @@ async def agent_run(body: AgentRunIn) -> dict:
     # M4 (audit #5): a wall handoff mints a resume_token — PERSIST the run state under it so a later
     # /agent/resume can be VALIDATED and resumed with context, instead of a blind cold restart.
     if result.get("resume_token") and (result.get("needs_human") or result.get("paused")):
-        core.resume_store.put(str(result["resume_token"]), {
+        c.resume_store.put(str(result["resume_token"]), {
             "task": body.task, "start_url": body.start_url,
             "wall_kind": result.get("wall_kind"),
             "history": (result.get("history") or [])[-30:], "step": result.get("steps")})
@@ -1722,15 +1767,16 @@ async def agent_resume(body: AgentResumeIn) -> dict:
     # http(s) host, exactly like /agent/run — a private/metadata/file:// resume target is
     # rejected (422) before the agent continues.
     _assert_public_agent_url(body.start_url)
+    c = current_core()
     # M4 (audit #5): VALIDATE the resume_token against the stored state. A present token resumes WITH
     # context (the prior history is handed to the agent so it doesn't redo what's done); a missing/expired
     # token resumes COLD (resumed_cold=True). Either way it continues from the now-unblocked page and
     # never re-touches the wall. (Full mid-plan loop re-entry is a noted optimization on top of this.)
-    state = core.resume_store.pop(body.resume_token) if body.resume_token else None
-    core.glassbox.log("handoff", {"event": "resume", "token": body.resume_token,
+    state = c.resume_store.pop(body.resume_token) if body.resume_token else None
+    c.glassbox.log("handoff", {"event": "resume", "token": body.resume_token,
                                   "url": body.start_url, "restored": bool(state)})
-    agent = WebVoyagerAgent(core.browser_link, gateway_agent, max_steps=body.max_steps,
-                            notifier=core.notify_user)
+    agent = WebVoyagerAgent(c.browser_link, gateway_agent, max_steps=body.max_steps,
+                            notifier=c.notify_user)
     task = body.task
     prior = (state or {}).get("history") or []
     if prior:
@@ -1752,7 +1798,7 @@ async def agent_resume(body: AgentResumeIn) -> dict:
             result["needs_human"] = True
     # sweep #17: re-persist resume state if the resumed run hit ANOTHER wall (multi-wall handoff)
     if result.get("resume_token") and (result.get("needs_human") or result.get("paused")):
-        core.resume_store.put(str(result["resume_token"]), {
+        c.resume_store.put(str(result["resume_token"]), {
             "task": body.task, "start_url": body.start_url, "wall_kind": result.get("wall_kind"),
             "history": (result.get("history") or [])[-30:], "step": result.get("steps")})
     return result
@@ -1820,22 +1866,23 @@ async def anticipate_research(body: PersonResearchIn) -> dict:
     owner's own email/contacts, without being asked."""
     from .proactive.anticipate import anticipatory_research, research_person, format_human_notification
 
+    c = current_core()
     # Get remembered items from memory for person lookup
     remembered = []
     try:
-        remembered = core.live_memory.capturer.remember.all()
+        remembered = c.live_memory.capturer.remember.all()
     except Exception:
         pass
 
     if body.people:
         results = await anticipatory_research(
-            body.task_context, body.people, core.gateway, remembered, caller="anticipate_api")
+            body.task_context, body.people, c.gateway, remembered, caller="anticipate_api")
         return {
             "people": {name: ctx.as_dict() for name, ctx in results.items()},
             "notification": format_human_notification(body.task_context, results),
         }
     else:
-        ctx = await research_person(body.name, body.task_context, core.gateway, remembered, caller="anticipate_api")
+        ctx = await research_person(body.name, body.task_context, c.gateway, remembered, caller="anticipate_api")
         return {
             "person": ctx.as_dict(),
             "notification": format_human_notification(body.task_context, {body.name: ctx}),
