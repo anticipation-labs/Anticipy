@@ -1051,10 +1051,13 @@ async def onboard_owner_scrape(body: OwnerScrapeIn) -> dict:
     signals = await run_in_threadpool(scrape_owner, body.cdp_url, None, max_chars=body.max_chars)
     doss = await _dossier.synthesize_dossier(signals, core.gateway)
     counts = _dossier.write_dossier_to_memory(doss, core.memory)
-    status = signals.summary()
+    status = {"usable_count": len(signals.get("logged_in", [])),
+              "needs_login": signals.get("needs_login", []),
+              "surfaces": [{"key": s.get("key"), "status": s.get("status"), "chars": s.get("chars")}
+                           for s in signals.get("surfaces", [])]}
     core.glassbox.log("owner_scrape", {"usable": status["usable_count"],
                                        "needs_login": status["needs_login"], "wrote": counts})
-    return {"dossier": doss.as_dict(), "scrape": status, "memory_written": counts}
+    return {"dossier": doss, "scrape": status, "memory_written": counts}
 
 
 class ComposeEmailIn(BaseModel):
