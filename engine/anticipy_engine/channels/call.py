@@ -75,7 +75,10 @@ class CallChannel(Channel):
         # Both are env-overridable; voice may be "<voiceId>" or "<voiceId>-<modelId>" (turbo/flash = low
         # latency, sub-second turns). Set ANTICIPY_CR_TTS_PROVIDER="" to fall back to Twilio's basic voice.
         tts = escape((os.environ.get("ANTICIPY_CR_TTS_PROVIDER", "ElevenLabs")).strip(), {'"': "&quot;"})
-        voice = escape((os.environ.get("ANTICIPY_CR_VOICE", "21m00Tcm4TlvDq8ikWAM-eleven_turbo_v2_5")).strip(),
+        # Twilio's documented en-US DEFAULT ElevenLabs voice for ConversationRelay (confirmed valid). Format
+        # is voiceId or voiceId-modelId (modelId = flash_v2_5/turbo_v2_5 — NO 'eleven_' prefix, which Twilio
+        # rejects with error 64101). Override via ANTICIPY_CR_VOICE.
+        voice = escape((os.environ.get("ANTICIPY_CR_VOICE", "UgBBYS2sOqTuMpoF3BR0")).strip(),
                        {'"': "&quot;"})
         attrs = f'url="{url}" welcomeGreeting="{greet}"'
         if tts:
