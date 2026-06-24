@@ -2152,6 +2152,15 @@ class WebVoyagerAgent:
 
         for step in range(self.max_steps):
             text = (out.get("text") or "").lower()
+            # LOGIN-WALL gate (sweep r2): a general task that lands on a login/sign-in PAGE must pause+hand
+            # off too — BLOCK_MARKERS only covers captcha/anti-bot. Gated on the URL being a login page AND
+            # login text, so a mere "Sign in" header link doesn't trip it. (Pairs with the credential
+            # hard-stop, which already refuses to type into a password field.)
+            if (LOGIN_URL_RE.search(out.get("url", "") or "")
+                    and any(m in text for m in ("sign in", "log in", "enter your password",
+                                                "use your", "continue with", "to continue"))):
+                return await self._handoff(out, step + 1, history, "login",
+                                           "login wall — handed back with the page open for you to sign in")
             if any(k in text for k in BLOCK_MARKERS):
                 return await self._handoff(out, step + 1, history, classify_wall(text),
                                            "captcha / anti-bot wall — handed back with the page open")
