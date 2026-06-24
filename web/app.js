@@ -70,21 +70,62 @@
     if (text != null) n.textContent = text;
     return n;
   }
-  function headers() {
-    var h = { "Content-Type": "application/json" };
-    if (OWNER_TOKEN) h["Authorization"] = "Bearer " + OWNER_TOKEN;
-    return h;
+  /* The engine identifies the caller by a Bearer token. We send the signed-in
+     Supabase user's access token on EVERY call (resolved fresh per request so a
+     refreshed token is always current). A legacy owner token, if present, is the
+     fallback for local/admin dev. authHeader() lives in the shared auth.js. */
+  function authHeader() {
+    var a = (window.Anticipy && window.Anticipy.auth) || null;
+    if (a && typeof a.authHeader === "function") {
+      return a.authHeader().then(function (h) {
+        // Prefer the signed-in user's token; fall back to a configured owner token.
+        if (h && h.Authorization) return h;
+        return OWNER_TOKEN ? { Authorization: "Bearer " + OWNER_TOKEN } : {};
+      });
+    }
+    return Promise.resolve(OWNER_TOKEN ? { Authorization: "Bearer " + OWNER_TOKEN } : {});
   }
+
   function api(path, opts) {
     opts = opts || {};
-    return fetch(ENGINE + path, {
-      method: opts.method || "GET",
-      headers: headers(),
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    return authHeader().then(function (auth) {
+      var h = { "Content-Type": "application/json" };
+      if (auth && auth.Authorization) h["Authorization"] = auth.Authorization;
+      return fetch(ENGINE + path, {
+        method: opts.method || "GET",
+        headers: h,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
     }).then(function (r) {
+      // A 401 means the engine no longer trusts this caller — drop to sign-in.
+      if (r.status === 401) { onUnauthorized(); throw new Error("HTTP 401"); }
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     });
+  }
+
+  /* On a 401 from the engine: the session is gone or rejected. Raise the gate
+     once (it reloads into a signed-out state cleanly). Guarded so a burst of
+     in-flight calls all 401'ing only triggers one transition. */
+  var droppedToSignIn = false;
+  function onUnauthorized() {
+    if (droppedToSignIn) return;
+    droppedToSignIn = true;
+    var a = (window.Anticipy && window.Anticipy.auth) || null;
+    var g = (window.Anticipy && window.Anticipy.gate) || null;
+    function raise() {
+      if (g && typeof g.protect === "function") {
+        g.protect({ onReady: function () { location.reload(); } });
+      } else {
+        location.reload();
+      }
+    }
+    // sign the (now-invalid) session out first so the gate starts clean
+    if (a && typeof a.signOut === "function") {
+      a.signOut().then(raise).catch(raise);
+    } else {
+      raise();
+    }
   }
   function relTime(ts) {
     if (!ts) return "just now";
@@ -786,10 +827,29 @@
   }
 
   /* ---------- boot ---------- */
-  setToday();
-  autoGrow();
-  // confirm liveness before first paint, then load the board
-  api("/health")
-    .then(function () { engineUp = true; return loadAll(); })
-    .catch(function () { engineUp = false; renderDeck(false); scheduleRetry(); });
+  // Gate the Board behind sign-in. Anticipy.gate.protect shows the sign-in
+  // screen when signed out and only calls onReady once a real session exists;
+  // if already signed in, onReady runs immediately and no gate is shown.
+  function bootApp() {
+    setToday();
+    autoGrow();
+    // surface the signed-in chip (email + Sign out) in the topbar
+    var chipSlot = $("[data-auth-chip]");
+    if (chipSlot && window.Anticipy && window.Anticipy.gate) {
+      window.Anticipy.gate.mountChip(chipSlot);
+    }
+    // confirm liveness before first paint, then load the board
+    api("/health")
+      .then(function () { engineUp = true; return loadAll(); })
+      .catch(function () { engineUp = false; renderDeck(false); scheduleRetry(); });
+  }
+
+  if (window.Anticipy && window.Anticipy.gate && typeof window.Anticipy.gate.protect === "function") {
+    window.Anticipy.gate.protect({ onReady: bootApp });
+  } else {
+    // auth layer missing (CDN blocked): boot the board anyway so the app isn't
+    // bricked — engine calls just go out without a token and the engine answers
+    // (or 401s honestly). Never a blank screen.
+    bootApp();
+  }
 })();

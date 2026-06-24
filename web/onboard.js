@@ -56,15 +56,29 @@
     (location.hostname === "127.0.0.1" || location.hostname === "localhost");
   var ENGINE = SAME_ORIGIN ? "" : (window.ANTICIPY_ENGINE_URL || "https://engine-production-eb43.up.railway.app");
 
+  /* ----- auth: send the signed-in Supabase user's token on every engine call -----
+     The engine identifies the caller by a Bearer access token (verified against
+     Supabase). authHeader() lives in the shared auth.js; resolved fresh per call
+     so a refreshed token is always current. */
+  function authHeader() {
+    var a = (window.Anticipy && window.Anticipy.auth) || null;
+    if (a && typeof a.authHeader === "function") return a.authHeader();
+    return Promise.resolve({});
+  }
+
   /* ----- the one network helper: engine base + path, JSON, honest errors ----- */
   function api(path, opts) {
     opts = opts || {};
-    var init = { method: opts.method || "GET", headers: {} };
-    if (opts.body !== undefined) {
-      init.headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(opts.body);
-    }
-    return fetch(ENGINE + path, init).then(function (res) {
+    return authHeader().then(function (auth) {
+      var init = { method: opts.method || "GET", headers: {} };
+      if (auth && auth.Authorization) init.headers["Authorization"] = auth.Authorization;
+      if (opts.body !== undefined) {
+        init.headers["Content-Type"] = "application/json";
+        init.body = JSON.stringify(opts.body);
+      }
+      return fetch(ENGINE + path, init);
+    }).then(function (res) {
+      if (res.status === 401) { onUnauthorized(); }
       if (!res.ok) {
         var e = new Error("engine_status_" + res.status);
         e.status = res.status;
@@ -72,6 +86,25 @@
       }
       return res.json();
     });
+  }
+
+  /* On a 401: the engine no longer trusts this caller. Sign out + raise the
+     sign-in screen, once. */
+  var droppedToSignIn = false;
+  function onUnauthorized() {
+    if (droppedToSignIn) return;
+    droppedToSignIn = true;
+    var a = (window.Anticipy && window.Anticipy.auth) || null;
+    var g = (window.Anticipy && window.Anticipy.gate) || null;
+    function raise() {
+      if (g && typeof g.protect === "function") {
+        g.protect({ onReady: function () { location.reload(); } });
+      } else {
+        location.reload();
+      }
+    }
+    if (a && typeof a.signOut === "function") a.signOut().then(raise).catch(raise);
+    else raise();
   }
 
   /* ----- reveal stagger (welcome-page [data-reveal]) ----- */
@@ -764,7 +797,7 @@
      banner on the intro screen so a returning owner is never trapped
      in setup. They can still choose to run setup again.
      ========================================================= */
-  (function firstRunGate() {
+  function firstRunGate() {
     var returning = $("[data-returning]");
     var redoBtn = $("[data-returning-redo]");
     if (!returning) return;
@@ -780,8 +813,22 @@
         returning.hidden = true; // dismiss the banner and proceed through setup as usual
       });
     }
-  })();
+  }
 
-  /* ----- first paint ----- */
-  goTo("intro");
+  /* ----- boot: gate onboarding behind sign-in, then first paint ----- */
+  function bootOnboard() {
+    // signed-in chip (email + Sign out) in the topbar
+    var chipSlot = $("[data-auth-chip]");
+    if (chipSlot && window.Anticipy && window.Anticipy.gate) {
+      window.Anticipy.gate.mountChip(chipSlot);
+    }
+    firstRunGate();
+    goTo("intro");
+  }
+
+  if (window.Anticipy && window.Anticipy.gate && typeof window.Anticipy.gate.protect === "function") {
+    window.Anticipy.gate.protect({ onReady: bootOnboard });
+  } else {
+    bootOnboard();
+  }
 })();

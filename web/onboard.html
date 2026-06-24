@@ -14,10 +14,15 @@
 
   <!-- Shared design system (tokens + welcome-page classes) -->
   <link rel="stylesheet" href="styles.css" />
+  <!-- The sign-in / sign-up gate -->
+  <link rel="stylesheet" href="auth.css" />
   <!-- The Board's additions (card anatomy, act-confirm, act-allow, note-field) -->
   <link rel="stylesheet" href="app.css" />
   <!-- Onboarding-only additions -->
   <link rel="stylesheet" href="onboard.css" />
+
+  <!-- Supabase client (public anon key only — safe in static JS) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <!-- Same atmosphere as the welcome page -->
@@ -29,6 +34,7 @@
     <span class="topbar-date">
       getting set up · <span class="topbar-date-val" data-step-marker>one of four</span>
     </span>
+    <span class="auth-chip-slot" data-auth-chip></span>
   </header>
 
   <!-- The quiet spine — the gold hairline + breathing dot, the only chrome -->
@@ -257,6 +263,9 @@
 
   </main>
 
+  <!-- Shared auth path (Supabase client + helpers), then the gate, then onboarding -->
+  <script src="auth.js"></script>
+  <script src="auth-screen.js"></script>
   <script src="onboard.js"></script>
 </body>
 </html>

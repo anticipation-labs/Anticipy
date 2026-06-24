@@ -1,0 +1,450 @@
+/* =========================================================
+   ANTICIPY — the sign-in / sign-up gate
+   The same atmosphere as the welcome page: cream paper, ink type,
+   one gold hairline, DM Serif Display lead. No dev-console tells —
+   it reads like a quiet front door, not a form.
+   Tokens only (defined in styles.css). Loaded after styles.css.
+   ========================================================= */
+
+/* The gate sits above everything and owns the screen while signed out. */
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(28px, 6vh, 64px) var(--gutter);
+  background: var(--paper);
+  /* same paper vignette as body::before, so the gate never looks pasted-on */
+  background-image: radial-gradient(
+    120% 100% at 50% 0%,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(245, 241, 232, 0) 55%,
+    rgba(23, 22, 21, 0.03) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.6s var(--ease);
+}
+
+.auth-gate.is-in {
+  opacity: 1;
+}
+
+.auth-gate[hidden] {
+  display: none;
+}
+
+/* When the gate is up, the product underneath must not be reachable. */
+body.auth-locked {
+  overflow: hidden;
+}
+
+.auth-column {
+  width: 100%;
+  max-width: 440px;
+  position: relative;
+  z-index: 1;
+}
+
+/* The quiet spine — the gold hairline + breathing dot, mirroring onboarding */
+.auth-rail {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 2.4rem;
+}
+
+.auth-rail-line {
+  width: 0;
+  height: 1px;
+  background: var(--gold);
+  animation: authDraw 1s var(--ease) 0.2s forwards;
+}
+
+.auth-rail-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  opacity: 0;
+  animation:
+    fadeInDot 0.6s var(--ease) 0.9s forwards,
+    breathe 4s ease-in-out 1.5s infinite;
+}
+
+@keyframes authDraw {
+  to { width: clamp(28px, 8vw, 56px); }
+}
+
+.auth-eyebrow {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 1.2rem;
+}
+
+.auth-headline {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(34px, 5vw, 52px);
+  line-height: 1.06;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 0 0 1rem;
+}
+
+.auth-sub {
+  font-size: 17px;
+  line-height: 1.66;
+  color: var(--ink-80);
+  margin: 0 0 2.4rem;
+  max-width: 380px;
+}
+
+/* ---------- the fields (welcome-page underline idiom) ---------- */
+.auth-field {
+  position: relative;
+  border-bottom: 1px solid var(--ink-wash);
+  margin-bottom: 1.6rem;
+  transition: opacity 0.4s var(--ease);
+}
+
+.auth-field::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 1px;
+  width: 100%;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s var(--ease);
+}
+
+.auth-field:focus-within::after {
+  transform: scaleX(1);
+}
+
+.auth-field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-50);
+  margin: 0 0 6px;
+}
+
+.auth-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 18px;
+  color: var(--ink);
+  padding: 4px 0 10px;
+  outline: none;
+  letter-spacing: 0.01em;
+}
+
+.auth-input::placeholder {
+  color: var(--ink-40);
+}
+
+/* show/hide password — a quiet text affordance, never a loud icon button */
+.auth-reveal {
+  position: absolute;
+  right: 0;
+  bottom: 10px;
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-50);
+  cursor: pointer;
+  padding: 2px 0;
+  letter-spacing: 0.02em;
+}
+
+.auth-reveal:hover {
+  color: var(--ink-80);
+}
+
+/* ---------- primary action ---------- */
+.auth-actions {
+  margin-top: 2rem;
+}
+
+/* fills on hover like .btn-ink, full width here for the front door */
+.auth-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  padding: 15px 28px;
+  background: transparent;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: color 0.25s var(--ease);
+  z-index: 0;
+}
+
+.auth-submit::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+  z-index: -1;
+}
+
+.auth-submit:hover:not([disabled]) {
+  color: var(--paper);
+}
+
+.auth-submit:hover:not([disabled])::before {
+  transform: scaleX(1);
+}
+
+.auth-submit[disabled] {
+  cursor: default;
+  color: var(--ink-40);
+  border-color: var(--ink-wash);
+}
+
+/* a small inline spinner dot while a request is in flight */
+.auth-spinner {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  display: none;
+  animation: breathe 1.2s ease-in-out infinite;
+}
+
+.auth-submit.is-busy .auth-spinner {
+  display: inline-block;
+}
+
+/* ---------- the mode toggle (sign in <-> create account) ---------- */
+.auth-switch {
+  margin: 1.8rem 0 0;
+  font-size: 15px;
+  color: var(--ink-60);
+  letter-spacing: 0.01em;
+}
+
+.auth-switch-btn {
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--ink-85);
+  cursor: pointer;
+  padding: 0 0 2px;
+  position: relative;
+  letter-spacing: 0.01em;
+}
+
+.auth-switch-btn::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+
+.auth-switch-btn:hover::after {
+  transform: scaleX(1);
+}
+
+/* ---------- honest message lines ---------- */
+.auth-msg {
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  margin: 1.4rem 0 0;
+  min-height: 1.2em;
+}
+
+/* an error is stated plainly in ink — never a red console-style banner */
+.auth-msg.is-error {
+  color: var(--ink-85);
+}
+
+.auth-msg.is-error::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+  margin-right: 9px;
+  vertical-align: 0.18em;
+}
+
+.auth-msg.is-quiet {
+  color: var(--ink-50);
+}
+
+/* ---------- the "check your email" state ---------- */
+.auth-confirm {
+  text-align: left;
+}
+
+.auth-confirm-mark {
+  width: 30px;
+  height: 30px;
+  margin: 0 0 1.4rem;
+  display: block;
+}
+
+.auth-confirm-mark path {
+  stroke: var(--gold);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.auth-confirm-headline {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.1;
+  color: var(--ink);
+  margin: 0 0 1rem;
+}
+
+.auth-confirm-body {
+  font-size: 17px;
+  line-height: 1.66;
+  color: var(--ink-80);
+  margin: 0 0 0.6rem;
+  max-width: 380px;
+}
+
+.auth-confirm-email {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.auth-confirm-back {
+  margin-top: 2rem;
+}
+
+/* a signed-out / footer note */
+.auth-footnote {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-40);
+  letter-spacing: 0.01em;
+  margin: 3rem 0 0;
+  max-width: 380px;
+}
+
+/* ---------- the signed-in chip (lives in the topbar) ---------- */
+.auth-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ink-60);
+  letter-spacing: 0.01em;
+}
+
+.auth-chip-email {
+  color: var(--ink-70);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-chip-signout {
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-60);
+  cursor: pointer;
+  padding: 2px 0;
+  position: relative;
+  letter-spacing: 0.02em;
+}
+
+.auth-chip-signout::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease);
+}
+
+.auth-chip-signout:hover::after {
+  transform: scaleX(1);
+}
+
+/* The reveal stagger for the gate's own lines (independent of [data-reveal]). */
+.auth-reveal-item {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.8s var(--ease), transform 0.8s var(--ease);
+}
+
+.auth-reveal-item.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-gate,
+  .auth-reveal-item,
+  .auth-rail-line,
+  .auth-rail-dot {
+    transition: none;
+    animation: none;
+    opacity: 1;
+    transform: none;
+    width: auto;
+  }
+  .auth-rail-line { width: clamp(28px, 8vw, 56px); }
+}
+
+@media (max-width: 640px) {
+  .auth-headline {
+    font-size: clamp(30px, 9vw, 40px);
+  }
+  .auth-input {
+    font-size: 16px;
+  }
+  .auth-chip-email {
+    display: none; /* keep the topbar calm on phones; sign-out stays */
+  }
+}
