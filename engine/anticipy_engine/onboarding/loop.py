@@ -15,11 +15,15 @@ from .permissions import SURFACE_SERVICE
 MAX_LAYERS = 4
 # each layer reads DEEPER: (max_chars, scroll_steps). Layer 1 catalogues the surface; later layers
 # scroll further and dwell to pull in more emails/events/contacts/posts (it takes its time).
-_DEPTH = {1: (4000, 6), 2: (8000, 10), 3: (14000, 16), 4: (20000, 22)}
+# each layer reads DEEPER: (max_chars, scroll_steps, dwell, settle) — sweep #3 threads dwell+settle so
+# later passes actually linger longer on slow surfaces, not just scroll more.
+_DEPTH = {1: (4000, 6, 1.8, 3.5), 2: (8000, 10, 2.0, 4.5), 3: (14000, 16, 2.2, 5.5), 4: (20000, 22, 2.4, 6.0)}
 _CONFIDENT = 0.7
+_BUDGET_S = 300.0  # sweep #4: overall wall-clock budget so the loop can never block indefinitely
 
 
 async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYERS) -> dict:
+    import time
     from fastapi.concurrency import run_in_threadpool
 
     perms = core.onboard_permissions
@@ -31,10 +35,15 @@ async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYER
     layers: list = []
     doss: dict = {}
     last_conf = -1.0
+    started = time.monotonic()
+    timed_out = False
     for layer in range(1, min(max_layers, MAX_LAYERS) + 1):
+        if time.monotonic() - started > _BUDGET_S:  # sweep #4: stop gracefully on the wall-clock budget
+            timed_out = True
+            break
         # GENUINE read of the allowed surfaces — deeper each layer (honest needs_login; never faked)
-        max_chars, scroll_steps = _DEPTH.get(layer, (8000, 10))
-        signals = await run_in_threadpool(scrape_owner, cdp_url, allowed, max_chars, scroll_steps)
+        max_chars, scroll_steps, dwell, settle = _DEPTH.get(layer, (8000, 10, 2.0, 4.5))
+        signals = await run_in_threadpool(scrape_owner, cdp_url, allowed, max_chars, scroll_steps, dwell, settle)
         doss = await _dossier.synthesize_dossier(signals, core.gateway)
         counts = _dossier.write_dossier_to_memory(doss, core.memory)
         conf = float(doss.get("confidence", 0.0) or 0.0)
@@ -63,6 +72,7 @@ async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYER
         "ok": True,
         "layers": layers,
         "done": done,
+        "timed_out": timed_out,
         "dossier": doss.get("dossier", {}),
         "confidence": final.get("confidence", 0),
         "needs_login": final.get("needs_login", []),

@@ -1113,6 +1113,33 @@ async def onboard_loop(body: OnboardLoopIn) -> dict:
     return await run_loop(core, body.cdp_url, body.max_layers)
 
 
+class OnboardCompleteIn(BaseModel):
+    complete: bool = True
+
+
+@app.get("/onboard/status")
+def onboard_status() -> dict:
+    """First-run marker (sweep #12): has onboarding been completed/confirmed?"""
+    p = core.data_dir / "onboard_complete.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"onboarding_complete": False}
+    except Exception:
+        return {"onboarding_complete": False}
+
+
+@app.post("/onboard/complete")
+def onboard_complete(body: OnboardCompleteIn) -> dict:
+    """Persist that the owner confirmed their dossier — the durable 'onboarding done' signal the app
+    reads to skip the guided flow on subsequent runs (sweep #12)."""
+    import time as _t
+    data = {"onboarding_complete": bool(body.complete), "at": _t.time()}
+    try:
+        (core.data_dir / "onboard_complete.json").write_text(json.dumps(data), encoding="utf-8")
+    except Exception:
+        pass
+    return data
+
+
 class ComposeEmailIn(BaseModel):
     to: str
     subject: str = ""
