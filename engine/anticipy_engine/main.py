@@ -635,6 +635,21 @@ def history() -> dict:
     return {"items": [i.model_dump() for i in core.memory.history.all()]}
 
 
+@app.get("/memory/drawers")
+def memory_drawers() -> dict:
+    """Read surface for all four memory drawers — count + recent items each (the dossier writes land in
+    profile [stated] and derived [inferred]). Fixes the harness G4 read + the missing-read-surface gap."""
+    def snap(store):
+        items = store.all()
+        return {"count": len(items), "recent": [i.model_dump() for i in items[-15:]]}
+    return {"drawers": {
+        "profile": snap(core.memory.profile),
+        "derived": snap(core.memory.derived),
+        "open_loops": snap(core.memory.open_loops),
+        "history": snap(core.memory.history),
+    }}
+
+
 @app.get("/memory/open-loops")
 def memory_open_loops(limit: int = 50) -> dict:
     return core.memory_open_loops(limit=limit)

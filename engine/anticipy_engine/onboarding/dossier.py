@@ -60,34 +60,74 @@ async def synthesize_dossier(signals: dict, gateway) -> dict:
             "model": "smart"}
 
 
+def _as_list(v) -> list:
+    """The model may return a list, a bare string, or null — never iterate a string char-by-char."""
+    if v is None:
+        return []
+    if isinstance(v, str):
+        return [v] if v.strip() else []
+    if isinstance(v, list):
+        return v
+    return [v]
+
+
+def _name_of(item) -> str:
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, dict):
+        return str(item.get("name") or item.get("url") or item.get("label") or "").strip()
+    return ""
+
+
 def write_dossier_to_memory(doss: dict, memory) -> dict:
-    """Persist the dossier: STATED facts (identity/work/people/family) -> profile drawer,
-    INFERRED (tools/sites) -> derived drawer. Writes NOTHING when the dossier is empty (honest)."""
+    """Persist the dossier: STATED facts (identity/work/people/family) -> profile drawer (provenance
+    'stated'), INFERRED (tools/sites) -> derived drawer (provenance 'inferred', confidence < 1).
+    Robust to model shape drift (string-or-dict people/family/tools); writes NOTHING when empty (honest)."""
     d = (doss or {}).get("dossier") or {}
-    if not d:
+    if not isinstance(d, dict) or not d:
         return {"profile": 0, "derived": 0}
     p = c = 0
-    ident = d.get("identity") or {}
-    bits = [f"{k}: {v}" for k, v in ident.items() if v]
-    if bits:
-        memory.profile.write_text("Owner identity — " + "; ".join(bits)); p += 1
-    if d.get("work"):
-        memory.profile.write_text(f"Owner work: {d['work']}"); p += 1
-    for person in (d.get("people") or []):
-        name = (person.get("name") or "").strip()
+
+    ident = d.get("identity")
+    if isinstance(ident, dict):
+        bits = [f"{k}: {v}" for k, v in ident.items() if v]
+        if bits:
+            memory.profile.write_text("Owner identity — " + "; ".join(bits),
+                                      provenance="stated", confidence=0.9); p += 1
+    elif isinstance(ident, str) and ident.strip():
+        memory.profile.write_text(f"Owner identity — {ident.strip()}",
+                                  provenance="stated", confidence=0.9); p += 1
+
+    if isinstance(d.get("work"), str) and d["work"].strip():
+        memory.profile.write_text(f"Owner work: {d['work'].strip()}",
+                                  provenance="stated", confidence=0.85); p += 1
+
+    for person in _as_list(d.get("people")):
+        if isinstance(person, str):
+            person = {"name": person}
+        if not isinstance(person, dict):
+            continue
+        name = str(person.get("name") or "").strip()
         if not name:
             continue
-        rel = person.get("relationship") or ""
-        why = person.get("why_they_matter") or ""
+        rel = str(person.get("relationship") or "")
+        why = str(person.get("why_they_matter") or "")
         txt = "Important person: " + name + (f" — {rel}" if rel else "") + (f"; {why}" if why else "")
-        memory.profile.write_text(txt, people=[name]); p += 1
-    for fam in (d.get("family") or []):
-        if fam:
-            memory.profile.write_text(f"Family: {fam}"); p += 1
-    for tool in (d.get("tools") or []):
-        if tool:
-            memory.derived.write_text(f"Tool the owner uses: {tool}"); c += 1
-    for site in (d.get("act_on_sites") or []):
-        if site:
-            memory.derived.write_text(f"Site the browser arm may act on: {site}"); c += 1
+        memory.profile.write_text(txt, people=[name], provenance="stated", confidence=0.85); p += 1
+
+    for fam in _as_list(d.get("family")):
+        n = _name_of(fam)
+        if n:
+            memory.profile.write_text(f"Family: {n}", provenance="stated", confidence=0.8); p += 1
+
+    for tool in _as_list(d.get("tools")):
+        n = _name_of(tool)
+        if n:
+            memory.derived.write_text(f"Tool the owner uses: {n}", provenance="inferred", confidence=0.6); c += 1
+
+    for site in _as_list(d.get("act_on_sites")):
+        n = _name_of(site)
+        if n:
+            memory.derived.write_text(f"Site the browser arm may act on: {n}",
+                                      provenance="inferred", confidence=0.6); c += 1
     return {"profile": p, "derived": c}

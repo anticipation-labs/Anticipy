@@ -1213,6 +1213,20 @@ class ControlCore:
         except Exception as exc:
             ok, answer = False, ""
             self.glassbox.log("browser_action_error", {"ask_id": ask_id, "error": str(exc)})
+        # M4 HONESTY (audit #3 — never fake done): res.success is the agent's RAW self-report. Before we
+        # text the owner "Done — ...", a JUDGE must verify it on the real model; an unverified result is
+        # NOT claimed done (the owner is asked to retry / take over). Stub/mock keeps prior behavior.
+        if ok and answer and getattr(self.gateway, "provider", None) == PROVIDER_OPENROUTER:
+            try:
+                from ..agent.webvoyager import judge as _judge
+                _v = await _judge(self.gateway, task,
+                                  {"answer": answer, "final_url": getattr(res, "url", None) or url})
+                if not _v.get("success"):
+                    ok = False
+                    self.glassbox.log("browser_action_unverified", {"ask_id": ask_id, "reason": _v.get("reason")})
+            except Exception:
+                ok = False  # couldn't verify -> don't claim done (honest over convenient)
+                self.glassbox.log("browser_action_unverified", {"ask_id": ask_id, "reason": "judge unavailable"})
         # LAND THE RESULT ON THE DURABLE CARD (parity with the API arm's read-back proof):
         # the card was flipped to 'running' on YES; now write the resolved browser receipt
         # (final url + screenshot flag/path + the answer) back onto the record and persist,

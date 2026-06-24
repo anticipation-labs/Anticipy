@@ -25,9 +25,12 @@ DEMOTE_PENALTY = 3         # a rejection costs this many clean reps
 _SEND_ACTIONS = {"draft_or_confirm_message"}
 # the tiny always-reversible whitelist Limited still auto-does without asking
 _LIMITED_AUTO = {"create_calendar_or_reminder", "timed_reminder", "write_memory", "write_profile_memory"}
-# reversible actions Full-Send may upgrade ask -> do (no money, no external send, throwaway browser)
+# reversible actions Full-Send may upgrade ask -> do, AND that the executor can actually run (a
+# browser-arm web task). NOTE: execute_owner_task (route=api) is deliberately NOT here — there is no
+# api auto-executor, so promoting it would strand the card as an approved-but-never-run "ask". The dial
+# only promises upgrades it can deliver; an api task stays a confirm-first ask in every mode.
 _FULLSEND_UPGRADE = {"research_or_find_item", "browser_action", "find_or_cart_without_purchase",
-                     "browse_task", "execute_owner_task"}
+                     "browse_task"}
 
 
 _BROWSERISH = {"research_or_find_item", "browser_action", "find_or_cart_without_purchase", "browse_task"}
@@ -75,13 +78,15 @@ def adjust(card: dict, mode: str, trust_tier: int = 0, confidence: float = 1.0) 
         return {"disposition": disp, "why": "Limited mode", "changed": False}
 
     if mode == "full_send" and not floor_hit:
-        if disp == "ask" and (action in _FULLSEND_UPGRADE or trust_tier >= 2):
+        # only upgrade actions the executor can actually run (browser-arm web tasks); trust does NOT
+        # bypass that — a non-executable ask (e.g. an api task) stays a confirm-first ask.
+        if disp == "ask" and action in _FULLSEND_UPGRADE:
             return {"disposition": "do", "why": "Full-Send — I'll just handle it (reversible, no money)",
                     "changed": True}
         return {"disposition": disp, "why": "Full-Send mode", "changed": False}
 
-    # regular: trust earned over reps can promote a repeatedly-approved reversible ask -> do
-    if mode == "regular" and disp == "ask" and trust_tier >= 2 and action not in _SEND_ACTIONS:
+    # regular: trust earned over reps can promote a repeatedly-approved EXECUTABLE reversible ask -> do
+    if mode == "regular" and disp == "ask" and trust_tier >= 2 and action in _FULLSEND_UPGRADE:
         return {"disposition": "do", "why": "you've okayed this kind of thing enough — I'll just do it",
                 "changed": True}
     return {"disposition": disp, "why": "Regular mode", "changed": False}

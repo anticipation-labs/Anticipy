@@ -41,13 +41,16 @@ check("low-confidence do->ask (full_send)",
 # TRUST LEDGER: 5 clean reps promote a task-type to tier 2; then Regular promotes its ask->do; a rejection demotes.
 with tempfile.TemporaryDirectory() as d:
     led = am.TrustLedger(os.path.join(d, "trust.json"))
-    tt = am.task_type(coffee_ask)
+    tt = am.task_type(lookup_ask)   # an EXECUTABLE reversible web task (the executor can run it)
     for _ in range(5): led.record_clean(tt)
     check("5 clean reps -> tier 2", led.tier(tt) == 2, f"tier={led.tier(tt)}")
-    check("regular promotes trusted reversible ask->do",
-          am.adjust(coffee_ask, "regular", trust_tier=led.tier(tt))["disposition"] == "do")
+    check("regular promotes a trusted EXECUTABLE reversible ask->do",
+          am.adjust(lookup_ask, "regular", trust_tier=led.tier(tt))["disposition"] == "do")
     led.record_rejection(tt)
     check("rejection demotes below tier 2", led.tier(tt) < 2, f"tier={led.tier(tt)}")
+    # the dial NEVER promises an upgrade the executor can't run: an api task stays a confirm-first ask
+    check("api task (execute_owner_task) NOT promoted even at max trust",
+          am.adjust(coffee_ask, "full_send", trust_tier=2)["disposition"] == "ask")
     # even a trusted task-type can't promote a SEND or MONEY
     led2 = am.TrustLedger(os.path.join(d, "t2.json"))
     for _ in range(9): led2.record_clean(am.task_type(send))

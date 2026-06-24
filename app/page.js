@@ -2,18 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-// NO demo scaffolding: a real user never inherits someone else's day or someone else's
-// people. The capture box opens empty with a human placeholder; the onboarding form opens
-// empty so the first profile written is genuinely the owner's. (First-run setup lives at
-// /welcome — the guided front door.)
 const SAMPLE = "";
-
-const SAMPLE_PLACEHOLDER =
-  "Just talk. Paste a transcript, or type what your day sounds like — the small stuff you'd forget, the things you said you'd do. I'll sort out what matters.";
 
 const DEFAULT_MEMORY = {
   ownerName: "",
-  timezone: "",
+  timezone: "America/Vancouver",
   phone: "",
   email: "",
   preferences: "",
@@ -23,15 +16,10 @@ const DEFAULT_MEMORY = {
   notes: "",
 };
 
-// People/connection/store fields accept comma- OR pipe-separated columns, so the
-// seed copy can stay human (no raw pipe-delimited data on screen) while the parser
-// keeps working unchanged for either separator.
-const FIELD_SEP = /\s*[|,]\s*/;
-
-const sources = [
-  ["typed", "Type it"],
-  ["transcript", "Paste a transcript"],
-  ["upload", "Upload audio"],
+const MODES = [
+  ["typed", "Type"],
+  ["transcript", "Paste"],
+  ["upload", "Upload"],
   ["start_listening", "Listen"],
 ];
 
@@ -43,7 +31,7 @@ function lines(value) {
 }
 
 function pipeParts(line) {
-  return line.split(FIELD_SEP).map((part) => part.trim());
+  return line.split("|").map((part) => part.trim());
 }
 
 function normalizeConnectionStatus(value) {
@@ -80,20 +68,19 @@ function onboardingPayload(form) {
   };
 }
 
-// AUTO_DO_WITH_OPT_OUT (the autonomy law): a reversible chore the assistant STARTED on its own
-// ("call Amazon about the plant"). It is NOT an approval ask — it shows "I'm on it … — tell me to
-// stop", with a STOP control, never Yes/Not-now. Detected by the persisted autonomy_mode (SEAM 2).
-function isOptOut(card) {
-  if (!card) return false;
-  if (card.status === "stopped") return false; // a stopped chore drops out of the on-it lane
-  if (card.status === "declined" || card.status === "done") return false;
-  return card.autonomy_mode === "AUTO_DO_WITH_OPT_OUT" || card.execution?.opt_out === true;
+// Which human section a card belongs to. The engine's own disposition/status is the
+// source of truth — this only chooses how to GROUP it for a person to read.
+function sectionOf(card) {
+  if (card.status === "declined") return "remember"; // you said no; it lives as a note
+  if (card.disposition === "blocked" || card.status === "blocked") return "blocked";
+  if (card.disposition === "remember") return "remember";
+  if (card.disposition === "ask" || card.status === "waiting") return "ask";
+  if (card.status === "done") return "done";
+  return "doing";
 }
 
+// Kept for the durable-card refresh/merge logic below (server cards carry status only).
 function cardBucket(card) {
-  // An in-flight opt-out chore is its own lane (started, stoppable) — never an approval ask.
-  if (isOptOut(card)) return "onit";
-  if (card.status === "stopped") return "done";
   if (card.status === "declined") return "done";
   if (card.status === "done" || card.disposition === "remember") return "done";
   if (card.disposition === "blocked" || card.status === "blocked") return "blocked";
@@ -101,266 +88,120 @@ function cardBucket(card) {
   return "ready";
 }
 
-// ---- copy guards (§4.8): the user never sees a codebase artifact ----
-// Every string that originates in the engine passes through one of these before it
-// reaches the DOM. Test scaffolding ("[Anticipy test]"), orphan transcript timestamps
-// ("00:00:03]"), internal role prefixes ("Owner task:"), and engine route/disposition
-// tags ("reversible:research -> act", "fail-safe ask", "cannot confirm safe -> ...")
-// are scrubbed here, never rendered. If a string is ONLY machine noise, the caller
-// drops the line rather than show it.
-
-// Strip test labels, orphan timestamps, internal role prefixes, and ASCII arrows from
-// any user text, then collapse a runaway rambling line (a vent dictated as one long
-// run-on) down to its first clean clause so a title never shows a mid-word transcript dump.
-function cleanText(value) {
-  if (value == null) return "";
-  let s = String(value)
-    .replace(/\[Anticipy[^\]]*\]\s*/gi, "")            // "[Anticipy test]" scaffolding
-    .replace(/^\s*\d{1,2}:\d{2}:\d{2}\]\s*/g, "")      // orphan "00:00:03]" timestamp head
-    .replace(/\b\d{1,2}:\d{2}:\d{2}\]\s*/g, "")        // ...or mid-string
-    .replace(/^\s*(?:Owner task|Owner|Follow up on your commitment)\s*:\s*/i, "")
-    .replace(/\s*-+>\s*/g, " to ")                     // never a literal ASCII "->"
-    .replace(/\s{2,}/g, " ")
-    .trim();
-  return s;
+function lowerFirst(value) {
+  const s = (value || "").trim();
+  return s ? s[0].toLowerCase() + s.slice(1) : s;
 }
 
-// ---- copy guard for ERROR messages (§4.7 / §4.8) ----
-// A real person must never see a raw backend error, a codebase verb, an engine URL, or a
-// port. Known failures collapse to ONE calm Donna line; the wrong-key case gets its own.
-// Anything that still smells like machine noise is replaced wholesale; everything else is
-// passed through cleanText so a genuinely human backend message survives intact.
-const ERROR_HUMAN = [
-  [/owner unlock|that key|unlock failed|wrong key|invalid (?:key|token)/i, "That key didn't work. Try again."],
-];
-const MACHINE_SMELL = /\b(failed|engine|exception|traceback|undefined|null|fetch|unreachable|reach|owner)\b|127\.0\.0\.1|:\d{4}\b|https?:\/\//i;
-function humanizeError(value) {
-  const raw = cleanText(value);
-  if (!raw) return "";
-  for (const [re, say] of ERROR_HUMAN) if (re.test(raw)) return say;
-  if (MACHINE_SMELL.test(raw)) return "I lost the thread for a moment. Try again.";
-  return raw;
+function isInternalText(text) {
+  if (!text) return true;
+  const markers = ["fail-safe", "\u2192", "->", "low-confidence", "confirm before", "cannot confirm", "memory "];
+  return markers.some((m) => text.toLowerCase().includes(m));
 }
 
-// A title-safe version of cleanText: caps an over-long / rambling string so it never
-// shows as a wall of run-on transcript. Cuts at the first sentence end, else first 8
-// words, with an ellipsis — but only when the line is genuinely too long.
-function shortText(value, max = 72) {
-  const s = cleanText(value);
-  if (s.length <= max) return s;
-  const sentence = s.match(/^.{12,72}?[.!?](?:\s|$)/);
-  if (sentence) return sentence[0].trim();
-  return s.split(/\s+/).slice(0, 9).join(" ") + "…";
+function humanizeText(text) {
+  if (!text || isInternalText(text)) return null;
+  let t = text.replace(/^(Confirm task|Follow up|Confirm):?\s*/i, "").trim();
+  if (!t) return null;
+  return t[0].toUpperCase() + t.slice(1);
 }
 
-// A reason string is internal machine noise (a route/disposition/triage tag) if it
-// matches any of these — those must never reach the user (§4.8). When it does, the
-// "why" line is dropped entirely rather than humanized into a guess.
-const ROUTE_TAG_RE = /reversible:|->|\bfail-safe\b|re-gated|\bdecider\b|\bsignal\b|\broute\b|\bdisposition\b|goal_state|requires approval|planned step|\bact\b|\bask\b|\bcheckout\b(?!\s)/i;
+function humanCopy(text, fallback = "") {
+  return humanizeText(text) || fallback;
+}
 
-// Engine triage reasons → one plain human sentence. Anything not in the map (or that
-// looks like a raw route tag) returns "" so the caller drops the line.
-const REASON_HUMAN = [
-  [/explicit remember|commitment signal/i, "You said you'd remember this."],
-  [/stated preference|identity|relationship fact/i, "Something about you, worth keeping."],
-  [/care obligation|pickup|drop-?off/i, "A pickup that matters — I'll keep the timing safe."],
-  [/scheduling|contact verb|concrete time|timed action/i, "There's a time on this, so I lined it up."],
-  [/third-party communication|before sending/i, "I'll check with you before messaging someone."],
-  [/money|checkout|pay/i, "Money's involved, so the last step stays yours."],
-  [/item\/source context|exact item|source before/i, "I need the exact item before I can add it to a cart."],
-];
+function cardSourceLine(card) {
+  return humanCopy(card?.source_text, "");
+}
 
-function humanWhy(reason) {
-  const text = cleanText(reason);
-  if (!text) return "";
-  for (const [re, say] of REASON_HUMAN) {
-    if (re.test(text)) return say;
+function humanWhy(ask) {
+  return humanCopy(ask?.reason || ask?.action, "I wanted to check first.");
+}
+
+function loopTitle(loop) {
+  return humanCopy(loop?.text, "Something to keep an eye on.");
+}
+
+function spokenLine(card) {
+  const section = sectionOf(card);
+  if (section === "blocked") {
+    return "This touches money, so I stopped. The actual payment is always yours.";
   }
-  // Unknown reason: only keep it if it reads like a plain sentence (no route tags,
-  // no arrows, no bare engine words). Otherwise stay silent.
-  if (ROUTE_TAG_RE.test(text)) return "";
-  return text;
-}
-
-// Rule-name titles the engine emits → clean human labels. If the engine already sent
-// a humane title (e.g. "Prepare message for Sam"), we keep it; if it sent a rule name
-// or a raw transcript, we map/repair it here. Never a truncated transcript, never a
-// test label, never the "Owner task:" prefix.
-const TITLE_HUMAN = [
-  [/capture reminder|open loop/i, "A reminder you set"],
-  [/schedule|timed action/i, "Something with a time on it"],
-  [/protect pickup|drop-?off/i, "A pickup to protect"],
-  [/block money|money action/i, "A payment — left for you"],
-  [/resolve browser task/i, "Something to find online"],
-];
-
-// A line is vent-like / rambling (the dictated run-on filler) if it's long and has the
-// telltale repetition of a vent rather than a crisp task. We never use it as a title.
-function isRamble(s) {
-  if (!s) return false;
-  if (s.length > 90) return true;
-  if (/\boh yeah\b.*\boh yeah\b/i.test(s)) return true;
-  return false;
-}
-
-function humanTitle(card) {
-  const raw = cleanText(card.title || card.action || "");
-  // A rule-name title: map it to a clean label.
-  for (const [re, label] of TITLE_HUMAN) {
-    if (re.test(raw)) {
-      // Prefer the real task text if it's a short, clean sentence.
-      const src = cleanText(card.source_text || "");
-      if (src && !isRamble(src) && !ROUTE_TAG_RE.test(src)) return shortText(src);
-      return label;
+  if (card.disposition === "remember") {
+    const fact = (card.title || "").replace(/^remember:?\s*/i, "").trim();
+    return fact ? `Noted \u2014 ${lowerFirst(fact)}` : "Noted.";
+  }
+  switch (card.action) {
+    case "create_calendar_or_reminder":
+    case "create_reminder":
+    case "schedule_event":
+      return "I'll set a reminder so this doesn't slip.";
+    case "draft_or_confirm_message":
+    case "draft_message":
+    case "send_message":
+      return "I've drafted the message \u2014 say the word and I'll send it.";
+    case "find_or_cart_without_purchase":
+      return "I'll find it and put it in the cart. I won't check out.";
+    case "prepare_purchase_path_without_payment":
+      return "I'll get it ready to buy, then stop before paying.";
+    case "write_profile_memory":
+      return "Noted \u2014 that helps me get you right.";
+    default: {
+      const title = humanizeText(card.title);
+      if (title) return title;
+      const src = humanizeText(card.source_text);
+      if (src) return src;
+      return "I'll take care of this.";
     }
   }
-  // An engine-humanized title we trust (e.g. "Prepare message for Sam"): keep as-is.
-  if (raw && !isRamble(raw)) return shortText(raw);
-  // Anything long/rambling (a raw transcript leaked as a title): fall back to a short
-  // clean source, or a calm generic — never a truncated mid-word vent dump.
-  const src = cleanText(card.source_text || "");
-  if (src && !isRamble(src) && !ROUTE_TAG_RE.test(src)) return shortText(src);
-  return "Something I caught";
 }
 
-// Is this card's source_text genuine user transcript (worth showing) or just the
-// classifier rationale / a rambling vent? Show only short, clean, non-tag source.
-function cardSourceLine(card) {
-  const src = cleanText(card.source_text || "");
-  if (!src) return "";
-  if (ROUTE_TAG_RE.test(src)) return "";
-  // A rambling vent / filler line is not a clean "source" — drop it entirely.
-  if (isRamble(src)) return "";
-  // If the title already IS the source, don't echo it twice.
-  if (src === humanTitle(card)) return "";
-  return src;
+// Short, plain-language outcome chip for a card.
+function chipFor(card, pendingAsk) {
+  const section = sectionOf(card);
+  if (card.status === "declined") return { cls: "calm", text: "You said no" };
+  if (section === "blocked") return { cls: "blocked", text: "Stopped at money" };
+  if (section === "ask") return { cls: "ask", text: pendingAsk ? "Needs your okay" : "Waiting on you" };
+  if (card.disposition === "remember") return { cls: "remember", text: "Remembered" };
+  if (card.status === "failed") return { cls: "ask", text: "Needs a connected account" };
+  if (section === "done") return { cls: "do", text: "Done" };
+  return { cls: "do", text: "Ready" };
 }
 
-// A stable de-dup key for a caught item: collapse near-identical / progressively-
-// truncated transcript variants (the "oh yeah we should go for dinner..." storm) into
-// ONE. We key on the first handful of normalized words so all the truncations match.
-function dedupeKey(card) {
-  const base = cleanText(card.source_text || card.title || card.action || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return base.split(" ").slice(0, 8).join(" ") || card.id;
-}
-
-// Collapse a list of cards to one card per dedupeKey (first wins, since the list is
-// ordered freshest-first by the time it reaches here).
-function dedupeCards(list) {
-  const seen = new Set();
-  const out = [];
-  for (const card of list) {
-    const key = dedupeKey(card);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(card);
-  }
-  return out;
-}
-
-
-// Turn a machine proof object into one plain, human receipt line. Never JSON, never
-// a raw id or null — the spec's banned-string rule (§4.8). If there's nothing human
-// to say, we say nothing (the caller drops empty receipts).
 function proofValue(proof) {
   if (!proof) return "";
-  if (proof.type === "memory_resolution") return cleanText([proof.item, proof.site].filter(Boolean).join(" at "));
-  if (proof.type === "browser_receipt") return cleanText([proof.answer || "Checked it in the browser", proof.url].filter(Boolean).join(" — "));
-  if (proof.decision) {
-    // A resolution proof: ONE human phrase. "You said yes" already implies the outcome,
-    // so we don't also append the raw/humanized goal_state (that's what produced the
-    // doubled "You said yes — waiting on you" the critics flagged).
-    if (proof.decision === "approved") return "You said yes";
-    if (proof.decision === "declined") return "You passed";
-    // Anything else (a raw token) is mapped, never shown raw.
-    return humanState(proof.decision) || "";
-  }
-  // Never surface a filesystem path or a raw token to the user.
+  if (proof.type === "memory_resolution") return [proof.item, proof.site].filter(Boolean).join(" @ ");
+  if (proof.type === "browser_receipt") return [proof.answer || "browser verified", proof.url].filter(Boolean).join(" @ ");
+  if (proof.decision) return [proof.decision, proof.goal_state].filter(Boolean).join(" / ");
+  if (proof.memory_id) return proof.memory_id;
+  if (proof.path) return proof.path;
+  if (proof.type) return proof.type;
   return "";
 }
 
-function proofLabel(proof) {
-  if (proof?.type === "memory_resolution") return "Remembered";
-  if (proof?.type === "browser_receipt") return "Checked";
-  if (proof?.type === "resolution") return "Your call";
-  return "Note";
-}
-
-// Engine goal-states → words a person reads. Never surfaces goal_state/disposition raw.
-function humanState(state) {
-  const map = {
-    done: "handled",
-    waiting: "waiting on you",
-    blocked: "left for you",
-    declined: "set aside",
-    prepared: "prepared, not sent",
-    held: "held",
-  };
-  return state ? (map[state] || "") : "";
-}
-
-function visibleProofs(proofs = []) {
-  if (!Array.isArray(proofs)) return [];
-  // Only the three proof types that map to a plain human receipt are ever shown. The
-  // rest (engine_execution with its raw act/ask disposition, card_record file paths,
-  // memory_write/read_back internals) carry machine noise §4.8 bans, and the card's
-  // own status dot already says whether it's handled/waiting — so we drop them.
-  const userProof = new Set(["memory_resolution", "browser_receipt", "resolution"]);
-  return proofs.filter((proof) => userProof.has(proof?.type)).slice(0, 2);
-}
-
-// A human one-word state for a card, mapped to the dot color in the row. No raw
-// ids, no "Waiting for Omar" role-speak — the words the spec asks for (§4.8).
-function outcomeWord(card) {
-  const bucket = cardBucket(card);
-  if (card.status === "stopped") return { label: "Stopped", tone: "" };
-  if (card.status === "declined") return { label: "Set aside", tone: "" };
-  if (bucket === "onit") return { label: "On it", tone: "onit" };
-  if (bucket === "blocked") return { label: "Left for you", tone: "held" };
-  if (bucket === "ask") return { label: "Waiting for your yes", tone: "waiting" };
-  if (bucket === "done") return { label: "Handled", tone: "handled" };
-  return { label: "Ready", tone: "" };
-}
-
-// The follow-up line for a card, read from the ATTACHED PLAN DICT (card.follow_up), not
-// from any action literal. When an obligation's outcome depends on someone else, the engine
-// schedules a check at follow_up.when_ts; this tells the user, in plain words, when we'll
-// circle back. Returns "" when there is no plan (most cards) so nothing extra renders.
-function followUpNote(card) {
-  const fu = card?.follow_up;
-  if (!fu || typeof fu !== "object") return "";
-  const days = Number(fu.in_days);
-  if (Number.isFinite(days)) {
-    if (days <= 0) return "I'll check back on this shortly.";
-    if (days === 1) return "I'll check back on this tomorrow.";
-    return `I'll check back on this in ${days} days.`;
+// A single human-readable receipt line for a card, if the engine left proof.
+function receiptLine(card) {
+  const proofs = Array.isArray(card.proof) ? card.proof : [];
+  const human = proofs.find((p) => p?.type === "memory_resolution" || p?.type === "browser_receipt");
+  const value = proofValue(human);
+  if (value) return value;
+  const goalState = card.execution?.goal_state;
+  if (goalState && !["waiting", "blocked", "done", "declined", "failed", "ready"].includes(goalState)) {
+    return goalState;
   }
-  return "I'll check back on this and nudge you if it stalls.";
+  return "";
 }
 
 function receiptText(entry) {
-  // Only ever a human sentence. If the event has no summary/message, we describe it
-  // plainly rather than dumping JSON (which would leak {...}/null to the user).
-  if (entry.summary) return cleanText(entry.summary);
-  if (entry.message) return cleanText(entry.message);
-  if (entry.data && typeof entry.data === "object") {
-    const note = entry.data.summary || entry.data.message || entry.data.note;
-    if (note) return cleanText(note);
-  }
-  return "Noted.";
+  return humanCopy(entry?.summary || entry?.message, "Updated.");
 }
 
 function firedLoopText(item) {
-  const what = cleanText(item.task || item.text || "") || "a loop";
-  const did = item.decision === "approved" ? "took it on" : item.decision === "declined" ? "left it for you" : "checked on it";
-  return `Looked back at "${what}" and ${did}.`;
+  const pieces = [item.task || item.text || "loop", item.decision || "checked"];
+  if (item.category) pieces.push(item.category);
+  return pieces.join(" — ");
 }
 
-// The remember-list ts is a unix epoch in seconds (RememberList writes time.time()).
 function formatRememberTs(ts) {
   const seconds = Number(ts);
   if (!Number.isFinite(seconds)) return "";
@@ -369,22 +210,20 @@ function formatRememberTs(ts) {
   return date.toLocaleString();
 }
 
-// (The readiness checklist now lives only on /connect; its render helpers were removed
-// from the home surface so the day view stays a single calm moment, not a status console.)
-
 function loopMeta(loop) {
-  // The "why this is open" line, in human words — never the raw route/action/
-  // disposition fields (those are engine internals, §4.8).
   const fields = loop.fields || {};
-  const action = fields.action;
-  if (action === "connect_account") return "Waiting on an account connection.";
-  // A follow-up is a SCHEDULED check the engine set on a card whose outcome depends on
-  // someone else — recognized by the loop's kind (the scheduled fire-site row), not by an
-  // action literal. The card that spawned it shows the human "I'll check back…" line.
-  if (fields.kind === "follow_up") return "A follow-up I'll circle back on.";
-  if (fields.kind === "reminder") return "A reminder you set.";
-  return "Still open.";
+  return [fields.route, fields.action, fields.disposition || fields.kind]
+    .filter(Boolean)
+    .join(" — ");
 }
+
+const SECTION_META = {
+  doing: { title: "I'm taking care of these" },
+  ask: { title: "Just need your okay" },
+  blocked: { title: "I stopped at money" },
+  remember: { title: "Worth remembering" },
+};
+const SECTION_ORDER = ["doing", "ask", "blocked", "remember"];
 
 function MemoryField({ label, value, onChange, multiline = false, placeholder = "" }) {
   const props = {
@@ -408,60 +247,51 @@ function ProfileView({ profile }) {
   const blockers = profile.blockers || [];
   const browserOff = profile.browser_available === false;
   return (
-    <div className="recap">
-      <div className="recap-head">
+    <div className="profile-view">
+      <div className="profile-head">
         <strong>{profile.name}</strong>
-        {profile.role ? <span className="recap-role">{profile.role}</span> : null}
+        {profile.role ? <span className="profile-role">{profile.role}</span> : null}
         {browserOff ? (
-          <span className="row-state" title="I couldn't open a browser, so I read nothing. I didn't invent anything.">
-            <span className="state-dot waiting" /> couldn&apos;t look further
+          <span className="ant-pill" title="No browser arm was available, so nothing was scraped. No facts were invented.">
+            browser unavailable
           </span>
         ) : null}
       </div>
       {(profile.org || profile.location) ? (
-        <div className="recap-sub">
+        <div className="profile-sub">
           {profile.org ? <span>{profile.org}</span> : null}
           {profile.location ? <span>{profile.location}</span> : null}
         </div>
       ) : null}
-      <div className="recap-sub">
-        <span>{summary.facts ?? facts.length} things I picked up</span>
-        {(summary.needs_cross_check ?? 0) ? <span>{summary.needs_cross_check} I&apos;d double-check</span> : null}
-        <span>
-          read {summary.sources_read_ok ?? 0} of {summary.sources_total ?? (profile.sources || []).length}
-        </span>
-      </div>
       {facts.length ? (
-        <ul className="recap-facts">
+        <ul className="profile-facts">
           {facts.map((fact, index) => (
-            <li className="recap-fact" key={`${fact.field}-${index}`}>
-              <div className="recap-fact-head">
-                <span className="recap-field">{fact.field}</span>
+            <li className="profile-fact" key={`${fact.field}-${index}`}>
+              <div className="profile-fact-head">
+                <span className="profile-field">{fact.field}</span>
                 {fact.needs_cross_check ? (
-                  <span className="row-state" title="I only saw this on one page — worth confirming.">
-                    <span className="state-dot waiting" /> worth a check
+                  <span className="ant-pill" title="Low-trust single-page pull — confirm with a second source.">
+                    needs cross-check
                   </span>
                 ) : (
-                  <span className="row-state" title="I read the whole page — I'm fairly sure.">
-                    <span className="state-dot handled" /> fairly sure
-                  </span>
+                  <span className="ant-pill">{fact.confidence || fact.trust}</span>
                 )}
               </div>
-              <p className="recap-value">{fact.value}</p>
+              <p className="profile-value">{fact.value}</p>
               {fact.source_url ? (
-                <a className="recap-source" href={fact.source_url} target="_blank" rel="noopener noreferrer">
-                  where I saw it
+                <a className="profile-source" href={fact.source_url} target="_blank" rel="noopener noreferrer">
+                  {fact.source_url}
                 </a>
               ) : null}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="recap-empty">No facts assembled. Nothing was invented.</p>
+        <p className="profile-empty">No facts assembled. Nothing was invented.</p>
       )}
       {blockers.length ? (
-        <div className="recap-blockers">
-          <span className="recap-field">What stopped me</span>
+        <div className="profile-blockers">
+          <span className="profile-field">Couldn&apos;t read</span>
           <ul>
             {blockers.map((b, index) => (
               <li key={`blocker-${index}`}>{b}</li>
@@ -473,131 +303,55 @@ function ProfileView({ profile }) {
   );
 }
 
-// The plain-English "I'm on it … — tell me to stop" line for an AUTO_DO_WITH_OPT_OUT chore.
-// Pulls the chore's own words from the source line so it reads like a person, not a status code.
-function onItLine(card) {
-  const what = shortText(card.source_text || card.title || "") || "this";
-  return `I'm on it with ${what} — tell me to stop.`;
-}
-
-function TaskCard({ card, pendingAsk, onResolve, onStop, accent: showAccent = true }) {
-  const bucket = cardBucket(card);
-  const word = outcomeWord(card);
-  const optOut = bucket === "onit";
-  // Only the human receipts that actually have something to say (proofValue !== "").
-  const proofs = visibleProofs(card.proof)
-    .map((proof) => ({ label: proofLabel(proof), value: proofValue(proof) }))
-    .filter((p) => p.value);
-  // Only the lead waiting/blocked/on-it row carries a status color (R1.2 / R2.11); queued
-  // rows after it render plain so a single screen shows one accent at most.
-  const accent = !showAccent
-    ? ""
-    : bucket === "ask"
-      ? "accent-ask"
-      : bucket === "blocked"
-        ? "accent-blocked"
-        : bucket === "onit"
-          ? "accent-onit"
-          : "";
-  const title = humanTitle(card);
-  // For an opt-out chore the "I'm on it … — tell me to stop" line replaces the why blurb so the
-  // card reads as STARTED work, not a pending decision.
-  const why = optOut ? onItLine(card) : humanWhy(card.reason);
-  const followUp = followUpNote(card);
-  const sourceLine = optOut ? "" : cardSourceLine(card);
+// One card, rendered as a calm row with a colored rail + first-person line.
+function Item({ card, pendingAsk, onResolve }) {
+  const section = sectionOf(card);
+  const chip = chipFor(card, pendingAsk);
+  const receipt = receiptLine(card);
+  const ask = pendingAsk;
   return (
-    <article className={`row settle ${accent}`}>
-      <div className="row-head">
-        <h4 className="row-title">{title}</h4>
-        <span className="row-state">
-          <span className={`state-dot ${word.tone}`} />
-          {word.label}
-        </span>
+    <article className={`ant-item ${section}`}>
+      <p className="ant-item-action">{spokenLine(card)}</p>
+      {cardSourceLine(card) ? <p className="ant-quote">{cardSourceLine(card)}</p> : null}
+      <div className="ant-item-foot">
+        <span className={`ant-chip ${chip.cls}`}>{chip.text}</span>
+        {receipt ? <span className="ant-receipt">{receipt}</span> : null}
       </div>
-      {sourceLine ? <p className="row-source">{sourceLine}</p> : null}
-      {why ? <p className={optOut ? "row-onit" : "row-why"}>{why}</p> : null}
-      {followUp ? <p className="row-followup">{followUp}</p> : null}
-      {proofs.length ? (
-        <div className="row-receipt">
-          <dl>
-            {proofs.map((proof, index) => (
-              <div key={`${card.id}-proof-${index}`} style={{ display: "contents" }}>
-                <dt>{proof.label}</dt>
-                <dd>{proof.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ) : null}
-      {optOut && onStop ? (
-        <div className="row-actions">
-          {/* The autonomy law: an opt-out chore is STARTED, not pending. The only control is
-              STOP — never a Yes/Not-now approval. */}
-          <button className="btn-stop" onClick={() => onStop(card.id)}>Stop</button>
-        </div>
-      ) : null}
-      {!optOut && pendingAsk ? (
-        <div className="row-actions">
-          <button onClick={() => onResolve(pendingAsk.ask_id, true)}>Yes</button>
-          <button onClick={() => onResolve(pendingAsk.ask_id, false)}>Not now</button>
+      {ask ? (
+        <div className="ant-actions">
+          <button className="ant-yes" onClick={() => onResolve(ask.ask_id, true)}>Yes, go ahead</button>
+          <button className="ant-no" onClick={() => onResolve(ask.ask_id, false)}>Not now</button>
         </div>
       ) : null}
     </article>
   );
 }
 
-function PendingAsk({ ask, onResolve, accent = true }) {
-  const title = shortText(ask.action) || "Something I caught";
-  const why = humanWhy(ask.reason);
-  return (
-    <article className={`row settle ${accent ? "accent-ask" : ""}`}>
-      <div className="row-head">
-        <h4 className="row-title">{title}</h4>
-        <span className="row-state">
-          <span className="state-dot waiting" />
-          Waiting for your yes
-        </span>
-      </div>
-      {why ? <p className="row-why">{why}</p> : null}
-      <div className="row-actions">
-        <button onClick={() => onResolve(ask.ask_id, true)}>Yes</button>
-        <button onClick={() => onResolve(ask.ask_id, false)}>Not now</button>
-      </div>
-    </article>
-  );
+function humanAskText(ask) {
+  const action = humanizeText(ask.action);
+  if (action) return action;
+  const reason = humanWhy(ask);
+  if (reason) return reason;
+  return "I need your go-ahead on something.";
 }
 
-function MemoryLoop({ loop, onResolve, onConnect, connection }) {
-  const meta = loopMeta(loop);
-  const canResolve = !loop.fields?.owner_card_id;
-  const canConnect = canResolve && loop.fields?.action === "connect_account";
+function AskItem({ ask, onResolve }) {
   return (
-    <article className="row settle">
-      <div className="row-head">
-        <h4 className="row-title">{shortText(loop.text) || "An open thread"}</h4>
-        <span className="row-state">
-          <span className="state-dot waiting" />
-          Open
-        </span>
+    <article className="ant-item ask">
+      <p className="ant-item-action">{humanAskText(ask)}</p>
+      <div className="ant-item-foot">
+        <span className="ant-chip ask">Needs your okay</span>
       </div>
-      {meta ? <p className="row-why">{meta}</p> : null}
-      {connection ? (
-        <p className="row-why">
-          {connection.message || (connection.connect_url ? "Opening where you finish connecting." : connection.name)}
-        </p>
-      ) : null}
-      {canResolve ? (
-        <div className="row-actions">
-          {canConnect ? <button type="button" onClick={() => onConnect(loop.id)}>Connect</button> : null}
-          <button type="button" onClick={() => onResolve(loop.id)}>Mark done</button>
-        </div>
-      ) : null}
+      <div className="ant-actions">
+        <button className="ant-yes" onClick={() => onResolve(ask.ask_id, true)}>Yes, go ahead</button>
+        <button className="ant-no" onClick={() => onResolve(ask.ask_id, false)}>Not now</button>
+      </div>
     </article>
   );
 }
 
 export default function Home() {
-  const [text, setText] = useState(SAMPLE);
+  const [text, setText] = useState("");
   const [source, setSource] = useState("typed");
   const [executeActions, setExecuteActions] = useState(true);
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -607,15 +361,7 @@ export default function Home() {
   const [pending, setPending] = useState([]);
   const [loops, setLoops] = useState([]);
   const [remembered, setRemembered] = useState([]);
-  // Per-line press-go state keyed by remembered line id: { busy } while in flight,
-  // then the engine result (done-with-receipt for a whitelisted action, or the
-  // prepared/handback state for a non-whitelisted one). DISPLAY-ONLY; the raw line
-  // and inferred task stay visible alongside.
   const [approveResults, setApproveResults] = useState({});
-  // Per-line DRY-RUN preview state keyed by remembered line id: { busy } while in flight,
-  // then the engine's preview ({would_execute, intent, tool, args, handback, why}). This is
-  // trust-before-connect: it shows what press-go WOULD do live WITHOUT executing anything —
-  // no Goal, no orchestrator, no memory write, no account needed.
   const [previewResults, setPreviewResults] = useState({});
   const [connections, setConnections] = useState({});
   const [tickResult, setTickResult] = useState(null);
@@ -644,52 +390,27 @@ export default function Home() {
     readiness: null,
   });
   const [busy, setBusy] = useState(false);
+  const [hasRun, setHasRun] = useState(false);
   const [error, setError] = useState("");
   const recognitionRef = useRef(null);
 
-  // Direct browser arm: type a web task, watch the open-source agent run it on a real site.
-  const [webTask, setWebTask] = useState("");
-  const [webUrl, setWebUrl] = useState("");
-  const [webBusy, setWebBusy] = useState(false);
-  const [webResult, setWebResult] = useState(null);
-  const [webError, setWebError] = useState("");
+  // ─── Deepgram real-time listen state ───
+  const [listening, setListening] = useState(false);
+  const [liveSegments, setLiveSegments] = useState([]);   // [{speaker, text, isFinal}]
+  const [interimText, setInterimText] = useState("");
+  const [listenProcessing, setListenProcessing] = useState(false);
+  const [anticipation, setAnticipation] = useState("");
+  const listenWsRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const mediaStreamRef = useRef(null);
 
-  async function runWebTask() {
-    if (!webTask.trim() || webBusy) return;
-    setWebBusy(true);
-    setWebError("");
-    setWebResult(null);
-    try {
-      const res = await fetch("/api/browser/run", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ task: webTask.trim(), start_url: webUrl.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.success === false) {
-        throw new Error(data.message || data.error || data.answer || "I couldn't finish that on the web.");
-      }
-      setWebResult(data);
-    } catch (err) {
-      setWebError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setWebBusy(false);
+  const sections = useMemo(() => {
+    const next = { doing: [], ask: [], blocked: [], remember: [], done: [] };
+    for (const card of cards) {
+      const s = sectionOf(card);
+      (next[s] || next.done).push(card);
     }
-  }
-
-  const buckets = useMemo(() => {
-    const next = { onit: [], ready: [], ask: [], blocked: [], done: [] };
-    for (const card of cards) next[cardBucket(card)].push(card);
-    // Collapse near-identical / progressively-truncated duplicates so a real user sees
-    // ONE decision per real thing, never a wall of copies (the dinner-vent storm).
-    return {
-      onit: dedupeCards(next.onit),
-      ready: dedupeCards(next.ready),
-      ask: dedupeCards(next.ask),
-      blocked: dedupeCards(next.blocked),
-      done: dedupeCards(next.done),
-    };
+    return next;
   }, [cards]);
   const pendingByGoal = useMemo(() => {
     const next = new Map();
@@ -707,78 +428,15 @@ export default function Home() {
     }
     return ids;
   }, [cards, pendingByGoal]);
-  const hasLatestRunStats = observed.length > 0 || ignored > 0;
-  // Everything waiting for a yes, from BOTH sources (cards bucketed as "ask" and raw
-  // pending asks with no card), merged into ONE list and deduped ACROSS both so a single
-  // vent can't show up once as a card and once as a pending ask. Capped to a short list.
-  const WAITING_CAP = 6;
-  const waiting = useMemo(() => {
-    const keyOf = (text) =>
-      cleanText(text || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, 8).join(" ");
-    const seen = new Set();
-    const out = [];
-    for (const card of buckets.ask) {
-      const k = keyOf(card.source_text || card.title || card.action);
-      if (k && seen.has(k)) continue;
-      if (k) seen.add(k);
-      out.push({ kind: "card", id: card.id, card, ask: pendingByGoal.get(card.id) || pendingByGoal.get(card.execution?.ask_id) });
-    }
-    const unmatched = pending.filter((a) => !matchedPendingIds.has(a.ask_id));
-    for (const ask of unmatched) {
-      const k = keyOf(ask.action);
-      if (k && seen.has(k)) continue;
-      if (k) seen.add(k);
-      out.push({ kind: "ask", id: ask.ask_id, ask });
-    }
-    return out;
-  }, [buckets.ask, pending, pendingByGoal, matchedPendingIds]);
-  const waitingVisible = waiting.slice(0, WAITING_CAP);
-  const waitingHidden = Math.max(0, waiting.length - waitingVisible.length);
-  // The "Here's what I caught" digest shows a short list, not the whole backlog (§2.3):
-  // a handful of the most recent handled/ready items, with the rest summarized in one
-  // calm line below rather than scrolled as a flat wall.
-  const HANDLED_CAP = 6;
-  const handledAll = [...buckets.done, ...buckets.ready];
-  const handledCount = handledAll.length;
-  const handledVisible = handledAll.slice(0, HANDLED_CAP);
-  const handledHidden = Math.max(0, handledCount - handledVisible.length);
-  // First run = the surface is genuinely empty (nothing caught, nothing waiting, nothing
-  // open). We greet a newcomer with one calm first step instead of a populated dashboard.
-  const isFirstRun =
-    cards.length === 0 && pending.length === 0 && loops.length === 0 && remembered.length === 0;
-  // "Things you said you'd do" — collapse the truncation storm and drop empty/vent rows
-  // so it's a short readable list, not a wall. Keyed on the first words like the cards.
-  const rememberedView = useMemo(() => {
-    const seen = new Set();
-    const out = [];
-    for (const row of remembered) {
-      const said = cleanText(row.text || "");
-      if (!said) continue;
-      const key = said.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, 8).join(" ");
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(row);
-    }
-    return out.slice(0, 12);
-  }, [remembered]);
-  // "Still open" loops: collapse the same dictated vent repeated as many open threads,
-  // and cap the list so it's a short tail, not a 47-row scroll.
-  const loopsView = useMemo(() => {
-    const seen = new Set();
-    const out = [];
-    for (const loop of loops) {
-      const said = cleanText(loop.text || "");
-      const key = said.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, 8).join(" ") || loop.id;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(loop);
-    }
-    return out;
-  }, [loops]);
-  const loopsVisible = loopsView.slice(0, 8);
-  const loopsHidden = Math.max(0, loopsView.length - loopsVisible.length);
-  // The ledger ("What I did and heard") is a short recent tail, not the whole log.
-  const eventsVisible = events.slice(0, 10);
+  const unmatchedPending = pending.filter((ask) => !matchedPendingIds.has(ask.ask_id));
+  // Lines the engine saw but chose to leave alone (vents, sarcasm, narration).
+  const cardLineNos = useMemo(() => new Set(cards.map((c) => c.line_no)), [cards]);
+  const leftAlone = useMemo(
+    () => observed.filter((line) => !cardLineNos.has(line.line_no)),
+    [observed, cardLineNos],
+  );
+  const hasResult = cards.length > 0 || leftAlone.length > 0;
+  const askCount = sections.ask.length + unmatchedPending.length;
 
   function ownerFetch(url, options = {}) {
     return fetch(url, { ...options, credentials: "same-origin" });
@@ -863,7 +521,7 @@ export default function Home() {
       const data = engineStatus.value.data || {};
       setEngine({
         ok: data.engine === "ok",
-        label: data.engine === "ok" ? "engine online" : "engine degraded",
+        label: data.engine === "ok" ? "listening" : "engine degraded",
         openLoops: typeof data.open_loop_count === "number" ? data.open_loop_count : null,
         pendingCount: typeof data.pending_count === "number" ? data.pending_count : null,
         extensionConnected: Boolean(data.extension_connected),
@@ -916,10 +574,52 @@ export default function Home() {
     };
   }, []);
 
+  const resultsRef = useRef(null);
   function applyIngestResult(data) {
     setCards(data.cards || []);
     setObserved(data.observed_lines || []);
     setIgnored(data.ignored_line_count || 0);
+    setHasRun(true);
+    // Auto-scroll to results
+    setTimeout(() => {
+      if (resultsRef.current) {
+        resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 100);
+    // Anticipatory research: find people mentioned in cards and research them
+    const allCards = data.cards || [];
+    const peopleSet = new Set();
+    for (const card of allCards) {
+      // Check args.person (single person from triage)
+      if (card.args?.person) peopleSet.add(card.args.person);
+      // Check args.people (array)
+      const people = card.people || card.args?.people || [];
+      for (const p of (Array.isArray(people) ? people : [])) {
+        if (p && p.length > 1) peopleSet.add(p);
+      }
+      // Extract names from task_text as fallback
+      const taskText = card.args?.task_text || card.text || "";
+      const nameMatches = taskText.match(/\b[A-Z][a-z]{2,}\b/g) || [];
+      const skipNames = new Set(["Send", "Get", "Put", "Set", "Call", "Tell", "Ask", "Pay", "Buy", "Order", "Pick", "Drop", "The", "This", "That", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]);
+      for (const n of nameMatches) {
+        if (!skipNames.has(n)) peopleSet.add(n);
+      }
+    }
+    if (peopleSet.size > 0) {
+      const people = Array.from(peopleSet);
+      fetch("/api/anticipate/research", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: people[0], task_context: text, people }),
+      })
+        .then((r) => r.json())
+        .then((res) => {
+          if (res.notification) {
+            setAnticipation(res.notification);
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   function updateMemoryField(field, value) {
@@ -950,11 +650,11 @@ export default function Home() {
   async function buildProfile(event) {
     if (event) event.preventDefault();
     const name = profileName.trim();
-    const sources = profileSources
+    const profileUrls = profileSources
       .split(/[\n,]/)
       .map((s) => s.trim())
       .filter((s) => /^https?:\/\//i.test(s));
-    if (!name || sources.length === 0) {
+    if (!name || profileUrls.length === 0) {
       setProfileError("Enter a name and at least one public http(s) URL.");
       return;
     }
@@ -964,7 +664,7 @@ export default function Home() {
       const response = await ownerFetch("/api/onboarding/profile", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, sources }),
+        body: JSON.stringify({ name, sources: profileUrls }),
       });
       const data = await response.json().catch(() => ({}));
       handleOwnerAuthFailure(response, data);
@@ -999,9 +699,6 @@ export default function Home() {
   }
 
   async function approveRemembered(lineId) {
-    // Press go on ONE remembered line. The engine is default-deny: it executes only
-    // the three whitelisted reversible intents (with its own read-back proof) and hands
-    // everything else back. We just render whatever it returns.
     setApproveResults((current) => ({ ...current, [lineId]: { busy: true } }));
     setError("");
     try {
@@ -1025,10 +722,6 @@ export default function Home() {
   }
 
   async function previewRemembered(lineId) {
-    // DRY-RUN ONE remembered line: ask the engine what press-go WOULD do live, WITHOUT
-    // doing it. The engine runs the SAME default-deny inference + whitelist mapping but
-    // builds no Goal, calls no orchestrator, writes no memory, and touches no api/browser
-    // hands — so this needs no connected account. We just render the planned action.
     setPreviewResults((current) => ({ ...current, [lineId]: { busy: true } }));
     setError("");
     try {
@@ -1171,38 +864,6 @@ export default function Home() {
     }
   }
 
-  async function stopCard(cardId) {
-    // The autonomy law's opt-out: the owner pressed STOP on an "On it — you can stop me" chore.
-    setBusy(true);
-    setError("");
-    try {
-      const response = await ownerFetch("/api/owner/stop", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ card_id: cardId }),
-      });
-      const data = await response.json();
-      handleOwnerAuthFailure(response, data);
-      if (!response.ok) throw new Error(data.message || data.error || "Stop failed");
-      setCards((current) =>
-        current.map((card) =>
-          card.id === cardId
-            ? {
-                ...card,
-                status: "stopped",
-                execution: { ...(card.execution || {}), goal_state: "stopped" },
-              }
-            : card,
-        ),
-      );
-      await loadStatus();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function loadFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1212,62 +873,151 @@ export default function Home() {
     if (file.type.startsWith("text/") || /\.(txt|md|vtt|srt|json|csv)$/i.test(file.name)) {
       setText(await file.text());
     } else {
-      setText(`Ready: ${file.name}. Hit "Read my day" and I'll listen through it.`);
+      setText(`Uploaded ${file.name}. Hand it to me and I'll listen through it.`);
     }
   }
 
-  function startListening() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setError("I can't catch audio here — type or paste it instead.");
+  async function startDeepgramListen() {
+    if (listening) {
+      stopDeepgramListen();
       return;
     }
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-      return;
-    }
-    setSource("start_listening");
-    setUploadedFile(null);
     setError("");
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    // BUGFIX (the "hello x 4 trillion" duplication): event.results is CUMULATIVE and includes
-    // unstable interim results that fire many times per word. The old handler joined ALL of them
-    // and APPENDED on every event, so one word ballooned into thousands. Walk only from
-    // event.resultIndex and append each FINAL segment exactly once.
-    recognition.onresult = (event) => {
-      let finalChunk = "";
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        if (result && result.isFinal) {
-          finalChunk += (result[0]?.transcript || "") + " ";
+    setListenProcessing(false);
+    setLiveSegments([]);
+    setInterimText("");
+
+    try {
+      // Get engine WebSocket URL
+      const res = await fetch("/api/listen/stream");
+      const { ws_url } = await res.json();
+
+      // Request mic access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true },
+      });
+      mediaStreamRef.current = stream;
+
+      // Create AudioContext at 16kHz for linear16 PCM
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      audioCtxRef.current = audioCtx;
+      const mic = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+      // Connect WebSocket to engine
+      const ws = new WebSocket(ws_url);
+      listenWsRef.current = ws;
+
+      ws.onopen = () => {
+        setListening(true);
+        setSource("start_listening");
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "transcript") {
+            if (msg.is_final && msg.transcript.trim()) {
+              const newSegs = (msg.segments || []).map((s) => ({
+                speaker: s.speaker,
+                text: s.text,
+                isFinal: true,
+              }));
+              if (newSegs.length) {
+                setLiveSegments((prev) => [...prev, ...newSegs]);
+              } else {
+                setLiveSegments((prev) => [...prev, { speaker: null, text: msg.transcript, isFinal: true }]);
+              }
+              setInterimText("");
+            } else if (!msg.is_final) {
+              setInterimText(msg.transcript);
+            }
+          } else if (msg.type === "utterance_end") {
+            // Visual break indicator
+            setLiveSegments((prev) => [...prev, { speaker: -1, text: "---", isFinal: true, isBreak: true }]);
+          } else if (msg.type === "processing") {
+            setListenProcessing(true);
+          } else if (msg.type === "ingest_result") {
+            setListenProcessing(false);
+            const data = msg.result;
+            applyIngestResult(data);
+          } else if (msg.type === "ingest_error") {
+            setListenProcessing(false);
+            setError(msg.error || "Listen ingest failed");
+          } else if (msg.type === "error") {
+            setError(msg.message || "Listen error");
+            stopDeepgramListen();
+          }
+        } catch (parseErr) {
+          // ignore non-JSON
         }
-      }
-      const clean = finalChunk.trim();
-      if (clean) {
-        setText((current) => (current.trim() ? `${current.trim()} ${clean}` : clean));
-      }
-    };
-    recognition.onerror = (event) => {
-      setError("Let me try that again. You can also type it.");
-    };
-    recognition.onend = () => {
-      recognitionRef.current = null;
-    };
-    recognitionRef.current = recognition;
-    recognition.start();
+      };
+
+      ws.onerror = () => {
+        setError("Listen connection failed — is the engine running?");
+        stopDeepgramListen();
+      };
+
+      ws.onclose = () => {
+        setListening(false);
+      };
+
+      // Stream audio to WebSocket as linear16 PCM
+      processor.onaudioprocess = (audioEvent) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        const float32 = audioEvent.inputBuffer.getChannelData(0);
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32768));
+        }
+        ws.send(int16.buffer);
+      };
+
+      mic.connect(processor);
+      processor.connect(audioCtx.destination);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      stopDeepgramListen();
+    }
+  }
+
+  function stopDeepgramListen() {
+    if (listenWsRef.current) {
+      try { listenWsRef.current.close(); } catch (e) { /* */ }
+      listenWsRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      try { audioCtxRef.current.close(); } catch (e) { /* */ }
+      audioCtxRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+    setListening(false);
+  }
+
+  // Keep old Web Speech API as fallback
+  function startListening() {
+    startDeepgramListen();
+  }
+
+  function onModeClick(value) {
+    if (value === "start_listening") {
+      startListening();
+      return;
+    }
+    setSource(value);
+    if (value !== "upload") setUploadedFile(null);
   }
 
   if (!access.checked) {
     return (
-      <main className="shell">
-        <section className="gate-screen">
-          <div className="gate orb-wrap">
-            <div className="orb" />
-            <p className="orb-word">Getting ready…</p>
-          </div>
+      <main className="ant-gate-wrap">
+        <section className="ant-gate">
+          <div className="mark">A</div>
+          <h1>One moment</h1>
+          <p>Checking that it&apos;s you.</p>
         </section>
       </main>
     );
@@ -1275,576 +1025,474 @@ export default function Home() {
 
   if (access.required && !access.authenticated) {
     return (
-      <main className="shell">
-        <section className="gate-screen">
-          <form className="gate settle" onSubmit={unlockOwner}>
-            <p className="gate-line">Welcome back.</p>
-            <label className="token-field">
-              <span>Your key</span>
-              <input
-                autoComplete="current-password"
-                autoFocus
-                onChange={(event) => setAccessToken(event.target.value)}
-                type="password"
-                value={accessToken}
-              />
-            </label>
-            <button className="primary" disabled={accessBusy || !accessToken.trim()} type="submit">
-              {accessBusy ? "One moment" : "Come in"}
-            </button>
-            {accessError ? <div className="error">{humanizeError(accessError)}</div> : null}
-          </form>
-        </section>
+      <main className="ant-gate-wrap">
+        <form className="ant-gate" onSubmit={unlockOwner}>
+          <div className="mark">A</div>
+          <h1>Welcome back</h1>
+          <p>Enter your owner key to pick up where you left off.</p>
+          <label>
+            <span>Owner key</span>
+            <input
+              autoComplete="current-password"
+              autoFocus
+              onChange={(event) => setAccessToken(event.target.value)}
+              type="password"
+              value={accessToken}
+            />
+          </label>
+          <button className="ant-primary" disabled={accessBusy || !accessToken.trim()} type="submit">
+            {accessBusy ? "Unlocking…" : "Unlock"}
+          </button>
+          {accessError ? <div className="ant-error">{accessError}</div> : null}
+        </form>
       </main>
     );
   }
 
   return (
-    <main className="shell">
-      <div className="column">
-        <div className="surface-head settle">
-          <h1 className="surface-title">{isFirstRun ? "Hi. Let's begin." : "Here’s your day."}</h1>
-          <p className="surface-sub">
-            {isFirstRun
-              ? "Tell me about your day below — type it, paste it, or just talk. When you’re ready, connect your accounts so I can actually help."
-              : "I’m listening, remembering, and getting the small things handled. You only see what needs you."}
+    <main className="ant">
+      <div className="ant-wrap">
+        <header className="ant-hero">
+          <span className="ant-status">
+            <span className={`dot ${engine.ok ? "ok" : "bad"}`} />
+            {listening ? "Listening" : engine.ok ? "Ready" : engine.label}
+            {access.required ? (
+              <>
+                {" · "}
+                <button className="ant-quiet-link" onClick={lockOwner} type="button">lock</button>
+              </>
+            ) : null}
+          </span>
+          <h1>{memoryForm.ownerName ? `Hey ${memoryForm.ownerName}` : "Hey there"}</h1>
+          <p className="ant-hero-sub">
+            Talk, and I&apos;ll handle the rest.
           </p>
-          {isFirstRun ? (
-            <a
-              href="/welcome"
-              className="primary"
-              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", marginTop: 16, width: "fit-content" }}
-            >
-              Set me up first
-            </a>
-          ) : null}
-        </div>
+        </header>
 
-        <div className="presence settle">
-          {/* The orb's breath reflects the REAL state (§2.2's four ambient states): while I'm
-              working a day, an energetic green breath when you've told me to handle the reversible
-              ones (Acting), an amber breath when I'm only reading it back (Thinking); a calm green
-              breath when idle and waiting (Listening); a still dot when resting. Nothing is faked —
-              "Acting" shows only when execute-the-reversible-ones is on and a run is in flight. */}
-          <span className={`pulse ${busy ? (executeActions ? "acting" : "thinking") : engine.ok ? "on" : ""}`} />
-          <span>{busy ? (executeActions ? "Acting" : "Thinking") : engine.ok ? "Listening" : "Resting for a moment"}</span>
-          {access.required ? (
-            <button className="quiet-link" onClick={lockOwner} type="button">
-              Step away
-            </button>
-          ) : null}
-        </div>
+        {/* ─── THE BIG LISTEN BUTTON ─── */}
+        <section className="ant-listen-hero">
+          <button
+            className={`ant-listen-btn ${listening ? "active" : ""}`}
+            type="button"
+            onClick={startDeepgramListen}
+          >
+            <span className="ant-listen-icon">
+              {listening ? (
+                <svg viewBox="0 0 24 24" fill="currentColor" width="48" height="48">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="currentColor" width="48" height="48">
+                  <path d="M12 1a4 4 0 0 1 4 4v7a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12v-2h-2z" />
+                </svg>
+              )}
+            </span>
+            <span className="ant-listen-label">{listening ? "Stop" : "Listen"}</span>
+          </button>
+          {listening ? (
+            <span className="ant-listen-pulse">
+              <span /><span /><span />
+            </span>
+          ) : (
+            <span className="ant-listen-hint">Just talk — I&apos;ll hear what matters</span>
+          )}
+        </section>
 
-        {/* The readiness checklist lives on /connect, not here — the home screen is one
-            calm moment (the day), never a second status console competing with it (R1.7). */}
+        {/* ─── LIVE TRANSCRIPT ─── */}
+        {(listening || liveSegments.length > 0) ? (
+          <section className="ant-live-transcript">
+            <h2 className="ant-section-title">Live transcript</h2>
+            <div className="ant-transcript-body">
+              {liveSegments.map((seg, i) => (
+                seg.isBreak ? (
+                  <div key={`brk-${i}`} className="ant-transcript-break" />
+                ) : (
+                  <div key={`seg-${i}`} className={`ant-transcript-line ${seg.isFinal ? "final" : "interim"}`}>
+                    {seg.speaker !== null && seg.speaker >= 0 ? (
+                      <span className={`ant-speaker speaker-${seg.speaker % 4}`}>
+                        {seg.speaker === 0 ? "You" : `Speaker ${seg.speaker}`}
+                      </span>
+                    ) : null}
+                    <span className="ant-transcript-text">{seg.text}</span>
+                  </div>
+                )
+              ))}
+              {interimText ? (
+                <div className="ant-transcript-line interim">
+                  <span className="ant-transcript-text">{interimText}</span>
+                </div>
+              ) : null}
+              {listenProcessing ? (
+                <div className="ant-thinking">
+                  <span className="dots"><i /><i /><i /></span>
+                  Processing what I heard…
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
-        {/* ---- capture: type, paste, upload, or listen ---- */}
-        <section className="block">
-          <div className="block-head">
-            <h2 className="block-title">Tell me about your day</h2>
-            <button
-              className="quiet-link"
-              type="button"
-              onClick={() => {
-                setUploadedFile(null);
-                setSource("typed");
-                setText(""); // blank the box — never restore a sample world
-              }}
-            >
-              clear
-            </button>
-          </div>
+        {/* ─── SECONDARY INPUTS: Paste / Type / Upload ─── */}
+        <details className="ant-fold ant-input-fold" open={!listening && !hasRun && liveSegments.length === 0}>
+          <summary>
+            <span>Or type / paste / upload</span>
+            <small></small>
+          </summary>
+          <div className="ant-fold-body">
+            <section className="ant-input-card">
+              <div className="ant-modes">
+                {[["typed", "Type"], ["transcript", "Paste"], ["upload", "Upload"]].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={source === value ? "active" : ""}
+                    onClick={() => { setSource(value); if (value !== "upload") setUploadedFile(null); }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-          <div className="source-row" role="tablist" aria-label="How to share">
-            {sources.map(([value, label]) => (
-              <button
-                className={source === value ? "active" : ""}
-                key={value}
-                onClick={() => {
-                  setSource(value);
-                  if (value !== "upload") setUploadedFile(null);
+              <textarea
+                className="ant-textarea"
+                value={text}
+                placeholder="Paste a conversation, a day's transcript, or just type what happened."
+                onChange={(event) => {
+                  setUploadedFile(null);
+                  setText(event.target.value);
                 }}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+                spellCheck="true"
+              />
 
-          <textarea
-            className="transcript"
-            value={text}
-            placeholder={SAMPLE_PLACEHOLDER}
-            onChange={(event) => {
-              setUploadedFile(null);
-              setText(event.target.value);
-            }}
-            spellCheck="true"
-          />
-
-          {/* The control matches the chosen way to share: a styled file picker for upload,
-              the listen toggle for voice. Typing/pasting just use the box above — no raw
-              browser "Choose File" control, no second redundant Listen button. */}
-          {source === "upload" || source === "start_listening" ? (
-            <div className="control-row">
               {source === "upload" ? (
-                <label className="file-pick">
+                <div className="ant-file-row">
                   <input
                     type="file"
                     accept=".txt,.md,.vtt,.srt,.json,.csv,.mp3,.m4a,.wav,.aac,.flac,.ogg"
                     onChange={loadFile}
                   />
-                  {uploadedFile ? "Choose a different file" : "Choose a file"}
-                </label>
+                </div>
               ) : null}
-              {source === "start_listening" ? (
-                <button className="secondary" type="button" onClick={startListening}>
-                  {recognitionRef.current ? "Stop listening" : "Start listening"}
+              {uploadedFile ? (
+                <div className="ant-upload-note">
+                  <span>Picked</span>
+                  <strong>{uploadedFile.name}</strong>
+                  <button className="ant-quiet-link" type="button" onClick={() => setUploadedFile(null)}>
+                    use typed text instead
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="ant-input-foot">
+                <button
+                  className="ant-quiet-link"
+                  type="button"
+                  onClick={() => {
+                    setUploadedFile(null);
+                    setSource("typed");
+                    setText("");
+                  }}
+                >
+                  clear
                 </button>
-              ) : null}
-            </div>
-          ) : null}
-          {uploadedFile ? (
-            <div className="upload-note">
-              <span>Ready</span>
-              <strong>{uploadedFile.name}</strong>
-              <button className="quiet-link" type="button" onClick={() => setUploadedFile(null)}>
-                use typed text
-              </button>
-            </div>
-          ) : null}
-
-          <div className="control-row">
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={executeActions}
-                onChange={(event) => setExecuteActions(event.target.checked)}
-              />
-              Let me handle the reversible ones
-            </label>
-            <button className="primary" type="button" onClick={runIngest} disabled={busy || (!text.trim() && !uploadedFile)}>
-              {busy ? "Reading" : "Read my day"}
-            </button>
+                <span className="spacer" />
+                <label className="ant-status" title="Let me carry out the safe, reversible ones on my own.">
+                  <input
+                    type="checkbox"
+                    checked={executeActions}
+                    onChange={(event) => setExecuteActions(event.target.checked)}
+                  />
+                  act on the safe ones
+                </label>
+                <button
+                  className="ant-primary"
+                  type="button"
+                  onClick={runIngest}
+                  disabled={busy || (!text.trim() && !uploadedFile)}
+                >
+                  {busy ? "Thinking…" : "Hand it to me"}
+                </button>
+              </div>
+              {error ? <div className="ant-error">{error}</div> : null}
+            </section>
           </div>
-          {error ? <div className="error">{humanizeError(error)}</div> : null}
+        </details>
 
-          {/* Secondary power-user tools — hidden on first run so a newcomer lands on ONE
-              clean capture moment (R1.7); they appear once the day is underway. */}
-          {!isFirstRun ? (
-          <>
-          <details className="fold">
+        {!hasRun ? (
+          <a className="ant-nudge" href="/onboarding">
+            <span className="ant-nudge-emoji">+</span>
+            <span className="ant-nudge-body">
+              <strong>Set up your profile</strong>
+              <span>I&apos;ll learn who matters to you and how to help.</span>
+            </span>
+            <span className="ant-nudge-arrow" aria-hidden="true"></span>
+          </a>
+        ) : null}
+
+        {busy && !hasResult ? (
+          <div className="ant-thinking">
+            <span className="dots"><i /><i /><i /></span>
+            Reading through your day…
+          </div>
+        ) : null}
+
+        {hasResult ? (
+          <section className="ant-response" ref={resultsRef}>
+          {anticipation && (
+            <div style={{
+              background: "linear-gradient(135deg, #f0f9ff 0%, #e8f4f8 100%)",
+              borderLeft: "3px solid #0ea5e9",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              marginBottom: "16px",
+              fontSize: "14px",
+              color: "#0c4a6e",
+              lineHeight: "1.5",
+            }}>
+              <strong style={{fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px", opacity: 0.7}}>
+                Anticipatory research
+              </strong>
+              <div style={{marginTop: "4px"}}>{anticipation}</div>
+            </div>
+          )}
+            {hasRun ? (
+              <p className="ant-recap">
+                {observed.length} thing{observed.length === 1 ? "" : "s"} heard
+                {sections.doing.length ? ` · ${sections.doing.length} handling` : ""}
+                {askCount ? ` · ${askCount} need${askCount === 1 ? "s" : ""} you` : ""}
+                {sections.blocked.length ? ` · ${sections.blocked.length} stopped` : ""}
+                {leftAlone.length ? ` · ${leftAlone.length} left alone` : ""}
+              </p>
+            ) : null}
+
+            {SECTION_ORDER.map((key) => {
+              const items = sections[key];
+              const extra = key === "ask" ? unmatchedPending : [];
+              if (!items.length && !extra.length) return null;
+              return (
+                <div className="ant-group" key={key}>
+                  <div className="ant-group-head">
+                    <h2>{SECTION_META[key].title}</h2>
+                    <span className="count">{items.length + extra.length}</span>
+                  </div>
+                  {items.map((card) => (
+                    <Item
+                      card={card}
+                      key={card.id}
+                      pendingAsk={pendingByGoal.get(card.id) || pendingByGoal.get(card.execution?.ask_id)}
+                      onResolve={resolveAsk}
+                    />
+                  ))}
+                  {extra.map((ask) => (
+                    <AskItem ask={ask} key={ask.ask_id} onResolve={resolveAsk} />
+                  ))}
+                </div>
+              );
+            })}
+
+            {leftAlone.length ? (
+              <div className="ant-group">
+                <div className="ant-group-head">
+                  <h2>I left these alone</h2>
+                  <span className="count">{leftAlone.length}</span>
+                </div>
+                {leftAlone.map((line) => (
+                  <article className="ant-item calm" key={`vent-${line.line_no}`}>
+                    <p className="ant-quote">{line.text}</p>
+                    <div className="ant-item-foot">
+                      <span className="ant-chip calm">Just venting — not a task</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : (
+          !busy ? <p className="ant-empty">Nothing to show yet — hand me your day above.</p> : null
+        )}
+
+        <div className="ant-more">
+          <div className="ant-more-label">Settings</div>
+          <details className="ant-fold">
             <summary>
               <span>What I know about you</span>
-              {memoryResult ? <small>{memoryResult.written?.length || 0} saved</small> : null}
+              <small>{memoryResult ? `${memoryResult.written?.length || 0} saved` : "edit"}</small>
             </summary>
-            <div className="field-grid">
-              <MemoryField
-                label="Your name"
-                value={memoryForm.ownerName}
-                onChange={(value) => updateMemoryField("ownerName", value)}
-              />
-              <MemoryField
-                label="Time zone"
-                value={memoryForm.timezone}
-                onChange={(value) => updateMemoryField("timezone", value)}
-              />
-              <MemoryField
-                label="Phone"
-                value={memoryForm.phone}
-                onChange={(value) => updateMemoryField("phone", value)}
-              />
-              <MemoryField
-                label="Email"
-                value={memoryForm.email}
-                onChange={(value) => updateMemoryField("email", value)}
-              />
-              <MemoryField
-                label="How I should behave"
-                value={memoryForm.preferences}
-                onChange={(value) => updateMemoryField("preferences", value)}
-                multiline
-              />
-              <MemoryField
-                label="People in your life"
-                value={memoryForm.people}
-                onChange={(value) => updateMemoryField("people", value)}
-                multiline
-              />
-              <MemoryField
-                label="Accounts to reach"
-                value={memoryForm.connections}
-                onChange={(value) => updateMemoryField("connections", value)}
-                multiline
-              />
-              <MemoryField
-                label="Places you shop"
-                value={memoryForm.stores}
-                onChange={(value) => updateMemoryField("stores", value)}
-                multiline
-              />
-              <MemoryField
-                label="Anything else"
-                value={memoryForm.notes}
-                onChange={(value) => updateMemoryField("notes", value)}
-                multiline
-              />
+            <div className="ant-fold-body">
+              <div className="memory-grid">
+                <MemoryField label="Your name" value={memoryForm.ownerName} onChange={(v) => updateMemoryField("ownerName", v)} />
+                <MemoryField label="Time zone" value={memoryForm.timezone} onChange={(v) => updateMemoryField("timezone", v)} />
+                <MemoryField label="Phone" value={memoryForm.phone} onChange={(v) => updateMemoryField("phone", v)} />
+                <MemoryField label="Email" value={memoryForm.email} onChange={(v) => updateMemoryField("email", v)} />
+                <MemoryField label="How I should behave" value={memoryForm.preferences} onChange={(v) => updateMemoryField("preferences", v)} multiline />
+                <MemoryField label="People who matter" value={memoryForm.people} onChange={(v) => updateMemoryField("people", v)} multiline />
+                <MemoryField label="Apps & accounts" value={memoryForm.connections} onChange={(v) => updateMemoryField("connections", v)} multiline />
+                <MemoryField label="Stores I use" value={memoryForm.stores} onChange={(v) => updateMemoryField("stores", v)} multiline />
+                <MemoryField label="Anything else" value={memoryForm.notes} onChange={(v) => updateMemoryField("notes", v)} multiline />
+              </div>
+              <div className="ant-fold-foot">
+                <button className="ant-ghost" type="button" onClick={saveMemory} disabled={memoryBusy}>
+                  {memoryBusy ? "Saving…" : "Save"}
+                </button>
+                {memoryResult?.missing_connections?.length ? (
+                  <span className="ant-inline-note">Still needs: {memoryResult.missing_connections.join(", ")}</span>
+                ) : memoryResult ? (
+                  <span className="ant-inline-note">Saved.</span>
+                ) : null}
+              </div>
+              {memoryError ? <div className="ant-error">{memoryError}</div> : null}
             </div>
-            <div className="control-row" style={{ marginTop: 18 }}>
-              <button className="secondary" type="button" onClick={saveMemory} disabled={memoryBusy}>
-                {memoryBusy ? "Saving" : "Remember this"}
-              </button>
-              {memoryResult?.missing_connections?.length ? (
-                <span className="fold-result">Still to connect: {memoryResult.missing_connections.join(", ")}</span>
-              ) : memoryResult ? (
-                <span className="fold-result">Got it.</span>
-              ) : null}
-            </div>
-            {memoryError ? <div className="error">{humanizeError(memoryError)}</div> : null}
           </details>
 
-          <details className="fold">
+          {loops.length || tickResult ? (
+            <details className="ant-fold">
+              <summary>
+                <span>Things I&apos;m keeping an eye on</span>
+                <small>{loops.length}</small>
+              </summary>
+              <div className="ant-fold-body">
+                <div className="ant-fold-foot">
+                  <button className="ant-ghost" type="button" onClick={scanLoops} disabled={busy}>
+                    {busy ? "Checking…" : "Check now"}
+                  </button>
+                  {tickResult ? (
+                    <span className="ant-inline-note">
+                      {(tickResult.fired || []).length
+                        ? `${(tickResult.fired || []).length} came due: ${(tickResult.fired || []).map(firedLoopText).join("; ")}`
+                        : "Nothing due right now."}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="ant-loop-list">
+                  {loops.map((loop) => {
+                    const meta = loopMeta(loop);
+                    const conn = connections[loop.id];
+                    const canResolve = !loop.fields?.owner_card_id;
+                    const canConnect = canResolve && loop.fields?.action === "connect_account";
+                    return (
+                      <article className="ant-loop" key={loop.id}>
+                        <div className="ant-loop-body">
+                          <strong>{loopTitle(loop)}</strong>
+                          {meta ? <span className="ant-loop-meta">{meta}</span> : null}
+                          {conn ? (
+                            <span className="ant-loop-meta">{conn.status}: {conn.message || conn.connect_url || conn.name}</span>
+                          ) : null}
+                        </div>
+                        {canResolve ? (
+                          <div className="ant-loop-actions">
+                            {canConnect ? <button className="ant-ghost" type="button" onClick={() => connectLoop(loop.id)}>Connect</button> : null}
+                            <button className="ant-ghost" type="button" onClick={() => resolveLoop(loop.id)}>Done</button>
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
+          ) : null}
+
+          {remembered.length ? (
+            <details className="ant-fold">
+              <summary>
+                <span>Things you said you&apos;d do</span>
+                <small>{remembered.length}</small>
+              </summary>
+              <div className="ant-fold-body">
+                <div className="ant-loop-list">
+                  {remembered.map((row, index) => {
+                    const inf = row.inferred;
+                    const hasTask = inf && inf.task;
+                    const conf = inf && inf.confidence;
+                    const canApprove = Boolean(row.id) && hasTask && conf && conf !== "low";
+                    const ar = row.id ? approveResults[row.id] : undefined;
+                    const res = ar && ar.result;
+                    const canPreview = Boolean(row.id);
+                    const pr = row.id ? previewResults[row.id] : undefined;
+                    const pres = pr && pr.result;
+                    return (
+                      <article className="ant-remember" key={row.id || `${row.ts || "remembered"}-${index}`}>
+                        <div className="ant-remember-head">
+                          <strong>{hasTask ? inf.task : row.text}</strong>
+                          {row.ts ? <span className="ant-loop-meta">{formatRememberTs(row.ts)}</span> : null}
+                        </div>
+                        {hasTask ? <p className="ant-quote">{row.text}</p> : null}
+                        {(conf || (inf && inf.due_phrase) || (inf && inf.people && inf.people.length)) ? (
+                          <div className="ant-pill-row">
+                            {conf ? <span className="ant-pill">{conf} confidence</span> : null}
+                            {inf && inf.due_phrase ? <span className="ant-pill">{inf.due_phrase}</span> : null}
+                            {inf && inf.people && inf.people.length ? <span className="ant-pill">{inf.people.join(", ")}</span> : null}
+                          </div>
+                        ) : null}
+                        <div className="ant-remember-actions">
+                          {canApprove && !res ? (
+                            <button className="ant-yes" type="button" onClick={() => approveRemembered(row.id)} disabled={ar && ar.busy}>
+                              {ar && ar.busy ? "Working…" : "Do it now"}
+                            </button>
+                          ) : null}
+                          {canPreview ? (
+                            <button className="ant-ghost" type="button" onClick={() => previewRemembered(row.id)} disabled={pr && pr.busy}>
+                              {pr && pr.busy ? "Previewing…" : pres ? "Refresh preview" : "Preview"}
+                            </button>
+                          ) : null}
+                        </div>
+                        {res ? (
+                          <p className="ant-inline-note">
+                            {res.executed
+                              ? `Done${res.idempotent ? " (already)" : ""} — ${res.would_do || res.intent}`
+                              : res.prepared
+                                ? `Prepared, your turn — ${res.would_do || res.inferred_action || res.intent}`
+                                : `Not acted on — ${res.reason || "no confident task"}`}
+                          </p>
+                        ) : null}
+                        {ar && ar.error ? <p className="ant-inline-note err">{ar.error}</p> : null}
+                        {pres ? (
+                          <p className="ant-inline-note">
+                            {pres.would_execute
+                              ? `Would run live — ${pres.would_do || pres.intent}${pres.tool ? ` (${pres.tool})` : ""}`
+                              : pres.handback
+                                ? `Would hand back — ${pres.handback || pres.inferred_action || pres.intent}`
+                                : `Nothing would run — ${pres.why || "vent / narration"}`}
+                          </p>
+                        ) : null}
+                        {pr && pr.error ? <p className="ant-inline-note err">{pr.error}</p> : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
+          ) : null}
+
+          <details className="ant-fold">
             <summary>
               <span>Look someone up</span>
-              {profileResult ? <small>{profileResult.summary?.facts || 0} things found</small> : null}
+              <small>{profileResult ? `${profileResult.summary?.facts || 0} facts` : "from links"}</small>
             </summary>
-            <form className="stack" onSubmit={buildProfile}>
-              <MemoryField
-                label="Name"
-                value={profileName}
-                onChange={setProfileName}
-                placeholder="e.g. Ada Lovelace"
-              />
-              <MemoryField
-                label="Public pages to read (one per line)"
-                value={profileSources}
-                onChange={setProfileSources}
-                placeholder="https://en.wikipedia.org/wiki/Ada_Lovelace"
-                multiline
-              />
-              <div className="control-row">
-                <button className="secondary" type="submit" disabled={profileBusy}>
-                  {profileBusy ? "Reading" : "Read them up"}
-                </button>
-                <span className="fold-result">Public pages only — no sign-in, nothing changed.</span>
-              </div>
-            </form>
-            {profileError ? <div className="error">{humanizeError(profileError)}</div> : null}
-            {profileResult ? <ProfileView profile={profileResult} /> : null}
+            <div className="ant-fold-body">
+              <form className="profile-form" onSubmit={buildProfile}>
+                <MemoryField label="Name or company" value={profileName} onChange={setProfileName} placeholder="e.g. Ada Lovelace" />
+                <MemoryField
+                  label="Public links (one per line)"
+                  value={profileSources}
+                  onChange={setProfileSources}
+                  placeholder="https://en.wikipedia.org/wiki/Ada_Lovelace"
+                  multiline
+                />
+                <div className="ant-fold-foot">
+                  <button className="ant-ghost" type="submit" disabled={profileBusy}>
+                    {profileBusy ? "Reading…" : "Read these"}
+                  </button>
+                  <span className="ant-inline-note">Public pages only — no login, no writes.</span>
+                </div>
+              </form>
+              {profileError ? <div className="ant-error">{profileError}</div> : null}
+              {profileResult ? <ProfileView profile={profileResult} /> : null}
+            </div>
           </details>
-          </>
-          ) : null}
-        </section>
 
-        {/* ---- send me to the web: the open-source browser arm, on demand ---- */}
-        <section className="block">
-          <h2 className="block-title">Send me to the web</h2>
-          <p className="block-note">
-            Just tell me what you want — I&apos;ll figure out where to go, open a real browser, do it,
-            and report back. I never log in, spend, or check out.
-          </p>
-          <div className="stack">
-            <label className="field">
-              <span>What do you need?</span>
-              <input
-                value={webTask}
-                onChange={(e) => setWebTask(e.target.value)}
-                placeholder="e.g. find me a standing desk under $300"
-                onKeyDown={(e) => { if (e.key === "Enter") runWebTask(); }}
-                autoComplete="off"
-              />
-            </label>
-          </div>
-          <div className="control-row">
-            <button className="primary" type="button" onClick={runWebTask} disabled={webBusy || !webTask.trim()}>
-              {webBusy ? "On it…" : "Go"}
-            </button>
-          </div>
-          {webBusy ? (
-            <div className="orb-wrap settle" style={{ marginTop: 8 }}>
-              <div className="orb thinking" />
-              <p className="orb-word">Working in a real browser…</p>
-            </div>
-          ) : null}
-          {webError ? <div className="error">{humanizeError(webError)}</div> : null}
-          {webResult ? (
-            <div className="recap settle" style={{ marginTop: 8 }}>
-              <p className="recap-value">{cleanText(webResult.answer) || "Done."}</p>
-              {webResult.final_url ? <p className="row-source">{webResult.final_url}</p> : null}
-            </div>
-          ) : null}
-        </section>
-
-        {/* ---- what I caught (the digest) — only once there's a day to show (R1.7) ---- */}
-        {!isFirstRun ? (
-        <section className="block">
-          <div className="block-head">
-            <h2 className="block-title">Here&apos;s what I caught</h2>
-            <button className="quiet-link" type="button" onClick={loadStatus}>
-              refresh
-            </button>
-          </div>
-
-          {hasLatestRunStats ? (
-            <p className="glance">
-              I read <strong>{observed.length}</strong> {observed.length === 1 ? "line" : "lines"} and let{" "}
-              <strong>{ignored}</strong> throwaway {ignored === 1 ? "one" : "ones"} pass.
-            </p>
-          ) : null}
-
-          <div className="rows">
-            {handledVisible.map((card) => <TaskCard card={card} key={card.id} accent={false} />)}
-            {!handledCount ? (
-              <div className="empty">Nothing handled yet — share your day above and I&apos;ll get started.</div>
-            ) : null}
-          </div>
-          {handledHidden > 0 ? (
-            <p className="glance">…and {handledHidden} more, all handled. Nothing there needs you.</p>
-          ) : null}
-        </section>
-        ) : null}
-
-        {/* ---- On it — you can stop me (the autonomy law: reversible chores STARTED, not asked) ---- */}
-        {buckets.onit.length ? (
-          <section className="block">
-            <h2 className="block-title">On it — you can stop me</h2>
-            <p className="block-note">
-              These are reversible — I&apos;ve already started. Tell me to stop any one and I will.
-            </p>
-            <div className="rows">
-              {buckets.onit.map((card, index) => (
-                <TaskCard card={card} key={card.id} onStop={stopCard} accent={index === 0} />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {/* ---- waiting for your yes (R2.11: ONE amber row, the rest plain below) ---- */}
-        {waiting.length ? (
-          <section className="block">
-            <h2 className="block-title">Waiting for your yes</h2>
-            {waiting.length > 1 ? (
-              <p className="block-note">These are waiting for your yes. One gets the yes first.</p>
-            ) : null}
-            <div className="rows">
-              {/* Only the lead row carries the amber accent; the rest render plain so a
-                  single screen shows one status color at most (R1.2 / R2.11). */}
-              {waitingVisible.map((item, index) =>
-                item.kind === "card" ? (
-                  <TaskCard
-                    card={item.card}
-                    key={item.id}
-                    pendingAsk={item.ask}
-                    onResolve={resolveAsk}
-                    accent={index === 0}
-                  />
-                ) : (
-                  <PendingAsk
-                    ask={item.ask}
-                    key={item.id}
-                    onResolve={resolveAsk}
-                    accent={index === 0}
-                  />
-                ),
-              )}
-            </div>
-            {waitingHidden > 0 ? (
-              <p className="glance">…and {waitingHidden} more waiting quietly below.</p>
-            ) : null}
-          </section>
-        ) : null}
-
-        {/* ---- left for you (the only hard stop) ---- */}
-        {buckets.blocked.length ? (
-          <section className="block">
-            <h2 className="block-title">Left for you</h2>
-            <p className="block-note">I got these to the last step. The final move is yours — I won&apos;t spend or sign in for you.</p>
-            <div className="rows">
-              {buckets.blocked.map((card, index) => <TaskCard card={card} key={card.id} accent={index === 0} />)}
-            </div>
-          </section>
-        ) : null}
-
-        {/* ---- still open (loops) — only once there's a day underway (R1.7) ---- */}
-        {!isFirstRun ? (
-        <section className="block">
-          <div className="block-head">
-            <h2 className="block-title">Still open</h2>
-            <button className="quiet-link" type="button" onClick={scanLoops} disabled={busy}>
-              look back now
-            </button>
-          </div>
-          {tickResult ? (
-            <div className="glance">
-              {(tickResult.fired || []).length
-                ? (tickResult.fired || []).map((item, index) => (
-                    <p className="row-why" key={item.loop_id || `${item.task || "loop"}-${index}`} style={{ margin: 0 }}>
-                      {firedLoopText(item)}
-                    </p>
-                  ))
-                : <span>I looked back and nothing needed me.</span>}
-            </div>
-          ) : null}
-          <div className="rows">
-            {loopsVisible.length ? loopsVisible.map((loop) => (
-              <MemoryLoop
-                loop={loop}
-                key={loop.id}
-                onConnect={connectLoop}
-                onResolve={resolveLoop}
-                connection={connections[loop.id]}
-              />
-            )) : <div className="empty">Nothing left open.</div>}
-          </div>
-          {loopsHidden > 0 ? (
-            <p className="glance">…and {loopsHidden} more open, nothing urgent.</p>
-          ) : null}
-        </section>
-        ) : null}
-
-        {/* ---- review: what you said you'd do ---- */}
-        {!isFirstRun ? (
-        <section className="block">
-          <h2 className="block-title">Things you said you&apos;d do</h2>
-            <div className="rows">
-              {rememberedView.length ? rememberedView.map((row, index) => {
-                // DISPLAY-ONLY inference: the inferred task is shown ABOVE the raw line.
-                // The raw line stays visible as the ground truth the owner can check.
-                const inf = row.inferred;
-                const hasTask = inf && inf.task;
-                const conf = inf && inf.confidence;
-                // Press-go is offered only for a confident inferred task (a real line,
-                // not a vent). The engine still re-infers and is default-deny.
-                const canApprove = Boolean(row.id) && hasTask && conf && conf !== "low";
-                const ar = row.id ? approveResults[row.id] : undefined;
-                const res = ar && ar.result;
-                // DRY-RUN preview is offered for ANY remembered line with an id (even a
-                // non-whitelisted or low-confidence one) so the owner can see what press-go
-                // WOULD do live — the planned intent/tool/args for a whitelisted line, the
-                // handback for the rest, or the vent stop — WITHOUT executing or connecting.
-                const canPreview = Boolean(row.id);
-                const pr = row.id ? previewResults[row.id] : undefined;
-                const pres = pr && pr.result;
-                return (
-                <article className="row settle" key={row.id || `${row.ts || "remembered"}-${index}`}>
-                  <div className="row-head">
-                    {hasTask
-                      ? <h4 className="row-title">{shortText(inf.task)}</h4>
-                      : <h4 className="row-title">{shortText(row.text)}</h4>}
-                    {row.ts ? <span className="row-when">{formatRememberTs(row.ts)}</span> : null}
-                  </div>
-                  {hasTask ? (
-                    <p className="row-why" title="What you actually said">
-                      You said: {shortText(row.text, 120)}
-                    </p>
-                  ) : null}
-                  {(conf || (inf && inf.due_phrase) || (inf && inf.people && inf.people.length)) ? (
-                    <div className="row-meta">
-                      {conf ? <span>{conf === "high" ? "I'm fairly sure" : conf === "med" ? "fairly likely" : "just a hunch"}</span> : null}
-                      {inf && inf.due_phrase ? <span>by {inf.due_phrase}</span> : null}
-                      {inf && inf.people && inf.people.length
-                        ? <span>{inf.people.join(", ")}</span> : null}
-                    </div>
-                  ) : null}
-                  {(row.source || (row.people && row.people.length)) ? (
-                    <p className="row-source">
-                      {cleanText([row.source, (row.people || []).join(", ")].filter(Boolean).join(" — "))}
-                    </p>
-                  ) : null}
-                  {canApprove ? (
-                    <div className="row-actions">
-                      {!res ? (
-                        <button
-                          type="button"
-                          onClick={() => approveRemembered(row.id)}
-                          disabled={ar && ar.busy}
-                        >
-                          {ar && ar.busy ? "On it" : "Yes, handle it"}
-                        </button>
-                      ) : res.executed ? (
-                        // Whitelisted reversible action ran: read-back receipt, in words.
-                        <span className="row-state">
-                          <span className="state-dot handled" />
-                          {res.idempotent ? "Already handled" : "Handled"} — {cleanText(res.would_do) || "done"}
-                        </span>
-                      ) : res.prepared ? (
-                        // Non-whitelisted: prepared and handed back, never executed.
-                        <span className="row-state">
-                          <span className="state-dot waiting" />
-                          Prepared — your turn. {cleanText(res.why_handback || res.would_do || res.inferred_action || "")}
-                        </span>
-                      ) : (
-                        // Refused at the engine (e.g. re-inferred as a vent): no action.
-                        <span className="row-state">
-                          <span className="state-dot" />
-                          Left it alone. {cleanText(res.reason) || "Sounded like a passing comment."}
-                        </span>
-                      )}
-                      {ar && ar.error ? <span className="row-why">{humanizeError(ar.error)}</span> : null}
-                    </div>
-                  ) : null}
-                  {canPreview ? (
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        onClick={() => previewRemembered(row.id)}
-                        disabled={pr && pr.busy}
-                      >
-                        {pr && pr.busy
-                          ? "Looking"
-                          : pres
-                            ? "Look again"
-                            : "Show me what you'd do"}
-                      </button>
-                    </div>
-                  ) : null}
-                  {pres ? (
-                    pres.would_execute ? (
-                      // Whitelisted: describe the planned action in plain words. Never the
-                      // raw tool name or a JSON args blob (§4.8 — no machine noise).
-                      <p className="row-why">
-                        <span className="row-state"><span className="state-dot handled" /> I&apos;d go ahead</span>
-                        {" — "}{cleanText(pres.would_do) || "handle this"}{pres.note ? `. ${cleanText(pres.note)}` : ""}
-                      </p>
-                    ) : pres.handback ? (
-                      <p className="row-why">
-                        <span className="row-state"><span className="state-dot waiting" /> I&apos;d hand it back</span>
-                        {" — "}{cleanText(pres.handback || pres.inferred_action) || "prepare it and leave the last step to you"}
-                        {pres.why ? `. ${cleanText(pres.why)}` : ""}
-                      </p>
-                    ) : (
-                      // Vent / narration: press-go would do nothing at all.
-                      <p className="row-why">
-                        <span className="row-state"><span className="state-dot" /> I&apos;d stay quiet</span>
-                        {" — "}{cleanText(pres.why) || "this sounded like a passing comment, not a task"}
-                      </p>
-                    )
-                  ) : null}
-                  {pr && pr.error ? <p className="row-why">{humanizeError(pr.error)}</p> : null}
-                </article>
-                );
-              }) : <div className="empty">Nothing to look back on yet.</div>}
-            </div>
-        </section>
-        ) : null}
-
-        {/* ---- the ledger: everything I did and heard ---- */}
-        {!isFirstRun ? (
-        <section className="block">
-          <h2 className="block-title">What I did and heard</h2>
-          <div className="rows">
-            {eventsVisible.length ? eventsVisible.map((entry, index) => (
-              <div className="row" key={`${entry.ts || index}-${entry.kind || "event"}`}>
-                <p className="row-why" style={{ margin: 0 }}>{receiptText(entry)}</p>
-              </div>
-            )) : <div className="empty">Nothing logged yet.</div>}
-          </div>
-        </section>
-        ) : null}
-
-        {!isFirstRun ? (
-          <p className="close-line">That&apos;s everything. Nothing else needs you right now.</p>
-        ) : null}
+        </div>
       </div>
     </main>
   );

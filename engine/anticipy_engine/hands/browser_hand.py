@@ -353,4 +353,18 @@ class BrowserHand(Worker):
         if not (proof.get("screenshot") or proof.get("url")):
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           output=result, error="browser agent returned no final screenshot or URL")
+        # M4 HONESTY (audit #2 — never fake done): the agent's non-empty answer is its SELF-REPORT, not
+        # proof. On the real model a JUDGE must verify the result before we call it success; an
+        # unverified/failed task is handed back to the human, never reported as a fake success. (Stub/mock
+        # — the test path with no real browser — keeps prior behavior so the suite is unaffected.)
+        from ..core.gateway import PROVIDER_OPENROUTER
+        if getattr(self.gateway, "provider", None) == PROVIDER_OPENROUTER:
+            try:
+                from ..agent.webvoyager import judge as _judge
+                verdict = await _judge(self.gateway, task, result, image=shot)
+            except Exception:
+                verdict = {"success": False, "reason": "judge unavailable"}
+            result["judgment"] = verdict
+            if not verdict.get("success"):
+                return Result(job_id=job.id, status=JobStatus.needs_human, proof=proof, output=result)
         return Result(job_id=job.id, status=JobStatus.success, proof=proof, output=result)
