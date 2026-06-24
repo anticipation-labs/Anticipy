@@ -26,6 +26,18 @@ import urllib.request
 
 from .navwall import nav_block_reason
 
+# MONEY + CREDENTIAL hard stops for the REAL-profile bridge (sweep r2): symmetric with the WebVoyager
+# arm's PURCHASE_GUARD. The native bridge drives the user's logged-in Chrome (saved cards/sessions), so a
+# click on a pay/checkout control, or a type into a password/OTP/card field, is REFUSED here at the bridge
+# — even if a prompt injection talked the model into emitting it.
+_PAY_CLICK = re.compile(
+    r"place\s+(your\s+)?order|\bbuy\s*now\b|buy\s*it\s*now|\bpay\b|payment|complete\s+(purchase|order|payment)|"
+    r"confirm\s+(and\s+pay|order|purchase|payment)|check\s*out|checkout|submit\s+(order|payment)|"
+    r"proceed\s+to\s+(pay|checkout)|subscribe|donate|send\s+money|transfer\s+(funds|money)", re.I)
+_CRED_FIELD = re.compile(
+    r"password|passwd|\bpwd\b|\botp\b|one[- ]time\s+(code|pass)|verification\s+code|security\s+code|"
+    r"2fa|two[- ]factor|authenticator|\bpin\b|card\s*number|\bcvv\b|\bcvc\b|credit\s*card", re.I)
+
 
 ACTIONABLE_TAGS = {"a", "button", "textarea", "select"}
 ACTIONABLE_ROLES = {
@@ -397,6 +409,15 @@ class NativeBridgeLink:
             if not selector:
                 return self._needs_human(job_id, f"native bridge has no selector for element {index}")
             meta = self._selector_meta.get(index) or {}
+            # MONEY + CREDENTIAL hard stops on the REAL profile (sweep r2) — refuse a pay/checkout click or
+            # a password/OTP/card type before Chrome touches it; hand back for the human to do themselves.
+            _ml = " ".join(str(meta.get(k, "")) for k in ("name", "role", "href", "type"))
+            if action == "click" and _PAY_CLICK.search(_ml):
+                return self._needs_human(job_id, "STOPPED before a purchase/pay control on your real "
+                                                 "profile — money is the hard stop; confirm it yourself.")
+            if action == "type" and _CRED_FIELD.search(_ml):
+                return self._needs_human(job_id, "STOPPED before typing into a password/verification "
+                                                 "field — I never enter your credentials; do it yourself.")
             if action == "click" and _bool_env("ANTICIPY_NATIVE_BRIDGE_TRUSTED_CLICK", True):
                 ok, details = self._trusted_cdp_click(selector, meta)
                 if ok:
