@@ -65,39 +65,67 @@ _SCROLL_JS = (
 # not a flat innerText smear. Each returns a JSON array; selectors have an innerText fallback (Gmail's
 # class names are obfuscated + drift, so we always keep the row's raw text). If an extractor returns
 # nothing, the read falls back to the flat-line path — so it never returns empty on a logged-in surface.
+_GMAIL_CELL = "const g=s=>{const e=r.querySelector(s);return e?((e.getAttribute('email')||e.getAttribute('name')||e.getAttribute('title')||e.innerText||'').trim()):'';};"
+# inbox: the .yW cell is the SENDER -> direction 'received'
 _GMAIL_JS = (
     "JSON.stringify([...document.querySelectorAll('tr.zA, tr[role=row]')].slice(0,80).map(r=>{"
-    "const g=s=>{const e=r.querySelector(s);return e?((e.getAttribute('email')||e.getAttribute('title')||e.innerText||'').trim()):'';};"
+    + _GMAIL_CELL +
     "const from=g('.yW span[email]')||g('.yW span')||g('.zF')||g('.yP');"
     "const subj=g('.y6')||g('.bog');const snip=g('.y2');const time=g('.xW span[title]')||g('.xW span');"
     "const raw=(r.innerText||'').replace(/\\s+/g,' ').trim();"
-    "return {type:'email',from:from,subject:subj,snippet:snip,time:time,raw:raw.slice(0,200)};"
+    "return {type:'email',direction:'received',from:from,subject:subj,snippet:snip,time:time,raw:raw.slice(0,200)};"
     "}).filter(x=>x.raw))"
 )
-_CAL_JS = (
-    "JSON.stringify([...document.querySelectorAll('[role=button][aria-label],div[jsname] [role=button]')]"
-    ".map(e=>(e.getAttribute('aria-label')||e.innerText||'').replace(/\\s+/g,' ').trim())"
-    ".filter(s=>s&&/\\d/.test(s)&&s.length>4).slice(0,80).map(s=>({type:'event',text:s.slice(0,180)})))"
+# sweep r2 #1: on the SENT view the .yW cell is the RECIPIENT -> direction 'sent' (never conflate the two)
+_GMAIL_SENT_JS = (
+    "JSON.stringify([...document.querySelectorAll('tr.zA, tr[role=row]')].slice(0,80).map(r=>{"
+    + _GMAIL_CELL +
+    "const to=g('.yW span[email]')||g('.yW span')||g('.zF')||g('.yP');"
+    "const subj=g('.y6')||g('.bog');const snip=g('.y2');const time=g('.xW span[title]')||g('.xW span');"
+    "const raw=(r.innerText||'').replace(/\\s+/g,' ').trim();"
+    "return {type:'email',direction:'sent',to:to,subject:subj,snippet:snip,time:time,raw:raw.slice(0,200)};"
+    "}).filter(x=>x.raw))"
 )
+# sweep r2 #2: split events into title/start/end/recurring (was one opaque aria-label line)
+_CAL_JS = (
+    "JSON.stringify([...document.querySelectorAll('[data-eventid],[jsname][role=button][aria-label],[role=button][aria-label]')].map(e=>{"
+    "const a=(e.getAttribute('aria-label')||e.innerText||'').replace(/\\s+/g,' ').trim();"
+    "const m=a.match(/(\\d{1,2}:\\d{2}\\s*[AP]M)/gi)||[];"
+    "return {type:'event',title:a.split(',')[0].slice(0,120),start:(m[0]||''),end:(m[1]||''),recurring:/recurring|repeats/i.test(a),raw:a.slice(0,180)};"
+    "}).filter(x=>x.raw&&/\\d/.test(x.raw)).slice(0,80))"
+)
+# sweep r2 #2: split contacts into name/email/phone (was one opaque innerText line)
 _CONTACTS_JS = (
-    "JSON.stringify([...document.querySelectorAll('[role=row],[data-member-id],a[href*=\"/person/\"]')]"
-    ".map(r=>(r.innerText||r.getAttribute('aria-label')||'').replace(/\\s+/g,' ').trim())"
-    ".filter(s=>s&&s.length>2).slice(0,120).map(s=>({type:'contact',text:s.slice(0,140)})))"
+    "JSON.stringify([...document.querySelectorAll('[role=row][data-member-id],a[href*=\"/person/\"],[role=row]')].map(r=>{"
+    "const t=(r.innerText||r.getAttribute('aria-label')||'').replace(/\\s+/g,' ').trim();"
+    "const em=(t.match(/[\\w.+-]+@[\\w.-]+\\.\\w+/)||[''])[0];"
+    "const ph=(t.match(/\\+?\\d[\\d\\s().-]{6,}\\d/)||[''])[0];"
+    "const name=t.split(/\\s{2,}|·|•|,/)[0].slice(0,80);"
+    "return {type:'contact',name:name,email:em,phone:ph,raw:t.slice(0,140)};"
+    "}).filter(x=>x.raw&&x.raw.length>2).slice(0,120))"
 )
 _LINKEDIN_JS = (
     "JSON.stringify([...document.querySelectorAll('div.feed-shared-update-v2, article, li.artdeco-card')]"
     ".map(r=>(r.innerText||'').replace(/\\s+/g,' ').trim()).filter(s=>s&&s.length>20).slice(0,40)"
     ".map(s=>({type:'post',text:s.slice(0,300)})))"
 )
-_EXTRACTORS = {"gmail_inbox": _GMAIL_JS, "gmail_sent": _GMAIL_JS, "calendar": _CAL_JS,
+_EXTRACTORS = {"gmail_inbox": _GMAIL_JS, "gmail_sent": _GMAIL_SENT_JS, "calendar": _CAL_JS,
                "contacts": _CONTACTS_JS, "linkedin": _LINKEDIN_JS}
 
 
 def _record_key(rec: dict) -> str:
-    if rec.get("type") == "email":
-        return ("email|" + (rec.get("from") or "") + "|" + (rec.get("subject") or "")
-                + "|" + (rec.get("raw") or "")[:60]).lower()
-    return (str(rec.get("type")) + "|" + (rec.get("text") or rec.get("raw") or ""))[:140].lower()
+    t = rec.get("type")
+    if t == "email":  # direction + correspondent so sent-to-X and received-from-X never collapse
+        who = rec.get("to") or rec.get("from") or ""
+        return ("email|" + (rec.get("direction") or "") + "|" + who + "|"
+                + (rec.get("subject") or "") + "|" + (rec.get("raw") or "")[:50]).lower()
+    if t == "event":
+        return ("event|" + (rec.get("title") or "") + "|" + (rec.get("start") or "")
+                + "|" + (rec.get("raw") or "")[:50]).lower()
+    if t == "contact":
+        return ("contact|" + (rec.get("name") or "") + "|" + (rec.get("email") or "")
+                + "|" + (rec.get("raw") or "")[:50]).lower()
+    return (str(t) + "|" + (rec.get("text") or rec.get("raw") or ""))[:140].lower()
 
 
 def _render_records(records: list) -> str:
@@ -108,8 +136,16 @@ def _render_records(records: list) -> str:
     for typ, items in by.items():
         out.append(f"=== {typ.upper()}S ({len(items)}) ===")
         for r in items[:60]:
-            if typ == "email":
-                fields = [x for x in [r.get("from"), r.get("subject"), r.get("time")] if x]
+            if typ == "email":  # direction-tagged correspondent so the model weights sent vs received
+                who = ("→ " + r["to"]) if r.get("to") else (("← " + r["from"]) if r.get("from") else "")
+                fields = [x for x in [who, r.get("subject"), r.get("time")] if x]
+                out.append("- " + (" | ".join(fields) if fields else (r.get("raw") or "")))
+            elif typ == "event":
+                when = (r.get("start") or "") + (("–" + r["end"]) if r.get("end") else "")
+                extra = " (recurring)" if r.get("recurring") else ""
+                out.append("- " + (r.get("title") or r.get("raw") or "") + (f" | {when}" if when else "") + extra)
+            elif typ == "contact":
+                fields = [x for x in [r.get("name"), r.get("email"), r.get("phone")] if x]
                 out.append("- " + (" | ".join(fields) if fields else (r.get("raw") or "")))
             else:
                 out.append("- " + (r.get("text") or r.get("raw") or ""))
