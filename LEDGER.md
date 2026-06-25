@@ -92,6 +92,19 @@ read real content. This LIFTS part of the ceiling below → real-account work is
 (onboarding scrape on his real Gmail/Calendar = read-only; draft-then-ask = a parked [Anticipy test]
 draft, never sent). Loop RE-ARMED for those.
 
+### Real-account cycle (2026-06-25, his Gmail logged in)
+- ✅ **Task 1 — real-account onboarding (LIVE):** `/onboard/deep-read-hand` on his real Gmail + Calendar →
+  both surfaces ok (1804 / 1854 chars), **memory_written profile:8 + derived:7** (15 real facts learned),
+  no login walls. The "scrapes you" step, live on his real accounts. (Counts only; no content surfaced.)
+- 🔴 **Task 2 — draft-then-ask (§4.4) — RED, NOT faked:** the hand reported success and the judge passed
+  it, but the **read-back caught a false-positive** — searching his Gmail shows NO `[Anticipy test]` item
+  in Drafts, Sent, or anywhere. So **no draft was created** (the agent bailed after 3 steps in Gmail's
+  compose overlay) — AND **nothing was sent (safety held)**. Two real gaps → PENDING: (a) reliable
+  Gmail compose-to-draft via the hand (the SPA overlay defeats the generic agent — needs a compose
+  recipe / cdp compose path); (b) the JUDGE must verify a WRITE task by reading the mailbox back, not
+  trusting the agent's self-report (this is the never-fake-done hole for write actions — the manual
+  read-back caught it this time).
+
 ## 🏁 AUTONOMOUS CEILING (2026-06-25) — partially lifted by the Gmail login
 
 Every part of the 6-step plan that can be **built + proven without Omar** is GREEN, live-proven, committed,
