@@ -437,6 +437,17 @@
     return (card && card.execution && card.execution.ask_id) ? card.execution.ask_id : card.id;
   }
 
+  // NEVER FAKE SUCCESS: celebrate ONLY on a POSITIVE sentinel from the engine — not "anything that
+  // isn't explicitly false". The engine has success-shaped-but-not-success replies that lack a
+  // `resolved` key (a never-execute block returns {approved:false, blocked:true}; a money card stays
+  // blocked), and those must spring back, not play the gold check.
+  function resolvedOk(res) {
+    if (!res) return false;
+    if (res.blocked === true || res.resolved === false || res.approved === false) return false;
+    return res.approved === true || res.resolved === true
+      || (typeof res.state === "string" && res.state.length > 0);
+  }
+
   // CONFIRM / DENY / UNDO -> POST /resolve {ask_id, approved}
   function doResolve(card, approved, kind) {
     if (resolving) return;
@@ -447,19 +458,20 @@
 
     api("/resolve", { method: "POST", body: { ask_id: askIdOf(card), approved: approved } })
       .then(function (res) {
-        // NEVER fake success: only celebrate if the engine actually resolved it.
-        if (res && res.resolved === false) {
-          setBusy(false);
-          showAside("Hmm — I couldn’t lock that in. Pull to refresh and try again.");
-          return;
-        }
         if (approved) {
-          // affirming: bloom + gold check + fly up
+          // affirming: celebrate ONLY if the engine truly resolved it (positive sentinel)
+          if (!resolvedOk(res)) {
+            setBusy(false);
+            showAside(res && res.blocked
+              ? "That one I can’t take on myself — it’s yours to handle."
+              : "Hmm — I couldn’t lock that in. Try again.");
+            return;
+          }
           playConfirm(node);
           removeCardLocal(card.id);
           flyOut(node, "confirm", function () { afterResolve(); });
         } else {
-          // quiet sweep aside (deny / undo)
+          // quiet sweep aside (deny / undo) — the user said no; dismissing is the intended outcome
           card.status = "declined";
           removeCardLocal(card.id);
           flyOut(node, "deny", function () { afterResolve(); });
@@ -483,9 +495,11 @@
 
     api("/resolve", { method: "POST", body: { ask_id: askIdOf(card), approved: true } })
       .then(function (res) {
-        if (res && res.resolved === false) {  // never fake done
+        if (!resolvedOk(res)) {  // never fake done, never bump the dial on a non-resolution
           setBusy(false);
-          showAside("Hmm — I couldn’t lock that in. Try again.");
+          showAside(res && res.blocked
+            ? "That one’s yours to handle — I can’t take it on."
+            : "Hmm — I couldn’t lock that in. Try again.");
           return null;  // sentinel: do not proceed to celebrate
         }
         playConfirm(node);

@@ -307,6 +307,19 @@ def _split_multi_action(text: str) -> list[str]:
     actionable = [p for p in parts if _is_action(p)]
     if len(actionable) < 2:
         return [text]
+    # CONSERVATIVE (audit fix): a later action-clause is a DISTINCT task only if — after its leading
+    # verb — it names its OWN target (a person / proper noun / new object). If it instead starts with a
+    # generic determiner/pronoun object ("...and confirm THE TIME", "...and tell THEM", "...and check
+    # THE PRICE first") it is a sub-step of the first task, so the whole line stays ONE card. This stops
+    # over-splitting "call the dentist and confirm the time" while still splitting "call the dentist and
+    # email Priya".
+    _CONT = re.compile(r"^(?:the|a|an|them|it|that|this|him|her|those|us)\b", re.I)
+    def _is_substep(p: str) -> bool:
+        q = _REMINDER_LEAD.sub("", p).strip()
+        m = re.match(r"^(?:also\s+|then\s+|please\s+)?\S+\s+(.*)$", q)  # drop the leading verb
+        return bool(m and _CONT.match(m.group(1).strip()))
+    if any(_is_substep(p) for p in actionable[1:]):
+        return [text]
     return actionable
 
 
