@@ -62,7 +62,12 @@ not the agent's flaky multi-fact synthesis). LIVE: Espresso article → surface 
 memory_written {profile:1,derived:1}, real facts synthesized. Old screenshot-first scrape superseded.
 **Real-accounts (Gmail/calendar) reuse this read-only path → needs Omar logged in (login wall →
 needs_login) = PENDING.** Depth follow-on (open sub-items within a page) tracked.
-**Next: Step 4 cloud per-user** → Step 5 voice (tunnel+Twilio = Omar) → Step 6 integrated owner test (§4 = finish).
+**RELIABILITY (§4.6) — ✅ LIVE-GREEN 2026-06-25 (`0cb5df9`):** the hand returned EMPTY on multi-fact
+reads (AGENT_MAX_TOKENS=96 truncated the answer JSON → unparseable → blank). Raised cap to 512 + an
+empty-answer re-ask guard. LIVE: "list 5 key facts" → 3/3 real answers (was 0/3); single-fact still
+works. Follow-on: judge calibration wavers on deliberately-fuzzy asks (errs to handback, never fake-done).
+**Next: Step 4 cloud per-user routing** (locally testable: 2 simulated users → isolated cores; cloud
+deploy = Omar) → Step 5 voice (tunnel+Twilio = Omar) → Step 6 integrated owner test (§4 = finish).
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 
