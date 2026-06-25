@@ -107,6 +107,41 @@ _VENT = re.compile(
     r"|\bmove to a beach\b|\bwin the lottery\b|\bquit my job\b",
     re.I,
 )
+# DIRECTED THREAT (safety hole, audit): _VENT caught conditional "I'd kill" but MISSED first-person
+# FUTURE/desire violence aimed at a PERSON — "I'm going to kill my boss", "I could strangle my
+# landlord", "I might punch my neighbor". A threat is NEVER an executable owner task; it must classify
+# as a vent (non-task) so no card/memory/action is ever created from it. Scoped to a PERSON target
+# (pronoun, person-noun, or possessive+person) so technical/idiom phrasings never match: "kill the
+# process", "I'm going to email Priya", "kill it at the gym", "I could murder a burger", "beat the
+# deadline" all stay NON-vent (real-or-harmless), only person-directed violence is caught.
+_THREAT_VERB = (r"(?:kill|murder|hurt|harm|attack|strangle|choke|stab|shoot|punch|"
+                r"beat\s+(?:up|the\s+(?:crap|hell|shit|living\s+\w+)\s+out\s+of)|beat|"
+                r"slap|smack|throttle|assault|end|take\s+out|knock\s+out)")
+# PERSON target only (a pronoun, or possessive/article + a person-noun). NO bare proper-name branch
+# on purpose: "kill Marcus" and "kill Chrome/Excel" are indistinguishable by regex, so a name branch
+# would false-flag legit "kill <app>" tasks. The person-noun gate is what keeps "kill the process",
+# "take out a loan", "end my subscription" OUT.
+_THREAT_PERSON = (r"(?:him|her|them|everyone|someone|somebody)\b"
+                  r"|(?:my|the|a|an|that|this|his|her|their|our)\s+(?:\w+\s+){0,2}?"
+                  r"(?:boss|coworker|co-worker|colleague|landlord|manager|supervisor|neighbou?r|"
+                  r"husband|wife|spouse|partner|ex|mom|mum|mother|dad|father|sister|brother|sibling|"
+                  r"kid|kids|son|daughter|child|friend|client|customer|roommate|teacher|professor|"
+                  r"doctor|nurse|in-?law|family|team|coach|tenant|intern|guy|woman|man|person|people)\b")
+# Future/desire established by EITHER an I-prefix that already carries future ("I'll", "I will",
+# "I'm gonna/going to", "I'ma", "I swear I'll", "I have half a mind to") OR a standalone modal — so
+# bare-future "I'll murder my boss" / "I will kill him" are caught (the earlier mandatory-modal
+# version missed them). Residual (documented, defense-in-depth, end-to-end no-breach proven by triage
+# + safety_mega_eval): bare proper-name targets ("kill Marcus") and gerunds ("feel like killing").
+_THREAT_FUTURE = (r"(?:i'?ll|i\s+will|i'?m\s+gonna|i'?m\s+going\s+to|i\s+am\s+going\s+to|i'?ma|i'?d|"
+                  r"i\s+swear\s+i'?ll|i\s+have\s+half\s+a\s+mind\s+to|i\s+wanna|i\s+want\s+to|"
+                  r"i\s+could|i\s+would|i\s+might|i'?m\s+about\s+to|gonna|going\s+to|wanna|want\s+to|"
+                  r"could|would|might|about\s+to)")
+_DIRECTED_THREAT = re.compile(
+    r"\b" + _THREAT_FUTURE + r"\s+"
+    r"(?:just\s+|honestly\s+|literally\s+|totally\s+|really\s+|seriously\s+)?"
+    + _THREAT_VERB + r"\s+(?:" + _THREAT_PERSON + r")",
+    re.I,
+)
 # A RETRACTION / self-cancel of a just-stated task ("schedule it ... scratch that", "book it, no —
 # hold off", "... we might cancel"). DISTINCT from the cart/draft BOUND "don't buy/send" (which
 # is_vent_shape deliberately KEEPS as a no-purchase bound on a prep card): this lists ONLY the
@@ -194,7 +229,7 @@ def is_vent_shape(text: str) -> bool:
         return False
     return bool(_VENT.search(raw) or _LAUGH_HEDGE_VENT.search(raw)
                 or _HYPERBOLE.search(raw) or _DESPAIR.search(raw)
-                or _RETRACTION.search(raw))
+                or _RETRACTION.search(raw) or _DIRECTED_THREAT.search(raw))
 
 
 def is_vent(text: str) -> bool:

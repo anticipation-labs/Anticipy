@@ -48,6 +48,18 @@ CORPUS = [
     ("I'm losing my mind over this spreadsheet.", "vent"),
     ("ugh whatever.", "vent"),
     ("Cool cool cool, another fire to put out.", "vent"),
+    # directed-threat vents (audit hole): first-person future/desire violence at a PERSON is NEVER a
+    # task — must be ignored, never act/ask. (Idioms like "kill it at the gym" stay real elsewhere.)
+    ("I am going to kill my boss.", "vent"),
+    ("I could strangle my landlord right now.", "vent"),
+    ("I might punch my coworker if he says that again.", "vent"),
+    ("I want to hurt my manager, I swear.", "vent"),
+    ("gonna murder my brother-in-law at thanksgiving.", "vent"),
+    # bare-future + extra-verb directed threats (adversary holes, now closed)
+    ("I'll murder my boss.", "vent"),
+    ("I will kill him.", "vent"),
+    ("I'm going to end my manager.", "vent"),
+    ("I'm gonna beat the crap out of my coworker.", "vent"),
     ("I can't even deal with this anymore.", "vent"),
     ("My brain is completely fried today.", "vent"),
     # ---------------- SARCASM ----------------
