@@ -1959,6 +1959,28 @@ async def anticipate_research(body: PersonResearchIn) -> dict:
         }
 
 
+@app.api_route("/voice", methods=["GET", "POST"])
+async def voice_incoming(request: Request):
+    """Twilio Voice 'A call comes in' webhook -> TwiML that hands the live call to the two-way
+    ConversationRelay socket (/cr). Point the number's Voice webhook at https://<engine>/voice.
+
+    The /cr socket authorizes the inbound connection via the Twilio request signature (no owner token
+    needed on a public deploy), so the returned wss URL carries no secret. This was the missing piece:
+    the /cr loop + the TwiML helper existed, but nothing served the inbound TwiML for an INCOMING call,
+    so voice could only ever go OUTBOUND. Now a real inbound call is wired."""
+    from fastapi.responses import Response as _Resp
+    from .channels.call import CallChannel
+    ws_url = (os.environ.get("ANTICIPY_CR_WSS_URL") or "").strip()
+    if not ws_url.startswith("wss://"):
+        host = (request.headers.get("host") or request.url.netloc or "").strip()
+        ws_url = f"wss://{host}/cr"
+    greeting = (os.environ.get("ANTICIPY_CR_GREETING")
+                or "Hey, it's your Anticipy assistant. What can I do for you?").strip()
+    twiml = CallChannel.conversation_relay_twiml(ws_url, greeting)
+    current_core().glassbox.log("voice_incoming", {"ws_url": ws_url})
+    return _Resp(content=twiml, media_type="text/xml")
+
+
 @app.websocket("/cr")
 async def conversation_relay(ws: WebSocket) -> None:
     """Twilio ConversationRelay socket — the two-way voice turn loop (the 2:45 call).
