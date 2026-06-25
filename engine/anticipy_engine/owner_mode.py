@@ -105,6 +105,25 @@ _ORDER_VERB = r"order (?:a|an|the|me|us|food|lunch|dinner|takeout|delivery|coffe
 # (F-011 over-catch). The negative lookahead keeps the verb, drops the product-noun.
 _BROWSER = re.compile(r"\b(grab(?!\s+bars?\b)|buy|" + _ORDER_VERB + r"|purchase|checkout|cart|find|look up|research)\b", re.I)
 _MONEY = re.compile(r"\b(pay|buy|" + _ORDER_VERB + r"|purchase|checkout|wire|venmo|zelle|cashapp|credit card|payment)\b", re.I)
+# WEB-ANSWERABLE INFO QUESTIONS (rung B): a factual lookup the browser can resolve, phrased as a
+# QUESTION/request WITHOUT a _BROWSER verb — "what time does X close", "how much is Y", "check the
+# status of flight Z", "what's the phone number for W". These were dropped (no card) or sent to a
+# generic confirm/clarify instead of the hand. Scoped to factual web targets (hours/price/status/
+# address/etc.) so a calendar question ("when is my meeting") or a vent ("why does everything suck")
+# does NOT match. Money/send/vent are still gated FIRST (this only fires in the browser branch, after
+# the money->blocked and send->draft pre-gates), so it never weakens the money hard stop.
+_WEB_LOOKUP = re.compile(
+    r"\b(?:what(?:'?s| is| time| are)?|when(?:'?s| is| does| do)?|how (?:much|many|long|far|tall|old|big)|"
+    r"where(?:'?s| is| can| are)?|who(?:'?s| is)?|which)\b[\w' ,]{0,60}?\b"
+    r"(?:open|opens?|close[sd]?|closing|cost|costs?|price[sd]?|hours?|address|located|"
+    r"phone|number|status|available|availability|website|rated|reviews?|fees?|admission|deadline)\b"
+    r"|\bhow (?:much|many|long|far|tall|old|big)\b"
+    # "check the STATUS/tracking/score/weather/availability OF X" = a web lookup; scoped tight (and
+    # requires the trailing of/on/for) so work phrasings like "sanity-check the hours" do NOT match.
+    r"|\bcheck (?:the |my )?(?:status|tracking|score|weather|availability)\s+(?:of|on|for)\b"
+    r"|\b(?:phone number|opening hours|visiting hours|website)\s+(?:for|of|to)\b",
+    re.I,
+)
 _NO_BUY = re.compile(
     r"\b(don'?t (?:buy|check\s*out|purchase|order|pay)|do not (?:buy|check\s*out|purchase|order|pay)|"
     r"no buying|no check\s*out|cart only|just.*cart)\b",
@@ -593,7 +612,7 @@ class OwnerMode:
                 reason="third-party communication should be confirmed before sending",
             )
 
-        if _BROWSER.search(text):
+        if _BROWSER.search(text) or _WEB_LOOKUP.search(text):
             if _NO_BUY.search(text):
                 disposition: OwnerDisposition = "do"
                 action = "find_or_cart_without_purchase"
