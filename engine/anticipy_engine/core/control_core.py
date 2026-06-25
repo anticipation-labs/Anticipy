@@ -1568,6 +1568,17 @@ class ControlCore:
                     self.glassbox.log("moat_task_rescued",
                                       {"line": line.text[:140],
                                        "reason": "model caught a real task the triage silenced"})
+                    # ROUTING CONSISTENCY (loop must close): a web-resolvable lookup ("look up/find/
+                    # research X", "what time does Y", "how much is Z") that fell into the moat-rescue must
+                    # reach the HAND, not a generic confirm that never executes — otherwise the SAME
+                    # "look up X" sometimes runs and sometimes dead-ends (the routing nondeterminism that
+                    # keeps the loop from closing). Money/vent are already excluded above; the money SIGNAL
+                    # guard here is belt-and-suspenders so a spend never routes to the browser arm.
+                    from ..owner_mode import _BROWSER as _OB, _WEB_LOOKUP as _OWL
+                    if (_OB.search(line.text) or _OWL.search(line.text)) and not _MONEY_SIGNAL.search(line.text):
+                        self.glassbox.log("moat_task_to_browser",
+                                          {"line": line.text[:120], "reason": "web-resolvable -> the hand, not a dead confirm"})
+                        return self._browser_action_ask(line, source)
                     # back it with a PAUSED resolvable goal so the app's YES actually executes it
                     # (real calendar hold / tracked commitment) — never a dead display card.
                     ask_id, goal_id, _w = self._confirm_task_goal(line)
