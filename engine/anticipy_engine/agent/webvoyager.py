@@ -35,7 +35,11 @@ PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes
 (e.g., reach the target page; find the target item; select it; perform the action; verify/stop).
 Reply ONLY JSON: {"subgoals":["...","..."]}"""
 
-AGENT_MAX_TOKENS = max(64, int(os.environ.get("ANTICIPY_AGENT_MAX_TOKENS", "96")))
+# 96 was enough for a click/type/scroll action + a one-line answer, but a multi-fact answer
+# ("list the 5 key facts") JSON overflowed it -> truncated -> unparseable/empty -> the read silently
+# returned nothing (the §4.6 jankiness). It's a CAP, not a target, so short navigation actions still
+# cost the same; only a long answer uses the headroom. 512 fits a real multi-fact read.
+AGENT_MAX_TOKENS = max(64, int(os.environ.get("ANTICIPY_AGENT_MAX_TOKENS", "512")))
 # The JUDGE needs its OWN, larger budget: at 96 tokens the verdict JSON gets truncated → unparseable
 # → it defaulted to false on every correct answer (the self-verify arm was effectively dead).
 JUDGE_MAX_TOKENS = max(192, int(os.environ.get("ANTICIPY_JUDGE_MAX_TOKENS", "256")))
@@ -2241,7 +2245,20 @@ class WebVoyagerAgent:
             last_thought = (action.get("thought") or "")[:160]  # scratchpad for the next step
 
             if action.get("action") == "answer":
-                return self._done(out, step + 1, history, answer=action.get("answer", ""))
+                ans = (action.get("answer") or "").strip()
+                if not ans:
+                    # the model chose action=answer but produced NO text (truncation / dropped field) —
+                    # do not bail to a blank on a readable page; re-ask once for JUST the answer text
+                    # with full room. (Honest: if it's still empty we return empty, never fabricated.)
+                    fix = await _think(
+                        self.gw,
+                        prompt + "\n\nYou chose action=answer but the answer field was EMPTY. Output ONE "
+                                 "JSON object exactly: {\"action\":\"answer\",\"answer\":\"<your full answer "
+                                 "text here>\"} — the answer must be non-empty.",
+                        tier=SMART, caller="agent", image=None, json_mode=True, temperature=0.1,
+                        max_tokens=max(AGENT_MAX_TOKENS, 512))
+                    ans = ((_parse_json(fix) or {}).get("answer") or "").strip()
+                return self._done(out, step + 1, history, answer=ans)
 
             # MONEY HARD STOP (deterministic, ALL action types): refuse any money-capable action
             # (click / type+enter submit / navigate) when on OR navigating to a checkout/payment page.
