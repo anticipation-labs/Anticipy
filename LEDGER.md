@@ -23,6 +23,7 @@
 | **Phase 0.1** — Board never fakes success (real ask id + celebrate only on terminal/running state) | refuted 3×, fixed 3×; **final adversary HOLDS, no hole** — it reproduced a live `{approved:true,state:"failed"}` and confirmed `resolvedOk` springs it back; no genuine success left un-celebratable | ✅ **GREEN — SEALED** |
 | **Phase 0.3 (DROP side)** — bundled DISTINCT tasks split; no task vanishes | live: vent+"call dentist AND send Priya"→2 cards | GREEN |
 | **Phase 1 (THE SPINE) — code** — YES→act drives the CONNECTED real Chrome (WebVoyagerAgent on browser_link), throwaway only as fallback; one judge + card-landing for both | mock routing test (8 assertions) + adversary HELD (25 more: judge-forced, agent-raising, missing keys, safety-stop, paused, fallback regression); suite 108/0 | ✅ GREEN (code) — **live act = BLOCKED-ON-OMAR** |
+| **Phase 6.1 safety — is_vent directed-threat hole** — first-person violence at a person now suppressed as a vent (was surfaced as a HIGH-conf task) | adversary-driven (13 holes closed, 0 false-pos); safety_mega_eval BREACHES:0 / 172 lines; suite 108/0 | ✅ GREEN (improved) — bounded regex residual (bare proper-name / gerund), NO end-to-end breach |
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 
@@ -54,5 +55,16 @@
   Phase 1 mapped + verification approach defined; live act = BLOCKED-ON-OMAR.
 - `c7e1106` **Cycle 3 (2026-06-24):** **Phase 1 spine code DONE** — YES→act repointed to the connected
   real Chrome (throwaway = fallback); mock routing test (8) + adversary HELD (25 more); suite **108/0**.
-  Live act in real Gmail = BLOCKED-ON-OMAR. Next: Phase 1 remainders are Omar-gated → next unblocked
-  fully-verifiable work = Phase 6 safety (is_vent directed-threat hole) or Phase 2 draft-compose (code).
+  Live act in real Gmail = BLOCKED-ON-OMAR.
+- `6e5a7a2` **Cycle 4 (2026-06-24):** **Phase 6.1 directed-threat hole closed** (adversary-driven, 13
+  holes, 0 false-pos, BREACHES:0, suite 108/0). DECLINED Phase 6.2 amount-tier (auto-spend-under-$X
+  would weaken the money hard-stop — kept all-or-nothing park). **→ LOOP STOPPED:** every remaining
+  gate is BLOCKED-ON-OMAR (see below). No further autonomous cycle scheduled — waiting on Omar.
+
+---
+
+## ⏸️ AUTONOMOUS LOOP STOPPED (2026-06-24) — waiting on Omar
+
+Every gate that could be built + verified **without** Omar is done, ratcheted, and committed (suite
+108/0). Everything left genuinely needs him — so per THE_FORGE ("don't grind, don't fake"), the loop
+is **stopped**, not spinning. The batch to unblock the rest is in **`PENDING_FOR_OMAR.md`**.
