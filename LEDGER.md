@@ -41,13 +41,21 @@ auto-run (earned browser trust) → card PERSISTED → connected hand runs on th
 success=True → card `state=done`, answer "330 meters". Honesty held: a Guggenheim lookup answered from
 Google (not the official site) → judge → `state=failed`, never faked. Fix: the auto-run + ask branches
 `append+continue`'d BEFORE `_persist_card`, so results had no record to land on — now persist first.
-**Next: RUNG B — brain copy/flow** (these real gaps found while proving A):
-- routing **nondeterminism**: "look up/find X" sometimes → `confirm_owner_task` (voice_text) instead of
-  the browser arm (the model-expansion rephrases away the `_BROWSER` trigger). Make web-lookups route
-  to the hand deterministically.
-- stale-card **dedup** returns a prior card, bypassing `_spine_card` conversion (re-ingest of a similar line).
-- email = draft-then-ask (not "do"); money = warm ask (not blocked status); multi-line never drops; loop dedup.
-Then Step 3 onboarding wired to the live hands → 4 cloud → 5 voice → 6 owner test.
+**RUNG B — brain copy/flow — ✅ LIVE-GREEN 2026-06-25:**
+- **B.1 routing determinism (`e93afa3`):** web-answerable QUESTIONS ("what time does X close", "check the
+  status of flight Y", "how much is Z") were dropped/clarified; added scoped `_WEB_LOOKUP` (after the
+  money/send pre-gates) so they route to the hand. LIVE: 6/6 lookups → hand; the dropped Costco
+  question → card state=done "$65/yr". Money still blocked, vents ignored.
+- **B.3 email draft-then-ask (`4e6c4f6`):** `_person_hint` was case-sensitive → "Email Priya"/"Send Sam"
+  missed the name → generic confirm. Scoped `(?i:)` to the verb. LIVE: → `ask/draft_or_confirm_message`
+  (drafts first, never auto-sends).
+- **B.4 money:** already `blocked` + warm reason ("Because it's about money, you want to check it over
+  first") — acceptable warm ask, not a cold status.
+- **B.5 multi-line:** LIVE: "…call the dentist…and send Priya the deck" → 2 cards (no drop), vent ignored.
+- Residuals (tracked, not blocking): role-recipient sends ("text my landlord") need a proper name to
+  draft; stale-card dedup can still return a prior card on near-identical re-ingest.
+**Next: Step 3 — onboarding wired to the LIVE hands** (§2 layered scrape↔call loop; real OPEN/read, not
+screenshot-first) → Step 4 cloud per-user → Step 5 voice → Step 6 integrated owner test (§4 = finish).
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 
