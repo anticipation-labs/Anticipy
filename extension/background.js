@@ -615,6 +615,24 @@ async function doAct(msg) {
   }
 }
 
+// Robustly create a tab even when the MV3 service worker has "No current window" (the cause of
+// the observe failure): target the last-focused NORMAL window, else any normal window, else make a
+// new window. chrome.tabs.create({active:true}) alone throws when the SW has no current window.
+async function createTab(url) {
+  let winId = null;
+  try { const w = await chrome.windows.getLastFocused({ windowTypes: ["normal"] }); if (w && w.id != null) winId = w.id; } catch (e) {}
+  if (winId == null) {
+    try { const ws = await chrome.windows.getAll({ windowTypes: ["normal"] }); if (ws && ws.length) winId = ws[ws.length - 1].id; } catch (e) {}
+  }
+  if (winId != null) {
+    try { return await chrome.tabs.create({ url, active: true, windowId: winId }); } catch (e) {}
+  }
+  const win = await chrome.windows.create({ url, focused: true });
+  if (win && win.tabs && win.tabs[0]) return win.tabs[0];
+  const q = await chrome.tabs.query({ windowId: win && win.id });
+  return q[0];
+}
+
 // --- the "Anticipy" tab group: always operate here, reusing one working tab ---
 async function openInGroup(url) {
   let tab = await getWorkingTab();
@@ -626,12 +644,12 @@ async function openInGroup(url) {
     const current = await chrome.tabs.get(tab.id);
     if (url && beforeUrl && url !== beforeUrl && current.url === beforeUrl && current.status === "loading") {
       try { await chrome.tabs.remove(tab.id); } catch (e) {}
-      tab = await chrome.tabs.create({ url, active: true });
+      tab = await createTab(url);
       await setState({ workTabId: tab.id });
       recreated = true;
     }
   } else {
-    tab = await chrome.tabs.create({ url, active: true });
+    tab = await createTab(url);
     await setState({ workTabId: tab.id });
   }
   await ensureGroup(tab.id);
