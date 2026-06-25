@@ -1216,35 +1216,60 @@ class ControlCore:
             self.text_channel.send(self._user_contact(), f"On it — I'm looking into \"{task}\" on the web now. I'll text you what I find.")
         except Exception:
             pass
-        res = None
+        # PHASE 1 — THE SPINE: act in the user's OWN connected Chrome (real, logged-in session) via the
+        # extension when it is attached; only fall back to the throwaway browser-use when no extension is
+        # connected. The throwaway can never reach the user's real accounts — driving the connected hand
+        # IS the product. Both paths feed the SAME judge + card-landing below (one motion, no fork).
+        res = None            # browse_act result object (throwaway fallback)
+        run_result = None     # WebVoyagerAgent dict result (connected real-Chrome path)
+        ok = False
+        answer = ""
         try:
-            res = await asyncio.to_thread(browse_act, task, url=url, max_steps=16)
-            ok = bool(getattr(res, "success", False))
-            answer = (getattr(res, "result", "") or "").strip()
+            if self.browser_link.connected:
+                from ..agent.webvoyager import WebVoyagerAgent
+                self.glassbox.log("browser_action_hand", {"ask_id": ask_id, "hand": "connected_extension"})
+                run_result = await WebVoyagerAgent(
+                    self.browser_link, self.gateway, max_steps=16).run(task, url)
+                answer = (run_result.get("answer") or "").strip()
+                # a wall / safety-stop / pause is NOT a success — hand back, never claim done
+                blocked = bool(run_result.get("needs_human") or run_result.get("stopped_for_safety")
+                               or run_result.get("paused"))
+                ok = bool(answer) and not blocked
+            else:
+                self.glassbox.log("browser_action_hand", {"ask_id": ask_id, "hand": "throwaway"})
+                res = await asyncio.to_thread(browse_act, task, url=url, max_steps=16)
+                ok = bool(getattr(res, "success", False))
+                answer = (getattr(res, "result", "") or "").strip()
         except Exception as exc:
             ok, answer = False, ""
             self.glassbox.log("browser_action_error", {"ask_id": ask_id, "error": str(exc)})
-        # M4 HONESTY (audit #3 — never fake done): res.success is the agent's RAW self-report. Before we
-        # text the owner "Done — ...", a JUDGE must verify it on the real model; an unverified result is
-        # NOT claimed done (the owner is asked to retry / take over). Stub/mock keeps prior behavior.
+        # Normalize the outcome across both hands (connected agent -> dict; browse_act -> object).
+        if run_result is not None:
+            final_url = run_result.get("final_url") or url
+            screenshot = bool(run_result.get("final_shot"))
+            screenshot_path = None
+        elif res is not None:
+            final_url = getattr(res, "url", None) or url
+            screenshot = bool(getattr(res, "screenshot", False))
+            screenshot_path = getattr(res, "screenshot_path", None)
+        else:
+            final_url, screenshot, screenshot_path = url, False, None
+        # M4 HONESTY (never fake done): the answer is the agent's RAW self-report. Before we text the owner
+        # "Done — ...", a JUDGE must verify it on the real model; an unverified result is NOT claimed done
+        # (the owner is asked to retry / take over). Stub/mock keeps prior behavior.
         if ok and answer and getattr(self.gateway, "provider", None) == PROVIDER_OPENROUTER:
             try:
                 from ..agent.webvoyager import judge as _judge
-                _v = await _judge(self.gateway, task,
-                                  {"answer": answer, "final_url": getattr(res, "url", None) or url})
+                _v = await _judge(self.gateway, task, {"answer": answer, "final_url": final_url})
                 if not _v.get("success"):
                     ok = False
                     self.glassbox.log("browser_action_unverified", {"ask_id": ask_id, "reason": _v.get("reason")})
             except Exception:
                 ok = False  # couldn't verify -> don't claim done (honest over convenient)
                 self.glassbox.log("browser_action_unverified", {"ask_id": ask_id, "reason": "judge unavailable"})
-        # LAND THE RESULT ON THE DURABLE CARD (parity with the API arm's read-back proof):
-        # the card was flipped to 'running' on YES; now write the resolved browser receipt
-        # (final url + screenshot flag/path + the answer) back onto the record and persist,
-        # so the board shows the OUTCOME of the web task, not a stranded 'running'.
-        final_url = (getattr(res, "url", None) or url) if res is not None else url
-        screenshot = bool(getattr(res, "screenshot", False)) if res is not None else False
-        screenshot_path = getattr(res, "screenshot_path", None) if res is not None else None
+        # LAND THE RESULT ON THE DURABLE CARD (parity with the API arm's read-back proof): the card was
+        # flipped to 'running' on YES; write the resolved browser receipt back so the board shows the
+        # OUTCOME, not a stranded 'running'.
         self._land_browser_result_on_card(
             ask_id, success=ok, answer=answer, url=final_url,
             screenshot=screenshot, screenshot_path=screenshot_path)
