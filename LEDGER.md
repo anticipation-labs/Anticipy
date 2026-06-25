@@ -66,8 +66,15 @@ needs_login) = PENDING.** Depth follow-on (open sub-items within a page) tracked
 reads (AGENT_MAX_TOKENS=96 truncated the answer JSON → unparseable → blank). Raised cap to 512 + an
 empty-answer re-ask guard. LIVE: "list 5 key facts" → 3/3 real answers (was 0/3); single-fact still
 works. Follow-on: judge calibration wavers on deliberately-fuzzy asks (errs to handback, never fake-done).
-**Next: Step 4 cloud per-user routing** (locally testable: 2 simulated users → isolated cores; cloud
-deploy = Omar) → Step 5 voice (tunnel+Twilio = Omar) → Step 6 integrated owner test (§4 = finish).
+**STEP 4 — per-user HANDS routing — ✅ LIVE-GREEN 2026-06-25 (`98fe1f6`):** per-user DATA was already
+isolated; the gap was `/ws/extension` hardcoded to the DEFAULT `browser_link`. Now it binds the WS to
+`registry.core_for(?user=<id>).browser_link`, per-user token-gated. PROVEN via the real /ws/extension
+route (`test_per_user_hands`, 10/10): each user pilots only their own hand, cross-user token rejected.
+Suite 109/0. REMAINING (Omar/deploy): extension must carry the Supabase identity (dials token-only today)
++ cloud deploy (Railway volume + tenancy decision + 2 real signed-in browsers) → PENDING.
+**Next: Step 5 voice (tunnel+Twilio = Omar)** → Step 6 owner test (§4 = finish, needs Omar's real days).
+Remaining AUTONOMOUS-provable work = DEEPEN green rungs: more hand action types (fill-form-to-review,
+cart-without-buy §4.4), onboarding open-sub-items depth, judge calibration.
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 

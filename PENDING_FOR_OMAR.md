@@ -30,8 +30,10 @@
 **3. Cloud per-user (one decision + one Railway setting).**
    (a) Pick the tenancy model: shared-process registry (simplest) **or** container-per-user.
    (b) Provision a Railway **persistent volume** for the engine's data dir (today a redeploy wipes it).
-   → Unblocks: **Phase 5** (each signed-in user drives their *own* Chrome via the extension; data
-   survives restarts).
+   → Unblocks: **Phase 5 cloud deploy.** The per-user routing is BUILT + proven (each user's extension
+   binds only their own Chrome, `test_per_user_hands` 10/10) — the remaining piece is the extension
+   carrying your Supabase identity on connect, which only matters/works once it's deployed with real
+   sign-in. Data also survives restarts once the volume exists.
 
 ## How to hand it back to the loop
 Do any subset above and say so — the loop picks up the now-unblocked phase, builds + live-proves it
