@@ -176,6 +176,13 @@ _CART_PREP = re.compile(
     r"|\bline\s+up\s+an?\s+order\b|\bprep\s+an?\s+order\b",
     re.I)
 
+# A "make a physical artifact and print it" task (a door sign, a notice, a label) — the CREATE + PRINT
+# capability: generate the artifact -> prepare the print -> confirm before printing (physical action).
+_SIGN_TASK = re.compile(
+    r"\b(?:make|create|print|design|put\s*up|whip\s*up|draw\s*up|throw\s*together|need|want)\b"
+    r"[^.;!?]{0,40}?\b(?:sign|notice|label|flyer|poster|placard|out[- ]?of[- ]?order)\b",
+    re.I)
+
 
 def _is_draft_or_cart_prep(text: str) -> bool:
     """A reversible PREPARE task (draft a message / build a cart) — must surface as a confirm-first
@@ -1116,6 +1123,60 @@ class ControlCore:
             title=f"Look this up for you: {task[:70]}", disposition="ask", route="browser",
             action="browser_action", args={"task_text": task, "start_url": url}, confidence=0.8,
             reason="I'll handle this on the web once you say yes",
+            execution={"decision": "ask", "goal_id": ask_id, "ask_id": ask_id, "goal_state": "waiting"})
+
+    async def _create_and_print_ask(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
+        """THE CREATE + PRINT ROUND-TRIP (the 'make the actual thing + do it' capability): a task like
+        'make a sign for the broken door' -> the product GENERATES the real printable artifact NOW, then
+        asks before the physical action. On YES (core.resolve) it actually prints to the default printer.
+        Mirrors the browser round-trip: confirm-first, NEVER auto-prints (a physical real-world action),
+        money never reaches here. The artifact is created up front so the ask can show the real thing."""
+        from ..hands.make_artifact import make_sign, prepare_print
+        task = (line.text or "").strip()
+        headline, sub = "Notice", ""
+        try:
+            raw = await self.gateway.think(
+                "A person wants a physical SIGN made and printed. Their words: \"%s\". Reply ONLY a "
+                "compact JSON object {\"headline\":\"<2-4 words, the big line>\",\"sub\":\"<one short "
+                "supporting line>\"}. Example for a broken door: {\"headline\":\"Out of Order\","
+                "\"sub\":\"Please use the other door\"}." % task,
+                tier="smart", caller="make_sign", temperature=0)
+            m = re.search(r"\{.*\}", raw or "", re.S)
+            if m:
+                d = json.loads(m.group(0))
+                headline = (d.get("headline") or headline).strip()[:40] or "Notice"
+                sub = (d.get("sub") or "").strip()[:80]
+        except Exception as exc:
+            self.glassbox.log("sign_infer_error", {"error": str(exc)})
+            low = task.lower()
+            if "door" in low and any(w in low for w in ("broke", "busted", "out of order", "jam", "stuck")):
+                headline, sub = "Out of Order", "Please use the other door"
+        slug = "sign_" + hashlib.sha256(task.encode("utf-8")).hexdigest()[:12]
+        artifact = make_sign(headline, sub, slug=slug)
+        prep = prepare_print(artifact)
+        ask_id = "cp_" + hashlib.sha256(f"create_and_print|{source}|{task}".encode("utf-8")).hexdigest()[:18]
+        self.proactive.pending[ask_id] = {
+            "goal_id": ask_id, "action": task, "category": "create_and_print",
+            "reason": "made the artifact — confirm before printing (physical action)",
+            "artifact": artifact, "printer": prep.get("printer"), "print_command": prep.get("command")}
+        self.proactive._persist_pending()
+        printer = prep.get("printer") or ""
+        short = printer.split("_")[0] if printer else "your printer"
+        msg = (f"Heard about the {'door' if 'door' in task.lower() else 'sign'} — I made a "
+               f"“{headline}” sign. Okay to print it on {short}? Reply YES or NO.")
+        try:
+            self.text_channel.send(self._user_contact(), msg)
+            self.glassbox.log("create_print_ask_sent",
+                              {"ask_id": ask_id, "artifact": artifact, "headline": headline})
+        except Exception as exc:
+            self.glassbox.log("create_print_ask_send_error", {"ask_id": ask_id, "error": str(exc)})
+        return OwnerTaskCard(
+            id=ask_id, source=source, line_no=line.line_no, source_text=line.text,
+            title=f"Made a “{headline}” sign — print it?", disposition="ask",
+            route="create_print", action="create_and_print",
+            args={"task_text": task, "artifact": artifact, "headline": headline, "sub": sub,
+                  "printer": prep.get("printer"), "print_command": prep.get("command")},
+            confidence=0.85, reason="I made the sign — I'll print it once you say yes",
             execution={"decision": "ask", "goal_id": ask_id, "ask_id": ask_id, "goal_state": "waiting"})
 
     def _support_chore_opt_out(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
@@ -2281,6 +2342,15 @@ class ControlCore:
             # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This
             # is the absolute lever that keeps a vent from ever producing an act (the cardinal sin).
             card = self._apply_force_ask(card, line)
+            # CREATE + PRINT CHOKEPOINT: a 'make/print a sign' task -> GENERATE the real artifact and ask
+            # before printing (a physical action). Runs on the line regardless of how the brain shaped it,
+            # so a sign task the router would drop to a do-nothing confirm still reaches the create+print
+            # round-trip. Excludes money (never) and vents (force_ask: held, not proactively executed).
+            if (execute_actions and not getattr(line, "force_ask", False)
+                    and _SIGN_TASK.search(getattr(line, "text", "") or "")
+                    and not _MONEY_SIGNAL.search(getattr(line, "text", "") or "")):
+                self.glassbox.log("create_print_chokepoint", {"line": (line.text or "")[:120]})
+                card = await self._create_and_print_ask(line, source)
             # ROUTING CHOKEPOINT (reliability): a web-resolvable lookup that ANY internal path shaped as a
             # generic confirm (route=voice_text / action=confirm_owner_task) should still reach the HAND —
             # reroute it to the browser ask. A single catch-all so a web task can't dead-end as a
@@ -3555,6 +3625,29 @@ class ControlCore:
             self.glassbox.log("browser_action_declined", {"ask_id": ask_id})
             return {"ask_id": ask_id, "approved": False, "declined_action": p.get("action"),
                     "goal_id": ask_id}
+        # CREATE + PRINT round-trip: a YES actually prints the generated artifact (the physical action,
+        # gated behind explicit consent); a NO leaves it made-but-unprinted. The artifact already exists
+        # (created at ask-time), so YES is just the print. Reuses the card-landing helper -> state=done.
+        if isinstance(p, dict) and p.get("category") == "create_and_print":
+            self.proactive.pending.pop(ask_id, None)
+            self.proactive._persist_pending()
+            printer = (p.get("printer") or "the printer")
+            if approved:
+                from ..hands.make_artifact import send_to_print
+                res = send_to_print(p.get("artifact"), p.get("printer"))
+                self._land_browser_result_on_card(
+                    ask_id, success=bool(res.get("ok")),
+                    answer=(f"Printed to {printer.split('_')[0]}" if res.get("ok")
+                            else f"Print failed: {(res.get('stderr') or '')[:80]}"),
+                    url=None, screenshot=False)
+                self.glassbox.log("create_print_approved", {"ask_id": ask_id, "ok": res.get("ok")})
+                return {"ask_id": ask_id, "approved": True, "create_and_print": True,
+                        "state": "done" if res.get("ok") else "failed", "goal_id": ask_id,
+                        "printed": bool(res.get("ok")), "artifact": p.get("artifact")}
+            self._resolve_browser_card_record(ask_id, False)
+            self.glassbox.log("create_print_declined", {"ask_id": ask_id})
+            return {"ask_id": ask_id, "approved": False, "declined_action": p.get("action"),
+                    "goal_id": ask_id, "artifact": p.get("artifact")}
         out = await self.proactive.resolve_ask(ask_id, approved)
         link = self._owner_card_goals.pop(out.get("goal_id"), None) if isinstance(out, dict) else None
         if link is None and isinstance(out, dict) and out.get("goal_id"):

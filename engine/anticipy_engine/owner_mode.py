@@ -20,7 +20,7 @@ from .shared.note_task import match_internal_note
 
 OwnerSource = Literal["pay_to_try", "start_listening", "mp3", "transcript", "typed", "app", "mac_mic", "pendant_phone"]
 OwnerDisposition = Literal["do", "ask", "remember", "blocked"]
-OwnerRoute = Literal["api", "browser", "voice_text", "memory"]
+OwnerRoute = Literal["api", "browser", "voice_text", "memory", "create_print"]
 
 
 class OwnerObservedLine(BaseModel):
