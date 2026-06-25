@@ -22,6 +22,7 @@
 | **Phase 0.4** — memory write-idempotent (3 ingests→1 loop) + inject dedup/vent-gate | live; **adversary HOLDS** | GREEN |
 | **Phase 0.1** — Board never fakes success (real ask id + celebrate only on terminal/running state) | refuted 3×, fixed 3×; **final adversary HOLDS, no hole** — it reproduced a live `{approved:true,state:"failed"}` and confirmed `resolvedOk` springs it back; no genuine success left un-celebratable | ✅ **GREEN — SEALED** |
 | **Phase 0.3 (DROP side)** — bundled DISTINCT tasks split; no task vanishes | live: vent+"call dentist AND send Priya"→2 cards | GREEN |
+| **Phase 1 (THE SPINE) — code** — YES→act drives the CONNECTED real Chrome (WebVoyagerAgent on browser_link), throwaway only as fallback; one judge + card-landing for both | mock routing test (8 assertions) + adversary HELD (25 more: judge-forced, agent-raising, missing keys, safety-stop, paused, fallback regression); suite 108/0 | ✅ GREEN (code) — **live act = BLOCKED-ON-OMAR** |
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 
@@ -31,7 +32,7 @@
 
 ## 🔴 RED / NEXT — the path to §4 (from PLAN_TO_DONE)
 
-1. **Phase 1 — THE SPINE (next):** route the YES→act path (`_run_browser_and_confirm`, control_core.py:1209) to drive `WebVoyagerAgent(self.browser_link, self.gateway, …)` when `browser_link.connected`, else fall back to the throwaway `browse_act`; normalize the agent's dict result (answer/final_url/needs_human/final_shot) into the existing judge + `_land_browser_result_on_card` path; pass the card's structured args. **Verification note:** the new branch only activates with an extension connected, so the stub suite can't reach it — verify the routing+adapter with a MOCK-based unit test (unattended, ratchet-able), and the live "act in real Gmail" with Omar logged into the paired Chrome (do NOT drive his Chrome unattended). *(code = mine; live proof = BLOCKED-ON-OMAR)*
+1. **Phase 1 — THE SPINE:** ✅ **routing/adapter DONE + adversary-held (`c7e1106`)** — YES→act drives the connected real Chrome (`WebVoyagerAgent` on `browser_link`), throwaway only as fallback, one judge + card-landing. **REMAINING:** (a) live "act in real Gmail" proof — **BLOCKED-ON-OMAR** (won't drive his Chrome unattended); (b) thread the card's structured args into the act (today `_run_browser_and_confirm` still takes a task string + re-derived url); (c) "open email→read body" recipe + a general post-action read-back proof for non-commerce tasks.
 2. **Phase 2 —** real Gmail drafts + "okay to send?" loop. *(code mine; live proof needs Omar)*
 3. **Phase 3 —** full agentic onboarding (go-in scrape + scrape↔call loop + autonomy/money/do-not-touch capture). *(needs Omar login + Twilio)*
 4. **Phase 4 —** voice on + reachable (tunnel + live env + inbound `/voice` webhook). *(needs Omar: tunnel + Twilio)*
@@ -51,3 +52,7 @@
 - **Cycle 2 (2026-06-24):** 0.1 final adversary HOLDS → **0.1 SEALED**. Over-split merge attempted →
   **reverted** (ratchet caught a money-line merge risk) → residual stays tracked, suite back to 107/0.
   Phase 1 mapped + verification approach defined; live act = BLOCKED-ON-OMAR.
+- `c7e1106` **Cycle 3 (2026-06-24):** **Phase 1 spine code DONE** — YES→act repointed to the connected
+  real Chrome (throwaway = fallback); mock routing test (8) + adversary HELD (25 more); suite **108/0**.
+  Live act in real Gmail = BLOCKED-ON-OMAR. Next: Phase 1 remainders are Omar-gated → next unblocked
+  fully-verifiable work = Phase 6 safety (is_vent directed-threat hole) or Phase 2 draft-compose (code).
