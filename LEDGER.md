@@ -72,9 +72,28 @@ isolated; the gap was `/ws/extension` hardcoded to the DEFAULT `browser_link`. N
 route (`test_per_user_hands`, 10/10): each user pilots only their own hand, cross-user token rejected.
 Suite 109/0. REMAINING (Omar/deploy): extension must carry the Supabase identity (dials token-only today)
 + cloud deploy (Railway volume + tenancy decision + 2 real signed-in browsers) → PENDING.
-**Next: Step 5 voice (tunnel+Twilio = Omar)** → Step 6 owner test (§4 = finish, needs Omar's real days).
-Remaining AUTONOMOUS-provable work = DEEPEN green rungs: more hand action types (fill-form-to-review,
-cart-without-buy §4.4), onboarding open-sub-items depth, judge calibration.
+**DEEPEN THE HANDS — ✅ LIVE-GREEN 2026-06-25:** proved the hand OPERATES beyond read, each judge:true:
+- multi-hop OPEN-ITEM: HN front page → clicked into `item?id=…` → reported title + "68 comments" (§4.4
+  "opens items, clicks in"; the onboarding open-sub-items depth).
+- multi-field FORM FILL+SUBMIT: selenium web-form → typed a field → Submit → `submitted-form.html?
+  my-text=Anticipy` → "Form submitted, Received!" (forms = the bulk of real workload).
+- Capability set now: read · search · navigate · multi-hop open-item · form fill+submit. (No code change
+  — verifications of existing ability.) Known wart: a transient "chrome-extension:// URL" value-setter
+  error from the duplicate `Anticipy-Browser-Hand` extensions (copy-chaos) — retry succeeded; cleanup = remove the 2 dup extensions.
+
+---
+
+## 🏁 AUTONOMOUS CEILING REACHED (2026-06-25)
+
+Every part of the 6-step plan that can be **built + proven without Omar** is GREEN, live-proven, committed,
+suite 109/0: hands operate (read/search/navigate/open-item/form-fill) · integrated owner-flow → hand →
+result-on-card · brain (route/draft/block) · onboarding deep-read → memory · reliability · per-user hands.
+Everything that REMAINS is, by the nature of the product, **Omar's real life** — not something I can fake or
+simulate: real-account onboarding + the live Gmail spine proof (his login), voice (Twilio/tunnel), cloud
+deploy (Railway volume + tenancy + extension Supabase identity), and **Step 6 — the multi-day owner test on
+his real days** (the §4 finish, inherently his). Per the rule (don't grind, don't fake), the loop **STOPS**
+here and hands Omar the batch in `PENDING_FOR_OMAR.md`. Do any item → say so → the loop resumes and finishes
+that piece live.
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 

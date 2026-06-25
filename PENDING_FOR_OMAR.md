@@ -1,7 +1,9 @@
 # PENDING FOR OMAR — the batch that unblocks the rest
 
-> Updated 2026-06-25. The autonomous loop is RUNNING and climbing the rungs; everything below is the
-> small set that genuinely needs you. Read with `LEDGER.md`.
+> Updated 2026-06-25. **The autonomous loop has reached its ceiling and STOPPED** — everything provable
+> without you is done, live-proven, committed (suite 109/0). Everything below genuinely needs your real
+> life (accounts, phone, infra, real days). Do any item → say so → the loop resumes and finishes that
+> piece live. Read with `LEDGER.md`.
 
 ## What's LIVE-GREEN now (proven by running it, committed on `factory/build`, suite 108/0)
 - **The hands operate any site** — open/read/search/navigate, judged true (Wikipedia, Hacker News).
@@ -34,6 +36,12 @@
    binds only their own Chrome, `test_per_user_hands` 10/10) — the remaining piece is the extension
    carrying your Supabase identity on connect, which only matters/works once it's deployed with real
    sign-in. Data also survives restarts once the volume exists.
+
+**4. (30-sec cleanup, optional but recommended) Remove the duplicate hand extensions.**
+   `chrome://extensions` → remove the two **"Anticipy Bridge v6"** entries (folder `Anticipy-Browser-Hand`).
+   Keep only **"Anticipy (the hands)"** (`Anticipy-Extension`). The dupes don't talk to the engine but
+   occasionally cause a transient "chrome-extension:// URL" error during form-fills (a retry currently
+   works around it). One canonical extension = no jank.
 
 ## How to hand it back to the loop
 Do any subset above and say so — the loop picks up the now-unblocked phase, builds + live-proves it
