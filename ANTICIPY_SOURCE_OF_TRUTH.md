@@ -1206,11 +1206,16 @@ Anticipy is **not** finished if any of these is true, no matter how good the res
 - Memory (4 drawers) + the scrape→memory loop (real facts about Omar persisted).
 - Site ↔ engine connection.
 
-**Real but SHALLOW — the #1 gap: THE BROWSER AGENT.**
-- Today's onboarding "scrape" only reads the **first visible screen** and scrolls/screenshots. It does
-  NOT open emails, click in, navigate, or *operate*. That is not the agent §2 describes.
-- The agent that actually OPERATES arbitrary real systems reliably (the §2 / §3 / §4 depth) is the
-  hardest, least-finished part — and the spine of the whole product.
+**THE BROWSER AGENT — the #1 gap — STARTED MOVING (2026-06-25, live-proven):**
+- **The hands were DEAD and we never knew** (every "browser" gate was a proxy): the extension threw
+  `No current window` on every action — `chrome.tabs.create({active:true})` in the MV3 service worker
+  with no focused window. **Fixed** (a robust `createTab` → last-focused/any normal window, else open
+  one). Committed `020d94c`.
+- **R1 GREEN (live, real spine):** `/agent/run` (the SAME WebVoyagerAgent the owner act-path drives)
+  opened en.wikipedia.org/wiki/Coffee and reported title + first sentence; **judge: True**. The honesty
+  layer held: an earlier empty answer was refused as `needs_human`, never faked.
+- Still ahead (the depth §2/§3/§4 needs): R2 operate-a-task (click/type/navigate, park at money/send),
+  R3 a NOVEL site (prove general, not hardcoded), then wire onboarding to it.
 
 **Bugs found by testing today (honest):** multi-line input drops a task (the "dentist" vanished when
 bundled); the email path returns `do` instead of **draft-then-ask**; money copy must be the warm ask,
