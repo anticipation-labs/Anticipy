@@ -444,8 +444,13 @@
   function resolvedOk(res) {
     if (!res) return false;
     if (res.blocked === true || res.resolved === false || res.approved === false) return false;
-    return res.approved === true || res.resolved === true
-      || (typeof res.state === "string" && res.state.length > 0);
+    if (res.resolved === true) return true;
+    // approved===true is NOT success on its own: the engine returns approved:true with state
+    // "waiting"/"failed" when a multi-step goal re-stalls (needs another confirm) — celebrating that
+    // fakes done on an unfinished (often money-adjacent) task. Only a TERMINAL-success ("done") or an
+    // actively-executing browser action ("running") earns the gold check.
+    var st = (typeof res.state === "string") ? res.state : "";
+    return st === "done" || st === "running";
   }
 
   // CONFIRM / DENY / UNDO -> POST /resolve {ask_id, approved}
