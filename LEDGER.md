@@ -25,6 +25,18 @@
 | **Phase 1 (THE SPINE) — code** — YES→act drives the CONNECTED real Chrome (WebVoyagerAgent on browser_link), throwaway only as fallback; one judge + card-landing for both | mock routing test (8 assertions) + adversary HELD (25 more: judge-forced, agent-raising, missing keys, safety-stop, paused, fallback regression); suite 108/0 | ✅ GREEN (code) — **live act = BLOCKED-ON-OMAR** |
 | **Phase 6.1 safety — is_vent directed-threat hole** — first-person violence at a person now suppressed as a vent (was surfaced as a HIGH-conf task) | adversary-driven (13 holes closed, 0 false-pos); safety_mega_eval BREACHES:0 / 172 lines; suite 108/0 | ✅ GREEN (improved) — bounded regex residual (bare proper-name / gerund), NO end-to-end breach |
 
+## 🖐️ STEP 1 — THE HANDS OPERATE (the spine, the #1 gap) — ✅ LIVE-GREEN 2026-06-25
+
+The hands were DEAD (every "browser" gate was a proxy): the extension threw `No current window` on
+every action. **Fixed** (`createTab` → last-focused/any normal window, else open one; `020d94c`).
+Live-proven via `/agent/run` (the SAME agent the owner act-path drives), each judged TRUE:
+- **R1** open+read a real site — Wikipedia/Coffee → title + first sentence.
+- **R2** *operate* — searched, navigated Main_Page→Espresso (2 steps), extracted the first sentence.
+- **R3** *novel site* — Hacker News top story "Half-Life 2 in a Browser" → **horizontal, not hardcoded**.
+Honesty held: an empty answer was refused as `needs_human`, never faked.
+**Next rungs:** integrated owner-flow on a real site (utterance→hands act→read-back→close, §4.1) →
+Step 2 brain copy/flow → Step 3 onboarding wired to the live hands → 4 cloud → 5 voice → 6 owner test.
+
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 
 | Item | What's done | The residual |
