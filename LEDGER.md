@@ -54,8 +54,15 @@ Google (not the official site) → judge → `state=failed`, never faked. Fix: t
 - **B.5 multi-line:** LIVE: "…call the dentist…and send Priya the deck" → 2 cards (no drop), vent ignored.
 - Residuals (tracked, not blocking): role-recipient sends ("text my landlord") need a proper name to
   draft; stale-card dedup can still return a prior card on near-identical re-ingest.
-**Next: Step 3 — onboarding wired to the LIVE hands** (§2 layered scrape↔call loop; real OPEN/read, not
-screenshot-first) → Step 4 cloud per-user → Step 5 voice → Step 6 integrated owner test (§4 = finish).
+**STEP 3 — onboarding deep-read via the LIVE hand — ✅ LIVE-GREEN 2026-06-25 (`0d62a11`):**
+`POST /onboard/deep-read-hand {targets}` → `onboard_deep_read_via_hand` drives the connected Chrome to
+OPEN each target + READ real content (observe: page text + visible items) → dossier synthesizer →
+memory. Extended `_render` to carry generic notes/text (horizontal, any surface). Reliable (observe,
+not the agent's flaky multi-fact synthesis). LIVE: Espresso article → surface ok, 1901 chars,
+memory_written {profile:1,derived:1}, real facts synthesized. Old screenshot-first scrape superseded.
+**Real-accounts (Gmail/calendar) reuse this read-only path → needs Omar logged in (login wall →
+needs_login) = PENDING.** Depth follow-on (open sub-items within a page) tracked.
+**Next: Step 4 cloud per-user** → Step 5 voice (tunnel+Twilio = Omar) → Step 6 integrated owner test (§4 = finish).
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 
