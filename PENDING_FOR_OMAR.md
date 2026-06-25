@@ -10,10 +10,28 @@
 > — the chokepoint fix closed it safely (suite 110/0, zero safety breaches). A real Gmail draft flushed;
 > onboarding learned from your real Gmail+Calendar. **The product works end-to-end.**
 >
-> **The ONLY thing left is yours: your real days = the §4 finish.** Live with it a few real days (keep your
-> accounts connected); we read the same gate metrics on your actual days. That is the one thing that can
-> stamp "fully done," by definition — it can't be simulated, because it's your life. Optional polish I can
-> still do solo: push the route→run→done sample to ≥9/10 sustained, and an automated front-end UI e2e.
+> **#0b — The DOOR SIGN (the real "end to end" bar) is BUILT, hardened, safe, and printed.** Hear the
+> subtle ask → infer it → create the real PDF → submit to your Canon → ask first. 3-agent investigation +
+> hardening: real headlines from your original words, honest "sent to print queue" (never fake "Printed"),
+> no silent drops / no fake printer, safety-verified 0 leaks. Commits f8d63ec → 6946286, suite 110/0.
+>
+> **THE ONE THING FOR THE REAL TEXT — your Twilio (you offered "i will log u in"):** the SMS code is FULLY
+> BUILT (send + inbound YES/NO + /resolve). To make you actually RECEIVE "I heard the door — okay to print?"
+> and reply YES, set these env vars on the engine and restart:
+> ```
+> ANTICIPY_CHANNELS_MODE=live
+> TWILIO_ACCOUNT_SID=AC...        TWILIO_AUTH_TOKEN=...        TWILIO_FROM=+1<your twilio number>
+> OWNER_PHONE=+1<your cell>       ANTICIPY_INBOUND_POLL_SECONDS=15
+> ```
+> Then a sign/lookup ask texts you for real and your "YES" drives it. (I can't enter creds — that's yours.)
+>
+> **THE OTHER TWO (yours by nature):** (1) turn the **Canon online** — print job -195 is queued and drops
+> the moment it's reachable; (2) the **pendant** (live ambient audio) is hardware. And **your real days**
+> remain the §4 "fully done" stamp — it can't be simulated because it's your life.
+>
+> Remaining deeper tech (supervised, not unsafe): the moat occasionally rephrases/strips a line on the
+> whole-day path + stale-dedup returns an old card on exact re-ingest — the core-brain seam (mitigated for
+> single lines via original_text; the deeper fix is a careful supervised pass, not unsupervised thrashing).
 
 ## What's LIVE-GREEN now (proven by running it, committed on `factory/build`, suite 108/0)
 - **The hands operate any site** — open/read/search/navigate, judged true (Wikipedia, Hacker News).
