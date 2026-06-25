@@ -195,7 +195,7 @@ def _derive_sign_text(task: str) -> tuple[str, str]:
         m = re.search(r"\b(?:that\s+says|saying|that\s+reads|reads|says)\s+([A-Za-z0-9 ,'!?\-]{2,40})",
                       task or "", re.I)
     if m:
-        return (m.group(1).strip().rstrip(".").title()[:40] or "Notice"), ""
+        return (m.group(1).strip().rstrip(".").title()[:40] or ""), ""
     for pat, head, sub in (
         (r"out[- ]?of[- ]?order|not working|out of service|\bbroke\b|busted", "Out of Order", "Please use the other one"),
         (r"no\s*parking", "No Parking", "Thank you"),
@@ -220,8 +220,8 @@ def _derive_sign_text(task: str) -> tuple[str, str]:
     m = re.search(r"\b(?:sign|notice|label|flyer|poster)\s+(?:for|about|that says|saying|re)\s+"
                   r"(?:the\s+)?([a-z0-9 '\-]{2,30})", low)
     if m:
-        return (m.group(1).strip().title()[:40] or "Notice"), ""
-    return "Notice", ""
+        return (m.group(1).strip().title()[:40] or ""), ""
+    return "", ""
 
 
 def _is_draft_or_cart_prep(text: str) -> bool:
@@ -1173,27 +1173,26 @@ class ControlCore:
         money never reaches here. The artifact is created up front so the ask can show the real thing."""
         from ..hands.make_artifact import make_sign, prepare_print
         task = (line.text or "").strip()
-        headline, sub = "", ""
-        try:
-            raw = await self.gateway.think(
-                "A person wants a physical SIGN made and printed. Their words: \"%s\". Reply ONLY a "
-                "compact JSON object {\"headline\":\"<the big line; use the person's own quoted words if "
-                "given; NEVER the word 'Notice'>\",\"sub\":\"<one short supporting line, or empty>\"}. "
-                "Example for a broken door: {\"headline\":\"Out of Order\",\"sub\":\"Please use the other "
-                "door\"}." % task,
-                tier="smart", caller="make_sign", temperature=0)
-            m = re.search(r"\{.*\}", raw or "", re.S)
-            if m:
-                d = json.loads(m.group(0))
-                headline = (d.get("headline") or "").strip()[:40]
-                sub = (d.get("sub") or "").strip()[:80]
-        except Exception as exc:
-            self.glassbox.log("sign_infer_error", {"error": str(exc)})
-        # Robust fallback: if the model was unreachable/empty/'Notice' (e.g. under load), derive a REAL
-        # headline deterministically (quoted text -> keyword map -> object noun) — never ship 'Notice'.
+        # DETERMINISTIC FIRST: a strong signal (the person's quoted words / a known sign type / the object
+        # noun) is authoritative + robust — not subject to model flakiness or concurrent-load failures.
+        # Only ask the model for a novel phrasing the deriver can't resolve. Never ship the generic 'Notice'.
+        headline, sub = _derive_sign_text(task)
+        if not headline:
+            try:
+                raw = await self.gateway.think(
+                    "A person wants a physical SIGN made and printed. Their words: \"%s\". Reply ONLY a "
+                    "compact JSON object {\"headline\":\"<the big line; use the person's own words; NEVER "
+                    "the word 'Notice'>\",\"sub\":\"<one short supporting line, or empty>\"}." % task,
+                    tier="smart", caller="make_sign", temperature=0)
+                m = re.search(r"\{.*\}", raw or "", re.S)
+                if m:
+                    d = json.loads(m.group(0))
+                    headline = (d.get("headline") or "").strip()[:40]
+                    sub = (d.get("sub") or "").strip()[:80]
+            except Exception as exc:
+                self.glassbox.log("sign_infer_error", {"error": str(exc)})
         if not headline or headline.lower() == "notice":
-            dh, ds = _derive_sign_text(task)
-            headline, sub = dh, (sub or ds)
+            headline = "Notice"
         slug = "sign_" + hashlib.sha256(task.encode("utf-8")).hexdigest()[:12]
         artifact = make_sign(headline, sub, slug=slug)
         prep = prepare_print(artifact)
