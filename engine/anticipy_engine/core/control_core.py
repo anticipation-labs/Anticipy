@@ -179,9 +179,49 @@ _CART_PREP = re.compile(
 # A "make a physical artifact and print it" task (a door sign, a notice, a label) — the CREATE + PRINT
 # capability: generate the artifact -> prepare the print -> confirm before printing (physical action).
 _SIGN_TASK = re.compile(
-    r"\b(?:make|create|print|design|put\s*up|whip\s*up|draw\s*up|throw\s*together|need|want)\b"
-    r"[^.;!?]{0,40}?\b(?:sign|notice|label|flyer|poster|placard|out[- ]?of[- ]?order)\b",
+    r"\b(?:make|create|print|design|put\s*up|stick\s*up|post|hang|tape\s*up|whip\s*up|draw\s*up|"
+    r"throw\s*(?:up|together)|need|want)\b"
+    r"[^.;!?]{0,45}?\b(?:sign|notice|label|flyer|poster|placard|warning|out[- ]?of[- ]?order)\b",
     re.I)
+
+
+def _derive_sign_text(task: str) -> tuple[str, str]:
+    """Deterministically derive a real sign headline+sub from the task — the robust fallback when the
+    model inference is unreachable/empty/'Notice' (never ship the generic placeholder). Quoted/explicit
+    text wins, then a keyword map for common sign types, then the object noun. Pure-local, no model."""
+    low = re.sub(r"[-_]", " ", (task or "").lower())
+    m = re.search(r"['\"“‘]([^'\"”’]{2,40})['\"”’]", task or "")
+    if not m:
+        m = re.search(r"\b(?:that\s+says|saying|that\s+reads|reads|says)\s+([A-Za-z0-9 ,'!?\-]{2,40})",
+                      task or "", re.I)
+    if m:
+        return (m.group(1).strip().rstrip(".").title()[:40] or "Notice"), ""
+    for pat, head, sub in (
+        (r"out[- ]?of[- ]?order|not working|out of service|\bbroke\b|busted", "Out of Order", "Please use the other one"),
+        (r"no\s*parking", "No Parking", "Thank you"),
+        (r"wet\s*floor", "Caution: Wet Floor", "Watch your step"),
+        (r"wet\s*paint", "Wet Paint", "Do not touch"),
+        (r"beware.*dog|dog.*(?:loose|bite)", "Beware of Dog", ""),
+        (r"do not disturb|quiet\s*please|keep\s*quiet|be\s*quiet", "Quiet Please", ""),
+        (r"reserved\s*(?:parking|spot)", "Reserved Parking", ""),
+        (r"garage\s*sale|yard\s*sale", "Garage Sale", ""),
+        (r"bake\s*sale", "Bake Sale", ""),
+        (r"lost\s*(?:cat|dog|pet)", "Lost Pet", "Please call if found"),
+        (r"for\s*sale", "For Sale", ""),
+        (r"\bclosed\b", "Closed", ""),
+        (r"recycl", "Recycling", ""),
+        (r"keep\s*(?:out|off)|do not enter|no entry", "Keep Out", ""),
+    ):
+        if re.search(pat, low):
+            return head, sub
+    mb = re.search(r"back in (\w+)\s*min", low)
+    if mb:
+        return f"Back in {mb.group(1).title()} Minutes", ""
+    m = re.search(r"\b(?:sign|notice|label|flyer|poster)\s+(?:for|about|that says|saying|re)\s+"
+                  r"(?:the\s+)?([a-z0-9 '\-]{2,30})", low)
+    if m:
+        return (m.group(1).strip().title()[:40] or "Notice"), ""
+    return "Notice", ""
 
 
 def _is_draft_or_cart_prep(text: str) -> bool:
@@ -1133,24 +1173,27 @@ class ControlCore:
         money never reaches here. The artifact is created up front so the ask can show the real thing."""
         from ..hands.make_artifact import make_sign, prepare_print
         task = (line.text or "").strip()
-        headline, sub = "Notice", ""
+        headline, sub = "", ""
         try:
             raw = await self.gateway.think(
                 "A person wants a physical SIGN made and printed. Their words: \"%s\". Reply ONLY a "
-                "compact JSON object {\"headline\":\"<2-4 words, the big line>\",\"sub\":\"<one short "
-                "supporting line>\"}. Example for a broken door: {\"headline\":\"Out of Order\","
-                "\"sub\":\"Please use the other door\"}." % task,
+                "compact JSON object {\"headline\":\"<the big line; use the person's own quoted words if "
+                "given; NEVER the word 'Notice'>\",\"sub\":\"<one short supporting line, or empty>\"}. "
+                "Example for a broken door: {\"headline\":\"Out of Order\",\"sub\":\"Please use the other "
+                "door\"}." % task,
                 tier="smart", caller="make_sign", temperature=0)
             m = re.search(r"\{.*\}", raw or "", re.S)
             if m:
                 d = json.loads(m.group(0))
-                headline = (d.get("headline") or headline).strip()[:40] or "Notice"
+                headline = (d.get("headline") or "").strip()[:40]
                 sub = (d.get("sub") or "").strip()[:80]
         except Exception as exc:
             self.glassbox.log("sign_infer_error", {"error": str(exc)})
-            low = task.lower()
-            if "door" in low and any(w in low for w in ("broke", "busted", "out of order", "jam", "stuck")):
-                headline, sub = "Out of Order", "Please use the other door"
+        # Robust fallback: if the model was unreachable/empty/'Notice' (e.g. under load), derive a REAL
+        # headline deterministically (quoted text -> keyword map -> object noun) — never ship 'Notice'.
+        if not headline or headline.lower() == "notice":
+            dh, ds = _derive_sign_text(task)
+            headline, sub = dh, (sub or ds)
         slug = "sign_" + hashlib.sha256(task.encode("utf-8")).hexdigest()[:12]
         artifact = make_sign(headline, sub, slug=slug)
         prep = prepare_print(artifact)
