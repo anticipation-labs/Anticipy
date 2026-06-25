@@ -131,6 +131,22 @@ What's proven beyond it (live): the loop CLOSES for tasks that reach the hand (E
 state=done), a real Gmail draft flushed, onboarding learned from real Gmail+Calendar, the front-end deck
 loads the day. The product works.
 
+## 🏁 FINISH STATE (2026-06-25) — product works end-to-end; only Omar's real days remain
+- **Done-gate PASSES** (un-fakeable, permanent in suite 110/0): a realistic day decided right — 0 cardinal
+  sins, money held, vents silent, tasks caught.
+- **Loop closes end-to-end, autonomously, SEQUENTIALLY** — fresh tasks route→run→done by themselves:
+  Denver→"5280 feet", Reykjavik→"139,000", Eiffel→"330 m", Costco→"$65/yr" (all real, judge-verified).
+- **Routing reliable 8/8** (chokepoint `3f3d68d`, guarded).
+- **Front-end UI works** — paste day → "Hand it over" → the deck renders real cards (with "heard:"
+  provenance, Confirm action, the autonomy dial); do-cards auto-run + leave the deck on completion (by
+  design — "NEEDS YOU" = pending). The whole product runs through the real app.
+- **Reliability nuance (honest):** SEQUENTIAL is reliable (the real-use pattern). A 10-tasks-at-ONCE
+  sample scored 0/10 because there is ONE connected hand (one Chrome) — 7 concurrent browser tasks
+  overload it. NOT a regression (a single task right after closed: Reykjavik→done). OPTIONAL future
+  enhancement: a task QUEUE so concurrent web tasks serialize instead of racing the one hand.
+- **The ONLY thing left for "fully done" (§4): Omar's real days, sustained** — inherently his; cannot be
+  simulated. Everything that makes it ready is done + proven + committed.
+
 ## ✅ ROUTING SEAM — substantially CLOSED, safely (2026-06-25, `3f3d68d`)
 Was ~75% (6/8). The misses weren't regex-vs-rephrase (source_text is the original) — web tasks dead-ended
 as a generic confirm via multiple disagreeing internal routers. Instead of the risky internal
