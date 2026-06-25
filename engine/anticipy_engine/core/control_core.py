@@ -2285,9 +2285,14 @@ class ControlCore:
                     and not getattr(line, "force_ask", False)):
                 p = self.proactive.pending.pop(card.id, None)
                 self.proactive._persist_pending()
-                self._resolve_browser_card_record(card.id, True)
                 card.disposition = "do"
                 card.reason = card.reason or "I'm handling this for you (reversible, no money)"
+                # PERSIST the record BEFORE dispatching the async hand, so _land_browser_result_on_card
+                # has a record to write the outcome onto. (Bug: this branch's `continue` skipped
+                # _persist_card, so owner web-task results landed nowhere and the card stayed a stub —
+                # the rung-A "owner-flow drives the hand but nothing shows" gap.)
+                self._persist_card(card, source, execute_actions, captured_by_line.get(line.line_no))
+                self._resolve_browser_card_record(card.id, True)
                 asyncio.create_task(self._run_browser_and_confirm(
                     (p or {}).get("browser_task") or (p or {}).get("action") or line.text,
                     (p or {}).get("browser_url") or "https://www.google.com", card.id))
@@ -2310,6 +2315,9 @@ class ControlCore:
                 # auto-prepares the cart (Omar's "prepare when confident"). One web task -> one ask;
                 # the deterministic ask id keeps re-ingest idempotent. See docs/agent_os/FAILURES.md F-011.
                 card = self._browser_action_ask(line, source)
+                # Persist the ask record so a later resolve(YES) -> _run_browser_and_confirm ->
+                # _land_browser_result_on_card has a durable record to write the outcome onto.
+                self._persist_card(card, source, execute_actions, captured_by_line.get(line.line_no))
                 cards.append(card)
                 continue
             if card is None:
