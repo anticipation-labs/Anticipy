@@ -3086,6 +3086,13 @@ class ControlCore:
                 lines.append("LinkedIn profile name: " + str(ex["profile_name"]).strip())
             if str(ex.get("username") or "").strip():
                 lines.append("GitHub username: " + str(ex["username"]).strip())
+            # GENERIC deep-read content (hand-driven scrape of any surface — the horizontal path):
+            # facts the live hand read deep off a page, not tied to a known account schema.
+            for nt in (ex.get("notes") or [])[:25]:
+                if str(nt).strip():
+                    lines.append(str(nt).strip())
+            if str(ex.get("text") or "").strip():
+                lines.append(str(ex["text"]).strip()[:1500])
             return "\n".join(lines)
 
         surfaces: list[dict] = []
@@ -3113,6 +3120,50 @@ class ControlCore:
         summary = [{"key": s["key"], "status": s["status"], "chars": len(s["text"])} for s in surfaces]
         self.glassbox.log("onboard_deep_scrape", {"source": source, "surfaces": summary, "wrote": counts})
         return {"dossier": doss, "surfaces": summary, "memory_written": counts}
+
+    async def onboard_deep_read_via_hand(self, targets: list, source: str = "hand_deep_read") -> dict:
+        """ONBOARDING via the LIVE hands (Step 3): for each {url,label}, drive the connected Chrome to
+        OPEN the page and READ its real content — the observe primitive returns the page text PLUS the
+        visible items/sections (the inbox's emails, the calendar's events, the article's headings) —
+        then land it in memory via ingest_deep_scrape (the dossier synthesizer extracts the facts). This
+        is the real-content read, NOT the old screenshot-the-first-screen. A sign-in surface yields a
+        needs_login surface (never types credentials). Uses observe (reliable), not the agent's flaky
+        inline synthesis. Provable on any public page; reused as-is for real accounts (read-only)."""
+        from .envelopes import new_id
+        _LOGIN_MARKERS = ("sign in", "log in", "enter your password", "use your google account",
+                          "couldn't sign you in", "to continue to", "forgot email")
+        scraped: list[dict] = []
+        for t in (targets or [])[:8]:
+            url = str((t or {}).get("url") or "").strip()
+            label = str((t or {}).get("label") or url).strip()
+            if not url:
+                continue
+            try:
+                r = await self.browser_link.send_browse(new_id(), "observe", {"url": url}, timeout=60.0)
+            except Exception as exc:
+                self.glassbox.log("hand_deep_read_error", {"url": url, "error": f"{type(exc).__name__}: {exc}"})
+                scraped.append({"service": label, "url": url, "error": True})
+                continue
+            o = r.get("output") or {}
+            text = (o.get("text") or "").strip()
+            elements = o.get("elements") or []
+            low = text.lower()
+            if r.get("status") == "needs_human" or (
+                    text and len(text) < 1200 and sum(m in low for m in _LOGIN_MARKERS) >= 2):
+                scraped.append({"service": label, "url": url, "signed_in": False})
+                self.glassbox.log("hand_deep_read", {"url": url, "label": label, "result": "needs_login"})
+                continue
+            if not text and not elements:
+                scraped.append({"service": label, "url": url, "signed_in": True, "extracted": {}})
+                continue
+            # the visible ITEMS/sections the hand opened onto (emails, events, headings, links)
+            items = [str(e.get("name")).strip() for e in elements
+                     if isinstance(e, dict) and str(e.get("name") or "").strip() and e.get("inView")][:20]
+            scraped.append({"service": label, "url": url, "signed_in": True,
+                            "extracted": {"text": text[:1800], "notes": items}})
+            self.glassbox.log("hand_deep_read", {"url": url, "label": label, "chars": len(text),
+                                                 "items": len(items), "final_url": o.get("url")})
+        return await self.ingest_deep_scrape(scraped, source=source)
 
     @staticmethod
     def _onboarding_key(fields: dict) -> str:

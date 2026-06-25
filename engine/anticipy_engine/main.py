@@ -1198,6 +1198,20 @@ async def onboard_deep_scrape(body: DeepScrapeIn) -> dict:
     return await current_core().ingest_deep_scrape(body.scraped, source=body.source)
 
 
+class DeepReadHandIn(BaseModel):
+    targets: list[dict] = Field(default_factory=list)
+    source: str = "hand_deep_read"
+
+
+@app.post("/onboard/deep-read-hand")
+async def onboard_deep_read_hand(body: DeepReadHandIn) -> dict:
+    """STEP 3: onboarding deep-read driven by the LIVE hand (the connected Chrome) — OPENS + reads each
+    target deep across sections (not screenshot-the-first-screen) and lands the learned facts in memory.
+    targets=[{url,label,max_steps}]. For real accounts pass _DEEP_SCAN_URLS entries (read-only; a login
+    wall -> needs_login surface, never types credentials)."""
+    return await current_core().onboard_deep_read_via_hand(body.targets, source=body.source)
+
+
 # Canonical URLs for a consent-gated content deep-scan: ONLY services the owner allowed are opened.
 _DEEP_SCAN_URLS = {
     "gmail": ("Gmail", "https://mail.google.com/mail/u/0/#inbox"),
