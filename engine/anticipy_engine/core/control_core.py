@@ -2281,6 +2281,21 @@ class ControlCore:
             # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This
             # is the absolute lever that keeps a vent from ever producing an act (the cardinal sin).
             card = self._apply_force_ask(card, line)
+            # ROUTING CHOKEPOINT (reliability): a web-resolvable lookup that ANY internal path shaped as a
+            # generic confirm (route=voice_text / action=confirm_owner_task) should still reach the HAND —
+            # reroute it to the browser ask. A single catch-all so a web task can't dead-end as a
+            # do-nothing confirm, regardless of which router produced it. Excluded by construction: vents
+            # (force_ask), money (the _MONEY_SIGNAL guard + the absolute money-block upstream), and sends
+            # (those are draft_or_confirm_message, not confirm_owner_task) — so this never routes a
+            # vent/money/send to the browser arm. The safety corpus + done-gate guard it.
+            if (execute_actions and card is not None
+                    and getattr(card, "action", None) == "confirm_owner_task"
+                    and not getattr(line, "force_ask", False)):
+                from ..owner_mode import _BROWSER as _CB, _WEB_LOOKUP as _CWL
+                _ctxt = (getattr(card, "source_text", None) or getattr(line, "text", "") or "")
+                if (_CB.search(_ctxt) or _CWL.search(_ctxt)) and not _MONEY_SIGNAL.search(_ctxt):
+                    self.glassbox.log("confirm_to_browser_chokepoint", {"line": _ctxt[:120]})
+                    card = self._browser_action_ask(line, source)
             # M3: apply the user's autonomy DIAL (Full-Send/Regular/Limited) + earned trust — but NEVER
             # on a vent-adjacent (force_ask) card (acting on a vent is the cardinal sin). Money/send are
             # invariant-locked inside the dial, so they pass through unchanged (always confirm).
