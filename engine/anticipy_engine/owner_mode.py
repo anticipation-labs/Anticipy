@@ -290,13 +290,21 @@ def _split_multi_action(text: str) -> list[str]:
     (one call) stays whole. Used by the explicit-reminder backstop, which otherwise emits the whole
     line as ONE task and lets the model keep only the most salient action."""
     inner = _REMINDER_LEAD.sub("", text or "").strip()
-    parts = [p.strip(" ,.;") for p in re.split(r"\s+and\s+|\s*,\s*|\s+then\s+|\s*;\s*", inner)
+    # split on SENTENCE boundaries too (.!?), not just list separators — a vent prefix ends in a period
+    # ("...so behind. Remind me to call the dentist, and send Priya...") and must not glue the tasks
+    # together. (audit fix: bundled task vanished because the period was never a boundary.)
+    parts = [p.strip(" ,.;") for p in re.split(r"[.!?]+\s+|\s+and\s+|\s*,\s*|\s+then\s+|\s*;\s*", inner)
              if p and p.strip(" ,.;")]
     # strip a leftover leading connector so "X, Y, and Z" -> "Z" is testable (Oxford-comma fix #21)
     parts = [c for c in (re.sub(r"^(?:and|then|also|plus)\s+", "", p, flags=re.I).strip() for p in parts) if c]
     if len(parts) < 2:
         return [text]
-    actionable = [p for p in parts if _ACTION_LEAD.match(p)]
+    # a clause is actionable if — AFTER stripping a "remind me to" / "make sure to" lead — it starts with
+    # a strong action verb. Without the per-clause strip, "Remind me to call the dentist" reads as
+    # non-actionable and the task is dropped. Keep the original clause text (preserves reminder framing).
+    def _is_action(p: str) -> bool:
+        return bool(_ACTION_LEAD.match(_REMINDER_LEAD.sub("", p).strip()))
+    actionable = [p for p in parts if _is_action(p)]
     if len(actionable) < 2:
         return [text]
     return actionable

@@ -836,11 +836,20 @@ class ControlCore:
         self.memory.open_loops.update(item)
         return True
 
-    def _follow_up_loop_id(self, card_id: str) -> str:
-        """Stable, per-card id for the follow-up fire-site loop, so re-ingesting the same
-        obligation rewrites the SAME row (INSERT OR REPLACE) — never a duplicate, never a
-        second trigger firing for one obligation."""
-        return f"followup:{card_id}"
+    def _follow_up_loop_id(self, card) -> str:
+        """CONTENT-stable id for the follow-up fire-site loop, so re-ingesting the same obligation
+        rewrites the SAME row (INSERT OR REPLACE) — never a duplicate, never a second trigger. Keyed
+        on the card's CONTENT (source_text+route+action), NOT the random per-ingest card.id (audit fix:
+        the random id made every re-ingest create a fresh 'followup:' row)."""
+        if isinstance(card, dict):
+            raw = "|".join([
+                re.sub(r"\s+", " ", (card.get("source_text") or "").strip().lower()),
+                str(card.get("route") or ""), str(card.get("action") or ""),
+            ])
+            key = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+        else:
+            key = str(card)   # back-compat: a bare string is used as-is
+        return f"followup:{key}"
 
     def _schedule_follow_up(self, card: dict, plan: dict, now: float) -> dict:
         """FIRE-SITE for follow-ups: turn the computed plan into a durable, fireable open_loop
@@ -856,7 +865,7 @@ class ControlCore:
         card_id = card.get("id") or ""
         if not card_id:
             return plan
-        loop_id = self._follow_up_loop_id(card_id)
+        loop_id = self._follow_up_loop_id(card)
         existing = self.memory.open_loops.get(loop_id)
         if existing is not None:
             # Already scheduled. Preserve the original when_ts (no churn). If it has already
@@ -2116,10 +2125,30 @@ class ControlCore:
         # vent floor is preserved. Tight signal: a pure emotional vent never qualifies.
         from ..live_memory.review_infer import is_vent as _is_vent
         from ..owner_mode import vent_adjacent_directed_task as _vent_adj
+        from ..owner_mode import _split_multi_action as _split_actions
+        # SPLIT-BEFORE-MERGE (audit fix): a vent-prefixed line carrying MULTIPLE tasks ("my day is
+        # insane, remind me to call the dentist AND send Priya the deck") used to be marked force_ask as
+        # ONE line — so the second task was buried and lost. Disaggregate first: if it splits into >=2
+        # action clauses, surface each as its OWN confirm-first card (force_ask preserves the vent floor —
+        # nothing auto-acts). Single-task vent lines keep the old behavior.
+        _next_no = max([getattr(l, "line_no", 0) for l in observed], default=0)
+        _rebuilt = []
         for _ln in observed:
             if (not getattr(_ln, "force_ask", False)
                     and _is_vent(_ln.text) and _vent_adj(_ln.text)):
+                _parts = _split_actions(_ln.text)
+                if len(_parts) >= 2:
+                    for _p in _parts:
+                        _next_no += 1
+                        _nl = OwnerObservedLine(line_no=_next_no, text=_p)
+                        _nl.force_ask = True
+                        if getattr(_ln, "src_idx", None) is not None:
+                            _nl.src_idx = _ln.src_idx
+                        _rebuilt.append(_nl)
+                    continue
                 _ln.force_ask = True
+            _rebuilt.append(_ln)
+        observed = _rebuilt
         # DETERMINISTIC MONEY BACKSTOP — money is the ONLY hard stop, so a directed money action must
         # NEVER be dropped or amount-stripped past the floor. The 20-life test caught the moat DROPPING
         # "Transfer 1.2 million ... to the new SPV ... do it now" ENTIRELY (no card at all — the worst
@@ -2483,6 +2512,9 @@ class ControlCore:
                                        dt.datetime.now(dt.timezone.utc).timestamp())
             item = self.memory.open_loops.write_text(
                 card.source_text,
+                # CONTENT-STABLE id (audit fix): re-ingesting the same utterance+action upserts THIS row
+                # instead of minting a new one — the cause of "send sarah the deck" piling up 36x.
+                id="ownerloop:" + _owner_card_dedupe_key(card),
                 fields=loop_fields,
                 provenance=f"owner:{source}",
                 confidence=card.confidence,

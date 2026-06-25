@@ -63,6 +63,27 @@ class Injector:
         # the deterministic ledger: ALL open/waiting loops, always (importance, recent first)
         loops = [i for i in self.memory.open_loops.all() if is_active_open_loop(i)]
         loops.sort(key=lambda i: (-i.importance, -i.timestamp))
+        # DEDUP + VENT-GATE what the BRAIN actually sees (audit fix). The durable store can hold the
+        # same loop many times (re-ingest) — the read endpoint collapsed them but inject did NOT, so the
+        # brain saw "send sarah the deck" up to 11x and even vents leaked into its context. Collapse to
+        # one per content key (sorted first, so the best copy wins) and never surface a vent-shaped loop.
+        from .review_infer import is_vent_shape as _is_vent_shape
+        def _loop_key(i):
+            ck = (getattr(i, "fields", None) or {}).get("capture_key")
+            return ck or " ".join((i.text or "").lower().split())
+        _seen_keys, _deduped = set(), []
+        for _i in loops:
+            try:
+                if _is_vent_shape(_i.text):
+                    continue
+            except Exception:
+                pass
+            _kk = _loop_key(_i)
+            if _kk in _seen_keys:
+                continue
+            _seen_keys.add(_kk)
+            _deduped.append(_i)
+        loops = _deduped
 
         cos = dict(self.memory.db.scored(qv, _FUZZY))   # id -> cosine (stored embeddings)
         # never surface superseded/archived items (a changed fact's old version)

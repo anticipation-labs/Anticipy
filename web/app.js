@@ -430,6 +430,13 @@
     actionsEl.classList.toggle("is-busy", b);
   }
 
+  // The engine keys resolve on the REAL ask id, which for standard "execute_owner_task" asks is
+  // card.execution.ask_id, NOT card.id. Posting card.id silently returned {resolved:false} and the
+  // UI faked the checkmark anyway (a "never fake done" violation). Use the real id, and verify.
+  function askIdOf(card) {
+    return (card && card.execution && card.execution.ask_id) ? card.execution.ask_id : card.id;
+  }
+
   // CONFIRM / DENY / UNDO -> POST /resolve {ask_id, approved}
   function doResolve(card, approved, kind) {
     if (resolving) return;
@@ -438,8 +445,14 @@
     setBusy(true);
     clearAside();
 
-    api("/resolve", { method: "POST", body: { ask_id: card.id, approved: approved } })
-      .then(function () {
+    api("/resolve", { method: "POST", body: { ask_id: askIdOf(card), approved: approved } })
+      .then(function (res) {
+        // NEVER fake success: only celebrate if the engine actually resolved it.
+        if (res && res.resolved === false) {
+          setBusy(false);
+          showAside("Hmm — I couldn’t lock that in. Pull to refresh and try again.");
+          return;
+        }
         if (approved) {
           // affirming: bloom + gold check + fly up
           playConfirm(node);
@@ -468,8 +481,13 @@
     setBusy(true);
     clearAside();
 
-    api("/resolve", { method: "POST", body: { ask_id: card.id, approved: true } })
-      .then(function () {
+    api("/resolve", { method: "POST", body: { ask_id: askIdOf(card), approved: true } })
+      .then(function (res) {
+        if (res && res.resolved === false) {  // never fake done
+          setBusy(false);
+          showAside("Hmm — I couldn’t lock that in. Try again.");
+          return null;  // sentinel: do not proceed to celebrate
+        }
         playConfirm(node);
         // bump dial one notch up (limited -> regular -> full_send)
         var idx = MODES.indexOf(currentMode);
@@ -481,9 +499,10 @@
               })
               .catch(function () { /* dial bump failed — confirm still stands */ })
           : Promise.resolve();
-        return bump;
+        return bump.then(function () { return "ok"; });
       })
-      .then(function () {
+      .then(function (ok) {
+        if (ok !== "ok") return;  // didn't resolve — already handled, don't fake it
         removeCardLocal(card.id);
         flyOut(node, "confirm", function () { afterResolve(); });
         showAside("On it — and I’ll handle these kinds myself now. You can always pull the dial back.");

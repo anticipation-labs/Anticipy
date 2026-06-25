@@ -36,6 +36,9 @@ PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes
 Reply ONLY JSON: {"subgoals":["...","..."]}"""
 
 AGENT_MAX_TOKENS = max(64, int(os.environ.get("ANTICIPY_AGENT_MAX_TOKENS", "96")))
+# The JUDGE needs its OWN, larger budget: at 96 tokens the verdict JSON gets truncated → unparseable
+# → it defaulted to false on every correct answer (the self-verify arm was effectively dead).
+JUDGE_MAX_TOKENS = max(192, int(os.environ.get("ANTICIPY_JUDGE_MAX_TOKENS", "256")))
 ADD_CLICK_SETTLE_SECONDS = 2.0
 
 ACT_SYS = """You control a REAL browser through a numbered set-of-marks overlay (the screenshot shows numbered boxes).
@@ -2363,6 +2366,19 @@ async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] 
     # temperature=0 so identical (answer, screenshot) gets an identical verdict —
     # the general judge must be deterministic, not flip on a re-grade.
     raw = await _think(gw, prompt, tier=SMART, caller="agent", image=image, json_mode=True, temperature=0,
-                       max_tokens=AGENT_MAX_TOKENS)
+                       max_tokens=JUDGE_MAX_TOKENS)
     j = _parse_json(raw) or {}
+    if not j:
+        # The verdict JSON was empty/truncated/unparseable. Do NOT silently default to false (that made
+        # the judge fail every correct answer). Retry once in plain text and read the verdict from words.
+        raw2 = await _think(
+            gw, prompt + "\nReply with the single word SUCCESS or FAIL, then a short reason.",
+            tier=SMART, caller="agent", image=image, json_mode=False, temperature=0,
+            max_tokens=JUDGE_MAX_TOKENS)
+        j = _parse_json(raw2) or {}
+        if not j:
+            head = (raw2 or "").strip().lower()[:40]
+            ok = (head.startswith("success") or head.startswith("true") or head.startswith("yes")
+                  or ("success" in head and "fail" not in head))
+            return {"success": ok, "reason": (raw2 or "").strip()[:160] or "text-mode verdict"}
     return {"success": bool(j.get("success")), "reason": j.get("reason", "")}
