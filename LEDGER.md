@@ -20,21 +20,18 @@
 | Per-user cloud (Supabase auth + data isolation, A≠B on disk) | `test_user_isolation` + audit | HELD |
 | **Phase 0.2** — judge revived (correct→true, wrong→false; not always-true) | live judge probes; **adversary HOLDS** | GREEN |
 | **Phase 0.4** — memory write-idempotent (3 ingests→1 loop) + inject dedup/vent-gate | live; **adversary HOLDS** | GREEN |
-| **Phase 0.1** — Board never fakes success (real ask id + celebrate only on terminal/running state) | logic verified vs the adversary's exact live shapes (waiting/failed/blocked→spring-back) | GREEN* |
+| **Phase 0.1** — Board never fakes success (real ask id + celebrate only on terminal/running state) | refuted 3×, fixed 3×; **final adversary HOLDS, no hole** — it reproduced a live `{approved:true,state:"failed"}` and confirmed `resolvedOk` springs it back; no genuine success left un-celebratable | ✅ **GREEN — SEALED** |
 | **Phase 0.3 (DROP side)** — bundled DISTINCT tasks split; no task vanishes | live: vent+"call dentist AND send Priya"→2 cards | GREEN |
-
-\*0.1 was refuted twice and fixed twice; the current fix is logic+live-shape verified. A final
-adversarial pass is queued (next cycle) before it's marked fully sealed.
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 
 | Item | What's done | The residual |
 |---|---|---|
-| **Phase 0.3 (OVER-SPLIT side)** | the deterministic splitter is conservative + correct (a sub-step like "…and confirm the time" stays one task) and runs on reminder-shaped lines | plain **imperative** lines ("email Priya the deck and update the cover", "book the flight and check the price first") bypass the deterministic splitter and the **model** over-splits them into 2 cards. Bounded: an extra card to dismiss — **never a lost task, never a safety issue**. Fix queued: a post-extract sub-step merge (pure code, no Omar). |
+| **Phase 0.3 (OVER-SPLIT side)** | the deterministic splitter is conservative + correct on reminder-shaped lines | plain **imperative** lines still get over-split by the model. A post-extract `src_idx` merge was **ATTEMPTED and REVERTED 2026-06-24** — the ratchet caught that it could merge away a *money* line in a multi-line transcript (`src_idx` from whole-transcript extraction does NOT reliably mean "same sentence", so it grouped unrelated obligations). Bounded residual (an extra card, never a lost task). **Safer fix needed: group by sentence-span, not `src_idx`** — and any such merge must NEVER touch a money/blocked line. |
 
 ## 🔴 RED / NEXT — the path to §4 (from PLAN_TO_DONE)
 
-1. **Phase 1 — THE SPINE:** route the YES→act path to the **connected extension (real Chrome)**, not the throwaway; pass the card's structured args; add a code-level pay/login click guard; add an "open email→read body" recipe + general read-back proof. *(code = mine; live PROOF needs Omar logged in)*
+1. **Phase 1 — THE SPINE (next):** route the YES→act path (`_run_browser_and_confirm`, control_core.py:1209) to drive `WebVoyagerAgent(self.browser_link, self.gateway, …)` when `browser_link.connected`, else fall back to the throwaway `browse_act`; normalize the agent's dict result (answer/final_url/needs_human/final_shot) into the existing judge + `_land_browser_result_on_card` path; pass the card's structured args. **Verification note:** the new branch only activates with an extension connected, so the stub suite can't reach it — verify the routing+adapter with a MOCK-based unit test (unattended, ratchet-able), and the live "act in real Gmail" with Omar logged into the paired Chrome (do NOT drive his Chrome unattended). *(code = mine; live proof = BLOCKED-ON-OMAR)*
 2. **Phase 2 —** real Gmail drafts + "okay to send?" loop. *(code mine; live proof needs Omar)*
 3. **Phase 3 —** full agentic onboarding (go-in scrape + scrape↔call loop + autonomy/money/do-not-touch capture). *(needs Omar login + Twilio)*
 4. **Phase 4 —** voice on + reachable (tunnel + live env + inbound `/voice` webhook). *(needs Omar: tunnel + Twilio)*
@@ -46,7 +43,11 @@ adversarial pass is queued (next cycle) before it's marked fully sealed.
 - **Voice go-live** → OK to expose via tunnel/deploy + confirm the Twilio number's webhook (Phase 4).
 - **Cloud** → the tenancy decision (shared-process vs container-per-user) + a Railway persistent volume (Phase 5).
 
-## Commits this session (Phase 0)
+## Commits / cycle log
 - `90b1089` THE_FORGE + Phase 0 (all 4 gates first pass)
 - `ca91d93` close adversarial refutations of 0.1 + 0.3 (round 1)
 - `5d9ab19` close the deeper 0.1 refutation (terminal-state)
+- `5caea25` LEDGER v1
+- **Cycle 2 (2026-06-24):** 0.1 final adversary HOLDS → **0.1 SEALED**. Over-split merge attempted →
+  **reverted** (ratchet caught a money-line merge risk) → residual stays tracked, suite back to 107/0.
+  Phase 1 mapped + verification approach defined; live act = BLOCKED-ON-OMAR.
