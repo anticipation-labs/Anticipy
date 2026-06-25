@@ -4,19 +4,16 @@
 > scores 0 cardinal-sins, money held, vents silent, tasks caught (`owner_test_run --key day01.json`,
 > now permanent in the suite, 110/0). The two things left both need YOU. Read with `LEDGER.md`.
 >
-> **#0 — The whole product passing the gate is the headline.** It decides a real day correctly, the loop
-> closes for tasks that reach the hand (Eiffel→done, a real Gmail draft flushed, onboarding learned from
-> your real accounts). What remains is (A) one routing-reliability POLISH that needs a careful supervised
-> pass (thrashing the core brain unsupervised breaks it — proven this session), and (B) your real days.
+> **#0 — The whole product passing the gate is the headline, and the loop now closes by itself.** It
+> decides a real day correctly (done-gate PASS) AND a fresh handed-over task routes → runs → finishes on
+> its own ("Find the elevation of Denver" → done, "5280 feet"). Routing reaches the hand 8/8 now (was 6/8)
+> — the chokepoint fix closed it safely (suite 110/0, zero safety breaches). A real Gmail draft flushed;
+> onboarding learned from your real Gmail+Calendar. **The product works end-to-end.**
 >
-> **A — Routing-reliability supervised pass (~20 min with me).** Fresh web tasks reach the hand ~75% of
-> the time; the misses dead-end as a generic confirm via a tangled multi-path router. The fix is to
-> consolidate routing into ONE place (or a model-assigned route) — core-brain surgery I won't do solo
-> after it bit us. Sit with me once (or say "do it, the suite + safety corpus are your guard, revert any
-> regress") and I'll drive it to ~100%, gated.
->
-> **B — Your real days = the §4 finish.** Live with it a few real days (accounts stay connected); we read
-> the same gate metrics on your days. That is the only thing that can stamp "fully done," by definition.
+> **The ONLY thing left is yours: your real days = the §4 finish.** Live with it a few real days (keep your
+> accounts connected); we read the same gate metrics on your actual days. That is the one thing that can
+> stamp "fully done," by definition — it can't be simulated, because it's your life. Optional polish I can
+> still do solo: push the route→run→done sample to ≥9/10 sustained, and an automated front-end UI e2e.
 
 ## What's LIVE-GREEN now (proven by running it, committed on `factory/build`, suite 108/0)
 - **The hands operate any site** — open/read/search/navigate, judged true (Wikipedia, Hacker News).
