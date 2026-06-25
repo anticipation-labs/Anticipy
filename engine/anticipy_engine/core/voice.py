@@ -165,7 +165,17 @@ def humanize_card(card) -> None:
         opts = ["Got it — I'll remember that.", "Noted.", "Filed that away for you."]
         why = "Worth keeping in mind."
     elif disp == "ask":
-        if who and ("message" in act or "draft" in act or route == "voice_text"):
+        if route == "create_print" or "create_and_print" in act:
+            head = (args.get("headline") or "").strip()
+            if head and args.get("printer_ready", True):
+                opts = [f"Made a “{head}” sign — print it?", f"Print the “{head}” sign?",
+                        f"Okay to print “{head}”?"]
+            elif head:
+                opts = [f"Made a “{head}” sign — no printer found yet. Print when one's ready?"]
+            else:
+                opts = ["I made the sign — print it?"]
+            why = "I made it — printing is a physical action, so I'll wait for your okay."
+        elif who and ("message" in act or "draft" in act or route == "voice_text"):
             opts = [f"Want me to message {who}?", f"Should I reach out to {who}?",
                     f"I can write to {who} — say the word."]
             why = "It reaches someone else, so I'll check with you first."
@@ -226,6 +236,10 @@ async def humanize_cards(gateway, cards) -> None:
     except Exception:
         return
     for i, c in enumerate(cards):
+        # Keep the deterministic title for a create+print card — it carries the actual sign headline
+        # ("Print the “Out of Order” sign?"); the model pass, seeded only by source_text, would drop it.
+        if getattr(c, "route", "") == "create_print" or "create_and_print" in (getattr(c, "action", "") or ""):
+            continue
         x = by.get(i)
         if not x:
             continue

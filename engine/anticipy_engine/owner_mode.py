@@ -48,6 +48,10 @@ class OwnerObservedLine(BaseModel):
     # let the fragment escape the money gate; this flag carries the raw-line money truth so the spine
     # ALWAYS blocks the fragment. Money is the hard stop — it can never be lost to truncation.
     money_src: bool = False
+    # The VERBATIM raw transcript line before the moat rephrased it. The moat sometimes strips
+    # quoted/keyword content ("...print a sign that says 'Out of Order'" -> "print a sign for the door");
+    # content-sensitive code (sign wording, keyword routing) prefers original_text over the reworded text.
+    original_text: str | None = None
 
 
 class OwnerTaskCard(BaseModel):

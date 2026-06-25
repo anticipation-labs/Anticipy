@@ -1173,16 +1173,18 @@ class ControlCore:
         money never reaches here. The artifact is created up front so the ask can show the real thing."""
         from ..hands.make_artifact import make_sign, prepare_print
         task = (line.text or "").strip()
+        # Derive the sign wording from the ORIGINAL words when we have them — the moat sometimes rephrases
+        # the line and strips quoted/keyword content; fall back to the (possibly reworded) task text.
+        derive_src = (getattr(line, "original_text", None) or task).strip()
         # DETERMINISTIC FIRST: a strong signal (the person's quoted words / a known sign type / the object
-        # noun) is authoritative + robust — not subject to model flakiness or concurrent-load failures.
-        # Only ask the model for a novel phrasing the deriver can't resolve. Never ship the generic 'Notice'.
-        headline, sub = _derive_sign_text(task)
+        # noun) is authoritative + robust — not subject to model flakiness. Model only for novel phrasings.
+        headline, sub = _derive_sign_text(derive_src)
         if not headline:
             try:
                 raw = await self.gateway.think(
                     "A person wants a physical SIGN made and printed. Their words: \"%s\". Reply ONLY a "
                     "compact JSON object {\"headline\":\"<the big line; use the person's own words; NEVER "
-                    "the word 'Notice'>\",\"sub\":\"<one short supporting line, or empty>\"}." % task,
+                    "the word 'Notice'>\",\"sub\":\"<one short supporting line, or empty>\"}." % derive_src,
                     tier="smart", caller="make_sign", temperature=0)
                 m = re.search(r"\{.*\}", raw or "", re.S)
                 if m:
@@ -1193,32 +1195,50 @@ class ControlCore:
                 self.glassbox.log("sign_infer_error", {"error": str(exc)})
         if not headline or headline.lower() == "notice":
             headline = "Notice"
-        slug = "sign_" + hashlib.sha256(task.encode("utf-8")).hexdigest()[:12]
-        artifact = make_sign(headline, sub, slug=slug)
-        prep = prepare_print(artifact)
         ask_id = "cp_" + hashlib.sha256(f"create_and_print|{source}|{task}".encode("utf-8")).hexdigest()[:18]
+        # GENERATE the artifact + prepare the printer. NEVER silently drop the task or fake a printer: on a
+        # real failure (PDF render error) hand back an honest card; if there is NO printer, say so plainly.
+        try:
+            slug = "sign_" + hashlib.sha256(f"{source}|{task}".encode("utf-8")).hexdigest()[:12]
+            artifact = make_sign(headline, sub, slug=slug)
+            prep = prepare_print(artifact)
+        except Exception as exc:
+            self.glassbox.log("create_print_make_error", {"error": str(exc), "task": task[:80]})
+            return OwnerTaskCard(
+                source=source, line_no=line.line_no, source_text=line.text,
+                title=f"Couldn't make the “{headline}” sign", disposition="ask", route="create_print",
+                action="confirm_owner_task", args={"task_text": task, "error": str(exc)[:120]},
+                confidence=0.5, reason="I hit an error generating the sign — want me to try again?")
+        printer = prep.get("printer") or ""
+        short = printer.split("_")[0] if printer else ""
+        ready = bool(prep.get("ready"))
         self.proactive.pending[ask_id] = {
             "goal_id": ask_id, "action": task, "category": "create_and_print",
-            "reason": "made the artifact — confirm before printing (physical action)",
+            "reason": "made the artifact — confirm before printing (physical action)", "headline": headline,
             "artifact": artifact, "printer": prep.get("printer"), "print_command": prep.get("command")}
         self.proactive._persist_pending()
-        printer = prep.get("printer") or ""
-        short = printer.split("_")[0] if printer else "your printer"
-        msg = (f"Heard about the {'door' if 'door' in task.lower() else 'sign'} — I made a "
-               f"“{headline}” sign. Okay to print it on {short}? Reply YES or NO.")
+        if ready:
+            msg = (f"Heard about the {'door' if 'door' in task.lower() else 'sign'} — I made a "
+                   f"“{headline}” sign. Okay to print it on {short}? Reply YES or NO.")
+            reason, title = ("I made the sign — I'll send it to print once you say yes",
+                             f"Made a “{headline}” sign — print it?")
+        else:
+            msg = (f"I made a “{headline}” sign, but I don't see a printer connected. Reply YES and I'll "
+                   f"send it the moment one's set up.")
+            reason, title = ("I made the sign — no printer found yet; YES queues it for when one's ready",
+                             f"Made a “{headline}” sign — no printer found")
         try:
             self.text_channel.send(self._user_contact(), msg)
             self.glassbox.log("create_print_ask_sent",
-                              {"ask_id": ask_id, "artifact": artifact, "headline": headline})
+                              {"ask_id": ask_id, "artifact": artifact, "headline": headline, "ready": ready})
         except Exception as exc:
             self.glassbox.log("create_print_ask_send_error", {"ask_id": ask_id, "error": str(exc)})
         return OwnerTaskCard(
             id=ask_id, source=source, line_no=line.line_no, source_text=line.text,
-            title=f"Made a “{headline}” sign — print it?", disposition="ask",
-            route="create_print", action="create_and_print",
+            title=title, disposition="ask", route="create_print", action="create_and_print",
             args={"task_text": task, "artifact": artifact, "headline": headline, "sub": sub,
-                  "printer": prep.get("printer"), "print_command": prep.get("command")},
-            confidence=0.85, reason="I made the sign — I'll print it once you say yes",
+                  "printer": prep.get("printer"), "print_command": prep.get("command"), "printer_ready": ready},
+            confidence=0.85, reason=reason,
             execution={"decision": "ask", "goal_id": ask_id, "ask_id": ask_id, "goal_state": "waiting"})
 
     def _support_chore_opt_out(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
@@ -1875,6 +1895,7 @@ class ControlCore:
                     n += 1
                     _ot = OwnerObservedLine(line_no=n, text=_cl, moat_task=True)
                     _ot.src_idx = src_idx
+                    _ot.original_text = line.text   # verbatim source before split/rephrase (sign wording, keywords)
                     _ot.money_src = _is_money_action(_cl)   # per-clause money truth (M1a-consistent)
                     out.append(_ot)
                 self.glassbox.log("reminder_hold_backstop",
@@ -1918,6 +1939,7 @@ class ControlCore:
                 for t in vent_tasks:
                     n += 1
                     _vt = OwnerObservedLine(line_no=n, text=t["task"], force_ask=True)
+                    _vt.original_text = line.text   # verbatim source before the moat reworded it
                     _vt.money_src = _is_money_action(t["task"])   # M1a: per-task money truth (no bleed)
                     out.append(_vt)
                 self.glassbox.log("extract_vent_tasks_held",
@@ -1947,6 +1969,7 @@ class ControlCore:
                 n += 1
                 _ot = OwnerObservedLine(line_no=n, text=t["task"], moat_task=True)
                 _ot.src_idx = src_idx   # which raw line this task was split from (for same-source dedup)
+                _ot.original_text = line.text   # verbatim source before the moat reworded it (sign wording, keywords)
                 _ot.money_src = _is_money_action(t["task"])   # M1a: per-task money truth (no bleed); truncation re-blocked by the money backstop
                 out.append(_ot)
             self.glassbox.log("extract_tasks", {"line": line.text[:140],
@@ -3673,21 +3696,33 @@ class ControlCore:
         if isinstance(p, dict) and p.get("category") == "create_and_print":
             self.proactive.pending.pop(ask_id, None)
             self.proactive._persist_pending()
-            printer = (p.get("printer") or "the printer")
+            printer = (p.get("printer") or "")
+            short = printer.split("_")[0] if printer else "the printer"
+            head = p.get("headline") or "the"
             if approved:
                 from ..hands.make_artifact import send_to_print
                 res = send_to_print(p.get("artifact"), p.get("printer"))
+                ok = bool(res.get("ok"))
+                # HONEST: `lp` returning 0 means the job was ACCEPTED into the print queue — not that paper
+                # came out (we can't see the physical device). Say "sent to <printer>'s queue", never the
+                # unverifiable "Printed". A real lp failure -> honest, actionable error, state=failed.
                 self._land_browser_result_on_card(
-                    ask_id, success=bool(res.get("ok")),
-                    answer=(f"Printed to {printer.split('_')[0]}" if res.get("ok")
-                            else f"Print failed: {(res.get('stderr') or '')[:80]}"),
+                    ask_id, success=ok,
+                    answer=(f"Sent the “{head}” sign to {short}'s print queue" if ok
+                            else f"Couldn't reach the printer ({(res.get('stderr') or 'no printer').strip()[:90]}) — the sign is saved"),
                     url=None, screenshot=False)
-                self.glassbox.log("create_print_approved", {"ask_id": ask_id, "ok": res.get("ok")})
+                self._sync_owner_loop_status(ask_id, "done" if ok else "failed")
+                self.glassbox.log("create_print_approved", {"ask_id": ask_id, "ok": ok, "stderr": (res.get("stderr") or "")[:200]})
                 return {"ask_id": ask_id, "approved": True, "create_and_print": True,
-                        "state": "done" if res.get("ok") else "failed", "goal_id": ask_id,
-                        "printed": bool(res.get("ok")), "artifact": p.get("artifact")}
-            self._resolve_browser_card_record(ask_id, False)
-            self.glassbox.log("create_print_declined", {"ask_id": ask_id})
+                        "state": "done" if ok else "failed", "goal_id": ask_id,
+                        "queued": ok, "artifact": p.get("artifact")}
+            # NO: record a clean proof that the sign was MADE but not printed (never lose the artifact).
+            self._land_browser_result_on_card(
+                ask_id, success=False,
+                answer=f"Not printed (you said no) — the “{head}” sign is saved if you want it later",
+                url=None, screenshot=False)
+            self._sync_owner_loop_status(ask_id, "declined")
+            self.glassbox.log("create_print_declined", {"ask_id": ask_id, "artifact": p.get("artifact")})
             return {"ask_id": ask_id, "approved": False, "declined_action": p.get("action"),
                     "goal_id": ask_id, "artifact": p.get("artifact")}
         out = await self.proactive.resolve_ask(ask_id, approved)
