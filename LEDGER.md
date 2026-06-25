@@ -121,6 +121,25 @@ draft, never sent). Loop RE-ARMED for those.
   loop-closes proof. Open question to verify live: do `do` cards auto-run under REGULAR, or need the
   deck Confirm? Either way, the gate is: see a reversible task go card→run→result, in the UI.
 
+## 🧱 THE CORE SEAM — task→hand→execute pipeline is NONDETERMINISTIC (2026-06-25, honest, do NOT thrash)
+This is the real reason it isn't "reliably done," isolated at last:
+- **Routing nondeterminism:** the moat (`_expand_tasks_with_model`) REPHRASES each task before owner_mode
+  regex-shapes it, so regex routing can't reliably catch web tasks. After the `b81e974` fix, "look up
+  the time in Tokyo / Ferry Building hours / SF→Tokyo flight" → `browser` ✓, but a FRESH "look up the
+  height of Mount Fuji" → `confirm_owner_task` ✗. ~75%, not 100%.
+- **Execution gap:** even routed `do/research_or_find_item/browser` cards can sit at **state=open** (don't
+  auto-run) — only cards that become a `browser_action` ASK (`br_…`) auto-run + close the loop (proven:
+  Eiffel "330 m", Costco "$65/yr", Guggenheim all → `state=done`). The stale-dedup (control_core ~2236)
+  + the convert-to-browser_action(1485/2302) + auto_run interplay is the tangle.
+- **The reliable fix = a MOAT-LEVEL change:** have the model-expansion ASSIGN each task's route/executability
+  (not regex-after-rephrase), + make the execution dispatch deterministic. This is the CORE brain pipeline
+  — high regression risk, and Omar has repeatedly said STOP breaking the working pipes. So: do NOT thrash
+  it unsupervised. Chip carefully (one change, suite 109/0 + safety BREACHES:0 + REVERT on regress) or do
+  it in a supervised session. The committed `b81e974` is a safe partial improvement; keep it.
+- **What DOES work (so this is bounded, not broken):** the brain decides a full day correctly; the loop
+  CLOSES for tasks that reach the hand as browser_action; money held; sends drafted; vents silent; the
+  front-end deck loads the day. The gap is reliability of routing+dispatch, not capability.
+
 ## 🏁 AUTONOMOUS CEILING (2026-06-25) — partially lifted by the Gmail login
 
 Every part of the 6-step plan that can be **built + proven without Omar** is GREEN, live-proven, committed,
