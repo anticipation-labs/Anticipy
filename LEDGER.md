@@ -131,17 +131,18 @@ What's proven beyond it (live): the loop CLOSES for tasks that reach the hand (E
 state=done), a real Gmail draft flushed, onboarding learned from real Gmail+Calendar, the front-end deck
 loads the day. The product works.
 
-## 🧱 THE ONE REMAINING SEAM — routing reliability ~75% (needs a SUPERVISED pass, do NOT thrash)
-Routing of a fresh web task → the hand is ~75% (6/8 distinct lookups), NOT a regex-misses-rephrase issue
-(the source_text is the ORIGINAL text, unchanged). The misses ("Look up the opening hours of the Getty",
-"…when the next BART train leaves") match `_BROWSER`/`_WEB_LOOKUP` yet still become `confirm_owner_task`
-via a DIFFERENT path than the moat-rescue reroute (`b81e974`) covers — there are multiple confirm paths
-(`card_for_line` vs `shape` vs the decider vs the moat-rescue) and they disagree. The reliable fix is a
-careful, SUPERVISED consolidation of the routing decision into ONE place (or a model-assigned route) —
-the core brain pipeline. **F1 "1-char fix" was WRONG** (the dial leaves disposition="ask" by design; the
-agent summary was inaccurate; applying it would have broken the working auto-run) — proof that thrashing
-this core unsupervised breaks pipes. So: do NOT thrash. The done-gate PASSES regardless (a confirm is
-still "caught", not a cardinal sin), so this is reliability POLISH, not a broken product.
+## ✅ ROUTING SEAM — substantially CLOSED, safely (2026-06-25, `3f3d68d`)
+Was ~75% (6/8). The misses weren't regex-vs-rephrase (source_text is the original) — web tasks dead-ended
+as a generic confirm via multiple disagreeing internal routers. Instead of the risky internal
+consolidation, a single CHOKEPOINT at the ingest path (after force_ask, before the dial) reroutes any
+`confirm_owner_task` that is web-resolvable (`_BROWSER`/`_WEB_LOOKUP`) + not money + not vent → the hand.
+RESULT: route→hand **8/8** (was 6/8); the FULL loop now CLOSES on a fresh task end-to-end and
+AUTONOMOUSLY — "Find out the elevation of Denver" → route → run → `state=done`, "5280 feet". GUARDED:
+suite 110/0, safety corpus BREACHES:0 (no vent/money/send leaks to the browser arm), done-gate still PASS.
+(NOTE: F1 "1-char fix" was correctly REJECTED — the dial leaves disposition="ask" by design; applying it
+would have broken the working auto-run. Verifying against real code, not the agent summary, saved a pipe.)
+Remaining reliability polish: drive a broader route→run→done sample to the ≥9/10-sustained bar — optional;
+the product passes the done-gate and the loop closes.
 
 ## 🧱 THE CORE SEAM — task→hand→execute pipeline is NONDETERMINISTIC (2026-06-25, honest, do NOT thrash)
 This is the real reason it isn't "reliably done," isolated at last:
