@@ -34,8 +34,20 @@ Live-proven via `/agent/run` (the SAME agent the owner act-path drives), each ju
 - **R2** *operate* — searched, navigated Main_Page→Espresso (2 steps), extracted the first sentence.
 - **R3** *novel site* — Hacker News top story "Half-Life 2 in a Browser" → **horizontal, not hardcoded**.
 Honesty held: an empty answer was refused as `needs_human`, never faked.
-**Next rungs:** integrated owner-flow on a real site (utterance→hands act→read-back→close, §4.1) →
-Step 2 brain copy/flow → Step 3 onboarding wired to the live hands → 4 cloud → 5 voice → 6 owner test.
+
+**RUNG A — integrated owner-flow → hand (§4.1) — ✅ LIVE-GREEN 2026-06-25 (`9412f68`):**
+`/owner/ingest "Find the height of the Eiffel Tower in metres"` → brain → browser_action card →
+auto-run (earned browser trust) → card PERSISTED → connected hand runs on the real web → judge
+success=True → card `state=done`, answer "330 meters". Honesty held: a Guggenheim lookup answered from
+Google (not the official site) → judge → `state=failed`, never faked. Fix: the auto-run + ask branches
+`append+continue`'d BEFORE `_persist_card`, so results had no record to land on — now persist first.
+**Next: RUNG B — brain copy/flow** (these real gaps found while proving A):
+- routing **nondeterminism**: "look up/find X" sometimes → `confirm_owner_task` (voice_text) instead of
+  the browser arm (the model-expansion rephrases away the `_BROWSER` trigger). Make web-lookups route
+  to the hand deterministically.
+- stale-card **dedup** returns a prior card, bypassing `_spine_card` conversion (re-ingest of a similar line).
+- email = draft-then-ask (not "do"); money = warm ask (not blocked status); multi-line never drops; loop dedup.
+Then Step 3 onboarding wired to the live hands → 4 cloud → 5 voice → 6 owner test.
 
 ## 🟡 PARTIAL — honest non-binary residual (NOT faked green)
 
