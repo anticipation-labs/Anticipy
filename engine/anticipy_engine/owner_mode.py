@@ -390,10 +390,14 @@ _NOT_A_NAME = {
 
 
 def _person_hint(text: str) -> str | None:
-    m = re.search(r"\b(?:send|email|text|tell|reply to|follow up with)\s+([A-Z][a-z]+)\b", text)
+    # (?i:...) scopes case-insensitivity to the VERB only — so a sentence-start "Email Priya" /
+    # "Send Sam" / "Text Dana" matches (was case-sensitive, so a capitalized leading verb missed the
+    # person and the send dead-ended as a generic confirm instead of draft-then-ask) — while the name
+    # stays a proper noun ([A-Z][a-z]+), so "send the deck" never treats "the" as a name.
+    m = re.search(r"\b(?i:send|e-?mail|text|message|tell|reply to|follow up with|ping|dm)\s+([A-Z][a-z]+)\b", text)
     if m and m.group(1) not in _NOT_A_NAME:
         return m.group(1)
-    m = re.search(r"\b([A-Z][a-z]+)\s+(?:needs|asked|is waiting|wanted)\b", text)
+    m = re.search(r"\b([A-Z][a-z]+)\s+(?i:needs|asked|is waiting|wanted)\b", text)
     return m.group(1) if (m and m.group(1) not in _NOT_A_NAME) else None
 
 
