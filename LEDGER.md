@@ -83,7 +83,16 @@ Suite 109/0. REMAINING (Omar/deploy): extension must carry the Supabase identity
 
 ---
 
-## 🏁 AUTONOMOUS CEILING REACHED (2026-06-25)
+## 🔑 KEYSTONE — the spine acts in Omar's REAL Gmail — ✅ LIVE-GREEN 2026-06-25
+
+Omar's paired Chrome is logged into Gmail, so the #1 item I'd marked BLOCKED-ON-OMAR is now PROVEN:
+`/agent/run` (connected hand) read his REAL inbox → "Sender: me, Nick; Subject: Omar from Anticipy - No
+worries, should I book it through your c…", judge:true. The hands reach his real logged-in account and
+read real content. This LIFTS part of the ceiling below → real-account work is now autonomously provable
+(onboarding scrape on his real Gmail/Calendar = read-only; draft-then-ask = a parked [Anticipy test]
+draft, never sent). Loop RE-ARMED for those.
+
+## 🏁 AUTONOMOUS CEILING (2026-06-25) — partially lifted by the Gmail login
 
 Every part of the 6-step plan that can be **built + proven without Omar** is GREEN, live-proven, committed,
 suite 109/0: hands operate (read/search/navigate/open-item/form-fill) · integrated owner-flow → hand →
