@@ -105,6 +105,18 @@ draft, never sent). Loop RE-ARMED for those.
   trusting the agent's self-report (this is the never-fake-done hole for write actions — the manual
   read-back caught it this time).
 
+## 🚶 WHOLE-PRODUCT WALK (2026-06-25) — driving the real front end (app.html), per Omar: "everything must work — front end, browser agent, scrape; stop testing pieces"
+- ✅ Front end loads + is polished: welcome (/) "Vibe your life." hero; app (/app.html) "The Board" —
+  day-input ("Hand it over"), "NEEDS YOU" cards, and the AUTONOMY dial (Limited/Regular/Full-Send) IN the UI.
+- ✅ Live-connected: the Board renders a real card from a prior engine ingest (the Priya draft).
+- 🔴 **SEAM #1 (first real walk finding):** pasted a 6-task day → clicked "Hand it over" → input cleared
+  but the Board STILL shows only the old single Priya card; the new day's cards (Nick reminder, FedEx
+  lookup, AWS money-hold, competitor research) did NOT render. So the front-end "Hand it over → render
+  the day's cards" path is broken/incomplete in the UI. THIS is the lowest broken step → the WHOLE-PRODUCT
+  WALK LOOP fixes it next (diagnose: did the ingest fire? did cards get created in the engine? does the
+  Board refresh/render the new set?). Only the whole journey counts — this is the right gap, found by
+  walking the real UI instead of curling pieces.
+
 ## 🏁 AUTONOMOUS CEILING (2026-06-25) — partially lifted by the Gmail login
 
 Every part of the 6-step plan that can be **built + proven without Omar** is GREEN, live-proven, committed,
