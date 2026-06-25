@@ -131,6 +131,25 @@ What's proven beyond it (live): the loop CLOSES for tasks that reach the hand (E
 state=done), a real Gmail draft flushed, onboarding learned from real Gmail+Calendar, the front-end deck
 loads the day. The product works.
 
+## 🚪 DOOR-SIGN END-TO-END (the REAL bar Omar named) — BUILT (2026-06-25, `f8d63ec`)
+Omar's definition of "works end to end": his dad (building a house) said "Omar, can you go print out a
+sign for [the broken door]?" — the pendant should HEAR the subtle ask, INFER it, CREATE the sign, SEND IT
+TO THE PRINTER, and TEXT him. My prior "end to end" (typed → web lookup → fact) was a thin slice; the
+product had NO create-an-artifact and NO real-world-fulfillment capability at all (actions were only
+decide/read/draft/calendar/memory). NOW BUILT + proven:
+- `hands/make_artifact.py`: make_sign() → real printable PDF (reportlab); prepare_print()/send_to_print() →
+  the real default printer via `lp`. Physical print follows the line: PREPARE + ask, never auto.
+- `_create_and_print_ask` (control_core) + a CREATE+PRINT chokepoint: hears the door moment — EXPLICIT and
+  the SUBTLE form that was IGNORED an hour earlier ("…Omar, can you go print out a sign for it?") — the
+  MODEL infers the wording ("Out of Order / Please use the other door"), generates the PDF, texts "okay to
+  print on <printer>?", and on YES (resolve) actually prints. owner_mode: +route "create_print".
+- PROVEN: ingest the door moment → real PDF (sent to Omar) → resolve YES → `lp` accepted it (request id
+  Canon…-195, the Canon is "now printing" it). Physical page waits ONLY on the Canon being online
+  ("Unable to locate printer Canond1efe6.local" = the device is offline, not a product gap).
+- GUARDED: suite 110/0, safety BREACHES:0, done-gate PASS. See [[feedback_anticipy_end_to_end_bar]].
+- REMAINING frontier (beyond this task): live ambient audio (the pendant), live proactive voice/text
+  (Twilio), broadening creation + real-world fulfillment past signs.
+
 ## 🏁 FINISH STATE (2026-06-25) — product works end-to-end; only Omar's real days remain
 - **Done-gate PASSES** (un-fakeable, permanent in suite 110/0): a realistic day decided right — 0 cardinal
   sins, money held, vents silent, tasks caught.
