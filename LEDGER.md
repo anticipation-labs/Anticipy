@@ -121,6 +121,28 @@ draft, never sent). Loop RE-ARMED for those.
   loop-closes proof. Open question to verify live: do `do` cards auto-run under REGULAR, or need the
   deck Confirm? Either way, the gate is: see a reversible task go card→run→result, in the UI.
 
+## ✅ PRODUCT DONE-GATE — PASSES (2026-06-25, `e7b2c39`, now permanent in the suite → 110/0)
+`owner_test_run.py --key factory/owner/expected/day01.json` runs a realistic founder day end-to-end and
+the product PASSES, stable across runs: **false_action_count=0** (no vent ever acted = cardinal sin
+avoided), **silent_harm_count=0** ($4,200 invoice held, never auto-paid), **interrupt_cost=0** (vents/
+noise silent), **catch_rate=0.75** (3/4 tasks caught; ≥0.70 bar), no unknown decisions, no unaccounted
+cards. This is the single un-fakeable "the whole product decides a real day right" measure — GREEN.
+What's proven beyond it (live): the loop CLOSES for tasks that reach the hand (Eiffel/Costco/Guggenheim →
+state=done), a real Gmail draft flushed, onboarding learned from real Gmail+Calendar, the front-end deck
+loads the day. The product works.
+
+## 🧱 THE ONE REMAINING SEAM — routing reliability ~75% (needs a SUPERVISED pass, do NOT thrash)
+Routing of a fresh web task → the hand is ~75% (6/8 distinct lookups), NOT a regex-misses-rephrase issue
+(the source_text is the ORIGINAL text, unchanged). The misses ("Look up the opening hours of the Getty",
+"…when the next BART train leaves") match `_BROWSER`/`_WEB_LOOKUP` yet still become `confirm_owner_task`
+via a DIFFERENT path than the moat-rescue reroute (`b81e974`) covers — there are multiple confirm paths
+(`card_for_line` vs `shape` vs the decider vs the moat-rescue) and they disagree. The reliable fix is a
+careful, SUPERVISED consolidation of the routing decision into ONE place (or a model-assigned route) —
+the core brain pipeline. **F1 "1-char fix" was WRONG** (the dial leaves disposition="ask" by design; the
+agent summary was inaccurate; applying it would have broken the working auto-run) — proof that thrashing
+this core unsupervised breaks pipes. So: do NOT thrash. The done-gate PASSES regardless (a confirm is
+still "caught", not a cardinal sin), so this is reliability POLISH, not a broken product.
+
 ## 🧱 THE CORE SEAM — task→hand→execute pipeline is NONDETERMINISTIC (2026-06-25, honest, do NOT thrash)
 This is the real reason it isn't "reliably done," isolated at last:
 - **Routing nondeterminism:** the moat (`_expand_tasks_with_model`) REPHRASES each task before owner_mode
