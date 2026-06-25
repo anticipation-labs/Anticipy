@@ -2950,6 +2950,16 @@ class ControlCore:
         if not isinstance(discovered, (list, tuple)):
             discovered = []
         items = [x for x in discovered if isinstance(x, dict)][:100]
+        # OBSERVABILITY (ALWAYS — even on an all-logged-out scan): record the EXACT per-service verdict
+        # + reason the extension reported. Without this a "not logged in for an account I AM in" is
+        # silently swallowed and impossible to debug (the long-standing scrape complaint). This is the
+        # truth a test / the reality gate reads back; it never fakes a result.
+        scan_raw = [
+            {"service": x.get("service"), "logged_in": bool(x.get("logged_in")),
+             "reason": x.get("reason") or x.get("error") or "", "url": x.get("url")}
+            for x in items
+        ]
+        self.glassbox.log("onboard_scan_result", {"source": source, "raw": scan_raw})
         uid = self.api_hand.user_id
         onb = scan_to_onboarding(
             items, source=source,
@@ -2958,6 +2968,7 @@ class ControlCore:
         result = await self.owner_onboard(onb)
         result["connections"] = [c.model_dump() for c in onb.connections]
         result["discovered_count"] = len(items)
+        result["scan_raw"] = scan_raw   # exact per-service verdict+reason (testability/observability)
         # Glass-box the real scrape so it is PROVABLE the onboarding "scrapes you" step fired
         # and fed the per-person mesh. Emit ONLY when the scan actually ingested connections —
         # an empty/no-op scan is not an onboarding event and must never look like one (honesty:
@@ -2973,6 +2984,70 @@ class ControlCore:
                 ],
             })
         return result
+
+    async def ingest_deep_scrape(self, scraped, source: str = "chrome_deep_scrape") -> dict:
+        """Ingest a CONTENT deep-scrape from the user's OWN logged-in Chrome (the extension's
+        deep_scrape intent: real Gmail subjects/senders, calendar events, Drive files, LinkedIn, ...)
+        -> synthesize a graded dossier -> write it to memory. THIS is the 'scrapes you' step that
+        actually LEARNS about the owner, run through their real Chrome (the extension), not a CDP debug
+        browser. Honest by construction: a signed-out / empty surface contributes nothing and is never
+        invented; with nothing readable the dossier is empty + carries a clarifying question."""
+        from ..onboarding import dossier as _dossier
+        if not isinstance(scraped, (list, tuple)):
+            scraped = []
+        items = [x for x in scraped if isinstance(x, dict)][:50]
+
+        def _render(it: dict) -> str:
+            ex = it.get("extracted") if isinstance(it.get("extracted"), dict) else {}
+            lines: list[str] = []
+            for em in (ex.get("emails") or [])[:20]:
+                if isinstance(em, dict):
+                    frm = str(em.get("from") or "").strip()
+                    subj = str(em.get("subject") or "").strip()
+                    if frm or subj:
+                        lines.append(f"Email — from {frm}: {subj}")
+                elif isinstance(em, str) and em.strip():
+                    lines.append("Email — " + em.strip())
+            for ev in (ex.get("events") or [])[:15]:
+                if str(ev).strip():
+                    lines.append("Calendar — " + str(ev).strip())
+            for f in (ex.get("recent_files") or [])[:15]:
+                if str(f).strip():
+                    lines.append("File — " + str(f).strip())
+            for ch in (ex.get("channels") or [])[:15]:
+                if str(ch).strip():
+                    lines.append("Slack channel — " + str(ch).strip())
+            if str(ex.get("profile_name") or "").strip():
+                lines.append("LinkedIn profile name: " + str(ex["profile_name"]).strip())
+            if str(ex.get("username") or "").strip():
+                lines.append("GitHub username: " + str(ex["username"]).strip())
+            return "\n".join(lines)
+
+        surfaces: list[dict] = []
+        for it in items:
+            svc = str(it.get("service") or "").strip()
+            if not svc:
+                continue
+            key = svc.lower()
+            if it.get("error") or it.get("signed_in") is False:
+                surfaces.append({"key": key, "label": svc, "status": "needs_login",
+                                 "needs_login": it.get("signed_in") is False, "text": ""})
+                continue
+            text = _render(it)
+            surfaces.append({"key": key, "label": svc,
+                             "status": "ok" if text else "empty",
+                             "needs_login": False, "text": text})
+
+        signals = {
+            "surfaces": surfaces,
+            "logged_in": [s["key"] for s in surfaces if s["status"] == "ok"],
+            "needs_login": [s["key"] for s in surfaces if s.get("needs_login")],
+        }
+        doss = await _dossier.synthesize_dossier(signals, self.gateway)
+        counts = _dossier.write_dossier_to_memory(doss, self.memory)
+        summary = [{"key": s["key"], "status": s["status"], "chars": len(s["text"])} for s in surfaces]
+        self.glassbox.log("onboard_deep_scrape", {"source": source, "surfaces": summary, "wrote": counts})
+        return {"dossier": doss, "surfaces": summary, "memory_written": counts}
 
     @staticmethod
     def _onboarding_key(fields: dict) -> str:

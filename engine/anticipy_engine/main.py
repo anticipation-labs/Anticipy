@@ -1110,6 +1110,8 @@ async def onboard_discover(body: DiscoverConnectionsIn) -> dict:
 
 class ScanIn(BaseModel):
     services: list[dict] = Field(default_factory=list)  # optional [{name,url}]; empty -> extension defaults
+    wait: bool = False  # when true, return the extension's actual discovery result
+    timeout_s: float = 90.0
 
 
 @app.post("/onboard/scan")
@@ -1119,8 +1121,22 @@ async def onboard_scan(body: ScanIn) -> dict:
     logged-in-vs-signin signal per service and POSTs results back to /onboard/discover. Returns
     triggered=False (no error) when no extension is connected to drive."""
     c = current_core()
+    if body.wait:
+        timeout_s = max(5.0, min(float(body.timeout_s or 90.0), 240.0))
+        result = await c.browser_link.scan_connections(body.services or None, timeout=timeout_s)
+        c.glassbox.log("onboard_scan", {
+            "triggered": bool(result.get("triggered")),
+            "waited": True,
+            "services": len(body.services or []),
+            "status": result.get("status"),
+            "discovered_count": len(result.get("discovered") or []),
+            "posted": bool(result.get("posted")),
+        })
+        result["note"] = ("scan completed in your Chrome; results were posted to /onboard/discover"
+                          if result.get("posted") else "scan completed, but the extension did not confirm posting")
+        return result
     triggered = await c.browser_link.discover_connections(body.services or None)
-    c.glassbox.log("onboard_scan", {"triggered": triggered, "services": len(body.services or [])})
+    c.glassbox.log("onboard_scan", {"triggered": triggered, "waited": False, "services": len(body.services or [])})
     return {"triggered": triggered, "note": ("scan started in your Chrome; results arrive via "
             "/onboard/discover" if triggered else "no browser extension connected")}
 
@@ -1167,6 +1183,46 @@ async def onboard_owner_scrape(body: OwnerScrapeIn) -> dict:
     c.glassbox.log("owner_scrape", {"usable": status["usable_count"],
                                        "needs_login": status["needs_login"], "wrote": counts})
     return {"dossier": doss, "scrape": status, "memory_written": counts}
+
+
+class DeepScrapeIn(BaseModel):
+    scraped: list[dict] = Field(default_factory=list)
+    source: str = "chrome_deep_scrape"
+
+
+@app.post("/onboard/deep-scrape")
+async def onboard_deep_scrape(body: DeepScrapeIn) -> dict:
+    """Ingest the extension's CONTENT deep-scrape (real Chrome: emails/events/files/...) -> synthesize a
+    dossier -> write it to memory. This is the 'scrapes you' step that actually LEARNS about the owner,
+    run through their OWN logged-in Chrome (the extension), NOT a CDP debug browser."""
+    return await current_core().ingest_deep_scrape(body.scraped, source=body.source)
+
+
+# Canonical URLs for a consent-gated content deep-scan: ONLY services the owner allowed are opened.
+_DEEP_SCAN_URLS = {
+    "gmail": ("Gmail", "https://mail.google.com/mail/u/0/#inbox"),
+    "calendar": ("Google Calendar", "https://calendar.google.com/calendar/u/0/r"),
+    "drive": ("Google Drive", "https://drive.google.com/drive/my-drive"),
+    "linkedin": ("LinkedIn", "https://www.linkedin.com/feed/"),
+}
+
+
+@app.post("/onboard/deep-scan")
+async def onboard_deep_scan() -> dict:
+    """TRIGGER a CONTENT deep-scrape in the user's connected Chrome — CONSENT-GATED to the services the
+    owner allowed (mirrors owner-scrape). The extension reads real content in the user's OWN Chrome and
+    POSTs it to /onboard/deep-scrape. Returns triggered=False (no error) when no extension is connected."""
+    c = current_core()
+    services = [{"name": label, "url": url}
+                for key, (label, url) in _DEEP_SCAN_URLS.items()
+                if c.onboard_permissions.is_allowed(key)]
+    if not services:
+        return {"triggered": False, "note": "no service allowed yet — approve at least one account first"}
+    triggered = await c.browser_link.deep_scrape(services)
+    c.glassbox.log("onboard_deep_scan", {"triggered": triggered, "services": [s["name"] for s in services]})
+    return {"triggered": triggered, "services": [s["name"] for s in services],
+            "note": ("deep scan started in your Chrome; results arrive via /onboard/deep-scrape"
+                     if triggered else "no browser extension connected")}
 
 
 class OnboardPermissionIn(BaseModel):

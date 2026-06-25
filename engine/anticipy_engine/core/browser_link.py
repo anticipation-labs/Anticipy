@@ -114,6 +114,47 @@ class BrowserLink:
         await self._ws.send_json({"type": "discover_connections", "services": services or []})
         return True
 
+    async def deep_scrape(self, services: Optional[list] = None) -> bool:
+        """Tell the extension to CONTENT-scrape the given logged-in services in the user's OWN Chrome
+        (real Gmail subjects/senders, calendar events, Drive files, ...) and POST the result to
+        /onboard/deep-scrape. Fire-and-forget — same pattern as discover_connections; the scrape
+        reports back over /onboard/deep-scrape, so this only needs the socket open. Returns False if
+        no extension is connected to drive."""
+        if not self.connected or self._ws is None:
+            return False
+        await self._ws.send_json({"type": "deep_scrape", "services": services or []})
+        return True
+
+    async def scan_connections(self, services: Optional[list] = None, timeout: float = 90.0) -> dict:
+        """Run the same extension account scan, but wait for the extension's WS result.
+
+        The extension still POSTs the discovered services to /onboard/discover, so this method is
+        only a proof/diagnostic wrapper around the real onboarding path.
+        """
+        if not self.connected or self._ws is None:
+            return {"triggered": False, "reason": "extension not connected"}
+        loop = asyncio.get_running_loop()
+        job_id = "discover_" + secrets.token_urlsafe(8)
+        fut: "asyncio.Future[dict]" = loop.create_future()
+        self._pending[job_id] = fut
+        await self._ws.send_json({"type": "discover_connections", "job_id": job_id, "services": services or []})
+        try:
+            msg = await asyncio.wait_for(fut, timeout=timeout)
+            output = msg.get("output") if isinstance(msg, dict) else {}
+            if not isinstance(output, dict):
+                output = {}
+            return {
+                "triggered": True,
+                "status": msg.get("status") if isinstance(msg, dict) else None,
+                "discovered": output.get("discovered") or [],
+                "count": output.get("count", 0),
+                "posted": bool(output.get("posted")),
+            }
+        except asyncio.TimeoutError:
+            return {"triggered": True, "status": "timeout", "reason": "extension scan did not return before timeout"}
+        finally:
+            self._pending.pop(job_id, None)
+
     # ---- dev hot-reload ----
     async def reload(self) -> bool:
         if self._ws is None:

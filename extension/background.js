@@ -158,6 +158,81 @@ async function executeBrowseJob(msg) {
 // sign-in signal from the DOM (an account/avatar/sign-out control, minus a sign-in wall) — never
 // account contents, never an identifier, never a credential — then POSTs the {service, logged_in,
 // url} list to the engine's /onboard/discover, which builds the per-person connection mesh.
+function discoverServiceKey(svc) {
+  const raw = (((svc && svc.name) || "") + " " + ((svc && svc.url) || "")).toLowerCase();
+  if (raw.includes("gmail") || raw.includes("mail.google")) return "gmail";
+  if (raw.includes("calendar.google") || raw.includes("google calendar")) return "calendar";
+  if (raw.includes("drive.google") || raw.includes("google drive")) return "drive";
+  if (raw.includes("outlook") || raw.includes("office")) return "outlook";
+  if (raw.includes("slack")) return "slack";
+  if (raw.includes("notion")) return "notion";
+  if (raw.includes("linkedin")) return "linkedin";
+  if (raw.includes("github")) return "github";
+  if (raw.includes("x.com") || raw.includes("twitter")) return "x";
+  if (raw.includes("instagram")) return "instagram";
+  return "generic";
+}
+
+function classifyDiscoverPage(svc, page) {
+  const key = discoverServiceKey(svc);
+  const url = String((page && page.url) || "").toLowerCase();
+  const title = String((page && page.title) || "").toLowerCase();
+  const authText = String((page && page.authText) || "").toLowerCase();
+  const signals = (page && page.signals) || {};
+  const hardLoginUrl = (
+    /accounts\.google\.com\/(signin|servicelogin|interactive|v3\/signin)/.test(url) ||
+    /login\.live\.com|\/login\b|\/signin\b|\/sign-in\b|\/users\/sign_in\b|\/i\/flow\/login\b/.test(url)
+  );
+  const hardLoginText = /enter your password|forgot password|create (an )?account|sign in to continue|log in to continue/.test(authText);
+  const genericSignedIn = !!(page && page.hasAccountChrome) || !!signals.googleAccount || !!signals.userMenu;
+
+  if (hardLoginUrl && !genericSignedIn) return { logged_in: false, reason: "login_url" };
+
+  if (key === "gmail" && /mail\.google\.com\/mail/.test(url) &&
+      (signals.gmailShell || signals.googleAccount || title.includes("gmail"))) {
+    return { logged_in: true, reason: "gmail_shell" };
+  }
+  if (key === "calendar" && /calendar\.google\.com/.test(url) &&
+      (signals.calendarShell || signals.googleAccount || title.includes("calendar"))) {
+    return { logged_in: true, reason: "calendar_shell" };
+  }
+  if (key === "drive" && /drive\.google\.com\/drive/.test(url) &&
+      (signals.driveShell || signals.googleAccount || title.includes("drive"))) {
+    return { logged_in: true, reason: "drive_shell" };
+  }
+  if (key === "outlook" && /(outlook\.live\.com|outlook\.office\.com)\/mail/.test(url) &&
+      (signals.outlookShell || genericSignedIn)) {
+    return { logged_in: true, reason: "outlook_shell" };
+  }
+  if (key === "slack" && /app\.slack\.com\/client/.test(url) &&
+      (signals.slackShell || genericSignedIn)) {
+    return { logged_in: true, reason: "slack_shell" };
+  }
+  if (key === "notion" && /notion\.so/.test(url) &&
+      (signals.notionShell || genericSignedIn)) {
+    return { logged_in: true, reason: "notion_shell" };
+  }
+  if (key === "linkedin" && /linkedin\.com\/(feed|in|mynetwork|jobs|notifications|messaging)/.test(url) &&
+      (signals.linkedinShell || genericSignedIn)) {
+    return { logged_in: true, reason: "linkedin_shell" };
+  }
+  if (key === "github" && /github\.com/.test(url) && (signals.githubShell || signals.userMenu)) {
+    return { logged_in: true, reason: "github_shell" };
+  }
+  if (key === "x" && /x\.com\/(home|notifications|messages|compose|explore)/.test(url) &&
+      (signals.xShell || genericSignedIn)) {
+    return { logged_in: true, reason: "x_shell" };
+  }
+  if (key === "instagram" && /instagram\.com/.test(url) &&
+      (signals.instagramShell || genericSignedIn)) {
+    return { logged_in: true, reason: "instagram_shell" };
+  }
+
+  if (hardLoginUrl || (hardLoginText && !genericSignedIn)) return { logged_in: false, reason: "login_wall" };
+  if (genericSignedIn) return { logged_in: true, reason: "account_chrome" };
+  return { logged_in: false, reason: "no_signed_in_signal" };
+}
+
 async function doDiscoverConnections(msg) {
   const services = (msg.services && msg.services.length) ? msg.services : DEFAULT_DISCOVER_SERVICES;
   const discovered = [];
@@ -172,18 +247,62 @@ async function doDiscoverConnections(msg) {
         target: { tabId: tab.id },
         func: () => ({
           url: location.href,
+          title: document.title,
           // a 1-line auth signal only — NOT account contents
           authText: (document.body ? document.body.innerText : "").slice(0, 1200),
           hasAccountChrome: !!document.querySelector(
             '[aria-label*="Account" i],[aria-label*="profile" i],img[alt*="avatar" i],' +
             'a[href*="logout" i],a[href*="signout" i],a[href*="sign-out" i],button[aria-label*="sign out" i]'
           ),
+          signals: {
+            googleAccount: !!document.querySelector(
+              'a[aria-label*="Google Account" i],button[aria-label*="Google Account" i],' +
+              'a[href*="SignOutOptions"],a[href*="accounts.google.com/SignOutOptions"]'
+            ),
+            userMenu: !!document.querySelector(
+              '[aria-label*="account menu" i],[aria-label*="user menu" i],[aria-label*="profile menu" i],' +
+              'summary[aria-label*="View profile" i],button[aria-label*="Open user account menu" i]'
+            ),
+            appShell: !!document.querySelector('main,[role="main"],nav,[role="navigation"]'),
+            gmailShell: !!document.querySelector(
+              'div[gh="tl"],div[gh="cm"],tr.zA,a[href*="#inbox"],[aria-label*="Inbox" i],[role="main"] [role="grid"]'
+            ),
+            calendarShell: !!document.querySelector(
+              '[data-eventid],[data-eventchip],[aria-label*="Main calendar" i],[aria-label*="Create" i],[role="main"] [role="grid"]'
+            ),
+            driveShell: !!document.querySelector(
+              '[aria-label*="New" i],[aria-label*="My Drive" i],[data-target="doc"],[role="main"] [role="grid"]'
+            ),
+            outlookShell: !!document.querySelector(
+              '[aria-label*="New mail" i],[aria-label*="Message list" i],[role="listbox"],[role="main"]'
+            ),
+            slackShell: !!document.querySelector(
+              '[data-qa="channel_sidebar_name_"],[data-qa="workspace_sidebar"],[data-qa="slack_kit_scrollbar"]'
+            ),
+            notionShell: !!document.querySelector('.notion-frame,[data-testid="sidebar"],[aria-label*="Private" i]'),
+            linkedinShell: !!document.querySelector(
+              '[data-test-global-nav],nav[aria-label*="Primary" i],a[href*="/mynetwork/"],a[href*="/messaging/"]'
+            ),
+            githubShell: !!document.querySelector(
+              'meta[name="user-login"],.AppHeader-user,[data-login],summary[aria-label*="View profile" i]'
+            ),
+            xShell: !!document.querySelector(
+              '[data-testid="SideNav_AccountSwitcher_Button"],[data-testid="primaryColumn"],a[href="/messages"]'
+            ),
+            instagramShell: !!document.querySelector(
+              'nav a[href="/direct/inbox/"],a[href="/accounts/edit/"],svg[aria-label="Home"]'
+            ),
+          },
         }),
       });
-      const blob = ((page.url || "") + " " + (page.authText || "")).toLowerCase();
-      const signinWall = /\/login|\/signin|\/sign-in|accounts\.|\bsign in\b|\blog in\b|enter your password|create (an )?account|continue with/.test(blob);
-      const logged_in = !!page.hasAccountChrome && !signinWall;
-      discovered.push({ service: svc.name, logged_in: logged_in, identifier: "", url: url });
+      const classified = classifyDiscoverPage(svc, page);
+      discovered.push({
+        service: svc.name,
+        logged_in: classified.logged_in,
+        identifier: "",
+        url: page.url || url,
+        reason: classified.reason,
+      });
     } catch (e) {
       discovered.push({ service: svc.name, logged_in: false, identifier: "", url: url, error: String(e) });
     }
@@ -819,5 +938,17 @@ async function doDeepScrape(msg) {
       scraped.push({ service: svc.name, url, error: String(e) });
     }
   }
-  return result(msg, "success", null, { scraped, count: scraped.length });
+  // Hand the CONTENT scrape to the engine (mirrors discover_connections -> /onboard/discover):
+  // POST to /onboard/deep-scrape, which synthesizes a dossier from this real-Chrome content and
+  // writes it to memory. This is what makes the scrape actually LEARN about the user.
+  let posted = false;
+  try {
+    const resp = await fetch((await engineHttp()) + "/onboard/deep-scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scraped: scraped, source: "chrome_deep_scrape" }),
+    });
+    posted = !!(resp && resp.ok);
+  } catch (e) {}
+  return result(msg, "success", null, { scraped, count: scraped.length, posted });
 }
