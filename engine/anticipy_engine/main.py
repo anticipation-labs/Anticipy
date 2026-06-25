@@ -2048,12 +2048,19 @@ async def conversation_relay(ws: WebSocket) -> None:
 
 @app.websocket("/ws/extension")
 async def ws_extension(ws: WebSocket) -> None:
-    if not core.browser_link.check_token(ws.query_params.get("token")):
-        await ws.close(code=1008)  # reject unauthenticated handshake
+    # PER-USER HANDS (Step 4): the extension carries its signed-in user id (?user=<supabase id>) so the
+    # WS binds to THAT user's core.browser_link — each user pilots their OWN Chrome, never another's.
+    # No user id (owner-token / local / suite) -> the DEFAULT core. The token still gates it: each core
+    # has its OWN browser_link.token (fetched from /ws/token under that user), so a user can only attach
+    # with their own core's token — a wrong/cross token is rejected.
+    target = registry.core_for((ws.query_params.get("user") or "").strip() or None)
+    if not target.browser_link.check_token(ws.query_params.get("token")):
+        await ws.close(code=1008)  # reject unauthenticated / cross-user handshake
         return
     await ws.accept()
-    await core.browser_link.attach(ws)
-    core.glassbox.log("extension", {"event": "connected"})
+    await target.browser_link.attach(ws)
+    target.glassbox.log("extension", {"event": "connected",
+                                      "user": (ws.query_params.get("user") or "").strip() or "default"})
     try:
         while True:
             try:
@@ -2069,12 +2076,12 @@ async def ws_extension(ws: WebSocket) -> None:
             if msg.get("type") == "ping":
                 await ws.send_json({"type": "pong"})
             else:
-                await core.browser_link.on_message(msg)
+                await target.browser_link.on_message(msg)
     except WebSocketDisconnect:
         pass
     finally:
-        await core.browser_link.detach(ws)
-        core.glassbox.log("extension", {"event": "disconnected"})
+        await target.browser_link.detach(ws)
+        target.glassbox.log("extension", {"event": "disconnected"})
 
 
 # ---- M7: serve the premium frontend (welcome + app) from the engine's OWN origin ----
