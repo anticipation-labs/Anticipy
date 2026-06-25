@@ -1,16 +1,17 @@
 # PENDING FOR OMAR — the batch that unblocks the rest
 
-> Updated 2026-06-24 (supersedes older entries). The autonomous FORGE loop has done everything
-> verifiable **without** you (suite 108/0, each gate adversary-checked + committed on `factory/build`).
-> Everything below genuinely needs you — the loop is **stopped**, not grinding. Read with `LEDGER.md`.
+> Updated 2026-06-25. The autonomous loop is RUNNING and climbing the rungs; everything below is the
+> small set that genuinely needs you. Read with `LEDGER.md`.
 
-## What's already done + locked (no action needed)
-- The brain (act/ask/silent, vents ignored — now incl. directed threats, money blocked), memory,
-  per-user cloud accounts (A≠B), the safety floor (money/vent/never-fake, BREACHES:0 corpus).
-- **0.1 sealed** — the Board never fakes success (celebrates only on a real terminal/running state).
-- **Phase 1 spine — code done** — a YES now drives your *real connected Chrome*, not the throwaway
-  (verified by mock test + adversary; the only thing left is proving it acts in your real Gmail).
-- **6.1** — directed threats ("I'll kill my boss") are suppressed, not surfaced as tasks.
+## What's LIVE-GREEN now (proven by running it, committed on `factory/build`, suite 108/0)
+- **The hands operate any site** — open/read/search/navigate, judged true (Wikipedia, Hacker News).
+- **The integrated owner-flow** — you say it → the connected hand does it on the real web → judge
+  verifies → result lands on the card ("Find the height of the Eiffel Tower" → done, "330 meters").
+- **The brain** — act/ask/silent, vents ignored (incl. directed threats), money blocked, web-lookups
+  route to the hand, email = draft-then-ask, multi-line keeps every task.
+- **Onboarding deep-read via the hand** — opens a page, reads real content, lands facts in memory
+  (proven on a public page; **your real accounts just need you logged in** — see #1).
+- The never-fake honesty layer holds (a result the judge can't verify → handed back, never faked).
 
 ## The batch (≈10 min total, then the loop can finish Phases 1–5)
 
