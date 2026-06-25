@@ -41,6 +41,7 @@ run proactive_eval_selftest "$PY" "$REPO/engine/scripts/proactive_eval.py" --sel
 run journey_eval_selftest "$PY" "$REPO/engine/scripts/journey_eval.py" --selftest  # journey gauge soundness (zero model calls)
 run owner_test_selftest "$PY" "$REPO/engine/scripts/owner_test.py" --selftest  # P5 finish-line scorer self-proof (zero model calls)
 run owner_test_run_selftest "$PY" "$REPO/engine/scripts/owner_test_run.py" --selftest  # P5 RUNNER: a real day through the engine, scored (0 cardinal-sin end to end)
+run owner_test_day01 "$PY" "$REPO/engine/scripts/owner_test_run.py" --key "$REPO/factory/owner/expected/day01.json"  # P5 DONE-GATE: a realistic founder day end-to-end -> PASS (0 false-action, money held, catch>=0.70)
 
 echo "== integration (boot engine/extension; free/stub) =="
 run brain_loop      bash "$REPO/scripts/brain_loop.sh"
