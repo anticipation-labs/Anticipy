@@ -109,13 +109,17 @@ draft, never sent). Loop RE-ARMED for those.
 - ✅ Front end loads + is polished: welcome (/) "Vibe your life." hero; app (/app.html) "The Board" —
   day-input ("Hand it over"), "NEEDS YOU" cards, and the AUTONOMY dial (Limited/Regular/Full-Send) IN the UI.
 - ✅ Live-connected: the Board renders a real card from a prior engine ingest (the Priya draft).
-- 🔴 **SEAM #1 (first real walk finding):** pasted a 6-task day → clicked "Hand it over" → input cleared
-  but the Board STILL shows only the old single Priya card; the new day's cards (Nick reminder, FedEx
-  lookup, AWS money-hold, competitor research) did NOT render. So the front-end "Hand it over → render
-  the day's cards" path is broken/incomplete in the UI. THIS is the lowest broken step → the WHOLE-PRODUCT
-  WALK LOOP fixes it next (diagnose: did the ingest fire? did cards get created in the engine? does the
-  Board refresh/render the new set?). Only the whole journey counts — this is the right gap, found by
-  walking the real UI instead of curling pieces.
+- ⚠️ **SEAM #1 — RETRACTED (misdiagnosis, corrected honestly):** the Board is a swipeable DECK
+  (`app.js:213 vis.slice(0,3)` = top card + 2 peeking; flick through). `/owner/cards` returns 50 cards
+  INCLUDING the whole pasted day decided CORRECTLY — AWS $4,200 `blocked`, Priya/Nick `draft`, FedEx +
+  competitors + Italian `do`. The UI ingest calls `/owner/ingest {execute_actions:true}` (app.js:717).
+  So the front end DOES render the day + the brain decided right. Not a bug — I saw only the top card.
+- 🔎 **REAL open step (where the walk actually is):** the day's reversible `do` cards (FedEx, competitors,
+  Italian) sit at **state=None** — created but not yet executed. Next walk step (loop): in the deck, use
+  "Not now" to pass the Priya SEND card (NEVER confirm-send), reach a reversible `do` card, Confirm it via
+  the action row → the browser agent runs → the result must land back ON the card IN the UI. That is the
+  loop-closes proof. Open question to verify live: do `do` cards auto-run under REGULAR, or need the
+  deck Confirm? Either way, the gate is: see a reversible task go card→run→result, in the UI.
 
 ## 🏁 AUTONOMOUS CEILING (2026-06-25) — partially lifted by the Gmail login
 
