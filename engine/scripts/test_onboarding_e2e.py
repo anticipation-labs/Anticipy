@@ -216,6 +216,13 @@ def run_flow(*, allow=True, dossier=None, do_complete=True, scrape_mode="ok"):
     chk["idempotent"] = (len(core.memory.profile.all()) == n_prof
                          and len(core.memory.derived.all()) == n_der
                          and len(core.memory.open_loops.all()) == n_loop)
+    # STEP 6b — store_account URL canonicalization: the SAME store typed with/without scheme or www must
+    # upsert to ONE card, not duplicate (overnight bug-hunt #3). Re-post Costco with a scheme+www variant.
+    CLIENT.post("/owner/onboard", json={"stores": [{"name": "Costco", "url": "https://www.costco.com/"}], "source": "first_run"})
+    costco_cards = [i for i in core.memory.profile.all()
+                    if (i.fields or {}).get("kind") == "store_account"
+                    and "costco" in (i.text or "").lower()]
+    chk["store_url_dedup"] = (len(costco_cards) == 1)
 
     # STEP 7 — honest "not connected": no extension -> triggered:False, never a faked read
     scan = CLIENT.post("/onboard/scan", json={"services": []}).json()

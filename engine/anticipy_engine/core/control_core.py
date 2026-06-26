@@ -203,7 +203,7 @@ def _derive_sign_text(task: str) -> tuple[str, str]:
     if m:
         return (m.group(1).strip().rstrip(".").title()[:40] or ""), ""
     for pat, head, sub in (
-        (r"out[- ]?of[- ]?order|not working|out of service|\bbroke\b|busted", "Out of Order", "Please use the other one"),
+        (r"out[- ]?of[- ]?order|not working|out of service|\bbroken?\b|busted", "Out of Order", "Please use the other one"),
         (r"no\s*parking", "No Parking", "Thank you"),
         (r"wet\s*floor", "Caution: Wet Floor", "Watch your step"),
         (r"wet\s*paint", "Wet Paint", "Do not touch"),
@@ -3348,6 +3348,11 @@ class ControlCore:
             return f"{source}:app_connection:{identifier or name}"
         if kind == "store_account":
             url = str(fields.get("url") or "").strip().lower()
+            # Normalize equivalent URLs to ONE key so "costco.com" / "https://costco.com" / "www.costco.com/"
+            # upsert in place instead of writing duplicate store cards (overnight bug-hunt #3). Purely
+            # additive URL canonicalization (scheme + leading www + trailing slash); never merges by name.
+            url = re.sub(r"^https?://", "", url)
+            url = re.sub(r"^www\.", "", url).rstrip("/")
             name = str(fields.get("name") or "").strip().lower()
             return f"{source}:store_account:{url or name}"
         if kind == "raw_onboarding_notes":
