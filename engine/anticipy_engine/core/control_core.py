@@ -198,6 +198,18 @@ _SITE_ACTION = re.compile(
     r"gmail|outlook|paypal|venmo|netflix|spotify|shopify|etsy|best\s*buy)\b"
     r"|\bgo\s+to\s+(?:my\s+|the\s+)?[A-Za-z][A-Za-z.\s]{0,20}?\b(?:and|,|to)\b",
     re.I)
+# RETURN / RMA shape that _SITE_ACTION misses: the site name as a NOUN modifier ("get the AMAZON
+# return", "deal with my AMAZON return") or a return/refund/exchange of a PURCHASED item ("return the
+# cameras I BOUGHT"). Anchored on the SITE noun OR return+"I bought" — never a bare verb — so vents
+# ("return to bed", "cancel my plans", "deal with my feelings") never match. Money stays gated by the
+# chokepoint's _MONEY_SIGNAL guard.
+_RETURN_TASK = re.compile(
+    r"\b(?:amazon|walmart|ebay|best\s*buy|costco|target|etsy)\b[^.;!?]{0,40}?"
+    r"\b(?:return|refund|exchange|replacement|order|package|delivery|shipment)\b"
+    r"|\b(?:return|refund|exchange|replacement|order|package|delivery|shipment)\b[^.;!?]{0,40}?"
+    r"\b(?:amazon|walmart|ebay|best\s*buy|costco|target|etsy)\b"
+    r"|\b(?:return|refund|exchange|send\s+back)\b[^.;!?]{0,50}?\bI\s+(?:bought|ordered|purchased|got|received)\b",
+    re.I)
 
 # A "make a physical artifact and print it" task (a door sign, a notice, a label) — the CREATE + PRINT
 # capability: generate the artifact -> prepare the print -> confirm before printing (physical action).
@@ -1154,6 +1166,12 @@ class ControlCore:
         hard-blocked in the extension regardless of site."""
         t = (task or "").lower()
         tld = (os.environ.get("ANTICIPY_OWNER_TLD") or "com").strip().lstrip(".").lower() or "com"
+        # A return/RMA task starts in the ORDERS page (the return funnel begins there), in the owner's
+        # locale — checked BEFORE the generic site map so "amazon return" lands on Orders, not the
+        # homepage. Amazon-only (the return recipe is amazon-only); other-site returns fall through.
+        if (re.search(r"\b(?:return|refund|exchange|replacement|send\s+back)\b", t)
+                and not re.search(r"\b(?:walmart|ebay|best\s*buy|costco|target|etsy)\b", t)):
+            return f"https://www.amazon.{tld}/gp/css/order-history"
         # sites that have country domains -> owner's TLD; the rest are .com-only services
         localized = {"amazon": "amazon", "walmart": "walmart", "best buy": "bestbuy", "ebay": "ebay"}
         fixed = {
@@ -2497,7 +2515,7 @@ class ControlCore:
             _act_txt = getattr(line, "text", "") or ""
             if (execute_actions and not getattr(line, "force_ask", False)
                     and (card is None or getattr(card, "action", None) in ("confirm_owner_task", "execute_owner_task"))
-                    and _SITE_ACTION.search(_act_txt)
+                    and (_SITE_ACTION.search(_act_txt) or _RETURN_TASK.search(_act_txt))
                     and not _MONEY_SIGNAL.search(_act_txt)):
                 self.glassbox.log("site_action_chokepoint", {"line": _act_txt[:120]})
                 card = self._browser_action_ask(line, source)
