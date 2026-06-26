@@ -77,8 +77,9 @@ def _safe(user_id: str) -> str:
 
 
 def _base_dir() -> Path:
-    """The existing data base the DEFAULT core uses (mirrors control_core._base)."""
-    return Path(os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
+    """The existing data base the DEFAULT core uses (mirrors control_core._base).
+    abspath -> absolute at build so it stays cwd-stable, without resolving symlinks (see control_core._base)."""
+    return Path(os.path.abspath(Path(os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()))
 
 
 def user_data_dir(user_id: str) -> Path:

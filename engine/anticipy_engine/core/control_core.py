@@ -41,7 +41,13 @@ from ..proactive.harm import _MONEY_SIGNAL  # the money hard-stop signal (amount
 
 
 def _base(data_dir=None) -> Path:
-    return Path(data_dir or os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
+    # ABSOLUTE at construction (cwd-frozen): routes that re-derive data_dir at request time (e.g.
+    # GET /onboard/status) must not drift when the process cwd changes — a relative ".anticipy-data"
+    # resolved per-request against a different cwd threw a completed owner back into setup (the
+    # onboarding "split-brain"). os.path.abspath freezes it absolute WITHOUT resolving symlinks (so it
+    # stays byte-equal to the configured path — /var vs /private/var etc. don't diverge).
+    raw = Path(data_dir or os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
+    return Path(os.path.abspath(raw))
 
 
 # DETERMINISTIC ASIDE FLOOR (model-independent). A past/perfect interrogative directed at

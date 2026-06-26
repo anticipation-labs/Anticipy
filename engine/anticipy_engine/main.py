@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import json
 import hmac
 import ipaddress
 import os
@@ -1278,7 +1279,12 @@ def onboard_status() -> dict:
     p = current_core().data_dir / "onboard_complete.json"
     try:
         return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"onboarding_complete": False}
-    except Exception:
+    except Exception as exc:
+        # fail-open (don't trap a real owner on a corrupt marker), but LEAVE A TRACE so it's diagnosable
+        try:
+            current_core().glassbox.log("onboard_status_read_error", {"error": f"{type(exc).__name__}: {exc}"})
+        except Exception:
+            pass
         return {"onboarding_complete": False}
 
 
@@ -1290,8 +1296,14 @@ def onboard_complete(body: OnboardCompleteIn) -> dict:
     data = {"onboarding_complete": bool(body.complete), "at": _t.time()}
     try:
         (current_core().data_dir / "onboard_complete.json").write_text(json.dumps(data), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as exc:
+        # NEVER claim done on a failed persist — the next GET /onboard/status would read False and
+        # re-trap the owner. Report the failure honestly instead of returning a phantom success.
+        try:
+            current_core().glassbox.log("onboard_complete_write_error", {"error": f"{type(exc).__name__}: {exc}"})
+        except Exception:
+            pass
+        return {"onboarding_complete": False, "error": "could not persist onboarding completion"}
     return data
 
 
