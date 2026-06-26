@@ -88,8 +88,11 @@ def _retry_hint_seconds(resp) -> Optional[float]:
 
 
 class ModelGateway:
-    # gate + plan (proactive brain) and agent (the web-agent loop) may use smart
-    SMART_CALLERS = frozenset({"gate", "plan", "agent"})
+    # gate + plan (proactive brain), agent (the web-agent loop), and make_sign (the create+print sign-
+    # wording fallback when the deterministic deriver has no confident headline) may use smart. Without
+    # make_sign the fallback raised PermissionError -> was swallowed -> every novel-phrasing sign shipped
+    # the generic "Notice" (overnight bug-hunt #2; the deterministic keyword path still runs FIRST).
+    SMART_CALLERS = frozenset({"gate", "plan", "agent", "make_sign"})
 
     def __init__(self, provider: Optional[str] = None, endpoint: Optional[str] = None,
                  stub=None, timeout: float = 60.0,

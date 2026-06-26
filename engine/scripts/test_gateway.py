@@ -40,6 +40,17 @@ async def main() -> None:
     assert len(gw.smart_calls) == 2
     assert gw.total_cost() > 0
 
+    # make_sign MAY use smart (the create+print sign-wording fallback). It was wrongly refused, so the
+    # fallback raised PermissionError -> was swallowed -> every novel-phrasing sign shipped the generic
+    # "Notice" (overnight bug-hunt #2). Assert it is allowed now (deterministic keyword path still first).
+    assert "make_sign" in gw.SMART_CALLERS, "make_sign must be in SMART_CALLERS"
+    make_sign_ok = True
+    try:
+        await gw.think("a sign headline", tier=SMART, caller="make_sign")
+    except PermissionError:
+        make_sign_ok = False
+    assert make_sign_ok, "make_sign must NOT be refused smart tier (sign-wording fallback would die)"
+
     # the post_to_x trigger is the WORD post — hyphen compounds and prefixes are
     # not social posts (a junk post step parks an otherwise-complete goal)
     gw2 = ModelGateway()
