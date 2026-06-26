@@ -3428,6 +3428,22 @@ class ControlCore:
             for mem in memories
             if mem.drawer == "profile" and mem.fields.get("kind") == "app_connection"
         }
+        # NAMES of services that are actually CONNECTED — from this batch AND the durable profile
+        # drawer. A connect-loop is keyed on the service's identifier, but a service often connects
+        # under a CHANGED identifier (typed "Gmail" with no email, then the scan reads you@gmail.com),
+        # so the loop's old key no longer matches the connected card's new key and the stale
+        # "Connect Gmail" nag never closes (overnight bug-hunt finding #3). The name fallback below
+        # closes it — bounded: only ever closes a loop when a card with that name is truly connected.
+        connected_names = {
+            str(mem.fields.get("name") or "").strip().lower()
+            for mem in memories
+            if mem.drawer == "profile" and mem.fields.get("kind") == "app_connection"
+            and mem.fields.get("status") == "connected"
+        }
+        for p in self.memory.profile.all():
+            if (p.fields.get("kind") == "app_connection"
+                    and p.fields.get("status") == "connected"):
+                connected_names.add(str(p.fields.get("name") or "").strip().lower())
         for item in self.memory.open_loops.all():
             if item.fields.get("action") != "connect_account":
                 continue
@@ -3435,10 +3451,15 @@ class ControlCore:
             if key in active_missing:
                 continue
             conn = connection_keys.get(key)
-            if conn is None or conn.fields.get("status") != "connected":
+            connected_by_key = conn is not None and conn.fields.get("status") == "connected"
+            loop_name = str(item.fields.get("name") or "").strip().lower()
+            connected_by_name = bool(loop_name) and loop_name in connected_names
+            if not (connected_by_key or connected_by_name):
                 continue
             item.status = "done"
-            item.fields = {**item.fields, "onboarding_key": key, "resolved_from": "owner_onboarding_connected"}
+            item.fields = {**item.fields, "onboarding_key": key,
+                           "resolved_from": "owner_onboarding_connected" if connected_by_key
+                           else "owner_onboarding_connected_by_name"}
             self.memory.open_loops.update(item)
 
     async def notify_user(self, text: str, recipient: str | None = None) -> dict:

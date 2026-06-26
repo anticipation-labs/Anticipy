@@ -230,6 +230,14 @@ def run_flow(*, allow=True, dossier=None, do_complete=True, scrape_mode="ok"):
                    if (i.fields or {}).get("kind") == "app_connection"
                    and "gmail" in (i.text or "").lower()]
     chk["app_connection_dedup"] = (len(gmail_cards) == 1)
+    # STEP 6d — connect-loop CLOSES when a service connects under a CHANGED identifier (bug-hunt finding
+    # #3). A connected scan (connected=true, a new email id) must flip the stale "Connect Gmail" to-do to
+    # done — not keep nagging. (Gmail's connect_account loop was created in STEP 3.)
+    CLIENT.post("/onboard/discover", json={"discovered": [{"service": "Gmail", "logged_in": True, "connected": True, "identifier": "owner@example.com"}]})
+    gmail_loops = [l for l in core.memory.open_loops.all()
+                   if (l.fields or {}).get("action") == "connect_account"
+                   and "gmail" in (l.text or "").lower()]
+    chk["connect_loop_closes"] = (len(gmail_loops) > 0 and all(l.status == "done" for l in gmail_loops))
 
     # STEP 7 — honest "not connected": no extension -> triggered:False, never a faked read
     scan = CLIENT.post("/onboard/scan", json={"services": []}).json()
