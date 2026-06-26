@@ -1079,3 +1079,25 @@
     transition: none !important;
   }
 }
+
+/* ===== Prominent microphone button (clear "tap to talk") ===== */
+.mic-btn {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  padding: 0.7rem 1.4rem 0.7rem 0.9rem;
+  border: 1.5px solid var(--gold, #b8893b); border-radius: 999px;
+  background: #fff; color: var(--gold, #b8893b);
+  font: 600 1.02rem/1 "Inter", system-ui, sans-serif; cursor: pointer;
+  transition: background .18s, color .18s, transform .12s, box-shadow .18s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.mic-btn:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(184,137,59,.18); }
+.mic-btn .mic-ico { flex: none; }
+.mic-btn.is-listening {
+  background: var(--gold, #b8893b); color: #fff;
+  box-shadow: 0 0 0 0 rgba(184,137,59,.55); animation: micPulse 1.4s ease-out infinite;
+}
+@keyframes micPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(184,137,59,.5); }
+  70%  { box-shadow: 0 0 0 14px rgba(184,137,59,0); }
+  100% { box-shadow: 0 0 0 0 rgba(184,137,59,0); }
+}

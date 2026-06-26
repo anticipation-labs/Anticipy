@@ -55,9 +55,12 @@
         </div>
 
         <div class="listen-footer">
-          <button class="listen-dot-btn" type="button" data-listen aria-pressed="false" aria-label="Listen">
-            <span class="listen-dot" aria-hidden="true"></span>
-            <span class="listen-dot-label">Listen</span>
+          <button class="mic-btn" type="button" data-listen aria-pressed="false" aria-label="Tap to talk">
+            <svg class="mic-ico" viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+              <path fill="currentColor" d="M12 14.5a3.25 3.25 0 0 0 3.25-3.25V6a3.25 3.25 0 1 0-6.5 0v5.25A3.25 3.25 0 0 0 12 14.5z"/>
+              <path fill="currentColor" d="M18.75 11.25a.95.95 0 1 0-1.9 0 4.85 4.85 0 0 1-9.7 0 .95.95 0 1 0-1.9 0 6.75 6.75 0 0 0 5.8 6.68V20.4H8.4a.95.95 0 1 0 0 1.9h7.2a.95.95 0 1 0 0-1.9h-2.65v-2.47a6.75 6.75 0 0 0 5.8-6.68z"/>
+            </svg>
+            <span class="mic-label" data-mic-label>Tap to talk</span>
           </button>
           <button class="listen-submit" type="button" data-submit>Hand it over <span class="arrow" aria-hidden="true">&rarr;</span></button>
         </div>
@@ -130,6 +133,6 @@
   <!-- Shared auth path (Supabase client + helpers), then the gate, then the app -->
   <script src="auth.js"></script>
   <script src="auth-screen.js"></script>
-  <script src="app.js?v=20260626a"></script>
+  <script src="app.js?v=20260626b"></script>
 </body>
 </html>

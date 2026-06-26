@@ -701,7 +701,7 @@
   var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
   var recog = null, listening = false, baseText = "";
   function setListenLabel(t) {
-    var l = listenBtn.querySelector(".listen-dot-label");
+    var l = listenBtn.querySelector("[data-mic-label]") || listenBtn.querySelector(".listen-dot-label");
     if (l) l.textContent = t;
   }
   function stopListening() {
@@ -709,7 +709,7 @@
     listening = false;
     listenBtn.classList.remove("is-listening");
     listenBtn.setAttribute("aria-pressed", "false");
-    setListenLabel("Listen");
+    setListenLabel("Tap to talk");
     try { if (recog) recog.stop(); } catch (e) {}
     recog = null;
   }
