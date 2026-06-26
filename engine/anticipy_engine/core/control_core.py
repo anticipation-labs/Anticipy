@@ -1991,6 +1991,33 @@ class ControlCore:
                 out.append(_ot)
             self.glassbox.log("extract_tasks", {"line": line.text[:140],
                               "tasks": [t["task"] for t in tasks]})
+        # SENTENCE-LEVEL WEB-LOOKUP BACKSTOP (browser-only reliability, 2026-06-26): the per-line model
+        # split sometimes DROPS a factual web-lookup buried in an unpunctuated day-blob ("...anyway look up
+        # when the Apple Store opens...") — it vanishes with no card. Recover it: scan each observed line's
+        # sentences and re-emit any FACTUAL web-lookup (the scoped _WEB_LOOKUP only — what-time/hours/price/
+        # status/phone/etc.) not already covered. DELIBERATELY NOT the broad _BROWSER "find" verb: "can't
+        # FIND the energy to care" is a vent, and matching bare "find" leaked a vent into a browser action
+        # (cardinal sin). _WEB_LOOKUP requires a factual target, so emotional language can't match. Money +
+        # vent still gated; the spine + chokepoint route it confirm-first to the hand.
+        from ..owner_mode import _WEB_LOOKUP as _DWL, _sentence_split
+        from ..live_memory.review_infer import is_vent_shape as _ivs
+        covered = [{w for w in re.findall(r"[a-z0-9]+", (o.text or "").lower()) if len(w) > 2} for o in out]
+        for src_idx, line in enumerate(observed):
+            for seg in (_sentence_split(line.text or "") or []):
+                seg = seg.strip()
+                if (not seg or _ivs(seg) or _is_interrogative_aside(seg)
+                        or _is_directed_question_to_named_person(seg)):
+                    continue
+                if not _DWL.search(seg) or _MONEY_SIGNAL.search(seg):
+                    continue   # factual web-lookups only; money is never browser-routed here
+                stoks = {w for w in re.findall(r"[a-z0-9]+", seg.lower()) if len(w) > 2}
+                if any(len(stoks & c) >= 2 for c in covered):
+                    continue   # already covered by an extracted/backstopped task
+                n += 1
+                _wt = OwnerObservedLine(line_no=n, text=seg, moat_task=True)
+                _wt.src_idx = src_idx
+                out.append(_wt)
+                covered.append(stoks)
         return out
 
     async def owner_ingest(self, source: str, text: str, meta: dict | None = None,
