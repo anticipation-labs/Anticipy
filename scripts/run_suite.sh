@@ -43,6 +43,7 @@ run owner_test_selftest "$PY" "$REPO/engine/scripts/owner_test.py" --selftest  #
 run owner_test_run_selftest "$PY" "$REPO/engine/scripts/owner_test_run.py" --selftest  # P5 RUNNER: a real day through the engine, scored (0 cardinal-sin end to end)
 run owner_test_day01 "$PY" "$REPO/engine/scripts/owner_test_run.py" --key "$REPO/factory/owner/expected/day01.json"  # P5 DONE-GATE: a realistic founder day end-to-end -> PASS (0 false-action, money held, catch>=0.70)
 run onboarding_e2e_selftest "$PY" "$REPO/engine/scripts/test_onboarding_e2e.py" --selftest  # ONBOARDING DONE-GATE: full flow (permissions->owner/onboard->discover->loop->complete->status) end-to-end + planted-failure battery (empty dossier / skipped complete / no consent / login-walled)
+run onboard_web_contract_selftest "$PY" "$REPO/engine/scripts/test_onboard_web_contract.py" --selftest  # ONBOARDING WEB: the front-end forward-finish path is wired (no dead-end when nothing's readable) + retry no-op removed
 
 echo "== integration (boot engine/extension; free/stub) =="
 run brain_loop      bash "$REPO/scripts/brain_loop.sh"

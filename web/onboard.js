@@ -554,10 +554,37 @@
   var loopRetry = $("[data-loop-retry]");
   if (loopRetry) {
     loopRetry.addEventListener("click", function () {
+      // Open the browser to sign in, then reveal a fresh "Read again" affordance — do NOT re-run the
+      // loop in the same tick (openAnticipyBrowser is fire-and-forget; an immediate re-read hits the
+      // same not-signed-in surfaces and is guaranteed to come back empty). The user clicks Read again
+      // once they've actually signed in.
       openAnticipyBrowser();
-      runLoop();
+      var again = $("[data-loop-again]");
+      if (again) again.hidden = false;
     });
   }
+
+  // FORWARD ESCAPE: onboarding must ALWAYS be able to FINISH, even when no account was readable
+  // (stub model / no debuggable Chrome). "Set me up — I'll learn as we go" persists the completion
+  // marker so the owner reaches the app; the engine keeps learning from everything afterward.
+  function finishOnboarding() {
+    api("/onboard/complete", { method: "POST", body: { complete: true } })
+      .catch(function () { /* best-effort marker; the app re-checks status */ })
+      .then(function () {
+        if (loopEmpty) loopEmpty.hidden = true;
+        if (loopTail) loopTail.hidden = true;
+        goTo("dossier");                                  // switch to the dossier screen (where completeBlock lives)
+        if (dossierStage) dossierStage.style.display = "none";  // hide the learning-cards stage, keep its sibling
+        if (completeBlock) {
+          completeBlock.hidden = false;
+          if (screens.dossier) revealScreen(screens.dossier);
+          if (completeBlock.scrollIntoView) completeBlock.scrollIntoView({ block: "center" });
+        }
+      });
+  }
+  $all("[data-onboard-finish]").forEach(function (b) {
+    b.addEventListener("click", finishOnboarding);
+  });
 
   /* =========================================================
      SCREEN 3 · THE DOSSIER CONFIRM
