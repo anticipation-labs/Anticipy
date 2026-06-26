@@ -182,6 +182,23 @@ _CART_PREP = re.compile(
     r"|\bline\s+up\s+an?\s+order\b|\bprep\s+an?\s+order\b",
     re.I)
 
+# A "do X on a real logged-in SITE/account" task — the centerpiece browser action (e.g. "return that
+# security camera on Amazon", "cancel my order on DoorDash", "go to my Amazon and start a return"). It
+# MUST drive the BROWSER hand on the user's real Chrome (browser-only; never the API arm), and never get
+# dropped. SAFETY ANCHOR: it only fires when an action verb is tied to a NAMED site/account — via a
+# locative "on/at/in/from/through (my|the) <Capitalized-Site>" OR "go to (my) <Site> and ...". The site
+# anchor is what stops vent over-match: "return to bed" / "cancel my plans, I'm exhausted" have NO site,
+# so they never match. Money is still gated upstream (a buy/pay on a site stays blocked, never auto-driven).
+_SITE_ACTION = re.compile(
+    r"\b(?:return|cancel|reorder|re-?order|refund|exchange|track|manage|reschedule|rebook|"
+    r"start\s+(?:a\s+)?return|get\s+(?:a\s+|the\s+)?(?:return\s+label|refund)|update|change|check\s+on|"
+    r"find|look\s*up|reset|download|print|book|renew)\b"
+    r"[^.;!?]{0,60}?\b(?:on|at|in|from|through)\s+(?:my\s+|the\s+|our\s+)?"
+    r"([A-Z][A-Za-z]+|amazon|ebay|walmart|doordash|uber\s*eats|instacart|costco|target|"
+    r"gmail|outlook|paypal|venmo|netflix|spotify|shopify|etsy|best\s*buy)\b"
+    r"|\bgo\s+to\s+(?:my\s+|the\s+)?[A-Za-z][A-Za-z.\s]{0,20}?\b(?:and|,|to)\b",
+    re.I)
+
 # A "make a physical artifact and print it" task (a door sign, a notice, a label) — the CREATE + PRINT
 # capability: generate the artifact -> prepare the print -> confirm before printing (physical action).
 _SIGN_TASK = re.compile(
@@ -1130,19 +1147,25 @@ class ControlCore:
 
     @staticmethod
     def _web_start_url(task: str) -> str:
-        """Pick the site for a web task from plain language. Known sites start directly there (most
-        reliable); otherwise a Google search lets the agent navigate. Never the user's logged-in
-        Chrome — the throwaway browser, where the runner's money/checkout/login guard applies."""
+        """Pick the site for a web task from plain language, in the OWNER'S LOCALE. Sites with country
+        domains (amazon, walmart, ebay, best buy) resolve to the owner's TLD — ANTICIPY_OWNER_TLD
+        (e.g. "ca" for Canada) — so a Canadian owner gets amazon.CA, not amazon.com (their logged-in
+        session lives on .ca). Runs on the owner's real Chrome (browser-only); money/checkout is
+        hard-blocked in the extension regardless of site."""
         t = (task or "").lower()
-        sites = {
-            "amazon": "https://www.amazon.com", "opentable": "https://www.opentable.com",
-            "doordash": "https://www.doordash.com", "ubereats": "https://www.ubereats.com",
-            "uber eats": "https://www.ubereats.com", "yelp": "https://www.yelp.com",
-            "instacart": "https://www.instacart.com", "walmart": "https://www.walmart.com",
-            "best buy": "https://www.bestbuy.com", "target": "https://www.target.com",
-            "google": "https://www.google.com",
+        tld = (os.environ.get("ANTICIPY_OWNER_TLD") or "com").strip().lstrip(".").lower() or "com"
+        # sites that have country domains -> owner's TLD; the rest are .com-only services
+        localized = {"amazon": "amazon", "walmart": "walmart", "best buy": "bestbuy", "ebay": "ebay"}
+        fixed = {
+            "opentable": "https://www.opentable.com", "doordash": "https://www.doordash.com",
+            "ubereats": "https://www.ubereats.com", "uber eats": "https://www.ubereats.com",
+            "yelp": "https://www.yelp.com", "instacart": "https://www.instacart.com",
+            "target": "https://www.target.com", "google": "https://www.google.com",
         }
-        for key, url in sites.items():
+        for key, host in localized.items():
+            if key in t:
+                return f"https://www.{host}.{tld}"
+        for key, url in fixed.items():
             if key in t:
                 return url
         return "https://www.google.com"
@@ -2008,8 +2031,11 @@ class ControlCore:
                 if (not seg or _ivs(seg) or _is_interrogative_aside(seg)
                         or _is_directed_question_to_named_person(seg)):
                     continue
-                if not _DWL.search(seg) or _MONEY_SIGNAL.search(seg):
-                    continue   # factual web-lookups only; money is never browser-routed here
+                # Recover a dropped FACTUAL web-lookup OR a dropped SITE-ACTION ("return X on Amazon",
+                # "go to my Amazon and start a return") — both route to the browser hand. _SITE_ACTION is
+                # site-anchored so vents never match. Money is never browser-routed here.
+                if not (_DWL.search(seg) or _SITE_ACTION.search(seg)) or _MONEY_SIGNAL.search(seg):
+                    continue
                 stoks = {w for w in re.findall(r"[a-z0-9]+", seg.lower()) if len(w) > 2}
                 if any(len(stoks & c) >= 2 for c in covered):
                     continue   # already covered by an extracted/backstopped task
@@ -2462,6 +2488,19 @@ class ControlCore:
                     and not _MONEY_SIGNAL.search(_sign_txt)):
                 self.glassbox.log("create_print_chokepoint", {"line": _sign_txt[:120]})
                 card = await self._create_and_print_ask(line, source)
+            # SITE-ACTION CHOKEPOINT (browser-only, 2026-06-26): "return that security camera on Amazon" /
+            # "cancel my order on DoorDash" / "go to my Amazon and start a return" is a real action on a
+            # logged-in SITE -> it MUST drive the BROWSER hand (the API arm is deleted; never route here to
+            # api/execute_owner_task). _SITE_ACTION is site-anchored ("on/at <Site>" or "go to my <Site>"),
+            # so vents ("return to bed", "cancel my plans") never match; money is still blocked. Fires only
+            # when the line isn't already a good shape (None / generic confirm / the old api execute task).
+            _act_txt = getattr(line, "text", "") or ""
+            if (execute_actions and not getattr(line, "force_ask", False)
+                    and (card is None or getattr(card, "action", None) in ("confirm_owner_task", "execute_owner_task"))
+                    and _SITE_ACTION.search(_act_txt)
+                    and not _MONEY_SIGNAL.search(_act_txt)):
+                self.glassbox.log("site_action_chokepoint", {"line": _act_txt[:120]})
+                card = self._browser_action_ask(line, source)
             # ROUTING CHOKEPOINT (reliability): a web-resolvable lookup that ANY internal path shaped as a
             # generic confirm (route=voice_text / action=confirm_owner_task) should still reach the HAND —
             # reroute it to the browser ask. A single catch-all so a web task can't dead-end as a

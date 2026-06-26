@@ -759,7 +759,18 @@
     } catch (e) { stopListening(); }
   }
   listenBtn.addEventListener("click", function () {
-    if (listening) stopListening(); else startListening();
+    if (listening) {
+      // SEAMLESS: stop talking -> it proceeds on its own. No separate "Hand it over" click — the whole
+      // point is press Listen, say what's going on, and it takes it from there. Small delay so the final
+      // speech phrase lands in the field before we hand it over.
+      stopListening();
+      if ((fieldEl.value || "").trim()) {
+        setListenLabel("On it…");
+        setTimeout(function () { handOver(); }, 450);
+      }
+    } else {
+      startListening();
+    }
   });
 
   function handOver() {
