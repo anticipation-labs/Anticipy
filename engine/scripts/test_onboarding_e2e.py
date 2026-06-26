@@ -223,6 +223,13 @@ def run_flow(*, allow=True, dossier=None, do_complete=True, scrape_mode="ok"):
                     if (i.fields or {}).get("kind") == "store_account"
                     and "costco" in (i.text or "").lower()]
     chk["store_url_dedup"] = (len(costco_cards) == 1)
+    # STEP 6c — app_connection dedup: the same service re-seen WITH an identifier (typed no-id Gmail in
+    # STEP 3, then a Chrome scan with the email) must UPSERT one card, not duplicate (bug-hunt #2).
+    CLIENT.post("/onboard/discover", json={"discovered": [{"service": "Gmail", "logged_in": True, "identifier": "owner@example.com"}]})
+    gmail_cards = [i for i in core.memory.profile.all()
+                   if (i.fields or {}).get("kind") == "app_connection"
+                   and "gmail" in (i.text or "").lower()]
+    chk["app_connection_dedup"] = (len(gmail_cards) == 1)
 
     # STEP 7 — honest "not connected": no extension -> triggered:False, never a faked read
     scan = CLIENT.post("/onboard/scan", json={"services": []}).json()

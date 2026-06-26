@@ -3360,12 +3360,25 @@ class ControlCore:
         return f"{source}:{kind}:{str(fields).strip().lower()}"
 
     def _find_onboarding_item(self, drawer, key: str, fields: dict):
+        new_kind = str(fields.get("kind") or "").strip().lower()
+        new_name = str(fields.get("name") or "").strip().lower()
+        new_ident = str(fields.get("identifier") or "").strip().lower()
         for item in drawer.all():
             item_key = item.fields.get("onboarding_key") or self._onboarding_key(item.fields)
             if item_key == key:
                 return item
             if fields.get("action") == "connect_account" and item.fields.get("action") == "connect_account":
-                if str(item.fields.get("name") or "").strip().lower() == str(fields.get("name") or "").strip().lower():
+                if str(item.fields.get("name") or "").strip().lower() == new_name:
+                    return item
+            # app_connection profile card: a varying/appearing identifier for the SAME service name must
+            # UPSERT in place, not spawn a duplicate (overnight bug-hunt #2: typed Gmail w/ no id, then
+            # the Chrome scan w/ the email id wrote two "App connection: Gmail" cards). Bounded: only when
+            # ONE side lacks an identifier — two genuinely distinct same-service accounts (each with its
+            # own identifier) stay separate. Never name-only.
+            if new_kind == "app_connection" and str(item.fields.get("kind") or "").strip().lower() == "app_connection":
+                it_name = str(item.fields.get("name") or "").strip().lower()
+                it_ident = str(item.fields.get("identifier") or "").strip().lower()
+                if it_name == new_name and (not new_ident or not it_ident):
                     return item
         return None
 
