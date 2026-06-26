@@ -2112,8 +2112,20 @@ async def ws_extension(ws: WebSocket) -> None:
 # StaticFiles only catches leftover paths (/, /app.html, /styles.css, /app.js, ...). html=True -> "/" = index.html.
 try:
     from fastapi.staticfiles import StaticFiles
+
+    class _NoCacheStatic(StaticFiles):
+        # Always revalidate the app shell (HTML/JS/CSS): the browser keeps an etag and gets a fast 304
+        # when nothing changed, but picks up a fresh build the instant a file changes — no stale UI.
+        async def get_response(self, path, scope):
+            resp = await super().get_response(path, scope)
+            try:
+                resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+            except Exception:
+                pass
+            return resp
+
     _web_dir = Path(__file__).resolve().parents[2] / "web"
     if _web_dir.is_dir():
-        app.mount("/", StaticFiles(directory=str(_web_dir), html=True), name="web")
+        app.mount("/", _NoCacheStatic(directory=str(_web_dir), html=True), name="web")
 except Exception:
     pass

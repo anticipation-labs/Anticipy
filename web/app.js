@@ -171,9 +171,13 @@
   function visibleCards() {
     return cards.filter(function (c) {
       if (dismissed[c.id]) return false;
-      var st = (c.status || "open");
-      // declined / removed cards leave the surface
-      if (st === "declined") return false;
+      var st = (c.status || c.state || "open");
+      // resolved cards leave the surface: declined, or already terminal (done/failed) — never let a
+      // dead card sit on the deck where re-confirming it just errors ("couldn't lock that in").
+      if (st === "declined" || st === "done" || st === "failed" || st === "resolved") return false;
+      // a browser / create+print card that already ran (terminal receipt) is done too
+      var br = c.browser_result;
+      if (br && (br.success === true || br.state === "done")) return false;
       return true;
     });
   }
@@ -692,14 +696,74 @@
   });
   submitBtn.addEventListener("click", handOver);
 
-  // Listen affordance — visual-only promise of the pendant (wires nothing yet)
+  // Active listening — the pendant, in the browser. Speak your day; the words land in the field live
+  // (final phrases committed, the in-flight phrase shown faintly). Stop, glance, hand it over.
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var recog = null, listening = false, baseText = "";
+  function setListenLabel(t) {
+    var l = listenBtn.querySelector(".listen-dot-label");
+    if (l) l.textContent = t;
+  }
+  function stopListening() {
+    if (!listening && !recog) return;
+    listening = false;
+    listenBtn.classList.remove("is-listening");
+    listenBtn.setAttribute("aria-pressed", "false");
+    setListenLabel("Listen");
+    try { if (recog) recog.stop(); } catch (e) {}
+    recog = null;
+  }
+  function startListening() {
+    if (!SpeechRec) {
+      showAside("Talking it out needs Chrome's mic — for now, just type or paste and I'll take it from there.");
+      return;
+    }
+    baseText = (fieldEl.value || "").trim();
+    recog = new SpeechRec();
+    recog.lang = "en-US";
+    recog.continuous = true;
+    recog.interimResults = true;
+    recog.onresult = function (ev) {
+      var interim = "";
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        var tr = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) {
+          baseText = (baseText + (baseText && !/\s$/.test(baseText) ? " " : "") + tr.trim()).trim();
+        } else {
+          interim += tr;
+        }
+      }
+      fieldEl.value = baseText + (interim ? (baseText ? " " : "") + interim : "");
+      autoGrow();
+    };
+    recog.onerror = function (ev) {
+      var err = ev && ev.error;
+      if (err === "not-allowed" || err === "service-not-allowed") {
+        showAside("I need mic access to listen — allow it in the address bar, or just type it out.");
+      } else if (err === "no-speech") {
+        // silence — keep going (onend will restart)
+      }
+      if (err === "not-allowed" || err === "service-not-allowed" || err === "audio-capture") stopListening();
+    };
+    recog.onend = function () {
+      // Chrome ends the session on a pause; while the user still has Listen ON, seamlessly resume.
+      if (listening && recog) { try { recog.start(); } catch (e) { stopListening(); } }
+    };
+    try {
+      recog.start();
+      listening = true;
+      listenBtn.classList.add("is-listening");
+      listenBtn.setAttribute("aria-pressed", "true");
+      setListenLabel("Listening…");
+      clearAside();
+    } catch (e) { stopListening(); }
+  }
   listenBtn.addEventListener("click", function () {
-    var on = listenBtn.classList.toggle("is-listening");
-    listenBtn.setAttribute("aria-pressed", String(on));
-    // data-listen hook left for a future /listen/start
+    if (listening) stopListening(); else startListening();
   });
 
   function handOver() {
+    if (typeof stopListening === "function") stopListening();   // speaking -> handing over: release the mic
     var text = (fieldEl.value || "").trim();
     if (!text) return;
     clearAside();
@@ -719,10 +783,14 @@
       .then(function (res) {
         fieldEl.value = "";
         autoGrow();
-        mergeCards((res && res.cards) || []);
+        var got = ((res && res.cards) || []);
+        mergeCards(got);
         renderDeck(true);
         var ignored = (res && res.ignored_line_count) || 0;
-        if (ignored > 0) {
+        if (got.length === 0 && ignored === 0) {
+          // nothing surfaced and nothing was explicitly "just life" — don't leave a silent "all caught up"
+          showAside("I didn't catch anything I could take on there — mind saying it a touch more directly?");
+        } else if (ignored > 0) {
           showAside(ignored + (ignored === 1 ? " line was just life — left it be." : " lines were just life — left them be."));
         }
       })
