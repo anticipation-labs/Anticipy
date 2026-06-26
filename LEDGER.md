@@ -253,3 +253,20 @@ that piece live.
 Every gate that could be built + verified **without** Omar is done, ratcheted, and committed (suite
 108/0). Everything left genuinely needs him — so per THE_FORGE ("don't grind, don't fake"), the loop
 is **stopped**, not spinning. The batch to unblock the rest is in **`PENDING_FOR_OMAR.md`**.
+
+## 🌙 OVERNIGHT AUTONOMOUS LOOP (2026-06-25 → morning) — find real bugs, fix one at a time, gated
+Omar asleep; authorized "better you try and fail than do nothing." Rescoped done ([[anticipy_done_rescope]]):
+onboarding must work (DONE 112/0, verified live), download-app + 5-day proof dropped, text/call work in
+theory (DONE — ready_to_enable, mock). The loop: each cycle an adversarial bug-hunt workflow finds
+CONFIRMED real bugs across the product (onboarding / create+print / routing / safety) → fix the top one
+MINIMALLY → GATE HARD (suite 112/0 AND safety_mega_eval BREACHES:0 AND relevant e2e) → commit only a
+strict improvement, REVERT any regress (never leave a broken pipe) → log here → launch next cycle.
+HARD RAILS overnight: never flip channels live (no surprise texts), never drive Omar's Chrome/Google
+profile, never money/send, engine stays mock/stub, no commits while factory/.lock exists. Baseline @89eaccf.
+- Cycle 1: bug-hunt wi7fglq5j launched.
+- Cycle 2-3 (00:15-00:20): engine crashed under bug-hunt concurrency -> restarted, mock confirmed. Hunt wi7fglq5j still running; will scrutinize findings (engine was down mid-run). Future hunts: gentler engine concurrency.
+- Cycle 4 (00:26): bug-hunt wi7fglq5j -> 3 confirmed (0 safety leaks). FIX #1 loop-retry dead affordance (self-inflicted, caught by hunt): pass ev + [data-loop-empty-again] visible read-again; web-contract 6 checks. Suite 112/0. Committed.
+- Cycle 5 (00:33): FIX #3 store_account URL canonicalization (scheme/www/slash) -> 1 card; e2e store_url_dedup (19 checks). Suite 112/0. Committed.
+- Cycle 6 (00:35): FIX #2 app_connection dedup (bounded name-fallback; distinct accounts stay separate); e2e 20 checks. Suite 112/0. Committed. ALL 3 hunt findings done.
+- Cycle 11 (00:51): cycle-7 hunt w0m8oorgo -> 6 confirmed, 0 blocker. FIX #4 make_sign smart-tier (dead fallback -> generic NOTICE); test_gateway asserts. Suite 112/0. Committed. #1(digital-leak)/#3(stale-loop) flagged needs-care.
+- Cycle 14 (01:40): FIX #5 digital-medium guard (slack/gmail/website no longer print a physical PDF; door-sign + email-on-sign still print). Caught+fixed a HANG in the new test (TestClient-no-bus -> rewrote to core.owner_ingest). Suite 113/0. Committed.

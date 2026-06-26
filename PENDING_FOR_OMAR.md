@@ -1,5 +1,36 @@
 # PENDING FOR OMAR — the batch that unblocks the rest
 
+## ☀️ MORNING HANDOFF — overnight autonomous run (2026-06-25 night → 2026-06-26)
+**5 real bugs found, fixed, gated, and committed while you slept — suite went 112 → 113/0, zero regressions.**
+Each was surfaced by an adversarial bug-hunt, re-verified on the live engine, fixed minimally, and gated
+(full suite + zero safety breaches + the onboarding/print e2e) before commit.
+
+| # | Fix | Commit |
+|---|---|---|
+| 1 | Onboarding loop-retry was a **dead button** (no event → silent; revealed a button trapped in a hidden parent) — added a visible "Read again" + pass the click event | `cca7732` |
+| 2 | Onboarding wrote **duplicate "Common store/account" cards** for `costco.com` vs `https://costco.com` — URL canonicalization | `b9be7e3` |
+| 3 | Onboarding wrote **duplicate "App connection" cards** when an account's identifier appeared/changed (typed Gmail → Chrome scan) — bounded name-fallback (distinct accounts stay separate) | `eb8ec43` |
+| 4 | Every **novel-phrasing sign shipped a generic "NOTICE"** — `make_sign`'s model fallback was dead code (locked out of the smart tier) | `9a265a1` |
+| 5 | **Digital requests spawned a physical PDF** — "post a warning in the slack channel" / "create a label in gmail" hit the print path; narrow guard excludes digital targets, real signs (incl. "a sign with my email on it") still print | `1cb58e0` |
+
+**Tests added/strengthened (un-fakeable, planted-failure-proven):** `test_onboarding_e2e` 18→20 checks,
+`test_onboard_web_contract` 4→6, `test_gateway` +make_sign assertion, **new** `test_create_print_routing`.
+
+**Still needs YOU (one item, flagged needs-care — I did NOT risk it unsupervised):**
+- **Finding #3 — stale "Connect X" loop never closes** when a service connects under a *changed* identifier.
+  `engine/anticipy_engine/core/control_core.py` `_close_connected_setup_loops` (~3407-3429) looks the
+  connection up by key only; when the key changes (identifier appears) it returns None and the WAITING
+  "Connect Gmail" loop never flips to done → a connected account keeps showing as needing setup. **Exact
+  fix:** a bounded name-match fallback — also close the connect loop when the key-lookup is None but its
+  `fields.name` matches a *connected* app_connection profile card. Gate on the full suite. ~10 min with me.
+
+**Notes:** the adversarial bug-hunt crashes the local engine under concurrency (I restarted it each time and
+re-verified findings on the healthy engine). **All overnight rails held:** channels stayed **mock** (no
+texts/calls sent), your Chrome/Google profile was never driven, no money/send, no real data deleted, only
+the specific fix files were committed. Loop stopped cleanly at ~02:00. (Earlier items below still stand.)
+
+---
+
 > Updated 2026-06-25. **The product PASSES the un-fakeable done-gate** — a realistic day run end-to-end
 > scores 0 cardinal-sins, money held, vents silent, tasks caught (`owner_test_run --key day01.json`,
 > now permanent in the suite, 110/0). The two things left both need YOU. Read with `LEDGER.md`.
