@@ -33,6 +33,13 @@ def _checks(html: str, js: str) -> dict:
     # 4) the loop-retry handler must NOT re-run the loop in the same tick (the guaranteed-empty no-op)
     chk["no_synchronous_retry_reload"] = ("openAnticipyBrowser();\n      runLoop();" not in js
                                           and not re.search(r"openAnticipyBrowser\(\);\s*runLoop\(\);", js))
+    # 5) loop-retry must pass the click event to openAnticipyBrowser (no-arg -> null link -> silent scan,
+    #    the honest status text never renders) — assert the call carries an argument.
+    chk["retry_passes_event"] = bool(re.search(r"openAnticipyBrowser\(\s*ev\s*\)", js))
+    # 6) the empty-floor read-again button exists AND lives in the empty floor (not trapped in the hidden
+    #    [data-loop-tail]) so un-hiding it actually shows it.
+    chk["empty_floor_read_again"] = ("data-loop-empty-again" in html
+                                     and "[data-loop-empty-again]" in js)
     return chk
 
 

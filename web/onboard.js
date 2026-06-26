@@ -540,8 +540,8 @@
       });
   }
 
-  // tail actions
-  $all("[data-loop-again]").forEach(function (b) {
+  // tail actions + the empty-floor "Read again" (after the user signs in) -> re-run the loop
+  $all("[data-loop-again], [data-loop-empty-again]").forEach(function (b) {
     b.addEventListener("click", function () { runLoop(); });
   });
   var loopContinue = $("[data-loop-continue]");
@@ -553,13 +553,17 @@
   }
   var loopRetry = $("[data-loop-retry]");
   if (loopRetry) {
-    loopRetry.addEventListener("click", function () {
+    loopRetry.addEventListener("click", function (ev) {
       // Open the browser to sign in, then reveal a fresh "Read again" affordance — do NOT re-run the
       // loop in the same tick (openAnticipyBrowser is fire-and-forget; an immediate re-read hits the
       // same not-signed-in surfaces and is guaranteed to come back empty). The user clicks Read again
       // once they've actually signed in.
-      openAnticipyBrowser();
-      var again = $("[data-loop-again]");
+      // PASS the click event so openAnticipyBrowser anchors its honest scan-status text to THIS button
+      // (no event -> null link -> the whole status path was silently skipped). And reveal the read-again
+      // button that lives INSIDE the empty floor — the old [data-loop-again] sits in a hidden
+      // [data-loop-tail] parent, so un-hiding the child could never show it.
+      openAnticipyBrowser(ev);
+      var again = $("[data-loop-empty-again]");
       if (again) again.hidden = false;
     });
   }
