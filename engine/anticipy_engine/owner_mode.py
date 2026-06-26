@@ -117,11 +117,11 @@ _MONEY = re.compile(r"\b(pay|buy|" + _ORDER_VERB + r"|purchase|checkout|wire|ven
 # does NOT match. Money/send/vent are still gated FIRST (this only fires in the browser branch, after
 # the money->blocked and send->draft pre-gates), so it never weakens the money hard stop.
 _WEB_LOOKUP = re.compile(
-    r"\b(?:what(?:'?s| is| time| are)?|when(?:'?s| is| does| do)?|how (?:much|many|long|far|tall|old|big)|"
+    r"\b(?:what(?:'?s| is| time| are)?|when(?:'?s| is| does| do)?|how (?:much|many|long|far|tall|old|big|late|early)|"
     r"where(?:'?s| is| can| are)?|who(?:'?s| is)?|which)\b[\w' ,]{0,60}?\b"
     r"(?:open|opens?|close[sd]?|closing|cost|costs?|price[sd]?|hours?|address|located|"
     r"phone|number|status|available|availability|website|rated|reviews?|fees?|admission|deadline)\b"
-    r"|\bhow (?:much|many|long|far|tall|old|big)\b"
+    r"|\bhow (?:much|many|long|far|tall|old|big|late|early)\b"
     # "check the STATUS/tracking/score/weather/availability OF X" = a web lookup; scoped tight (and
     # requires the trailing of/on/for) so work phrasings like "sanity-check the hours" do NOT match.
     r"|\bcheck (?:the |my )?(?:status|tracking|score|weather|availability)\s+(?:of|on|for)\b"
