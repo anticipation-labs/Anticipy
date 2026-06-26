@@ -189,6 +189,17 @@ _SIGN_TASK = re.compile(
     r"throw\s*(?:up|together)|need|want)\b"
     r"[^.;!?]{0,45}?\b(?:sign|notice|label|flyer|poster|placard|warning|out[- ]?of[- ]?order)\b",
     re.I)
+# A DIGITAL-CHANNEL TARGET (overnight bug-hunt #1): "post a warning IN THE SLACK CHANNEL" / "create a
+# label IN GMAIL" are digital requests, not physical signs — they must NOT reach the create+print
+# (real-PDF) path. Match the medium ONLY as a LOCATIVE target (in/on/to/into <medium>, or "<app> channel/
+# message/...") so a PHYSICAL sign that merely MENTIONS a medium ("put up a sign WITH my email on it")
+# still prints. Narrow + additive; never widens what create+print catches.
+_DIGITAL_MEDIUM = re.compile(
+    r"\b(?:in|on|to|into)\s+(?:the\s+|my\s+|a\s+|our\s+)?"
+    r"(?:slack|teams|discord|gmail|e-?mail|inbox|notion|figma|canva|google\s*doc(?:s)?|google\s*sheet(?:s)?|"
+    r"web\s*page|web\s*site|website|online|chat|group\s*chat|whats\s*app|the\s+channel|messages?)\b"
+    r"|\b(?:slack|teams|discord|gmail|notion|figma|canva)\s+(?:channel|message|post|thread|doc|dm)\b",
+    re.I)
 
 
 def _derive_sign_text(task: str) -> tuple[str, str]:
@@ -2417,10 +2428,12 @@ class ControlCore:
             # before printing (a physical action). Runs on the line regardless of how the brain shaped it,
             # so a sign task the router would drop to a do-nothing confirm still reaches the create+print
             # round-trip. Excludes money (never) and vents (force_ask: held, not proactively executed).
+            _sign_txt = getattr(line, "text", "") or ""
             if (execute_actions and not getattr(line, "force_ask", False)
-                    and _SIGN_TASK.search(getattr(line, "text", "") or "")
-                    and not _MONEY_SIGNAL.search(getattr(line, "text", "") or "")):
-                self.glassbox.log("create_print_chokepoint", {"line": (line.text or "")[:120]})
+                    and _SIGN_TASK.search(_sign_txt)
+                    and not _DIGITAL_MEDIUM.search(_sign_txt)   # a digital-channel target -> not a physical sign
+                    and not _MONEY_SIGNAL.search(_sign_txt)):
+                self.glassbox.log("create_print_chokepoint", {"line": _sign_txt[:120]})
                 card = await self._create_and_print_ask(line, source)
             # ROUTING CHOKEPOINT (reliability): a web-resolvable lookup that ANY internal path shaped as a
             # generic confirm (route=voice_text / action=confirm_owner_task) should still reach the HAND —
