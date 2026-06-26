@@ -143,6 +143,20 @@ CART_URL_RE = re.compile(
     re.I,
 )
 REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
+# ---- Amazon RETURN funnel (the _try_amazon_return_recipe step plan) ----
+AMAZON_ORDERS_URL_RE = re.compile(r"/(?:gp/css/order-history|your-orders|gp/your-account/order-history)\b", re.I)
+RETURN_DONE_URL_RE = re.compile(r"/(?:a/returns/(?:package|label|confirmation)|spr/returns/(?:confirm|label))", re.I)
+RETURN_START_RE = re.compile(r"\breturn\s+or\s+replace\s+items?\b|\breturn\s+items?\b|\bstart\s+(?:a\s+)?return\b|\breturn/replace\b", re.I)
+RETURN_SUBMIT_RE = re.compile(r"\bsubmit\s+(?:your\s+)?return\b|\bconfirm\s+your\s+return\b|\bsubmit\b", re.I)
+RETURN_LABEL_RE = re.compile(r"\b(?:return\s+label|get\s+(?:your\s+)?label|print\s+label|qr\s+code|drop\s*-?off\s+code|view\s+label|barcode)\b", re.I)
+RETURN_REASON_RE = re.compile(r"\b(?:defective|doesn'?t\s+(?:work|fit)|no\s+longer\s+needed|wrong\s+item|not\s+as\s+described|changed\s+my\s+mind|better\s+price|item\s+defective|missing\s+parts|arrived\s+damaged)\b", re.I)
+RETURN_REFUND_ORIG_RE = re.compile(r"refund\s+to\s+(?:your\s+)?(?:original|same)\s+(?:payment|card)|original\s+payment\s+method", re.I)
+RETURN_FREE_RE = re.compile(r"\bfree\b|\$0\.00|no\s+(?:cost|charge|fee)|drop\s*-?off|amazon\s+hub|whole\s*foods|\bUPS\s+drop", re.I)
+RETURN_FEE_RE = re.compile(r"\$\s*\d|\bfee\b|\bcost(?:s)?\b|\bdeducted\b|\brestocking\b|pickup\s*\$", re.I)
+RETURN_CONTINUE_RE = re.compile(r"\b(?:continue|next|confirm|submit|done|get\s+label|finish)\b", re.I)
+# Re-purchase / spend controls on the orders + return pages that PURCHASE_GUARD doesn't cover ("Buy it
+# again" is a one-click re-buy) — the return recipe must NEVER click these (money hard-stop).
+_RETURN_BUY_RE = re.compile(r"\b(?:buy\s+it\s+again|buy\s+again|buy\s+now|add\s+to\s+cart|place\s+(?:your\s+)?order|proceed\s+to\s+checkout|reorder|re-?order|subscribe)\b", re.I)
 CART_DURABILITY_READS = max(1, int(os.environ.get("ANTICIPY_CART_DURABILITY_READS", "5")))
 CART_DURABILITY_DELAY_SECONDS = max(0.0, float(os.environ.get("ANTICIPY_CART_DURABILITY_DELAY_SECONDS", "5.0")))
 SEARCH_RESULTS_URL_RE = re.compile(
@@ -364,6 +378,29 @@ def _search_text(task: str) -> str:
             if item:
                 return item
     return ""
+
+
+def _return_item_text(task: str) -> str:
+    """Strip verbs/site/filler from a return task -> the item words ("security cameras"). Used to find
+    the right order on the Amazon orders page (token-matched against order-card text)."""
+    t = re.sub(r"\b(?:get|start|do|deal\s+with|handle|process|the|a|an|my|please|amazon|walmart|ebay|"
+               r"return|refund|exchange|replace(?:ment)?|send\s+back|cancel|order|for|of|i|bought|"
+               r"ordered|purchased|got|received|on|from|that|this|those|these)\b",
+               " ", task or "", flags=re.I)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _return_unsafe_click(el: dict) -> Optional[str]:
+    """The Amazon-return recipe drives _act directly, so it does NOT inherit the run()-loop hard-stops.
+    Re-implement them: never click a money-commit control, and never pick a return option that costs
+    money (a fee/restocking, unless it's explicitly free). Returns a stop-reason, else None. (orderID=
+    in a URL is harmless read-only return management, so it's deliberately NOT a stop here.)"""
+    name = el.get("name") or ""
+    if PURCHASE_GUARD.search(name) or _RETURN_BUY_RE.search(name):
+        return f"a buy/spend control '{name[:48]}'"
+    if RETURN_FEE_RE.search(name) and not RETURN_FREE_RE.search(name):
+        return f"a return option that costs money '{name[:48]}'"
+    return None
 
 
 def _host(url: str) -> str:
@@ -1619,6 +1656,136 @@ class WebVoyagerAgent:
         return self._done(out, step, history, answer="", needs_human=True, paused=True,
                           wall_kind=wall_kind, ask=ask, resume_token=new_id(), reason=detail)
 
+    async def _try_amazon_return_recipe(self, task: str, start_url: str) -> Optional[dict]:
+        """THE AMAZON RETURN (the one real end-to-end scenario): drive the owner's real logged-in
+        amazon.ca — Orders -> find the item -> "Return or replace items" -> reason -> a FREE method +
+        refund to original payment -> the return label/QR. Effective (a tailored step plan, not the
+        generic loop) and honest: money/credential hard-stops are re-implemented (the recipe bypasses
+        the run()-loop guards), and it NEVER fakes done — only a verified label/QR is success; anything
+        else is a handback (needs_human) with page_states as evidence. Gate: amazon host + return intent
+        + an item -> else None (falls through to the commerce recipe / generic loop). Returns None ONLY
+        before the first mutation; once it clicks 'Return or replace', it always returns _done/_handoff."""
+        if "amazon." not in _host(start_url):
+            return None
+        if not re.search(r"\b(return|refund|exchange|replace|send\s+back)\b", task or "", re.I):
+            return None
+        item = _return_item_text(task)
+        if not item:
+            return None
+        history: List[str] = []
+        states: list[dict] = []
+        steps = 0
+        m = re.match(r"(https?://[^/]+)", start_url)
+        base = m.group(1) if m else "https://www.amazon.ca"
+        orders_url = base + "/gp/css/order-history"
+        item_toks = _item_tokens(item)
+
+        # STEP 0/1 — land on the Orders page (resume-aware: if we're already mid-funnel, the loop below
+        # picks it up). Walls (login/2FA/anti-bot) -> pause + text + resume, never type a credential.
+        first_url = start_url if AMAZON_ORDERS_URL_RE.search(start_url or "") else orders_url
+        out, shot = await self._observe_ready(first_url)
+        self._cur_shot = shot
+        history.append("return: open orders")
+        wall = _commerce_wall_kind(out)
+        if wall:
+            return await self._handoff(out, steps + 1, history, wall, "wall opening Amazon orders")
+        if not AMAZON_ORDERS_URL_RE.search((out or {}).get("url") or "") \
+                and not RETURN_DONE_URL_RE.search((out or {}).get("url") or ""):
+            out, shot = await self._observe_ready(orders_url)
+            self._cur_shot = shot
+            history.append("return: re-navigate orders")
+            steps += 1
+            wall = _commerce_wall_kind(out)
+            if wall:
+                return await self._handoff(out, steps + 1, history, wall, "wall on Amazon orders")
+        states.append(_page_state("amazon_orders", out, item, history[-1], start_url=start_url))
+        if self._unactionable_obs(out) and not AMAZON_ORDERS_URL_RE.search((out or {}).get("url") or ""):
+            return self._done(out, steps + 1, history, answer="",
+                              reason="Amazon orders page did not load", needs_human=True,
+                              amazon_return_recipe=True, page_states=states)
+
+        # STEP 2 — locate the order whose card matches the item, find its "Return or replace items"
+        btn = None
+        for scroll in range(6):
+            if _token_hits((out.get("text") or ""), item_toks) > 0:
+                btn = _pick_button(out.get("elements") or [], RETURN_START_RE)
+                if btn:
+                    break
+            await self._act({"action": "scroll", "dir": "down"})
+            out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            steps += 1
+            wall = _commerce_wall_kind(out)
+            if wall:
+                return await self._handoff(out, steps + 1, history, wall, "wall scanning orders")
+        states.append(_page_state("amazon_located_order", out, item, "return: scan orders", start_url=start_url))
+        if not btn:
+            return self._done(out, steps + 1, history, answer="",
+                              reason=f"could not find an order matching '{item}'", needs_human=True,
+                              amazon_return_recipe=True, page_states=states)
+
+        # STEP 3 — start the return (FIRST mutation; from here NEVER return None, only _done/_handoff)
+        stop = _return_unsafe_click(btn)
+        if stop:
+            return self._done(out, steps + 1, history, answer=f"STOPPED — {stop}",
+                              stopped_for_safety=True, amazon_return_recipe=True, page_states=states)
+        out, shot = await self._act_add_and_observe({"action": "click", "index": btn.get("idx")})
+        self._cur_shot = shot
+        history.append("return: clicked 'Return or replace items'")
+        steps += 1
+        wall = _commerce_wall_kind(out)
+        if wall:
+            return await self._handoff(out, steps + 1, history, wall, "wall starting return")
+        states.append(_page_state("amazon_return_started", out, item, history[-1], start_url=start_url))
+
+        # STEP 4-6 — reason -> free method + refund-to-original -> submit -> label. Bounded; each click
+        # safety-checked. Success ONLY when the label/QR/confirmation is on screen (read-back, not self-
+        # attested). Money stop: only fee options + no free -> stopped_for_safety.
+        for phase in range(10):
+            url = (out.get("url") or "")
+            text = (out.get("text") or "")
+            els = out.get("elements") or []
+            if RETURN_DONE_URL_RE.search(url) or _pick_button(els, RETURN_LABEL_RE) or RETURN_LABEL_RE.search(text):
+                return self._done(out, steps + 1, history,
+                                  answer=f"Return started for {item}; return label/QR generated.",
+                                  amazon_return_recipe=True, page_states=states)
+            # money stop: a refund/return-method step where EVERY option costs money and none is free
+            if _pick_button(els, RETURN_FEE_RE) and not _pick_button(els, RETURN_FREE_RE) \
+                    and not _pick_button(els, RETURN_REFUND_ORIG_RE):
+                return self._done(out, steps + 1, history,
+                                  answer=f"STOPPED — every return option for {item} has a fee; handed back so you choose.",
+                                  stopped_for_safety=True, amazon_return_recipe=True, page_states=states)
+            # next safe control: a FREE method > refund-to-original > a reason > continue/submit
+            nxt = (_pick_button(els, RETURN_FREE_RE) or _pick_button(els, RETURN_REFUND_ORIG_RE)
+                   or _pick_button(els, RETURN_REASON_RE) or _pick_button(els, RETURN_SUBMIT_RE)
+                   or _pick_button(els, RETURN_CONTINUE_RE))
+            if nxt is None:
+                if phase < 5:
+                    await self._act({"action": "scroll", "dir": "down"})
+                    out, shot = await self._observe_ready()
+                    self._cur_shot = shot
+                    steps += 1
+                    continue
+                return self._done(out, steps + 1, history, answer="",
+                                  reason="return flow step changed; could not proceed to the label",
+                                  needs_human=True, amazon_return_recipe=True, page_states=states)
+            stop = _return_unsafe_click(nxt)
+            if stop:
+                return self._done(out, steps + 1, history,
+                                  answer=f"STOPPED — {stop}; handed back so you choose.",
+                                  stopped_for_safety=True, amazon_return_recipe=True, page_states=states)
+            out, shot = await self._act_add_and_observe({"action": "click", "index": nxt.get("idx")})
+            self._cur_shot = shot
+            history.append(f"return: clicked '{(nxt.get('name') or '')[:40]}'")
+            steps += 1
+            wall = _commerce_wall_kind(out)
+            if wall:
+                return await self._handoff(out, steps + 1, history, wall, "wall mid return flow")
+            states.append(_page_state(f"amazon_return_phase_{phase}", out, item, history[-1], start_url=start_url))
+        return self._done(out, steps + 1, history, answer="",
+                          reason="could not reach the return label after several steps",
+                          needs_human=True, amazon_return_recipe=True, page_states=states)
+
     async def _try_commerce_recipe(self, task: str, start_url: str) -> Optional[dict]:
         item = _search_text(task)
         if not item or not re.search(r"\b(cart|basket|bag)\b", task or "", re.I):
@@ -2133,6 +2300,10 @@ class WebVoyagerAgent:
                           page_states=states, commerce_recipe=True)
 
     async def run(self, task: str, start_url: str) -> dict:
+        # Most-specific recipe first: an Amazon RETURN before the generic commerce (cart) recipe.
+        return_result = await self._try_amazon_return_recipe(task, start_url)
+        if return_result is not None:
+            return return_result
         recipe_result = await self._try_commerce_recipe(task, start_url)
         if recipe_result is not None:
             return recipe_result
