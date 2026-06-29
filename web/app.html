@@ -6,6 +6,7 @@
   <title>Anticipy — The Board</title>
   <meta name="description" content="The calm room. Hand over your day; the loose ends close behind you. Anticipy never spends your money, or your trust, without asking." />
   <meta name="theme-color" content="#F5F1E8" />
+  <link rel="icon" href="data:," />
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -32,8 +33,20 @@
     <span class="topbar-date">
       the day <span class="topbar-date-val" data-today>·</span>
     </span>
+    <nav class="an-topnav" aria-label="Sections">
+      <a href="app.html" class="active">Tasks</a>
+      <a href="mp3.html">Upload</a>
+      <a href="settings.html">Settings</a>
+    </nav>
     <span class="auth-chip-slot" data-auth-chip></span>
   </header>
+  <style>
+    .an-topnav { display:inline-flex; gap:.2rem; margin-left:1rem; }
+    .an-topnav a { font:500 .82rem/1 "Inter",sans-serif; color:#4A4641; text-decoration:none;
+      padding:.4rem .75rem; border-radius:999px; }
+    .an-topnav a:hover { background:#F5F1E8; color:#171615; }
+    .an-topnav a.active { background:#171615; color:#FBF9F4; }
+  </style>
 
   <main class="app-shell" id="top">
 

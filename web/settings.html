@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anticipy — Settings</title>
+  <meta name="theme-color" content="#FBF9F4" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171615'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23B8924A' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="anticipy.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .set-section { margin-bottom: 1.8rem; }
+    .toggle { position: relative; width: 46px; height: 26px; flex: 0 0 auto; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .track { position:absolute; inset:0; background: var(--line); border-radius: 999px; transition:.2s; }
+    .toggle .track::before { content:""; position:absolute; left:3px; top:3px; width:20px; height:20px; background:#fff; border-radius:50%; transition:.2s; box-shadow: var(--shadow-sm); }
+    .toggle input:checked + .track { background: var(--green); }
+    .toggle input:checked + .track::before { transform: translateX(20px); }
+    .perm-row { display:flex; align-items:center; gap:1rem; padding:.85rem 0; border-bottom:1px solid var(--line-soft); }
+    .perm-row:last-child { border-bottom:0; }
+    .perm-row .grow strong { display:block; }
+    .save-flash { color: var(--green); font-size:.85rem; min-height:1.1em; }
+  </style>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="an-topbar">
+    <a class="an-wordmark" href="app.html" aria-label="Anticipy home">ANTICIPY<span class="dot">.</span></a>
+    <nav class="an-nav" data-an-nav></nav>
+  </header>
+
+  <div class="an-main">
+    <main class="an-panel an-panel--wide" role="main" style="margin:1rem auto">
+      <p class="eyebrow">Settings</p>
+      <h1>How much rope I get.</h1>
+      <p class="muted" style="margin-top:.4rem">You're always in control. Money and anything irreversible always ask — in every mode.</p>
+      <p class="save-flash" data-flash></p>
+
+      <div class="divider"></div>
+
+      <!-- AUTONOMY -->
+      <section class="set-section">
+        <h3 class="serif">Autonomy</h3>
+        <p class="muted" style="margin:.3rem 0 1rem">Set the default. You can still nudge it per task.</p>
+        <div class="seg" data-autonomy>
+          <button type="button" data-mode="limited">Limited</button>
+          <button type="button" data-mode="regular">Regular</button>
+          <button type="button" data-mode="full_send">Full-Send</button>
+        </div>
+        <p class="muted" data-mode-desc style="margin:.8rem 0 0; font-size:.92rem"></p>
+        <p class="pill-note" style="margin-top:.8rem">⚖︎ Money &amp; irreversible always confirm</p>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- PERMISSIONS -->
+      <section class="set-section">
+        <h3 class="serif">What I'm allowed to touch</h3>
+        <p class="muted" style="margin:.3rem 0 1rem">Nothing is read or acted on until you allow it here.</p>
+        <div data-perms><p class="muted">Loading…</p></div>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- ALWAYS-CONFIRM RULES -->
+      <section class="set-section">
+        <h3 class="serif">Always ask me first about…</h3>
+        <p class="muted" style="margin:.3rem 0 1rem">Your hard lines. I'll never cross these on my own.</p>
+        <div class="stack-sm" id="rules"></div>
+        <div class="row" style="margin-top:.8rem">
+          <input class="input grow" id="new-rule" placeholder="e.g. Anything touching my personal email" />
+          <button class="btn btn--ghost" type="button" id="add-rule">Add</button>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- MEMORY (Phase 4) -->
+      <section class="set-section">
+        <h3 class="serif">Your memory</h3>
+        <p class="muted" style="margin:.3rem 0 1rem">Everything I know about you — view it, correct it, or tell me to forget.</p>
+        <button class="btn btn--ghost" type="button" data-soon="memory_view"
+                data-soon-msg="The memory viewer + correction loop arrives in the memory phase.">Open memory</button>
+      </section>
+
+      <div class="divider"></div>
+
+      <!-- TEXT MIRROR (Phase 5) -->
+      <section class="set-section">
+        <div class="perm-row" style="border:0; padding:0">
+          <div class="grow">
+            <strong>Mirror everything to my phone</strong>
+            <span class="muted">Every proof and every ask also comes by text.</span>
+          </div>
+          <button class="btn btn--ghost" type="button" data-soon="text_mirror" data-soon-pill="off"
+                  data-soon-msg="Text-first mirror turns on in the connections phase.">Turn on <span class="soon">soon</span></button>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+      <button class="btn btn--ghost" type="button" id="signout">Sign out</button>
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="anticipy.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var A = window.Anticipy || {};
+    var $ = function (s) { return document.querySelector(s); };
+    A.buildNav("settings");
+
+    function flash(msg) { var f = $("[data-flash]"); f.textContent = msg; setTimeout(function(){ if (f.textContent===msg) f.textContent=""; }, 2200); }
+
+    /* ---- autonomy ---- */
+    var MODES = {
+      limited:  "Limited — I suggest, you do. I'll line everything up and hand it to you.",
+      regular:  "Regular — I prep and check before acting. The recommended balance.",
+      full_send:"Full-Send — I handle the small, safe things and tell you after."
+    };
+    function paintMode(mode) {
+      Array.prototype.forEach.call(document.querySelectorAll("[data-autonomy] button"), function (b) {
+        b.classList.toggle("active", b.getAttribute("data-mode") === mode);
+      });
+      $("[data-mode-desc]").textContent = MODES[mode] || "";
+    }
+    document.querySelectorAll("[data-autonomy] button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var mode = b.getAttribute("data-mode"); paintMode(mode);
+        A.api("/owner/autonomy_mode", { method: "POST", body: { mode: mode } })
+          .then(function () { flash("Saved — running in " + mode.replace("_", "-") + " mode."); })
+          .catch(function () { flash("Couldn't save that just now."); });
+      });
+    });
+    A.api("/owner/autonomy_mode").then(function (d) { paintMode((d && d.mode) || "regular"); })
+      .catch(function () { paintMode("regular"); });
+
+    /* ---- permissions (rendered from the engine's own service list) ---- */
+    function renderPerms(state) {
+      var host = $("[data-perms]"); host.innerHTML = "";
+      var services = (state && state.services) || [];
+      if (!services.length) { host.innerHTML = '<p class="muted">No connectable accounts reported yet.</p>'; return; }
+      services.forEach(function (svc) {
+        var key = svc.service || svc.name || svc.key;
+        var label = svc.label || key;
+        var note = svc.why ? ("to " + svc.why).replace(/^to to /, "to ") : "";
+        var row = document.createElement("div"); row.className = "perm-row";
+        row.innerHTML =
+          '<div class="grow"><strong>' + A.escapeHtml(label) + '</strong><span class="muted">' + A.escapeHtml(note) + '</span></div>' +
+          '<label class="toggle"><input type="checkbox" ' + (svc.allowed ? "checked" : "") + ' data-svc="' + A.escapeHtml(key) + '"><span class="track"></span></label>';
+        host.appendChild(row);
+      });
+      host.querySelectorAll("input[data-svc]").forEach(function (inp) {
+        inp.addEventListener("change", function () {
+          var svc = inp.getAttribute("data-svc");
+          A.api("/onboard/permissions", { method: "POST", body: { service: svc, allowed: inp.checked } })
+            .then(function () { flash((inp.checked ? "Allowed " : "Turned off ") + svc + "."); })
+            .catch(function () { flash("Couldn't update " + svc + "."); inp.checked = !inp.checked; });
+        });
+      });
+    }
+    A.api("/onboard/permissions").then(renderPerms).catch(function () { renderPerms({ services: [] }); });
+
+    /* ---- always-confirm rules (local for now; persisted with profile next phase) ---- */
+    var rules = JSON.parse(localStorage.getItem("an_rules") || "[]");
+    function renderRules() {
+      var host = $("#rules"); host.innerHTML = "";
+      if (!rules.length) { host.innerHTML = '<p class="muted" style="font-size:.9rem">No hard lines yet.</p>'; }
+      rules.forEach(function (r, i) {
+        var row = document.createElement("div"); row.className = "an-card"; row.style.padding = ".7rem 1rem";
+        row.innerHTML = '<div class="row row--between"><span>' + A.escapeHtml(r) + '</span><button class="btn btn--ghost" style="padding:.3rem .7rem" data-del="' + i + '">Remove</button></div>';
+        host.appendChild(row);
+      });
+      host.querySelectorAll("[data-del]").forEach(function (b) {
+        b.addEventListener("click", function () { rules.splice(+b.getAttribute("data-del"), 1); saveRules(); });
+      });
+    }
+    function saveRules() { localStorage.setItem("an_rules", JSON.stringify(rules)); renderRules(); }
+    $("#add-rule").addEventListener("click", function () {
+      var v = $("#new-rule").value.trim(); if (!v) return; rules.push(v); $("#new-rule").value = ""; saveRules(); flash("Rule added.");
+    });
+    renderRules();
+
+    /* ---- sign out ---- */
+    $("#signout").addEventListener("click", function () {
+      if (A.auth && A.auth.signOut) A.auth.signOut().then(function () { location.href = "index.html"; });
+      else location.href = "index.html";
+    });
+  })();
+  </script>
+</body>
+</html>

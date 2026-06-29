@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anticipy — Getting to know you</title>
+  <meta name="theme-color" content="#FBF9F4" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171615'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23B8924A' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="anticipy.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="an-topbar">
+    <a class="an-wordmark" href="index.html" aria-label="Anticipy home">ANTICIPY<span class="dot">.</span></a>
+  </header>
+
+  <div class="an-stage">
+    <main class="an-panel an-panel--wide" role="main" id="ob-root">
+
+      <!-- progress dots -->
+      <div class="an-steps" data-dots aria-hidden="true"></div>
+
+      <!-- ===== SCREEN: basics (page 3 — machine, brief) ===== -->
+      <section class="ob-screen" data-screen="basics" hidden>
+        <div class="center">
+          <div class="an-pulse"></div>
+          <p class="eyebrow">Setting up</p>
+          <h1>Getting things ready</h1>
+          <p class="muted">Pairing your space and warming up. This only takes a moment.</p>
+        </div>
+      </section>
+
+      <!-- ===== SCREEN: you (page 4 — the one the user fills) ===== -->
+      <section class="ob-screen" data-screen="you" hidden>
+        <p class="eyebrow">A little about you</p>
+        <h1>Tell me who I'm working for.</h1>
+        <p class="muted" style="margin-top:.4rem">Just the basics — I'll learn the rest by paying attention.</p>
+        <div class="divider"></div>
+        <form id="you-form" novalidate>
+          <div class="field">
+            <label for="f-name">Your name</label>
+            <input class="input" id="f-name" placeholder="e.g. Omar" required />
+          </div>
+          <div class="field">
+            <label for="f-summary">You, in one sentence</label>
+            <textarea class="input" id="f-summary" rows="2" placeholder="e.g. Founder of a small startup, mid-fundraise, running a team of six."></textarea>
+          </div>
+          <div class="field">
+            <label for="f-matters">What matters most right now? <span class="muted" style="font-weight:400">(optional)</span></label>
+            <textarea class="input" id="f-matters" rows="2" placeholder="e.g. Closing our lead investor, then hiring two engineers."></textarea>
+          </div>
+          <div class="field">
+            <label for="f-people">The people who matter <span class="muted" style="font-weight:400">(comma-separated, optional)</span></label>
+            <input class="input" id="f-people" placeholder="e.g. Priya (cofounder), Marcus (client), Dana (counsel)" />
+          </div>
+          <div class="row" style="gap:1rem">
+            <div class="field grow">
+              <label for="f-phone">Phone <span class="muted" style="font-weight:400">(for voice/SMS later)</span></label>
+              <input class="input" id="f-phone" type="tel" placeholder="+1 …" />
+            </div>
+            <div class="field grow">
+              <label for="f-style">How you write</label>
+              <select class="input" id="f-style">
+                <option value="">—</option>
+                <option value="warm-paragraphs">Warm, full paragraphs</option>
+                <option value="short-direct">Short and direct</option>
+                <option value="formal">Formal</option>
+                <option value="depends">Depends who I'm talking to</option>
+              </select>
+            </div>
+          </div>
+          <p class="form-error" id="you-err" role="alert"></p>
+          <button class="btn btn--primary btn--block btn--lg" type="submit" id="you-next">Continue</button>
+        </form>
+      </section>
+
+      <!-- ===== SCREENS: machine steps (pages 5–10, hidden from user, auto-advance) ===== -->
+      <section class="ob-screen" data-screen="machine" hidden>
+        <div class="center">
+          <div class="an-pulse"></div>
+          <p class="eyebrow" data-machine-eyebrow>Working</p>
+          <h1 data-machine-title>Reading your inbox</h1>
+          <p class="muted" data-machine-sub>Skimming the last few weeks, opening the threads that carry weight.</p>
+          <p style="margin-top:1rem">
+            <span class="pill-note" data-soon="onboarding_scrape" data-soon-pill="off">Live scrape &amp; calls arrive in a later step</span>
+            <span class="soon">soon</span>
+          </p>
+        </div>
+      </section>
+
+      <!-- ===== SCREEN: great (page 11 — the mirror + clarifications) ===== -->
+      <section class="ob-screen" data-screen="great" hidden>
+        <p class="eyebrow">Here's what I've got</p>
+        <h1>This is how I see you so far.</h1>
+        <p class="muted" style="margin-top:.4rem">Tell me if anything's off — I'll remember the correction.</p>
+        <div class="divider"></div>
+        <div id="mirror" class="stack-sm"></div>
+        <div class="divider"></div>
+        <div class="field">
+          <label for="f-clarify">One last thing — anything I should know that I wouldn't find on my own?</label>
+          <textarea class="input" id="f-clarify" rows="2" placeholder="e.g. Never email my cofounder before 9am. Don't touch my personal account."></textarea>
+        </div>
+        <button class="btn btn--primary btn--block btn--lg" type="button" id="great-next">Looks right — finish setup</button>
+      </section>
+
+      <!-- ===== SCREEN: done (page 12) ===== -->
+      <section class="ob-screen" data-screen="done" hidden>
+        <div class="center">
+          <div class="an-pulse"></div>
+          <p class="eyebrow">All set</p>
+          <h1>I'm paying attention now.</h1>
+          <p class="muted">From here I'll just be listening. When something needs you, I'll have it mostly done and come to you for the last tap.</p>
+          <div style="margin-top:1.6rem">
+            <a class="btn btn--gold btn--lg" href="app.html">Go to my day &rarr;</a>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="anticipy.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var A = window.Anticipy || {};
+    var $ = function (s, r) { return (r || document).querySelector(s); };
+
+    // The user-facing arc. Hidden machine steps render with the "machine" screen
+    // and a per-step caption; only `you` and `great` are interactive.
+    var STEPS = [
+      { screen: "basics",  dot: true,  hold: 1600 },
+      { screen: "you",     dot: true },                                   // page 4 — interactive
+      { screen: "machine", dot: true, hold: 2000, eyebrow: "Layer 1 · reading",  title: "Reading your inbox",    sub: "Skimming the last few weeks, opening the threads that carry weight." },
+      { screen: "machine", dot: false, hold: 2000, eyebrow: "Call 1 · intro",     title: "A quick hello",         sub: "Confirming the obvious and setting how much rope to give me." },
+      { screen: "machine", dot: false, hold: 2000, eyebrow: "Layer 2 · deeper",   title: "Going a level deeper",  sub: "Into your tools, following the threads that matter, building the catalog." },
+      { screen: "machine", dot: false, hold: 2000, eyebrow: "Call 2 · gaps",      title: "Filling the gaps",      sub: "The handful of things reading can't tell me — priorities, preferences." },
+      { screen: "machine", dot: false, hold: 1800, eyebrow: "Layer 3 · surgical", title: "Closing the last gaps", sub: "A surgical pass on anything still open." },
+      { screen: "machine", dot: false, hold: 1800, eyebrow: "Final call",         title: "Putting it together",   sub: "Reflecting you back and locking how I'll run." },
+      { screen: "great",   dot: true },                                   // page 11 — interactive
+      { screen: "done",    dot: true }                                    // page 12
+    ];
+
+    var idx = 0;
+    var profile = { owner_name: "", raw_notes: "", preferences: [], people: [], phone: "", source: "onboarding" };
+
+    // progress dots = the meaningful milestones
+    var dotSteps = STEPS.filter(function (s) { return s.dot; });
+    function renderDots() {
+      var host = $("[data-dots]"); host.innerHTML = "";
+      // map current idx to a dot index
+      var seen = -1; for (var i = 0; i <= idx; i++) if (STEPS[i].dot) seen++;
+      dotSteps.forEach(function (_, di) {
+        var d = document.createElement("span"); d.className = "dot";
+        if (di < seen) d.classList.add("done"); if (di === seen) d.classList.add("active");
+        host.appendChild(d);
+      });
+    }
+
+    function show(i) {
+      idx = i; var step = STEPS[i];
+      Array.prototype.forEach.call(document.querySelectorAll(".ob-screen"), function (el) { el.hidden = true; });
+      var el = document.querySelector('.ob-screen[data-screen="' + step.screen + '"]');
+      if (step.screen === "machine") {
+        $("[data-machine-eyebrow]").textContent = step.eyebrow || "Working";
+        $("[data-machine-title]").textContent = step.title || "";
+        $("[data-machine-sub]").textContent = step.sub || "";
+      }
+      el.hidden = false; renderDots();
+      if (step.screen === "great") renderMirror();
+      if (step.screen === "done") completeOnboarding();
+      if (step.hold) setTimeout(function () { if (idx === i) next(); }, step.hold);
+    }
+    function next() { if (idx < STEPS.length - 1) show(idx + 1); }
+
+    /* ---- page 4: the form -> POST /owner/onboard ---- */
+    $("#you-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var name = $("#f-name").value.trim();
+      if (!name) { $("#you-err").textContent = "Just your name to start."; return; }
+      var people = $("#f-people").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
+        .map(function (p) { return { name: p, relationship: "", notes: "" }; });
+      var prefs = [];
+      var matters = $("#f-matters").value.trim(); if (matters) prefs.push("Focus right now: " + matters);
+      var style = $("#f-style").value; if (style) prefs.push("Writing style: " + style.replace(/-/g, " "));
+      profile.owner_name = name;
+      profile.raw_notes = $("#f-summary").value.trim();
+      profile.preferences = prefs;
+      profile.people = people;
+      profile.phone = $("#f-phone").value.trim();
+
+      var btn = $("#you-next"); btn.classList.add("is-busy"); btn.disabled = true;
+      A.api("/owner/onboard", { method: "POST", body: profile })
+        .then(function () { next(); })
+        .catch(function (err) {
+          // honest: don't fake-advance on a real failure
+          $("#you-err").textContent = "Couldn't save that just now (" + (err.status || "network") + "). Trying again will work.";
+          btn.classList.remove("is-busy"); btn.disabled = false;
+        });
+    });
+
+    /* ---- page 11: the mirror, from what we just saved ---- */
+    function renderMirror() {
+      var host = $("#mirror"); host.innerHTML = "";
+      function row(k, v) {
+        if (!v) return;
+        var r = document.createElement("div"); r.className = "fact-row";
+        r.innerHTML = '<span class="k">' + A.escapeHtml(k) + '</span><span class="v">' + A.escapeHtml(v) + '</span>';
+        host.appendChild(r);
+      }
+      row("Name", profile.owner_name);
+      row("In a sentence", profile.raw_notes);
+      profile.preferences.forEach(function (p) {
+        var parts = p.split(":"); row(parts[0], parts.slice(1).join(":").trim());
+      });
+      if (profile.people.length) row("People who matter", profile.people.map(function (p) { return p.name; }).join(", "));
+      if (!host.children.length) row("Note", "We'll learn more as you go.");
+    }
+
+    $("#great-next").addEventListener("click", function () {
+      var clarify = $("#f-clarify").value.trim();
+      var btn = this; btn.classList.add("is-busy"); btn.disabled = true;
+      var save = clarify
+        ? A.api("/owner/onboard", { method: "POST", body: Object.assign({}, profile, { raw_notes: clarify, preferences: ["Rule: " + clarify] }) }).catch(function(){})
+        : Promise.resolve();
+      save.then(function () { btn.classList.remove("is-busy"); btn.disabled = false; next(); });
+    });
+
+    /* ---- page 12: mark complete (real) ---- */
+    function completeOnboarding() {
+      A.api("/onboard/complete", { method: "POST", body: { complete: true } }).catch(function () {});
+    }
+
+    // start
+    show(0);
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anticipy — Upload</title>
+  <meta name="theme-color" content="#FBF9F4" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171615'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23B8924A' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="anticipy.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="an-topbar">
+    <a class="an-wordmark" href="app.html" aria-label="Anticipy home">ANTICIPY<span class="dot">.</span></a>
+    <nav class="an-nav" data-an-nav></nav>
+  </header>
+
+  <div class="an-main">
+    <main class="an-panel an-panel--wide" role="main" style="margin:1rem auto">
+      <p class="eyebrow">Hand over your day</p>
+      <h1>Drop in a recording or a transcript.</h1>
+      <p class="muted" style="margin-top:.4rem">A voice memo, a meeting, a brain-dump — I'll read it, separate the real tasks from the venting, and bring back only what needs you.</p>
+
+      <div class="divider"></div>
+
+      <!-- drop zone (audio upload -> transcription is Phase 6) -->
+      <div class="an-card" id="drop" style="border-style:dashed; text-align:center; cursor:pointer" data-soon="mp3_transcribe" data-soon-pill="off"
+           data-soon-msg="Audio transcription is coming in a later step. For now, paste the transcript below — that path is live.">
+        <div class="an-pulse" style="margin-bottom:.6rem"></div>
+        <h3 class="serif">Drop an MP3 / M4A here <span class="soon">soon</span></h3>
+        <p class="muted" style="margin:.3rem 0 0">or click to choose a file — I'll transcribe it and listen.</p>
+        <input type="file" id="file" accept="audio/*" hidden />
+      </div>
+
+      <p class="center muted" style="margin:1.2rem 0; font-size:.9rem">— or paste it —</p>
+
+      <!-- transcript paste (LIVE: goes to the proactive engine) -->
+      <form id="paste-form">
+        <div class="field">
+          <label for="transcript">Paste a transcript</label>
+          <textarea class="input" id="transcript" rows="6" placeholder="Paste what was said — the messy, real version. e.g. &quot;ugh I still need to email Dana the contract, and remind me the dentist thing is Thursday, whatever, and I'm so done with this week…&quot;"></textarea>
+          <p class="hint">I'll only act on real tasks — never on venting.</p>
+        </div>
+        <p class="form-error" id="err" role="alert"></p>
+        <button class="btn btn--primary btn--lg" type="submit" id="send">Listen to this &rarr;</button>
+        <a class="btn btn--ghost btn--lg" href="app.html" style="margin-left:.5rem">See my board</a>
+      </form>
+
+      <div id="result" hidden style="margin-top:1.4rem">
+        <div class="divider"></div>
+        <p class="eyebrow">Heard you</p>
+        <div id="result-body" class="stack-sm"></div>
+        <a class="btn btn--gold btn--lg" href="app.html" style="margin-top:1rem">Go to the cards &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="anticipy.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var A = window.Anticipy || {};
+    var $ = function (s) { return document.querySelector(s); };
+    A.buildNav("mp3");
+
+    // drop-zone is soon-gated by anticipy.js; the file input never fires real work.
+    $("#drop").addEventListener("click", function () { /* gated by data-soon handler */ });
+
+    $("#paste-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var text = $("#transcript").value.trim();
+      $("#err").textContent = "";
+      if (text.length < 8) { $("#err").textContent = "Paste a little more so I have something to work with."; return; }
+      var btn = $("#send"); btn.classList.add("is-busy"); btn.disabled = true;
+
+      // LIVE path — the same owner-intake the Board uses (triage -> gate -> cards).
+      A.api("/owner/ingest", { method: "POST", body: { text: text, source: "transcript", execute_actions: true, meta: { via: "mp3_page" } } })
+        .then(function (data) { showResult(data); })
+        .catch(function (err2) {
+          $("#err").textContent = "Couldn't reach the engine (" + (err2.status || "network") + "). It may still be warming up.";
+        })
+        .then(function () { btn.classList.remove("is-busy"); btn.disabled = false; });
+    });
+
+    function showResult(data) {
+      var host = $("#result-body"); host.innerHTML = "";
+      var note = document.createElement("div"); note.className = "an-card";
+      note.innerHTML = "<p style='margin:0'>Got it — I've read this and I'm sorting the real tasks from the noise. Anything that needs you will show up on your board as a card.</p>";
+      host.appendChild(note);
+      // If the engine echoed structured output, surface a count honestly.
+      try {
+        var n = (data && data.cards && data.cards.length) || 0;
+        var ignored = (data && data.ignored_line_count) || 0;
+        var c = document.createElement("p"); c.className = "pill-note";
+        if (n) c.textContent = n + " card" + (n === 1 ? "" : "s") + " waiting on your board";
+        else if (ignored) c.textContent = ignored + (ignored === 1 ? " line was just life — left it be." : " lines were just life — left them be.");
+        else c.textContent = "Nothing actionable caught — try saying it a touch more directly.";
+        host.appendChild(c);
+      } catch (e) {}
+      $("#result").hidden = false;
+      $("#result").scrollIntoView({ behavior: "smooth" });
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anticipy — Sign in</title>
+  <meta name="theme-color" content="#FBF9F4" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171615'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23B8924A' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="anticipy.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="an-topbar">
+    <a class="an-wordmark" href="index.html" aria-label="Anticipy home">ANTICIPY<span class="dot">.</span></a>
+  </header>
+
+  <div class="an-stage">
+    <main class="an-panel" role="main">
+      <p class="eyebrow" data-eyebrow>Welcome back</p>
+      <h1 data-title>Sign in</h1>
+      <p class="muted" data-sub style="margin-top:.4rem">Your assistant, waiting where you left off.</p>
+
+      <div class="divider"></div>
+
+      <form id="auth-form" novalidate>
+        <div class="field">
+          <label for="email">Email</label>
+          <input class="input" type="email" id="email" autocomplete="email" placeholder="you@work.com" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input class="input" type="password" id="password" autocomplete="current-password" placeholder="••••••••" required minlength="6" />
+          <p class="hint" data-pwhint>At least 6 characters.</p>
+        </div>
+        <p class="form-error" id="err" role="alert"></p>
+        <button class="btn btn--primary btn--block btn--lg" type="submit" id="submit">Sign in</button>
+      </form>
+
+      <p class="center muted" style="margin:1.2rem 0 0; font-size:.9rem">
+        <span data-switch-q>New here?</span>
+        <a href="#" id="toggle" data-switch-a>Create an account</a>
+      </p>
+
+      <div id="confirm-note" hidden style="margin-top:1.2rem">
+        <div class="an-card center">
+          <div class="an-pulse" style="margin-bottom:.8rem"></div>
+          <h3 class="serif">Check your email</h3>
+          <p class="muted" style="margin:.4rem 0 0">We sent a confirmation link to <strong data-sent-to></strong>. Click it and you'll land right in setup.</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="anticipy.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var A = window.Anticipy || {};
+    var auth = A.auth;
+    var mode = "signin"; // or "signup"
+    var ATgo = "onboarding.html"; // where a live session goes next
+
+    var $ = function (s) { return document.querySelector(s); };
+    var form = $("#auth-form"), email = $("#email"), pw = $("#password"),
+        err = $("#err"), submit = $("#submit"), toggle = $("#toggle"),
+        confirmNote = $("#confirm-note");
+
+    function setMode(m) {
+      mode = m;
+      var signup = m === "signup";
+      $("[data-eyebrow]").textContent = signup ? "Get started" : "Welcome back";
+      $("[data-title]").textContent  = signup ? "Create your account" : "Sign in";
+      $("[data-sub]").textContent    = signup
+        ? "Two fields and you're in. Setup takes it from here."
+        : "Your assistant, waiting where you left off.";
+      submit.textContent = signup ? "Create account" : "Sign in";
+      pw.setAttribute("autocomplete", signup ? "new-password" : "current-password");
+      $("[data-pwhint]").hidden = !signup;
+      $("[data-switch-q]").textContent = signup ? "Already have an account?" : "New here?";
+      $("[data-switch-a]").textContent = signup ? "Sign in" : "Create an account";
+      err.textContent = ""; confirmNote.hidden = true; form.hidden = false;
+    }
+
+    toggle.addEventListener("click", function (e) {
+      e.preventDefault(); setMode(mode === "signin" ? "signup" : "signin");
+    });
+
+    if (!auth || !auth.available) {
+      err.textContent = "Sign-in is unavailable right now (the auth service didn't load). Try again in a moment.";
+      submit.disabled = true;
+    } else {
+      // already signed in? skip straight in.
+      auth.currentSession().then(function (s) { if (s) location.href = ATgo; });
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      err.textContent = "";
+      var em = email.value.trim(), p = pw.value;
+      if (!em || !p) { err.textContent = "Email and password are both needed."; return; }
+      if (mode === "signup" && p.length < 6) { err.textContent = "Password needs at least 6 characters."; return; }
+      submit.classList.add("is-busy"); submit.disabled = true;
+      var op = mode === "signup" ? auth.signUp(em, p) : auth.signIn(em, p);
+      op.then(function (data) {
+        if (mode === "signup" && (!data || !data.session)) {
+          // email confirmation required
+          form.hidden = true;
+          $("[data-sent-to]").textContent = em;
+          confirmNote.hidden = false;
+          return;
+        }
+        location.href = ATgo; // live session
+      }).catch(function (e2) {
+        err.textContent = friendly(e2);
+        submit.classList.remove("is-busy"); submit.disabled = false;
+      });
+    });
+
+    function friendly(e2) {
+      var m = (e2 && e2.message) || "Something went wrong.";
+      if (/invalid login/i.test(m)) return "That email and password don't match. Try again, or create an account.";
+      if (/already registered|already exists/i.test(m)) return "That email already has an account — try signing in.";
+      if (/email.+confirm/i.test(m)) return "Please confirm your email first — check your inbox.";
+      return m;
+    }
+
+    // ?signup=1 opens straight on create-account
+    if (/[?&]signup=1/.test(location.search)) setMode("signup");
+  })();
+  </script>
+</body>
+</html>
