@@ -443,12 +443,13 @@ async function doObserve(msg) {
     const [{ result: page }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
+        // NOTE: we deliberately DO NOT draw anything on the live page. Earlier builds
+        // painted numbered set-of-marks boxes here, which flickered ugly outlines over
+        // the user's real Chrome every step. We are DOM-first, so the element map below
+        // is all the model needs; if a step truly needs vision, the numbered marks are
+        // composited onto the captured SCREENSHOT in the engine (page stays untouched).
         const old = document.getElementById('anticipy-som'); if (old) old.remove();
         const sel = 'a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [onclick], [contenteditable=""], [contenteditable=true]';
-        const cont = document.createElement('div'); cont.id = 'anticipy-som';
-        cont.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;';
-        document.documentElement.appendChild(cont);
-        const colors = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#008080', '#f032e6', '#9a6324'];
         const out = []; let i = 0;
         for (const el of document.querySelectorAll(sel)) {
           const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
@@ -480,15 +481,8 @@ async function doObserve(msg) {
           const sanc = el.closest('li, article, section, [role="listitem"], [role="article"]');
           const sp = (((sanc || el).innerText || '') + ' ' + (el.getAttribute('aria-label') || '')).slice(0, 240).toLowerCase();
           if (/sponsored|promoted|advertisement/.test(sp)) sponsored = true;
-          out.push({ idx: i, role: role, name: name, type: (el.getAttribute('type') || ''), state: stt.join(','), inView: inView, sponsored: sponsored });
-          if (inView) {
-            const c = colors[i % colors.length];
-            const box = document.createElement('div');
-            box.style.cssText = 'position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;outline:2px solid ' + c + ';box-sizing:border-box;';
-            const lab = document.createElement('div'); lab.textContent = String(i);
-            lab.style.cssText = 'position:absolute;left:0;top:0;transform:translateY(-100%);background:' + c + ';color:#fff;font:bold 11px monospace;padding:0 3px;white-space:nowrap;';
-            box.appendChild(lab); cont.appendChild(box);
-          }
+          out.push({ idx: i, role: role, name: name, type: (el.getAttribute('type') || ''), state: stt.join(','), inView: inView, sponsored: sponsored,
+            rect: inView ? { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) } : null });
           if (++i >= 600) break;
         }
         return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 12000), elements: out };
@@ -516,7 +510,7 @@ async function doAct(msg) {
     if (!tab) return result(msg, "needs_human", null, { reason: "no working tab" });
 
     if (a.action === "navigate") {
-      tab = await chrome.tabs.update(tab.id, { url: a.url, active: true });
+      tab = await chrome.tabs.update(tab.id, { url: a.url, active: false });
       await waitForComplete(tab.id, 25000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl); await settle(tab.id);
       return result(msg, "success", null, { ok: true, action: "navigate", url: a.url });
     }
@@ -627,14 +621,20 @@ async function doAct(msg) {
           cdpError = String(e);
         }
       }
-      step = "js_focus_click";
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id }, args: [a.index],
-        func: (i) => {
-          const e = document.querySelector('[data-anticipy-idx="'+i+'"]');
-          if (e) { if (e.focus) e.focus(); if (e.click) e.click(); }
-        },
-      }).catch(() => {});
+      // Fallback ONLY when the trusted CDP click did not go through. Firing a synthetic
+      // e.click() AFTER a successful CDP click double-triggers handlers (e.g. double
+      // navigation/double submit). For `type` we still need the field focused, but the
+      // CDP click above already focused it; the synthetic path is purely a CDP-failure net.
+      if (!cdpReady) {
+        step = "js_focus_click";
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id }, args: [a.index],
+          func: (i) => {
+            const e = document.querySelector('[data-anticipy-idx="'+i+'"]');
+            if (e) { if (e.focus) e.focus(); if (e.click) e.click(); }
+          },
+        }).catch(() => {});
+      }
       if (a.action === "type") {
         await sleep(120);
         if (cdpReady) {
@@ -688,9 +688,9 @@ async function createTab(url) {
     try { const ws = await chrome.windows.getAll({ windowTypes: ["normal"] }); if (ws && ws.length) winId = ws[ws.length - 1].id; } catch (e) {}
   }
   if (winId != null) {
-    try { return await chrome.tabs.create({ url, active: true, windowId: winId }); } catch (e) {}
+    try { return await chrome.tabs.create({ url, active: false, windowId: winId }); } catch (e) {}
   }
-  const win = await chrome.windows.create({ url, focused: true });
+  const win = await chrome.windows.create({ url, focused: false });
   if (win && win.tabs && win.tabs[0]) return win.tabs[0];
   const q = await chrome.tabs.query({ windowId: win && win.id });
   return q[0];
@@ -702,7 +702,7 @@ async function openInGroup(url) {
   const beforeUrl = tab && tab.url ? tab.url : "";
   let recreated = false;
   if (tab) {
-    tab = await chrome.tabs.update(tab.id, { url, active: true });
+    tab = await chrome.tabs.update(tab.id, { url, active: false });
     await sleep(200);
     const current = await chrome.tabs.get(tab.id);
     if (url && beforeUrl && url !== beforeUrl && current.url === beforeUrl && current.status === "loading") {

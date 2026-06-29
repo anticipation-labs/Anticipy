@@ -29,6 +29,7 @@ from ..core.envelopes import new_id
 from ..core.gateway import CHEAP, SMART, ModelGateway
 from .proof import confirm_stable_artifact
 from .handoff import ask_message, classify_wall
+from .recipes import RECIPE_CACHE, RecipeStore, descriptor, match_index, recipe_key
 
 # ── THE ONE UNLOCK FLAG ──────────────────────────────────────────────────────
 # Anticipy's brain decides what to do; the hands carry it out. The agent-level
@@ -467,6 +468,9 @@ class WebVoyagerAgent:
         self.max_steps = max_steps
         self.per_subgoal = per_subgoal
         self.notifier = notifier  # async callable(str)->None; texts the user on a wall (None = log only)
+        self.recipes = RecipeStore()  # learned-recipe cache (Pillar 4 / the cost-bend lever)
+        self._trace: List[dict] = []  # this run's PROGRESS actions, recorded for a future recipe
+        self._replayed = False        # True when this run was served from a cached recipe (no planner LLM)
         # ── instrumentation (measure from day one): per-run counters; gateway baselines are
         # captured at run() start so metrics reflect THIS task's spend, not the process total.
         self._vision_steps = 0          # steps where we attached the screenshot (vision fallback)
@@ -500,6 +504,7 @@ class WebVoyagerAgent:
             "vision_steps": self._vision_steps,
             "dom_steps": self._dom_steps,
             "vision_pct": round(100.0 * self._vision_steps / max(1, self._vision_steps + self._dom_steps), 1),
+            "replayed": self._replayed,  # True = served from a learned recipe (the cheap path)
         }
         # model-cost counters are an OPTIONAL gateway capability (the production ModelGateway has
         # them; minimal test doubles may not) — report them only when the gateway exposes them.
@@ -595,7 +600,65 @@ class WebVoyagerAgent:
         # might not get and never the agent's self-report.
         return {"steps": step, "final_url": (out or {}).get("url"), "history": history[-40:],
                 "final_text": ((out or {}).get("text") or "")[:3000],
-                "final_shot": getattr(self, "_cur_shot", None), "metrics": self._metrics(step), **extra}
+                "final_shot": getattr(self, "_cur_shot", None), "metrics": self._metrics(step),
+                # carried so the endpoint can PERSIST a recipe once (and only once) the judge verifies
+                # this run — a recipe is never saved from inside the agent (which can't grade itself).
+                "recipe_key": getattr(self, "_recipe_key", ""),
+                "trace": (self._trace if not self._replayed else []),
+                "replayed": self._replayed, **extra}
+
+    async def _answer_from_page(self, task: str, out: dict) -> str:
+        # The ONE LLM call a replayed run makes: read the final page and answer the task from it
+        # (cheap tier — this is a read-back, not planning). Content-bearing tasks ("what is X")
+        # need this; pure action tasks still get a faithful description of the end state.
+        page = ((out or {}).get("text") or "")[:PAGE_TEXT_CHARS]
+        prompt = ("Answer the TASK using ONLY the PAGE TEXT below (the page reached after the steps "
+                  "ran). Output ONE JSON object: {\"answer\":\"<answer text>\"}. If a fact is not in "
+                  "the page text, say so — never invent it.\n\nTASK: " + task
+                  + f"\n\nURL: {(out or {}).get('url')}\nPAGE TEXT:\n{page}")
+        raw = await _think(self.gw, prompt, tier=CHEAP, caller="agent", json_mode=True,
+                           temperature=0.1, max_tokens=AGENT_MAX_TOKENS)
+        return ((_parse_json(raw) or {}).get("answer") or "").strip()
+
+    async def _try_replay(self, rec: dict, task: str, start_url: str) -> Optional[dict]:
+        """Replay a learned recipe with ZERO planner/actor LLM calls. Returns a finished result on a
+        clean replay, or None on ANY divergence (caller then falls back to the full live loop)."""
+        steps = rec.get("steps") or []
+        out, shot = await self._observe_ready(start_url)
+        self._cur_shot = shot
+        if self._unactionable_obs(out):
+            return None
+        history: List[str] = ["REPLAY: cached recipe (0 planner LLM calls)"]
+        item_text = _search_text(task)
+        for n, st in enumerate(steps):
+            act = dict((st or {}).get("action") or {})
+            kind = act.get("action")
+            if not kind:
+                return None
+            if kind in ("navigate", "scroll", "back"):
+                res = await self._act(_clean_action(act, item_text))
+            else:
+                els = [e for e in (out.get("elements") or []) if e.get("inView")]
+                idx = match_index((st or {}).get("descriptor") or {}, els)
+                if idx is None:
+                    history.append(f"replay diverged at step {n} -> live fallback")
+                    return None  # self-heal: the recorded element is gone; reason live instead
+                a = dict(act); a["index"] = idx
+                res = await self._act(_clean_action(a, item_text))
+            if isinstance(res, dict) and res.get("status") in ("needs_human", "error"):
+                return None
+            out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            if self._unactionable_obs(out):
+                return None
+            history.append(f"replay {n}: {kind} '{((st.get('descriptor') or {}).get('name') or act.get('url') or '')[:26]}'")
+        # Walls still hand off honestly even on a replay (never fake done on a login/captcha page).
+        text = (out.get("text") or "").lower()
+        if any(k in text for k in BLOCK_MARKERS):
+            return None
+        self._replayed = True
+        ans = await self._answer_from_page(task, out)
+        return self._done(out, len(steps) + 1, history, answer=ans)
 
     async def _notify(self, msg: str) -> None:
         if not self.notifier:
@@ -622,9 +685,25 @@ class WebVoyagerAgent:
         # (Cost counters are an optional gateway capability; minimal test doubles lack them.)
         self._vision_steps = 0
         self._dom_steps = 0
+        self._trace = []
+        self._replayed = False
+        self._recipe_key = recipe_key(task, start_url)
         self._call_base = len(self.gw.calls) if hasattr(self.gw, "calls") else 0
         self._cost_base = self.gw.total_cost() if hasattr(self.gw, "total_cost") else 0.0
         self._smart_base = len(self.gw.smart_calls) if hasattr(self.gw, "smart_calls") else 0
+
+        # ── LEARNED-RECIPE REPLAY (Pillar 4) ─────────────────────────────────────────────
+        # Before spending a single planner/actor LLM call, see if THIS task on THIS site has a
+        # verified recipe. If so, replay it (zero planner LLM); only the final read-back answer
+        # costs. On ANY divergence the replay self-heals: it returns None and we fall straight
+        # through to the full live loop below. A bad replay can never make us wrong — only slow.
+        if RECIPE_CACHE:
+            rec = self.recipes.get(self._recipe_key)
+            if rec:
+                replayed = await self._try_replay(rec, task, start_url)
+                if replayed is not None:
+                    return replayed
+
         state = TaskState(await self._plan(task))
         history: List[str] = []
         visited: dict = {}
@@ -863,6 +942,15 @@ class WebVoyagerAgent:
             visited[new_sig] = visited.get(new_sig, 0) + 1
             history.append(f"{step}: {action.get('action')} idx={action.get('index')} "
                            f"'{(label or '')[:26]}' -> {progress} ({(out.get('url') or '')[:48]})")
+
+            # RECORD for the recipe cache: only actions that actually MOVED the page forward become
+            # part of a future replay. We store the STABLE descriptor (role+name), never the index.
+            if progress == "PROGRESS" and action.get("action") in ("click", "type", "select", "check", "navigate", "scroll", "back"):
+                _el = next((e for e in els if e.get("idx") == action.get("index")), None)
+                self._trace.append({
+                    "action": _clean_action(action, item_text),
+                    "descriptor": descriptor(_el) if _el else {},
+                })
 
             # subgoal completion
             if action.get("subgoal_done") and state.current:

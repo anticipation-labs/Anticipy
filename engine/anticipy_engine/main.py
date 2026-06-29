@@ -1862,6 +1862,17 @@ async def agent_run(body: AgentRunIn) -> dict:
         result["task_succeeded"] = bool(result["judgment"].get("success"))
         if not result["task_succeeded"]:
             result["needs_human"] = True
+        # LEARNED-RECIPE CACHE (Pillar 4): persist the action-trace ONLY for a fresh, judge-verified
+        # run (never from a replay, never unverified). The agent records the trace; the judge — which
+        # the agent can't be — blesses it; only then does it become a replayable recipe. This is the
+        # discover-don't-author rule that keeps recipes general while bending $/task down on repeats.
+        if (result["task_succeeded"] and not result.get("replayed")
+                and result.get("recipe_key") and result.get("trace")):
+            try:
+                agent.recipes.save(result["recipe_key"], body.task, body.start_url, result["trace"])
+            except Exception:
+                pass  # a cache write must never affect the user-visible outcome
+    result.pop("trace", None)  # internal-only; don't ship the raw trace over HTTP
     # M4 (audit #5): a wall handoff mints a resume_token — PERSIST the run state under it so a later
     # /agent/resume can be VALIDATED and resumed with context, instead of a blind cold restart.
     if result.get("resume_token") and (result.get("needs_human") or result.get("paused")):
