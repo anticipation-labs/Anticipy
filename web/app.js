@@ -343,13 +343,13 @@
 
     if (disp === "ask") {
       actionsEl.appendChild(makeConfirm(card));
-      actionsEl.appendChild(makeDeny(card, "Not now"));
+      actionsEl.appendChild(makeDeny(card, "Deny"));
       actionsEl.appendChild(makeAllow(card));
       actionsEl.appendChild(makeNote(card));
     } else if (disp === "blocked") {
       // money: CONFIRM + DENY only; ALLOW disabled (money always asks)
       actionsEl.appendChild(makeConfirm(card));
-      actionsEl.appendChild(makeDeny(card, "Not now"));
+      actionsEl.appendChild(makeDeny(card, "Deny"));
       var allow = makeAllow(card);
       allow.disabled = true;
       allow.title = "Money always asks — in every mode.";
@@ -377,8 +377,8 @@
   function makeConfirm(card) {
     var b = el("button", "act-confirm");
     b.type = "button";
-    b.innerHTML = "Confirm " + CHECK_SVG;
-    b.setAttribute("aria-label", ariaFor("Confirm", card));
+    b.innerHTML = "Accept " + CHECK_SVG;
+    b.setAttribute("aria-label", ariaFor("Accept", card));
     b.addEventListener("click", function () { doResolve(card, true, "confirm"); });
     return b;
   }
