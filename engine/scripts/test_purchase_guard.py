@@ -1,17 +1,16 @@
-"""Browser-arm MONEY backstop (defense-in-depth on the hard stop).
+"""Browser-arm SAFETY-MODE money guard (regex contract).
 
-Money is the only hard action stop, and the browser arm is a real path to spend it, so the
-WebVoyager agent must STOP before any control that finalizes a payment — yet never false-stop
-a cart/navigation control the (cart-only, no-checkout) task legitimately needs. This pins the
-two places the agent consults the guard: PURCHASE_GUARD (the regex) and _pick_button (which
-must skip a purchase control even when it matches the wanted pattern, webvoyager:776/846), the
-same regex the click path uses to stop-for-safety (webvoyager:2189).
+The purchase/checkout guard is no longer always-on: it fires only in SAFETY MODE
+(ANTICIPY_BROWSER_UNLOCKED=0); by default the brain decides and the hands act (see
+test_browser_safety_loop.py for the in-loop flag contract). This test pins the two REGEXES the
+safety-mode guard relies on so that, WHEN armed, it recognises every final-pay control/URL and
+never false-stops a benign cart/navigation control:
+  - PURCHASE_GUARD  — matches final-purchase button labels, not cart/nav labels;
+  - CHECKOUT_URL_RE — matches checkout/payment/order-submit URLs, not safe browse/cart URLs.
 
 Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_purchase_guard.py
 """
-import re
-
-from anticipy_engine.agent.webvoyager import CHECKOUT_URL_RE, PURCHASE_GUARD, _pick_add_button, _pick_button
+from anticipy_engine.agent.webvoyager import CHECKOUT_URL_RE, PURCHASE_GUARD
 
 # Final money-purchase controls — clicking ANY of these spends money. Must be caught.
 BLOCK = [
@@ -39,31 +38,6 @@ def main():
     assert not missed, f"purchase controls NOT blocked (money could be spent): {missed}"
     false_stops = [n for n in ALLOW if PURCHASE_GUARD.search(n)]
     assert not false_stops, f"cart/nav controls FALSE-stopped (task would stall): {false_stops}"
-
-    # _pick_button must skip a purchase control even when it matches the wanted pattern —
-    # so the recipe fast-path can never auto-select "Place your order".
-    els = [
-        {"name": "Place your order", "role": "button"},
-        {"name": "Add to cart", "role": "button"},
-    ]
-    picked = _pick_button(els, re.compile(r"order|cart", re.I))
-    assert picked and picked["name"] == "Add to cart", picked
-
-    # if the ONLY pattern match is a purchase control, pick NOTHING (never auto-buy).
-    only_buy = [{"name": "Buy now", "role": "button"}]
-    assert _pick_button(only_buy, re.compile(r"buy", re.I)) is None
-
-    # _pick_add_button (the commerce-recipe's SECOND auto-click path) must ALSO skip purchase
-    # controls and only ever pick an add-to-cart control.
-    add_els = [
-        {"name": "Place your order", "role": "button", "inView": True, "idx": 0},
-        {"name": "Add to cart", "role": "button", "inView": True, "idx": 1},
-    ]
-    picked_add = _pick_add_button(add_els, item="shoes")
-    assert picked_add and picked_add.get("idx") == 1, picked_add  # skipped 'Place your order'
-    # a product page whose ONLY buyable control is a final-pay button -> add nothing (never buy)
-    only_buy_page = [{"name": "Buy now", "role": "button", "inView": True, "idx": 0}]
-    assert _pick_add_button(only_buy_page, item="shoes") is None
 
     # CONTEXT-level money guard: the agent STOPS on/at a checkout/payment/order-submit URL regardless
     # of action type — closing the type+enter / navigate-to-pay / out-of-list / generic-label holes.
@@ -107,8 +81,9 @@ def main():
     false_url = [u for u in SAFE_URLS if CHECKOUT_URL_RE.search(u)]
     assert not false_url, f"safe URLs FALSE-stopped (cart task would stall): {false_url}"
 
-    print(f"PASS purchase_guard: {len(BLOCK)} money controls blocked, {len(ALLOW)} cart/nav "
-          "controls allowed, _pick_button skips purchase controls and never auto-selects a buy")
+    print(f"PASS purchase_guard (safety-mode regex contract): {len(BLOCK)} money controls matched, "
+          f"{len(ALLOW)} cart/nav controls allowed, {len(PAY_URLS)} pay URLs matched, "
+          f"{len(SAFE_URLS)} safe URLs allowed")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ import json
 import os
 import re
 import hashlib
+import urllib.parse
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -29,7 +30,6 @@ from .scorecard import Scorecard
 from .store import GoalStore
 from .workers import ChannelStub, ChannelWorker, MemoryWorker
 from ..channels.call import CallChannel
-from ..agent import site_hints
 from ..channels.text import TextChannel
 from ..hands import ApiHand, BrowserHand, MODE_LIVE, MODE_MOCK, NotFundedError
 from ..hands.api_hand import INTENT_MAP
@@ -600,7 +600,6 @@ def _card_step_receipts(steps: list[dict]) -> list[dict]:
                     "url": output.get("final_url") or proof.get("url") or args.get("url"),
                     "answer": output.get("answer") or "",
                     "screenshot": bool(proof.get("screenshot")),
-                    "commerce_recipe": bool(proof.get("commerce_recipe") or output.get("commerce_recipe")),
                 })
     return receipts
 
@@ -799,12 +798,6 @@ class ControlCore:
         self.owner_mode = OwnerMode()
         self.memory_worker = MemoryWorker(self.live_memory)
         self.gateway_ledger = ProactiveGatewayLedger(base, glassbox=self.glassbox)
-
-        # Browse hints: the agent's per-host facts are DATA (packaged seed + this
-        # engine's learned overlay). Explicit wiring like pending_path/deferred_path
-        # below — agent code never reads env or invents a path. The store is
-        # process-global, so the last constructed core owns it (env-var semantics).
-        site_hints.configure(base / "site_hints.json")
 
         # REAL hands replace connector_stub + browser_stub on the frozen contract.
         # channel_stub (reaching the user: call/text) stays (later chunk).
@@ -1252,34 +1245,25 @@ class ControlCore:
 
     @staticmethod
     def _web_start_url(task: str) -> str:
-        """Pick the site for a web task from plain language, in the OWNER'S LOCALE. Sites with country
-        domains (amazon, walmart, ebay, best buy) resolve to the owner's TLD — ANTICIPY_OWNER_TLD
-        (e.g. "ca" for Canada) — so a Canadian owner gets amazon.CA, not amazon.com (their logged-in
-        session lives on .ca). Runs on the owner's real Chrome (browser-only); money/checkout is
-        hard-blocked in the extension regardless of site."""
-        t = (task or "").lower()
-        tld = (os.environ.get("ANTICIPY_OWNER_TLD") or "com").strip().lstrip(".").lower() or "com"
-        # A return/RMA task starts in the ORDERS page (the return funnel begins there), in the owner's
-        # locale — checked BEFORE the generic site map so "amazon return" lands on Orders, not the
-        # homepage. Amazon-only (the return recipe is amazon-only); other-site returns fall through.
-        if (re.search(r"\b(?:return|refund|exchange|replacement|send\s+back)\b", t)
-                and not re.search(r"\b(?:walmart|ebay|best\s*buy|costco|target|etsy)\b", t)):
-            return f"https://www.amazon.{tld}/gp/css/order-history"
-        # sites that have country domains -> owner's TLD; the rest are .com-only services
-        localized = {"amazon": "amazon", "walmart": "walmart", "best buy": "bestbuy", "ebay": "ebay"}
-        fixed = {
-            "opentable": "https://www.opentable.com", "doordash": "https://www.doordash.com",
-            "ubereats": "https://www.ubereats.com", "uber eats": "https://www.ubereats.com",
-            "yelp": "https://www.yelp.com", "instacart": "https://www.instacart.com",
-            "target": "https://www.target.com", "google": "https://www.google.com",
-        }
-        for key, host in localized.items():
-            if key in t:
-                return f"https://www.{host}.{tld}"
-        for key, url in fixed.items():
-            if key in t:
-                return url
-        return "https://www.google.com"
+        """Pick a START url for a web task with ZERO per-site knowledge (fully horizontal):
+          1. If the task names an explicit URL, go straight there.
+          2. If it names a bare domain (e.g. "amazon.ca", "opentable.com"), open that.
+          3. Otherwise begin at a web search for the task and let the agent navigate from there.
+        No keyword->site lookup table, no owner-TLD baking, no site-specific funnel routing — the
+        agent reasons its way to the right page the same way on every site, new or known. Runs on
+        the owner's real (logged-in) Chrome via the extension."""
+        t = (task or "").strip()
+        m = re.search(r"https?://[^\s\"'<>]+", t)
+        if m:
+            return m.group(0).rstrip(".,)")
+        # a bare domain token like "amazon.ca" / "opentable.com" / "site.co.uk"
+        m = re.search(
+            r"\b([a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|co|ca|us|uk|de|fr|au|"
+            r"shop|store|app|ai|dev|gov|edu)(?:\.[a-z]{2})?)\b",
+            t, re.I)
+        if m:
+            return "https://www." + m.group(1).lstrip("www.")
+        return "https://www.google.com/search?q=" + urllib.parse.quote_plus(t)
 
     def _browser_action_ask(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
         """THE BROWSER ACTION ROUND-TRIP (Omar's centerpiece): a web task ("find me a standing desk
@@ -1310,8 +1294,7 @@ class ControlCore:
             self.glassbox.log("browser_ask_sent", {"ask_id": ask_id, "task": task, "url": url})
         except Exception as exc:
             self.glassbox.log("browser_ask_send_error", {"ask_id": ask_id, "error": str(exc)})
-        _is_ret = bool(re.search(r"\b(return|refund|exchange)\b", task, re.I) and re.search(r"amazon", task, re.I))
-        _title = "Do Amazon return" if _is_ret else f"Look this up for you: {task[:70]}"
+        _title = f"Look this up for you: {task[:70]}"
         return OwnerTaskCard(
             id=ask_id,
             source=source, line_no=line.line_no, source_text=line.text,
@@ -1502,16 +1485,17 @@ class ControlCore:
         run_result = None     # WebVoyagerAgent dict result (connected real-Chrome path)
         ok = False
         answer = ""
-        amazon_return_task = bool(
-            re.search(r"\b(return|refund|exchange)\b", task or "", re.I)
-            and re.search(r"amazon", task or "", re.I)
-        )
+        # Multi-step real-world tasks (return/refund/exchange, booking, checkout) need more steps than
+        # a quick lookup — a generic signal, not a per-site rule (works for ANY site, not just Amazon).
+        multistep_task = bool(re.search(
+            r"\b(return|refund|exchange|replace|cancel|book|reserve|order|buy|purchase|checkout|"
+            r"schedule|apply|sign\s*up|subscribe)\b", task or "", re.I))
         try:
             if self.browser_link.connected:
                 from ..agent.webvoyager import WebVoyagerAgent
                 self.glassbox.log("browser_action_hand", {"ask_id": ask_id, "hand": "connected_extension"})
                 run_result = await WebVoyagerAgent(
-                    self.browser_link, self.gateway, max_steps=(24 if amazon_return_task else 16)).run(task, url)
+                    self.browser_link, self.gateway, max_steps=(24 if multistep_task else 16)).run(task, url)
                 answer = (run_result.get("answer") or "").strip()
                 # a wall / safety-stop / pause is NOT a success — hand back, never claim done
                 blocked = bool(run_result.get("needs_human") or run_result.get("stopped_for_safety")
@@ -1541,29 +1525,11 @@ class ControlCore:
             trace = {
                 "history": (run_result.get("history") or [])[-40:],
                 "page_states": (run_result.get("page_states") or [])[-12:],
-                "return_form": run_result.get("return_form") or None,
-                "parked_at_continue": bool(run_result.get("parked_at_continue")),
-                "reached_return_page": bool(run_result.get("reached_return_page")),
             }
-        return_form = (run_result or {}).get("return_form") if isinstance(run_result, dict) else None
-        return_prepared = bool(isinstance(return_form, dict) and return_form.get("prepared"))
-        if amazon_return_task and run_result and run_result.get("amazon_return_recipe") and not return_prepared:
-            ok = False
-            self.glassbox.log("amazon_return_not_prepared",
-                              {"ask_id": ask_id, "return_form": return_form or {}})
-        amazon_return_success = bool(
-            run_result
-            and run_result.get("amazon_return_recipe")
-            and run_result.get("reached_return_page")
-            and "/returns/" in (final_url or "")
-            and return_prepared
-            and answer
-            and ok
-        )
         # M4 HONESTY (never fake done): the answer is the agent's RAW self-report. Before we text the owner
         # "Done — ...", a JUDGE must verify it on the real model; an unverified result is NOT claimed done
         # (the owner is asked to retry / take over). Stub/mock keeps prior behavior.
-        if ok and answer and getattr(self.gateway, "provider", None) == PROVIDER_OPENROUTER and not amazon_return_success:
+        if ok and answer and getattr(self.gateway, "provider", None) == PROVIDER_OPENROUTER:
             try:
                 from ..agent.webvoyager import judge as _judge
                 _v = await _judge(self.gateway, task, {"answer": answer, "final_url": final_url})
@@ -1594,123 +1560,6 @@ class ControlCore:
     @staticmethod
     def _browser_action_ask_id(task: str, source: str) -> str:
         return "br_" + hashlib.sha256(f"browser_action|{source}|{task}".encode("utf-8")).hexdigest()[:18]
-
-    @staticmethod
-    def _demo_amazon_return_enabled() -> bool:
-        return (os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN") or "").strip().lower() in {
-            "1", "true", "yes", "on"
-        }
-
-    @staticmethod
-    def _demo_amazon_return_task() -> str:
-        return (
-            os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN_TASK")
-            or "return the security camera on amazon"
-        ).strip()
-
-    def _demo_amazon_return_ask_id(self) -> str:
-        return self._browser_action_ask_id(self._demo_amazon_return_task(), "transcript")
-
-    @staticmethod
-    def _browser_task_from_card_record(record: dict) -> tuple[str, str]:
-        owner_card = record.get("owner_card") if isinstance(record, dict) else None
-        args = owner_card.get("args") if isinstance(owner_card, dict) else None
-        args = args if isinstance(args, dict) else {}
-        return (
-            str(args.get("task_text") or record.get("browser_task") or record.get("action") or ""),
-            str(args.get("start_url") or record.get("browser_url") or "https://www.google.com"),
-        )
-
-    def _is_demo_amazon_return_record(self, record: dict) -> bool:
-        task, _url = self._browser_task_from_card_record(record)
-        return (
-            self._demo_amazon_return_enabled()
-            and bool(re.search(r"\b(return|refund|exchange)\b", task, re.I))
-            and bool(re.search(r"amazon", task, re.I))
-        )
-
-    def _is_canonical_demo_amazon_return_record(self, record: dict) -> bool:
-        owner_card = record.get("owner_card") if isinstance(record, dict) else None
-        record_id = (
-            record.get("id")
-            or (owner_card.get("id") if isinstance(owner_card, dict) else None)
-            or ""
-        )
-        return str(record_id) == self._demo_amazon_return_ask_id()
-
-    def _rearm_demo_amazon_return_record(
-        self,
-        ask_id: str,
-        record: dict,
-        *,
-        proof: dict | None = None,
-        answer: str = "",
-        url: str | None = None,
-        screenshot: bool = False,
-        screenshot_path: str | None = None,
-        success: bool = False,
-        trace: dict | None = None,
-    ) -> dict:
-        """Keep the one-off Amazon return demo as a reusable Accept card.
-
-        The board hides terminal cards and successful browser_result records.
-        For this fixture, store the latest receipt but reset the visible card to
-        waiting and re-register pending so every refresh shows the same button.
-        """
-        task, start_url = self._browser_task_from_card_record(record)
-        if proof is None:
-            proof = {
-                "type": "browser_receipt",
-                "url": url,
-                "screenshot": bool(screenshot),
-                "answer": (answer or "")[:1000],
-            }
-            if screenshot_path:
-                proof["screenshot_path"] = screenshot_path
-        if trace:
-            proof["trace"] = trace
-
-        record["state"] = "waiting"
-        record["proof"] = proof
-        record["browser_result"] = {
-            "success": False,
-            "last_success": bool(success),
-            "answer": (answer or "")[:1000],
-            "url": url,
-            "screenshot": bool(screenshot),
-            "screenshot_path": screenshot_path,
-            "state": "waiting",
-        }
-        if trace:
-            record["browser_result"]["trace"] = trace
-        owner_card = record.get("owner_card")
-        if isinstance(owner_card, dict):
-            owner_card["status"] = "waiting"
-            owner_card["disposition"] = "ask"
-            execution = owner_card.get("execution")
-            if not isinstance(execution, dict):
-                execution = {}
-            execution.update({
-                "decision": "ask",
-                "goal_id": ask_id,
-                "ask_id": ask_id,
-                "goal_state": "waiting",
-                "proof": proof,
-            })
-            owner_card["execution"] = execution
-            record["owner_card"] = owner_card
-
-        self.proactive.pending[ask_id] = {
-            "goal_id": ask_id,
-            "action": task,
-            "category": "browser_action",
-            "reason": "browser task — confirm before I look",
-            "browser_task": task,
-            "browser_url": start_url,
-        }
-        self.proactive._persist_pending()
-        self._sync_owner_loop_status(ask_id, "waiting")
-        return record
 
     def _land_browser_result_on_card(self, ask_id: str, *, success: bool, answer: str,
                                      url: str | None, screenshot: bool,
@@ -1744,45 +1593,6 @@ class ControlCore:
             or record.get("description")
             or ask_id
         )
-        # DEMO: the Amazon-return card is a reusable board fixture — after the run, keep it as a fresh
-        # ASK (state 'waiting') and re-register its pending, so it's ALWAYS on the board + re-runnable.
-        if self._is_demo_amazon_return_record(record):
-            try:
-                record = self._rearm_demo_amazon_return_record(
-                    ask_id,
-                    record,
-                    proof=proof,
-                    answer=answer,
-                    url=url,
-                    screenshot=screenshot,
-                    screenshot_path=screenshot_path,
-                    success=success,
-                    trace=trace,
-                )
-                try:
-                    browser_event = self.gateway_ledger.record_browser_result(
-                        ask_id=ask_id,
-                        task=task_text,
-                        success=success,
-                        answer=answer,
-                        url=url,
-                        screenshot=screenshot,
-                        screenshot_path=screenshot_path,
-                        trace=trace,
-                        source_event_id=source_gateway_event_id,
-                    )
-                    record["browser_gateway_event_id"] = browser_event.get("event_id")
-                    if isinstance(record.get("owner_card"), dict):
-                        record["owner_card"]["browser_gateway_event_id"] = browser_event.get("event_id")
-                except Exception as _gateway_exc:
-                    self.glassbox.log("proactive_gateway_browser_result_error",
-                                      {"error": str(_gateway_exc)[:240]})
-                path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
-                self.glassbox.log("demo_amazon_return_rearmed",
-                                  {"card_id": ask_id, "success": bool(success), "url": url})
-            except Exception as _e:
-                self.glassbox.log("demo_card_keepalive_error", {"error": str(_e)[:120]})
-            return
         record["state"] = state
         record["proof"] = proof
         record["browser_result"] = {
@@ -4162,27 +3972,6 @@ class ControlCore:
             if not isinstance(card, dict):
                 continue
             state = record.get("state") or card.get("status") or "open"
-            if self._is_demo_amazon_return_record(record):
-                if not self._is_canonical_demo_amazon_return_record(record):
-                    continue
-            if self._is_demo_amazon_return_record(record) and state not in {"waiting", "running"}:
-                try:
-                    record = self._rearm_demo_amazon_return_record(
-                        str(record.get("id") or card.get("id") or path.stem),
-                        record,
-                        proof=record.get("proof") if isinstance(record.get("proof"), dict) else None,
-                        answer=((record.get("browser_result") or {}).get("answer") or ""),
-                        url=((record.get("browser_result") or {}).get("url") or None),
-                        screenshot=bool((record.get("browser_result") or {}).get("screenshot")),
-                        screenshot_path=(record.get("browser_result") or {}).get("screenshot_path"),
-                        success=bool((record.get("browser_result") or {}).get("last_success")
-                                     or (record.get("browser_result") or {}).get("success")),
-                    )
-                    path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
-                    card = record.get("owner_card") or card
-                    state = "waiting"
-                except Exception as exc:
-                    self.glassbox.log("demo_card_owner_cards_rearm_error", {"error": str(exc)[:120]})
             card = {**card, "status": state}
             # SEAM 2: surface the persisted autonomy mode so the board can pick the lane/verb.
             if not card.get("autonomy_mode") and record.get("autonomy_mode"):
@@ -4258,20 +4047,11 @@ class ControlCore:
         # runs async (1-3 min) and must not block the reply.
         p = self.proactive.pending.get(ask_id)
         if isinstance(p, dict) and p.get("category") == "browser_action":
-            _btask0 = p.get("browser_task") or p.get("action") or ""
-            # DEMO: the Amazon-return card is a REUSABLE board fixture — Accept runs it but the card
-            # STAYS on the board (pending kept, record not marked resolved) so it's always there on
-            # refresh and can be re-run. Gated by ANTICIPY_DEMO_AMAZON_RETURN.
-            _demo_keep = ((os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN") or "").strip().lower()
-                          in {"1", "true", "yes", "on"}
-                          and bool(re.search(r"\b(return|refund|exchange)\b", _btask0, re.I))
-                          and bool(re.search(r"amazon", _btask0, re.I)))
-            if not _demo_keep:
-                self.proactive.pending.pop(ask_id, None)
-                self.proactive._persist_pending()
-                # Reflect the resolution on the durable owner card (card.id == ask_id) so the board shows
-                # the outcome: YES -> running (the agent runs async + texts back), NO -> declined (F-011).
-                self._resolve_browser_card_record(ask_id, approved)
+            self.proactive.pending.pop(ask_id, None)
+            self.proactive._persist_pending()
+            # Reflect the resolution on the durable owner card (card.id == ask_id) so the board shows
+            # the outcome: YES -> running (the agent runs async + texts back), NO -> declined (F-011).
+            self._resolve_browser_card_record(ask_id, approved)
             # M3: a clean YES on a reversible web task BUILDS trust for that kind of task (promotes it
             # toward auto under Regular/Full-Send); a NO demotes it. Money/send never reach here.
             (self.trust_ledger.record_clean("browser") if approved

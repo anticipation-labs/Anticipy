@@ -1,19 +1,22 @@
-"""Browser agent IN-LOOP money hard-stop — proven through the real WebVoyagerAgent.run().
+"""Browser agent IN-LOOP guardrail contract — proven through the real WebVoyagerAgent.run().
 
-Money is the only hard action stop. PURCHASE_GUARD is unit-tested at the regex/_pick_button
-level (test_purchase_guard.py), but the load-bearing guarantee is that the *running agent loop*
-refuses to dispatch a click on a final-purchase control: webvoyager.py:2204-2209 returns
-stopped_for_safety BEFORE the click is ever sent to the browser. This drives the actual loop
-with a FakeLink + a scripted gateway and asserts:
-  1. a click targeting a purchase control => result['stopped_for_safety'] is True, an honest
-     hand-back answer, and the browser link NEVER received the purchase click (money not spent);
-  2. a click on a normal cart/nav control is NOT over-blocked (it IS dispatched, no safety stop).
+The agent-level "refusals" (don't click a final-purchase control, don't type a credential, don't
+act on a checkout page) are NOT always-on product behaviour. They are a SAFETY/DEMO mode gated by
+ANTICIPY_BROWSER_UNLOCKED (default ON = the brain decides, the hands act). Real-world spend is
+gated ask-first at the spine, not by a blanket refusal in the hands. This drives the actual loop
+with a FakeLink + a scripted gateway and pins BOTH sides of the flag:
+  1. UNLOCKED (default): a click on a purchase control IS dispatched (no safety stop) — the agent
+     is free to complete real flows;
+  2. LOCKED (ANTICIPY_BROWSER_UNLOCKED=0): the SAME click is stopped BEFORE the browser sees it
+     (stopped_for_safety, honest hand-back, money not spent).
+The SSRF / private-IP security boundary is separate and ALWAYS on (test_navwall.py).
 
 Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_safety_loop.py
 """
 import asyncio
 import json
 
+import anticipy_engine.agent.webvoyager as wv
 from anticipy_engine.agent.webvoyager import PURCHASE_GUARD, WebVoyagerAgent
 
 # A review page whose only actionable controls are a FINAL-PURCHASE button and a benign nav link.
@@ -62,33 +65,48 @@ class ClickGateway:
         return json.dumps({"action": "answer", "answer": "done looking"})
 
 
-async def test_inloop_purchase_click_is_stopped():
-    # sanity: the page's purchase control really is one the guard recognizes
-    assert PURCHASE_GUARD.search("Place your order"), "fixture purchase control must match the guard"
+async def test_unlocked_dispatches_purchase_click():
+    # DEFAULT (unlocked): the brain decides; the hands carry out a purchase click — no refusal.
+    assert wv.BROWSER_UNLOCKED is True, "default posture must be UNLOCKED (the brain decides)"
     link = FakeLink()
     agent = WebVoyagerAgent(link, ClickGateway(click_idx=0), max_steps=4, per_subgoal=3)
-    result = await agent.run(task="Tell me what this page shows.", start_url="https://shop.test/review")
-    assert result.get("stopped_for_safety") is True, result
-    assert "STOPPED before a purchase control" in (result.get("answer") or ""), result
-    # the load-bearing assertion: the purchase click was caught BEFORE the browser saw it.
-    assert link.actions == [], ("a purchase click was dispatched to the browser (money path!)", link.actions)
-    print("PASS in-loop money stop: agent.run() refused to dispatch 'Place your order' "
-          "(stopped_for_safety, no act reached the browser)")
+    result = await agent.run(task="Place the order on this page.", start_url="https://shop.test/review")
+    assert not result.get("stopped_for_safety"), result
+    assert any(a.get("action") == "click" for a in link.actions), (
+        "UNLOCKED: the purchase click must reach the browser (the agent completes the flow)", link.actions)
+    print("PASS unlocked: agent.run() dispatched 'Place your order' (the brain decides, hands act)")
 
 
-async def test_inloop_normal_click_not_overblocked():
+async def test_locked_stops_purchase_click():
+    # SAFETY MODE (locked): the SAME click is refused before the browser sees it.
+    assert PURCHASE_GUARD.search("Place your order"), "fixture purchase control must match the guard"
+    saved = wv.BROWSER_UNLOCKED
+    wv.BROWSER_UNLOCKED = False
+    try:
+        link = FakeLink()
+        agent = WebVoyagerAgent(link, ClickGateway(click_idx=0), max_steps=4, per_subgoal=3)
+        result = await agent.run(task="Tell me what this page shows.", start_url="https://shop.test/review")
+        assert result.get("stopped_for_safety") is True, result
+        assert "STOPPED before a purchase control" in (result.get("answer") or ""), result
+        assert link.actions == [], ("a purchase click was dispatched in safety mode (money path!)", link.actions)
+    finally:
+        wv.BROWSER_UNLOCKED = saved
+    print("PASS locked: ANTICIPY_BROWSER_UNLOCKED=0 stops 'Place your order' before the browser sees it")
+
+
+async def test_normal_click_not_overblocked():
     link = FakeLink()
     agent = WebVoyagerAgent(link, ClickGateway(click_idx=1), max_steps=4, per_subgoal=3)
     result = await agent.run(task="Tell me what this page shows.", start_url="https://shop.test/review")
     assert not result.get("stopped_for_safety"), result
-    # a benign nav control IS dispatched (the guard does not over-block cart/navigation)
     assert any(a.get("action") == "click" for a in link.actions), ("benign click was wrongly blocked", link.actions)
-    print("PASS in-loop scope: a 'Continue shopping' click is dispatched normally (no false safety stop)")
+    print("PASS scope: a 'Continue shopping' click is dispatched normally (no false safety stop)")
 
 
 async def main():
-    await test_inloop_purchase_click_is_stopped()
-    await test_inloop_normal_click_not_overblocked()
+    await test_unlocked_dispatches_purchase_click()
+    await test_locked_stops_purchase_click()
+    await test_normal_click_not_overblocked()
 
 
 if __name__ == "__main__":

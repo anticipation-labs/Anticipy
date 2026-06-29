@@ -328,15 +328,13 @@ class BrowserHand(Worker):
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           output=result, error="browser agent exhausted its step budget")
         if not result.get("answer"):
-            mutation_attempted = bool(
-                result.get("commerce_recipe")
-                and any(
-                    ((state.get("mutation") or {}).get("changed"))
-                    for state in (result.get("page_states") or [])
-                    if isinstance(state, dict)
-                )
-            )
-            if mutation_attempted:
+            if any(
+                ((state.get("mutation") or {}).get("changed"))
+                for state in (result.get("page_states") or [])
+                if isinstance(state, dict)
+            ):
+                # a real page mutation already happened (e.g. an item added, a form submitted) — don't
+                # blindly retry a side-effecting action; surface it instead.
                 result["non_retryable_real_mutation"] = True
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           output=result, error=result.get("reason") or "browser agent did not finish")
@@ -348,7 +346,6 @@ class BrowserHand(Worker):
             "steps": result.get("steps"),
             "history": (result.get("history") or [])[-10:],
             "page_states": (result.get("page_states") or [])[-8:],
-            "commerce_recipe": bool(result.get("commerce_recipe")),
         }
         if not (proof.get("screenshot") or proof.get("url")):
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,

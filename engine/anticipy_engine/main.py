@@ -137,33 +137,6 @@ def _arm_proactive_health(interval_s: float, armed: bool) -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await core.start()
-    # DEMO: keep the "Do Amazon return" card always on the board so the local app shows it on every
-    # refresh — one Accept away. Env-gated (ANTICIPY_DEMO_AMAZON_RETURN=1); idempotent via the
-    # deterministic ask_id, so it never duplicates. Autonomy forced Limited so it stays an Accept card.
-    if (os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN") or "").strip().lower() in {"1", "true", "yes", "on"}:
-        with suppress(Exception):
-            core.set_autonomy_mode("limited")
-        with suppress(Exception):
-            ask_id = core._demo_amazon_return_ask_id()
-            card_path = core.data_dir / "owner_cards" / f"{ask_id}.json"
-            if card_path.exists():
-                record = json.loads(card_path.read_text(encoding="utf-8"))
-                browser_result = record.get("browser_result") if isinstance(record, dict) else {}
-                browser_result = browser_result if isinstance(browser_result, dict) else {}
-                record = core._rearm_demo_amazon_return_record(
-                    ask_id,
-                    record,
-                    proof=record.get("proof") if isinstance(record.get("proof"), dict) else None,
-                    answer=browser_result.get("answer") or "",
-                    url=browser_result.get("url") or None,
-                    screenshot=bool(browser_result.get("screenshot")),
-                    screenshot_path=browser_result.get("screenshot_path"),
-                    success=bool(browser_result.get("last_success") or browser_result.get("success")),
-                    trace=browser_result.get("trace") if isinstance(browser_result.get("trace"), dict) else None,
-                )
-                card_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
-            else:
-                await core.owner_ingest("transcript", core._demo_amazon_return_task(), execute_actions=True)
     # ANTICIPY_TICK_SECONDS=0 disables the scheduler (deterministic tests use POST /trigger/tick)
     interval_s = float(os.environ.get("ANTICIPY_TICK_SECONDS", "30") or 0)
     tick_task = asyncio.create_task(_trigger_scheduler(interval_s)) if interval_s > 0 else None
