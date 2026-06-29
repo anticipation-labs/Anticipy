@@ -54,6 +54,21 @@ PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes
 (e.g., reach the target page; find the target item; select it; perform the action; verify/stop).
 Reply ONLY JSON: {"subgoals":["...","..."]}"""
 
+# Re-planning (Manus/Mariner pattern): when the FIRST plan's subgoals are all exhausted but the task
+# is not done, the planner gets ONE fresh look — it sees the page it actually landed on and what was
+# already tried, and writes a NEW set of subgoals to finish from HERE. Capped so a doomed task hands
+# back to the human instead of looping forever.
+MAX_REPLANS = int(os.environ.get("ANTICIPY_MAX_REPLANS", "1"))
+# The deterministic nav wall PREVENTS a navigate to a banking/credential/private host (the security
+# boundary). A single blocked navigate should not END a legitimate task — the agent is still on a
+# usable page, so skip the bad navigate and force a rethink. Only hand off if it keeps aiming at
+# blocked destinations (a real wall / injection it cannot get past).
+MAX_NAV_BLOCKS = int(os.environ.get("ANTICIPY_MAX_NAV_BLOCKS", "2"))
+REPLAN_SYS = """You are re-planning a browser task that did NOT finish with the first plan.
+You are given the original TASK, the PAGE you are on now (url + readable text), and what was already
+TRIED. Write a NEW 2-5 step plan to finish the task FROM HERE — do not repeat steps that clearly
+failed; try a different route. Reply ONLY JSON: {"subgoals":["...","..."]}"""
+
 # 96 was enough for a click/type/scroll action + a one-line answer, but a multi-fact answer
 # ("list the 5 key facts") JSON overflowed it -> truncated -> unparseable/empty -> the read silently
 # returned nothing (the §4.6 jankiness). It's a CAP, not a target, so short navigation actions still
@@ -543,17 +558,24 @@ class WebVoyagerAgent:
             return {"status": "error"}
 
     async def _plan(self, task: str) -> List[str]:
-        if _search_text(task):
-            return [
-                "search for the remembered item on the site",
-                "open the matching non-sponsored product",
-                "add the item to the cart",
-                "verify the cart contains the item",
-            ]
+        # FULLY HORIZONTAL: the SMART planner decomposes EVERY task the same way — no task-type
+        # branch, no baked commerce/cart subgoal list (that was hardcoding in planner clothing).
         raw = await _think(self.gw, PLAN_SYS + f"\n\nTASK: {task}", tier=SMART, caller="agent",
                            json_mode=True, temperature=0.2, max_tokens=AGENT_MAX_TOKENS)
         subs = (_parse_json(raw) or {}).get("subgoals") or [task]
         return [str(s) for s in subs][:6]
+
+    async def _replan(self, task: str, out: dict, history: List[str]) -> List[str]:
+        # The planner re-plans from the page actually reached, given what was tried. SMART tier:
+        # re-planning is exactly the high-value reasoning moment routing reserves the smart model for.
+        page = f"URL: {(out or {}).get('url')}\nPAGE TEXT:\n{((out or {}).get('text') or '')[:1200]}"
+        tried = "\n".join(history[-8:]) or "(nothing yet)"
+        raw = await _think(
+            self.gw,
+            REPLAN_SYS + f"\n\nTASK: {task}\n\nPAGE NOW:\n{page}\n\nALREADY TRIED:\n{tried}",
+            tier=SMART, caller="agent", json_mode=True, temperature=0.2, max_tokens=AGENT_MAX_TOKENS)
+        subs = (_parse_json(raw) or {}).get("subgoals") or []
+        return [str(s) for s in subs][:5]
 
     def _done(self, out, step, history, **extra):
         # final_text is the read-back of the resulting page (DOM-first verification evidence):
@@ -600,6 +622,8 @@ class WebVoyagerAgent:
         reflection = ""
         last_thought = ""  # carry the model's own reasoning forward one step (scratchpad)
         forbid = None  # (action, index) forbidden this step after a STUCK
+        replans = 0    # how many times the planner has re-planned (cap: MAX_REPLANS)
+        nav_blocks = 0 # how many navigates the wall has blocked this run (cap: MAX_NAV_BLOCKS)
         item_text = _search_text(task)
 
         out, shot = await self._observe_ready(start_url)
@@ -775,11 +799,19 @@ class WebVoyagerAgent:
             prev_url = out.get("url")
             label = next((e.get("name", "") for e in els if e.get("idx") == action.get("index")), action.get("text", ""))
             act_res = await self._act(_clean_action(action, item_text))
-            # SURFACE a deterministic block (sweep r2): the link refuses a navigate to a banking/credential/
-            # private host with needs_human — don't swallow that and keep looping; hand it back honestly.
+            # The link refuses a navigate to a banking/credential/private host with needs_human. The wall
+            # ALREADY blocked it (security held), and the agent is still on its current, usable page — so a
+            # single bad/hallucinated navigate must NOT end a legitimate task. Skip it, force a rethink on
+            # the smart tier, and only hand off after repeated blocked destinations (a real wall it can't pass).
             if isinstance(act_res, dict) and act_res.get("status") == "needs_human":
                 _why = ((act_res.get("output") or {}).get("reason")
                         or "the bridge refused a navigation to a sensitive site")
+                nav_blocks += 1
+                history.append(f"{step}: NAV BLOCKED ({_why[:60]}) -> rethink")
+                if nav_blocks <= MAX_NAV_BLOCKS and not self._unactionable_obs(out):
+                    sub_stuck += 1        # escalate to the smart model next step
+                    forbid = sig_here     # don't immediately re-emit the same blocked navigate
+                    continue
                 return self._done(out, step + 1, history, needs_human=True,
                                   answer=f"STOPPED — {_why}. Handed back to you with the tab open.")
             out, shot = await self._observe_ready()
@@ -820,6 +852,18 @@ class WebVoyagerAgent:
                 history.append(f"{step}: subgoal failed ('{subgoal_text[:40]}') -> moving on")
                 committed, sub_steps, sub_stuck, forbid, reflection = None, 0, 0, None, ""
                 if state.done():
+                    # The first plan is exhausted. Before handing back, let the planner RE-PLAN once
+                    # from the page actually reached (Manus/Mariner): a fresh route from HERE often
+                    # finishes what the upfront plan couldn't. Hand off only if re-planning is spent
+                    # or yields nothing.
+                    if replans < MAX_REPLANS:
+                        replans += 1
+                        new_subs = await self._replan(task, out, history)
+                        if new_subs:
+                            state = TaskState(new_subs)
+                            history.append(f"{step}: re-planned ({replans}) -> {len(new_subs)} new subgoals")
+                            prev_sig = new_sig
+                            continue
                     return await self._handoff(out, step + 1, history, classify_wall(out.get("text", "")),
                                                "could not complete a subgoal after retries — handed back")
             prev_sig = new_sig
