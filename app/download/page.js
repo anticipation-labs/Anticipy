@@ -1,65 +1,116 @@
-// The Anticipy download front-door. Static server component — no client state — so
-// it builds and renders standalone. Restyled to the one premium visual language
-// (charcoal ground, cream text, DM Serif voice) per ANTICIPY_UX_SPEC §5 / R5.1 —
-// no second, busier visual system.
-//
-// HONEST STATUS: the desktop app is a DEV build today. A signed, notarized public
-// download needs an Apple Developer ID + notarization — that is the one live-deferred
-// step, flagged below, never faked. The Download button points at the dev artifact
-// path the packaging script produces; wire it to the hosted artifact at release.
-
 export const metadata = {
   title: "Download Anticipy",
-  description: "The assistant that hears your day, remembers everything, and quietly gets the small things handled.",
+  description: "Download Anticipy — the proactive assistant that hears your day and gets your work done.",
 };
-
-const DEV_DOWNLOAD_URL =
-  process.env.NEXT_PUBLIC_ANTICIPY_DOWNLOAD_URL || "/api/download/anticipy-execute";
-const SIGNED = process.env.NEXT_PUBLIC_ANTICIPY_DOWNLOAD_SIGNED === "1";
 
 export default function DownloadPage() {
   return (
-    <main className="shell">
-      <div className="gate-screen">
-        <div className="gate settle" style={{ maxWidth: 460 }}>
-          <h1 className="gate-line">It hears you. It&apos;s handled.</h1>
-          <p className="gate-why" style={{ fontSize: "var(--t-body)", lineHeight: 1.6 }}>
-            The assistant that hears your messy day, remembers everything, and quietly gets your work
-            done — preparing each task and waiting for your go. It never acts on a throwaway comment,
-            and never spends a cent without you.
-          </p>
+    <main className="ant" style={{ maxWidth: 640, margin: "0 auto", padding: "48px 20px 80px" }}>
+      <h1 style={{ fontFamily: "var(--serif)", fontSize: 36, marginBottom: 8 }}>Get Anticipy</h1>
+      <p style={{ color: "var(--muted)", fontSize: 15, marginBottom: 32, lineHeight: 1.6 }}>
+        Everything you need to run the full system on your own machine.
+      </p>
 
-          <a href={DEV_DOWNLOAD_URL} className="primary" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", width: "fit-content", margin: "8px auto 0", minHeight: 48, padding: "0 28px" }}>
-            Download for macOS
-          </a>
-
-          <p className="gate-why">
-            macOS 13+ · installs the browser helper and walks you through setup
-          </p>
-
-          {!SIGNED && (
-            <div
-              style={{
-                marginTop: 16,
-                padding: "14px 18px",
-                borderRadius: 12,
-                background: "var(--ink-raised)",
-                border: "1px solid var(--hairline-strong)",
-                color: "var(--warm-gray)",
-                fontSize: "var(--t-meta)",
-                lineHeight: 1.6,
-                textAlign: "left",
-              }}
-            >
-              <strong style={{ color: "var(--cream)", fontWeight: 500 }}>Early preview.</strong> After
-              it downloads, double-click the file to unzip it. The first time you open it, your Mac may
-              ask if you trust it — hold Control, click the app, and choose Open. After that, a normal
-              double-click works from anywhere — Downloads, Applications, or your Desktop. A one-click
-              version is on the way.
-            </div>
-          )}
+      <section className="ant-card" style={{ padding: 24, marginBottom: 20 }}>
+        <h2 style={{ fontFamily: "var(--serif)", fontSize: 20, margin: "0 0 8px" }}>
+          Browser Helper
+        </h2>
+        <p style={{ color: "var(--ink-soft)", fontSize: 14, lineHeight: 1.6, margin: "0 0 16px" }}>
+          Lets Anticipy work in the browser you already use, so it can prepare safe steps and stop
+          before anything that needs your approval.
+        </p>
+        <a
+          href="/anticipy-chrome-extension.zip"
+          download
+          style={{
+            display: "inline-block",
+            background: "var(--ink)",
+            color: "var(--bg)",
+            fontSize: 15,
+            fontWeight: 600,
+            padding: "12px 28px",
+            borderRadius: 10,
+            textDecoration: "none",
+            marginBottom: 16,
+          }}
+        >
+          Download Extension (.zip)
+        </a>
+        <div style={{
+          background: "var(--panel)",
+          border: "1px solid var(--line)",
+          borderRadius: 8,
+          padding: "14px 16px",
+          fontSize: 13,
+          lineHeight: 1.6,
+          color: "var(--ink-soft)",
+        }}>
+          <strong>How to install:</strong>
+          <ol style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+            <li>Unzip the downloaded file</li>
+            <li>Open the browser extensions page</li>
+            <li>Enable &ldquo;Developer mode&rdquo; (top right toggle)</li>
+            <li>Click &ldquo;Load unpacked&rdquo; and select the unzipped folder</li>
+            <li>The Anticipy icon appears in your toolbar</li>
+          </ol>
         </div>
-      </div>
+      </section>
+
+      <section className="ant-card" style={{ padding: 24, marginBottom: 20 }}>
+        <h2 style={{ fontFamily: "var(--serif)", fontSize: 20, margin: "0 0 8px" }}>
+          Quick Start
+        </h2>
+        <p style={{ color: "var(--ink-soft)", fontSize: 14, lineHeight: 1.6, margin: "0 0 16px" }}>
+          Clone the repo, add your private settings file, and start Anticipy.
+        </p>
+        <pre style={{
+          background: "#1b1a17",
+          color: "#f6f3ec",
+          padding: "16px 18px",
+          borderRadius: 8,
+          fontSize: 13,
+          lineHeight: 1.6,
+          overflow: "auto",
+          whiteSpace: "pre-wrap",
+        }}>{`# 1. Clone and enter the repo
+git clone https://github.com/your-org/anticipy.git && cd anticipy
+
+# 2. Copy your private settings file
+cp .env.example .env.local
+
+# 3. Start everything
+./scripts/anticipy_setup.sh
+
+# Or manually:
+cd engine && python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python -m uvicorn anticipy_engine.main:app &
+cd .. && npm install && npm run dev`}</pre>
+      </section>
+
+      <section className="ant-card" style={{ padding: 24 }}>
+        <h2 style={{ fontFamily: "var(--serif)", fontSize: 20, margin: "0 0 8px" }}>
+          How it works
+        </h2>
+        <div style={{ fontSize: 14, lineHeight: 1.7, color: "var(--ink-soft)" }}>
+          <p style={{ margin: "0 0 12px" }}>
+            <strong>Listen</strong> - Press the big Listen button and talk. Anticipy turns
+            what matters into plain next steps.
+          </p>
+          <p style={{ margin: "0 0 12px" }}>
+            <strong>Think</strong> - It separates real commitments from vents, jokes, and
+            passing noise. Vents are never tasks. Money is always yours to approve.
+          </p>
+          <p style={{ margin: "0 0 12px" }}>
+            <strong>Act</strong> - It can prepare reminders, drafts, browser steps, and calls,
+            then pause before anything irreversible.
+          </p>
+          <p style={{ margin: 0 }}>
+            <strong>Remember</strong> - It keeps the people, preferences, commitments, and
+            open loops you choose to keep.
+          </p>
+        </div>
+      </section>
     </main>
   );
 }

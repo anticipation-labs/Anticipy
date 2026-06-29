@@ -137,6 +137,33 @@ def _arm_proactive_health(interval_s: float, armed: bool) -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await core.start()
+    # DEMO: keep the "Do Amazon return" card always on the board so the local app shows it on every
+    # refresh — one Accept away. Env-gated (ANTICIPY_DEMO_AMAZON_RETURN=1); idempotent via the
+    # deterministic ask_id, so it never duplicates. Autonomy forced Limited so it stays an Accept card.
+    if (os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        with suppress(Exception):
+            core.set_autonomy_mode("limited")
+        with suppress(Exception):
+            ask_id = core._demo_amazon_return_ask_id()
+            card_path = core.data_dir / "owner_cards" / f"{ask_id}.json"
+            if card_path.exists():
+                record = json.loads(card_path.read_text(encoding="utf-8"))
+                browser_result = record.get("browser_result") if isinstance(record, dict) else {}
+                browser_result = browser_result if isinstance(browser_result, dict) else {}
+                record = core._rearm_demo_amazon_return_record(
+                    ask_id,
+                    record,
+                    proof=record.get("proof") if isinstance(record.get("proof"), dict) else None,
+                    answer=browser_result.get("answer") or "",
+                    url=browser_result.get("url") or None,
+                    screenshot=bool(browser_result.get("screenshot")),
+                    screenshot_path=browser_result.get("screenshot_path"),
+                    success=bool(browser_result.get("last_success") or browser_result.get("success")),
+                    trace=browser_result.get("trace") if isinstance(browser_result.get("trace"), dict) else None,
+                )
+                card_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+            else:
+                await core.owner_ingest("transcript", core._demo_amazon_return_task(), execute_actions=True)
     # ANTICIPY_TICK_SECONDS=0 disables the scheduler (deterministic tests use POST /trigger/tick)
     interval_s = float(os.environ.get("ANTICIPY_TICK_SECONDS", "30") or 0)
     tick_task = asyncio.create_task(_trigger_scheduler(interval_s)) if interval_s > 0 else None
@@ -724,6 +751,12 @@ def memory_drawers() -> dict:
     }}
 
 
+@app.get("/proactive/gateway/recent")
+def proactive_gateway_recent(limit: int = 50) -> dict:
+    """Recent Plan Baby Steps gateway events across browser, memory, voice/text, and app lanes."""
+    return current_core().proactive_gateway_recent(limit=limit)
+
+
 @app.get("/memory/open-loops")
 def memory_open_loops(limit: int = 50) -> dict:
     return current_core().memory_open_loops(limit=limit)
@@ -897,6 +930,9 @@ async def listen_start() -> dict:
     decides act/ask/silent on your real day. Words only until the brain decides; money still asks."""
     global _mic_source
     if _mic_source is not None and _mic_source.running:
+        current_core().gateway_ledger.record_listen_status(
+            source="mac_mic", listening=True,
+            details={"already_running": True, "device": _mic_source._device})
         return {"listening": True, "already_running": True, "device": _mic_source._device}
     loop = asyncio.get_running_loop()
     # Capture THIS caller's core now; the mic-thread sink fires later with NO request context
@@ -918,6 +954,11 @@ async def listen_start() -> dict:
     _mic_source.start()
     c.glassbox.log("listen", {"event": "started", "device": _mic_source._device,
                                  "window_seconds": _mic_source._window})
+    c.gateway_ledger.record_listen_status(
+        source="mac_mic",
+        listening=True,
+        details={"device": _mic_source._device, "window_seconds": _mic_source._window},
+    )
     return {"listening": True, "device": _mic_source._device, "window_seconds": _mic_source._window,
             "note": "Anticipy is listening on your Mac mic now — just talk; it acts on what it hears."}
 
@@ -930,6 +971,12 @@ async def listen_stop() -> dict:
     if _mic_source is not None:
         _mic_source.stop()
         current_core().glassbox.log("listen", {"event": "stopped", "windows": windows, "utterances": utterances})
+        current_core().gateway_ledger.record_listen_status(
+            source="mac_mic",
+            listening=False,
+            status="stopped",
+            details={"windows": windows, "utterances": utterances},
+        )
     _mic_source = None
     return {"listening": False, "windows": windows, "utterances": utterances}
 
@@ -958,6 +1005,12 @@ async def listen_stream_ws(ws: WebSocket):
 
     dg_key = os.environ.get("DEEPGRAM_API_KEY", "")
     if not dg_key:
+        c.gateway_ledger.record_listen_status(
+            source="browser_mic",
+            listening=False,
+            status="unavailable",
+            details={"reason": "deepgram_not_configured"},
+        )
         await ws.send_json({"type": "error", "message": "DEEPGRAM_API_KEY not configured"})
         await ws.close()
         return
@@ -1080,6 +1133,13 @@ async def listen_stream_ws(ws: WebSocket):
                                         execute_actions=True)
             except Exception:
                 pass
+        with suppress(Exception):
+            c.gateway_ledger.record_listen_status(
+                source="browser_mic",
+                listening=False,
+                status="stopped",
+                details={"reason": "stream_disconnected"},
+            )
         c.glassbox.log("listen_stream", {"event": "disconnected"})
 
 
@@ -1721,6 +1781,7 @@ class ActIn(BaseModel):
     action: str
     index: int = 0
     text: str = ""
+    value: str = ""
     url: str = ""
     dir: str = "down"
     enter: bool = False
@@ -2056,6 +2117,12 @@ async def conversation_relay(ws: WebSocket) -> None:
                 turns_used += 1
                 turn = await brain.turn(msg.get("voicePrompt") or "")
                 last_handoff = turn.handoff_data()
+                with suppress(Exception):
+                    core.gateway_ledger.record_voice_turn(
+                        prompt=msg.get("voicePrompt") or "",
+                        handoff=last_handoff,
+                        channel="conversation_relay",
+                    )
                 # stream the reply as ConversationRelay text tokens; the FINAL frame
                 # carries last:true so Twilio knows the turn's speech is complete
                 tokens = list(stream_tokens(turn.reply))

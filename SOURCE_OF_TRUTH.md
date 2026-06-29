@@ -1,7 +1,8 @@
-# Anticipy — SOURCE OF TRUTH (canonical, 2026-06-23)
+# Anticipy — HISTORICAL SOURCE OF TRUTH (superseded 2026-06-24)
 
-> One page. If anything in the repo contradicts this, this wins. The ~29 older
-> STATUS/DONE/MISSION/LEDGER docs are **historical** — superseded by this + `WAKEUP_REPORT.md`.
+> Historical snapshot from 2026-06-23. `CURRENT_STATE.md` is now the dated source of truth;
+> if this file contradicts `CURRENT_STATE.md`, `README.md`, or live verification, this file loses.
+> Kept only to preserve context from the prior session.
 
 ## The one trunk (never fork the engine again)
 - **Canonical:** `~/Anticipy @ factory/build` — the only body with one integrated engine, a real test
@@ -9,8 +10,10 @@
 - **Remote:** `omize10/Anticipy-executor-working`. Treat `omize10/Anticipy` as archive.
 - **Archived parts-bins (read-only, do NOT build on):** `~/Developer/Anticipy-DEV-FINAL`,
   `~/Developer/Anticipy-V7`, `~/Desktop/Anticipy Core`, `~/Desktop/Anticipy-Browser-Hand`,
-  `~/Desktop/Anticipy-Extension`, `~/Projects/anticipy`. Their uncommitted work is preserved on
+  `~/Projects/anticipy`. Their uncommitted work is preserved on
   `preserve/2026-06-23-archive` branches — nothing was lost.
+- **Current loadable extension:** `~/Desktop/Anticipy-Extension`, kept in sync with
+  `~/Anticipy/extension`.
 
 ## Architecture decision — FULLY BROWSER (API arm CUT) — Omar, 2026-06-23
 - **Every action the product does for the user happens in the user's real Chrome, like a human.**

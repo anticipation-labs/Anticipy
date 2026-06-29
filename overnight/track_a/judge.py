@@ -12,10 +12,12 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta
 
-from arcadepy import Arcade
+_LIVE_TESTS_FLAG = "ANTICIPY_TRACK_A_ALLOW_LIVE_CALENDAR"
 
 
-def _client() -> Arcade:
+def _client():
+    from arcadepy import Arcade
+
     return Arcade(api_key=os.environ["ARCADE_API_KEY"])
 
 
@@ -66,6 +68,9 @@ def confirm(claim: dict) -> dict:
 
 def self_prove() -> bool:
     """Plant a real pass + a fake; the judge MUST pass the real and FAIL the fake. Cleans up after."""
+    if os.environ.get(_LIVE_TESTS_FLAG) != "1":
+        print(f"  self-prove refused: set {_LIVE_TESTS_FLAG}=1 only for a deliberate live proof run")
+        return False
     uid, client = _uid(), _client()
     start = (datetime.now().astimezone() + timedelta(days=1)).replace(hour=11, minute=0, second=0, microsecond=0)
     end = start + timedelta(minutes=30)

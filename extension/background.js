@@ -453,7 +453,7 @@ async function doObserve(msg) {
         for (const el of document.querySelectorAll(sel)) {
           const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
           if (r.width <= 2 || r.height <= 2 || cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
-          if (r.bottom < -50 || r.right < 0 || r.top > innerHeight + 1200 || r.left > innerWidth) continue;
+          if (r.bottom < -50 || r.right < 0 || r.top > innerHeight + 4000 || r.left > innerWidth) continue;
           el.setAttribute('data-anticipy-idx', String(i));
           let labelText = '';
           try {
@@ -489,9 +489,9 @@ async function doObserve(msg) {
             lab.style.cssText = 'position:absolute;left:0;top:0;transform:translateY(-100%);background:' + c + ';color:#fff;font:bold 11px monospace;padding:0 3px;white-space:nowrap;';
             box.appendChild(lab); cont.appendChild(box);
           }
-          if (++i >= 140) break;
+          if (++i >= 600) break;
         }
-        return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 2500), elements: out };
+        return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 12000), elements: out };
       },
     });
     const screenshot = await cdpScreenshot(tab.id);
@@ -530,6 +530,69 @@ async function doAct(msg) {
         func: (d) => window.scrollBy(0, (d === "up" ? -1 : 1) * innerHeight * 0.8) });
       await sleep(500);
       return result(msg, "success", null, { ok: true, action: "scroll" });
+    }
+    // --- agent primitive: CHECK (force a checkbox on/off and dispatch app-level events) ---
+    if (a.action === "check") {
+      step = "check";
+      const [{ result: r }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id }, args: [a.index, a.checked !== false],
+        func: (i, wantChecked) => {
+          const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
+          if (!e) return { ok: false, reason: 'missing element' };
+          let cb = null;
+          if (e.matches && e.matches('input[type="checkbox"]')) cb = e;
+          if (!cb && e.querySelector) cb = e.querySelector('input[type="checkbox"]');
+          if (!cb && e.getAttribute) {
+            const forId = e.getAttribute('for');
+            if (forId) cb = document.getElementById(forId);
+          }
+          if (!cb || !cb.matches || !cb.matches('input[type="checkbox"]')) {
+            return { ok: false, reason: 'not a checkbox', tag: e.tagName, role: e.getAttribute('role') };
+          }
+          if (cb.disabled) return { ok: false, reason: 'disabled checkbox' };
+          cb.scrollIntoView({ block: 'center', inline: 'center' });
+          if (cb.focus) cb.focus();
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked') &&
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked').set;
+          if (setter) setter.call(cb, !!wantChecked);
+          else cb.checked = !!wantChecked;
+          cb.dispatchEvent(new Event('input', { bubbles: true }));
+          cb.dispatchEvent(new Event('change', { bubbles: true }));
+          return { ok: cb.checked === !!wantChecked, checked: !!cb.checked };
+        },
+      });
+      await sleep(900);
+      return result(msg, (r && r.ok) ? "success" : "needs_human", null, { action: "check", ...(r || {}) });
+    }
+    // --- agent primitive: SELECT (choose an option in a <select>/combobox by VISIBLE TEXT) ---
+    if (a.action === "select") {
+      step = "select";
+      const [{ result: r }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id }, args: [a.index, String(a.value || a.text || "")],
+        func: (i, want) => {
+          const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
+          if (!e) return { ok: false, reason: 'missing element' };
+          const w = String(want || '').trim().toLowerCase();
+          const sel = e.tagName === 'SELECT' ? e : e.querySelector && e.querySelector('select');
+          if (sel && sel.options) {
+            const opts = Array.from(sel.options);
+            const norm = (s) => String(s || '').trim().toLowerCase();
+            let opt = opts.find(o => norm(o.textContent) === w || norm(o.value) === w)
+                   || opts.find(o => norm(o.textContent).replace(/\s+/g, ' ') === w)
+                   || opts.find(o => norm(o.textContent).startsWith(w + ' '))
+                   || opts.find(o => norm(o.textContent || '').includes(w))
+                   || opts.find(o => norm(o.value || '').includes(w));
+            if (!opt) return { ok: false, reason: 'no matching option', options: opts.map(o => (o.textContent || '').trim()).slice(0, 15) };
+            sel.value = opt.value; sel.selectedIndex = opt.index;
+            sel.dispatchEvent(new Event('input', { bubbles: true }));
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            return { ok: true, selected: (opt.textContent || '').trim() };
+          }
+          return { ok: false, reason: 'not a select', tag: e.tagName, role: e.getAttribute('role') };
+        },
+      });
+      await sleep(600);
+      return result(msg, (r && r.ok) ? "success" : "needs_human", null, { action: "select", ...(r || {}) });
     }
     if (a.action === "click" || a.action === "type") {
       // locate element, scroll it into view, get its viewport-center coords

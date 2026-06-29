@@ -22,6 +22,7 @@ from anticipy_engine.core.envelopes import Job, Risk
 from anticipy_engine.hands.api_hand import ApiHand, MODE_LIVE
 
 _LABEL = "[Anticipy test] "  # uniform safety label on EVERY event — not task-specific tuning
+_LIVE_TESTS_FLAG = "ANTICIPY_TRACK_A_ALLOW_LIVE_CALENDAR"
 
 
 def _robust_json(raw: str):
@@ -63,6 +64,12 @@ async def do(ask: str, now: datetime) -> dict:
     """Return the worker's claim. status='created' only if Arcade really made the event."""
     claim = {"ask": ask, "summary": None, "start_datetime": None, "end_datetime": None,
              "event_id": None, "status": "failed", "error": None}
+    if os.environ.get(_LIVE_TESTS_FLAG) != "1":
+        claim["error"] = (
+            f"live calendar writes disabled; set {_LIVE_TESTS_FLAG}=1 only for a deliberate "
+            "proof run against a disposable calendar"
+        )
+        return claim
     gw = _gateway()
     raw = await gw.think(_prompt(ask, now), tier=CHEAP, caller="track_a")
     data = _robust_json(raw)

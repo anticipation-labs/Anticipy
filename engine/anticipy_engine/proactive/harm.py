@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from ..shared.invoice_draft import match_invoice_draft_ask
-from ..shared.note_task import match_internal_note, match_note_task
+from ..shared.note_task import match_note_task
 from ..shared.schedule_change import match_schedule_change_hold
 from ..shared.slotbooking import match_context_slot_choice_booking, match_slot_choice_booking
 from ..shared.storesite import derive_store_site
@@ -45,39 +45,26 @@ from ..shared.storesite import derive_store_site
 # required, so non-money content sends are never newly money-blocked.
 _MONEY_SIGNAL = re.compile(
     r"[$£€]\s?\d"                                                  # $500, £20, € 50
-    # amount + currency word, incl. "2k/1.5m" shorthand ("send 2k usd to my mom"). The optional
-    # [km] only matches WITH a trailing currency word, so "go for a 5k run" (no currency) never trips.
-    r"|\b\d[\d,]*(?:\.\d{1,2})?\s?[km]?\s*(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?|million|billion)\b"
+    r"|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?)\b"
+    r"|\b\d+(?:\.\d+)?\s*[km]\s*(?:usd|cad|dollars?|bucks?|euros?|pounds?)\b"             # 2k usd
+    r"|\b\d[\d,]*(?:\.\d+)?\s*(?:million|billion)\b"                                      # 1.2 million
     r"|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|"
     r"fifty|sixty|seventy|eighty|ninety|hundred|thousand|couple|few)\b"
-    r"[\w\s-]{0,20}?\b(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?|million|billion)\b"  # five hundred dollars / 1.2 million
-    r"|\b(?:hundred|thousand|grand|million|billion)\b\s+(?:we|i|they|you|he|she)\s+(?:owe|owed)\b"
-    # MONEY OUT via refund/reimburse/credit — "refund the overpayment back to his card",
-    # "reimburse the client 1100", "credit her account". Money MOVING is the hard stop; the
-    # bug-hunt found these surfacing as a plain ask (or dropped) instead of the visible money block
-    # because no scale word ("dollars") nor a debt noun was present. Anchored to a money TARGET
-    # (card/account/overpayment/payment) or an amount. WINDOW widened 30->80: the 20-life test caught
-    # "refund the duplicate catering charge straight back to the corporate card" (52 chars refund->card)
-    # and "refund Priya's last two sessions to her card" slipping the old {0,30}.
-    r"|\b(?:refund|reimburse|credit)\b[^.;!?]{0,80}?\b(?:card|account|overpayment|payment|venmo|paypal|zelle|\d)"
-    r"|\bcharge\b[^.;!?]{0,25}?\b(?:card|account)\b"                                     # charge it to the company card
-    # MONEY MOVEMENT to a financial destination — "transfer 1.2 million to the new SPV", "wire it to
-    # the escrow account". The 20-life VC line ("Transfer 1.2 million ... to the new SPV ... do it now")
-    # was DROPPED entirely; this anchors transfer/wire/send/move to a money DESTINATION so it always blocks.
-    r"|\b(?:transfer|wire|send|move|remit|deposit)\b[^.;!?]{0,60}?\b(?:account|accounts|fund|funds|reserve|escrow|spv|wallet|iban|swift|routing|treasury|brokerage)\b"
-    # PAY/WIRE + a bare comma-or-3-digit NUMBER, no $ sign — "pay the equipment guy 1,400", "wire 400
-    # to her", "venmo Dave 250". The 20-life trainer line ("Pay the equipment guy ... it's 1,400, send
-    # him the transfer") was DROPPED because the amount had no currency word. STRONG money verbs only
-    # (not 'transfer/send' alone -> avoids "transfer 500 files"). Bounded number 3+ digits or grouped.
-    r"|\b(?:pay|paid|wire|wired|venmo|zelle|cashapp|paypal|remit|refund|reimburse)\b[^.;!?]{0,40}?\b\d{1,3}(?:,\d{3})+\b"
-    r"|\b(?:pay|paid|wire|wired|venmo|zelle|cashapp|paypal|remit|refund|reimburse)\b[^.;!?]{0,40}?\b\d{3,}\b"
-    # "send him/her/them the transfer / payment" — a money send whose amount sits elsewhere in the line.
-    r"|\bsend\b[^.;!?]{0,20}?\bthe\s+(?:transfer|payment|wire|deposit)\b"
-    # PAID RENEWAL — "renew the Creative Cloud plan", "renew the annual subscription" (the extracted
-    # fragment lost its $amount; renew+plan/subscription is a recurring charge -> PREPARE_THEN_STOP).
-    r"|\brenew(?:al|ing|ed|s)?\b[^.;!?]{0,40}?\b(?:subscription|membership|plan|premium|policy|licen[cs]e)\b"
+    r"[\w\s-]{0,20}?\b(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?)\b"             # five hundred dollars
+    r"|\b(?:hundred|thousand|grand)\b\s+(?:we|i|they|you|he|she)\s+(?:owe|owed)\b"       # five hundred we owe
     r"|\b(?:owe|owed|owes|owing|rent|deposit|invoice|balance|payment|payments|"
-    r"retainer|copay|co-pay|tab|bill|bills|dues|fee|fees|tuition|mortgage)\b",
+    r"retainer|copay|co-pay|tab|bill|bills|dues|fee|fees|tuition|mortgage)\b"
+    r"|\b(?:refund|chargeback)\b"
+    r"|\b(?:wire|transfer|pay|send)\b[^.;!?]{0,80}\b(?:escrow|account|spv|fund|reserve|"
+    r"corporate card|credit card|debit card|\d+(?:\.\d+)?\s*[km]\s*(?:usd|cad|dollars?|bucks?|euros?|pounds?))\b"
+    r"|\brenew\b[^.;!?]{0,80}\b(?:plan|subscription|membership|creative cloud)\b",
+    re.I,
+)
+_MONEY_CONTEXT_SIGNAL = re.compile(
+    r"\b(?:refund|chargeback)\b"
+    r"|\b(?:wire|transfer|pay|send)\b[^.;!?]{0,80}\b(?:escrow|account|spv|fund|reserve|"
+    r"corporate card|credit card|debit card|\d+(?:\.\d+)?\s*[km]\s*(?:usd|cad|dollars?|bucks?|euros?|pounds?))\b"
+    r"|\brenew\b[^.;!?]{0,80}\b(?:plan|subscription|membership|creative cloud)\b",
     re.I,
 )
 # The LEND-MONEY idiom family — a hand-cash request that carries NO scale word ("dollars"/
@@ -162,7 +149,7 @@ _HARD_SEND = re.compile(r"\b(send|sends|sending|forward|forwards|forwarding|dm|d
 # Room 3 refire marker (proactive.trigger_tick builds its follow-up events with this
 # prefix): a refired loop line must NEVER re-cancel the send reading, so a deferred
 # "remind me ... to send X" terminates at the ask when it fires instead of looping.
-FOLLOWUP_PREFIX = "Follow up on your commitment:"
+FOLLOWUP_PREFIX = "Follow up:"
 # Timed SELF-reminder frame: when it PRECEDES the send token and carries a concrete
 # time anchor in its own clause, the requested action is the reminder (rule 3) — the
 # hold is reversible and _fire_reminder re-gates the embedded action at fire time.
@@ -320,20 +307,10 @@ class HarmLine:
         # the invoice") never matches this shape and still gates as money via the verb.
         if match_invoice_draft_ask(action_text or ""):
             hard_text = re.sub(r"\binvoic(?:e|es|ing)\b", " ", hard_text)
-        # INTERNAL NOTE (NOT money): "make sure the retainer NOTE is in the CRM", "add a note in
-        # the client file about the retainer". A money/obligation noun (retainer/invoice/...) can
-        # be the SUBJECT of an internal record entry without the line ever moving money — the
-        # _MONEY_SIGNAL obligation-noun catch wrongly read the bare word as money and blocked the
-        # admin note (the lawyer seam). Strip those obligation nouns for this note shape ONLY so it
-        # falls through to the reversible `note` branch (rule 3). The note detector itself refuses
-        # any line carrying a spend/transaction verb, so a real payment ("pay/wire/chase the
-        # retainer") never matches and still gates as money below.
-        if match_internal_note(action_text or ""):
-            hard_text = re.sub(
-                r"\b(?:retainer|copay|co-pay|invoice|invoices|balance|deposit|dues|fee|fees|"
-                r"tuition|mortgage|payment|payments|bill|bills|tab|rent)\b",
-                " ", hard_text)
-        hard = _first_match(hard_text, _HARD)
+        if _MONEY_CONTEXT_SIGNAL.search(hard_text):
+            hard = "money"
+        else:
+            hard = _first_match(hard_text, _HARD)
         if hard is not None:
             return HarmVerdict(True, hard, f"detrimental:{hard} -> ask before acting")
         # 2) hard send (send/forward/dm) — binding, gray via memory. Two SCOPE exceptions
@@ -365,11 +342,6 @@ class HarmLine:
                                "reversible:time-anchored forget-hold -> act (re-gated on fire)")
         if match_note_task(action_text or "") is not None:
             return HarmVerdict(False, "note", "reversible:note capture -> act")
-        # An INTERNAL note in a CRM/file/record whose subject mentions a money word ("the retainer
-        # note is in the CRM") is reversible internal admin, not a payment. The note detector
-        # already excludes any line with a spend verb, so a real money move never reaches here.
-        if match_internal_note(action_text or "") is not None:
-            return HarmVerdict(False, "note", "reversible:internal note/record -> act")
         if match_invoice_draft_ask(action_text or ""):
             return HarmVerdict(True, "invoice_draft",
                                "invoice/client financial draft needs confirmation -> ask")
@@ -406,7 +378,7 @@ class HarmLine:
         terminates at the ask. Deny-direction: frame after the send, send outside the
         frame's own clause ("remind me at 7pm to call Dee. Send Sam the file now."), or
         no concrete time anchor inside that clause, keeps the binding-send reading."""
-        if t.lstrip().startswith(FOLLOWUP_PREFIX.lower()):
+        if re.match(r"\s*follow up\b", t):
             return False
         rem = _SELF_REMINDER.search(t)
         if rem is None or rem.start() > send_pos:
@@ -426,7 +398,7 @@ class HarmLine:
         # Force money (ASK/BLOCK) BEFORE the casual downgrade so a casual-recipient memory
         # match can NEVER turn a payment into a casual_send ACT. _HARD already catches these
         # at the top of assess(); this is the binding second gate on the send path.
-        if _MONEY_SIGNAL.search(t) or re.search(_MONEY_IDIOMS, t, re.I):
+        if _MONEY_SIGNAL.search(t) or _MONEY_CONTEXT_SIGNAL.search(t) or re.search(_MONEY_IDIOMS, t, re.I):
             return HarmVerdict(True, "money",
                                "send carries a money/amount signal -> money hard stop, ask/block "
                                "(no casual downgrade)")

@@ -7,6 +7,7 @@ layer and the tests drive it through `feed()` and `resume()`.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import datetime as dt
 import json
 import os
@@ -19,7 +20,7 @@ from .browser_link import BrowserLink
 from .bus import Bus
 from .env import load_local_env
 from .envelopes import Event, EventSource, Goal, GoalState, Job, JobStatus
-from .gateway import ModelGateway, PROVIDER_OPENROUTER
+from .gateway import ModelGateway, PROVIDER_GEMINI, PROVIDER_OPENROUTER
 from .glassbox import GlassBox
 from .native_bridge_link import NativeBridgeLink
 from .orchestrator import Approver, Orchestrator
@@ -37,6 +38,7 @@ from ..live_memory.brain import LiveMemoryBrain
 from ..memory.store import Memory, is_active_open_loop
 from ..owner_mode import OwnerIngestResult, OwnerMode, OwnerObservedLine, OwnerTaskCard
 from ..owner_onboarding import OwnerOnboardingIn, build_onboarding_plan
+from ..proactive.gateway import ProactiveGatewayLedger
 from ..proactive.harm import _MONEY_SIGNAL  # the money hard-stop signal (amount/account/transfer-to)
 
 
@@ -64,6 +66,9 @@ _INTERROGATIVE_ASIDE = re.compile(
     r"were|weren'?t|was|wasn'?t|are|aren'?t|is|isn'?t)\s+"
     r"(you|we|they|he|she|it|u|your|the|anyone|someone|anybody|somebody)\b",
     re.I)
+
+_GATEWAY_EVENT_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "anticipy_gateway_event_id", default=None)
 # A PAST/PERFECT completion-check aimed at the listener — "did you ...", "have you ...",
 # "didn't you ..." — anywhere in a question, so real-speech lead-ins ("hey did you ...?",
 # "anyway, did you ...?", "um so have you ...?") and rambling multi-clause questions are caught
@@ -117,6 +122,12 @@ _DIRECT_ADDRESS_Q_COMMA2 = re.compile(
     r"(?!\s+(?:we|i|us)\b)",
     re.I,
 )
+_INTIMATE_DIRECT_ADDRESS_Q = re.compile(
+    r"^\s*(?:(?:hey|hi|yo|um|uh),?\s+|please\s+)?"
+    r"(?:babe|baby|hon|honey|sweetie|sweetheart|love|dude|bro|buddy|man)\s*,?\s+"
+    r"(?:can|could|would|will|won'?t|do|are|is)\s+(?:you|u|ya)\b",
+    re.I,
+)
 # A request-to-you that ENDS with a name vocative ("Could you remind me what time the flight lands,
 # James?") is that person's question, not the owner's. The trailing ", Name?" is the aside signal; a
 # bare "could you remind me ...?" (no trailing name) stays a real request to the assistant.
@@ -134,7 +145,7 @@ def _is_directed_question_to_named_person(text: str) -> bool:
     ...?") has no name vocative and never matches."""
     t = (text or "").strip()
     return (bool(_DIRECT_ADDRESS_Q_COMMA.match(t)) or bool(_DIRECT_ADDRESS_Q_NOCOMMA.match(t))
-            or bool(_DIRECT_ADDRESS_Q_COMMA2.match(t)))
+            or bool(_DIRECT_ADDRESS_Q_COMMA2.match(t)) or bool(_INTIMATE_DIRECT_ADDRESS_Q.match(t)))
 
 
 # A vent-adjacent task survives the cardinal vent floor ONLY if the assistant can actually act on it:
@@ -147,6 +158,33 @@ _VENT_TASK_ACTIONABLE = re.compile(
     r"transfer|refund|reimburse|venmo|zelle|remind|look\s*up|research|find|confirm|register|"
     r"sign\s*up|submit|file|renew|rsvp|invite|share|upload|download|set\s*up|"
     r"pick\s*up|pickup|drop\s*off|grab)\b", re.I)
+_OVERWHELM_HEAT = re.compile(
+    r"\b(?:my\s+brain\s+is\s+fried|brain'?s\s+fried|i'?m\s+fried|i\s+am\s+fried|"
+    r"i'?m\s+(?:exhausted|spent|overwhelmed|drowning|running\s+on\s+(?:empty|fumes)|"
+    r"losing\s+it|so\s+done)|i\s+can'?t\s+even)\b",
+    re.I,
+)
+_BRAINSTORM_OR_OPTION_NOISE = re.compile(
+    r"\b(?:what\s+if|we\s+could|could\s+also|or\s+maybe|maybe\s+we|one\s+way|"
+    r"another\s+option|it'?s\s+an\s+option|just\s+(?:thinking|brainstorming|musing|riffing)|"
+    r"throwing\s+ideas|lots\s+to\s+chew|noodle\s+on\s+it|need\s+to\s+noodle)\b"
+    r"|\bschedule\s+(?:a\s+)?follow-?up\b[\w\s,.'’-]{0,80}?"
+    r"\bdecide\s+on\s+(?:one\s+of\s+these|which\s+one|the\s+option|an\s+option|options?)\b",
+    re.I,
+)
+_SOCIAL_PLEASANTRY_NOISE = re.compile(
+    r"\bgrab\s+(?:coffee|lunch|dinner|drinks)\b[\w\s,.'’-]{0,80}?"
+    r"\b(?:sometime|some\s+time|soon|one\s+day|when\s+things\s+calm\s+down)\b"
+    r"|\bwe\s+should\s+totally\b[\w\s,.'’-]{0,80}?"
+    r"\b(?:sometime|some\s+time|soon|one\s+day|when\s+things\s+calm\s+down)\b",
+    re.I,
+)
+_LOOSE_PARENT_OUTING_NOISE = re.compile(
+    r"\bwe\s+were\s+just\s+saying\b[\w\s,.'’-]{0,80}?"
+    r"\bneed\s+to\s+get\s+(?:them|the\s+kids|kids|children)\b[\w\s,.'’-]{0,60}?"
+    r"\b(?:park|outside|outdoors|out\s+of\s+the\s+house)\b[\w\s,.'’-]{0,40}?\blater\b",
+    re.I,
+)
 
 # REVERSIBLE PREPARE tasks the moat under-extracts: "draft an email to X but don't send it", "compose
 # a reply, hold it for me", "start a draft reminder", "get a cart together for 200 menus, don't order
@@ -402,6 +440,60 @@ def _is_interrogative_aside(text: str) -> bool:
     return (bool(_INTERROGATIVE_ASIDE.match(t)) or bool(_QUESTION_TO_OTHER.search(t))
             or bool(_END_VOCATIVE_Q.search(t))
             or _is_directed_question_to_named_person(t))
+
+
+def _deterministic_vent_adjacent_tasks(text: str) -> list[str]:
+    """No-model fallback for the source-of-truth rule:
+
+    Pure vent/sarcasm stays silent; a concrete assistant-doable task voiced
+    inside emotion is held as confirm-first work. This only runs when the model
+    extractor is unavailable, so it is deliberately narrow and action-verb based.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    try:
+        from ..live_memory.review_infer import is_vent, is_vent_shape
+        if not (is_vent(raw) or is_vent_shape(raw) or _OVERWHELM_HEAT.search(raw)):
+            return []
+    except Exception:
+        if not _OVERWHELM_HEAT.search(raw):
+            return []
+    if _is_interrogative_aside(raw) or _is_directed_question_to_named_person(raw):
+        return []
+    try:
+        from ..owner_mode import _split_multi_action
+    except Exception:
+        _split_multi_action = lambda s: [s]  # type: ignore[assignment]
+
+    chunks = [c.strip(" \t,;:-") for c in re.split(r"[.;!?]+|,", raw) if c.strip(" \t,;:-")]
+    out: list[str] = []
+    for chunk in chunks:
+        if not _VENT_TASK_ACTIONABLE.search(chunk):
+            continue
+        if _is_interrogative_aside(chunk) or _is_directed_question_to_named_person(chunk):
+            continue
+        for clause in _split_multi_action(chunk):
+            task = str(clause or "").strip(" \t,;:-")
+            if task and _VENT_TASK_ACTIONABLE.search(task):
+                out.append(task)
+    deduped: list[str] = []
+    for task in out:
+        key = re.sub(r"\s+", " ", task.lower())
+        if key not in {re.sub(r"\s+", " ", x.lower()) for x in deduped}:
+            deduped.append(task)
+    return deduped[:6]
+
+
+def _is_noncommittal_noise(text: str) -> bool:
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    return bool(
+        _BRAINSTORM_OR_OPTION_NOISE.search(raw)
+        or _SOCIAL_PLEASANTRY_NOISE.search(raw)
+        or _LOOSE_PARENT_OUTING_NOISE.search(raw)
+    )
 
 
 def _parse_iso_dt_local(value):
@@ -706,6 +798,7 @@ class ControlCore:
         self.live_memory = LiveMemoryBrain(self.memory, gateway=self.gateway, scorecard=self.scorecard)
         self.owner_mode = OwnerMode()
         self.memory_worker = MemoryWorker(self.live_memory)
+        self.gateway_ledger = ProactiveGatewayLedger(base, glassbox=self.glassbox)
 
         # Browse hints: the agent's per-host facts are DATA (packaged seed + this
         # engine's learned overlay). Explicit wiring like pending_path/deferred_path
@@ -1194,12 +1287,14 @@ class ControlCore:
         heard you want to … — want me to take a look? Reply YES." On YES (core.resolve) the working
         browser agent runs on the real site and the result is TEXTED back. Never auto-runs (confirm
         first); the runner's money/checkout/login guard means it can find/read but never buys."""
-        task = (line.text or "").strip()
+        # Use the owner's ORIGINAL words, not the moat's rephrase — the rephrase strips "return"/"amazon"
+        # and breaks both the browser routing and the return-recipe gate (nondeterministic failures).
+        task = (getattr(line, "original_text", None) or line.text or "").strip()
         url = self._web_start_url(task)
         # Deterministic ask id: re-ingesting the same web task reuses the SAME pending ask (and the
         # same card id), so a replayed transcript never spawns duplicate browser asks (idempotent
         # round-trip — guards the re-ingest-spam regression; see docs/agent_os/FAILURES.md F-011).
-        ask_id = "br_" + hashlib.sha256(f"browser_action|{source}|{task}".encode("utf-8")).hexdigest()[:18]
+        ask_id = self._browser_action_ask_id(task, source)
         # Register the pending ask directly (resolvable by the app YES button AND by an SMS "YES");
         # category=browser_action routes the YES to the browser agent in core.resolve.
         self.proactive.pending[ask_id] = {
@@ -1215,12 +1310,14 @@ class ControlCore:
             self.glassbox.log("browser_ask_sent", {"ask_id": ask_id, "task": task, "url": url})
         except Exception as exc:
             self.glassbox.log("browser_ask_send_error", {"ask_id": ask_id, "error": str(exc)})
+        _is_ret = bool(re.search(r"\b(return|refund|exchange)\b", task, re.I) and re.search(r"amazon", task, re.I))
+        _title = "Do Amazon return" if _is_ret else f"Look this up for you: {task[:70]}"
         return OwnerTaskCard(
             id=ask_id,
             source=source, line_no=line.line_no, source_text=line.text,
-            title=f"Look this up for you: {task[:70]}", disposition="ask", route="browser",
+            title=_title, disposition="ask", route="browser",
             action="browser_action", args={"task_text": task, "start_url": url}, confidence=0.8,
-            reason="I'll handle this on the web once you say yes",
+            reason="I'll handle this on the web once you accept",
             execution={"decision": "ask", "goal_id": ask_id, "ask_id": ask_id, "goal_state": "waiting"})
 
     async def _create_and_print_ask(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
@@ -1405,12 +1502,16 @@ class ControlCore:
         run_result = None     # WebVoyagerAgent dict result (connected real-Chrome path)
         ok = False
         answer = ""
+        amazon_return_task = bool(
+            re.search(r"\b(return|refund|exchange)\b", task or "", re.I)
+            and re.search(r"amazon", task or "", re.I)
+        )
         try:
             if self.browser_link.connected:
                 from ..agent.webvoyager import WebVoyagerAgent
                 self.glassbox.log("browser_action_hand", {"ask_id": ask_id, "hand": "connected_extension"})
                 run_result = await WebVoyagerAgent(
-                    self.browser_link, self.gateway, max_steps=16).run(task, url)
+                    self.browser_link, self.gateway, max_steps=(24 if amazon_return_task else 16)).run(task, url)
                 answer = (run_result.get("answer") or "").strip()
                 # a wall / safety-stop / pause is NOT a success — hand back, never claim done
                 blocked = bool(run_result.get("needs_human") or run_result.get("stopped_for_safety")
@@ -1435,10 +1536,34 @@ class ControlCore:
             screenshot_path = getattr(res, "screenshot_path", None)
         else:
             final_url, screenshot, screenshot_path = url, False, None
+        trace = None
+        if isinstance(run_result, dict):
+            trace = {
+                "history": (run_result.get("history") or [])[-40:],
+                "page_states": (run_result.get("page_states") or [])[-12:],
+                "return_form": run_result.get("return_form") or None,
+                "parked_at_continue": bool(run_result.get("parked_at_continue")),
+                "reached_return_page": bool(run_result.get("reached_return_page")),
+            }
+        return_form = (run_result or {}).get("return_form") if isinstance(run_result, dict) else None
+        return_prepared = bool(isinstance(return_form, dict) and return_form.get("prepared"))
+        if amazon_return_task and run_result and run_result.get("amazon_return_recipe") and not return_prepared:
+            ok = False
+            self.glassbox.log("amazon_return_not_prepared",
+                              {"ask_id": ask_id, "return_form": return_form or {}})
+        amazon_return_success = bool(
+            run_result
+            and run_result.get("amazon_return_recipe")
+            and run_result.get("reached_return_page")
+            and "/returns/" in (final_url or "")
+            and return_prepared
+            and answer
+            and ok
+        )
         # M4 HONESTY (never fake done): the answer is the agent's RAW self-report. Before we text the owner
         # "Done — ...", a JUDGE must verify it on the real model; an unverified result is NOT claimed done
         # (the owner is asked to retry / take over). Stub/mock keeps prior behavior.
-        if ok and answer and getattr(self.gateway, "provider", None) == PROVIDER_OPENROUTER:
+        if ok and answer and getattr(self.gateway, "provider", None) == PROVIDER_OPENROUTER and not amazon_return_success:
             try:
                 from ..agent.webvoyager import judge as _judge
                 _v = await _judge(self.gateway, task, {"answer": answer, "final_url": final_url})
@@ -1453,7 +1578,7 @@ class ControlCore:
         # OUTCOME, not a stranded 'running'.
         self._land_browser_result_on_card(
             ask_id, success=ok, answer=answer, url=final_url,
-            screenshot=screenshot, screenshot_path=screenshot_path)
+            screenshot=screenshot, screenshot_path=screenshot_path, trace=trace)
         if ok and answer:
             msg = f"Done — {answer[:500]}"
         else:
@@ -1466,9 +1591,131 @@ class ControlCore:
         self.glassbox.log("browser_action_done", {"ask_id": ask_id, "success": ok,
                                                   "result": (answer[:200] if answer else None)})
 
+    @staticmethod
+    def _browser_action_ask_id(task: str, source: str) -> str:
+        return "br_" + hashlib.sha256(f"browser_action|{source}|{task}".encode("utf-8")).hexdigest()[:18]
+
+    @staticmethod
+    def _demo_amazon_return_enabled() -> bool:
+        return (os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN") or "").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
+
+    @staticmethod
+    def _demo_amazon_return_task() -> str:
+        return (
+            os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN_TASK")
+            or "return the security camera on amazon"
+        ).strip()
+
+    def _demo_amazon_return_ask_id(self) -> str:
+        return self._browser_action_ask_id(self._demo_amazon_return_task(), "transcript")
+
+    @staticmethod
+    def _browser_task_from_card_record(record: dict) -> tuple[str, str]:
+        owner_card = record.get("owner_card") if isinstance(record, dict) else None
+        args = owner_card.get("args") if isinstance(owner_card, dict) else None
+        args = args if isinstance(args, dict) else {}
+        return (
+            str(args.get("task_text") or record.get("browser_task") or record.get("action") or ""),
+            str(args.get("start_url") or record.get("browser_url") or "https://www.google.com"),
+        )
+
+    def _is_demo_amazon_return_record(self, record: dict) -> bool:
+        task, _url = self._browser_task_from_card_record(record)
+        return (
+            self._demo_amazon_return_enabled()
+            and bool(re.search(r"\b(return|refund|exchange)\b", task, re.I))
+            and bool(re.search(r"amazon", task, re.I))
+        )
+
+    def _is_canonical_demo_amazon_return_record(self, record: dict) -> bool:
+        owner_card = record.get("owner_card") if isinstance(record, dict) else None
+        record_id = (
+            record.get("id")
+            or (owner_card.get("id") if isinstance(owner_card, dict) else None)
+            or ""
+        )
+        return str(record_id) == self._demo_amazon_return_ask_id()
+
+    def _rearm_demo_amazon_return_record(
+        self,
+        ask_id: str,
+        record: dict,
+        *,
+        proof: dict | None = None,
+        answer: str = "",
+        url: str | None = None,
+        screenshot: bool = False,
+        screenshot_path: str | None = None,
+        success: bool = False,
+        trace: dict | None = None,
+    ) -> dict:
+        """Keep the one-off Amazon return demo as a reusable Accept card.
+
+        The board hides terminal cards and successful browser_result records.
+        For this fixture, store the latest receipt but reset the visible card to
+        waiting and re-register pending so every refresh shows the same button.
+        """
+        task, start_url = self._browser_task_from_card_record(record)
+        if proof is None:
+            proof = {
+                "type": "browser_receipt",
+                "url": url,
+                "screenshot": bool(screenshot),
+                "answer": (answer or "")[:1000],
+            }
+            if screenshot_path:
+                proof["screenshot_path"] = screenshot_path
+        if trace:
+            proof["trace"] = trace
+
+        record["state"] = "waiting"
+        record["proof"] = proof
+        record["browser_result"] = {
+            "success": False,
+            "last_success": bool(success),
+            "answer": (answer or "")[:1000],
+            "url": url,
+            "screenshot": bool(screenshot),
+            "screenshot_path": screenshot_path,
+            "state": "waiting",
+        }
+        if trace:
+            record["browser_result"]["trace"] = trace
+        owner_card = record.get("owner_card")
+        if isinstance(owner_card, dict):
+            owner_card["status"] = "waiting"
+            owner_card["disposition"] = "ask"
+            execution = owner_card.get("execution")
+            if not isinstance(execution, dict):
+                execution = {}
+            execution.update({
+                "decision": "ask",
+                "goal_id": ask_id,
+                "ask_id": ask_id,
+                "goal_state": "waiting",
+                "proof": proof,
+            })
+            owner_card["execution"] = execution
+            record["owner_card"] = owner_card
+
+        self.proactive.pending[ask_id] = {
+            "goal_id": ask_id,
+            "action": task,
+            "category": "browser_action",
+            "reason": "browser task — confirm before I look",
+            "browser_task": task,
+            "browser_url": start_url,
+        }
+        self.proactive._persist_pending()
+        self._sync_owner_loop_status(ask_id, "waiting")
+        return record
+
     def _land_browser_result_on_card(self, ask_id: str, *, success: bool, answer: str,
                                      url: str | None, screenshot: bool,
-                                     screenshot_path: str | None = None) -> None:
+                                     screenshot_path: str | None = None,
+                                     trace: dict | None = None) -> None:
         """Write the resolved BROWSER RECEIPT onto the durable owner card record (card.id == ask_id):
         a `proof` (url + screenshot flag/path) plus a `browser_result` block (answer + success) and the
         final state (done on a real answer, else failed). This is the browser arm's equivalent of the
@@ -1489,6 +1736,53 @@ class ControlCore:
         }
         if screenshot_path:
             proof["screenshot_path"] = screenshot_path
+        if trace:
+            proof["trace"] = trace
+        source_gateway_event_id = record.get("gateway_event_id")
+        task_text = (
+            ((record.get("owner_card") or {}).get("source_text") if isinstance(record.get("owner_card"), dict) else None)
+            or record.get("description")
+            or ask_id
+        )
+        # DEMO: the Amazon-return card is a reusable board fixture — after the run, keep it as a fresh
+        # ASK (state 'waiting') and re-register its pending, so it's ALWAYS on the board + re-runnable.
+        if self._is_demo_amazon_return_record(record):
+            try:
+                record = self._rearm_demo_amazon_return_record(
+                    ask_id,
+                    record,
+                    proof=proof,
+                    answer=answer,
+                    url=url,
+                    screenshot=screenshot,
+                    screenshot_path=screenshot_path,
+                    success=success,
+                    trace=trace,
+                )
+                try:
+                    browser_event = self.gateway_ledger.record_browser_result(
+                        ask_id=ask_id,
+                        task=task_text,
+                        success=success,
+                        answer=answer,
+                        url=url,
+                        screenshot=screenshot,
+                        screenshot_path=screenshot_path,
+                        trace=trace,
+                        source_event_id=source_gateway_event_id,
+                    )
+                    record["browser_gateway_event_id"] = browser_event.get("event_id")
+                    if isinstance(record.get("owner_card"), dict):
+                        record["owner_card"]["browser_gateway_event_id"] = browser_event.get("event_id")
+                except Exception as _gateway_exc:
+                    self.glassbox.log("proactive_gateway_browser_result_error",
+                                      {"error": str(_gateway_exc)[:240]})
+                path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+                self.glassbox.log("demo_amazon_return_rearmed",
+                                  {"card_id": ask_id, "success": bool(success), "url": url})
+            except Exception as _e:
+                self.glassbox.log("demo_card_keepalive_error", {"error": str(_e)[:120]})
+            return
         record["state"] = state
         record["proof"] = proof
         record["browser_result"] = {
@@ -1498,10 +1792,30 @@ class ControlCore:
             "screenshot": bool(screenshot),
             "screenshot_path": screenshot_path,
         }
+        if trace:
+            record["browser_result"]["trace"] = trace
         if isinstance(record.get("owner_card"), dict):
             record["owner_card"]["status"] = state
             # Mirror the receipt onto the card body so owner_cards() surfaces it on the board.
             self._set_card_execution_proof(record["owner_card"], proof, state)
+        try:
+            browser_event = self.gateway_ledger.record_browser_result(
+                ask_id=ask_id,
+                task=task_text,
+                success=success,
+                answer=answer,
+                url=url,
+                screenshot=screenshot,
+                screenshot_path=screenshot_path,
+                trace=trace,
+                source_event_id=source_gateway_event_id,
+            )
+            record["browser_gateway_event_id"] = browser_event.get("event_id")
+            if isinstance(record.get("owner_card"), dict):
+                record["owner_card"]["browser_gateway_event_id"] = browser_event.get("event_id")
+        except Exception as _gateway_exc:
+            self.glassbox.log("proactive_gateway_browser_result_error",
+                              {"error": str(_gateway_exc)[:240]})
         try:
             path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
         except Exception:
@@ -1801,6 +2115,23 @@ class ControlCore:
                 if _is_interrogative_aside(l.text) or _is_directed_question_to_named_person(l.text):
                     self.glassbox.log("aside_silenced_no_model", {"line": (l.text or "")[:140]})
                     continue
+                if _is_noncommittal_noise(l.text):
+                    self.glassbox.log("noncommittal_noise_silenced_no_model", {
+                        "line": (l.text or "")[:140],
+                    })
+                    continue
+                vent_tasks = _deterministic_vent_adjacent_tasks(l.text)
+                if vent_tasks:
+                    for task in vent_tasks:
+                        held = OwnerObservedLine(line_no=l.line_no, text=task, force_ask=True)
+                        held.original_text = l.text
+                        held.money_src = _is_money_action(task)
+                        kept.append(held)
+                    self.glassbox.log("vent_tasks_held_no_model", {
+                        "line": (l.text or "")[:140],
+                        "tasks": vent_tasks,
+                    })
+                    continue
                 # NOTE: do NOT force moat_task on reversible lines here — that routes them through the
                 # confirm-first rescue and DOWNGRADES spine AUTO_DO tasks (reminders/carts) into asks
                 # (over-caution + regression). Stub/no-model surfacing of spine-dropped reversibles
@@ -2077,6 +2408,9 @@ class ControlCore:
         proof of their memory write.
         """
         meta = meta or {}
+        gateway_event_id = str(meta.get("gateway_event_id") or f"gw_{hashlib.sha256(f'{source}:{text}:{dt.datetime.now(dt.timezone.utc).timestamp()}'.encode()).hexdigest()[:24]}")
+        meta = {**meta, "gateway_event_id": gateway_event_id}
+        gateway_token = _GATEWAY_EVENT_ID.set(gateway_event_id)
         # Asks caught from THIS app paste show in-app ("Waiting for your yes"); they must NOT also
         # SMS the owner (that is the banned spam — every task buzzing the phone). Suppress ask
         # delivery for the duration of the ingest; time-due reminders (trigger_tick) still text.
@@ -2086,6 +2420,7 @@ class ControlCore:
                 source, text, meta, execute_actions, observed=None)
         finally:
             self.proactive._suppress_ask_delivery = False
+            _GATEWAY_EVENT_ID.reset(gateway_token)
         # PROACTIVE FIND-NOTIFICATION (owner directive): when the engine FINDS something it can't act
         # on without the owner's okay — money (the hard stop), a send to a person, anything
         # irreversible — it must IDENTIFY it and TELL the owner over text, in real human words (never
@@ -2106,6 +2441,19 @@ class ControlCore:
                                        "live": (sent or {}).get("mock") is False})
             except Exception as e:  # pragma: no cover - never let a notify break ingest
                 self.glassbox.log("finds_notify_failed", {"error": str(e)})
+        try:
+            event = self.gateway_ledger.record_owner_ingest(
+                event_id=gateway_event_id,
+                source=source,
+                text=text,
+                meta=meta,
+                result=out,
+                execute_actions=execute_actions,
+            )
+            out["gateway_event"] = event
+            out["gateway_events"] = [event]
+        except Exception as e:  # pragma: no cover - observability must not break intake
+            self.glassbox.log("proactive_gateway_owner_ingest_error", {"error": str(e)[:240]})
         return out
 
     def _intent_resolve(self, observed, raw_lines):
@@ -2238,6 +2586,34 @@ class ControlCore:
             self.glassbox.log("semantic_dedup_merged", {"dropped": len(drop_ids), "kept": len(cand) - len(drop_ids)})
         return [ln for ln in observed if id(ln) not in drop_ids]
 
+    def _build_from_proactive_decisions(self, decision_result):
+        """Convert the canonical proactive decision pass into owner-observed lines.
+
+        The decision pipeline owns "who/real/what now"; the existing owner path
+        still owns routing, card persistence, memory proof, browser proof, and
+        follow-up. Ignored decisions stay visible in the gateway trace but never
+        become candidate cards.
+        """
+        out: list[OwnerObservedLine] = []
+        n = 0
+        for decision in getattr(decision_result, "decisions", []) or []:
+            if decision.decision == "ignore":
+                continue
+            task = (decision.task_text or decision.evidence_span or "").strip()
+            if not task:
+                continue
+            n += 1
+            line = OwnerObservedLine(line_no=n, text=task)
+            line.original_text = (decision.evidence_span or task).strip() or task
+            if decision.decision in {"ask", "follow_up"}:
+                line.force_ask = True
+            if decision.decision in {"act", "ask", "block", "follow_up"}:
+                line.moat_task = True
+            if decision.decision == "block" or _is_money_action(task) or _is_money_action(line.original_text or ""):
+                line.money_src = True
+            out.append(line)
+        return out
+
     async def _completeness_sweep(self, text: str, observed: list, raw_lines: list):
         """MODEL-LAYER completeness backstop — the real fix for the catch-rate long tail. Five rounds of
         the 20-life gauntlet proved the per-line moat drops a chunk of CLEAN reversible tasks inside dense
@@ -2365,7 +2741,37 @@ class ControlCore:
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
         self._silenced_count = 0   # M1d: vent/sarcasm/aside lines dropped during expansion -> counted in ignored_line_count
-        observed = await self._expand_tasks_with_model(raw_observed)   # THE MOAT: model splits + judges
+        decision_result = None
+        use_decision_pipeline = (
+            self.gateway.provider in {PROVIDER_OPENROUTER, PROVIDER_GEMINI}
+            and (os.environ.get("ANTICIPY_PROACTIVE_DECISION_PIPELINE", "1") or "").strip().lower()
+            not in {"0", "false", "no", "off"}
+        )
+        if use_decision_pipeline:
+            try:
+                from ..proactive.decision_pipeline import decide_transcript
+                decision_result = await decide_transcript(
+                    self.gateway,
+                    text,
+                    source_truth_case_id=str((meta or {}).get("source_case") or "") or None,
+                )
+            except Exception as exc:
+                decision_result = None
+                self.glassbox.log("proactive_decision_pipeline_error", {"error": str(exc)[:240]})
+        if decision_result is not None and getattr(decision_result, "available", False):
+            observed = self._build_from_proactive_decisions(decision_result)
+            self._silenced_count = sum(
+                1 for d in (decision_result.decisions or []) if getattr(d, "decision", None) == "ignore"
+            )
+            self.glassbox.log("proactive_decision_pipeline", {
+                "decisions": len(decision_result.decisions or []),
+                "kept": len(observed),
+                "wearer": decision_result.wearer,
+                "source_case": (meta or {}).get("source_case"),
+            })
+        else:
+            observed = await self._expand_tasks_with_model(raw_observed)   # THE MOAT: model splits + judges
+        decision_pipeline_owned = bool(decision_result is not None and getattr(decision_result, "available", False))
         # DETERMINISTIC VENT-ADJACENT BACKSTOP: when the moat fails to split a vent-prefixed line
         # ("ugh my brain is fried, but remind me to send Maya the email before Friday") into its
         # embedded obligation, the cardinal-sin guard would drop the whole line and the real task
@@ -2415,16 +2821,17 @@ class ControlCore:
         def _mtok(s):
             return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) > 2}
 
-        for _raw in raw_lines:
-            if not (_MONEY_RE.search(_raw) and _MONEY_VERB_RE.search(_raw)):
-                continue
-            _rtok = _mtok(_raw)
-            _covered = any(_MONEY_RE.search(l.text) and len(_rtok & _mtok(l.text)) >= 2
-                           for l in observed)
-            if not _covered:
-                _n = max([getattr(l, "line_no", 0) for l in observed], default=0) + 1
-                observed.append(OwnerObservedLine(line_no=_n, text=_raw))
-                self.glassbox.log("money_backstop_reinjected", {"line": _raw[:160]})
+        if not decision_pipeline_owned:
+            for _raw in raw_lines:
+                if not (_MONEY_RE.search(_raw) and _MONEY_VERB_RE.search(_raw)):
+                    continue
+                _rtok = _mtok(_raw)
+                _covered = any(_MONEY_RE.search(l.text) and len(_rtok & _mtok(l.text)) >= 2
+                               for l in observed)
+                if not _covered:
+                    _n = max([getattr(l, "line_no", 0) for l in observed], default=0) + 1
+                    observed.append(OwnerObservedLine(line_no=_n, text=_raw))
+                    self.glassbox.log("money_backstop_reinjected", {"line": _raw[:160]})
         # PRESERVE THE NO-BUY BOUND THROUGH THE MOAT (narrow + safe): the owner's explicit "...put it in
         # the cart, DON'T buy it" is a deliberate purchase ceiling that should keep a money-flavored
         # shopping line as a reversible CART-PREP, not the money wall. The moat sometimes rewords the
@@ -2512,7 +2919,7 @@ class ControlCore:
             # api/execute_owner_task). _SITE_ACTION is site-anchored ("on/at <Site>" or "go to my <Site>"),
             # so vents ("return to bed", "cancel my plans") never match; money is still blocked. Fires only
             # when the line isn't already a good shape (None / generic confirm / the old api execute task).
-            _act_txt = getattr(line, "text", "") or ""
+            _act_txt = getattr(line, "original_text", None) or getattr(line, "text", "") or ""
             if (execute_actions and not getattr(line, "force_ask", False)
                     and (card is None or getattr(card, "action", None) in ("confirm_owner_task", "execute_owner_task"))
                     and (_SITE_ACTION.search(_act_txt) or _RETURN_TASK.search(_act_txt))
@@ -2643,6 +3050,8 @@ class ControlCore:
                                    ignored_line_count=ignored)
         out = result.model_dump(mode="json")
         out["middle_trace"] = middle_trace   # GATE MIDDLE-1 proof (captured memories + resolutions)
+        if decision_result is not None and getattr(decision_result, "available", False):
+            out["brain_decisions"] = decision_result.to_wire()
         # Autonomy mode per card (packet 02): the chosen mode + why, for product + certification.
         from ..proactive.autonomy import classify_autonomy
         from ..proactive.autonomy_mode import adjust as _dial_adjust, task_type as _dial_task_type
@@ -2750,6 +3159,7 @@ class ControlCore:
                               {"owner_card_id": card.id, "source": source,
                                "source_text": card.source_text})
             return False
+        gateway_event_id = _GATEWAY_EVENT_ID.get()
         fields = {
             "owner_card_id": card.id,
             "owner_card_dedupe_key": _owner_card_dedupe_key(card),
@@ -2762,6 +3172,8 @@ class ControlCore:
             "args": card.args,
             "reason": card.reason,
         }
+        if gateway_event_id:
+            fields["gateway_event_id"] = gateway_event_id
         if card.disposition == "remember":
             item = self.memory.profile.write_text(
                 card.source_text,
@@ -2891,15 +3303,19 @@ class ControlCore:
         # Durable card record, shaped like a goal (id/intent/steps/state) so the
         # factory's existing run collector and scorer read owner cards unchanged.
         card.proof.append({"type": "card_record", "path": str(record_path)})
+        owner_card_payload = card.model_dump(mode="json")
+        if gateway_event_id:
+            owner_card_payload["gateway_event_id"] = gateway_event_id
         record = {
             "id": card.id,
             "dedupe_key": _owner_card_dedupe_key(card),
+            "gateway_event_id": gateway_event_id,
             "intent": card.action,
             "description": f"{card.title} — {card.source_text}",
             "state": state,
             "steps": steps,
             "proof": goal_proof,
-            "owner_card": card.model_dump(mode="json"),
+            "owner_card": owner_card_payload,
         }
         record_path.parent.mkdir(parents=True, exist_ok=True)
         record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
@@ -3625,6 +4041,10 @@ class ControlCore:
         loops = [i.model_dump(mode="json") for i in deduped[:max(0, limit)]]
         return {"loops": loops, "count": len(deduped)}
 
+    def proactive_gateway_recent(self, limit: int = 50) -> dict:
+        """Recent Plan Baby Steps gateway events for app, tests, and audits."""
+        return self.gateway_ledger.recent(limit=limit)
+
     def resolve_memory_loop(self, loop_id: str, status: str = "done") -> dict:
         """Owner closes a memory/setup loop. Owner-card loops must resolve through cards."""
         if status not in {"done", "blocked", "waiting", "open"}:
@@ -3742,10 +4162,35 @@ class ControlCore:
             if not isinstance(card, dict):
                 continue
             state = record.get("state") or card.get("status") or "open"
+            if self._is_demo_amazon_return_record(record):
+                if not self._is_canonical_demo_amazon_return_record(record):
+                    continue
+            if self._is_demo_amazon_return_record(record) and state not in {"waiting", "running"}:
+                try:
+                    record = self._rearm_demo_amazon_return_record(
+                        str(record.get("id") or card.get("id") or path.stem),
+                        record,
+                        proof=record.get("proof") if isinstance(record.get("proof"), dict) else None,
+                        answer=((record.get("browser_result") or {}).get("answer") or ""),
+                        url=((record.get("browser_result") or {}).get("url") or None),
+                        screenshot=bool((record.get("browser_result") or {}).get("screenshot")),
+                        screenshot_path=(record.get("browser_result") or {}).get("screenshot_path"),
+                        success=bool((record.get("browser_result") or {}).get("last_success")
+                                     or (record.get("browser_result") or {}).get("success")),
+                    )
+                    path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+                    card = record.get("owner_card") or card
+                    state = "waiting"
+                except Exception as exc:
+                    self.glassbox.log("demo_card_owner_cards_rearm_error", {"error": str(exc)[:120]})
             card = {**card, "status": state}
             # SEAM 2: surface the persisted autonomy mode so the board can pick the lane/verb.
             if not card.get("autonomy_mode") and record.get("autonomy_mode"):
                 card["autonomy_mode"] = record.get("autonomy_mode")
+            if record.get("gateway_event_id"):
+                card["gateway_event_id"] = record.get("gateway_event_id")
+            if record.get("browser_gateway_event_id"):
+                card["browser_gateway_event_id"] = record.get("browser_gateway_event_id")
             execution = card.get("execution")
             if isinstance(execution, dict):
                 card["execution"] = {
@@ -3813,25 +4258,58 @@ class ControlCore:
         # runs async (1-3 min) and must not block the reply.
         p = self.proactive.pending.get(ask_id)
         if isinstance(p, dict) and p.get("category") == "browser_action":
-            self.proactive.pending.pop(ask_id, None)
-            self.proactive._persist_pending()
-            # Reflect the resolution on the durable owner card (card.id == ask_id) so the board shows
-            # the outcome: YES -> running (the agent runs async + texts back), NO -> declined (F-011).
-            self._resolve_browser_card_record(ask_id, approved)
+            _btask0 = p.get("browser_task") or p.get("action") or ""
+            # DEMO: the Amazon-return card is a REUSABLE board fixture — Accept runs it but the card
+            # STAYS on the board (pending kept, record not marked resolved) so it's always there on
+            # refresh and can be re-run. Gated by ANTICIPY_DEMO_AMAZON_RETURN.
+            _demo_keep = ((os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN") or "").strip().lower()
+                          in {"1", "true", "yes", "on"}
+                          and bool(re.search(r"\b(return|refund|exchange)\b", _btask0, re.I))
+                          and bool(re.search(r"amazon", _btask0, re.I)))
+            if not _demo_keep:
+                self.proactive.pending.pop(ask_id, None)
+                self.proactive._persist_pending()
+                # Reflect the resolution on the durable owner card (card.id == ask_id) so the board shows
+                # the outcome: YES -> running (the agent runs async + texts back), NO -> declined (F-011).
+                self._resolve_browser_card_record(ask_id, approved)
             # M3: a clean YES on a reversible web task BUILDS trust for that kind of task (promotes it
             # toward auto under Regular/Full-Send); a NO demotes it. Money/send never reach here.
             (self.trust_ledger.record_clean("browser") if approved
              else self.trust_ledger.record_rejection("browser"))
             if approved:
+                _btask = p.get("browser_task") or p.get("action") or ""
+                try:
+                    self.text_channel.send(
+                        self._user_contact(),
+                        f"On it - starting the browser task now: {_btask[:160]}. I'll report back with proof.",
+                    )
+                except Exception as _exc:
+                    self.glassbox.log("browser_action_start_text_error", {"error": str(_exc)})
                 asyncio.create_task(self._run_browser_and_confirm(
-                    p.get("browser_task") or p.get("action") or "",
+                    _btask,
                     p.get("browser_url") or "https://www.google.com", ask_id))
                 self.glassbox.log("browser_action_approved", {"ask_id": ask_id})
-                return {"ask_id": ask_id, "approved": True, "browser_action": True,
-                        "state": "running", "goal_id": ask_id}
+                out = {"ask_id": ask_id, "approved": True, "browser_action": True,
+                       "state": "running", "goal_id": ask_id}
+                try:
+                    out["gateway_event"] = self.gateway_ledger.record_approval(
+                        ask_id=ask_id, approved=True, source="app", result=out,
+                        action=p.get("action") or "browser_action")
+                except Exception as _gateway_exc:
+                    self.glassbox.log("proactive_gateway_approval_error",
+                                      {"error": str(_gateway_exc)[:240]})
+                return out
             self.glassbox.log("browser_action_declined", {"ask_id": ask_id})
-            return {"ask_id": ask_id, "approved": False, "declined_action": p.get("action"),
-                    "goal_id": ask_id}
+            out = {"ask_id": ask_id, "approved": False, "declined_action": p.get("action"),
+                   "goal_id": ask_id}
+            try:
+                out["gateway_event"] = self.gateway_ledger.record_approval(
+                    ask_id=ask_id, approved=False, source="app", result=out,
+                    action=p.get("action") or "browser_action")
+            except Exception as _gateway_exc:
+                self.glassbox.log("proactive_gateway_approval_error",
+                                  {"error": str(_gateway_exc)[:240]})
+            return out
         # CREATE + PRINT round-trip: a YES actually prints the generated artifact (the physical action,
         # gated behind explicit consent); a NO leaves it made-but-unprinted. The artifact already exists
         # (created at ask-time), so YES is just the print. Reuses the card-landing helper -> state=done.
@@ -3855,9 +4333,17 @@ class ControlCore:
                     url=None, screenshot=False)
                 self._sync_owner_loop_status(ask_id, "done" if ok else "failed")
                 self.glassbox.log("create_print_approved", {"ask_id": ask_id, "ok": ok, "stderr": (res.get("stderr") or "")[:200]})
-                return {"ask_id": ask_id, "approved": True, "create_and_print": True,
-                        "state": "done" if ok else "failed", "goal_id": ask_id,
-                        "queued": ok, "artifact": p.get("artifact")}
+                out = {"ask_id": ask_id, "approved": True, "create_and_print": True,
+                       "state": "done" if ok else "failed", "goal_id": ask_id,
+                       "queued": ok, "artifact": p.get("artifact")}
+                try:
+                    out["gateway_event"] = self.gateway_ledger.record_approval(
+                        ask_id=ask_id, approved=True, source="app", result=out,
+                        action=p.get("action") or "create_and_print")
+                except Exception as _gateway_exc:
+                    self.glassbox.log("proactive_gateway_approval_error",
+                                      {"error": str(_gateway_exc)[:240]})
+                return out
             # NO: record a clean proof that the sign was MADE but not printed (never lose the artifact).
             self._land_browser_result_on_card(
                 ask_id, success=False,
@@ -3865,8 +4351,16 @@ class ControlCore:
                 url=None, screenshot=False)
             self._sync_owner_loop_status(ask_id, "declined")
             self.glassbox.log("create_print_declined", {"ask_id": ask_id, "artifact": p.get("artifact")})
-            return {"ask_id": ask_id, "approved": False, "declined_action": p.get("action"),
-                    "goal_id": ask_id, "artifact": p.get("artifact")}
+            out = {"ask_id": ask_id, "approved": False, "declined_action": p.get("action"),
+                   "goal_id": ask_id, "artifact": p.get("artifact")}
+            try:
+                out["gateway_event"] = self.gateway_ledger.record_approval(
+                    ask_id=ask_id, approved=False, source="app", result=out,
+                    action=p.get("action") or "create_and_print")
+            except Exception as _gateway_exc:
+                self.glassbox.log("proactive_gateway_approval_error",
+                                  {"error": str(_gateway_exc)[:240]})
+            return out
         out = await self.proactive.resolve_ask(ask_id, approved)
         link = self._owner_card_goals.pop(out.get("goal_id"), None) if isinstance(out, dict) else None
         if link is None and isinstance(out, dict) and out.get("goal_id"):
@@ -3898,6 +4392,17 @@ class ControlCore:
                 self.glassbox.log("owner_card_resolved",
                                   {"card_id": link["card_id"], "ask_id": ask_id,
                                    "approved": approved, "state": record["state"]})
+        try:
+            out["gateway_event"] = self.gateway_ledger.record_approval(
+                ask_id=ask_id,
+                approved=approved,
+                source="app",
+                result=out,
+                action=out.get("action") if isinstance(out, dict) else None,
+            )
+        except Exception as _gateway_exc:
+            self.glassbox.log("proactive_gateway_approval_error",
+                              {"error": str(_gateway_exc)[:240]})
         return out
 
     async def approve_remembered(self, line_id: str) -> dict:

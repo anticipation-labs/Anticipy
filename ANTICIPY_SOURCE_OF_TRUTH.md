@@ -28,7 +28,6 @@ before anything that matters. The goal: it genuinely runs **~50% of your workloa
 3. **For each real task it decides:** handle it / prepare-and-ask / stay silent — by confidence,
    reversibility, and the trust dial.
 4. **It TALKS like a human, never like a system:**
-   - Money → *"Hey, I heard this involves money — want me to go ahead, or hold off?"* (NEVER "BLOCKED").
    - Send (email/text) → it **drafts it**, then *"Got the email to Sanket ready — okay to send?"*
    - It goes the extra mile: does the prep, hands you the finished thing for one tap.
 5. **It ACTS in YOUR real systems via the browser** — navigating, opening items, clicking, *operating

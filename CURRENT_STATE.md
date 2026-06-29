@@ -70,6 +70,8 @@ Two halves, by necessity:
 - **Confusing names.** `~/Anticipy`'s git remote is `omize10/Anticipy-executor-working` (named after the
   squatter). Multiple `.anticipy-data*` dirs. Many stale docs. No single source of truth → this file fixes
   that.
+- **Live local data dir:** when the engine cwd is `~/Anticipy/engine`, the active glassbox/memory files are
+  under `~/Anticipy/engine/.anticipy-data`, not repo-root `~/Anticipy/.anticipy-data`.
 - **In-memory vs disk.** The engine caches owner_cards in memory; deleting the JSON files doesn't clear the
   board without a restart.
 - **Browser caching of the static app** caused a "flash/reload loop" — the local sign-in gate reloaded on
@@ -88,6 +90,8 @@ the duplicates.** Most "it's not working" reports trace to running/loading the w
 3. Use it: `http://127.0.0.1:8787/app.html` (the Board — paste a day → cards; Confirm a browser card → it
    acts in your Chrome). **Owner/local mode skips sign-in.** Hard-reload (`Cmd+Shift+R`) if the page flashes.
 4. Prove the hands: `POST /ws/observe {"url":"https://mail.google.com/mail/u/0/"}` → reads your real inbox.
+5. Prove onboarding scan: `POST /onboard/scan {"wait":true,"services":[{"name":"Gmail","url":"https://mail.google.com/mail/u/0/"},{"name":"Google Calendar","url":"https://calendar.google.com/calendar/u/0/r"}]}` → returns
+   logged-in detection proof (`gmail_shell`, `calendar_shell`) and posts to `/onboard/discover`.
 
 ## 7. Honest scorecard
 Brain **95%** · Accounts/per-user **95%** · Hands (work locally, not polished/not cloud) **~60%** ·

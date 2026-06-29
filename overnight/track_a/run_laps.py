@@ -2,8 +2,9 @@
 
 Per lap: pull a NEW request (generator) -> worker creates a real event -> judge reads the real
 calendar and confirms it. The harness coordinates; worker and judge never import each other. The
-judge is self-proved (real+fake) before ANY lap is trusted. After the run it keeps a few events
-visible as morning proof and deletes the rest (cleanup), logging every real id either way.
+judge is self-proved (real+fake) before ANY lap is trusted. Live writes are disabled unless
+ANTICIPY_TRACK_A_ALLOW_LIVE_CALENDAR=1 is set. After a live run it deletes all test events by
+default; set ANTICIPY_TRACK_A_KEEP_VISIBLE to intentionally leave a small proof sample.
 
 Run: PYTHONPATH=engine:overnight/track_a python overnight/track_a/run_laps.py [n_laps]
 """
@@ -22,12 +23,13 @@ from anticipy_engine.core.env import load_local_env
 load_local_env()
 
 import generate_request as gen
-import judge as J
-import worker as W
-from arcadepy import Arcade
+
+_LIVE_TESTS_FLAG = "ANTICIPY_TRACK_A_ALLOW_LIVE_CALENDAR"
 
 
 def _delete(event_id: str) -> bool:
+    from arcadepy import Arcade
+
     try:
         Arcade(api_key=os.environ["ARCADE_API_KEY"]).tools.execute(
             tool_name="GoogleCalendar.DeleteEvent", user_id=os.environ["ARCADE_USER_ID"],
@@ -38,6 +40,17 @@ def _delete(event_id: str) -> bool:
 
 
 async def main(n: int) -> dict:
+    if os.environ.get(_LIVE_TESTS_FLAG) != "1":
+        msg = (
+            f"live calendar writes disabled; set {_LIVE_TESTS_FLAG}=1 only for a deliberate "
+            "proof run against a disposable calendar"
+        )
+        print(msg)
+        return {"aborted": "live_calendar_disabled", "reason": msg}
+
+    import judge as J
+    import worker as W
+
     print("=== Track A: self-prove the judge before trusting any lap (LAW #4) ===")
     if not J.self_prove():
         print("JUDGE BROKEN -> refusing to run laps."); return {"aborted": "judge_broken"}
@@ -66,8 +79,9 @@ async def main(n: int) -> dict:
 
     passes = [r for r in rows if r["pass"]]
     distinct_passed = len({r["ask"] for r in passes})
-    # cleanup: keep the last 3 PASSED events visible as morning proof; delete the rest
-    keep = {r["event_id"] for r in passes[-3:]}
+    # cleanup: keep none by default; leaving proof events visible must be explicit.
+    keep_count = int(os.environ.get("ANTICIPY_TRACK_A_KEEP_VISIBLE", "0"))
+    keep = {r["event_id"] for r in passes[-keep_count:]} if keep_count > 0 else set()
     deleted, kept = [], []
     for r in rows:
         eid = r["event_id"]

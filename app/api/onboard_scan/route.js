@@ -1,6 +1,6 @@
 import { privateEngineRequest } from "../_engine";
 
-// Owner-gated proxy: POST {} -> engine POST /onboard/scan_api.
+// Owner-gated proxy: POST {} -> engine POST /onboard/scan.
 //
 // The engine looks at the accounts the owner is already signed into and reports back,
 // in plain language, what it found — which accounts are connected, and a few honest
@@ -11,7 +11,7 @@ import { privateEngineRequest } from "../_engine";
 export async function POST(request) {
   // Accept an optional body but never require one — the engine's scan takes no input.
   const body = await request.json().catch(() => ({}));
-  return privateEngineRequest(request, "/onboard/scan_api", {
+  return privateEngineRequest(request, "/onboard/scan", {
     method: "POST",
     body: JSON.stringify(body || {}),
   });

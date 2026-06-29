@@ -108,12 +108,11 @@ export async function engineRequest(path, options = {}) {
     const data = text ? JSON.parse(text) : {};
     return Response.json(data, { status: response.status });
   } catch (error) {
-    // Never leak the engine URL/port or the raw error to the surface (§4.7). The home
-    // screen renders `message` directly; it must read as Donna, not a dev console.
     return Response.json(
       {
         error: "engine_unreachable",
-        message: "I lost the thread for a moment. Try again.",
+        message: `Could not reach Anticipy Engine at ${ENGINE_URL}`,
+        detail: error instanceof Error ? error.message : String(error),
       },
       { status: 503 },
     );

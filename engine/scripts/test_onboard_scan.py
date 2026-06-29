@@ -38,6 +38,20 @@ async def main():
     await link.discover_connections(svcs)
     assert ws.sent[-1]["services"] == svcs, ws.sent[-1]
 
+    # diagnostic/proof mode waits for the extension's result payload
+    scan_task = asyncio.create_task(link.scan_connections(svcs, timeout=1.0))
+    await asyncio.sleep(0)
+    assert ws.sent[-1]["type"] == "discover_connections" and ws.sent[-1]["job_id"].startswith("discover_")
+    await link.on_message({
+        "type": "result",
+        "job_id": ws.sent[-1]["job_id"],
+        "status": "success",
+        "output": {"discovered": [{"service": "Gmail", "logged_in": True}], "count": 1, "posted": True},
+    })
+    scan = await scan_task
+    assert scan["triggered"] is True and scan["posted"] is True, scan
+    assert scan["discovered"][0]["service"] == "Gmail", scan
+
     # after the extension drops, the trigger no-ops again (no stale send)
     await link.detach(ws)
     before = len(ws.sent)

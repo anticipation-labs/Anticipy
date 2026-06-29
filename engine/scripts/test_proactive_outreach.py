@@ -46,7 +46,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 import anticipy_engine.main as m  # noqa: E402
 
 CALL_LINE = "remind me to call me back about the dentist at 2:45"   # -> channel_pref via fire path
-TEXT_LINE = "take my meds at 9pm"
+TEXT_LINE = "remind me to take my meds at 9pm"
 
 
 def _seed(core, loop_id: str, text: str, remind_ts: float, channel_pref: str | None) -> None:

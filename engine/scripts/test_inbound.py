@@ -31,7 +31,7 @@ os.environ.setdefault("ANTICIPY_MODEL_PROVIDER", "stub")
 os.environ.setdefault("ANTICIPY_HANDS_MODE", "mock")
 os.environ.setdefault("ANTICIPY_NATIVE_BRIDGE_FALLBACK", "0")
 os.environ.pop("ANTICIPY_OWNER_INGEST", None)
-os.environ.pop("ANTICIPY_CHANNELS_MODE", None)   # mock everywhere; no transports
+os.environ["ANTICIPY_CHANNELS_MODE"] = "mock"   # mock everywhere; no transports
 OWNER = "+15550009999"
 os.environ["OWNER_PHONE"] = OWNER
 

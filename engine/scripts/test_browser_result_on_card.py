@@ -100,6 +100,68 @@ async def _run_case(success: bool):
     return _record(data_dir, ask_id), sent
 
 
+async def _run_demo_amazon_rearm_case():
+    old_demo = os.environ.get("ANTICIPY_DEMO_AMAZON_RETURN")
+    os.environ["ANTICIPY_DEMO_AMAZON_RETURN"] = "1"
+    data_dir = Path(tempfile.mkdtemp(prefix="anticipy-amz-demo-card-"))
+    core = ControlCore(data_dir=data_dir)
+    await core.start()
+    core.text_channel.send = lambda to, msg: None
+    task = core._demo_amazon_return_task()
+    ask_id = core._demo_amazon_return_ask_id()
+    url = "https://www.amazon.ca/gp/css/order-history"
+    try:
+        _seed_browser_card(core, data_dir, ask_id, task, url)
+        duplicate_ask_id = core._browser_action_ask_id(
+            "please do the Amazon return about the security camera light", "transcript")
+        _seed_browser_card(
+            core,
+            data_dir,
+            duplicate_ask_id,
+            "please do the Amazon return about the security camera light",
+            url,
+        )
+        core._resolve_browser_card_record(ask_id, approved=True)
+        core._land_browser_result_on_card(
+            ask_id,
+            success=True,
+            answer="Opened your Amazon return for the security camera — stopped at Continue.",
+            url="https://www.amazon.ca/spr/returns/cart?orderId=123",
+            screenshot=True,
+        )
+        rec = _record(data_dir, ask_id)
+        assert rec["state"] == "waiting", ("demo card must re-arm to waiting", rec)
+        assert rec["owner_card"]["status"] == "waiting", rec["owner_card"]
+        assert rec["owner_card"]["execution"]["goal_state"] == "waiting", rec["owner_card"]["execution"]
+        assert rec["owner_card"]["execution"]["ask_id"] == ask_id, rec["owner_card"]["execution"]
+        assert rec["browser_result"]["success"] is False, rec["browser_result"]
+        assert rec["browser_result"]["last_success"] is True, rec["browser_result"]
+        assert ask_id in core.proactive.pending, core.proactive.pending
+
+        # Heal stale non-waiting records from older runs when the board reloads.
+        for stale_state in ("failed", "open"):
+            rec["state"] = stale_state
+            rec["owner_card"]["status"] = stale_state
+            (data_dir / "owner_cards" / f"{ask_id}.json").write_text(
+                json.dumps(rec, indent=2, sort_keys=True), encoding="utf-8")
+            cards = core.owner_cards(limit=10)["cards"]
+            healed = next(c for c in cards if c["id"] == ask_id)
+            assert all(c["id"] != duplicate_ask_id for c in cards), cards
+            assert healed["status"] == "waiting", healed
+            assert healed["execution"]["ask_id"] == ask_id, healed["execution"]
+            healed_rec = _record(data_dir, ask_id)
+            assert healed_rec["state"] == "waiting", healed_rec
+            assert ask_id in core.proactive.pending, core.proactive.pending
+            rec = healed_rec
+        return rec
+    finally:
+        await core.stop()
+        if old_demo is None:
+            os.environ.pop("ANTICIPY_DEMO_AMAZON_RETURN", None)
+        else:
+            os.environ["ANTICIPY_DEMO_AMAZON_RETURN"] = old_demo
+
+
 async def main():
     # --- success: a real cart-prep result must land on the card ---
     rec, sent = await _run_case(success=True)
@@ -126,6 +188,9 @@ async def main():
     assert (proof2.get("answer") or "") == "", proof2
     assert rec2["owner_card"]["status"] == "failed", rec2["owner_card"]
     print("PASS browser-result-on-card: failure run -> card=failed, honest receipt (no faked screenshot/answer)")
+
+    await _run_demo_amazon_rearm_case()
+    print("PASS browser-result-on-card: demo Amazon return card re-arms, heals stale state, and suppresses duplicates")
 
     print("ALL browser-result-on-card TESTS PASSED")
 

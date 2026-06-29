@@ -24,7 +24,9 @@ COST = {CHEAP: 0.0005, SMART: 0.02}
 
 PROVIDER_STUB = "stub"
 PROVIDER_OPENROUTER = "openrouter"
+PROVIDER_GEMINI = "gemini"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 # 429 retry-hint honoring (ledger F7 residual). The live brain is Gemini free tier,
 # whose 429s state the server's own wait: google.rpc.RetryInfo retryDelay in the error
@@ -122,6 +124,8 @@ class ModelGateway:
 
         if self.provider == PROVIDER_OPENROUTER:
             return await self._openrouter(task, tier, image, json_mode, temperature, max_tokens)
+        if self.provider == PROVIDER_GEMINI:
+            return await self._gemini(task, tier, json_mode, temperature, max_tokens)
         if self.endpoint:
             return await self._custom_endpoint(task, tier)
         return self._stub(task, tier, caller)
@@ -184,12 +188,72 @@ class ModelGateway:
                 if resp.status_code in (500, 502, 503, 504):
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue
+                if resp.status_code in (401, 402, 403):
+                    self.calls[-1]["provider_error_status"] = resp.status_code
+                    self.calls[-1]["provider_error"] = resp.text[:240]
+                    return ""
                 resp.raise_for_status()
                 content_out = (resp.json()["choices"][0].get("message") or {}).get("content")
                 if content_out:
                     return content_out
                 last = content_out or ""
                 await asyncio.sleep(1.0 * (attempt + 1))  # empty -> brief backoff, retry
+            except (httpx.TransportError, httpx.HTTPStatusError):
+                await asyncio.sleep(1.5 * (attempt + 1))
+        return last or ""
+
+    async def _gemini(self, task: str, tier: str, json_mode: bool = False,
+                      temperature: Optional[float] = None,
+                      max_tokens: Optional[int] = None) -> str:
+        key = os.environ.get("GOOGLE_API_KEY")
+        if not key:
+            raise RuntimeError("no Google API key: set GOOGLE_API_KEY")
+        import httpx
+
+        model = self.smart_model if tier == SMART else self.cheap_model
+        model = model.split("/")[-1] if "/" in model else model
+        if not model.startswith("gemini-"):
+            model = "gemini-2.5-flash"
+        token_cap = int(max_tokens or os.environ.get("ANTICIPY_MODEL_MAX_TOKENS") or 2048)
+        body: dict = {
+            "contents": [{"role": "user", "parts": [{"text": task}]}],
+            "generationConfig": {
+                "temperature": 0.0 if temperature is None else temperature,
+                "maxOutputTokens": token_cap,
+            },
+        }
+        if json_mode:
+            body["generationConfig"]["responseMimeType"] = "application/json"
+        # Gemini 2.5 supports thinkingConfig; older models ignore unknown fields
+        # poorly, so only include it for current 2.5 models.
+        if "2.5" in model:
+            body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
+        headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+        url = f"{GEMINI_URL}/models/{model}:generateContent"
+        last = ""
+        for attempt in range(4):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout,
+                                             transport=self._transport) as client:
+                    resp = await client.post(url, headers=headers, json=body)
+                if resp.status_code == 429:
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                if resp.status_code in (500, 502, 503, 504):
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                if resp.status_code in (400, 401, 403):
+                    self.calls[-1]["provider_error_status"] = resp.status_code
+                    self.calls[-1]["provider_error"] = resp.text[:240]
+                    return ""
+                resp.raise_for_status()
+                data = resp.json()
+                parts = (((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
+                content_out = parts[0].get("text", "") if parts else ""
+                if content_out:
+                    return content_out
+                last = content_out or ""
+                await asyncio.sleep(1.0 * (attempt + 1))
             except (httpx.TransportError, httpx.HTTPStatusError):
                 await asyncio.sleep(1.5 * (attempt + 1))
         return last or ""

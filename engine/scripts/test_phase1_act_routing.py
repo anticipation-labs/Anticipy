@@ -33,9 +33,9 @@ with tempfile.TemporaryDirectory() as d:
     # Isolate routing from card I/O: capture what would be landed on the card.
     landed = {}
     core._land_browser_result_on_card = (
-        lambda ask_id, *, success, answer, url, screenshot, screenshot_path=None:
+        lambda ask_id, *, success, answer, url, screenshot, screenshot_path=None, trace=None:
         landed.update({"ask_id": ask_id, "success": success, "answer": answer,
-                       "url": url, "screenshot": screenshot}))
+                       "url": url, "screenshot": screenshot, "trace": trace}))
 
     used = {"agent": False, "browse_act": False}
 

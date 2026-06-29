@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 # force mock: the suite must never construct a Twilio transport
-os.environ.pop("ANTICIPY_CHANNELS_MODE", None)
+os.environ["ANTICIPY_CHANNELS_MODE"] = "mock"
 
 from anticipy_engine.channels import Channels  # noqa: E402
 from anticipy_engine.channels.base import Channel  # noqa: E402
@@ -52,7 +52,7 @@ try:
     os.environ["TWILIO_ACCOUNT_SID"] = "AC_test"
     os.environ["TWILIO_AUTH_TOKEN"] = "token"
     os.environ["TWILIO_FROM"] = "+15550000000"
-    os.environ.pop("ANTICIPY_CHANNELS_MODE", None)
+    os.environ["ANTICIPY_CHANNELS_MODE"] = "mock"
     assert TextChannel.configured() and CallChannel.configured()
     assert not TextChannel()._live() and not CallChannel()._live()
     os.environ["ANTICIPY_CHANNELS_MODE"] = "live"
@@ -71,7 +71,7 @@ prev = {k: os.environ.get(k) for k in (
     "TWILIO_FROM", "OWNER_PHONE", "ANTICIPY_INBOUND_POLL_SECONDS",
 )}
 try:
-    os.environ.pop("ANTICIPY_CHANNELS_MODE", None)
+    os.environ["ANTICIPY_CHANNELS_MODE"] = "mock"
     os.environ["TWILIO_ACCOUNT_SID"] = "AC_test"
     os.environ["TWILIO_AUTH_TOKEN"] = "token"
     os.environ["TWILIO_FROM"] = "+15550000000"
