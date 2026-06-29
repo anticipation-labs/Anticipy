@@ -1,0 +1,108 @@
+{
+  "summary": {
+    "tasks": 5,
+    "success_pct": 100.0,
+    "human_intervention_pct": 0.0,
+    "avg_cost_usd": 0.0528,
+    "avg_steps": 1.8,
+    "avg_vision_pct": 70.0,
+    "avg_frontier_pct": 62.0
+  },
+  "rows": [
+    {
+      "task": "What is the very first quote shown on this page, and who is it attributed to?",
+      "url": "https://quotes.toscrape.com/",
+      "answer": "\u201cThe world as we have created it is a process of our thinking. It cannot be changed without changing our thinking.\u201d by Albert Einstein",
+      "success": true,
+      "needs_human": false,
+      "judge_reason": "The agent correctly identified the very first quote and its attribution as displayed on the page.",
+      "metrics": {
+        "steps": 1,
+        "vision_steps": 1,
+        "dom_steps": 0,
+        "vision_pct": 100.0,
+        "model_calls": 4,
+        "smart_calls": 3,
+        "frontier_pct": 75.0,
+        "est_cost_usd": 0.0605
+      },
+      "wall_s": 11.8
+    },
+    {
+      "task": "Go to the 'humor' tag page, then tell me the author of the first quote listed there.",
+      "url": "https://quotes.toscrape.com/",
+      "answer": "Jane Austen",
+      "success": true,
+      "needs_human": false,
+      "judge_reason": "The agent successfully navigated to the 'humor' tag page and correctly identified 'Jane Austen' as the author of the first quote listed there, which is corroborated by the provided page text and screenshot.",
+      "metrics": {
+        "steps": 2,
+        "vision_steps": 1,
+        "dom_steps": 1,
+        "vision_pct": 50.0,
+        "model_calls": 4,
+        "smart_calls": 2,
+        "frontier_pct": 50.0,
+        "est_cost_usd": 0.041
+      },
+      "wall_s": 13.3
+    },
+    {
+      "task": "What is the title and price of the first book shown on this page?",
+      "url": "https://books.toscrape.com/",
+      "answer": "Title: A Light in the Attic, Price: \u00a351.77",
+      "success": true,
+      "needs_human": false,
+      "judge_reason": null,
+      "metrics": {
+        "steps": 2,
+        "vision_steps": 2,
+        "dom_steps": 0,
+        "vision_pct": 100.0,
+        "model_calls": 4,
+        "smart_calls": 3,
+        "frontier_pct": 75.0,
+        "est_cost_usd": 0.0605
+      },
+      "wall_s": 15.3
+    },
+    {
+      "task": "Open the 'Travel' category and tell me how many books are listed in it.",
+      "url": "https://books.toscrape.com/",
+      "answer": "11",
+      "success": true,
+      "needs_human": false,
+      "judge_reason": "The agent successfully opened the 'Travel' category and correctly reported that there are '11' books listed, which is confirmed by the page text '11 results.' and the visible book listings.",
+      "metrics": {
+        "steps": 2,
+        "vision_steps": 1,
+        "dom_steps": 1,
+        "vision_pct": 50.0,
+        "model_calls": 4,
+        "smart_calls": 2,
+        "frontier_pct": 50.0,
+        "est_cost_usd": 0.041
+      },
+      "wall_s": 12.7
+    },
+    {
+      "task": "What is this article's subject, and what was the first web browser, who created it, and in what year?",
+      "url": "https://en.wikipedia.org/wiki/Web_browser",
+      "answer": "The article's subject is web browsers. The first web browser was WorldWideWeb, created by Sir Tim Berners-Lee in 1990.",
+      "success": true,
+      "needs_human": false,
+      "judge_reason": "The agent correctly identified the article's subject as web browsers. It also correctly stated that the first web browser was WorldWideWeb, created by Sir Tim Berners-Lee in 1990, which is directly supported by the 'History' section of the provided text.",
+      "metrics": {
+        "steps": 2,
+        "vision_steps": 1,
+        "dom_steps": 1,
+        "vision_pct": 50.0,
+        "model_calls": 5,
+        "smart_calls": 3,
+        "frontier_pct": 60.0,
+        "est_cost_usd": 0.061
+      },
+      "wall_s": 16.9
+    }
+  ]
+}

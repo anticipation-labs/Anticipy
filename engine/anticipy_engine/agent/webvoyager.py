@@ -100,7 +100,8 @@ Rules:
 - Obey the PROGRESS label and any STUCK note: NEVER repeat an action that caused no change; do something different.
 - VERIFY, don't assume: the LAST STEP label says whether your previous action actually changed the page. If it did not, your approach was wrong — try something else.
 - When stuck, change the KIND of action (scroll to reveal new options, press enter to submit, or choose a different element) — not merely a different number.
-- Set subgoal_done=true the moment the CURRENT subgoal is achieved. Use action=answer only when the WHOLE task is done."""
+- Set subgoal_done=true the moment the CURRENT subgoal is achieved. Use action=answer only when the WHOLE task is done.
+- COMPLETE answers: if the task asks several things (e.g. "X, who did it, and what year"), your answer MUST cover EVERY part. Read further down the PAGE TEXT for the missing facts before answering; do not answer with only the first part."""
 
 # Real purchase-CONFIRM controls only — money is the hard stop, so this backstop STOPS the
 # agent before any control that finalizes a payment, and NEVER touches cart/navigation
@@ -170,6 +171,9 @@ VISION_MODE = (os.environ.get("ANTICIPY_VISION_MODE") or "auto").strip().lower()
 # Below this many actionable elements the page is likely canvas/image/custom-widget heavy and the
 # DOM tells us too little — fall back to vision. (0–1 actionable elements by default.)
 MIN_DOM_ELEMENTS = max(0, int(os.environ.get("ANTICIPY_MIN_DOM_ELEMENTS", "2")))
+# How much readable page text to put in the per-step prompt. Generous so mid-article facts on long
+# content pages stay in scope (the answer often sits just past the nav/TOC chrome).
+PAGE_TEXT_CHARS = max(800, int(os.environ.get("ANTICIPY_PAGE_TEXT_CHARS", "4000")))
 # A task/subgoal phrased about what the page LOOKS like genuinely needs pixels.
 _VISUAL_TASK_RE = re.compile(
     r"\b(what|which)\s+colou?r|colou?r\s+of|\b(image|images|photo|photos|picture|pictures|pic|logo|"
@@ -283,7 +287,12 @@ def _build_act_prompt(
     body_parts = [f"URL: {url}", f"TITLE: {title}"]
     pt = re.sub(r"\n{3,}", "\n\n", (page_text or "")).strip()
     if pt:
-        body_parts += ["PAGE TEXT (readable content, for reading answers off the page):", pt[:1800]]
+        # Budget: content-heavy pages (encyclopedia/article/docs) front-load nav + TOC chrome, so a
+        # tight window is all menu and the actual answer sits just past it. A larger slice keeps the
+        # readable body (and mid-article facts) in scope; it's cheap on the cheap tier and a CAP not a
+        # target, so short pages cost nothing extra.
+        body_parts += ["PAGE TEXT (readable content, for reading answers off the page):",
+                       pt[:PAGE_TEXT_CHARS]]
     body_parts += ["VISIBLE ELEMENTS (interactive; act on these by index):", el_lines]
     page_body = "\n".join(body_parts)
     return (
@@ -540,7 +549,10 @@ class WebVoyagerAgent:
         def _not_ready(o) -> bool:
             if self._empty_obs(o):
                 return True
-            if url is not None and not (o or {}).get("elements"):
+            # Wait until the DOM has at least the vision threshold of elements: bailing the wait as
+            # soon as ONE element appears would still leave the first decision on a half-loaded page
+            # (len(els) < MIN_DOM_ELEMENTS) -> spurious sparse-DOM vision on a page that's merely mid-load.
+            if url is not None and len((o or {}).get("elements") or []) < max(MIN_DOM_ELEMENTS, 1):
                 return True
             return False
         while _not_ready(out) and n < tries:
@@ -624,6 +636,7 @@ class WebVoyagerAgent:
         forbid = None  # (action, index) forbidden this step after a STUCK
         replans = 0    # how many times the planner has re-planned (cap: MAX_REPLANS)
         nav_blocks = 0 # how many navigates the wall has blocked this run (cap: MAX_NAV_BLOCKS)
+        recompleted = False  # the multi-part-answer completeness re-ask fires at most once
         item_text = _search_text(task)
 
         out, shot = await self._observe_ready(start_url)
@@ -752,6 +765,27 @@ class WebVoyagerAgent:
                         tier=SMART, caller="agent", image=None, json_mode=True, temperature=0.1,
                         max_tokens=max(AGENT_MAX_TOKENS, 512))
                     ans = ((_parse_json(fix) or {}).get("answer") or "").strip()
+                elif not recompleted:
+                    # COMPLETENESS gate: a multi-part question ("X, who did it, and what year") answered
+                    # too briefly is the cheap actor stopping at the first part. Re-ask ONCE on the SMART
+                    # tier to cover EVERY part from the page text already in scope — the same high-value
+                    # reasoning moment routing reserves the smart model for. Fires only on multi-ask tasks
+                    # with a short answer, so single-part tasks pay nothing.
+                    cues = set(re.findall(r"\b(what|who|whom|when|where|why|which|how\s+many|how\s+much|year)\b",
+                                          task.lower()))
+                    if len(cues) >= 2 and len(ans) < 160:
+                        recompleted = True
+                        fix = await _think(
+                            self.gw,
+                            prompt + f"\n\nYou answered: {ans!r}\nThe TASK asks for SEVERAL things. Using ONLY the "
+                                     "PAGE TEXT above, output ONE JSON {\"action\":\"answer\",\"answer\":\"...\"} that "
+                                     "answers EVERY part of the task. If a part is genuinely absent from the page "
+                                     "text, say so for that part — do not invent it.",
+                            tier=SMART, caller="agent", image=None, json_mode=True, temperature=0.1,
+                            max_tokens=max(AGENT_MAX_TOKENS, 512))
+                        fixed = ((_parse_json(fix) or {}).get("answer") or "").strip()
+                        if len(fixed) > len(ans):
+                            ans = fixed
                 return self._done(out, step + 1, history, answer=ans)
 
             # GUARDRAILS (only when LOCKED — ANTICIPY_BROWSER_UNLOCKED=0). When UNLOCKED (default),
@@ -806,8 +840,9 @@ class WebVoyagerAgent:
             if isinstance(act_res, dict) and act_res.get("status") == "needs_human":
                 _why = ((act_res.get("output") or {}).get("reason")
                         or "the bridge refused a navigation to a sensitive site")
+                _burl = (act_res.get("output") or {}).get("blocked_url") or action.get("url") or "?"
                 nav_blocks += 1
-                history.append(f"{step}: NAV BLOCKED ({_why[:60]}) -> rethink")
+                history.append(f"{step}: NAV BLOCKED url={_burl} ({_why[:50]}) -> rethink")
                 if nav_blocks <= MAX_NAV_BLOCKS and not self._unactionable_obs(out):
                     sub_stuck += 1        # escalate to the smart model next step
                     forbid = sig_here     # don't immediately re-emit the same blocked navigate
@@ -896,7 +931,7 @@ async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] 
         f"You are grading a web agent. Your evidence is {evidence}.\n"
         + "Reply ONLY JSON {\"success\":true|false,\"reason\":\"...\"}.\n"
         + f"TASK: {task}\nAGENT ANSWER: {result.get('answer')!r}\nFINAL URL: {result.get('final_url')}\n"
-        + (f"RESULTING PAGE TEXT (read-back):\n{page_text[:2400]}\n" if has_text else "")
+        + (f"RESULTING PAGE TEXT (read-back):\n{page_text[:PAGE_TEXT_CHARS]}\n" if has_text else "")
         + ("Decide ONLY from substance: does the answer, corroborated by the page read-back"
            + (" and screenshot" if has_shot else "")
            + ", satisfy what the task asked for? Verify the answer against the page evidence — do not "

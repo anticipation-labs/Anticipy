@@ -89,7 +89,7 @@ class BrowserLink:
                     "job_id": job_id,
                     "status": "needs_human",
                     "proof": None,
-                    "output": {"reason": f"navigation blocked: {reason}"},
+                    "output": {"reason": f"navigation blocked: {reason}", "blocked_url": nav_url},
                 }
         if not self.connected or self._ws is None:
             raise ConnectionError("extension not connected")
