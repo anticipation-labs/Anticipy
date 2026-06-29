@@ -92,8 +92,11 @@ _proactive_health = {
 # core's default gateway so the engine/hands tests stay free + deterministic).
 gateway_agent = ModelGateway(
     provider=PROVIDER_OPENROUTER,
-    cheap_model="google/gemini-3.1-flash-lite",   # routine see-and-locate steps
-    smart_model="google/gemini-3.5-flash",        # planning / recovery / stuck / judge
+    # Models come from env (the configured truth in .env*), falling back to the working
+    # gemini-2.5 family. The cheap tier handles routine see-and-locate steps; the smart tier
+    # handles planning / recovery / stuck / the read-back judge.
+    cheap_model=os.environ.get("ANTICIPY_MODEL_CHEAP", "google/gemini-2.5-flash-lite"),
+    smart_model=os.environ.get("ANTICIPY_MODEL_SMART", "google/gemini-2.5-flash"),
 )
 
 
