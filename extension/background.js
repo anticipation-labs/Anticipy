@@ -103,6 +103,7 @@ async function handleMessage(msg) {
     let r;
     if (msg.intent === "observe") r = await doObserve(msg);
     else if (msg.intent === "act") r = await doAct(msg);
+    else if (msg.intent === "crop") r = await doCrop(msg);
     else r = await executeBrowseJob(msg);
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(r));
   }
@@ -441,6 +442,55 @@ async function cdpScreenshot(tabId) {
 chrome.tabs.onRemoved.addListener((id) => { if (id === attachedTab) attachedTab = null; });
 chrome.debugger.onDetach.addListener((src) => { if (src && src.tabId === attachedTab) attachedTab = null; });
 
+// --- agent primitive: CROP (DOM + regions) -------------------------------------------------
+// The cost+quality lever. Instead of attaching a WHOLE-PAGE screenshot when the DOM is
+// ambiguous (frontier agents pay full-frame vision tokens on EVERY step), we capture ONLY
+// the region(s) around the candidate elements the agent is deciding between. A tight crop is
+// a small fraction of the image tokens of a full frame, so we get real pixel grounding exactly
+// where the DOM falls short while keeping the cost edge. The rects are the element bounding
+// boxes from observe (viewport CSS px); CDP Page.captureScreenshot `clip` also takes CSS px,
+// so there is no devicePixelRatio math — `scale` just downsamples the output.
+async function doCrop(msg) {
+  const a = msg.args || {};
+  const rects = Array.isArray(a.rects) ? a.rects : [];
+  const pad = Number.isFinite(a.pad) ? a.pad : 28;
+  const maxw = Number.isFinite(a.maxw) ? a.maxw : 760;
+  try {
+    const tab = await getWorkingTab();
+    if (!tab) return result(msg, "needs_human", null, { reason: "crop: no working tab" });
+    await ensureDebugger(tab.id);
+    let vw = 1280, vh = 800;
+    try {
+      const [{ result: vp }] = await chrome.scripting.executeScript({ target: { tabId: tab.id },
+        func: () => ({ w: window.innerWidth, h: window.innerHeight }) });
+      if (vp) { vw = vp.w || vw; vh = vp.h || vh; }
+    } catch (e) {}
+    const valid = rects.filter(r => r && Number.isFinite(r.x) && Number.isFinite(r.y) && r.w > 0 && r.h > 0);
+    if (!valid.length) {
+      // no usable rects — fall back to the full viewport shot so the caller still gets pixels
+      const full = await cdpScreenshot(tab.id);
+      return result(msg, "success", { screenshot: full }, { cropped: false });
+    }
+    let x0 = Math.min(...valid.map(r => r.x));
+    let y0 = Math.min(...valid.map(r => r.y));
+    let x1 = Math.max(...valid.map(r => r.x + r.w));
+    let y1 = Math.max(...valid.map(r => r.y + r.h));
+    x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad);
+    x1 = Math.min(vw, x1 + pad); y1 = Math.min(vh, y1 + pad);
+    const w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0);
+    const scale = Math.min(1, maxw / w);
+    const r = await cdp(tab.id, "Page.captureScreenshot", {
+      format: "jpeg", quality: 60, captureBeyondViewport: false,
+      clip: { x: x0, y: y0, width: w, height: h, scale },
+    });
+    const shot = (r && r.data) ? ("data:image/jpeg;base64," + r.data) : null;
+    return result(msg, "success", { screenshot: shot },
+      { cropped: !!shot, region: { x: Math.round(x0), y: Math.round(y0), w: Math.round(w), h: Math.round(h) }, count: valid.length });
+  } catch (e) {
+    return result(msg, "needs_human", null, { reason: "crop error: " + String(e) });
+  }
+}
+
 // --- wait for the page to settle (readyState complete + brief idle) ---
 async function settle(tabId, maxMs = 6000) {
   const start = Date.now();
@@ -596,6 +646,7 @@ async function doObserve(msg) {
           if (lines.length) _items = '\n\n--- STRUCTURED ITEMS (each item with ONLY its own tags; count these, ignore any sidebar tag list) ---\n' + lines.slice(0, 60).join('\n');
         } catch (e) {}
         return { url: location.href, title: document.title, text: ((document.body ? document.body.innerText : '').slice(0, 12000) + _tbl + _items).slice(0, 16000), elements: out,
+          vw: Math.round(window.innerWidth || 0), vh: Math.round(window.innerHeight || 0),
           scrollY: Math.round(window.scrollY || 0), scrollMax: Math.max(0, Math.round((_se ? _se.scrollHeight : 0) - innerHeight)) };
       },
     });
@@ -625,6 +676,7 @@ async function doObserve(msg) {
     return result(msg, "success",
       { screenshot, url: page.url, title: page.title },
       { url: page.url, title: page.title, text: pageText, elements: page.elements,
+        vw: page.vw, vh: page.vh,
         scrollY: page.scrollY, scrollMax: page.scrollMax, group_id: (await getState()).groupId,
         debug });
   } catch (e) {

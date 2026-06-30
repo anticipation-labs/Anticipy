@@ -543,7 +543,9 @@ class WebVoyagerAgent:
         self._replayed = False        # True when this run was served from a cached recipe (no planner LLM)
         # ── instrumentation (measure from day one): per-run counters; gateway baselines are
         # captured at run() start so metrics reflect THIS task's spend, not the process total.
-        self._vision_steps = 0          # steps where we attached the screenshot (vision fallback)
+        self._vision_steps = 0          # steps where we attached an image (vision fallback)
+        self._region_steps = 0          # of those, steps that used a tight REGION CROP (DOM+regions)
+        self._full_shot_steps = 0       # of those, steps that needed the WHOLE-PAGE screenshot
         self._dom_steps = 0             # steps decided from the DOM/element list alone
         self._call_base = 0
         self._cost_base = 0.0
@@ -551,9 +553,14 @@ class WebVoyagerAgent:
 
     @staticmethod
     def _vision_reason(els: list, task: str, subgoal: str, escalate: bool, has_shot: bool) -> str:
-        """Decide whether to attach the screenshot THIS step (DOM-first). Returns a short reason
-        string when vision is warranted, else "" (act from the DOM/element list alone).
-        Never invents a reason when no screenshot exists."""
+        """Decide whether to attach an image THIS step (DOM-first). Returns a short reason string
+        when vision is warranted, else "" (act from the DOM/element list alone). Never invents a
+        reason when no screenshot exists.
+
+        The reason ALSO selects WHICH image (see _wants_full_shot): a task about what the page
+        LOOKS like, or a page the DOM can't describe (canvas), needs the WHOLE-PAGE screenshot;
+        a merely-ambiguous element decision needs only a tight REGION CROP (DOM+regions) — pixel
+        grounding exactly where the DOM is weak, at a fraction of full-frame vision tokens."""
         if not has_shot or VISION_MODE == "off":
             return ""
         if VISION_MODE == "always":
@@ -567,13 +574,75 @@ class WebVoyagerAgent:
             return "stuck-recover"        # we're stuck; a look at the pixels can break the loop
         return ""
 
+    @staticmethod
+    def _wants_full_shot(reason: str) -> bool:
+        # Whole-page pixels are only warranted when the PAGE'S APPEARANCE itself is the question
+        # (visual-task) or the DOM describes almost nothing (sparse/canvas). Everything else is an
+        # element-grounding decision → a region crop suffices (cheaper, and tighter = higher signal).
+        return reason in ("visual-task", "sparse-dom", "mode=always")
+
+    # words that carry no targeting signal — excluded when matching the subgoal to element labels
+    _STOP = frozenset((
+        "the a an of to in on at for and or but with from into your you this that these those is are be "
+        "click type select check open go find tell list page through all every count name names exact "
+        "it its as by then next get see read look value row column table button link field box".split()))
+
+    @classmethod
+    def _relevant_rects(cls, els: list, task: str, subgoal: str, vw: int, vh: int) -> list:
+        """Pick the bounding boxes of the in-view elements most relevant to the CURRENT subgoal
+        (token overlap with their labels). These are the 'regions' we crop. Returns [] when there
+        is no good focal region or when the union would already span most of the viewport (a crop
+        would then save nothing — fall back to the full shot)."""
+        toks = set(t for t in re.findall(r"[a-z0-9]{3,}", ((subgoal or "") + " " + (task or "")).lower())
+                   if t not in cls._STOP)
+        if not toks:
+            return []
+        scored = []
+        for e in els:
+            if not e.get("inView"):
+                continue
+            r = e.get("rect")
+            if not r:
+                continue
+            ntok = set(re.findall(r"[a-z0-9]{3,}", (e.get("name") or "").lower()))
+            score = len(toks & ntok)
+            if score >= 1:
+                scored.append((score, r))
+        if not scored:
+            return []
+        scored.sort(key=lambda s: -s[0])
+        picked = [r for _, r in scored[:6]]
+        x0 = min(r["x"] for r in picked); y0 = min(r["y"] for r in picked)
+        x1 = max(r["x"] + r["w"] for r in picked); y1 = max(r["y"] + r["h"] for r in picked)
+        if vw and vh and (x1 - x0) * (y1 - y0) > 0.6 * vw * vh:
+            return []                     # union already covers most of the page → no savings
+        return picked
+
+    async def _region_crop(self, els: list, task: str, subgoal: str, vw: int, vh: int) -> Optional[str]:
+        """Capture a tight crop around the relevant element region(s). Returns a data-URL image,
+        or None when there is no focal region (caller then uses the full shot)."""
+        rects = self._relevant_rects(els, task, subgoal, vw, vh)
+        if not rects:
+            return None
+        try:
+            r = await self.link.send_browse(new_id(), "crop",
+                                            {"rects": rects, "pad": 28, "maxw": 760}, timeout=30.0)
+        except Exception:
+            return None
+        if (r or {}).get("status") != "success":
+            return None
+        return ((r.get("proof") or {}).get("screenshot")) or None
+
     def _metrics(self, steps: int) -> dict:
         # vision/dom counts come from the agent itself, so they are always available.
         m = {
             "steps": steps,
             "vision_steps": self._vision_steps,
+            "region_steps": self._region_steps,      # DOM+regions: tight crops (the cheap vision path)
+            "full_shot_steps": self._full_shot_steps, # whole-page screenshots (rare: appearance/canvas)
             "dom_steps": self._dom_steps,
             "vision_pct": round(100.0 * self._vision_steps / max(1, self._vision_steps + self._dom_steps), 1),
+            "region_pct": round(100.0 * self._region_steps / max(1, self._vision_steps), 1),
             "replayed": self._replayed,  # True = served from a learned recipe (the cheap path)
         }
         # model-cost counters are an OPTIONAL gateway capability (the production ModelGateway has
@@ -1031,6 +1100,8 @@ class WebVoyagerAgent:
             organic = [e for e in all_in if not e.get("sponsored")]
             sponsored = [e for e in all_in if e.get("sponsored")]
             els = (organic + sponsored)[:45]  # organic first; ads last (and labelled)
+            _vw = int(out.get("vw") or 0) or 1280   # viewport size (for region-crop coverage sizing)
+            _vh = int(out.get("vh") or 0) or 800
 
             subgoal_text = state.current["text"] if state.current else "Provide the final answer (action=answer)."
             stuck_note = ""
@@ -1079,12 +1150,34 @@ class WebVoyagerAgent:
             # not every escalation. On hard tasks this is what kept vision% (and $/task) low.
             vision_escalate = sub_stuck >= 2
             vreason = self._vision_reason(els, task, subgoal_text, vision_escalate, has_shot=bool(shot))
-            img = shot if vreason else None
+            # DOM+REGIONS router: when the DOM alone is ambiguous we attach PIXELS — but only the
+            # WHOLE-PAGE screenshot when the page's APPEARANCE itself is the question (visual task)
+            # or the DOM describes almost nothing (canvas/sparse). For an ordinary ambiguous element
+            # decision we crop ONLY the relevant widget region(s) — same grounding, a fraction of the
+            # vision tokens of a full frame. That is the cost+quality lever over full-screenshot agents.
+            img = None
+            step_prompt = prompt
+            if vreason:
+                if self._wants_full_shot(vreason):
+                    img = shot
+                    self._full_shot_steps += 1
+                else:
+                    crop = await self._region_crop(els, task, subgoal_text, _vw, _vh)
+                    if crop:
+                        img = crop
+                        self._region_steps += 1
+                        step_prompt = prompt + (
+                            "\n\nNOTE: the attached image is a CROPPED region zoomed in on the "
+                            "candidate elements (NOT the whole page). Use it to disambiguate exactly "
+                            "those elements; the VISIBLE ELEMENTS list remains the full page.")
+                    else:
+                        img = shot
+                        self._full_shot_steps += 1
             if img:
                 self._vision_steps += 1
             else:
                 self._dom_steps += 1
-            raw1 = await _think(self.gw, prompt, tier=tier, caller="agent", image=img,
+            raw1 = await _think(self.gw, step_prompt, tier=tier, caller="agent", image=img,
                                 json_mode=True, temperature=0.1, max_tokens=AGENT_MAX_TOKENS)
             if not (raw1 or "").strip() and img:
                 # Some model/provider paths return empty content for image+JSON.
@@ -1102,6 +1195,7 @@ class WebVoyagerAgent:
                 # pixels (vision genuinely helps break an ambiguous step).
                 if shot and not img:
                     self._vision_steps += 1
+                    self._full_shot_steps += 1   # recovery uses the WHOLE-PAGE shot (rare, genuine stall)
                     self._dom_steps = max(0, self._dom_steps - 1)
                 raw2 = await _think(  # a non-answer always escalates to smart
                     self.gw,
