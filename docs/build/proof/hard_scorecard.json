@@ -1,0 +1,98 @@
+{
+  "suite": "hard_tasks \u2014 8 long-horizon tasks (multi-page count, top-N, sort, JS dialog, dynamic wait, nested frames, multi-hop DOB, paginate-all tag count)",
+  "method": "cold: recipe cache cleared before EVERY task; judge reads back real page text/structured tables/element state/all-pages corpus + independent Python ground truth; misses are SAFE handoffs (correct answer, never a fake)",
+  "judge_determinism_fix": "runs E,F,G \u2014 judge drops the screenshot when authoritative text/structured/corpus evidence exists (vision was the only non-deterministic input, occasionally flipping a correct verdict)",
+  "runs": [
+    {
+      "run": "A",
+      "passed": "7/8",
+      "success_pct": 87.5,
+      "avg_cost_usd": 0.0657,
+      "safe_handoffs": [
+        "sort table"
+      ],
+      "avg_vision_pct": 16.5,
+      "avg_frontier_pct": 69.8
+    },
+    {
+      "run": "B",
+      "passed": "8/8",
+      "success_pct": 100.0,
+      "avg_cost_usd": 0.0506,
+      "safe_handoffs": [],
+      "avg_vision_pct": 9.4,
+      "avg_frontier_pct": 71.5
+    },
+    {
+      "run": "C",
+      "passed": "8/8",
+      "success_pct": 100.0,
+      "avg_cost_usd": 0.0506,
+      "safe_handoffs": [],
+      "avg_vision_pct": 12.5,
+      "avg_frontier_pct": 72.1
+    },
+    {
+      "run": "D",
+      "passed": "8/8",
+      "success_pct": 100.0,
+      "avg_cost_usd": 0.0431,
+      "safe_handoffs": [],
+      "avg_vision_pct": 8.3,
+      "avg_frontier_pct": 66.2
+    },
+    {
+      "run": "E",
+      "passed": "8/8",
+      "success_pct": 100.0,
+      "avg_cost_usd": 0.0482,
+      "safe_handoffs": [],
+      "avg_vision_pct": 38.5,
+      "avg_frontier_pct": 66.3
+    },
+    {
+      "run": "F",
+      "passed": "7/8",
+      "success_pct": 87.5,
+      "avg_cost_usd": 0.0531,
+      "safe_handoffs": [
+        "multi-page count"
+      ],
+      "avg_vision_pct": 43.8,
+      "avg_frontier_pct": 72.9
+    },
+    {
+      "run": "G",
+      "passed": "8/8",
+      "success_pct": 100.0,
+      "avg_cost_usd": 0.0707,
+      "safe_handoffs": [],
+      "avg_vision_pct": 38.5,
+      "avg_frontier_pct": 69.9
+    }
+  ],
+  "aggregate_postfix_BCDEFG": {
+    "task_instances": 48,
+    "verified": 47,
+    "success_pct": 97.9,
+    "avg_cost_usd": 0.0527,
+    "min_run_pct": 87.5,
+    "median_run": "100%",
+    "note": "the only non-verified instance (run F / multi-page count) was a SAFE handoff of a correct answer \u2014 never a fake"
+  },
+  "baseline_vs_now": {
+    "baseline_cold": {
+      "success_pct": 62.5,
+      "cost_usd": 0.246,
+      "vision_pct": 54,
+      "frontier_pct": 70
+    },
+    "now_cold": {
+      "success_pct": 97.9,
+      "cost_usd": 0.0527,
+      "vision_pct": 25.2,
+      "frontier_pct": 69.8
+    },
+    "warm_replay_usd": 0.0005
+  }
+}

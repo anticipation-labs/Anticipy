@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Anticipy — Live Mission Control</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#0f1620; --panel2:#131c28; --line:#1e2a3a;
+    --ink:#d7e2f0; --dim:#7d8ca0; --green:#3ad27a; --amber:#ffb454; --red:#ff5d62;
+    --cyan:#39bae6; --violet:#b48ead; --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#0d141d,#0a0e14);}
+  header .logo{font-weight:800;font-size:19px;letter-spacing:.3px}
+  header .logo b{color:var(--cyan)}
+  header .tag{color:var(--dim);font-size:13px}
+  .pill{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim)}
+  .dot{width:9px;height:9px;border-radius:50%;background:#444;box-shadow:0 0 0 0 rgba(58,210,122,.5)}
+  .dot.on{background:var(--green);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(58,210,122,.5)}70%{box-shadow:0 0 0 8px rgba(58,210,122,0)}100%{box-shadow:0 0 0 0 rgba(58,210,122,0)}}
+  .wrap{display:grid;grid-template-columns:340px 1fr;gap:0;height:calc(100% - 58px)}
+  .side{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:14px}
+  .side h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin:6px 4px 10px}
+  .btns{display:flex;gap:8px;margin-bottom:14px}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    padding:9px 12px;border-radius:8px;font-size:13px;font-weight:600}
+  button:hover{border-color:#2c3e54}
+  button.primary{background:#10324a;border-color:#1c4f72;color:#cdeafd}
+  button.warm{background:#2a2438;border-color:#4a3a66;color:#e6d6f5}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .task{border:1px solid var(--line);border-radius:9px;padding:10px 11px;margin-bottom:9px;background:var(--panel2)}
+  .task .n{font-size:11px;color:var(--cyan);font-weight:700;letter-spacing:.5px}
+  .task .t{font-size:12.5px;line-height:1.4;margin:3px 0 6px}
+  .task .u{font-size:11px;color:var(--dim);font-family:var(--mono);word-break:break-all}
+  .task .st{float:right;font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;background:#1a2433;color:var(--dim)}
+  .task .st.run{background:#10324a;color:var(--cyan)}
+  .task .st.ok{background:#11331f;color:var(--green)}
+  .task .st.human{background:#3a2c12;color:var(--amber)}
+  .main{display:flex;flex-direction:column;overflow:hidden}
+  .now{padding:13px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .now .lbl{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
+  .now .task{border:0;background:0;padding:0;margin:4px 0 0;font-size:15px;font-weight:600;color:#eaf2fb}
+  .now .url{font-family:var(--mono);font-size:12px;color:var(--cyan);margin-top:3px}
+  .log{flex:1;overflow:auto;padding:10px 16px;font-family:var(--mono);font-size:13px;line-height:1.65}
+  .row{display:flex;gap:10px;padding:3px 0;border-bottom:1px dotted #16202d;white-space:pre-wrap}
+  .row .s{color:var(--dim);min-width:42px}
+  .act{font-weight:700}
+  .act.click{color:var(--cyan)} .act.type{color:var(--violet)} .act.select{color:var(--amber)}
+  .act.navigate{color:#7fd1ff} .act.scroll,.act.back,.act.check{color:#9fb3c8}
+  .xy{color:#6fe0a8} .trust{color:var(--green);font-weight:700}
+  .prog.PROGRESS{color:var(--green)} .prog.NO_CHANGE{color:var(--dim)} .prog.REGRESSION{color:var(--red)}
+  .prog.REPLAY{color:var(--violet)}
+  .urlx{color:#5b86a8}
+  .badge{font-size:10px;padding:0 6px;border-radius:5px;border:1px solid var(--line);color:var(--dim)}
+  .badge.smart{color:var(--amber);border-color:#4a3a12}
+  .badge.replay{color:var(--violet);border-color:#3a2c4a}
+  .badge.vis{color:#7fd1ff;border-color:#1c4f72}
+  .evt{color:var(--dim);font-style:italic;padding:6px 0}
+  .evt.start{color:var(--cyan);font-style:normal;font-weight:700;border-top:1px solid var(--line);margin-top:6px;padding-top:10px}
+  .evt.mode{color:var(--violet);font-weight:700}
+  .evt.done.ok{color:var(--green);font-weight:700}
+  .evt.done.human{color:var(--amber);font-weight:700}
+  .score{border-top:1px solid var(--line);background:var(--panel);max-height:230px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;background:var(--panel)}
+  td.ok{color:var(--green)} td.human{color:var(--amber)} td.cost{color:#6fe0a8;font-family:var(--mono)}
+  td.mono{font-family:var(--mono)}
+  tfoot td{font-weight:700;color:#eaf2fb;border-top:2px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Anticipy <b>·</b> Live Mission Control</div>
+  <div class="tag">real authenticated Chrome · driven via CDP · DOM-first · model-routed</div>
+  <div class="pill"><span id="dot" class="dot"></span><span id="conn">connecting…</span></div>
+</header>
+<div class="wrap">
+  <aside class="side">
+    <h2>Run the suite</h2>
+    <div class="btns">
+      <button id="cold" class="primary">▶ Run all — COLD</button>
+      <button id="warm" class="warm" disabled>↻ Run all — WARM</button>
+    </div>
+    <h2>Tasks (brand-new sites)</h2>
+    <div id="tasks"></div>
+  </aside>
+  <section class="main">
+    <div class="now">
+      <div class="lbl">Now running</div>
+      <div class="task" id="nowTask">— idle —</div>
+      <div class="url" id="nowUrl"></div>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="score">
+      <table>
+        <thead><tr><th>#</th><th>Task</th><th>Mode</th><th>Result</th><th>$/task</th><th>Steps</th><th>Frontier%</th><th>Vision%</th></tr></thead>
+        <tbody id="scoreBody"></tbody>
+        <tfoot><tr><td colspan="4" id="sumLabel">—</td><td class="cost" id="sumCost"></td><td id="sumSteps"></td><td colspan="2"></td></tr></tfoot>
+      </table>
+    </div>
+  </section>
+</div>
+<script>
+const TASKS = [
+  {task:"In the Mystery category, page through ALL pages and tell me how many books are priced strictly above £50, and list their exact titles.",
+   url:"https://books.toscrape.com/catalogue/category/books/mystery_3/index.html", max_steps:40, kind:"multi-page filter + count"},
+  {task:"Look at the first five books in the Travel category. Of those five, tell me which is the cheapest and which is the most expensive, with their exact prices.",
+   url:"https://books.toscrape.com/catalogue/category/books/travel_2/index.html", max_steps:30, kind:"top-N compare"},
+  {task:"On the data tables page, in the FIRST table, sort the rows by Last Name (click the Last Name header), then tell me the full name and email address of the person now in the bottom row.",
+   url:"https://the-internet.herokuapp.com/tables", max_steps:20, kind:"sort table + read row"},
+  {task:"Click the 'Click for JS Confirm' button, choose Cancel on the dialog, then tell me the exact result text that appears under the buttons.",
+   url:"https://the-internet.herokuapp.com/javascript_alerts", max_steps:14, kind:"JS dialog handling"},
+  {task:"Start the loading process with the green Start button, wait until it finishes, and tell me the exact text that is revealed.",
+   url:"https://the-internet.herokuapp.com/dynamic_loading/2", max_steps:16, kind:"dynamic wait"},
+  {task:"There are nested frames on this page. Tell me the exact word displayed in the MIDDLE frame.",
+   url:"https://the-internet.herokuapp.com/nested_frames", max_steps:14, kind:"nested iframes"},
+  {task:"Find the quote about how 'the world as we have created it is a process of our thinking'. Click through to that author's About page and tell me the author's name and their date of birth.",
+   url:"https://quotes.toscrape.com/", max_steps:22, kind:"find quote + author DOB"},
+  {task:"Go through every page of quotes and tell me the total number of quotes tagged with 'love', and list each of those quotes' authors.",
+   url:"https://quotes.toscrape.com/", max_steps:40, kind:"paginate ALL + tag count"},
+];
+
+const $=s=>document.querySelector(s), log=$("#log");
+let curIdx=-1, runMode="COLD";
+const sums={n:0,cost:0,steps:0,ok:0};
+
+// render task cards
+const tasksEl=$("#tasks");
+TASKS.forEach((t,i)=>{
+  const d=document.createElement("div"); d.className="task"; d.id="task"+i;
+  d.innerHTML=`<span class="st" id="st${i}">queued</span><div class="n">TASK ${i+1} — ${t.kind}</div>`+
+    `<div class="t">${t.task}</div><div class="u">${t.url}</div>`;
+  tasksEl.appendChild(d);
+});
+
+function line(html){const r=document.createElement("div");r.innerHTML=html;log.appendChild(r);log.scrollTop=log.scrollHeight;}
+function setStatus(i,s,cls){const e=$("#st"+i);if(e){e.textContent=s;e.className="st "+(cls||"");}}
+
+// ---- live SSE stream ----
+function connect(){
+  const es=new EventSource("/agent/events");
+  es.addEventListener("hello",()=>{$("#dot").classList.add("on");$("#conn").textContent="live stream connected";});
+  es.onerror=()=>{$("#dot").classList.remove("on");$("#conn").textContent="reconnecting…";};
+  es.onmessage=(m)=>{
+    let ev; try{ev=JSON.parse(m.data);}catch(e){return;}
+    if(ev.type==="task_start"){
+      $("#nowTask").textContent=ev.task; $("#nowUrl").textContent="▶ "+ev.url;
+      line(`<div class="row evt start">▶ TASK START — ${esc(ev.task)}</div>`);
+    } else if(ev.type==="mode"){
+      line(`<div class="row evt mode">⚡ ${esc(ev.note||ev.mode)}</div>`);
+    } else if(ev.type==="step"){
+      const a=ev.action||"", xy=(ev.x!=null&&ev.y!=null)?`<span class="xy">@(${ev.x},${ev.y})</span>`:"";
+      const tr=ev.cdp==="trusted"?`<span class="trust">cdp:trusted</span>`:(ev.cdp==="fallback"?`<span class="urlx">cdp:fallback</span>`:"");
+      const tier=ev.tier==="smart"?`<span class="badge smart">SMART</span>`:(ev.tier==="replay"?`<span class="badge replay">REPLAY</span>`:"");
+      const vis=ev.vision?`<span class="badge vis">vision</span>`:"";
+      line(`<div class="row"><span class="s">${ev.step}</span>`+
+        `<span class="act ${a}">${a}</span>`+
+        (ev.index!=null?`<span class="urlx">idx=${ev.index}</span>`:"")+
+        `<span>“${esc((ev.label||"").slice(0,32))}”</span>${xy} ${tr} ${tier} ${vis}`+
+        `<span>→</span><span class="prog ${ev.progress}">${ev.progress}</span>`+
+        `<span class="urlx">${esc((ev.url||"").replace(/^https?:\/\//,""))}</span></div>`);
+    } else if(ev.type==="done"){
+      const m=ev.metrics||{}, ok=ev.success&&!ev.needs_human;
+      const cls=ok?"ok":"human", verdict=ok?"✓ VERIFIED":"⚠ HANDED TO HUMAN";
+      line(`<div class="row evt done ${cls}">${verdict} — ${esc((ev.answer||"").slice(0,140))} `+
+        `· $${(m.est_cost_usd??0).toFixed(4)} · ${m.steps||0} steps · frontier ${m.frontier_pct??0}% · vision ${m.vision_pct??0}%${ev.replayed?" · REPLAYED":""}</div>`);
+      recordScore(ev);
+    }
+  };
+}
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+function recordScore(ev){
+  if(curIdx<0)return;
+  const m=ev.metrics||{}, ok=ev.success&&!ev.needs_human;
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>${curIdx+1}</td><td>${esc(TASKS[curIdx].kind)}</td>`+
+    `<td class="mono">${ev.replayed?"WARM":runMode}</td>`+
+    `<td class="${ok?'ok':'human'}">${ok?'PASS':'HUMAN'}</td>`+
+    `<td class="cost">$${(m.est_cost_usd??0).toFixed(4)}</td>`+
+    `<td>${m.steps||0}</td><td>${m.frontier_pct??0}%</td><td>${m.vision_pct??0}%</td>`;
+  $("#scoreBody").appendChild(tr);
+  setStatus(curIdx, ok?"PASS":"HUMAN", ok?"ok":"human");
+  sums.n++; sums.cost+=(m.est_cost_usd||0); sums.steps+=(m.steps||0); sums.ok+=ok?1:0;
+  $("#sumLabel").textContent=`${sums.ok}/${sums.n} verified · avg`;
+  $("#sumCost").textContent="$"+(sums.cost/Math.max(1,sums.n)).toFixed(4);
+  $("#sumSteps").textContent=(sums.steps/Math.max(1,sums.n)).toFixed(1);
+}
+
+async function runOne(i){
+  curIdx=i; setStatus(i,"running","run");
+  const t=TASKS[i];
+  // clean slate before each task (cookies + per-origin storage) so a prior task's saved state
+  // (cart, login, form) can't contaminate the next — honest, deterministic cold measurement.
+  if(runMode!=="WARM"){ try{ await fetch("/agent/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}); }catch(e){} }
+  const r=await fetch("/agent/run",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({task:t.task,start_url:t.url,max_steps:t.max_steps,judge:true})});
+  await r.json().catch(()=>({}));
+}
+async function runAll(mode){
+  runMode=mode; $("#cold").disabled=true; $("#warm").disabled=true;
+  sums.n=0;sums.cost=0;sums.steps=0;sums.ok=0; $("#scoreBody").innerHTML="";
+  line(`<div class="row evt start">═══ ${mode} PASS — ${TASKS.length} tasks, one general agent, no per-site code ═══</div>`);
+  for(let i=0;i<TASKS.length;i++){ try{await runOne(i);}catch(e){line(`<div class="row evt">error: ${esc(String(e))}</div>`);} }
+  line(`<div class="row evt start">═══ ${mode} PASS COMPLETE — ${sums.ok}/${sums.n} verified · avg $${(sums.cost/Math.max(1,sums.n)).toFixed(4)}/task ═══</div>`);
+  $("#cold").disabled=false; $("#warm").disabled=false;
+  $("#nowTask").textContent="— idle —"; $("#nowUrl").textContent="";
+}
+$("#cold").onclick=()=>runAll("COLD");
+$("#warm").onclick=()=>runAll("WARM");
+connect();
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+[
+  {"task": "In the Mystery category, page through ALL pages and tell me how many books are priced strictly above £50, and list their exact titles.",
+   "start_url": "https://books.toscrape.com/catalogue/category/books/mystery_3/index.html", "max_steps": 40},
+
+  {"task": "Look at the first five books in the Travel category. Of those five, tell me which is the cheapest and which is the most expensive, with their exact prices.",
+   "start_url": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html", "max_steps": 30},
+
+  {"task": "On the data tables page, in the FIRST table, sort the rows by Last Name (click the Last Name header), then tell me the full name and email address of the person now in the bottom row.",
+   "start_url": "https://the-internet.herokuapp.com/tables", "max_steps": 20},
+
+  {"task": "Click the 'Click for JS Confirm' button, choose Cancel on the dialog, then tell me the exact result text that appears under the buttons.",
+   "start_url": "https://the-internet.herokuapp.com/javascript_alerts", "max_steps": 14},
+
+  {"task": "Start the loading process with the green Start button, wait until it finishes, and tell me the exact text that is revealed.",
+   "start_url": "https://the-internet.herokuapp.com/dynamic_loading/2", "max_steps": 16},
+
+  {"task": "There are nested frames on this page. Tell me the exact word displayed in the MIDDLE frame.",
+   "start_url": "https://the-internet.herokuapp.com/nested_frames", "max_steps": 14},
+
+  {"task": "Find the quote about how 'the world as we have created it is a process of our thinking'. Click through to that author's About page and tell me the author's name and their date of birth.",
+   "start_url": "https://quotes.toscrape.com/", "max_steps": 22},
+
+  {"task": "Go through every page of quotes and tell me the total number of quotes tagged with 'love', and list each of those quotes' authors.",
+   "start_url": "https://quotes.toscrape.com/", "max_steps": 40}
+]

@@ -91,6 +91,14 @@ function scheduleReconnect() {
 async function handleMessage(msg) {
   if (msg.type === "pong") return;
   if (msg.type === "reload") { console.log("[anticipy] hot reload"); chrome.runtime.reload(); return; }
+  if (msg.type === "reset_state") {
+    // Wipe per-site state (cookies + localStorage/sessionStorage/IndexedDB + cache) so a fresh task
+    // starts from a clean slate. Used for honest cold-start benchmarking: without it, a prior task's
+    // saved cart / login / form state leaks into the next run and makes results non-deterministic.
+    const r = await doResetState(msg);
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(r));
+    return;
+  }
   if (msg.type === "browse_job") {
     let r;
     if (msg.intent === "observe") r = await doObserve(msg);
@@ -374,6 +382,35 @@ async function cdpClick(tabId, x, y) {
   await cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 1, clickCount: 1 });
 }
 async function cdpType(tabId, text) { if (text) await cdp(tabId, "Input.insertText", { text }); }
+// Clean-slate reset: clear cookies + the current origin's storage (localStorage/IndexedDB/etc) so the
+// next task is not contaminated by what a prior task saved. Best-effort; never throws into the caller.
+async function doResetState(msg) {
+  const cleared = [];
+  try {
+    let tab = await getWorkingTab();
+    if (tab) {
+      try { await ensureDebugger(tab.id); } catch (e) {}
+      const origin = (() => { try { return new URL(tab.url || "").origin; } catch (e) { return ""; } })();
+      try { await cdp(tab.id, "Network.clearBrowserCookies"); cleared.push("cookies"); } catch (e) {}
+      try { await cdp(tab.id, "Network.clearBrowserCache"); cleared.push("cache"); } catch (e) {}
+      if (origin && origin !== "null") {
+        try {
+          await cdp(tab.id, "Storage.clearDataForOrigin",
+            { origin, storageTypes: "all" });
+          cleared.push("storage:" + origin);
+        } catch (e) {}
+      }
+      // also wipe the live page's JS storage directly (covers cases clearDataForOrigin misses)
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id },
+          func: () => { try { localStorage.clear(); } catch (e) {} try { sessionStorage.clear(); } catch (e) {} } });
+        cleared.push("jsstorage");
+      } catch (e) {}
+      try { await chrome.tabs.update(tab.id, { url: "about:blank", active: false }); } catch (e) {}
+    }
+  } catch (e) {}
+  return result(msg, "success", null, { ok: true, cleared });
+}
 async function cdpKey(tabId, key) {
   const map = { Enter: { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, text: "\r" } };
   const k = map[key] || { key };
@@ -449,9 +486,14 @@ async function doObserve(msg) {
         // is all the model needs; if a step truly needs vision, the numbered marks are
         // composited onto the captured SCREENSHOT in the engine (page stays untouched).
         const old = document.getElementById('anticipy-som'); if (old) old.remove();
-        const sel = 'a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [onclick], [contenteditable=""], [contenteditable=true]';
-        const out = []; let i = 0;
+        // Includes table/column headers and JS-bound clickables: `th`, `[role=columnheader]`,
+        // `[tabindex]`, `summary`, and `[class*=sort]` capture sortable table headers and custom
+        // widgets that bind click via JS (no inline onclick/href/role) — e.g. tablesorter's
+        // `<th><span>Last Name</span></th>`, which earlier was invisible to the agent.
+        const sel = 'a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=radio], [role=option], [role=columnheader], [onclick], [contenteditable=""], [contenteditable=true], th, summary, [class*="sort" i], [data-sort], [tabindex]:not([tabindex="-1"])';
+        const out = []; let i = 0; const _seen = new Set();
         for (const el of document.querySelectorAll(sel)) {
+          if (_seen.has(el)) continue; _seen.add(el);
           const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
           if (r.width <= 2 || r.height <= 2 || cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
           if (r.bottom < -50 || r.right < 0 || r.top > innerHeight + 4000 || r.left > innerWidth) continue;
@@ -474,7 +516,24 @@ async function doObserve(msg) {
           if (!name) { const anc = el.closest('li, article, section, [role="listitem"], [role="article"]'); if (anc) { const h = anc.querySelector('h1, h2, h3, [role="heading"]'); if (h) name = (h.innerText || '').trim(); } }
           name = name.replace(/\s+/g, ' ').slice(0, 110);
           const role = el.getAttribute('role') || el.tagName.toLowerCase();
-          const stt = []; if (el.disabled) stt.push('disabled'); if (el.checked) stt.push('checked');
+          const stt = []; if (el.disabled) stt.push('disabled');
+          // Surface checkbox/radio state BOTH ways. Reporting only 'checked' (and nothing when off)
+          // hid the unchecked state from the agent, so it could not tell a toggle landed and re-clicked
+          // it — toggling it back OFF (the "REGRESSION" thrash). An explicit 'unchecked' stops that.
+          const _ac = el.getAttribute('aria-checked');
+          const _toggle = (el.type === 'checkbox' || el.type === 'radio' || el.getAttribute('role') === 'checkbox' || el.getAttribute('role') === 'radio' || _ac !== null);
+          if (_toggle) stt.push((el.checked || _ac === 'true') ? 'checked' : 'unchecked');
+          else if (el.checked) stt.push('checked');
+          // Surface the field's CURRENT value so the agent can SEE a field is already filled (and the
+          // structural signature flips on type). Without this an input shows only its placeholder name,
+          // so a successful `type` looks like NO_CHANGE and the agent loops re-typing the same field.
+          let _fval = '';
+          try {
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') _fval = String(el.value || '');
+            else if (el.isContentEditable) _fval = String(el.textContent || '');
+          } catch (e) {}
+          if (_fval && (el.getAttribute('type') || '').toLowerCase() !== 'password') stt.push('value=' + _fval.slice(0, 40));
+          else if (_fval) stt.push('filled');
           const ae = el.getAttribute('aria-expanded'); if (ae) stt.push('expanded=' + ae);
           const inView = r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
           let sponsored = false;
@@ -485,14 +544,88 @@ async function doObserve(msg) {
             rect: inView ? { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) } : null });
           if (++i >= 600) break;
         }
-        return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 12000), elements: out };
+        const _se = document.scrollingElement || document.documentElement;
+        // STRUCTURED TABLES: body.innerText flattens every <table> into one wall of text, so when a
+        // page has two look-alike tables (e.g. the-internet /tables) neither the agent nor the judge
+        // can tell which is "the FIRST table" or read its rows IN ORDER after a sort. Emit each table
+        // separately, in DOM order, with its rows in their CURRENT (post-sort) order so "the bottom
+        // row of the first table" is unambiguous and verifiable.
+        let _tbl = '';
+        try {
+          const tables = Array.from(document.querySelectorAll('table')).slice(0, 4);
+          const parts = [];
+          tables.forEach((tb, ti) => {
+            const rows = Array.from(tb.querySelectorAll('tr')).slice(0, 60).map(tr =>
+              Array.from(tr.querySelectorAll('th,td')).map(c => (c.innerText || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join(' | ')
+            ).filter(Boolean);
+            if (rows.length) parts.push('TABLE ' + (ti + 1) + ' (in page order, rows top->bottom as currently displayed):\n' + rows.join('\n'));
+          });
+          if (parts.length) _tbl = '\n\n--- STRUCTURED TABLES ---\n' + parts.join('\n\n');
+        } catch (e) {}
+        // STRUCTURED ITEMS: a "count items tagged X across pages" task is unanswerable from flattened
+        // text — a quote's own tags and a sidebar "popular tags" list both flatten to the word "love",
+        // so the count is inflated by one per page. Emit each content item with ONLY its own tag/label
+        // chips, by climbing each tag anchor to its item card (real prose beyond the chips) and
+        // excluding cards holding many tags (the sidebar / popular-tags column).
+        let _items = '';
+        try {
+          const tagSel = 'a[class*="tag" i], a[rel="tag"]';
+          const anchors = Array.from(document.querySelectorAll(tagSel));
+          const cards = new Map();
+          anchors.forEach(a => {
+            // Climb to the item CARD: the nearest ancestor that has real prose (>25 chars of NON-tag
+            // text) — this skips the inner ".tags" container (which is all tag text) so a quote with
+            // many tags is not mistaken for a tag box. A "card" holding many tag anchors (>8) is a
+            // sidebar / popular-tags column, not one item, so it is excluded.
+            let p = a.parentElement, card = null;
+            for (let i = 0; i < 6 && p; i++) {
+              const t = (p.innerText || '').replace(/\s+/g, ' ').trim();
+              const innerTags = Array.from(p.querySelectorAll(tagSel)).map(x => (x.innerText || '').trim());
+              if (t.length - innerTags.join('').length > 25) { card = innerTags.length <= 8 ? p : null; break; }
+              p = p.parentElement;
+            }
+            if (!card) return;
+            if (!cards.has(card)) cards.set(card, { txt: (card.innerText || '').replace(/\s+/g, ' ').trim(), tags: [] });
+            const tg = (a.innerText || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            if (tg && cards.get(card).tags.indexOf(tg) < 0) cards.get(card).tags.push(tg);
+          });
+          const lines = [];
+          cards.forEach(v => {
+            if (v.tags.length) lines.push('ITEM: "' + v.txt.slice(0, 90) + '" | TAGS: ' + v.tags.join(', '));
+          });
+          if (lines.length) _items = '\n\n--- STRUCTURED ITEMS (each item with ONLY its own tags; count these, ignore any sidebar tag list) ---\n' + lines.slice(0, 60).join('\n');
+        } catch (e) {}
+        return { url: location.href, title: document.title, text: ((document.body ? document.body.innerText : '').slice(0, 12000) + _tbl + _items).slice(0, 16000), elements: out,
+          scrollY: Math.round(window.scrollY || 0), scrollMax: Math.max(0, Math.round((_se ? _se.scrollHeight : 0) - innerHeight)) };
       },
     });
     const screenshot = await cdpScreenshot(tab.id);
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => { const e = document.getElementById('anticipy-som'); if (e) e.remove(); } });
+    // CHILD-FRAME TEXT: the top-frame DOM extract above is blind to <iframe>/<frame> content
+    // (nested framesets, embedded widgets), so a task like "what word is in the MIDDLE frame"
+    // saw nothing and honestly handed off. Pull each child frame's readable text (allFrames) and
+    // append it, labelled by the frame's own URL, so frame content becomes part of the page text.
+    let pageText = page.text;
+    try {
+      const frames = await chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        func: () => ({ u: location.href, t: (document.body ? document.body.innerText : '').replace(/\s+/g, ' ').trim().slice(0, 1500) }),
+      });
+      const extra = [];
+      for (const f of (frames || [])) {
+        const fr = f && f.result;
+        if (!fr || !fr.t) continue;
+        if (fr.u === page.url) continue;            // skip the top frame (already captured)
+        if (pageText.includes(fr.t)) continue;       // skip duplicates already in top text
+        const tag = (() => { try { return new URL(fr.u).pathname.split('/').filter(Boolean).pop() || fr.u; } catch (e) { return fr.u; } })();
+        extra.push(`[frame ${tag}] ${fr.t}`);
+      }
+      if (extra.length) pageText = (pageText + "\n\n--- FRAME CONTENT ---\n" + extra.join("\n")).slice(0, 14000);
+    } catch (e) {}
     return result(msg, "success",
       { screenshot, url: page.url, title: page.title },
-      { url: page.url, title: page.title, text: page.text, elements: page.elements, group_id: (await getState()).groupId,
+      { url: page.url, title: page.title, text: pageText, elements: page.elements,
+        scrollY: page.scrollY, scrollMax: page.scrollMax, group_id: (await getState()).groupId,
         debug });
   } catch (e) {
     return result(msg, "needs_human", null, { reason: "observe error: " + String(e),
@@ -601,7 +734,7 @@ async function doAct(msg) {
           return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
         },
       });
-      if (!rc) return result(msg, "needs_human", null, { ok: false, err: "no element " + a.index });
+      if (!rc) return result(msg, "needs_human", null, { ok: false, reason: "stale element index " + a.index + " (element not found — re-observe)" });
       await sleep(200);
       let cdpReady = false;
       let cdpError = "";
@@ -637,6 +770,28 @@ async function doAct(msg) {
       }
       if (a.action === "type") {
         await sleep(120);
+        // CLEAR FIRST: CDP insertText inserts at the cursor, so without clearing, a retried
+        // `type` on the same field CONCATENATES (e.g. "tomsmith" -> "tomsmithtomsmith"). Empty the
+        // field (native setter + selection) before typing so the field holds EXACTLY a.text once.
+        step = "clear_field";
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id }, args: [a.index],
+          func: (i) => {
+            const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
+            if (!e) return;
+            if ('value' in e) {
+              const proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+              const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
+              if (setter) setter.call(e, ''); else e.value = '';
+              e.dispatchEvent(new Event('input', { bubbles: true }));
+              if (e.focus) e.focus();
+              if (e.setSelectionRange) { try { e.setSelectionRange(0, 0); } catch (_) {} }
+            } else if (e.isContentEditable) {
+              e.textContent = '';
+              if (e.focus) e.focus();
+            }
+          },
+        }).catch(() => {});
         if (cdpReady) {
           step = "cdp_type";
           await cdpType(tab.id, a.text || "");
@@ -670,7 +825,8 @@ async function doAct(msg) {
         if (a.enter) { await sleep(120); await cdpKey(tab.id, "Enter"); }
       }
       await sleep((a.enter || a.action === "click") ? 1400 : 400);
-      return result(msg, "success", null, { ok: true, action: a.action, step: "done", cdp_ready: cdpReady, cdp_error: cdpError });
+      return result(msg, "success", null, { ok: true, action: a.action, step: "done", cdp_ready: cdpReady, cdp_error: cdpError,
+                                            x: Math.round(rc.x), y: Math.round(rc.y) });
     }
     return result(msg, "needs_human", null, { ok: false, err: "unknown action " + a.action });
   } catch (e) {

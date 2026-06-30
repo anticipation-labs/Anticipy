@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .agent import WebVoyagerAgent, judge
+from .agent import events as agent_events
 from .capture.transcribe import is_audio_file, transcribe_audio
 from .channels.conversation_relay import ConversationRelayBrain, OnboardingCallBrain, stream_tokens
 from .channels.inbound import InboundPoller
@@ -1847,8 +1848,12 @@ async def agent_run(body: AgentRunIn) -> dict:
     _assert_public_agent_url(body.start_url)
     c = current_core()
     gw = _gateway_for(body.model)
+    # Scale the per-subgoal budget with the task length: a long multi-page task (e.g. "page through
+    # ALL pages and record qualifying items") legitimately needs more than the default 8 steps under
+    # a single subgoal, or it fails the subgoal mid-pagination. Short tasks keep the tight default.
+    _per_subgoal = max(8, body.max_steps // 3)
     agent = WebVoyagerAgent(c.browser_link, gw, max_steps=body.max_steps,
-                            notifier=c.notify_user)
+                            per_subgoal=_per_subgoal, notifier=c.notify_user)
     result = await agent.run(body.task, body.start_url)
     shot = result.pop("final_shot", None)  # vision-judge in-process; don't ship the image over HTTP
     # The general judge decides success — but only for an actual answer. A safety
@@ -1872,6 +1877,17 @@ async def agent_run(body: AgentRunIn) -> dict:
                 agent.recipes.save(result["recipe_key"], body.task, body.start_url, result["trace"])
             except Exception:
                 pass  # a cache write must never affect the user-visible outcome
+    # LIVE CONSOLE: announce the final verdict + cost so the mission-control page can close out
+    # the run on screen (success/needs_human, $/task, steps, frontier%, replayed).
+    agent_events.publish({
+        "type": "done",
+        "success": bool(result.get("task_succeeded")),
+        "needs_human": bool(result.get("needs_human")),
+        "answer": (result.get("answer") or "")[:300],
+        "replayed": bool(result.get("replayed")),
+        "metrics": result.get("metrics") or {},
+        "judge_reason": (result.get("judgment") or {}).get("reason"),
+    })
     result.pop("trace", None)  # internal-only; don't ship the raw trace over HTTP
     # M4 (audit #5): a wall handoff mints a resume_token — PERSIST the run state under it so a later
     # /agent/resume can be VALIDATED and resumed with context, instead of a blind cold restart.
@@ -1881,6 +1897,60 @@ async def agent_run(body: AgentRunIn) -> dict:
             "wall_kind": result.get("wall_kind"),
             "history": (result.get("history") or [])[-30:], "step": result.get("steps")})
     return result
+
+
+@app.post("/agent/reset")
+async def agent_reset() -> dict:
+    """Clean-slate reset: clear cookies + per-origin storage in the working tab so the next task
+    starts uncontaminated by what a prior task saved (saved cart, login, form state). Used by the
+    benchmark harness for honest, deterministic cold-start measurement."""
+    c = current_core()
+    try:
+        out = await c.browser_link.reset_state()
+        return {"ok": True, "result": out.get("output", out)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.get("/console")
+async def agent_console():
+    """Serve the live mission-control console (same-origin, so no CORS needed). It fires tasks at
+    /agent/run and renders the /agent/events step stream — the foreground proof surface while the
+    agent drives a background tab."""
+    from fastapi.responses import HTMLResponse
+    p = Path(__file__).resolve().parents[2] / "web" / "mission_control.html"
+    try:
+        return HTMLResponse(p.read_text())
+    except Exception:
+        return HTMLResponse("<h1>console missing</h1>", status_code=404)
+
+
+@app.get("/agent/events")
+async def agent_events_stream(request: Request):
+    """Server-Sent-Events stream of LIVE agent step-events (task_start / step / mode / done).
+    The mission-control console subscribes here and renders the per-step action log in real time
+    while the agent advances a BACKGROUND tab. Observability only — never affects an agent run."""
+    from fastapi.responses import StreamingResponse
+
+    async def gen():
+        q = agent_events.subscribe()
+        try:
+            # greet immediately so the client knows the stream is live
+            yield "event: hello\ndata: {}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    ev = await asyncio.wait_for(q.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"  # SSE comment to keep the connection warm
+                    continue
+                yield "data: " + json.dumps(ev) + "\n\n"
+        finally:
+            agent_events.unsubscribe(q)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 class AgentResumeIn(BaseModel):
