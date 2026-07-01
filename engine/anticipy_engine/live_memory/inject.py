@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 from ..memory.embed import embed
 from ..memory.store import Memory, is_active_open_loop
 from ..shared.schema import MemoryItem, now_ts
+from .rerank import rerank
 
 _TOK = re.compile(r"[a-z0-9]+")
 
@@ -55,13 +56,20 @@ class Injector:
         hay = _toks(item.text) | _toks(" ".join(item.people)) | _toks(" ".join(str(v) for v in item.fields.values()))
         return len(qtok & hay) / len(qtok)
 
-    def inject(self, context: str = "", k: Optional[int] = None) -> Dict[str, object]:
+    def inject(self, context: str = "", k: Optional[int] = None,
+               as_of: Optional[float] = None) -> Dict[str, object]:
         k = k or self.k
         qv = embed(context)
         qtok = _toks(context)
+        # BI-TEMPORAL (M3): retrieval filters by validity AT THE MOMENT of the read. An
+        # ephemeral fact ("...to 3 TODAY") whose valid_to has passed is invalid now and is
+        # NOT surfaced — even the always-on loop ledger drops an expired day-scoped ball.
+        # Durable facts (valid_to None) are always valid. `as_of` defaults to real now.
+        moment = now_ts() if as_of is None else as_of
 
         # the deterministic ledger: ALL open/waiting loops, always (importance, recent first)
-        loops = [i for i in self.memory.open_loops.all() if is_active_open_loop(i)]
+        loops = [i for i in self.memory.open_loops.all()
+                 if is_active_open_loop(i) and i.is_valid_at(moment)]
         loops.sort(key=lambda i: (-i.importance, -i.timestamp))
         # DEDUP + VENT-GATE what the BRAIN actually sees (audit fix). The durable store can hold the
         # same loop many times (re-ingest) — the read endpoint collapsed them but inject did NOT, so the
@@ -88,7 +96,7 @@ class Injector:
         cos = dict(self.memory.db.scored(qv, _FUZZY))   # id -> cosine (stored embeddings)
         # never surface superseded/archived items (a changed fact's old version)
         cands = [i for i in (self.memory.profile.all() + self.memory.history.all() + self.memory.derived.all())
-                 if i.status not in ("superseded", "archived")]
+                 if i.status not in ("superseded", "archived") and i.is_valid_at(moment)]
         now = now_ts()
         scored = []
         for it in cands:
@@ -100,7 +108,12 @@ class Injector:
             score = 0.55 * sem + 0.30 * kw + 0.10 * rec + 0.05 * it.importance
             scored.append((score, it))
         scored.sort(key=lambda x: -x[0])
-        ranked = [it for _, it in scored[:k]]
+        # RERANK (M6): a moment-aware second pass pulls the best-matching memory to the front so it
+        # leads the prompt AND survives the char budget. This is LIT — it runs every read, free +
+        # deterministic (no model). Its contradictor (recall@k vs the base ranker) is wired INSIDE
+        # rerank(): the reorder is rejected back to base order if it would drop a base-top-k item,
+        # so recall can never regress. Live mode can pass a cheap cross-encoder as bonus_fn.
+        ranked = rerank(qtok, scored, k)
 
         # semantic confidence (Memory Fix 2): how well the BEST active memory matches the
         # query. Below the calibrated floor -> abstain instead of fabricating an answer.

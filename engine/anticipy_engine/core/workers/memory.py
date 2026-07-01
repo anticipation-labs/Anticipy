@@ -67,19 +67,16 @@ class MemoryWorker(Worker):
                                   "fired_at": item.fields.get("fired_at")},
                           proof={"id": item.id}, cost=0.0)
         if job.intent == "read_context":
-            inj = self.lm.inject(job.args.get("about", ""))
-            ctx = {
-                "notes": inj["text"],
-                "open_loops": [i.text for i in inj["open_loops"]],
-                "profile": [i.text for i in inj["profile"]],
-                "history": [i.text for i in inj["history"]],
-                "derived": [i.text for i in inj["derived"]],
-            }
+            # THE single context seam: everyone reads through the one ContextPack builder
+            # (decider=decide, hands=act, voice=speak) so the pieces share one context.
+            purpose = str(job.args.get("purpose") or "decide")
+            pack = self.lm.build_context(job.args.get("about", ""), purpose=purpose)
             return Result(job_id=job.id, status=JobStatus.success,
-                          output={"context": ctx,
-                                  "top_relevance": inj.get("top_relevance", 0.0),   # for the harm-line gray middle
-                                  "abstain": inj.get("abstain", True)},
-                          proof={"injected": len(inj["items"]), "open_loops": len(inj["open_loops"])}, cost=0.0)
+                          output={"context": pack.as_ctx_dict(),
+                                  "top_relevance": pack.top_relevance,   # for the harm-line gray middle
+                                  "abstain": pack.abstain,
+                                  "purpose": pack.purpose},
+                          proof={"injected": pack.item_count, "open_loops": len(pack.open_loops)}, cost=0.0)
         # write_memory: an explicit write — force-keep into the requested drawer
         text = job.args.get("text") or job.args.get("note") or job.args.get("about") or ""
         requested = str(job.args.get("kind") or "").strip().lower()

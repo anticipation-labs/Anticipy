@@ -1,6 +1,54 @@
 # FOREMAN STATE — updated at the end of every foreman session
 
-## 🔵 LATEST SESSION — 2026-06-16 (Omar PRESENT, interactive; read this FIRST)
+## 🟢 MEM+CTX EXECUTION — 2026-06-28 (autonomous; M0→M7 of docs/agent_os/MEMORY_AND_CONTEXT_PLAN.md)
+Omar said "Go" → executing the memory+context plan autonomously, three things (memory / proactive /
+browser) converging on ONE ContextPack spine, wired to the frontend, nothing hard-coded, every step
+gated on a failable test. Branch: devin/full-frontend-ui. NO factory lock present.
+
+**DONE + verified (each has a test that can fail, registered in scripts/run_suite.sh):**
+- M0 baseline → docs/agent_os/MEMCTX_BASELINE.md (100 passed/12 failed pre-existing; safety_mega_eval PASS).
+- M1 single ContextPack builder: live_memory/context_builder.py returns typed ContextPack; decider
+  (core/workers/memory.py read_context), browser hands (control_core _mem_ctx purpose="act"), voice all
+  route through brain.build_context(). Frontend: engine GET /memory/context + app/api/memory/context/route.js
+  + PhaseZeroApp ContextPackInspector. Test: test_memctx_contextpack.py.
+- M2 capture reconciliation: capture._reconcile() supersedes older same-subject profile facts at WRITE
+  time (employer/name/location), trail preserved. Test: test_memctx_reconcile.py.
+- M3 bi-temporal validity: schema MemoryItem has event_time/valid_from/valid_to + is_valid_at(ts);
+  duetime.ephemeral_valid_to() marks day-scoped facts ("...today"); capture stamps event_time+valid_to;
+  store.py migrated (3 new REAL cols + ALTER-TABLE migration + _row_to_item/upsert); inject.py filters
+  loops AND fuzzy cands by is_valid_at(moment), moment=as_of or now; context_builder+brain thread as_of.
+  Test: test_memctx_temporal.py — "pickup to 3 today" said day1 NOT surfaced day2; durable fact + dated
+  loop still are. Suite now 105 passed/10 failed (10 ⊂ the 12 pre-existing; introduced ZERO regressions).
+
+- M4 salience gate + tiered memory: cheap capture-time gate sends low-signal episodic → tier="raw" +
+  short validity; cold sweep prunes expired raw via the M3 is_valid_at filter (no explicit delete);
+  durable-store growth bounded on an hour of noise while weak-signal tasks still caught.
+  Test: test_memctx_salience.py.
+- M5 privacy layer (gated like the money-stop): live_memory/privacy.py masks NEVER-STORE secret VALUES
+  (ssn/credit_card/password/bank_account) at SOURCE before any write; SENSITIVE (health/financial) tagged
+  + retention-windowed (~90d valid_to); context_builder._scrub() redacts-before-egress on every pack
+  field (defense in depth); store.purge_everything() + brain.forget_all() wipe ALL drawers + remember-list;
+  engine POST /memory/forget-me is default-deny (requires exact phrase "DELETE MY DATA").
+  Test: test_memctx_privacy.py (4 secrets masked, health tagged+retained, right-to-delete removed 12 rows).
+- M6 live seams w/ contradictors: live_memory/rerank.py — moment-aware second pass (people/field/text
+  overlap bonus on TOP of base score) pulls the on-point memory to the front; its contradictor recall_held()
+  REJECTS the reorder back to base order if it would evict a base-top-k item (recall can't regress); wired
+  into inject.py (runs every read, free + deterministic). Reflection contradictor in infer.py: counts routine
+  support over DISTINCT episodes (dedup by normalized text) and EXCLUDES vent-shaped lines, so a re-ingested
+  single line or a repeated vent can't harden into a derived fact. Test: test_memctx_rerank.py.
+- M7 whole-loop flywheel proof: test_memctx_flywheel.py — a day-1 durable preference (profile drawer) reaches
+  the decide+act+speak ContextPacks on day 3, CHANGES the hands' action vs a counterfactual brain that never
+  learned it (same query, different memory, different action), an ephemeral day-1 fact does NOT leak (M3), a
+  DIFFERENT-FAMILY judge confirms the action honors the constraint (and doesn't false-fire when nothing was
+  learned), and the post-action write-back is retrievable on a later read (loop closes).
+
+**STATUS: M0→M7 ALL GREEN.** Suite = 107 passed / 12 pre-existing failures (owner-mode + next-server,
+verified unrelated: retraction_silenced & messy_proactive_handoff fail identically with infer.py reverted to
+HEAD), ZERO regressions from M5–M7. Frontend seam live-tested: GET /memory/context resolves for decide/act/
+speak; POST /memory/forget-me default-denies without the phrase. Branch devin/full-frontend-ui, no lock.
+**NEXT (optional): record a UI demo of the flow (last todo item); the engineering gates are all closed.**
+
+## 🔵 EARLIER SESSION — 2026-06-16 (Omar PRESENT, interactive)
 Omar's core directive crystallized: **the MODEL must understand vague, casual, real speech using
 context + memory; hardcoded regex verbs are ONLY the safety floor, never a veto on a real task.**
 People say "oh yeah I gotta do that email of the thing next weekend", NOT "email Sarah the budget".

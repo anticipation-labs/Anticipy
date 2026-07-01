@@ -442,6 +442,12 @@ class RememberedApproveIn(BaseModel):
     line_id: str
 
 
+class ForgetMeIn(BaseModel):
+    # RIGHT-TO-DELETE (M5) is gated like the money hard-stop: destructive + irreversible, so it
+    # NEVER fires by accident. The caller must echo the exact confirm phrase.
+    confirm: str = ""
+
+
 class ConnectionAuthorizeIn(BaseModel):
     id: str
 
@@ -726,6 +732,34 @@ def memory_drawers() -> dict:
         "open_loops": snap(c.memory.open_loops),
         "history": snap(c.memory.history),
     }}
+
+
+@app.get("/memory/context")
+def memory_context(about: str = "", purpose: str = "decide") -> dict:
+    """THE single context seam, exposed for the UI: return the ONE ContextPack the brain
+    would assemble for this moment (decider=decide / hands=act / voice=speak). This is the
+    same builder every consumer uses — the UI shows exactly what the model will see, so the
+    'one context, three consumers' spine is visible and inspectable (never a parallel pipe)."""
+    if purpose not in ("decide", "act", "speak"):
+        purpose = "decide"
+    pack = current_core().live_memory.build_context(about, purpose=purpose)
+    return {"context_pack": pack.model_dump()}
+
+
+# The exact phrase the right-to-delete endpoint requires (money-stop-grade confirmation).
+_FORGET_CONFIRM = "DELETE MY DATA"
+
+
+@app.post("/memory/forget-me")
+def memory_forget_me(body: ForgetMeIn) -> dict:
+    """RIGHT-TO-DELETE (M5), gated like the money hard-stop: wipe EVERY trace of the user — all
+    four drawers AND the inert remember-list. Irreversible, so it requires the exact confirm
+    phrase; without it nothing is touched (default-deny)."""
+    if (body.confirm or "").strip() != _FORGET_CONFIRM:
+        return {"deleted": False, "reason": "confirmation required",
+                "confirm_phrase": _FORGET_CONFIRM}
+    res = current_core().live_memory.forget_all()
+    return {"deleted": True, "removed": res["removed"]}
 
 
 @app.get("/proactive/gateway/recent")
@@ -1424,6 +1458,12 @@ def _assert_public_source_url(url: str) -> None:
     host = parts.hostname  # already lowercased, brackets stripped for IPv6
     if not host:
         raise HTTPException(status_code=422, detail="source URL has no host")
+
+    # TEST-ONLY opt-in: allow a local target (localhost/127.0.0.1) ONLY when the operator
+    # explicitly sets ANTICIPY_ALLOW_LOCAL_TARGET=1. Used to drive a self-hosted test store
+    # on this box; OFF by default so production SSRF hardening is unchanged.
+    if os.getenv("ANTICIPY_ALLOW_LOCAL_TARGET") == "1" and host in ("localhost", "127.0.0.1", "::1"):
+        return
 
     # 1) Host is a literal IP address -> classify it directly (no DNS).
     try:

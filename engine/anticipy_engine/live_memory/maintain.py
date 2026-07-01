@@ -93,11 +93,28 @@ class Maintainer:
                 n += 1
         return n
 
-    def sweep(self) -> Dict[str, object]:
+    def _expire_raw(self, at: Optional[float] = None) -> int:
+        """TIERED MEMORY (M4): prune the raw buffer. A low-salience episodic line was written
+        with tier="raw" and a short validity window (M3 valid_to); once it is no longer valid it
+        is archived, so the firehose can never bloat the durable store. Retrieval already hides
+        it (is_valid_at) the instant it expires; this physically clears it in the cold sweep."""
+        moment = now_ts() if at is None else at
+        n = 0
+        for h in self.memory.history.all():
+            if h.status in ("archived", "superseded"):
+                continue
+            if (h.fields or {}).get("tier") == "raw" and not h.is_valid_at(moment):
+                h.status = "archived"
+                self.memory.history.update(h)
+                n += 1
+        return n
+
+    def sweep(self, at: Optional[float] = None) -> Dict[str, object]:
         if self.mode == "live":
             pass  # TODO(live): a bigger model can do richer reflection here; rare + amortized.
         superseded = self._supersede()
         consolidated = self._consolidate()
         archived = self._decay()
+        expired_raw = self._expire_raw(at=at)
         return {"ran": True, "superseded": superseded, "consolidated": consolidated,
-                "archived": archived, "smart_calls": 0}
+                "archived": archived, "expired_raw": expired_raw, "smart_calls": 0}

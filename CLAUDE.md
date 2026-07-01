@@ -83,6 +83,17 @@ only to keep work honest and moving.
   held). Strangers/onboarding/front door = next plan. Details: `factory/PHASES.yaml`.
 
 ## Non-negotiables (every role)
+- ALWAYS TEST BEFORE SAYING DONE. "Done" is never a claim; it is a check that could have
+  failed and did not. Run the real thing (suite / real day / real site / real benchmark),
+  read the result back, and only then say done. A statement of done without an attached,
+  reproducible result is a violation.
+- ALWAYS PLAN AND THINK ALL THE WAY THROUGH. Before touching code, write the plan: what the
+  change is, what it touches, how the pieces connect, and how you will prove it. Think the
+  whole chain, not the one step in front of you.
+- MAKE THE PIECES WORK TOGETHER, NOT PLUMBED SEPARATELY. Memory, proactive, hands (browser +
+  API), and voice are ONE system on ONE spine (Event → memory → decide → act → verify → close
+  the loop). Never ship a component that only works in isolation; a piece is only done when it
+  works inside the whole flow on a real day. See `docs/agent_os/SYSTEM_SPINE.md`.
 - Research before guessing: official docs / web search BEFORE editing configs, APIs, or
   formats you are not sure of. Hypothesis → research → test → fix → re-test.
 - Real artifacts only: `[Anticipy test]` labels, drafts never auto-sent, carts never

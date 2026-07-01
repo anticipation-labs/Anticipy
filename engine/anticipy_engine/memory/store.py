@@ -28,7 +28,11 @@ from ..shared.schema import MemoryItem, MemoryKind, now_ts
 from .embed import cosine, embed
 
 _COLS = ("id", "kind", "text", "fields", "people", "timestamp", "updated_at",
+         "event_time", "valid_from", "valid_to",
          "provenance", "confidence", "importance", "status", "embedding")
+
+# Bi-temporal columns added after v1 (M3). Migrated in via ALTER TABLE for existing DBs.
+_BITEMPORAL_COLS = ("event_time", "valid_from", "valid_to")
 
 
 def _default_data_dir() -> Path:
@@ -74,10 +78,16 @@ class MemoryDB:
             self.conn.execute(
                 "CREATE TABLE IF NOT EXISTS items("
                 "id TEXT PRIMARY KEY, kind TEXT, text TEXT, fields TEXT, people TEXT, "
-                "timestamp REAL, updated_at REAL, provenance TEXT, confidence REAL, "
+                "timestamp REAL, updated_at REAL, event_time REAL, valid_from REAL, valid_to REAL, "
+                "provenance TEXT, confidence REAL, "
                 "importance REAL, status TEXT, embedding TEXT)"
             )
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_kind ON items(kind)")
+            # migrate older DBs: add any missing bi-temporal column (SQLite ADD COLUMN is cheap)
+            existing = {r["name"] for r in self.conn.execute("PRAGMA table_info(items)").fetchall()}
+            for col in _BITEMPORAL_COLS:
+                if col not in existing:
+                    self.conn.execute(f"ALTER TABLE items ADD COLUMN {col} REAL")
             self.conn.commit()
 
     def _verify_integrity(self) -> None:
@@ -109,9 +119,13 @@ class MemoryDB:
 
     @staticmethod
     def _row_to_item(r: sqlite3.Row) -> MemoryItem:
+        keys = r.keys()
         return MemoryItem(
             id=r["id"], kind=r["kind"], text=r["text"], fields=json.loads(r["fields"] or "{}"),
             people=json.loads(r["people"] or "[]"), timestamp=r["timestamp"], updated_at=r["updated_at"],
+            event_time=r["event_time"] if "event_time" in keys else None,
+            valid_from=r["valid_from"] if "valid_from" in keys else None,
+            valid_to=r["valid_to"] if "valid_to" in keys else None,
             provenance=r["provenance"], confidence=r["confidence"], importance=r["importance"],
             status=r["status"],
         )
@@ -121,7 +135,8 @@ class MemoryDB:
             self.conn.execute(
                 f"INSERT OR REPLACE INTO items({','.join(_COLS)}) VALUES ({','.join('?' * len(_COLS))})",
                 (item.id, item.kind, item.text, json.dumps(item.fields), json.dumps(item.people),
-                 item.timestamp, item.updated_at, item.provenance, item.confidence, item.importance,
+                 item.timestamp, item.updated_at, item.event_time, item.valid_from, item.valid_to,
+                 item.provenance, item.confidence, item.importance,
                  item.status, json.dumps(embedding)),
             )
             self.conn.commit()
@@ -143,6 +158,23 @@ class MemoryDB:
             else:
                 self.conn.execute("DELETE FROM items WHERE kind=?", (kind,))
             self.conn.commit()
+
+    def purge_everything(self) -> int:
+        """RIGHT-TO-DELETE (M5): wipe EVERY table in the db — the four drawers (items) AND any
+        auxiliary table (e.g. the inert remember-list `remembered_lines`, review enrichments). No
+        trace of the user is left. Returns the number of rows removed. Rows gone => the vector
+        index (embeddings live on the rows) is gone with them."""
+        with self._lock:
+            names = [r["name"] for r in self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()]
+            removed = 0
+            for name in names:
+                n = self.conn.execute(f"SELECT COUNT(*) AS c FROM {name}").fetchone()["c"]
+                removed += int(n)
+                self.conn.execute(f"DELETE FROM {name}")
+            self.conn.commit()
+        return removed
 
     def scored(self, query_vec: List[float], kinds: List[str]):
         """(id, cosine) for every embedded item in the given kinds, best first."""
@@ -230,3 +262,8 @@ class Memory:
     def reindex(self) -> int:
         """One-shot re-embed of every drawer under the current embed() (stub<->live)."""
         return self.db.reindex()
+
+    def forget_everything(self) -> int:
+        """RIGHT-TO-DELETE (M5): wipe every drawer AND every auxiliary table (remember-list, etc.).
+        Returns rows removed. The only way to erase all traces on user request."""
+        return self.db.purge_everything()

@@ -58,12 +58,37 @@ class Inferrer:
             pass  # TODO(live): a model can derive richer routines/relationships; mostly cold.
         episodes = [h for h in self.memory.history.all() if h.status not in ("archived", "superseded")]
 
-        topic_df: Counter = Counter()       # document frequency of content tokens across episodes
+        # REFLECTION CONTRADICTOR (M6): a routine is only real if it recurs across DISTINCT
+        # episodes. The raw episodic log can hold the SAME line many times (re-ingest / echo), which
+        # would inflate a single mention into a fake "routine". So we count support over episodes
+        # DEDUPED by normalized text, and we EXCLUDE vent-shaped lines entirely (a vent must never
+        # harden into an inferred fact — the cardinal-sin guard on the reflection path). This is a
+        # different-family check than the min_count threshold: it attacks the evidence, not the tally.
+        from .review_infer import is_vent_shape as _is_vent_shape
+
+        def _norm(t: str) -> str:
+            return " ".join((t or "").lower().split())
+
+        seen_norm = set()
+        distinct: List[MemoryItem] = []
         for h in episodes:
+            try:
+                if _is_vent_shape(h.text):
+                    continue
+            except Exception:
+                pass
+            key = _norm(h.text)
+            if key in seen_norm:
+                continue
+            seen_norm.add(key)
+            distinct.append(h)
+
+        topic_df: Counter = Counter()       # DISTINCT-episode frequency of content tokens
+        for h in distinct:
             for tok in set(_content(h.text)):
                 topic_df[tok] += 1
         people_c: Counter = Counter()
-        for h in episodes:
+        for h in distinct:
             for p in h.people:
                 people_c[p] += 1
 

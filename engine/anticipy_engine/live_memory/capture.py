@@ -15,8 +15,11 @@ from typing import Dict, List, Optional, Tuple
 
 from ..memory.store import Memory
 from ..shared.schema import MemoryItem
-from .duetime import REMIND_LEAD_S, anchor_from_meta, parse_due
+from .duetime import REMIND_LEAD_S, anchor_from_meta, ephemeral_valid_to, parse_due
+from .maintain import _subject
+from .privacy import RETENTION_DAYS, SENSITIVE, redact
 from .remember import RememberList
+from .salience import RAW_BUFFER_HOURS, is_durable
 from .review_infer import ReviewEnricher, is_vent_shape
 
 _FILLER = {"um", "uh", "ok", "okay", "yeah", "yep", "yup", "nope", "no", "yes", "thanks",
@@ -175,6 +178,13 @@ class Capturer:
         if self.mode == "live":
             # TODO(live): cheap-model gate+extraction via self.gateway; never hit in tests.
             pass
+        # PRIVACY (M5), gated like the money hard-stop: mask NEVER-STORE secret VALUES (SSN,
+        # card/account numbers, passwords/PINs) at the SOURCE, before ANYTHING is written — so
+        # the raw secret never reaches the remember-list OR a drawer, and can never leave the
+        # device. `sens_cats` (incl. health/financial) tags the item + sets a retention window.
+        # All downstream work runs on the redacted text; redaction only masks values, never the
+        # sentence shape, so classify/vent/due-parsing are unaffected.
+        text, sens_cats = redact(text)
         # ADDITIVE parallel write to the INERT remember-list — generous + isolated.
         # Runs BEFORE the keep/drop gate so over-capture is high-recall, but it is a
         # side effect only: it never feeds the returned decision dict and never raises
@@ -216,8 +226,58 @@ class Capturer:
         if dup is not None:
             return {"kept": False, "reason": "dup", "item": dup, "kind": kind, "smart_calls": 0}
         prov = "stated" if kind in ("profile_fact", "open_loop") else (source or "capture")
-        item = MemoryItem(kind=kind, text=text.strip(), people=extract_people(text),
+        # BI-TEMPORAL (M3): the utterance clock is this fact's event_time; a day-scoped fact
+        # ("...to 3 TODAY") gets a valid_to at the end of that day so retrieval stops surfacing
+        # it tomorrow. Durable phrasing carries no marker -> valid_to stays None (never expires).
+        anchor = anchor_from_meta(meta)
+        v_to = ephemeral_valid_to(text, anchor)
+        people = extract_people(text)
+        # SALIENCE GATE + TIERED MEMORY (M4): a low-signal EPISODIC line (chit-chat/observation)
+        # is not durable — it lands in the raw buffer (tier="raw") with a short validity window
+        # and auto-expires via the same M3 is_valid_at filter, so the firehose can't bloat the
+        # durable store. Commitments/facts are salient by construction and untouched. If the line
+        # is already day-scoped (M3), keep the earliest expiry.
+        if kind == "history" and not is_durable(text, kind, people):
+            fields = {**fields, "tier": "raw"}
+            raw_to = anchor.timestamp() + RAW_BUFFER_HOURS * 3600.0
+            v_to = raw_to if v_to is None else min(v_to, raw_to)
+        # PRIVACY tagging + RETENTION (M5): mark the item's sensitivity categories, and give a
+        # SENSITIVE (health/financial) fact a retention window so it auto-expires via is_valid_at
+        # rather than living forever. Secret VALUES are already masked (redact above).
+        if sens_cats:
+            fields = {**fields, "sensitivity": sorted(sens_cats)}
+            if sens_cats & SENSITIVE:
+                retain_to = anchor.timestamp() + RETENTION_DAYS * 86400.0
+                v_to = retain_to if v_to is None else min(v_to, retain_to)
+        item = MemoryItem(kind=kind, text=text.strip(), people=people,
                           fields=fields, provenance=prov,
+                          event_time=anchor.timestamp(), valid_to=v_to,
                           status=("open" if kind == "open_loop" else "active"))
         self.memory.drawer(kind).write(item)
-        return {"kept": True, "kind": kind, "item": item, "smart_calls": 0}
+        # RECONCILE (M2): a NEWER stated fact on the same subject (employer/name/location)
+        # UPDATEs the world — supersede the older active fact at WRITE time so the wrong
+        # answer can never be surfaced between now and the cold sweep. Trail is preserved
+        # (status="superseded", not deleted). Deterministic, zero model calls.
+        superseded = self._reconcile(item, kind)
+        return {"kept": True, "kind": kind, "item": item, "smart_calls": 0,
+                "superseded": superseded}
+
+    def _reconcile(self, item: MemoryItem, kind: str) -> int:
+        """UPDATE-on-contradiction: supersede older active profile facts that share this
+        fact's subject key. Only genuine single-valued subjects reconcile (employer/name/
+        location); coexisting facts (preferences, relationships) are untouched."""
+        if kind != "profile_fact":
+            return 0
+        subj = _subject(item.text)
+        if not subj:
+            return 0
+        n = 0
+        for other in self.memory.profile.all():
+            if other.id == item.id or other.status in ("superseded", "archived"):
+                continue
+            if _subject(other.text) == subj and other.timestamp <= item.timestamp:
+                other.status = "superseded"
+                other.fields = {**(other.fields or {}), "superseded_by": item.id}
+                self.memory.profile.update(other)
+                n += 1
+        return n

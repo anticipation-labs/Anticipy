@@ -36,6 +36,17 @@ If you are not set up yet, do `autopilot/03_SETUP.md` first.
 - Raw traces, transcripts, `logs/last_realday.json`, `.anticipy-data/`, and raw verdict JSON/JSONL stay local-only and ignored. If they become tracked, untrack them with `git rm --cached` without deleting local copies.
 - If held-out content reaches tracked files or builder-readable files, the holdout is burned and the test is corrupted. Scrub it before continuing.
 
+## Standing working rules (every agent, every lap)
+- ALWAYS TEST BEFORE SAYING DONE. "Done" is a check that could have failed and did not — a real
+  run (suite / real day / real site / real benchmark) with the result read back. No attached
+  reproducible result → you are not done. Never claim done from memory or from logs alone.
+- ALWAYS PLAN AND THINK ALL THE WAY THROUGH before touching code: what changes, what it touches,
+  how the pieces connect, and how you will prove it. Think the whole chain, not one step.
+- MAKE THE PIECES WORK TOGETHER, NOT PLUMBED SEPARATELY. Memory, proactive, hands (browser + API),
+  and voice are ONE system on ONE spine (Event → memory → decide → act → verify → close the loop).
+  A piece is only done when it works inside the whole flow on a real day. See
+  `docs/agent_os/SYSTEM_SPINE.md`.
+
 ## The Laws in one breath (full text in 02_LAWS.md, they are absolute)
 - You never grade your own work. A separate judge session does.
 - The only proof that counts is a real change in the real world, checked by the judge, on a real day you have never seen. A passing test you could have edited proves nothing.

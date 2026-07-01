@@ -45,6 +45,24 @@ _RE_NOON = re.compile(r"\bnoon\b", re.I)
 _RE_TONIGHT = re.compile(r"\btonight\b", re.I)
 _RE_EOD = re.compile(r"\b(?:end of (?:the )?day|eod)\b", re.I)
 
+# Day-scoped ephemeral markers: a fact carrying one of these is TRUE only for the day it was
+# said (M3). "school moved pickup to 3 TODAY" must not surface tomorrow. Durable phrasing
+# ("I work at X") carries none of these -> no expiry.
+_RE_EPHEMERAL_DAY = re.compile(
+    r"\b(?:today|tonight|this (?:morning|afternoon|evening|"
+    r"lunchtime))\b", re.I)
+
+
+def ephemeral_valid_to(text: str, anchor: dt.datetime) -> Optional[float]:
+    """If `text` is scoped to the day it was said, return the epoch-seconds end of that day
+    (its last valid instant). None = durable (no day-scope word) -> never expires."""
+    if not _RE_EPHEMERAL_DAY.search(text or ""):
+        return None
+    if anchor.tzinfo is None:
+        anchor = anchor.astimezone()
+    end = _combine(anchor.date(), 23, 59, anchor.tzinfo) + dt.timedelta(seconds=59)
+    return end.timestamp()
+
 
 def anchor_from_meta(meta: Optional[dict]) -> dt.datetime:
     """The grounding clock: meta observed_at (tz-aware) > observed_at + meta timezone
