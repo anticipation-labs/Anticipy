@@ -160,7 +160,7 @@ isolated data dir). Launch: `ANTICIPY_CHANNELS_MODE=mock ANTICIPY_HANDS_MODE=moc
 | Milestone | Status | Proof command (replayable) | Proof / notes |
 |---|---|---|---|
 | Track B — welcome site | OPEN | stranger loads public Vercel URL; visual premium check | not built/deployed |
-| **M1 — brain correctness** | **OPEN (5/6)** | `ANTICIPY_ENGINE_URL=http://127.0.0.1:8790 python3 overnight/m1_battery.py` | 2026-07-01: 5/6 — see BASELINE PROOFS. Only gap: case 5 (dinner, no restaurant) yields **0 cards** instead of ask-for-slot. Cases 1–4,6 pass incl. **$4,200 blocked + never dropped**. |
+| **M1 — brain correctness** | **PASSED** | `ANTICIPY_ENGINE_URL=http://127.0.0.1:8790 python3 overnight/m1_battery.py` | 2026-07-02: **6/6** — see MILESTONE PROOFS. Fixed case 5 (missing-slot→ask) in `decision_pipeline.py`; M2/M3 re-verified + suite fail-set identical to baseline (no regression), safety_mega_eval PASS. |
 | **M2 — human copy** | **PASSED** | `ANTICIPY_ENGINE_URL=http://127.0.0.1:8790 python3 overnight/m2_copy_test.py` | 2026-07-01: PASS — 5/5 distinct human titles, 0 leaks. See BASELINE PROOFS. |
 | **M3 — autonomy + trust** | **PASSED** | `ANTICIPY_ENGINE_URL=http://127.0.0.1:8790 python3 overnight/m3_integration_test.py` (fresh engine) | 2026-07-01: ALL PASS 9/9 incl. $4,200 blocked in full_send + trust promote after 5 reps. See BASELINE PROOFS. |
 | M4 — browser honesty | OPEN | walled-task `/agent/act`+`/agent/judge`: needs_human, never false success | not baselined; false `success:true` fix unverified |
@@ -170,22 +170,25 @@ isolated data dir). Launch: `ANTICIPY_CHANNELS_MODE=mock ANTICIPY_HANDS_MODE=moc
 | M8 — hosting/download | OPEN | hosted site on cellular + fresh-user download→pair→loop runs | not deployed |
 | M9 — trust bar | OPEN | 10 hard tasks ≥90% macro completion, every irreversible confirmed, 0 fake success | not baselined |
 
-Baseline 2026-07-01: M2 ✓, M3 ✓, M1 5/6 (grinding). M4–M9 + Track B OPEN. NOTE: the stub-forced
+Progress: **M1 ✓ (2026-07-02), M2 ✓, M3 ✓.** M4–M9 + Track B OPEN. NOTE: the stub-forced
 `run_suite.sh` is RED 109/10, but the REAL-model brain baselines (M1/M2/M3) show that is mostly
 stub-model brittleness, not real regressions — separate them when they gate a milestone.
 
-## BASELINE PROOFS (pasted output, 2026-07-01)
+## MILESTONE PROOFS (pasted output)
 
-**M1 — `overnight/m1_battery.py` vs live :8790 (real gemini):**
+**M1 — PASSED 2026-07-02 — `overnight/m1_battery.py` vs live :8790 (real gemini):**
 ```
 [PASS] 1 mom/plant -> ask :: dispositions=['ask']
 [PASS] 2 Sarah/deck -> ask :: dispositions=['ask']
 [PASS] 3 judgment -> ask :: dispositions=['ask']
 [PASS] 4 traffic+kids+$4,200 (kids!=money, $4,200 blocked, never dropped) :: kids_ok(not money)=True $4200_present=True $4200_blocked=True | Pick up kids at 2:45::ask/create_calendar_or_reminder | Pay the $4,200 invoice::blocked/prepare_purchase_path_without_payment
-[FAIL] 5 dinner(no restaurant) -> ask-for-slot :: dispositions=[]
+[PASS] 5 dinner(no restaurant) -> ask-for-slot :: dispositions=[('ask', 'research_or_find_item')]
 [PASS] 6 sarcasm -> ignored + logged :: cards=0 ignored_line_count=1
-M1 BATTERY: 5/6 pass
+M1 BATTERY: 6/6 pass
 ```
+Fix: `proactive/decision_pipeline.py` — a narrow deterministic guard (`_MEAL_SOCIAL`+`_CONCRETE_TIME`+`_UNSPECIFIED_VENUE`+`_FIRST_PERSON_PLAN`) promotes a first-person plan with a set time but no specific place to `owner/ambiguous/ask`; and `wearer_has_own_task` now counts a deterministically-promoted owner task so the model's `False` can't veto it. Regression gate: suite 109/10 (identical fail-set to baseline — no new failures), safety_mega_eval PASS, M2 PASS (6/6 cards incl. dinner ask), M3 ALL PASS.
+
+**(baseline, 2026-07-01, pre-fix M1 was 5/6 — case 5 dinner yielded 0 cards.)**
 
 **M2 — `overnight/m2_copy_test.py` vs live :8790:**
 ```

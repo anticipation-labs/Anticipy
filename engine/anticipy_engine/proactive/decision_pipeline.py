@@ -65,6 +65,20 @@ _REVIEW_NEED = re.compile(
     r"\bI\s+(?:really\s+)?need\s+to\s+review\s+(?:the\s+)?([^.\n?!]{5,120}?)(?:\s+before\b|[.?!\n]|$)",
     re.I,
 )
+# A first-person plan to go out (meal/drinks) at a CONCRETE time but with an UNSPECIFIED venue is not a
+# vague pleasantry — it is the owner's own plan missing one slot (which place). Anticipy should ASK which
+# spot / offer to pick or book one, not silently ignore it. Requires all four signals so "grab coffee
+# sometime" (no concrete time) and "dinner at Nobu at 7" (venue already specified) do NOT trigger it.
+_MEAL_SOCIAL = re.compile(r"\b(?:dinner|lunch|breakfast|brunch|drinks|coffee|a\s+meal|a\s+bite)\b", re.I)
+_CONCRETE_TIME = re.compile(
+    r"\b(?:tonight|today|tomorrow|this\s+(?:morning|afternoon|evening|weekend)|later\s+today|"
+    r"at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b", re.I)
+_UNSPECIFIED_VENUE = re.compile(
+    r"\b(?:a\s+(?:nice|good|new|cool|fancy|great)\s+(?:place|spot|restaurant)|"
+    r"a\s+(?:place|spot|restaurant)|somewhere(?:\s+nice)?|some\s*place)\b", re.I)
+_FIRST_PERSON_PLAN = re.compile(
+    r"\b(?:let'?s|we\b|i\s+(?:want|wanna|feel\s+like|should|need)|wanna|gonna|"
+    r"thinking\s+(?:of|about))\b", re.I)
 
 
 class ProactiveCandidateDecision(BaseModel):
@@ -225,6 +239,20 @@ def _normalize_decision(raw: dict[str, Any], *, source_truth_case_id: str | None
         if not reason:
             reason = "sarcastic aversion, not a fresh request to act"
 
+    # Missing-slot -> ask: a first-person plan with a set time but no specific place is the owner's own
+    # intent missing one slot (which venue). Ask which spot / offer to pick one — never silently ignore.
+    # Overrides a model that mislabels it a listener pleasantry. Guarded to NOT fire on vague-time social
+    # mentions (no _CONCRETE_TIME) or plans that already name the place (no _UNSPECIFIED_VENUE).
+    if (_MEAL_SOCIAL.search(combined) and _CONCRETE_TIME.search(combined)
+            and _UNSPECIFIED_VENUE.search(combined) and _FIRST_PERSON_PLAN.search(combined)
+            and not _SARCASTIC_AVERSION.search(combined)):
+        actor = "owner"
+        realness = "ambiguous"
+        decision = "ask"
+        reason = "a plan with a set time but no specific place — worth asking which spot (or offering to find one)"
+        if not task_text:
+            task_text = evidence
+
     # Deterministic floor around the model: only owner/assistant-owned real or
     # ambiguous items may produce work. Third-party/listener/hypothetical output
     # cannot sneak through as a card even if the model's decision field disagrees.
@@ -357,7 +385,16 @@ async def decide_transcript(
     )
 
     is_brainstorm = bool(data.get("is_pure_brainstorm", False))
-    wearer_has_own_task = bool(data.get("wearer_has_own_task", any(d.decision != "ignore" for d in decisions)))
+    # A deterministically-promoted owner/assistant task (the missing-slot guard, the review-need floor,
+    # or any decision the floors in _normalize_decision graduated to ask/act/block/follow_up) IS the
+    # wearer owning a task — the model's wearer_has_own_task=False must not veto it back to ignore.
+    has_owner_actionable = any(
+        d.actor in {"owner", "assistant"} and d.decision in {"ask", "act", "block", "follow_up"}
+        for d in decisions
+    )
+    wearer_has_own_task = bool(
+        data.get("wearer_has_own_task", any(d.decision != "ignore" for d in decisions))
+    ) or has_owner_actionable
     if is_brainstorm or not wearer_has_own_task:
         decisions = [
             d.model_copy(update={
