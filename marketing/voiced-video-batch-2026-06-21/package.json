@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "render": "node render-all.mjs",
+    "audio": "python3 generate-audio.py",
+    "final": "node finalize-all.mjs",
+    "all": "python3 generate-audio.py && node render-all.mjs && node finalize-all.mjs"
+  },
+  "dependencies": {
+    "hyperframes": "^0.6.121"
+  },
+  "devDependencies": {}
+}

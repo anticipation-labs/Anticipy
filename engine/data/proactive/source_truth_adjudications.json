@@ -1,0 +1,8 @@
+{
+  "excluded_cases": {},
+  "rules": [
+    "A case can be excluded only when the source label is contradictory, missing, or impossible to adjudicate from the transcript alone.",
+    "Every exclusion must include a concrete reason and must reference the case key printed by proactive_source_truth_eval.py.",
+    "Cases are never silently skipped; the eval prints adjudicated_excluded and writes the manifest path into the failure ledger."
+  ]
+}

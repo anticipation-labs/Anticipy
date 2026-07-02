@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Anticipy Card Reel</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "DM Serif Display";
+        font-style: normal;
+        font-weight: 400;
+        src: url("assets/fonts/-nFnOHM81r4j6k0gjAW3mujVU2B2K_c.ttf") format("truetype");
+      }
+
+      @font-face {
+        font-family: "DM Serif Display";
+        font-style: italic;
+        font-weight: 400;
+        src: url("assets/fonts/-nFhOHM81r4j6k0gjAW3mujVU2B2G_Vx1w.ttf") format("truetype");
+      }
+
+      @font-face {
+        font-family: "IBM Plex Sans";
+        font-style: normal;
+        font-weight: 400;
+        src: url("assets/fonts/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSD6llzAA.ttf") format("truetype");
+      }
+
+      @font-face {
+        font-family: "IBM Plex Sans";
+        font-style: normal;
+        font-weight: 600;
+        src: url("assets/fonts/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDNF5zAA.ttf") format("truetype");
+      }
+
+      @font-face {
+        font-family: "IBM Plex Sans";
+        font-style: normal;
+        font-weight: 700;
+        src: url("assets/fonts/zYXGKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1swZSAXcomDVmadSDDV5zAA.ttf") format("truetype");
+      }
+
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 600;
+        src: url("assets/fonts/-F6qfjptAgt5VM-kVkqdyU8n3vAO8lc.ttf") format("truetype");
+      }
+
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 700;
+        src: url("assets/fonts/-F6qfjptAgt5VM-kVkqdyU8n3pQP8lc.ttf") format("truetype");
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        margin: 0;
+        overflow: hidden;
+        background: #11100d;
+      }
+
+      body {
+        font-family: "IBM Plex Sans", sans-serif;
+        color: #f4efe7;
+      }
+
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 18% 16%, rgba(200, 168, 106, 0.18), rgba(200, 168, 106, 0) 34%),
+          radial-gradient(circle at 88% 76%, rgba(110, 167, 119, 0.12), rgba(110, 167, 119, 0) 30%),
+          #11100d;
+      }
+
+      audio {
+        display: none;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background-color: #11100d;
+      }
+
+      #scene-1 {
+        opacity: 1;
+        z-index: 1;
+      }
+
+      #scene-2,
+      #scene-3,
+      #scene-4,
+      #scene-5,
+      #scene-6 {
+        opacity: 0;
+        z-index: 2;
+      }
+
+      .photo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: saturate(0.92) contrast(1.08);
+      }
+
+      .photo.soft {
+        filter: saturate(0.82) contrast(1.02) brightness(0.92);
+      }
+
+      .photo.card-front {
+        object-position: 44% 50%;
+      }
+
+      .photo.wide-cards {
+        object-position: center center;
+      }
+
+      .shade {
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(180deg, rgba(17, 16, 13, 0.24) 0%, rgba(17, 16, 13, 0.62) 46%, rgba(17, 16, 13, 0.92) 100%),
+          radial-gradient(circle at 50% 26%, rgba(244, 239, 231, 0.1), rgba(244, 239, 231, 0) 42%);
+      }
+
+      .grain {
+        position: absolute;
+        inset: 0;
+        opacity: 0.13;
+        background-image:
+          linear-gradient(rgba(244, 239, 231, 0.05) 1px, rgba(244, 239, 231, 0) 1px),
+          linear-gradient(90deg, rgba(244, 239, 231, 0.035) 1px, rgba(244, 239, 231, 0) 1px);
+        background-size: 31px 31px, 43px 43px;
+        pointer-events: none;
+        z-index: 15;
+      }
+
+      .scene-content {
+        position: relative;
+        z-index: 10;
+        width: 100%;
+        height: 100%;
+        padding: 102px 76px 118px;
+        display: flex;
+        flex-direction: column;
+        gap: 34px;
+      }
+
+      .meta-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: rgba(244, 239, 231, 0.62);
+        font: 700 24px/1 "IBM Plex Mono", monospace;
+        letter-spacing: 0.02em;
+      }
+
+      .dots {
+        display: flex;
+        gap: 10px;
+      }
+
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: rgba(244, 239, 231, 0.44);
+      }
+
+      .hook-stack {
+        margin-top: 108px;
+        max-width: 910px;
+      }
+
+      .display {
+        font-family: "DM Serif Display", serif;
+        font-weight: 400;
+        line-height: 0.9;
+        letter-spacing: 0;
+      }
+
+      .hook-line {
+        font-size: 124px;
+        color: #f4efe7;
+        text-shadow: 0 18px 80px rgba(0, 0, 0, 0.46);
+      }
+
+      .hook-line .brass {
+        color: #c8a86a;
+      }
+
+      .subline {
+        max-width: 780px;
+        margin-top: 34px;
+        font-size: 40px;
+        line-height: 1.12;
+        color: rgba(244, 239, 231, 0.82);
+      }
+
+      .quote-card {
+        margin-top: auto;
+        width: 100%;
+        border-radius: 28px;
+        padding: 30px 34px;
+        background: rgba(244, 239, 231, 0.1);
+        border: 1px solid rgba(244, 239, 231, 0.18);
+        box-shadow: 0 38px 120px rgba(0, 0, 0, 0.4);
+      }
+
+      .quote-card p {
+        font-size: 35px;
+        line-height: 1.2;
+        color: rgba(244, 239, 231, 0.88);
+      }
+
+      .prompt-panel {
+        margin-top: 82px;
+        width: 100%;
+        border-radius: 34px;
+        background: #f4efe7;
+        color: #191713;
+        padding: 34px;
+        box-shadow: 0 40px 130px rgba(0, 0, 0, 0.44);
+        transform: rotate(-0.9deg);
+      }
+
+      .prompt-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 68px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid rgba(25, 23, 19, 0.14);
+        color: #766f62;
+        font: 700 22px/1.25 "IBM Plex Mono", monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .prompt-box {
+        margin-top: 32px;
+        min-height: 286px;
+        border-radius: 22px;
+        padding: 30px;
+        background: rgba(25, 23, 19, 0.06);
+        border: 1px solid rgba(25, 23, 19, 0.1);
+      }
+
+      .prompt-box .placeholder {
+        font-size: 33px;
+        line-height: 1.22;
+        color: #5d564b;
+      }
+
+      .cursor {
+        display: inline-block;
+        width: 4px;
+        height: 38px;
+        margin-left: 6px;
+        background: #c8644f;
+        vertical-align: -7px;
+      }
+
+      .waiting {
+        margin-top: 30px;
+        display: inline-flex;
+        padding: 15px 20px;
+        border-radius: 999px;
+        background: rgba(200, 100, 79, 0.14);
+        color: #8c3d2f;
+        font-size: 26px;
+        font-weight: 800;
+      }
+
+      .problem-title {
+        margin-top: 76px;
+        font-size: 100px;
+        max-width: 880px;
+      }
+
+      .plain-list {
+        margin-top: 38px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+      }
+
+      .plain-item {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        color: rgba(244, 239, 231, 0.82);
+        font-size: 34px;
+        line-height: 1.08;
+      }
+
+      .plain-item::before {
+        content: "";
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #c8a86a;
+        flex: 0 0 auto;
+      }
+
+      .brand-reveal {
+        margin-top: auto;
+        border-radius: 30px;
+        padding: 34px;
+        background: rgba(17, 16, 13, 0.66);
+        border: 1px solid rgba(244, 239, 231, 0.18);
+        backdrop-filter: blur(18px);
+      }
+
+      .brand-reveal .big {
+        font-size: 104px;
+      }
+
+      .brand-reveal .small {
+        margin-top: 18px;
+        font-size: 37px;
+        color: rgba(244, 239, 231, 0.86);
+      }
+
+      .micro-flow {
+        margin-top: 56px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+
+      .flow-chip {
+        min-height: 150px;
+        border-radius: 24px;
+        padding: 22px;
+        background: rgba(244, 239, 231, 0.1);
+        border: 1px solid rgba(244, 239, 231, 0.18);
+      }
+
+      .flow-chip b {
+        display: block;
+        margin-bottom: 14px;
+        font-family: "DM Serif Display", serif;
+        font-size: 46px;
+        line-height: 0.9;
+        color: #c8a86a;
+        font-weight: 400;
+      }
+
+      .flow-chip span {
+        display: block;
+        color: rgba(244, 239, 231, 0.82);
+        font-size: 24px;
+        line-height: 1.1;
+      }
+
+      .receipt-stack {
+        margin-top: 72px;
+        display: grid;
+        gap: 24px;
+      }
+
+      .receipt {
+        border-radius: 28px;
+        padding: 30px;
+        background: #f4efe7;
+        color: #191713;
+        box-shadow: 0 32px 90px rgba(0, 0, 0, 0.34);
+      }
+
+      .receipt:nth-child(1) {
+        transform: rotate(-1.1deg);
+      }
+
+      .receipt:nth-child(2) {
+        transform: rotate(0.7deg);
+      }
+
+      .receipt:nth-child(3) {
+        transform: rotate(-0.4deg);
+      }
+
+      .receipt-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #766f62;
+        font: 800 21px/1 "IBM Plex Mono", monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .receipt-main {
+        margin-top: 18px;
+        font-size: 42px;
+        line-height: 1.02;
+        font-weight: 800;
+      }
+
+      .receipt.safe {
+        border: 2px solid rgba(110, 167, 119, 0.5);
+      }
+
+      .approval {
+        display: inline-flex;
+        margin-top: 18px;
+        border-radius: 999px;
+        padding: 14px 18px;
+        background: rgba(110, 167, 119, 0.18);
+        color: #315a37;
+        font-size: 24px;
+        font-weight: 900;
+      }
+
+      .cleaner {
+        margin-top: auto;
+        max-width: 900px;
+      }
+
+      .cleaner .line {
+        font-size: 118px;
+        line-height: 0.96;
+      }
+
+      .cleaner .line + .line {
+        margin-top: 22px;
+      }
+
+      .cleaner .thin {
+        color: rgba(244, 239, 231, 0.78);
+      }
+
+      .final-word {
+        margin-top: auto;
+        text-align: left;
+      }
+
+      .final-word .brand {
+        font-size: 132px;
+        color: #f4efe7;
+      }
+
+      .final-word .tag {
+        margin-top: 20px;
+        font-size: 46px;
+        color: rgba(244, 239, 231, 0.82);
+      }
+
+      .leak {
+        position: absolute;
+        inset: -180px;
+        z-index: 35;
+        pointer-events: none;
+        opacity: 0;
+      }
+
+      #leak-warm {
+        background: rgba(200, 168, 106, 0.28);
+      }
+
+      #leak-1 {
+        width: 1400px;
+        height: 1400px;
+        border-radius: 50%;
+        left: -720px;
+        top: 140px;
+        background: radial-gradient(circle, rgba(244, 239, 231, 0.88), rgba(200, 168, 106, 0.2) 34%, rgba(200, 168, 106, 0) 70%);
+      }
+
+      #leak-2 {
+        width: 1320px;
+        height: 1320px;
+        border-radius: 50%;
+        right: -650px;
+        bottom: 90px;
+        background: radial-gradient(circle, rgba(200, 168, 106, 0.7), rgba(200, 168, 106, 0.18) 38%, rgba(200, 168, 106, 0) 72%);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="17.4"
+      data-width="1080"
+      data-height="1920"
+    >
+      <audio
+        id="ambient"
+        data-start="0"
+        data-duration="17.4"
+        data-track-index="3"
+        src="assets/ambient.wav"
+        data-volume="0.42"
+      ></audio>
+      <audio
+        id="narration"
+        data-start="0"
+        data-duration="15.68"
+        data-track-index="4"
+        src="assets/narration.wav"
+        data-volume="1"
+      ></audio>
+
+      <section id="scene-1" class="scene">
+        <img id="s1-photo" class="photo soft" src="assets/pendant-close.jpg" alt="" data-layout-ignore />
+        <div class="shade"></div>
+        <div class="grain"></div>
+        <div class="scene-content">
+          <div class="meta-row" id="s1-meta">
+            <span>00:00 / first frame</span>
+            <div class="dots"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+          </div>
+          <div class="hook-stack">
+            <div id="s1-hook-a" class="display hook-line">prompts<br />aren't <span class="brass">cool.</span></div>
+            <div id="s1-hook-b" class="subline">getting handled before the prompt is.</div>
+          </div>
+          <div id="s1-quote" class="quote-card">
+            <p>the old interface waits for you to remember the work.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-2" class="scene">
+        <div class="grain"></div>
+        <div class="scene-content">
+          <div class="meta-row" id="s2-meta">
+            <span>diagnosis</span>
+            <span>still reactive</span>
+          </div>
+          <div id="s2-title" class="display problem-title">you don't need a forensic team.</div>
+          <div id="s2-panel" class="prompt-panel">
+            <div class="prompt-toolbar">
+              <span>today's AI</span>
+              <span>waiting...</span>
+            </div>
+            <div class="prompt-box">
+              <p class="placeholder">remind me what i was supposed to ask you to do<span class="cursor"></span></p>
+              <span class="waiting">needs a prompt first</span>
+            </div>
+          </div>
+          <div id="s2-list" class="plain-list">
+            <div class="plain-item">you remember the task</div>
+            <div class="plain-item">you open the box</div>
+            <div class="plain-item">you type your second job</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-3" class="scene">
+        <img id="s3-photo" class="photo card-front" src="assets/card-hand-front.jpg" alt="" data-layout-ignore />
+        <div class="shade"></div>
+        <div class="grain"></div>
+        <div class="scene-content">
+          <div class="meta-row" id="s3-meta">
+            <span>card reveal</span>
+            <span>proactive AI</span>
+          </div>
+          <div id="s3-reveal" class="brand-reveal">
+            <div class="display big">Anticipy<br />doesn't.</div>
+            <div class="small">say it once. let the errand surface.</div>
+          </div>
+          <div id="s3-flow" class="micro-flow">
+            <div class="flow-chip"><b>hear</b><span>the useful part</span></div>
+            <div class="flow-chip"><b>do</b><span>the safe part</span></div>
+            <div class="flow-chip"><b>ask</b><span>before risk</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-4" class="scene">
+        <img id="s4-photo" class="photo soft" src="assets/device-card-hand.jpg" alt="" data-layout-ignore />
+        <div class="shade"></div>
+        <div class="grain"></div>
+        <div class="scene-content">
+          <div class="meta-row" id="s4-meta">
+            <span>proof object</span>
+            <span>not magic</span>
+          </div>
+          <div id="s4-title" class="display problem-title">the boring job<br />got caught.</div>
+          <div id="s4-stack" class="receipt-stack">
+            <div class="receipt">
+              <div class="receipt-label"><span>found</span><span>11:08 pm</span></div>
+              <div class="receipt-main">Free trial due tonight.</div>
+            </div>
+            <div class="receipt">
+              <div class="receipt-label"><span>prepared</span><span>safe</span></div>
+              <div class="receipt-main">Cancellation path opened.</div>
+            </div>
+            <div class="receipt safe">
+              <div class="receipt-label"><span>boundary</span><span>needs you</span></div>
+              <div class="receipt-main">No money moved.</div>
+              <span class="approval">asks before money</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-5" class="scene">
+        <img id="s5-photo" class="photo wide-cards" src="assets/cards-desk-wide.jpg" alt="" data-layout-ignore />
+        <div class="shade"></div>
+        <div class="grain"></div>
+        <div class="scene-content">
+          <div class="meta-row" id="s5-meta">
+            <span>new sentence</span>
+            <span>cleaner interface</span>
+          </div>
+          <div class="cleaner">
+            <div id="s5-line-a" class="display line thin">drop the</div>
+            <div id="s5-line-b" class="display line">prompt.</div>
+            <div id="s5-line-c" class="subline">not another chatbot. a little follow-through engine for life admin.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-6" class="scene">
+        <img id="s6-photo" class="photo" src="assets/card-top.jpg" alt="" data-layout-ignore />
+        <div class="shade"></div>
+        <div class="grain"></div>
+        <div class="scene-content">
+          <div id="s6-word" class="final-word">
+            <div class="display brand">just<br />Anticipy.</div>
+            <div class="tag">it's cleaner.</div>
+          </div>
+        </div>
+      </section>
+
+      <div id="leak-warm" class="leak" data-layout-ignore></div>
+      <div id="leak-1" class="leak" data-layout-ignore></div>
+      <div id="leak-2" class="leak" data-layout-ignore></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      function focusPull(oldSel, newSel, t) {
+        tl.to(oldSel, { filter: "blur(16px)", scale: 1.03, duration: 0.45, ease: "power1.in" }, t);
+        tl.to(oldSel, { opacity: 0, duration: 0.28, ease: "power2.in" }, t + 0.18);
+        tl.fromTo(
+          newSel,
+          { opacity: 0, filter: "blur(16px)", scale: 0.98 },
+          { opacity: 1, filter: "blur(0px)", scale: 1, duration: 0.56, ease: "power2.out" },
+          t + 0.2,
+        );
+      }
+
+      function warmLeak(oldSel, newSel, t) {
+        tl.to("#leak-warm", { opacity: 0.35, duration: 0.25, ease: "power1.in" }, t);
+        tl.to("#leak-1", { opacity: 0.7, x: 360, duration: 0.5, ease: "sine.inOut" }, t + 0.02);
+        tl.to("#leak-2", { opacity: 0.55, x: -260, duration: 0.56, ease: "sine.inOut" }, t + 0.06);
+        tl.set(oldSel, { opacity: 0, filter: "none", scale: 1 }, t + 0.42);
+        tl.set(newSel, { opacity: 1, filter: "none", scale: 1 }, t + 0.42);
+        tl.to("#leak-warm", { opacity: 0, duration: 0.36, ease: "power2.out" }, t + 0.48);
+        tl.to("#leak-1", { opacity: 0, x: 610, duration: 0.28, ease: "power1.out" }, t + 0.58);
+        tl.to("#leak-2", { opacity: 0, x: -520, duration: 0.28, ease: "power1.out" }, t + 0.68);
+      }
+
+      // Scene 1
+      tl.from("#s1-photo", { scale: 1.1, x: -34, duration: 3.3, ease: "sine.out" }, 0.1);
+      tl.from("#s1-meta", { y: -18, opacity: 0, duration: 0.35, ease: "power3.out" }, 0.16);
+      tl.from("#s1-hook-a", { y: 58, opacity: 0, duration: 0.5, ease: "expo.out" }, 0.24);
+      tl.from("#s1-hook-b", { x: -36, opacity: 0, duration: 0.42, ease: "back.out(1.3)" }, 1.55);
+      tl.from("#s1-quote", { y: 44, scale: 0.97, opacity: 0, duration: 0.45, ease: "power4.out" }, 2.36);
+
+      // Transitions
+      focusPull("#scene-1", "#scene-2", 3.18);
+
+      // Scene 2
+      tl.from("#s2-meta", { x: -24, opacity: 0, duration: 0.32, ease: "power4.out" }, 3.58);
+      tl.from("#s2-title", { y: 48, opacity: 0, duration: 0.46, ease: "expo.out" }, 3.72);
+      tl.from("#s2-panel", { rotation: -4, y: 80, opacity: 0, duration: 0.52, ease: "back.out(1.25)" }, 4.34);
+      tl.from("#s2-list .plain-item", { x: -38, opacity: 0, duration: 0.34, stagger: 0.1, ease: "power3.out" }, 5.7);
+      tl.to(".cursor", { opacity: 0, duration: 0.18, repeat: 10, yoyo: true, ease: "steps(1)" }, 4.88);
+
+      warmLeak("#scene-2", "#scene-3", 7.36);
+
+      // Scene 3
+      tl.from("#s3-photo", { scale: 1.08, x: 24, duration: 2.52, ease: "sine.out" }, 7.78);
+      tl.from("#s3-meta", { y: -24, opacity: 0, duration: 0.3, ease: "power4.out" }, 7.82);
+      tl.from("#s3-reveal", { y: 66, opacity: 0, scale: 0.97, duration: 0.54, ease: "expo.out" }, 7.96);
+      tl.from("#s3-flow .flow-chip", { y: 42, opacity: 0, scale: 0.96, duration: 0.36, stagger: 0.12, ease: "back.out(1.4)" }, 8.82);
+
+      focusPull("#scene-3", "#scene-4", 9.92);
+
+      // Scene 4
+      tl.from("#s4-photo", { scale: 1.1, y: 28, duration: 3.3, ease: "sine.out" }, 10.25);
+      tl.from("#s4-meta", { x: 28, opacity: 0, duration: 0.28, ease: "power3.out" }, 10.28);
+      tl.from("#s4-title", { y: 42, opacity: 0, duration: 0.42, ease: "expo.out" }, 10.42);
+      tl.from("#s4-stack .receipt", { y: 72, opacity: 0, rotation: 2, duration: 0.38, stagger: 0.18, ease: "back.out(1.25)" }, 11.02);
+      tl.from(".approval", { scale: 0.82, opacity: 0, duration: 0.26, ease: "back.out(1.8)" }, 12.38);
+
+      warmLeak("#scene-4", "#scene-5", 13.18);
+
+      // Scene 5
+      tl.from("#s5-photo", { scale: 1.08, y: -18, duration: 2.4, ease: "sine.out" }, 13.58);
+      tl.from("#s5-meta", { y: -20, opacity: 0, duration: 0.26, ease: "power4.out" }, 13.6);
+      tl.from("#s5-line-a", { x: -46, opacity: 0, duration: 0.36, ease: "power3.out" }, 13.7);
+      tl.from("#s5-line-b", { y: 54, opacity: 0, scale: 0.94, duration: 0.42, ease: "expo.out" }, 13.94);
+      tl.from("#s5-line-c", { y: 34, opacity: 0, duration: 0.35, ease: "back.out(1.25)" }, 14.52);
+
+      focusPull("#scene-5", "#scene-6", 15.42);
+
+      // Scene 6
+      tl.from("#s6-photo", { scale: 1.11, x: -20, duration: 1.8, ease: "sine.out" }, 15.72);
+      tl.from("#s6-word", { y: 66, opacity: 0, duration: 0.5, ease: "expo.out" }, 15.78);
+      tl.to("#s6-word", { opacity: 0, y: -28, duration: 0.42, ease: "power2.in" }, 17.06);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

@@ -161,3 +161,18 @@ class BrowserLink:
             return False
         await self._ws.send_json({"type": "reload"})
         return True
+
+    # ---- clean-slate reset (clear cookies + per-origin storage) for honest cold-start benchmarking ----
+    async def reset_state(self, timeout: float = 20.0) -> dict:
+        if not self.connected or self._ws is None:
+            raise ConnectionError("extension not connected")
+        import uuid
+        job_id = "reset-" + uuid.uuid4().hex[:8]
+        loop = asyncio.get_running_loop()
+        fut: "asyncio.Future[dict]" = loop.create_future()
+        self._pending[job_id] = fut
+        await self._ws.send_json({"type": "reset_state", "job_id": job_id})
+        try:
+            return await asyncio.wait_for(fut, timeout=timeout)
+        finally:
+            self._pending.pop(job_id, None)

@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Anticipy Viral Proof</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        margin: 0;
+        overflow: hidden;
+        background: #11100d;
+        font-family: sans-serif;
+      }
+
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        color: #f4efe7;
+        background:
+          radial-gradient(circle at 20% 12%, rgba(200, 168, 106, 0.18), transparent 28%),
+          radial-gradient(circle at 82% 82%, rgba(244, 239, 231, 0.08), transparent 34%),
+          #11100d;
+      }
+
+      .grain {
+        position: absolute;
+        inset: 0;
+        opacity: 0.12;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 26px 26px, 31px 31px;
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 104px 72px 86px;
+        opacity: 0;
+        z-index: 5;
+      }
+
+      #scene-1 {
+        opacity: 1;
+      }
+
+      .topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: rgba(244, 239, 231, 0.58);
+        font-size: 26px;
+        letter-spacing: 0;
+      }
+
+      .dot-row {
+        display: flex;
+        gap: 10px;
+      }
+
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(244, 239, 231, 0.35);
+      }
+
+      .hook {
+        margin-top: 86px;
+        max-width: 890px;
+        font-family: serif;
+        font-size: 112px;
+        line-height: 0.92;
+        letter-spacing: 0;
+        color: #f4efe7;
+      }
+
+      .hook strong {
+        color: #c8a86a;
+        font-weight: 800;
+      }
+
+      .receipt-card {
+        margin-top: 86px;
+        width: 100%;
+        min-height: 552px;
+        border-radius: 34px;
+        background: #f4efe7;
+        color: #191713;
+        padding: 42px;
+        box-shadow: 0 36px 120px rgba(0, 0, 0, 0.44);
+        border: 1px solid rgba(255, 255, 255, 0.48);
+        overflow: hidden;
+      }
+
+      .receipt-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding-bottom: 28px;
+        border-bottom: 1px solid rgba(25, 23, 19, 0.12);
+      }
+
+      .receipt-kind {
+        font-size: 24px;
+        color: #766f62;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 800;
+      }
+
+      .receipt-time {
+        color: #766f62;
+        font-size: 24px;
+        font-weight: 600;
+      }
+
+      .receipt-main {
+        margin-top: 42px;
+        font-size: 58px;
+        line-height: 1.02;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .receipt-sub {
+        margin-top: 28px;
+        font-size: 31px;
+        line-height: 1.22;
+        color: #564f45;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        margin-top: 36px;
+        padding: 16px 22px;
+        border-radius: 999px;
+        background: rgba(110, 167, 119, 0.18);
+        color: #315a37;
+        font-size: 25px;
+        font-weight: 800;
+      }
+
+      .spoken-strip {
+        margin-top: auto;
+        width: 100%;
+        border-radius: 28px;
+        padding: 32px 36px;
+        background: rgba(244, 239, 231, 0.08);
+        border: 1px solid rgba(244, 239, 231, 0.16);
+        color: rgba(244, 239, 231, 0.88);
+        font-size: 34px;
+        line-height: 1.2;
+      }
+
+      .scene-title {
+        margin-top: 108px;
+        font-family: serif;
+        font-size: 94px;
+        line-height: 0.98;
+        color: #f4efe7;
+      }
+
+      .sentence-card {
+        margin-top: 86px;
+        border-radius: 34px;
+        background: rgba(244, 239, 231, 0.09);
+        border: 1px solid rgba(244, 239, 231, 0.18);
+        padding: 44px 42px;
+        font-size: 46px;
+        line-height: 1.08;
+        color: #f4efe7;
+      }
+
+      .sentence-label {
+        display: block;
+        margin-bottom: 24px;
+        color: #c8a86a;
+        font-size: 24px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .paper {
+        margin-top: 78px;
+        min-height: 560px;
+        border-radius: 12px;
+        background:
+          linear-gradient(rgba(25, 23, 19, 0.06) 1px, transparent 1px),
+          #f4efe7;
+        background-size: 100% 52px;
+        color: #191713;
+        padding: 48px 42px;
+        transform: rotate(-1.2deg);
+        box-shadow: 0 42px 100px rgba(0, 0, 0, 0.34);
+      }
+
+      .paper h2 {
+        margin: 0 0 36px;
+        font-family: serif;
+        font-size: 64px;
+        line-height: 0.96;
+      }
+
+      .paper-line {
+        display: flex;
+        gap: 18px;
+        align-items: flex-start;
+        margin: 24px 0;
+        font-size: 34px;
+        line-height: 1.08;
+      }
+
+      .check {
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        margin-top: 2px;
+        border-radius: 8px;
+        border: 3px solid #c8a86a;
+        background: rgba(200, 168, 106, 0.18);
+      }
+
+      .assistant-bubble {
+        margin-top: 86px;
+        max-width: 886px;
+        padding: 42px 46px;
+        border-radius: 38px 38px 38px 10px;
+        background: #f4efe7;
+        color: #191713;
+        box-shadow: 0 38px 100px rgba(0, 0, 0, 0.42);
+      }
+
+      .assistant-label {
+        color: #766f62;
+        font-size: 24px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .assistant-line {
+        margin-top: 20px;
+        font-size: 50px;
+        line-height: 1.05;
+        font-weight: 800;
+      }
+
+      .tiny-proof {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-top: 42px;
+      }
+
+      .proof-chip {
+        padding: 13px 17px;
+        border-radius: 999px;
+        color: #f4efe7;
+        background: rgba(244, 239, 231, 0.12);
+        border: 1px solid rgba(244, 239, 231, 0.16);
+        font-size: 23px;
+        font-weight: 700;
+      }
+
+      .brand-end {
+        margin-top: auto;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand-name {
+        font-family: serif;
+        font-size: 58px;
+        color: #f4efe7;
+      }
+
+      .brand-sub {
+        max-width: 520px;
+        text-align: right;
+        color: rgba(244, 239, 231, 0.74);
+        font-size: 28px;
+        line-height: 1.15;
+      }
+
+      .wipe {
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        background: #f4efe7;
+        transform: translateY(105%);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="12"
+      data-width="1080"
+      data-height="1920"
+      data-composition-variables='{"id":{"type":"string","default":"v01"},"hook":{"type":"string","default":"i did not write this."},"hookAccent":{"type":"string","default":"write"},"receiptKind":{"type":"string","default":"draft"},"receiptMain":{"type":"string","default":"Email to Dana is ready."},"receiptSub":{"type":"string","default":"Found the person, pulled the context, stopped before send."},"status":{"type":"string","default":"waiting for your nod"},"sentence":{"type":"string","default":"I said I would send Dana the budget before Thursday."},"midTitle":{"type":"string","default":"the app was never opened."},"paperTitle":{"type":"string","default":"what it caught"},"paperOne":{"type":"string","default":"person resolved from context"},"paperTwo":{"type":"string","default":"draft prepared"},"paperThree":{"type":"string","default":"send held for approval"},"assistantLine":{"type":"string","default":"I have this ready. Want me to send it now or hold it?"},"proofOne":{"type":"string","default":"actual receipt first"},"proofTwo":{"type":"string","default":"no app prompt"},"proofThree":{"type":"string","default":"human approval"},"endLine":{"type":"string","default":"the assistant that comes to you."},"timeLabel":{"type":"string","default":"2:47 PM"}}'
+    >
+      <div class="grain"></div>
+
+      <section id="scene-1" class="scene">
+        <div class="topline">
+          <span id="idLabel">probe 01</span>
+          <span class="dot-row"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+        </div>
+        <div id="hook" class="hook">i did not <strong>write</strong> this.</div>
+        <div id="receipt" class="receipt-card">
+          <div class="receipt-head">
+            <span id="receiptKind" class="receipt-kind">draft</span>
+            <span id="receiptTime" class="receipt-time">2:47 PM</span>
+          </div>
+          <div id="receiptMain" class="receipt-main">Email to Dana is ready.</div>
+          <div id="receiptSub" class="receipt-sub">Found the person, pulled the context, stopped before send.</div>
+          <div id="status" class="status-pill">waiting for your nod</div>
+        </div>
+        <div id="spokenStrip" class="spoken-strip">said once, not as a command.</div>
+      </section>
+
+      <section id="scene-2" class="scene">
+        <div class="topline">
+          <span>the sentence</span>
+          <span id="timeAgain">2:47 PM</span>
+        </div>
+        <div id="midTitle" class="scene-title">the app was never opened.</div>
+        <div class="sentence-card">
+          <span class="sentence-label">what was said</span>
+          <span id="sentence">I said I would send Dana the budget before Thursday.</span>
+        </div>
+      </section>
+
+      <section id="scene-3" class="scene">
+        <div class="topline">
+          <span>not a prompt</span>
+          <span>not a task list</span>
+        </div>
+        <div id="paper" class="paper">
+          <h2 id="paperTitle">what it caught</h2>
+          <div class="paper-line"><span class="check"></span><span id="paperOne">person resolved from context</span></div>
+          <div class="paper-line"><span class="check"></span><span id="paperTwo">draft prepared</span></div>
+          <div class="paper-line"><span class="check"></span><span id="paperThree">send held for approval</span></div>
+        </div>
+      </section>
+
+      <section id="scene-4" class="scene">
+        <div class="topline">
+          <span>how it should feel</span>
+          <span>quiet</span>
+        </div>
+        <div id="assistantBubble" class="assistant-bubble">
+          <div class="assistant-label">message from Anticipy</div>
+          <div id="assistantLine" class="assistant-line">I have this ready. Want me to send it now or hold it?</div>
+        </div>
+        <div id="chips" class="tiny-proof">
+          <span id="proofOne" class="proof-chip">actual receipt first</span>
+          <span id="proofTwo" class="proof-chip">no app prompt</span>
+          <span id="proofThree" class="proof-chip">human approval</span>
+        </div>
+        <div class="brand-end">
+          <div class="brand-name">Anticipy</div>
+          <div id="endLine" class="brand-sub">the assistant that comes to you.</div>
+        </div>
+      </section>
+
+      <div id="wipe" class="wipe"></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const fallbackVars = {
+        id: "v01",
+        hook: "i did not write this.",
+        hookAccent: "write",
+        receiptKind: "draft",
+        receiptMain: "Email to Dana is ready.",
+        receiptSub: "Found the person, pulled the context, stopped before send.",
+        status: "waiting for your nod",
+        sentence: "I said I would send Dana the budget before Thursday.",
+        midTitle: "the app was never opened.",
+        paperTitle: "what it caught",
+        paperOne: "person resolved from context",
+        paperTwo: "draft prepared",
+        paperThree: "send held for approval",
+        assistantLine: "I have this ready. Want me to send it now or hold it?",
+        proofOne: "actual receipt first",
+        proofTwo: "no app prompt",
+        proofThree: "human approval",
+        endLine: "the assistant that comes to you.",
+        timeLabel: "2:47 PM",
+      };
+
+      const runtimeVars =
+        window.__hyperframes && typeof window.__hyperframes.getVariables === "function"
+          ? window.__hyperframes.getVariables()
+          : {};
+      const v = { ...fallbackVars, ...runtimeVars };
+
+      function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+      }
+
+      function setHook(text, accent) {
+        const el = document.getElementById("hook");
+        const safe = String(text || "");
+        const marked = String(accent || "").trim();
+        if (marked && safe.toLowerCase().includes(marked.toLowerCase())) {
+          const index = safe.toLowerCase().indexOf(marked.toLowerCase());
+          el.innerHTML =
+            safe.slice(0, index) +
+            "<strong>" +
+            safe.slice(index, index + marked.length) +
+            "</strong>" +
+            safe.slice(index + marked.length);
+        } else {
+          el.textContent = safe;
+        }
+      }
+
+      setText("idLabel", v.id);
+      setHook(v.hook, v.hookAccent);
+      setText("receiptKind", v.receiptKind);
+      setText("receiptTime", v.timeLabel);
+      setText("receiptMain", v.receiptMain);
+      setText("receiptSub", v.receiptSub);
+      setText("status", v.status);
+      setText("spokenStrip", "said once, not as a command.");
+      setText("timeAgain", v.timeLabel);
+      setText("midTitle", v.midTitle);
+      setText("sentence", v.sentence);
+      setText("paperTitle", v.paperTitle);
+      setText("paperOne", v.paperOne);
+      setText("paperTwo", v.paperTwo);
+      setText("paperThree", v.paperThree);
+      setText("assistantLine", v.assistantLine);
+      setText("proofOne", v.proofOne);
+      setText("proofTwo", v.proofTwo);
+      setText("proofThree", v.proofThree);
+      setText("endLine", v.endLine);
+
+      const tl = gsap.timeline({ paused: true });
+
+      tl.from("#idLabel", { y: -22, opacity: 0, duration: 0.35, ease: "power3.out" }, 0.15);
+      tl.from(".dot", { scale: 0, opacity: 0, stagger: 0.06, duration: 0.28, ease: "back.out(2)" }, 0.2);
+      tl.from("#hook", { y: 82, opacity: 0, scale: 0.96, duration: 0.58, ease: "expo.out" }, 0.28);
+      tl.from("#receipt", { y: 110, opacity: 0, rotation: -1.2, duration: 0.66, ease: "power4.out" }, 0.78);
+      tl.from("#receiptMain", { y: 34, opacity: 0, duration: 0.38, ease: "power2.out" }, 1.18);
+      tl.from("#status", { scale: 0.72, opacity: 0, duration: 0.34, ease: "back.out(2.3)" }, 1.5);
+      tl.from("#spokenStrip", { y: 40, opacity: 0, duration: 0.42, ease: "power3.out" }, 2.02);
+
+      tl.to("#wipe", { y: "-105%", duration: 0.38, ease: "power2.inOut" }, 3.0);
+      tl.set("#scene-1", { opacity: 0 }, 3.39);
+      tl.set("#scene-2", { opacity: 1 }, 3.39);
+      tl.set("#wipe", { y: "105%" }, 3.41);
+      tl.from("#scene-2 .topline", { y: -24, opacity: 0, duration: 0.34, ease: "power2.out" }, 3.52);
+      tl.from("#midTitle", { x: -62, opacity: 0, duration: 0.54, ease: "expo.out" }, 3.66);
+      tl.from(".sentence-card", { y: 100, opacity: 0, rotation: 1.1, duration: 0.62, ease: "power4.out" }, 4.18);
+
+      tl.to("#wipe", { y: "-105%", duration: 0.38, ease: "power2.inOut" }, 6.0);
+      tl.set("#scene-2", { opacity: 0 }, 6.39);
+      tl.set("#scene-3", { opacity: 1 }, 6.39);
+      tl.set("#wipe", { y: "105%" }, 6.41);
+      tl.from("#scene-3 .topline", { y: -24, opacity: 0, duration: 0.32, ease: "power2.out" }, 6.5);
+      tl.from("#paper", { y: 112, opacity: 0, rotation: -6, duration: 0.64, ease: "elastic.out(1, 0.72)" }, 6.72);
+      tl.from(".paper-line", { x: -36, opacity: 0, stagger: 0.16, duration: 0.36, ease: "power3.out" }, 7.2);
+
+      tl.to("#wipe", { y: "-105%", duration: 0.38, ease: "power2.inOut" }, 9.0);
+      tl.set("#scene-3", { opacity: 0 }, 9.39);
+      tl.set("#scene-4", { opacity: 1 }, 9.39);
+      tl.set("#wipe", { y: "105%" }, 9.41);
+      tl.from("#scene-4 .topline", { y: -22, opacity: 0, duration: 0.32, ease: "power2.out" }, 9.5);
+      tl.from("#assistantBubble", { y: 92, opacity: 0, scale: 0.94, duration: 0.56, ease: "power4.out" }, 9.72);
+      tl.from(".proof-chip", { y: 20, opacity: 0, stagger: 0.1, duration: 0.28, ease: "back.out(1.8)" }, 10.22);
+      tl.from(".brand-name", { x: -36, opacity: 0, duration: 0.42, ease: "power3.out" }, 10.7);
+      tl.from("#endLine", { x: 36, opacity: 0, duration: 0.42, ease: "power3.out" }, 10.78);
+      tl.to("#root", { backgroundColor: "#11100d", duration: 0.2 }, 11.7);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

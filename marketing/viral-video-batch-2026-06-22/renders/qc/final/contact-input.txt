@@ -1,0 +1,10 @@
+file renders/qc/final/01-email-i-did-not-write.jpg
+file renders/qc/final/02-chatbot-is-inbox.jpg
+file renders/qc/final/03-creepy-boundary.jpg
+file renders/qc/final/04-not-ceo-toy.jpg
+file renders/qc/final/05-money-go-ahead.jpg
+file renders/qc/final/06-dinner-booking.jpg
+file renders/qc/final/07-lawyer-deadline.jpg
+file renders/qc/final/08-doctor-admin.jpg
+file renders/qc/final/09-founder-intro.jpg
+file renders/qc/final/10-parent-admin.jpg

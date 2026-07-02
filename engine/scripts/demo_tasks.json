@@ -1,0 +1,19 @@
+[
+  {"task": "Log in with username 'tomsmith' and password 'SuperSecretPassword!', then tell me the exact confirmation message shown after login.",
+   "start_url": "https://the-internet.herokuapp.com/login", "max_steps": 12},
+
+  {"task": "Using the dropdown on this page, select the option labelled 'Option 2', then tell me which option is now selected.",
+   "start_url": "https://the-internet.herokuapp.com/dropdown", "max_steps": 10},
+
+  {"task": "On this checkboxes page, make sure the FIRST checkbox is checked (check it if it is not), then tell me the checked/unchecked state of both checkboxes.",
+   "start_url": "https://the-internet.herokuapp.com/checkboxes", "max_steps": 12},
+
+  {"task": "Log in with username 'standard_user' and password 'secret_sauce', then add the 'Sauce Labs Backpack' to the cart, and tell me the number shown on the cart badge.",
+   "start_url": "https://www.saucedemo.com/", "max_steps": 16},
+
+  {"task": "Search the store for 'computer', then tell me the name and price of the first product in the results.",
+   "start_url": "https://demowebshop.tricentis.com/", "max_steps": 14},
+
+  {"task": "Go to page 2 of the quotes, then tell me the author of the very first quote listed on that page.",
+   "start_url": "https://quotes.toscrape.com/", "max_steps": 12}
+]

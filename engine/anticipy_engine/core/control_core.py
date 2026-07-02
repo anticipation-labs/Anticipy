@@ -879,16 +879,10 @@ class ControlCore:
     async def stop(self) -> None:
         await self.bus.stop()
 
-    def _mem_ctx(self, about: str) -> dict:
-        """INJECT seam for the orchestrator's plan: relevant memory for `about`."""
-        inj = self.live_memory.inject(about)
-        return {
-            "notes": inj["text"],
-            "open_loops": [i.text for i in inj["open_loops"]],
-            "profile": [i.text for i in inj["profile"]],
-            "history": [i.text for i in inj["history"]],
-            "derived": [i.text for i in inj["derived"]],
-        }
+    def _mem_ctx(self, about: str, purpose: str = "act") -> dict:
+        """INJECT seam for the orchestrator's plan: relevant memory for `about`, via the
+        ONE ContextPack builder (default purpose 'act' — this feeds the hands' plan)."""
+        return self.live_memory.build_context(about, purpose=purpose).as_ctx_dict()
 
     def _owner_timezone(self) -> tuple[dt.tzinfo, str | None]:
         """Read the owner's onboarded timezone from the PROFILE drawer (the owner_identity
@@ -1801,7 +1795,7 @@ class ControlCore:
             # find/cart but NEVER buys) and carries a memory_resolution receipt. When the item/source
             # is NOT resolvable, fall back to the confirm-first browser round-trip (Omar's centerpiece):
             # ONE deterministic texted ask, answered by YES — no duplicate ask, no stray goal (F-011).
-            ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": line.text}))
+            ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": line.text, "purpose": "act"}))
             if not self._has_external_context(ctx.output, line.text):
                 return self._browser_action_ask(line, source)
             # Resolved -> mark so the confirm-first gate SKIPS it; fall through to auto-execute below.

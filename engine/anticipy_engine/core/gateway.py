@@ -156,13 +156,29 @@ class ModelGateway:
             "X-Title": "Anticipy",
         }
         body = {"model": model, "messages": [{"role": "user", "content": content}]}
+        # Gemini 2.5 FLASH models THINK by default on the OpenAI-compat endpoint, and that reasoning is
+        # billed against max_tokens — so a small action cap can be entirely consumed by thinking,
+        # leaving content="" (which read as "no parseable action" and killed tasks mid-run). We do
+        # not need chain-of-thought for a single routine browser action, so disable it on flash.
+        # Gemini 2.5 PRO is thinking-ONLY (rejects reasoning_effort:none with "Budget 0 is invalid")
+        # and is our frontier-on-hard brain — we KEEP its thinking and instead guarantee enough token
+        # headroom so the mandatory reasoning + the JSON action both fit (else content comes back empty).
+        _ml = (model or "").lower()
+        _is_gemini = "gemini" in _ml
+        _thinking_only = _is_gemini and "pro" in _ml
+        if _is_gemini and not _thinking_only:
+            body["reasoning_effort"] = os.environ.get("ANTICIPY_GEMINI_REASONING_EFFORT", "none")
         if json_mode:
             body["response_format"] = {"type": "json_object"}  # force a parseable JSON object
         if temperature is not None:
             body["temperature"] = temperature  # low temp for stable, run-to-run decisions
         token_cap = max_tokens or os.environ.get("ANTICIPY_MODEL_MAX_TOKENS")
         if token_cap:
-            body["max_tokens"] = int(token_cap)
+            token_cap = int(token_cap)
+            if _thinking_only:
+                # mandatory thinking eats the budget first; floor it so the action/answer JSON survives
+                token_cap = max(token_cap, int(os.environ.get("ANTICIPY_THINKING_MAX_TOKENS", "4096")))
+            body["max_tokens"] = token_cap
 
         # Retry transient empties / 429 / 5xx — the provider intermittently returns
         # empty content under load, which would otherwise read as a spurious failure.
@@ -200,7 +216,49 @@ class ModelGateway:
                 await asyncio.sleep(1.0 * (attempt + 1))  # empty -> brief backoff, retry
             except (httpx.TransportError, httpx.HTTPStatusError):
                 await asyncio.sleep(1.5 * (attempt + 1))
+        # PRIMARY exhausted (empty under load — the free Gemini tier's per-minute quota). The cost
+        # story rides on that free tier, so we do NOT route normal traffic to a paid provider —
+        # instead we fall back to paid OpenRouter ONLY here, for this one starved call. This keeps
+        # routine cost at ~free while making the rare throttle non-fatal (a 1-step task handoff was
+        # almost always this). No-op unless a fallback key+url are configured.
+        fb = await self._fallback_completion(content, json_mode, temperature, max_tokens, tier)
+        if fb:
+            return fb
         return last or ""
+
+    async def _fallback_completion(self, content, json_mode, temperature, max_tokens, tier) -> str:
+        """One paid-OpenRouter attempt used only when the free primary returned empty. Reliability
+        backstop for benchmarking/production; fires rarely, so it barely moves average cost."""
+        fb_key = os.environ.get("ANTICIPY_FALLBACK_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+        fb_url = os.environ.get("ANTICIPY_FALLBACK_BASE_URL", OPENROUTER_URL)
+        if not fb_key or fb_url == self._url:
+            return ""
+        import httpx
+        model = (os.environ.get("ANTICIPY_FALLBACK_MODEL_SMART") if tier == SMART
+                 else os.environ.get("ANTICIPY_FALLBACK_MODEL_CHEAP"))
+        if not model:
+            return ""
+        body = {"model": model, "messages": [{"role": "user", "content": content}]}
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
+        if temperature is not None:
+            body["temperature"] = temperature
+        token_cap = max_tokens or os.environ.get("ANTICIPY_MODEL_MAX_TOKENS")
+        if token_cap:
+            body["max_tokens"] = int(token_cap)
+        headers = {"Authorization": f"Bearer {fb_key}", "Content-Type": "application/json",
+                   "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, transport=self._transport) as client:
+                resp = await client.post(fb_url, headers=headers, json=body)
+            if resp.status_code != 200:
+                return ""
+            out = (resp.json()["choices"][0].get("message") or {}).get("content") or ""
+            if out:
+                self.calls[-1]["fallback"] = model  # visible in postmortems
+            return out
+        except (httpx.TransportError, httpx.HTTPStatusError):
+            return ""
 
     async def _gemini(self, task: str, tier: str, json_mode: bool = False,
                       temperature: Optional[float] = None,

@@ -1,0 +1,40 @@
+{
+  "suite": "Anticipy browser agent — full-form demo",
+  "agent": "one general agent, zero per-site code",
+  "browser": "real authenticated Chrome, background tab, trusted CDP input, no highlight boxes",
+  "perception": "DOM/a11y-first, screenshot fallback",
+  "model_routing": "cheap per-step, frontier only on plan/recovery; read-back judge verifies",
+  "cold": {
+    "result": "6/6 verified",
+    "avg_cost_usd": 0.0791,
+    "avg_steps": 6.0,
+    "tasks": [
+      {"n": 1, "task": "login form + typing + submit", "site": "the-internet.herokuapp.com/login", "result": "PASS", "cost_usd": 0.0425, "steps": 5, "frontier_pct": 28.6, "vision_pct": 20, "answer": "Welcome to the Secure Area"},
+      {"n": 2, "task": "dropdown / select widget", "site": "the-internet.herokuapp.com/dropdown", "result": "PASS", "cost_usd": 0.1425, "steps": 8, "frontier_pct": 58.3, "vision_pct": 37.5, "answer": "Option 2"},
+      {"n": 3, "task": "checkbox toggle + state read", "site": "the-internet.herokuapp.com/checkboxes", "result": "PASS", "cost_usd": 0.0625, "steps": 6, "frontier_pct": 37.5, "vision_pct": 16.7, "answer": "first checked, second checked"},
+      {"n": 4, "task": "login + add-to-cart (multi-step)", "site": "saucedemo.com", "result": "PASS", "cost_usd": 0.1440, "steps": 11, "frontier_pct": 46.7, "vision_pct": 27.3, "answer": "cart badge = 1"},
+      {"n": 5, "task": "search box + extract result", "site": "demowebshop.tricentis.com", "result": "PASS", "cost_usd": 0.0215, "steps": 3, "frontier_pct": 25, "vision_pct": 0, "answer": "Build your own cheap computer, 800.00"},
+      {"n": 6, "task": "pagination + multi-hop", "site": "quotes.toscrape.com", "result": "PASS", "cost_usd": 0.0615, "steps": 3, "frontier_pct": 50, "vision_pct": 66.7, "answer": "Marilyn Monroe"}
+    ]
+  },
+  "warm": {
+    "result": "6/6 verified",
+    "avg_cost_usd": 0.0005,
+    "avg_steps": 3.5,
+    "note": "all tasks replayed verified recipe, 0 planner LLM calls, 0% frontier, 0% vision",
+    "tasks": [
+      {"n": 1, "task": "login form + typing + submit", "result": "PASS", "cost_usd": 0.0005, "steps": 4},
+      {"n": 2, "task": "dropdown / select widget", "result": "PASS", "cost_usd": 0.0005, "steps": 2},
+      {"n": 3, "task": "checkbox toggle + state read", "result": "PASS", "cost_usd": 0.0005, "steps": 2},
+      {"n": 4, "task": "login + add-to-cart (multi-step)", "result": "PASS", "cost_usd": 0.0005, "steps": 7},
+      {"n": 5, "task": "search box + extract result", "result": "PASS", "cost_usd": 0.0005, "steps": 3},
+      {"n": 6, "task": "pagination + multi-hop", "result": "PASS", "cost_usd": 0.0005, "steps": 3}
+    ]
+  },
+  "cost_vs_frontier": {
+    "frontier_computer_use_per_task_usd": "0.10-0.40",
+    "anticipy_cold_per_task_usd": 0.0791,
+    "anticipy_warm_per_task_usd": 0.0005,
+    "warm_vs_cold_factor": 158
+  }
+}

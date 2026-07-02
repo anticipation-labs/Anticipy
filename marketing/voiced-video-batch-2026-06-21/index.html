@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Anticipy Voiced Short</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        margin: 0;
+        overflow: hidden;
+        background: #0e0d0b;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        color: #f6f0e8;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 38%),
+          radial-gradient(circle at 50% 28%, rgba(232, 198, 128, 0.14), transparent 35%),
+          #0e0d0b;
+      }
+
+      .noise {
+        position: absolute;
+        inset: 0;
+        opacity: 0.12;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+        background-size: 29px 31px, 37px 41px;
+        pointer-events: none;
+        z-index: 20;
+      }
+
+      .safe {
+        position: absolute;
+        inset: 104px 84px 300px;
+        z-index: 4;
+      }
+
+      .topbar {
+        position: absolute;
+        top: 54px;
+        left: 72px;
+        right: 72px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: rgba(246, 240, 232, 0.52);
+        font-size: 24px;
+        z-index: 10;
+      }
+
+      .rec {
+        display: inline-flex;
+        gap: 11px;
+        align-items: center;
+      }
+
+      .rec-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: #c95f51;
+        box-shadow: 0 0 22px rgba(201, 95, 81, 0.55);
+      }
+
+      .headline {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 72px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 96px;
+        line-height: 0.96;
+        letter-spacing: 0;
+        color: #f6f0e8;
+        opacity: 0;
+      }
+
+      .caption {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 42px;
+        min-height: 172px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 30px 34px;
+        border-radius: 18px;
+        background: rgba(12, 12, 12, 0.82);
+        color: #f6f0e8;
+        font-size: 47px;
+        line-height: 1.05;
+        font-weight: 800;
+        text-align: center;
+        opacity: 0;
+      }
+
+      .card {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 378px;
+        min-height: 520px;
+        border-radius: 28px;
+        padding: 42px;
+        opacity: 0;
+        transform: translateY(32px) rotate(-0.5deg);
+        background: #f6f0e8;
+        color: #181612;
+        box-shadow: 0 40px 120px rgba(0, 0, 0, 0.45);
+      }
+
+      .label {
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #82776a;
+      }
+
+      .card-text {
+        margin-top: 34px;
+        font-size: 55px;
+        line-height: 1.03;
+        font-weight: 900;
+      }
+
+      .rule-card {
+        position: absolute;
+        left: 52px;
+        right: 52px;
+        top: 342px;
+        opacity: 0;
+        border-radius: 28px;
+        padding: 44px 44px 34px;
+        background: rgba(246, 240, 232, 0.09);
+        border: 1px solid rgba(246, 240, 232, 0.18);
+      }
+
+      .rule-title {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 78px;
+        line-height: 0.98;
+        color: #f6f0e8;
+      }
+
+      .rule-list {
+        margin: 40px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 21px;
+      }
+
+      .rule-list li {
+        display: flex;
+        gap: 18px;
+        align-items: center;
+        font-size: 36px;
+        line-height: 1.05;
+        color: rgba(246, 240, 232, 0.9);
+      }
+
+      .tick {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #d2ac68;
+        border-radius: 7px;
+        background: rgba(210, 172, 104, 0.16);
+      }
+
+      .phone {
+        position: absolute;
+        left: 98px;
+        right: 98px;
+        top: 328px;
+        height: 730px;
+        border-radius: 54px;
+        padding: 62px 38px;
+        opacity: 0;
+        background: linear-gradient(180deg, #23211d, #11100d);
+        border: 2px solid rgba(246, 240, 232, 0.18);
+        box-shadow: 0 42px 150px rgba(0, 0, 0, 0.58);
+      }
+
+      .phone-notch {
+        position: absolute;
+        top: 24px;
+        left: 50%;
+        width: 168px;
+        height: 22px;
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.55);
+      }
+
+      .bubble {
+        margin-top: 114px;
+        border-radius: 32px 32px 32px 10px;
+        padding: 36px 38px;
+        background: #f6f0e8;
+        color: #181612;
+        font-size: 48px;
+        line-height: 1.04;
+        font-weight: 800;
+      }
+
+      .chips {
+        display: flex;
+        gap: 12px;
+        margin-top: 26px;
+      }
+
+      .chip {
+        padding: 13px 17px;
+        border-radius: 999px;
+        background: rgba(246, 240, 232, 0.1);
+        color: rgba(246, 240, 232, 0.72);
+        font-size: 22px;
+        font-weight: 800;
+      }
+
+      .wave {
+        position: absolute;
+        left: 52px;
+        right: 52px;
+        top: 1054px;
+        height: 92px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        opacity: 0.46;
+      }
+
+      .bar {
+        width: 11px;
+        height: 24px;
+        border-radius: 999px;
+        background: rgba(246, 240, 232, 0.72);
+        transform-origin: center center;
+      }
+
+      .brand {
+        position: absolute;
+        left: 72px;
+        right: 72px;
+        bottom: 76px;
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        color: rgba(246, 240, 232, 0.52);
+        font-size: 24px;
+        z-index: 10;
+      }
+
+      .brand-name {
+        font-family: Georgia, "Times New Roman", serif;
+        color: #f6f0e8;
+        font-size: 34px;
+      }
+    </style>
+  </head>
+  <body>
+    <main
+      id="root"
+      data-composition-id="root"
+      data-composition-duration="26"
+      data-composition-width="1080"
+      data-composition-height="1920"
+      data-start="0"
+      data-duration="26"
+      data-width="1080"
+      data-height="1920"
+      data-composition-variables='{"id":"00","hook":"i am done opening chatbots.","proofLabel":"the sentence","proofText":"i said one sentence while walking.","boundaryTitle":"the point","boundaryLines":["no prompt box","no new inbox","asks before contact"],"assistant":"Draft is ready. Want me to send it?","captionA":"i am done opening chatbots.","captionB":"i said one sentence while walking.","captionC":"the follow-up was waiting later.","captionD":"not sent. just ready.","captionE":"this is what i want AI to be."}'
+    >
+      <div class="topbar">
+        <span class="rec"><span class="rec-dot"></span> voice memo</span>
+        <span id="idLabel">00</span>
+      </div>
+      <section class="safe">
+        <h1 id="headline" class="headline"></h1>
+        <article id="proofCard" class="card">
+          <div id="proofLabel" class="label"></div>
+          <div id="proofText" class="card-text"></div>
+        </article>
+        <article id="ruleCard" class="rule-card">
+          <div id="boundaryTitle" class="rule-title"></div>
+          <ul id="rules" class="rule-list"></ul>
+        </article>
+        <article id="phone" class="phone">
+          <div class="phone-notch"></div>
+          <div id="bubble" class="bubble"></div>
+          <div class="chips">
+            <span class="chip">ask first</span>
+            <span class="chip">human yes</span>
+            <span class="chip">not autopilot</span>
+          </div>
+        </article>
+        <div id="caption" class="caption"></div>
+        <div id="wave" class="wave"></div>
+      </section>
+      <div class="brand">
+        <span class="brand-name">Anticipy</span>
+        <span>ambient memory with brakes</span>
+      </div>
+      <div class="noise"></div>
+    </main>
+    <script>
+      const vars = window.__hyperframes?.getVariables?.() || {};
+      const byId = (id) => document.getElementById(id);
+
+      byId("idLabel").textContent = vars.id || "00";
+      byId("headline").textContent = vars.hook || "";
+      byId("proofLabel").textContent = vars.proofLabel || "";
+      byId("proofText").textContent = vars.proofText || "";
+      byId("boundaryTitle").textContent = vars.boundaryTitle || "";
+      byId("bubble").textContent = vars.assistant || "";
+
+      const ruleList = byId("rules");
+      (vars.boundaryLines || []).forEach((line) => {
+        const li = document.createElement("li");
+        const tick = document.createElement("span");
+        tick.className = "tick";
+        const text = document.createElement("span");
+        text.textContent = line;
+        li.append(tick, text);
+        ruleList.appendChild(li);
+      });
+
+      const wave = byId("wave");
+      for (let i = 0; i < 54; i += 1) {
+        const bar = document.createElement("span");
+        bar.className = "bar";
+        wave.appendChild(bar);
+      }
+
+      const caption = byId("caption");
+      const captionAt = (time, text) => {
+        tl.call(() => {
+          caption.textContent = text || "";
+        }, null, time);
+      };
+
+      const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
+      window.__timelines = window.__timelines || {};
+      window.__timelines.root = tl;
+
+      tl.set("#headline", { opacity: 0, y: 24 })
+        .set("#caption", { opacity: 0, y: 20 })
+        .set("#proofCard", { opacity: 0, y: 36, rotate: -1 })
+        .set("#ruleCard", { opacity: 0, y: 36 })
+        .set("#phone", { opacity: 0, y: 40 })
+        .set("#wave", { opacity: 0 });
+
+      captionAt(0.02, vars.captionA);
+      tl.to("#headline", { opacity: 1, y: 0, duration: 0.34 }, 0.02)
+        .to("#caption", { opacity: 1, y: 0, duration: 0.22 }, 0.08)
+        .to("#wave", { opacity: 0.48, duration: 0.22 }, 0.08)
+        .to(".bar", { scaleY: 2.8, duration: 0.28, stagger: { each: 0.015, repeat: 44, yoyo: true } }, 0.12);
+
+      captionAt(4.6, vars.captionB);
+      tl.to("#headline", { opacity: 0.18, scale: 0.985, duration: 0.45 }, 4.4)
+        .to("#proofCard", { opacity: 1, y: 0, rotate: -0.5, duration: 0.44 }, 4.65);
+
+      captionAt(9.8, vars.captionC);
+      tl.to("#proofCard", { opacity: 0, y: -20, duration: 0.38 }, 9.55)
+        .to("#ruleCard", { opacity: 1, y: 0, duration: 0.44 }, 9.85)
+        .from(".rule-list li", { opacity: 0, x: -18, stagger: 0.18, duration: 0.28 }, 10.2);
+
+      captionAt(15.1, vars.captionD);
+      tl.to("#ruleCard", { opacity: 0, y: -28, duration: 0.38 }, 14.75)
+        .to("#phone", { opacity: 1, y: 0, duration: 0.46 }, 15.05)
+        .from("#bubble", { opacity: 0, y: 18, duration: 0.36 }, 15.55)
+        .from(".chip", { opacity: 0, y: 12, stagger: 0.09, duration: 0.2 }, 16.1);
+
+      captionAt(21.0, vars.captionE);
+      tl.to("#phone", { opacity: 0.28, scale: 0.985, duration: 0.46 }, 20.75)
+        .to("#headline", { opacity: 1, scale: 1, duration: 0.48 }, 21.0)
+        .to("#root", { scale: 1.012, duration: 4.7, ease: "none" }, 21.0);
+    </script>
+  </body>
+</html>

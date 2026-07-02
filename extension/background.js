@@ -7,6 +7,13 @@
 const DEFAULT_ENGINE_HTTP = "http://127.0.0.1:8787";
 const PING_MS = 20000;
 
+// DEMO-ONLY (temporary, not for production): when true the agent's working tab is brought to the
+// FOREGROUND on every navigate/create so a screen recording shows the page visibly advancing. The
+// real product runs in the BACKGROUND (active:false) so it never steals the user's focus. Flip back
+// to false after recording.
+const ANTICIPY_DEMO_VISIBLE = true;
+const TAB_ACTIVE = ANTICIPY_DEMO_VISIBLE ? true : false;
+
 // Onboarding scrape: services to probe for an already-logged-in session (the engine may send its
 // own list via the discover_connections message). PRIVACY: we only detect a logged-in vs sign-in
 // signal — never read account contents, never store identifiers, never enter credentials.
@@ -516,13 +523,19 @@ async function doObserve(msg) {
       tab = await openInGroup(requestedUrl || (tab ? tab.url : "about:blank"));
       debug.after_open_url = tab && tab.url ? tab.url : "";
       debug.recreated = !!tab._anticipyRecreated;
-      await waitForComplete(tab.id, 25000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl);
+      // 10s (was 25s): the extension's whole observe (this wait + settle + DOM extract + child-frame
+      // read + screenshot) MUST return well inside the engine's per-observe timeout (25s), or the
+      // engine gives up and DISCARDS a response the extension was about to send — the exact silent
+      // failure that made Cambridge Dictionary (heavy consent/ad iframes that never fully settle)
+      // return nothing. waitForComplete already resolves on a usable DOM at its timeout, so 10s is
+      // plenty to reach an interactive page; the settle() below still gives late JS a beat to paint.
+      await waitForComplete(tab.id, 10000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl);
       try {
         const afterWait = await chrome.tabs.get(tab.id);
         debug.after_wait_url = afterWait && afterWait.url ? afterWait.url : "";
         debug.after_wait_status = afterWait && afterWait.status ? afterWait.status : "";
       } catch (e) {}
-      await settle(tab.id);
+      await settle(tab.id, 4000);
     } else {
       await ensureGroup(tab.id);
       await settle(tab.id);
@@ -544,8 +557,33 @@ async function doObserve(msg) {
         const out = []; let i = 0; const _seen = new Set();
         for (const el of document.querySelectorAll(sel)) {
           if (_seen.has(el)) continue; _seen.add(el);
-          const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
-          if (r.width <= 2 || r.height <= 2 || cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
+          let r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
+          const _elHidden = (r.width <= 2 || r.height <= 2 || cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0');
+          if (_elHidden) {
+            // A native form control (checkbox/radio/select) or ARIA toggle is frequently rendered as a
+            // 0-size / opacity:0 input behind a styled <label> or wrapper that IS the visible, clickable
+            // surface (PrestaShop/Bootstrap custom checkboxes, styled radios). Dropping it on size/opacity
+            // made REQUIRED consent boxes ("I agree to the terms…") invisible to the agent — it could
+            // never tick them and every checkout stalled. Rescue such controls by adopting their visible
+            // label's rect as the interactive surface; action=check sets .checked directly by index, and a
+            // click lands on the label (which forwards to the input). Only drop if NO visible surface.
+            const _rescuable = ((el.tagName === 'INPUT' && (el.getAttribute('type') || '').toLowerCase() !== 'hidden')
+              || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA'
+              || el.getAttribute('role') === 'checkbox' || el.getAttribute('role') === 'radio' || el.getAttribute('role') === 'switch');
+            let _lr = null;
+            if (_rescuable) {
+              let _labs = [];
+              try { if (el.labels && el.labels.length) _labs = Array.from(el.labels); } catch (e) {}
+              if (!_labs.length && el.id) { const _l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (_l) _labs = [_l]; }
+              if (!_labs.length) { const _pl = el.closest('label'); if (_pl) _labs = [_pl]; }
+              for (const _l of _labs) {
+                const _q = _l.getBoundingClientRect(); const _lcs = getComputedStyle(_l);
+                if (_q.width > 2 && _q.height > 2 && _lcs.visibility !== 'hidden' && _lcs.display !== 'none' && _lcs.opacity !== '0') { _lr = _q; break; }
+              }
+            }
+            if (!_lr) continue;   // genuinely no visible surface — drop as before
+            r = _lr;              // adopt the label as this control's interactive rect
+          }
           if (r.bottom < -50 || r.right < 0 || r.top > innerHeight + 4000 || r.left > innerWidth) continue;
           el.setAttribute('data-anticipy-idx', String(i));
           let labelText = '';
@@ -560,7 +598,22 @@ async function doObserve(msg) {
               if (parentLabel) labelText = (parentLabel.innerText || parentLabel.textContent || '').trim();
             }
           } catch (e) {}
-          let name = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || labelText || el.getAttribute('title') || el.innerText || '').trim();
+          // el.value is a good NAME only for a free-text <input>/<textarea> (its current content) or a
+          // <input type=submit|button|reset> (whose value IS the rendered caption). For a <button> the
+          // value is a submit token ("1") while the caption lives in innerText ("Continue"); for a
+          // <select> it is the chosen option's id; for a checkbox/radio it is "1"/"on". Using value for
+          // ANY of those hid the real label — a checkout "Continue" submit button, a shipping carrier
+          // radio, and a PrestaShop consent box ALL serialized as the name "1" and were untargetable
+          // (the agent could not click a "Continue" it never saw). Restrict value-as-name to the two
+          // cases where value is genuinely the human-facing text; everything else falls to label/innerText.
+          const _tag = el.tagName;
+          const _itype = (el.getAttribute('type') || '').toLowerCase();
+          const _valueAsName = (_tag === 'INPUT' && (
+            _itype === 'submit' || _itype === 'button' || _itype === 'reset'
+            || _itype === 'text' || _itype === 'email' || _itype === 'tel' || _itype === 'search'
+            || _itype === 'url' || _itype === 'number' || _itype === 'password' || _itype === 'date' || _itype === ''));
+          let name = (el.getAttribute('aria-label') || el.getAttribute('placeholder')
+            || (_valueAsName ? el.value : '') || labelText || el.getAttribute('title') || el.innerText || '').trim();
           if (!name) { const img = el.querySelector('img'); if (img) name = (img.getAttribute('alt') || '').trim(); }
           if (!name) name = (el.textContent || '').trim();
           if (!name) { const anc = el.closest('li, article, section, [role="listitem"], [role="article"]'); if (anc) { const h = anc.querySelector('h1, h2, h3, [role="heading"]'); if (h) name = (h.innerText || '').trim(); } }
@@ -580,11 +633,26 @@ async function doObserve(msg) {
           let _fval = '';
           try {
             if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') _fval = String(el.value || '');
+            // A <select> exposed NO current value, so the agent could not tell that "State" was already
+            // "California" or "Country" already "United States" — it re-selected the same option every
+            // step (NO_CHANGE) and never advanced to Continue (the checkout dropdown dead-spiral).
+            // Surface the chosen option's visible TEXT; skip the empty placeholder ("Please choose").
+            else if (el.tagName === 'SELECT') { const _so = el.options[el.selectedIndex]; _fval = (_so && _so.value) ? String(_so.textContent || '').trim() : ''; }
             else if (el.isContentEditable) _fval = String(el.textContent || '');
           } catch (e) {}
-          if (_fval && (el.getAttribute('type') || '').toLowerCase() !== 'password') stt.push('value=' + _fval.slice(0, 40));
-          else if (_fval) stt.push('filled');
+          if (_fval && !_toggle && (el.getAttribute('type') || '').toLowerCase() !== 'password') stt.push('value=' + _fval.slice(0, 40));
+          else if (_fval && !_toggle) stt.push('filled');
           const ae = el.getAttribute('aria-expanded'); if (ae) stt.push('expanded=' + ae);
+          // Surface REQUIRED + HTML5 validation so the agent knows a field must be satisfied before a
+          // form will submit. A required, unchecked consent box or an :invalid field with a browser
+          // message ("Please check this box if you want to proceed.") is the exact signal that a
+          // Continue/submit click was blocked — without it the agent clicks submit forever.
+          try {
+            if (el.required || el.getAttribute('aria-required') === 'true') stt.push('required');
+            if (typeof el.willValidate !== 'undefined' && el.willValidate && el.validationMessage && (el.matches && el.matches(':invalid'))) {
+              stt.push('invalid=' + String(el.validationMessage).slice(0, 60));
+            }
+          } catch (e) {}
           const inView = r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
           let sponsored = false;
           const sanc = el.closest('li, article, section, [role="listitem"], [role="article"]');
@@ -650,6 +718,36 @@ async function doObserve(msg) {
           scrollY: Math.round(window.scrollY || 0), scrollMax: Math.max(0, Math.round((_se ? _se.scrollHeight : 0) - innerHeight)) };
       },
     });
+    // SET-OF-MARKS: paint numbered boxes over the interactive elements (keyed by the SAME
+    // data-anticipy-idx set during extraction) into an overlay, so the captured screenshot carries
+    // the [idx] labels the model grounds on ("click 12" -> element idx 12). Drawn only for the
+    // capture, on the background working tab, then removed immediately (line below) — the user's
+    // live page is never left marked. This is what makes vision-first grounding reliable.
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => {
+        const old = document.getElementById('anticipy-som'); if (old) old.remove();
+        const box = document.createElement('div');
+        box.id = 'anticipy-som';
+        box.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none;margin:0;padding:0;';
+        const palette = ['#E6194B','#3CB44B','#4363D8','#F58231','#911EB4','#008080','#F032E6','#9A6324','#800000','#000075'];
+        const nodes = document.querySelectorAll('[data-anticipy-idx]');
+        for (const el of nodes) {
+          const idx = el.getAttribute('data-anticipy-idx');
+          let r; try { r = el.getBoundingClientRect(); } catch (e) { continue; }
+          if (!r || r.width <= 2 || r.height <= 2) continue;
+          if (r.bottom < 0 || r.right < 0 || r.top > window.innerHeight || r.left > window.innerWidth) continue; // in-view only
+          const c = palette[(parseInt(idx, 10) || 0) % palette.length];
+          const b = document.createElement('div');
+          b.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border:2px solid ${c};box-sizing:border-box;pointer-events:none;`;
+          const lab = document.createElement('div');
+          lab.textContent = idx;
+          const ly = r.top >= 13 ? (r.top - 13) : r.top;
+          lab.style.cssText = `position:fixed;left:${r.left}px;top:${ly}px;background:${c};color:#fff;font:700 11px/13px monospace;padding:0 3px;pointer-events:none;white-space:nowrap;`;
+          box.appendChild(b); box.appendChild(lab);
+        }
+        document.documentElement.appendChild(box);
+      }});
+    } catch (e) {}
     const screenshot = await cdpScreenshot(tab.id);
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => { const e = document.getElementById('anticipy-som'); if (e) e.remove(); } });
     // CHILD-FRAME TEXT: the top-frame DOM extract above is blind to <iframe>/<frame> content
@@ -658,10 +756,20 @@ async function doObserve(msg) {
     // append it, labelled by the frame's own URL, so frame content becomes part of the page text.
     let pageText = page.text;
     try {
-      const frames = await chrome.scripting.executeScript({
-        target: { tabId: tab.id, allFrames: true },
-        func: () => ({ u: location.href, t: (document.body ? document.body.innerText : '').replace(/\s+/g, ' ').trim().slice(0, 1500) }),
-      });
+      // allFrames executeScript blocks until EVERY frame answers. On an ad/consent-heavy page
+      // (Cambridge Dictionary carries a Sourcepoint CMP + many cross-origin ad iframes) a single
+      // slow/stuck frame hangs this call indefinitely — which hung the WHOLE observe past the
+      // engine's timeout, so the engine discarded the reply and the task saw an empty page and
+      // failed. Race it against a short deadline: child-frame text is a NICE-TO-HAVE (only a few
+      // tasks need frame content); the top-frame DOM+elements above is what matters. On timeout we
+      // simply skip frame text and return the real page.
+      const frames = await Promise.race([
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id, allFrames: true },
+          func: () => ({ u: location.href, t: (document.body ? document.body.innerText : '').replace(/\s+/g, ' ').trim().slice(0, 1500) }),
+        }),
+        new Promise((res) => setTimeout(() => res(null), 6000)),
+      ]);
       const extra = [];
       for (const f of (frames || [])) {
         const fr = f && f.result;
@@ -695,7 +803,7 @@ async function doAct(msg) {
     if (!tab) return result(msg, "needs_human", null, { reason: "no working tab" });
 
     if (a.action === "navigate") {
-      tab = await chrome.tabs.update(tab.id, { url: a.url, active: false });
+      tab = await chrome.tabs.update(tab.id, { url: a.url, active: TAB_ACTIVE });
       await waitForComplete(tab.id, 25000, tab._anticipyBeforeUrl, tab._anticipyTargetUrl); await settle(tab.id);
       return result(msg, "success", null, { ok: true, action: "navigate", url: a.url });
     }
@@ -896,9 +1004,9 @@ async function createTab(url) {
     try { const ws = await chrome.windows.getAll({ windowTypes: ["normal"] }); if (ws && ws.length) winId = ws[ws.length - 1].id; } catch (e) {}
   }
   if (winId != null) {
-    try { return await chrome.tabs.create({ url, active: false, windowId: winId }); } catch (e) {}
+    try { return await chrome.tabs.create({ url, active: TAB_ACTIVE, windowId: winId }); } catch (e) {}
   }
-  const win = await chrome.windows.create({ url, focused: false });
+  const win = await chrome.windows.create({ url, focused: ANTICIPY_DEMO_VISIBLE });
   if (win && win.tabs && win.tabs[0]) return win.tabs[0];
   const q = await chrome.tabs.query({ windowId: win && win.id });
   return q[0];
@@ -910,7 +1018,7 @@ async function openInGroup(url) {
   const beforeUrl = tab && tab.url ? tab.url : "";
   let recreated = false;
   if (tab) {
-    tab = await chrome.tabs.update(tab.id, { url, active: false });
+    tab = await chrome.tabs.update(tab.id, { url, active: TAB_ACTIVE });
     await sleep(200);
     const current = await chrome.tabs.get(tab.id);
     if (url && beforeUrl && url !== beforeUrl && current.url === beforeUrl && current.status === "loading") {
@@ -992,7 +1100,14 @@ function waitForComplete(tabId, timeout, beforeUrl, targetUrl) {
           func: () => document.readyState,
         }, (rows) => {
           const rs = rows && rows[0] && rows[0].result ? rows[0].result : "unknown";
-          if (navigationHasMoved(tab, beforeUrl, targetUrl) && (rs === "interactive" || rs === "complete")) finish();
+          // At the HARD timeout, a usable DOM is good enough — do NOT throw away the whole observe
+          // over the navigationHasMoved URL heuristic. Heavy sites (Cambridge Dictionary's consent +
+          // ad iframes, anything that redirects through a CMP) keep the tab churning so the URL check
+          // never satisfies, yet the real DOM is fully interactive. Bailing here returned an EMPTY
+          // observe → the agent saw nothing → wandered/failed. The engine has its own stale-page guard
+          // (re-observes until the observed URL matches the requested host+path), so resolving on a
+          // ready DOM here is safe and unblocks these sites. Only fail if the DOM is genuinely not up.
+          if (rs === "interactive" || rs === "complete") finish();
           else fail(new Error("load timeout status=" + status + " url=" + currentUrl + " readyState=" + rs));
         });
       });

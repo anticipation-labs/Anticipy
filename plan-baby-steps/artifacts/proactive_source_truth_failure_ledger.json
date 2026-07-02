@@ -1,0 +1,26 @@
+{
+  "adjudication": {
+    "count": 0,
+    "excluded": [],
+    "path": "/Users/omarebrahim/Anticipy/engine/data/proactive/source_truth_adjudications.json"
+  },
+  "concurrency": 2,
+  "failures": [],
+  "provider": "gemini",
+  "sample_n": 3,
+  "totals": {
+    "act_cases": 8,
+    "adjudicated_excluded": 0,
+    "any_coverage_rate": 1.0,
+    "cases": 15,
+    "correct_ignore": 7,
+    "false_fire": 0,
+    "full_coverage_rate": 1.0,
+    "gateway_failures": 0,
+    "hit": 8,
+    "ignore_cases": 7,
+    "miss": 0,
+    "partial": 0,
+    "wrong_disposition": 0
+  }
+}
