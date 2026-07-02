@@ -3,7 +3,7 @@
 
 # 05 — CURRENT STATE (the one living status page)
 
-**Last verified: 2026-07-02.** Rule: stale >7 days = suspect — re-run the proof commands below
+**Last verified: 2026-07-02 (end of the overnight build).** Rule: stale >7 days = suspect — re-run the proof commands below
 before trusting anything here. Live milestone ledger = `MISSION_LOCK.md` STATUS TABLE (pasted PASS
 outputs live there); this page is the plain-English summary of it.
 
