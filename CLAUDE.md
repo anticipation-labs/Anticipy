@@ -1,5 +1,12 @@
 # Anticipy — session bootstrap (auto-loaded; survives compaction and fresh sessions)
 
+> 🟡 **READ `MISSION_LOCK.md` (repo root) FIRST — IT IS THE ONLY SOURCE OF MISSION TRUTH.**
+> Locked 2026-07-01 by Omar. It holds the approved master plan (Track B + M1→M9, each with a PASS
+> test), the live STATUS TABLE, and the operating protocol: always work the LOWEST OPEN milestone,
+> prove its PASS test on the live engine, paste the proof, commit, move on — until M8 is green.
+> Side requests are DETOURS (do, log, return). Money/submit is the only hard stop. Never claim a
+> milestone without its pasted PASS output. On any conflict, `MISSION_LOCK.md` wins over the docs below.
+
 > 🔴 **READ `THE_MISSION.md` (repo root) FIRST, BEFORE ANYTHING ELSE.** It is the standing,
 > harsh-toned mission Omar instilled: build Anticipy to INVESTOR-READY, fully autonomously, via a
 > self-loop that does NOT stop until the done-gate is green. It carries the purity rules (verify
