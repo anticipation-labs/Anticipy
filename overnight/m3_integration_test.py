@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """M3 LIVE integration — the autonomy dial end-to-end on the running engine.
 Run via overnight/run_m3_integration.sh (fresh engine + cleared trust/cards)."""
-import json, urllib.request, time
+import json, os, urllib.request, time
 
-ENGINE = "http://127.0.0.1:8787"
+ENGINE = os.environ.get("ANTICIPY_ENGINE_URL", "http://127.0.0.1:8787")
 def post(path, body):
     req = urllib.request.Request(ENGINE + path, method="POST",
         data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})

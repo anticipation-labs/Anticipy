@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """M1 acceptance test — the 6-line battery, asserted against the LIVE engine.
 'Done' for M1 = this prints ALL PASS. Run: python3 overnight/m1_battery.py"""
-import json, urllib.request
+import json, os, urllib.request
 
-ENGINE = "http://127.0.0.1:8787"
+ENGINE = os.environ.get("ANTICIPY_ENGINE_URL", "http://127.0.0.1:8787")
 
 def ingest(text):
     # execute_actions=True = the REAL product path (listening/ambient), where _spine_card runs.

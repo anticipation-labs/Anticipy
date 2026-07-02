@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """M2 acceptance — every card the user sees is HUMAN: no engine templates, IDs, arrows, or jargon.
 Run via overnight/run_m2_copy.sh (it restarts the engine on clean state first)."""
-import json, re, urllib.request
+import json, os, re, urllib.request
 
-ENGINE = "http://127.0.0.1:8787"
+ENGINE = os.environ.get("ANTICIPY_ENGINE_URL", "http://127.0.0.1:8787")
 JARGON = ("dispatching", "the engine", "ingest", "harm-line", "press-go", "pipeline",
           "task queue", "anticipy:", "reminder:", "open loop", "the system", "disposition",
           "goal_state", "glassbox", "card record")
