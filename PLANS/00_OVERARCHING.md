@@ -12,12 +12,12 @@ A milestone may NOT be marked PASSED off work that bypassed its FIX plan's proof
 |--------|----------------------------------------------------------------|-----------------|-------------|---------------|
 | FIX-00 | canon-docs + gate | docs foundation | DONE | 2026-07-02 |
 | FIX-01 | one-pipeline (proactive consolidation Phases 1-2) | M1 durability | IN-PROGRESS | 2026-07-02 |
-| FIX-02 | orphans (anticipate wire-or-delete, digest wire) | — | OPEN | 2026-07-02 |
+| FIX-02 | orphans (anticipate wire-or-delete, digest wire) | — | IN-PROGRESS | 2026-07-02 |
 | FIX-03 | deep-scrape-wire | M5 | OPEN | 2026-07-02 |
-| FIX-04 | autonomy-wire | — | OPEN | 2026-07-02 |
+| FIX-04 | autonomy-wire | — | DONE | 2026-07-02 |
 | FIX-05 | profile-wire | — | OPEN | 2026-07-02 |
-| FIX-06 | pending-wire | — | OPEN | 2026-07-02 |
-| FIX-07 | true-proactive (derive + world_research + derive_tick) | the marquee | OPEN | 2026-07-02 |
+| FIX-06 | pending-wire | — | DONE | 2026-07-02 |
+| FIX-07 | true-proactive (derive + world_research + derive_tick) | the marquee | IN-PROGRESS | 2026-07-02 |
 | FIX-08 | remembered-panel | — | OPEN | 2026-07-02 |
 | FIX-09 | voice-checklist | M6 | OPEN | 2026-07-02 |
 | FIX-10 | deep-read-hand | — | OPEN | 2026-07-02 |
