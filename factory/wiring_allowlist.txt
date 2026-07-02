@@ -25,14 +25,11 @@ endpoint	/onboard/loop	TODO(FIX-03/FIX-10): onboarding loop endpoint exists but 
 endpoint	/onboard/deep-read-hand	TODO(FIX-03/FIX-10): deep-read hand exists; UI uses the shallow extension snapshot instead ("plumbed separately")
 route	/api/onboard/owner-scrape	TODO(FIX-03/FIX-10): owner-scrape proxy route has no UI caller — onboarding calls the shallow path
 route	/api/onboard/status	TODO(FIX-03/FIX-10): onboarding status route unpolled by the UI — the flow can't show real progress
-endpoint	/owner/autonomy_mode	TODO(FIX-04): the real engine autonomy gate — the dropdown wrote a local JSON store while this sat unused (the canonical wiring failure)
-route	/api/owner/stop	TODO(FIX-04): owner stop-switch route has no UI caller — the control surface isn't wired to the button
 endpoint	/capture	TODO(FIX-05): generic capture front door unused by product surfaces; product should POST captures here instead of script-only feeding
 endpoint	/memory/history	TODO(FIX-05): memory history endpoint never surfaced in the UI memory/profile seam
 route	/api/memory/open-loops	TODO(FIX-05): open-loops route built, never fetched by the UI — loops invisible to the user
 route	/api/memory/resolve-loop	TODO(FIX-05): resolve-loop route built, no UI resolve action calls it
 route	/api/onboarding/profile	TODO(FIX-05): profile seam route unwired — the profile the onboarding builds never reaches the surface
-route	/api/pending	TODO(FIX-06): pending-asks route has no UI caller — the ask/confirm surface reads elsewhere
 route	/api/memory/remembered	TODO(FIX-08): remembered-memory surface built, never fetched by the UI
 route	/api/memory/remembered/approve	TODO(FIX-08): remembered approve action unwired from any UI button
 route	/api/memory/remembered/dryrun	TODO(FIX-08): remembered dryrun unwired from any UI control
@@ -61,3 +58,4 @@ module	core/workers/browser.py	test-infrastructure: BrowserStub is the suite moc
 module	core/workers/connector.py	test-infrastructure: ConnectorStub is the suite mock worker, re-exported by core/workers/__init__.py (product package) and used by 20+ suite tests
 route	/api/digest	TODO(FIX-14): digest-now button not in the UI yet — the proxy exists for the ledger/actions surface pass
 route	/api/derive	TODO(FIX-07): the "anticipate now" button lands with the board UI pass — proxy wired, UI caller pending
+route	/api/owner/stop	TODO(FIX-06b): the STOP control for in-flight "on it" cards — engine route live (2026-07-02), the button itself is not rendered yet

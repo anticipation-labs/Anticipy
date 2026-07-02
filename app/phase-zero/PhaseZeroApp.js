@@ -818,12 +818,34 @@ function DoneScreen() {
   );
 }
 
+function PendingAsksPanel({ pendingAsks, onResolve }) {
+  if (!pendingAsks || pendingAsks.length === 0) return null;
+  return (
+    <section className="pz-pending-asks" aria-label="Waiting for your yes">
+      <h3>Waiting for your yes</h3>
+      {pendingAsks.map((ask) => (
+        <article key={ask.ask_id} className="pz-pending-ask">
+          <div>
+            <strong>{humanTitle(ask.action || "")}</strong>
+            {ask.reason ? <p>{humanTitle(ask.reason)}</p> : null}
+          </div>
+          <div className="pz-pending-actions">
+            <button type="button" onClick={() => onResolve(ask.ask_id, true)}>Yes, go ahead</button>
+            <button type="button" className="pz-ghost" onClick={() => onResolve(ask.ask_id, false)}>Not this one</button>
+          </div>
+        </article>
+      ))}
+    </section>
+  );
+}
+
 function BoardScreen(props) {
   const featuredCard = props.cards[0];
   return (
     <div className="pz-scene pz-board-scene">
       <ActiveListeningPanel {...props} />
       <GatewayCircuit gatewayEvents={props.gatewayEvents} compact />
+      <PendingAsksPanel pendingAsks={props.pendingAsks} onResolve={props.resolvePending} />
       {featuredCard ? <FeaturedTaskCard card={featuredCard} onResolve={props.resolveCard} onComment={props.saveComment} comment={props.comments[featuredCard.id] || ""} /> : null}
       <section className="pz-action-dock pz-action-dock-board">
         <a href="/mp3" className="pz-action-tile"><span>Upload</span><small>MP3 or transcript</small></a>
@@ -1289,6 +1311,28 @@ function ContextPackInspector() {
 }
 
 function SettingsScreen({ settings, setSettings, saveSettings, gatewayEvents }) {
+  // FIX-04 (2026-07-02): the dropdown used to write ONLY a local display store — the engine's
+  // real autonomy gate never heard about it. Now: read the real mode on mount, POST on change.
+  const AUTONOMY_TO_ENGINE = { Limited: "limited", Regular: "regular", "Full-Send": "full_send" };
+  const ENGINE_TO_AUTONOMY = { limited: "Limited", regular: "Regular", full_send: "Full-Send" };
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await jsonFetch("/api/owner/autonomy");
+        const label = ENGINE_TO_AUTONOMY[data.mode];
+        if (label) setSettings((current) => ({ ...current, autonomy: label }));
+      } catch { /* engine offline: the local label stands until it isn't */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  async function syncAutonomy(label) {
+    patch("autonomy", label);
+    const mode = AUTONOMY_TO_ENGINE[label];
+    if (!mode) return;
+    try {
+      await jsonFetch("/api/owner/autonomy", { method: "POST", body: JSON.stringify({ mode }) });
+    } catch { /* the mount read shows the honest engine state next visit */ }
+  }
   function patch(path, value) {
     setSettings((current) => {
       const next = structuredCloneSafe(current);
@@ -1320,7 +1364,7 @@ function SettingsScreen({ settings, setSettings, saveSettings, gatewayEvents }) 
           <div className="pz-settings-body">
           <label>
             <span>Autonomy</span>
-            <select value={settings.autonomy || "Regular"} onChange={(event) => patch("autonomy", event.target.value)}>
+            <select value={settings.autonomy || "Regular"} onChange={(event) => syncAutonomy(event.target.value)}>
               <option>Limited</option>
               <option>Regular</option>
               <option>Full-Send</option>
@@ -1405,6 +1449,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
   const [ingestBusy, setIngestBusy] = useState(false);
   const [ingestMessage, setIngestMessage] = useState("");
   const [engineCards, setEngineCards] = useState([]);
+  const [pendingAsks, setPendingAsks] = useState([]);
   const [gatewayEvents, setGatewayEvents] = useState([]);
   const [comments, setComments] = useState({});
   const [textMirror, setTextMirror] = useState({});
@@ -1459,6 +1504,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
       refreshEngine(),
       refreshListenStatus(),
       loadCards(),
+      loadPending(),
       loadGatewayEvents(),
       loadTaskState(),
     ]);
@@ -1546,6 +1592,29 @@ export default function PhaseZeroApp({ screen = "board" }) {
     } catch {
       setEngineCards([]);
     }
+  }
+
+  // FIX-06 (2026-07-02): the app could RESOLVE asks but never LISTED them — the
+  // "waiting for your yes" room was invisible. This is the read half of that loop.
+  async function loadPending() {
+    try {
+      const data = await jsonFetch("/api/pending");
+      setPendingAsks(Array.isArray(data.pending) ? data.pending : []);
+    } catch {
+      setPendingAsks([]);
+    }
+  }
+
+  async function resolvePending(askId, approved) {
+    try {
+      await jsonFetch("/api/resolve", {
+        method: "POST",
+        body: JSON.stringify({ ask_id: askId, approved }),
+      });
+    } catch {
+      /* the reload below shows the honest state either way */
+    }
+    await Promise.allSettled([loadPending(), loadCards(), loadGatewayEvents()]);
   }
 
   async function loadGatewayEvents() {
@@ -1767,6 +1836,8 @@ export default function PhaseZeroApp({ screen = "board" }) {
     setProfile,
     settings,
     setSettings,
+    pendingAsks,
+    resolvePending,
     onboarding,
     engineState,
     listenStatus,

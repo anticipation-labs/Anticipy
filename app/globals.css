@@ -2821,3 +2821,13 @@ body {
    Markup/logic are untouched — this only hides source-truth tags + the Live-circuit telemetry panel. */
 body:not(.pz-debug) .pz-dev-tags,
 body:not(.pz-debug) .pz-gateway { display: none !important; }
+
+/* FIX-06: the "Waiting for your yes" room — pending asks, finally visible. */
+.pz-pending-asks { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid rgba(212,175,55,.35); border-radius: 14px; background: rgba(212,175,55,.06); }
+.pz-pending-asks h3 { margin: 0; font-size: 15px; }
+.pz-pending-ask { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.pz-pending-ask p { margin: 2px 0 0; opacity: .75; font-size: 13px; }
+.pz-pending-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.pz-pending-actions .pz-ghost { opacity: .7; }
+.pz-pending-actions button { background: #d4af37; color: #1a1a17; border: 0; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.pz-pending-actions button.pz-ghost { background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.25); }
