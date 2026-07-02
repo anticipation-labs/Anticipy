@@ -18,9 +18,13 @@ _PROMPT = (
     '{"identity":{"name":"","role":"","location":"","email":""},'
     '"work":"one or two plain sentences",'
     '"people":[{"name":"","relationship":"","why_they_matter":""}],'
-    '"family":[""],"tools":[""],"act_on_sites":[""],'
+    '"family":[""],"tools":[""],"act_on_sites":[{"name":"","url":""}],'
     '"gaps":["the most useful things still unknown that a short call should ask"],'
-    '"confidence":0.0}\n\nRAW ACCOUNT TEXT:\n'
+    '"confidence":0.0}\n'
+    "For act_on_sites: these are the OTHER systems this person's life actually lives in (their CRM, "
+    "Notion, billing dashboard, project tracker) — include the exact https URL you actually SAW in "
+    "the text (a link in an email, a calendar entry, a signature). NEVER invent or guess a URL; if "
+    "you only saw a tool's name with no link, put it in tools, not act_on_sites.\n\nRAW ACCOUNT TEXT:\n"
 )
 
 

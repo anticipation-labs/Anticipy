@@ -38,6 +38,7 @@ run safety_mega_eval "$PY" "$REPO/engine/scripts/safety_mega_eval.py"  # 145-lin
 run premium_copy "$PY" "$REPO/factory/bin/check_premium_copy.py" --quiet  # UX_SPEC §4.8/R4.1 banned-strings gate: no dev-console leaks (Owner Mode/Press Go/route tags/raw engine fields) reach the surface; source backstop + raw-JSX check run even without :3000
 run wiring_gate "$PY" "$REPO/factory/bin/check_wiring.py" --quiet  # PLUMBING GATE: every engine endpoint has a product caller, every app/api route a UI caller, no orphan modules — "built but never wired" fails; debt is explicit TODO(FIX-NN) lines in factory/wiring_allowlist.txt, burned down via PLANS/ (FIX-19 flips --strict)
 run derive_tick "$PY" "$REPO/engine/scripts/test_derive_tick.py"  # TRUE PROACTIVITY (FIX-07): derive→research→ONE-front-door→notify orchestration, fire-once ledger, structural money/confidence floors, stub honesty
+run onboard_loop_expansion "$PY" "$REPO/engine/scripts/test_onboard_loop_expansion.py"  # SELF-EXPANDING SCRAPE (FIX-11): layer 2+ follows the discovered graph (real-URL-only, nav-wall refused, consent-gated)
 run memory_eval_selftest "$PY" "$REPO/engine/scripts/memory_eval.py" --selftest  # instrument soundness (zero model calls)
 run proactive_eval_selftest "$PY" "$REPO/engine/scripts/proactive_eval.py" --selftest  # proactive report-card instrument (zero model calls)
 run journey_eval_selftest "$PY" "$REPO/engine/scripts/journey_eval.py" --selftest  # journey gauge soundness (zero model calls)

@@ -15,6 +15,11 @@ SERVICES = [
     {"service": "calendar", "label": "Google Calendar", "why": "to learn your week and commitments"},
     {"service": "contacts", "label": "Google Contacts", "why": "to learn the people who matter"},
     {"service": "linkedin", "label": "LinkedIn", "why": "to learn your work and network"},
+    # FIX-11 (2026-07-02): the self-expanding layer-2+ consent — the sites the scrape DISCOVERS
+    # inside the accounts above (a CRM, Notion, a billing dashboard). One toggle covers them all;
+    # nothing expands without it, and the money/nav wall still refuses banks per-URL regardless.
+    {"service": "discovered", "label": "Sites I discover inside your accounts",
+     "why": "so layer 2+ can follow your real systems (CRM, Notion, billing) that your email and calendar point to"},
 ]
 # which scrape-surface keys belong to which service (so one "allow Gmail" covers inbox + sent)
 SURFACE_SERVICE = {

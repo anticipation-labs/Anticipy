@@ -8,9 +8,48 @@ nothing new. Genuine + honest throughout — it reuses owner_scrape, which never
 """
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
+from ..core.navwall import nav_block_reason
 from . import dossier as _dossier
 from .owner_scrape import DEFAULT_SURFACES, scrape_owner
 from .permissions import SURFACE_SERVICE
+
+# FIX-11 (2026-07-02): layer 2+ EXPANDS. Before this, every layer re-scrolled the same fixed
+# surface set deeper — "layer 2/3" was depth on identical inputs, not the graph expansion the
+# name promised. Now each layer unions in the systems the DOSSIER actually discovered (the CRM /
+# Notion / billing links seen inside the owner's own accounts), gated by the single "discovered"
+# consent. Hard rules: a discovered surface must carry a REAL https URL the model SAW (never a
+# name→domain guess), the nav/money wall refuses banks/checkout per-URL, hosts already allowed or
+# already bounced (needs_login) are skipped, and each layer adds at most MAX_DISCOVERED_PER_LAYER.
+MAX_DISCOVERED_PER_LAYER = 4
+
+
+def _discovered_surfaces(doss: dict, current: list, bounced_hosts: set) -> list:
+    """The dossier's act_on_sites -> new scrape surfaces, filtered hard (see module note)."""
+    have_hosts = {s.get("host", "") for s in current} | set(bounced_hosts)
+    out: list = []
+    for site in (doss.get("dossier", {}) or {}).get("act_on_sites", []) or []:
+        if not isinstance(site, dict):
+            continue   # a bare name has no URL the model actually saw — tools, not a surface
+        url = str(site.get("url") or "").strip()
+        name = str(site.get("name") or "").strip() or url
+        if not url.startswith("https://"):
+            continue
+        try:
+            host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+        except Exception:
+            continue
+        if not host or host in have_hosts:
+            continue
+        if nav_block_reason(url):
+            continue   # the money/nav wall: banks, checkout, payments never enter the loop
+        have_hosts.add(host)
+        out.append({"key": f"disc_{host.replace('.', '_')}", "label": f"Discovered — {name}",
+                    "url": url, "host": host})
+        if len(out) >= MAX_DISCOVERED_PER_LAYER:
+            break
+    return out
 
 MAX_LAYERS = 4
 # each layer reads DEEPER: (max_chars, scroll_steps). Layer 1 catalogues the surface; later layers
@@ -58,6 +97,15 @@ async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYER
         })
         core.glassbox.log("onboard_loop_layer", {"layer": layer, "scraped": signals.get("logged_in"),
                                                  "needs_login": needs_login, "confidence": conf})
+        # FIX-11: EXPAND — union in the systems this layer's dossier discovered, so the NEXT layer
+        # follows the owner's real graph instead of re-scrolling the same five sites deeper.
+        if perms.is_allowed("discovered"):
+            new_surfaces = _discovered_surfaces(doss, allowed, set(needs_login or []))
+            if new_surfaces:
+                allowed = allowed + new_surfaces
+                layers[-1]["discovered"] = [s["host"] for s in new_surfaces]
+                core.glassbox.log("onboard_loop_expanded", {"layer": layer,
+                                                            "added": [s["host"] for s in new_surfaces]})
         # stop: nothing left to log into AND confident
         if not needs_login and conf >= _CONFIDENT:
             break

@@ -21,9 +21,8 @@ endpoint	/console	operator dev console served as an HTML page: opened by typing 
 route	/api/health	uptime monitors and deploy probes hit this from outside the repo (curl/Railway/Vercel checks); it exists to be probed, not fetched by the UI
 # ---------------------------------------------------------------- TODO debt (each one is a severed seam)
 route	/api/anticipate/research	TODO(FIX-02): deep-research seam — route exists, zero UI callers; the research surface was built and never surfaced
-endpoint	/onboard/loop	TODO(FIX-03/FIX-10): onboarding loop endpoint exists but the UI onboarding flow never drives it — the exact deep-scrape-vs-shallow disease
-endpoint	/onboard/deep-read-hand	TODO(FIX-03/FIX-10): deep-read hand exists; UI uses the shallow extension snapshot instead ("plumbed separately")
-route	/api/onboard/owner-scrape	TODO(FIX-03/FIX-10): owner-scrape proxy route has no UI caller — onboarding calls the shallow path
+endpoint	/onboard/deep-read-hand	TODO(FIX-10): deep-read hand exists with no caller — wire as the loop's no-CDP arm or retire after one live trial
+route	/api/onboard/owner-scrape	TODO(FIX-10): owner-scrape proxy still has no UI caller — the loop (wired 2026-07-02) covers deep reads; decide wire-or-retire with deep-read-hand
 route	/api/onboard/status	TODO(FIX-03/FIX-10): onboarding status route unpolled by the UI — the flow can't show real progress
 endpoint	/capture	TODO(FIX-05): generic capture front door unused by product surfaces; product should POST captures here instead of script-only feeding
 endpoint	/memory/history	TODO(FIX-05): memory history endpoint never surfaced in the UI memory/profile seam

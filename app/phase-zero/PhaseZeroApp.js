@@ -536,11 +536,32 @@ function AccountReadStage({ deep = false, engineState }) {
     setMessage("");
     setResult(null);
     try {
-      const data = deep
-        ? await jsonFetch("/api/onboard/deep-scan", { method: "POST", body: "{}" })
-        : await jsonFetch("/api/onboard_scan", { method: "POST", body: JSON.stringify({ wait: true, timeout_s: 90 }) });
-      setResult(data);
-      setMessage(data.note || (data.triggered ? "Reading started in your Chrome." : "Your browser helper is not connected yet."));
+      let data;
+      if (deep) {
+        // FIX-03 (2026-07-02): "Go deeper" now runs the REAL 4-layer loop first — the genuine
+        // scroll+read of your logged-in accounts that expands into the systems it discovers
+        // (FIX-11). If the loop can't run (no debuggable Chrome), it says so honestly and we
+        // fall back to the shallow extension snapshot rather than pretending.
+        data = await jsonFetch("/api/onboard/loop", { method: "POST", body: "{}" });
+        if (data && data.ok === false) {
+          const reason = data.reason || "the deep read isn't available yet";
+          const fallback = await jsonFetch("/api/onboard/deep-scan", { method: "POST", body: "{}" });
+          setResult(fallback);
+          setMessage(`${reason} — using the quick read instead. ${fallback.note || ""}`.trim());
+          return;
+        }
+        setResult(data);
+        const read = (data.layers || []).flatMap((l) => l.scraped || []);
+        const grew = (data.layers || []).flatMap((l) => l.discovered || []);
+        const bits = [];
+        if (read.length) bits.push(`read ${[...new Set(read)].length} place${read.length === 1 ? "" : "s"} across ${data.layers.length} pass${data.layers.length === 1 ? "" : "es"}`);
+        if (grew.length) bits.push(`followed your world into ${grew.join(", ")}`);
+        setMessage(data.confirm_prompt || (bits.length ? `Done — ${bits.join("; ")}.` : "Done."));
+      } else {
+        data = await jsonFetch("/api/onboard_scan", { method: "POST", body: JSON.stringify({ wait: true, timeout_s: 90 }) });
+        setResult(data);
+        setMessage(data.note || (data.triggered ? "Reading started in your Chrome." : "Your browser helper is not connected yet."));
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
