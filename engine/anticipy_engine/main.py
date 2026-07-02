@@ -1704,6 +1704,23 @@ async def resolve(body: ResolveIn) -> dict:
     return await current_core().resolve(body.ask_id, body.approved)
 
 
+class OwnerStopIn(BaseModel):
+    card_id: str = ""
+    id: str = ""
+
+
+@app.post("/owner/stop")
+async def owner_stop(body: OwnerStopIn) -> dict:
+    """STOP control for an 'On it — you can stop me' reversible chore: halt any in-flight/queued work
+    and flip the durable card to 'stopped'. Reversible chores only (see stop_owner_card). The app's
+    STOP button POSTs {card_id}; without one, it no-ops honestly instead of erroring."""
+    cid = (body.card_id or body.id or "").strip()
+    if not cid:
+        return {"stopped": False, "reason": "no card_id provided"}
+    result = current_core().stop_owner_card(cid)
+    return result if isinstance(result, dict) else {"stopped": True, "card_id": cid}
+
+
 class AutonomyModeIn(BaseModel):
     mode: str
 
