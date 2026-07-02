@@ -5,6 +5,21 @@ import { createBrowserSupabaseClient } from "../../lib/supabase/client";
 import { supabaseMissingMessage } from "../../lib/supabase/config";
 import { FIXTURES, NAV_ITEMS, ONBOARDING_STAGES, SOURCE_TAGS, SOURCE_TRUTH_PATH } from "./sourceData";
 
+// Humanize an engine-supplied title before it reaches the surface: drop implementation/vendor
+// words, turn ASCII arrows into words, tidy whitespace — so a raw engine field can never render
+// as developer text (UX_SPEC §4.8). Empty in → empty out; titles from the copy engine pass through.
+const _IMPL_RE = /\b(arcade|openrouter|gemini|webvoyager|uvicorn|fastapi|supabase|localhost|cdp)\b/gi;
+function humanTitle(text) {
+  if (!text) return "";
+  return String(text)
+    .replace(/\s*->\s*/g, " then ")
+    .replace(/\s*\([^)]*\)\s*$/g, (m) => (/\b(arcade|openrouter|gemini|webvoyager|twilio|cdp|supabase)\b/i.test(m) ? "" : m))
+    .replace(_IMPL_RE, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,;:])/g, "$1")
+    .trim();
+}
+
 const EMPTY_PROFILE = {
   name: "",
   summary: "",
@@ -248,7 +263,7 @@ function AppShell({ screen, children, profile, session, engineState }) {
             <h1>{currentTitle}</h1>
           </div>
           <div className="pz-user">
-            <span>{session?.user?.email || profile.email || profile.name || "localhost"}</span>
+            <span>{session?.user?.email || profile.email || profile.name || "You"}</span>
           </div>
         </header>
         {children}
@@ -831,7 +846,7 @@ function FeaturedTaskCard({ card, comment, onComment, onResolve }) {
     <article className={`pz-featured-task pz-task-${card.risk}`}>
       <div>
         <span className="pz-category">{card.category}</span>
-        <h3>{card.title}</h3>
+        <h3>{humanTitle(card.title)}</h3>
         <p>{card.checkIn}</p>
       </div>
       <details>
@@ -1062,7 +1077,7 @@ function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveCom
               onClick={() => setSelectedId(card.id)}
             >
               <span>{card.category}</span>
-              <strong>{card.title}</strong>
+              <strong>{humanTitle(card.title)}</strong>
               <small>{card.risk === "ask" ? "Needs your okay" : card.risk === "blocked" ? "Stopped" : "Prepared"}</small>
             </button>
           ))}
@@ -1094,7 +1109,7 @@ function TaskCard({ card, comment, mirror, onComment, onResolve }) {
       <div className="pz-task-head">
         <div>
           <span className="pz-category">{card.category}</span>
-          <h4>{card.title}</h4>
+          <h4>{humanTitle(card.title)}</h4>
         </div>
         <div className="pz-task-pills">
           <StatusPill value={card.mode || "seeded"} />
