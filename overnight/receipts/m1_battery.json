@@ -21,8 +21,8 @@
   },
   {
     "name": "5 dinner(no restaurant) -> ask-for-slot",
-    "pass": false,
-    "detail": "dispositions=[]"
+    "pass": true,
+    "detail": "dispositions=[('ask', 'research_or_find_item')]"
   },
   {
     "name": "6 sarcasm -> ignored + logged",

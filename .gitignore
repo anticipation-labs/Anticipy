@@ -99,3 +99,4 @@ DONE_CERTIFICATION_BUNDLE/
 engine/.venv.bak.310/
 nohup.out
 app/*.bak.*
+.anticipy-data-hoe/
