@@ -43,7 +43,6 @@ endpoint	/agent/reset	TODO(FIX-12): agent control plane only driven by engine/sc
 endpoint	/agent/events	TODO(FIX-12): agent event stream has no product consumer
 endpoint	/agent/resume	TODO(FIX-12): agent resume (wall-handoff continue) has no product caller — the handoff loop can't close from the UI
 endpoint	/agent/judge	TODO(FIX-12): agent judge endpoint script-only
-endpoint	/hands/compose-email	TODO(FIX-13): the Gmail compose hand (the #1 long pole) exists as an endpoint with zero product callers
 endpoint	/scorecard	TODO(FIX-14): glassbox scorecard only read by factory/scripts tooling — the ledger never reaches the product surface
 endpoint	/goals/{goal_id}	TODO(FIX-14): goal drill-down only used by factory/persona tooling, no product caller
 endpoint	/gateway	TODO(FIX-14): gateway ledger dump script-only; the UI reads /proactive/gateway/recent instead — dedupe or wire
@@ -58,10 +57,5 @@ module	hands/browser_use_runner.py	TODO(FIX-15): browser-use runner imported onl
 route	/api/download/anticipy-execute	TODO(FIX-16): the Download route serves (scripts/test_download_route.sh proves it) but no UI href/fetch literal points at it — the button seam is unwired
 route	/api/owner/session	TODO(FIX-17): owner session/auth route only exercised by scripts/test_owner_app_auth.sh — the login UI never calls it
 route	/api/trigger/tick	TODO(FIX-18): scheduler front door with no scheduler — only the overnight harness ticks the engine directly
-module	brain.py	TODO(FIX-01 delete): legacy scaffold brain, nothing imports it — delete
-module	proactive/engine.py	TODO(FIX-01 delete): legacy ProactiveEngine scaffold; its only importers are the dead brain.py and a dead __init__ re-export nobody pulls — delete
-module	actions/layer.py	TODO(FIX-01 delete): action layer of the dead brain scaffold; alive only via dead importers + tests — delete with the cluster
-module	capture/intake.py	TODO(FIX-01 delete): intake of the dead brain scaffold; imported only by dead brain.py + tests — delete with the cluster
-module	model/client.py	TODO(FIX-01 delete): legacy model client of the dead brain scaffold (product model calls go through core); test-only — delete or fold in
-module	core/workers/browser.py	TODO(FIX-01 delete): BrowserStub worker never wired into control_core (channel/memory stubs are; this one is not) — delete or wire
-module	core/workers/connector.py	TODO(FIX-01 delete): ConnectorStub worker never wired into control_core — delete or wire
+module	core/workers/browser.py	test-infrastructure: BrowserStub is the suite mock worker, re-exported by core/workers/__init__.py (product package) and used by 20+ suite tests
+module	core/workers/connector.py	test-infrastructure: ConnectorStub is the suite mock worker, re-exported by core/workers/__init__.py (product package) and used by 20+ suite tests

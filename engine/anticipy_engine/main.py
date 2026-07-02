@@ -1378,36 +1378,10 @@ def onboard_complete(body: OnboardCompleteIn) -> dict:
     return data
 
 
-class ComposeEmailIn(BaseModel):
-    to: str
-    subject: str = ""
-    body: str = ""
-    send: bool = False
-    cdp_url: Optional[str] = None
-
-
-@app.post("/hands/compose-email")
-async def hands_compose_email(body: ComposeEmailIn) -> dict:
-    """FULL-BROWSER Gmail action in the owner's logged-in Chrome — the human way.
-
-    Opens Gmail, clicks Compose, types To / Subject / Body at a human cadence, then
-    DRAFTS (default, send=false) or SENDS (send=true). The code-level money guard
-    still applies (a card field / pay control is refused even here). Honest: if this
-    Chrome isn't signed into Gmail it returns ok=false with the real reason (bounced
-    to accounts.google.com), never a fake send."""
-    from fastapi.concurrency import run_in_threadpool
-
-    from .hands.cdp_client import run_cdp
-
-    req = {"op": "compose_gmail", "to": body.to, "subject": body.subject,
-           "body": body.body, "send": body.send}
-    if body.cdp_url:
-        req["cdp_url"] = body.cdp_url
-    res = await run_in_threadpool(run_cdp, req, 90.0)
-    current_core().glassbox.log("compose_email", {"to": body.to, "send": body.send,
-                                        "ok": res.get("ok"), "money_blocked": res.get("money_blocked")})
-    return res
-
+# (The /hands/compose-email endpoint was deleted 2026-07-02: it imported hands/cdp_client,
+#  a module that does not exist, so every call 500'd — a lie in the API surface. The REAL
+#  Gmail compose hand is FIX-13 in PLANS/00_OVERARCHING.md and will be built through the
+#  browser-hand path, not resurrected here.)
 
 # Max public source URLs we will read per profile build (keep the read bounded).
 ONBOARDING_MAX_SOURCES = 6

@@ -11,7 +11,7 @@ A milestone may NOT be marked PASSED off work that bypassed its FIX plan's proof
 | FIX | Title | Serves | Status | Last verified |
 |--------|----------------------------------------------------------------|-----------------|-------------|---------------|
 | FIX-00 | canon-docs + gate | docs foundation | DONE | 2026-07-02 |
-| FIX-01 | one-pipeline (proactive consolidation Phases 1-2) | M1 durability | OPEN | 2026-07-02 |
+| FIX-01 | one-pipeline (proactive consolidation Phases 1-2) | M1 durability | IN-PROGRESS | 2026-07-02 |
 | FIX-02 | orphans (anticipate wire-or-delete, digest wire) | — | OPEN | 2026-07-02 |
 | FIX-03 | deep-scrape-wire | M5 | OPEN | 2026-07-02 |
 | FIX-04 | autonomy-wire | — | OPEN | 2026-07-02 |
