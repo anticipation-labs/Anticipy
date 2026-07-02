@@ -87,9 +87,13 @@ human assistant would quietly get ahead of. NOT a restatement of an open loop or
 known facts it is derived from, in "evidence".
 
 A good derived need names: what's coming, why it follows from the evidence, the real-world
-questions to research first (each phrased as a task a browser assistant could do, e.g.
-"Using a maps site in the browser, find the driving time from the office to Lakeview
-Elementary leaving at 2:40pm"), and ONE safe proposed action:
+questions to research first, and ONE safe proposed action. Research questions MUST be
+answerable RIGHT NOW by reading public pages (present tense, no login, no future settings):
+GOOD: "Search the web for the driving time from downtown Vancouver to Lakeview Elementary
+Vancouver and report the estimated driving time you find."
+BAD: "find the driving time leaving at 2:40pm" (future departure needs login/settings),
+"what is Leila's current location" (not on any public page). At most ONE question per need,
+and only when its answer genuinely changes the action:
 - "calendar_hold"  args: {{"title": ..., "start_local": "HH:MM", "duration_min": N}}
 - "reminder"       args: {{"text": ..., "when_local": "HH:MM"}}
 - "heads_up_text"  args: {{"text": ...}}

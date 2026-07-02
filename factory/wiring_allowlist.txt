@@ -49,7 +49,7 @@ endpoint	/ws/browse	TODO(FIX-15): browser-hand control plane driven only by engi
 endpoint	/ws/observe	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
 endpoint	/ws/act	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
 route	/api/browser/run	TODO(FIX-15): browser-run proxy route only exercised by scripts/owner_product_runner.py, not the UI
-module	hands/browser_use_runner.py	TODO(FIX-15): browser-use runner imported only from engine/scripts — the hand exists, the product never picks it up
+module	hands/browser_use_runner.py	by-design subprocess: executed by the 3.11 bridge venv via browser_use_link (never imported by the 3.10 engine — the isolation IS the design); product-wired 2026-07-02 as the research/no-link browser arm
 route	/api/download/anticipy-execute	TODO(FIX-16): the Download route serves (scripts/test_download_route.sh proves it) but no UI href/fetch literal points at it — the button seam is unwired
 route	/api/owner/session	TODO(FIX-17): owner session/auth route only exercised by scripts/test_owner_app_auth.sh — the login UI never calls it
 route	/api/trigger/tick	TODO(FIX-18): scheduler front door with no scheduler — only the overnight harness ticks the engine directly

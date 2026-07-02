@@ -56,9 +56,29 @@ Leila from Lakeview Elementary at 3:15 today. Investor sync 1:30 to 2:30 at the 
   `2 derived_notified`.
 **WIRING PROOF:** outputs pasted above (2026-07-02).
 
-## Step 5 — remaining (queued)
-- [ ] UI surface: show derived cards with their "why" + research on the board (part of the FIX-05/06 UI pass).
-- [ ] Omar-live: enable `ANTICIPY_DERIVE_SECONDS=900` + real Chrome for real commute research (L1) + live SMS (L2).
+## Step 5 — PROACTIVE→BROWSER, REAL (Omar's directive 2026-07-02: "don't stop until it works")  [x]
+**What:** built the missing browser arm end-to-end. (a) Bridge venv `engine/.bu-venv` (py3.11 +
+browser-use 0.13.1 + playwright — playwright was the missing import behind "CDP endpoint did not
+come up"; Chrome-148 CFT only comes up when playwright spawns it). (b) browser_hand: READ-ONLY
+research (research=True) PREFERS the throwaway runner; no-link browse_task falls back to it; the
+strict no-guessed-site rule stays for ACTION tasks, search-start allowed only for research.
+(c) derive prompt: research questions must be answerable NOW on public pages ("search the web for
+the driving time … report the estimate you find").
+**WIRING PROOFS (2026-07-02, all REAL browser):**
+- Runner standalone: Wikipedia first sentence, success, 19.3s, screenshot.
+- PRODUCT BUS browse_task: "662,248" (Vancouver population) + proof URL #Demographics.
+- world_research through the bus (the exact derive path): `ok: True, answer: "11 minutes"` for the
+  downtown→Kitsilano drive, proof URL attached.
+- Composed derive_tick (live hands): derived the pickup travel-time need unprompted, ACTED (set the
+  reminder), texted: "…pick up Leila from school… I set the reminder — I've got it, or you this
+  time?" — the marquee sentence, real pipeline, honest couldn't-verify when a page fell short.
+- Gates: suite 112/10 byte-identical · GATE-M fresh-engine 6/6 · PASS · ALL PASS · wiring CLEAN (debt 35).
+
+## Remaining (queued)
+- [ ] UI surface: show derived cards with their "why" + research on the board (FIX-05/06 UI pass).
+- [ ] Research-arm robustness: the runner answers commute-class questions reliably; keep tuning
+  question phrasing as real usage accumulates.
+- [ ] Omar-live: enable `ANTICIPY_DERIVE_SECONDS=900` + his real Chrome (L1) + live SMS (L2).
 
 ## Final step — The gates + commit  [x]
 **WIRING PROOF (2026-07-02):** `==== SUITE: 111 passed, 10 failed ====` — 110→111 = exactly the new

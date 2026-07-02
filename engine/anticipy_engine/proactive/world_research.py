@@ -34,7 +34,11 @@ async def research(bus, questions: List[str], max_q: int = MAX_QUESTIONS) -> Lis
         if not q:
             continue
         try:
-            res = await bus.submit_job(Job(intent="browse_task", args={"task": q}))
+            # research=True marks this READ-ONLY: the browser hand may start from a search page
+            # (how a human researches an open question — refused for ACTION tasks, where landing
+            # on a guessed site would be dangerous). The in-band guard keeps the agent reading.
+            task = q + " (Read-only research: browse and read to answer the question; do not log in, buy, submit, or change anything.)"
+            res = await bus.submit_job(Job(intent="browse_task", args={"task": task, "research": True}))
             output = getattr(res, "output", None) or {}
             status = str(getattr(getattr(res, "status", None), "value", None)
                          or getattr(res, "status", "") or "")

@@ -149,7 +149,22 @@ class BrowserHand(Worker):
         if self.mode == MODE_MOCK:
             return self._handle_mock(job)
         link = self._active_link()
+        # PROACTIVE→BROWSER (2026-07-02): READ-ONLY research (world_research tags research=True)
+        # PREFERS the throwaway browser-use runner — public pages need no login, the fresh empty
+        # profile can't touch accounts, and A/B'd live it answers research (search → maps → "17
+        # minutes" with the directions URL as proof) where the link arm stalls on partial pages.
+        # The user's connected Chrome stays the arm for PERSONAL/action tasks.
+        if job.intent == "browse_task" and (job.args or {}).get("research"):
+            res = await self._browse_task_throwaway(job)
+            if res is not None and str(getattr(res.status, "value", res.status)) == "success":
+                return res
         if link is None:
+            # No extension/native link: browse_task falls back to the same throwaway bridge
+            # (the fallback _run_browser_and_confirm already uses for actions).
+            if job.intent == "browse_task":
+                res = await self._browse_task_throwaway(job)
+                if res is not None:
+                    return res
             reason = "the browser helper isn't connected"
             if self.fallback_link is not None:
                 err = getattr(self.fallback_link, "last_error", lambda: "")()
@@ -162,6 +177,36 @@ class BrowserHand(Worker):
         if job.intent == "browse_task" and self.gateway is not None:
             return await self._handle_agent(job, link)
         return await self._handle_once(job, link)
+
+    async def _browse_task_throwaway(self, job: Job) -> Optional[Result]:
+        """READ-ONLY browse_task via the throwaway browser-use bridge (no link needed).
+
+        Returns None when the bridge isn't available (missing bu-venv/chromium/key) so the
+        caller falls through to the honest needs_human. Never raises; never acts (browse_read
+        default is read-only — money/login/captcha are hard-stopped in the runner anyway)."""
+        try:
+            from .browser_use_link import available, browse_read
+            probe = available()
+            if not probe.get("available"):
+                return None
+            import asyncio as _aio
+            task = str((job.args or {}).get("task") or "").strip()
+            if not task:
+                return None
+            res = await _aio.to_thread(browse_read, task, max_steps=14, open_web=True)
+            ok = bool(getattr(res, "success", False))
+            answer = (getattr(res, "result", "") or "").strip()
+            out = {"answer": answer, "hand": "throwaway_browser",
+                   "steps": getattr(res, "steps", 0), "url": getattr(res, "url", None)}
+            if ok and answer:
+                return Result(job_id=job.id, status=JobStatus.success,
+                              proof={"url": str(getattr(res, "url", "") or ""),
+                                     "read_back": answer[:300]},
+                              output=out)
+            out["reason"] = (getattr(res, "error", "") or "the throwaway browser could not answer")
+            return Result(job_id=job.id, status=JobStatus.needs_human, proof=None, output=out)
+        except Exception:
+            return None
 
     async def _handle_prepare_form(self, job: Job, link) -> Result:
         """Safe browser WRITE: fill the form to the submit screen, then hand off.
@@ -289,7 +334,13 @@ class BrowserHand(Worker):
         link = link or self.link
         args = job.args if isinstance(job.args, dict) else {}
         task = str(args.get("task") or args.get("query") or job.intent).strip()
-        start = _start_url(args, allow_search=False)
+        # PROACTIVE→BROWSER (2026-07-02): a READ-ONLY research job (world_research tags
+        # research=True and appends the read-only guard in-band) may start from a search-results
+        # page — that's how a human researches an open question ("driving time from X to Y").
+        # ACTION tasks keep the strict rule: no resolved real site → refuse; never guess a site
+        # to act on. Money/login/captcha guards apply on every path regardless.
+        _is_research = bool(args.get("research"))
+        start = _start_url(args, allow_search=_is_research)
         if not task:
             task = f"Complete the browser task at {start}" if start else "Complete the browser task."
         if not start:
