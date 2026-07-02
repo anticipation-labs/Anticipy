@@ -291,25 +291,83 @@ function JourneyRail({ screen }) {
 
 function WelcomeScreen() {
   return (
-    <div className="pz-scene">
-      <section className="pz-hero pz-hero-dark">
-        <div className="pz-hero-copy">
-          <h2>Anticipy listens, remembers, and gets the next step ready.</h2>
-          <p>Start with one calm screen. Speak, upload, or review what is ready. Nothing sends without your last tap.</p>
-          <div className="pz-actions pz-actions-simple">
-            <a className="pz-button primary pz-button-xl" href="/sign">Start</a>
-            <a className="pz-button ghost" href="/">Try the assistant</a>
+    <main className="pz-land">
+      <header className="pz-land-bar">
+        <span className="pz-land-wordmark">Anticipy</span>
+        <a className="pz-land-cta pz-land-cta-sm" href="/sign">Come in</a>
+      </header>
+
+      <section className="pz-land-hero">
+        <div className="pz-land-glow" aria-hidden="true" />
+        <span className="pz-land-kicker">Vibe your life.</span>
+        <h1>A personal assistant that hears your day — and quietly takes care of it.</h1>
+        <p className="pz-land-sub">
+          Anticipy listens to your real life, catches the things you&apos;re asked to do, and handles them in your
+          own calendar, email, and accounts — checking with you like a sharp human before anything that matters.
+        </p>
+        <div className="pz-land-hero-actions">
+          <a className="pz-land-cta pz-land-cta-xl" href="/sign">Come in</a>
+          <span className="pz-land-hint">Takes about a minute.</span>
+        </div>
+      </section>
+
+      <section className="pz-land-beats">
+        <h2 className="pz-land-h2">How it works</h2>
+        <div className="pz-land-beat-row">
+          <article className="pz-land-beat">
+            <span className="pz-land-beat-num">01</span>
+            <h3>It hears your day.</h3>
+            <p>Someone says &quot;can you grab the kids at three?&quot; — mid-conversation, in passing. You keep talking. Anticipy caught it.</p>
+          </article>
+          <article className="pz-land-beat">
+            <span className="pz-land-beat-num">02</span>
+            <h3>It quietly handles it.</h3>
+            <p>It works inside your own calendar and email, the same way you would — and gets the next step ready without being asked twice.</p>
+          </article>
+          <article className="pz-land-beat">
+            <span className="pz-land-beat-num">03</span>
+            <h3>It checks in like a human.</h3>
+            <p>&quot;Draft&apos;s ready — okay to send?&quot; One tap from you, and it&apos;s done. Never a robot voice, never twelve pings.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="pz-land-moment">
+        <h2 className="pz-land-h2">One small moment, handled.</h2>
+        <div className="pz-land-phone" role="img" aria-label="Example text from Anticipy asking about a school pickup">
+          <div className="pz-land-phone-head">
+            <span className="pz-land-avatar">A</span>
+            <strong>Anticipy</strong>
+            <time>2:41 PM</time>
+          </div>
+          <p className="pz-land-heard">Earlier, on a call, you were asked: &quot;can you get Leila after school?&quot;</p>
+          <p className="pz-land-bubble">
+            Leila needs pickup at 3:15 — I checked the drive, 11 minutes. It&apos;s on your calendar — I&apos;ve got it, or you this time?
+          </p>
+          <div className="pz-land-chips">
+            <span className="pz-land-chip" aria-hidden="true">I&apos;ve got it</span>
+            <span className="pz-land-chip" aria-hidden="true">I&apos;ll go</span>
           </div>
         </div>
-        <PendantVisual active />
+        <p className="pz-land-moment-note">
+          It heard the ask, checked the drive, and put it on the calendar — then asked. That&apos;s the whole product.
+        </p>
       </section>
-      <section className="pz-action-dock" aria-label="What Anticipy can do now">
-        <a href="/" className="pz-action-tile active"><span>Listen</span><small>Catch what matters.</small></a>
-        <a href="/mp3" className="pz-action-tile"><span>Upload</span><small>Read a transcript.</small></a>
-        <a href="/go-to" className="pz-action-tile"><span>Review</span><small>Approve the next step.</small></a>
+
+      <section className="pz-land-trust">
+        <h2 className="pz-land-h2">The honest part</h2>
+        <p className="pz-land-trust-line">Anything that touches money always asks you first. Every mode, every time, no exceptions.</p>
+        <p className="pz-land-trust-line">Venting is never a task. Say you want to quit and move to the woods — nothing happens. That silence is the point.</p>
       </section>
-      <SourceTagList tags={["ST-ACTIVE-LISTENING", "ST-IGNORE-VENTS", "ST-NO-FAKE-DONE"]} />
-    </div>
+
+      <section className="pz-land-door">
+        <h2>Come in.</h2>
+        <p>One calm screen. Nothing sends without your last tap.</p>
+        <a className="pz-land-cta pz-land-cta-xl" href="/sign">Come in</a>
+      </section>
+
+      <footer className="pz-land-foot">Anticipy — Vibe your life.</footer>
+    </main>
   );
 }
 

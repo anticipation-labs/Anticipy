@@ -2831,3 +2831,97 @@ body:not(.pz-debug) .pz-gateway { display: none !important; }
 .pz-pending-actions .pz-ghost { opacity: .7; }
 .pz-pending-actions button { background: #d4af37; color: #1a1a17; border: 0; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .pz-pending-actions button.pz-ghost { background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.25); }
+
+/* ===== pz-land: public landing ===== */
+.pz-land {
+  min-height: 100svh; color: var(--pz-cream); font-family: var(--sans);
+  background:
+    radial-gradient(circle at 50% 12%, rgba(215,179,106,0.10), transparent 30rem),
+    linear-gradient(180deg, #050505 0%, var(--pz-bg) 50%, #0c0b09 100%);
+}
+.pz-land section { width: min(1040px, calc(100vw - 40px)); margin: 0 auto; }
+
+.pz-land-bar { height: 76px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 clamp(18px, 4vw, 48px); border-bottom: 1px solid rgba(248,244,236,0.08); }
+.pz-land-wordmark { font-family: var(--serif); font-size: 22px; color: var(--pz-cream); text-decoration: none; }
+
+.pz-land-cta { display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: 1px solid var(--pz-cream); background: var(--pz-cream);
+  color: var(--pz-bg); text-decoration: none; font-weight: 600;
+  transition: transform 160ms ease, box-shadow 160ms ease; }
+.pz-land-cta:hover { transform: translateY(-1px); box-shadow: 0 8px 40px rgba(215,179,106,0.22); }
+.pz-land-cta-sm { min-height: 40px; padding-inline: 20px; font-size: 14px; }
+.pz-land-cta-xl { min-height: 56px; padding-inline: 34px; font-size: 17px; }
+
+.pz-land-hero { position: relative; min-height: calc(100svh - 76px);
+  display: grid; align-content: center; gap: 22px; padding: 48px 0; }
+.pz-land-glow { position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(circle at 68% 40%, rgba(215,179,106,0.14), transparent 24rem);
+  animation: pzLandBreathe 8s ease-in-out infinite; }
+.pz-land-hero > * { position: relative; z-index: 1; }
+.pz-land-kicker { color: var(--pz-gold); font-size: 12px; font-weight: 650;
+  letter-spacing: 0.14em; text-transform: uppercase; }
+.pz-land-hero h1 { margin: 0; max-width: 880px; font-family: var(--serif); font-weight: 500;
+  font-size: clamp(40px, 6.4vw, 78px); line-height: 1.02; letter-spacing: -0.01em; }
+.pz-land-sub { max-width: 620px; margin: 0; color: var(--pz-cream-soft);
+  font-size: clamp(16px, 1.6vw, 19px); line-height: 1.6; }
+.pz-land-hero-actions { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
+.pz-land-hint { color: var(--pz-muted); font-size: 14px; }
+
+.pz-land-beats { padding: 96px 0; }
+.pz-land-h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(26px, 3vw, 36px); margin: 0 0 36px; }
+.pz-land-beat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.pz-land-beat { border: 1px solid var(--pz-line); border-radius: 8px; background: var(--pz-surface);
+  padding: 28px 24px; display: grid; gap: 10px; align-content: start; }
+.pz-land-beat-num { font-family: var(--serif); color: var(--pz-gold); font-size: 15px; }
+.pz-land-beat h3 { margin: 0; font-family: var(--serif); font-weight: 500; font-size: 22px; }
+.pz-land-beat p { margin: 0; color: var(--pz-cream-soft); font-size: 15px; line-height: 1.6; }
+
+.pz-land-moment { padding: 40px 0 96px; text-align: center; }
+.pz-land-phone { width: min(420px, 100%); margin: 0 auto; text-align: left;
+  border: 1px solid var(--pz-line-strong); border-radius: 20px;
+  background: rgba(18,18,16,0.9); box-shadow: 0 28px 100px rgba(0,0,0,0.45); padding: 18px 18px 22px; }
+.pz-land-phone-head { display: flex; align-items: center; gap: 10px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--pz-line); margin-bottom: 14px; }
+.pz-land-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--pz-cream);
+  color: var(--pz-bg); font-family: var(--serif); display: grid; place-items: center; font-size: 16px; }
+.pz-land-phone-head strong { font-size: 14px; font-weight: 650; }
+.pz-land-phone-head time { margin-left: auto; color: var(--pz-muted); font-size: 12px; }
+.pz-land-heard { color: var(--pz-muted); font-style: italic; font-size: 13px; margin: 0 4px 12px; }
+.pz-land-bubble { max-width: 88%; padding: 12px 15px; border-radius: 18px 18px 18px 6px;
+  background: var(--pz-surface-strong); color: var(--pz-cream); font-size: 15px; line-height: 1.5;
+  animation: pzLandArrive 600ms ease-out both; }
+.pz-land-chips { display: flex; gap: 8px; margin: 12px 0 0 4px; }
+.pz-land-chip { border: 1px solid rgba(215,179,106,0.5); color: var(--pz-gold);
+  border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600; }
+.pz-land-moment-note { max-width: 440px; margin: 18px auto 0; color: var(--pz-muted); font-size: 13px; line-height: 1.6; }
+
+.pz-land-trust { padding: 0 0 96px; display: grid; gap: 24px; max-width: 720px; }
+.pz-land-trust-line { margin: 0; padding-left: 20px; border-left: 2px solid var(--pz-gold);
+  color: var(--pz-cream-soft); font-size: clamp(16px, 1.7vw, 19px); line-height: 1.6; }
+
+.pz-land-door { padding: 120px 0; text-align: center; display: grid; gap: 14px; justify-items: center; }
+.pz-land-door h2 { margin: 0; font-family: var(--serif); font-weight: 500; font-size: clamp(32px, 4vw, 44px); }
+.pz-land-door p { margin: 0 0 10px; color: var(--pz-muted); font-size: 15px; }
+
+.pz-land-foot { padding: 32px 0 44px; text-align: center; color: var(--pz-muted);
+  font-size: 13px; border-top: 1px solid rgba(248,244,236,0.08); }
+
+@keyframes pzLandBreathe { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes pzLandArrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 920px) {
+  .pz-land-beat-row { grid-template-columns: 1fr; }        /* beats stack */
+  .pz-land-hero { min-height: auto; padding: 72px 0 56px; }
+}
+@media (max-width: 560px) {
+  .pz-land-bar { height: 64px; }
+  .pz-land-hero h1 { font-size: clamp(34px, 10vw, 44px); }
+  .pz-land-hero-actions { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .pz-land-cta-xl { width: 100%; }                          /* thumb-size door on phones */
+  .pz-land-beats, .pz-land-moment, .pz-land-trust { padding-block: 56px; }
+  .pz-land-door { padding: 72px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pz-land-glow, .pz-land-bubble { animation: none; }
+}
