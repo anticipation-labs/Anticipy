@@ -2815,3 +2815,9 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Consumer view (default): hide engine internals so the surface is calm + 5-year-old-simple.
+   A debug toggle (body.pz-debug, set via ?debug=1 or localStorage anticipy_debug=1) reveals them.
+   Markup/logic are untouched — this only hides source-truth tags + the Live-circuit telemetry panel. */
+body:not(.pz-debug) .pz-dev-tags,
+body:not(.pz-debug) .pz-gateway { display: none !important; }

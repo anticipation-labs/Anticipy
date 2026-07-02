@@ -1413,6 +1413,16 @@ export default function PhaseZeroApp({ screen = "board" }) {
   const audioContextRef = useRef(null);
   const mediaStreamRef = useRef(null);
 
+  // Debug toggle: engine internals (source tags, the Live-circuit telemetry panel) stay hidden for
+  // the consumer unless ?debug=1 or localStorage anticipy_debug=1 is set. Client-only (no SSR mismatch).
+  useEffect(() => {
+    try {
+      const on = new URLSearchParams(window.location.search).has("debug")
+        || window.localStorage.getItem("anticipy_debug") === "1";
+      document.body.classList.toggle("pz-debug", on);
+    } catch (_) {}
+  }, []);
+
   const cards = useMemo(() => {
     const live = engineCards.map(normalizeEngineCard);
     return SHOW_FIXTURES ? [...live, ...FIXTURES.map(fixtureToCard)] : live;
