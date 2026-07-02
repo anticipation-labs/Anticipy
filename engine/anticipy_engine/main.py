@@ -110,6 +110,42 @@ async def _trigger_scheduler(interval_s: float) -> None:
             await core.proactive.trigger_tick()
         except Exception as e:  # noqa: BLE001 — the scheduler must outlive any one tick
             core.glassbox.log("trigger_tick_error", {"error": f"{type(e).__name__}: {e}"})
+        try:
+            _maybe_deliver_daily_digest()
+        except Exception as e:  # noqa: BLE001 — digest delivery must never kill the clock
+            core.glassbox.log("digest_scheduler_error", {"error": f"{type(e).__name__}: {e}"})
+
+
+def _maybe_deliver_daily_digest() -> None:
+    """Once per local day, at/after ANTICIPY_DIGEST_HOUR (0-23), deliver the NF10 digest.
+
+    Default: env unset -> OFF (zero behavior change; the suite never sees this). Fire-once per
+    day via a durable stamp (data_dir/digest_last.json), mark-before-send like trigger_tick's
+    D16 stamp so a crash mid-send can't double-deliver. A quiet day sends nothing."""
+    raw = (os.environ.get("ANTICIPY_DIGEST_HOUR", "") or "").strip()
+    if raw == "":
+        return
+    try:
+        hour = max(0, min(23, int(raw)))
+    except ValueError:
+        return
+    import datetime as _dt
+    try:
+        tz, _name = core._owner_timezone()   # returns (tzinfo, name)
+    except Exception:
+        tz = None
+    now_local = _dt.datetime.now(tz) if tz else _dt.datetime.now()
+    if now_local.hour < hour:
+        return
+    stamp_path = core.data_dir / "digest_last.json"
+    today = now_local.strftime("%Y-%m-%d")
+    try:
+        if json.loads(stamp_path.read_text(encoding="utf-8")).get("date") == today:
+            return
+    except Exception:
+        pass
+    stamp_path.write_text(json.dumps({"date": today}), encoding="utf-8")  # mark BEFORE send
+    core.proactive.deliver_digest()
 
 
 async def _inbound_scheduler(poller: InboundPoller, interval_s: float) -> None:
@@ -1659,6 +1695,16 @@ async def trigger_tick() -> dict:
     """Deterministic tick (tests/gates): one watcher pass, same path as the scheduler."""
     fired = await current_core().proactive.trigger_tick()
     return {"fired": fired}
+
+
+@app.post("/digest/deliver")
+async def digest_deliver() -> dict:
+    """Deliver the day's accumulated non-urgent items as ONE message (NF10), then clear.
+
+    Wired 2026-07-02 (FIX-01 Phase 3): deliver_digest existed with NO caller — the queue
+    filled forever and never sent. A quiet day returns {"sent": false, "reason": "quiet day"}
+    and sends nothing. The scheduler also calls this daily when ANTICIPY_DIGEST_HOUR is set."""
+    return current_core().proactive.deliver_digest()
 
 
 @app.get("/glassbox")
