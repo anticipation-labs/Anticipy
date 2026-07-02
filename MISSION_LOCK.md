@@ -4,6 +4,15 @@
 > conflict. It was locked on 2026-07-01 by Omar's explicit instruction. Do not soften it, do not
 > re-scope it, do not let it drift. Newer dated entries in the STATUS TABLE win over older ones.
 
+> 🟠 **2026-07-02 — Omar's directive (newest wins):** DEFER all safety / money / vent-gating work
+> to the very END — Omar + Devin will do that pass manually last. Do NOT spend cycles building or
+> "fixing" safety gates (e.g. retraction_silenced, money-hard-stop machinery) now; they are parked.
+> **Overnight focus = FORWARD PRODUCT:** the look & feel (clean, simple, 5-year-old-proof) and making
+> the real flows actually work. Report honestly at morning: what's working+proven vs. the few items
+> that physically need Omar (his logged-in accounts, deploy creds). Never fake "done".
+> (Operational-safety floor that is NOT a "gate" and still holds: do not take **irreversible real-account
+> or money actions while Omar is asleep/unattended** — they can't be undone; prepare-and-park instead.)
+
 ## THE OPERATING PROTOCOL (non-negotiable)
 1. **Always work the LOWEST OPEN milestone.** Track B and M1 may run in parallel (Track B has zero
    engine dependency). Otherwise strictly dependency-ordered.
