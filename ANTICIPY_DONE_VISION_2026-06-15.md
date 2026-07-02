@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED AS AUTHORITY — 2026-07-02.** The living truth is **`CANON/00_START_HERE.md`**.
+> Distilled into CANON/01 + 02 + 04. Kept whole as the deep reference — the use-case library and the
+> feel/measurement record here remain the richest material in the repo.
+
 I have everything I need — the four research streams are rich and well-cited. This is a synthesis task, not a research task. Let me write the deliverable.
 
 # Anticipy: What "Done" Looks Like, How To Build That Feel, and The Path There

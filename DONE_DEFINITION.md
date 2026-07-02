@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # DONE — the only definition (Omar's guiding star, 2026-06-19)
 
 > This is THE definition of done. Every other "what done means" in this repo defers to this.

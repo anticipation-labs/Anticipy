@@ -1,5 +1,8 @@
 # MISSION_LOCK — the ONLY source of mission truth (read FIRST, every session)
 
+> 🧭 What Anticipy is / how it works / how the agent operates: **`CANON/00_START_HERE.md`** (2026-07-02).
+> This file remains the ONLY live mission + status ledger; CANON explains, MISSION_LOCK tracks.
+
 > This file is authoritative. It supersedes every other goal doc, handoff, or agent prompt on
 > conflict. It was locked on 2026-07-01 by Omar's explicit instruction. Do not soften it, do not
 > re-scope it, do not let it drift. Newer dated entries in the STATUS TABLE win over older ones.

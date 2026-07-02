@@ -5,10 +5,11 @@ shows you swipeable cards, and acts for you by **driving your real, logged-in Ch
 voice/SMS. **Money is the only hard stop** — it always asks. Browser-only by design (no per-service OAuth).
 
 ## 👉 Start here
-**Read [`CURRENT_STATE.md`](./CURRENT_STATE.md) first.** It is the single, dated source of truth — what's
-done, what's not, *why it keeps failing at the seams*, how to run it, and the history. The ~30 other `.md`
-files (and this repo's old "executor-working" Next.js docs) are historical; **CURRENT_STATE supersedes them**
-(newest dated wins). The definition of "done" is [`THE_BAR.md`](./THE_BAR.md).
+**Read [`CANON/00_START_HERE.md`](./CANON/00_START_HERE.md) first** — the single front door (2026-07-02):
+what Anticipy is, how it works, how the agent operates, and the reading order. Live mission + status:
+[`MISSION_LOCK.md`](./MISSION_LOCK.md). Every other `.md` in this repo is historical, indexed in
+[`CANON/99_SUPERSEDED_INDEX.md`](./CANON/99_SUPERSEDED_INDEX.md). The definition of "done" is
+[`CANON/04_DEFINITION_OF_DONE.md`](./CANON/04_DEFINITION_OF_DONE.md).
 
 ## Layout
 - `engine/` — the FastAPI brain + hands + voice + memory (`engine/anticipy_engine/`). Runs locally

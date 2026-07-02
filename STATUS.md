@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # STATUS — overnight run (technical log; WAKEUP.md is the morning report)
 
 Branch `overnight/real-progress` off green main `4e523c2`. Started overnight, person asleep.

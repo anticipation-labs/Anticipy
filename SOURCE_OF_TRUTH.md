@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # Anticipy — HISTORICAL SOURCE OF TRUTH (superseded 2026-06-24)
 
 > Historical snapshot from 2026-06-23. `CURRENT_STATE.md` is now the dated source of truth;

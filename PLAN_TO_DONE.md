@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # ANTICIPY — THE PLAN TO FULLY FINISHED
 
 > Grounded in a 10-subsystem audit of the **live code + running engine** (2026-06-24), each finding

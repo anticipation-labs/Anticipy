@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # 00 AMENDMENT: NEVER STALL, NEVER FAKE, ALWAYS MOVE THE REAL TASK FORWARD
 
 Read this first, before AGENTS.md and before anything in autopilot/. This file supersedes any rule in the other control-plane files that conflicts with it. If you ever think "I am blocked, I will stop," you are wrong unless the blocker is one of the five named human gates in section 6. Re-read this file at the start of every lap.

@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # THE PLAN — THE WHOLE PRODUCT WORKS, END TO END, THROUGH THE FRONT END
 
 > Omar, repeatedly: stop testing pieces. "Everything needs to work — the front end, the browser agent,

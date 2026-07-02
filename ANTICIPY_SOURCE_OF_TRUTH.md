@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED AS AUTHORITY — 2026-07-02.** The living truth is **`CANON/00_START_HERE.md`**.
+> Distilled into CANON/01 + 02 + 04. Kept whole as the deep reference — the use-case library and the
+> feel/measurement record here remain the richest material in the repo.
+
 # ANTICIPY — THE SOURCE OF TRUTH
 
 > The single canonical document. What Anticipy is, how it **actually** works, the deep onboarding,

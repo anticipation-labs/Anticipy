@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # PENDING FOR OMAR — the batch that unblocks the rest
 
 ## ☀️ MORNING HANDOFF — overnight autonomous run (2026-06-25 night → 2026-06-26)

@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # CURRENT TRUTH — mutable; verified by live command/read-back each run (do NOT trust old docs)
 
 _Last verified: 2026-06-17 PDT, foreman (Claude Opus 4.8). Gate 0 (Current Truth + Read-Back) re-run

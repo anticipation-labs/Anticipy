@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED — 2026-07-02.** Historical document. The living truth is **`CANON/00_START_HERE.md`**
+> (+ `MISSION_LOCK.md` for live mission status). Do not follow this file's read-order, done-definition,
+> or status claims. Indexed with context in `CANON/99_SUPERSEDED_INDEX.md`.
+
 # Anticipy — Execution Plan: How We Get to Done
 
 *The ordered path from the system that exists today to the Owner Test. Grounded in the real engine (`engine/anticipy_engine/`), the de-slopped vision (`ANTICIPY_DONE_VISION_2026-06-15.md`), and the two spam failures that are now part of the record. Every milestone carries a falsifiable exit check — a thing that is either true or false on a real run, never "feels better."*
