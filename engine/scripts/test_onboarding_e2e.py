@@ -125,8 +125,10 @@ def run_flow(*, allow=True, dossier=None, do_complete=True, scrape_mode="ok"):
     # STEP 0 — fresh state
     st0 = CLIENT.get("/onboard/status").json()
     perm0 = CLIENT.get("/onboard/permissions").json()
+    # 2026-07-02 (FIX-11): the consent list grew to 5 — the new "discovered" toggle gates the
+    # self-expanding layer-2+ scrape. The lock here is the GATE mechanics, not the count.
     chk["fresh_state"] = (st0.get("onboarding_complete") is False
-                          and len(perm0.get("services", [])) == 4
+                          and len(perm0.get("services", [])) == 5
                           and perm0.get("any_allowed") is False)
 
     # STEP 1 — the consent gate fires before any read
@@ -150,7 +152,7 @@ def run_flow(*, allow=True, dossier=None, do_complete=True, scrape_mode="ok"):
         disk_ok = (set(disk.keys()) == {"gmail", "calendar", "contacts", "linkedin"}) if allow else True
     chk["permissions_persisted"] = (
         (perm_after.get("any_allowed") is (True if allow else False))
-        and len(bad.get("services", [])) == 4
+        and len(bad.get("services", [])) == 5
         and not any(x["service"] == "notreal" for x in bad.get("services", []))
         and disk_ok)
 
