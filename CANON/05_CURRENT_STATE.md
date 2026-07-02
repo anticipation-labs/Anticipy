@@ -63,9 +63,14 @@ that works, every time:
 4. Vercel env (public, safe): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `ANTICIPY_ENGINE_URL=`the Railway engine.
 5. `vercel --prod --yes` → aliases to anticipy-welcome.vercel.app.
 
-**HONEST caveat:** the Railway engine runs OLD (June) code — tonight's consolidated brain +
-proactive→browser are NOT there yet. To put tonight's engine behind the live link, redeploy the
-engine to Railway. The LOCAL engine IS tonight's full brain (the biggest thing).
+**UPDATE (2026-07-02, later):** tonight's full engine is now LIVE on Railway (deployment 750778cc
+SUCCESS + active) — the public link runs tonight's brain end-to-end (welcome 200; `/api/health`
+via the app proxy returns the engine). Railway fix that unblocked it: the service Root Directory is
+`engine`, so the `railway up` bundle must nest files under `engine/` (flat upload → railpack
+'directory .../engine does not exist'). Deploy recipe: build /tmp bundle with `engine/{Dockerfile,
+requirements.cloud.txt, anticipy_engine}`, `railway link -p 2881a26d… -e production -s engine`,
+`railway up`. NOT YET VERIFIED: the live sign-in → type-a-day → cards flow (needs a real Supabase
+sign-in on the hosted domain).
 
 **INCIDENTS (2026-07-02, owned):** `vercel link` clobbered `.env.local` → restored from `~/Anticipy`,
 locked out via `.vercelignore`. Real SMS blocked: Twilio creds present but return 401 (token rotated) —
