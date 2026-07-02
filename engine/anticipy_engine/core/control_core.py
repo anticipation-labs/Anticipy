@@ -3518,6 +3518,148 @@ class ControlCore:
                            else "owner_onboarding_connected_by_name"}
             self.memory.open_loops.update(item)
 
+    async def derive_tick(self) -> dict:
+        """TRUE PROACTIVITY (FIX-07, 2026-07-02): anticipate → research → act → tell the owner.
+
+        One tick: build a WorldSnapshot from what the engine already knows → derive at most 2
+        UNSPOKEN needs (proactive/derive.py, floored: safe kinds only, money impossible,
+        confidence ≥ 0.6) → dedupe against open loops / recent cards / the fire-once ledger
+        (mark BEFORE act, like trigger_tick's D16 stamp) → research the real world browser-only
+        (proactive/world_research.py) → compose ONE plain-English action sentence and submit it
+        through the ONE front door (owner_ingest — same extractor, same harm-line, same autonomy
+        dial as everything else; no new decision engine) → if it ACTED, ONE text to the owner;
+        if it ASKED, the pending-ask SMS already covers the outreach (never double-text).
+
+        Fail-closed everywhere: a stub/starved model derives nothing; a research wall is an
+        honest miss carried into the message; an error returns {"derived": []} and never
+        crashes the scheduler."""
+        import time as time  # house style: scoped import (module has no top-level time)
+        from ..proactive.derive import WorldSnapshot, derive_needs
+        from ..proactive import world_research
+
+        out: list[dict] = []
+        try:
+            now = time.time()
+            tz, tz_name = self._owner_timezone()
+            profile_facts = [str(getattr(i, "text", "") or "") for i in self.memory.profile.all()][:20]
+            open_loops = [{"text": str(getattr(i, "text", "") or "")}
+                          for i in self.memory.open_loops.all()
+                          if str(getattr(i, "status", "")) not in {"done", "closed", "stopped"}][:15]
+            try:
+                recent_cards = (self.owner_cards(limit=12) or {}).get("cards") or []
+            except Exception:
+                recent_cards = []
+            calendar_events: list[dict] = []
+            try:
+                cal_value = await self._onboarding_read_value("read_calendar")
+                if isinstance(cal_value, list):
+                    calendar_events = [e for e in cal_value if isinstance(e, dict)][:12]
+            except Exception:
+                pass
+            snapshot = WorldSnapshot(now=now, tz_name=tz_name or "",
+                                     profile_facts=profile_facts, open_loops=open_loops,
+                                     recent_cards=recent_cards, calendar_events=calendar_events)
+            needs = await derive_needs(self.gateway, snapshot)
+        except Exception as exc:
+            self.glassbox.log("derive_tick_error", {"error": f"{type(exc).__name__}: {exc}"})
+            return {"derived": []}
+
+        if not needs:
+            return {"derived": []}
+
+        # Fire-once ledger: one firing per (local day, obligation signature). Mark BEFORE acting
+        # so a crash mid-flight can never double-fire. A daily need (school pickup) correctly
+        # re-derives tomorrow; the same need never fires twice today.
+        ledger_path = self.data_dir / "derived_needs.json"
+        try:
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        except Exception:
+            ledger = {}
+        import datetime as _dt
+        today = _dt.datetime.now(tz).strftime("%Y-%m-%d") if tz else _dt.datetime.now().strftime("%Y-%m-%d")
+
+        known_sigs = [_obligation_sig(str(l.get("text") or "")) for l in open_loops]
+        known_sigs += [_obligation_sig(str(c.get("title") or c.get("source_text") or "")) for c in recent_cards]
+
+        for need in needs:
+            sig = _obligation_sig(need.need)
+            key = f"{today}:{'|'.join(sorted(sig))}"
+            if key in ledger:
+                continue
+            if any(_same_obligation(sig, k) for k in known_sigs if k):
+                self.glassbox.log("derive_deduped", {"need": need.need[:120]})
+                continue
+            ledger[key] = {"date": today, "need": need.need[:200], "kind": need.action_kind}
+            try:
+                ledger_path.write_text(json.dumps(ledger, indent=2), encoding="utf-8")  # mark BEFORE act
+            except Exception:
+                pass
+
+            findings = await world_research.research(self.bus, need.research_questions)
+            research_lines = [f"{f['answer']}" for f in findings if f.get("ok")]
+            misses = [f["question"] for f in findings if not f.get("ok")]
+
+            # Compose the ONE action sentence and submit through the ONE front door.
+            args = need.action_args or {}
+            if need.action_kind == "calendar_hold":
+                title = str(args.get("title") or need.need)
+                when = str(args.get("start_local") or "").strip()
+                sentence = f"Put a hold on my calendar{(' at ' + when) if when else ''}: {title}."
+            elif need.action_kind == "reminder":
+                text_ = str(args.get("text") or need.need)
+                when = str(args.get("when_local") or "").strip()
+                sentence = f"Remind me{(' at ' + when) if when else ''}: {text_}."
+            else:  # heads_up_text — no action, just the message
+                sentence = ""
+            if research_lines and sentence:
+                sentence += " (" + "; ".join(research_lines[:2]) + ")"
+
+            entry: dict = {"need": need.need, "kind": need.action_kind, "why": need.why,
+                           "evidence": need.evidence, "research": findings}
+            acted = False
+            if sentence:
+                try:
+                    res = await self.owner_ingest("derived", sentence,
+                                                  {"derived": True, "derived_need": need.need[:200]},
+                                                  execute_actions=True)
+                    cards = res.get("cards") or []
+                    entry["cards"] = [{"disposition": c.get("disposition"),
+                                       "title": (c.get("title") or "")[:120]} for c in cards]
+                    acted = any(c.get("disposition") == "do" for c in cards)
+                    entry["decision"] = ("act" if acted else
+                                         ("ask" if any(c.get("disposition") == "ask" for c in cards)
+                                          else "silent"))
+                except Exception as exc:
+                    entry["decision"] = "error"
+                    entry["error"] = f"{type(exc).__name__}: {exc}"
+            else:
+                entry["decision"] = "heads_up"
+
+            # The proactive text: heads-up needs always tell the owner; acted needs confirm what
+            # was done. An ASK already texts through the pending path — never double-text.
+            if entry["decision"] in {"act", "heads_up"}:
+                msg = str((args.get("text") if need.action_kind == "heads_up_text" else "") or "")
+                if not msg:
+                    done_bit = "I put it on your calendar" if need.action_kind == "calendar_hold" \
+                        else "I set the reminder"
+                    detail = ("; ".join(research_lines[:2]) + " — ") if research_lines else ""
+                    msg = f"Heads up: {need.need}. {detail}{done_bit if acted else ''}".strip()
+                    if acted:
+                        msg += " — I've got it, or you this time?"
+                if misses:
+                    msg += f" (couldn't verify: {misses[0][:80]})"
+                try:
+                    await self.notify_user(msg)
+                    self.proactive.budget.record_interruption(time.time())
+                    self.glassbox.log("derived_notified", {"need": need.need[:120],
+                                                           "decision": entry["decision"],
+                                                           "message": msg[:200]})
+                    entry["notified"] = True
+                except Exception:
+                    entry["notified"] = False
+            out.append(entry)
+        return {"derived": out}
+
     async def notify_user(self, text: str, recipient: str | None = None) -> dict:
         """Text the user — the 'ask' half of a wall handoff (pause -> ask -> resume).
         Routes through the REAL send_text worker (mock by default, Twilio when the

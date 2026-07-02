@@ -148,6 +148,18 @@ def _maybe_deliver_daily_digest() -> None:
     core.proactive.deliver_digest()
 
 
+async def _derive_scheduler(interval_s: float) -> None:
+    """The anticipation clock (FIX-07): periodically derive unspoken needs. OFF unless
+    ANTICIPY_DERIVE_SECONDS > 0 — zero behavior change until Omar turns it on. A failed
+    pass is logged and the clock lives on."""
+    while True:
+        await asyncio.sleep(interval_s)
+        try:
+            await core.derive_tick()
+        except Exception as e:  # noqa: BLE001 — the clock must outlive any one pass
+            core.glassbox.log("derive_tick_error", {"error": f"{type(e).__name__}: {e}"})
+
+
 async def _inbound_scheduler(poller: InboundPoller, interval_s: float) -> None:
     """Poll Twilio for the owner's SMS replies (YES/NO resolves asks; speech ingests).
     Live-env-gated at startup; a poll failure is logged and the loop lives on."""
@@ -181,6 +193,9 @@ async def lifespan(app: FastAPI):
     interval_s = float(os.environ.get("ANTICIPY_TICK_SECONDS", "30") or 0)
     tick_task = asyncio.create_task(_trigger_scheduler(interval_s)) if interval_s > 0 else None
     _arm_proactive_health(interval_s, tick_task is not None)
+    # The anticipation clock (FIX-07): derive unspoken needs. Default 0 = OFF.
+    derive_s = float(os.environ.get("ANTICIPY_DERIVE_SECONDS", "0") or 0)
+    derive_task = asyncio.create_task(_derive_scheduler(derive_s)) if derive_s > 0 else None
     # Inbound SMS poll: ONLY with the live channel env (creds + mode) — suite, stub and
     # mock runs never construct a transport. ANTICIPY_INBOUND_POLL_SECONDS=0 disables.
     inbound_s = float(os.environ.get("ANTICIPY_INBOUND_POLL_SECONDS", "15") or 0)
@@ -189,7 +204,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        for task in (tick_task, inbound_task):
+        for task in (tick_task, derive_task, inbound_task):
             if task is not None:
                 task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -1695,6 +1710,15 @@ async def trigger_tick() -> dict:
     """Deterministic tick (tests/gates): one watcher pass, same path as the scheduler."""
     fired = await current_core().proactive.trigger_tick()
     return {"fired": fired}
+
+
+@app.post("/derive/tick")
+async def derive_tick_endpoint() -> dict:
+    """TRUE PROACTIVITY (FIX-07): one anticipation pass — derive unspoken needs from memory/
+    calendar/open-loops, research the world browser-only, act through the ONE front door,
+    text the owner. Deterministic entry for tests/gates; the scheduler calls the same method
+    when ANTICIPY_DERIVE_SECONDS > 0."""
+    return await current_core().derive_tick()
 
 
 @app.post("/digest/deliver")

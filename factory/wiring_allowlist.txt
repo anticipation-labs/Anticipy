@@ -60,3 +60,4 @@ route	/api/trigger/tick	TODO(FIX-18): scheduler front door with no scheduler —
 module	core/workers/browser.py	test-infrastructure: BrowserStub is the suite mock worker, re-exported by core/workers/__init__.py (product package) and used by 20+ suite tests
 module	core/workers/connector.py	test-infrastructure: ConnectorStub is the suite mock worker, re-exported by core/workers/__init__.py (product package) and used by 20+ suite tests
 route	/api/digest	TODO(FIX-14): digest-now button not in the UI yet — the proxy exists for the ledger/actions surface pass
+route	/api/derive	TODO(FIX-07): the "anticipate now" button lands with the board UI pass — proxy wired, UI caller pending
