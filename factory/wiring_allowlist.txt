@@ -1,0 +1,67 @@
+# factory/wiring_allowlist.txt — the ONLY legitimate exits from factory/bin/check_wiring.py.
+#
+# FORMAT (tab-separated, one entry per line):
+#   KIND<TAB>NAME<TAB>JUSTIFICATION
+#   KIND  = endpoint | route | module
+#   NAME  = exactly what the gate prints (engine path, /api/... route, or module path
+#           relative to engine/anticipy_engine/)
+#   JUSTIFICATION = why this is allowed to have no in-repo caller. NEVER empty — an
+#           allowlist entry without a reason is just the disease with paperwork.
+#
+# THE DEBT CONVENTION: a justification starting with "TODO(FIX-NN" is acknowledged DEBT,
+# not a blessing. It passes the default run (so the suite stays honest about NEW breakage)
+# and FAILS `check_wiring.py --strict` (so the debt can never silently become permanent).
+# Everything else is PERMANENT and must name a real out-of-repo caller (a monitor, Twilio,
+# a browser typing a URL) — "we'll wire it later" is never a permanent justification.
+#
+# ---------------------------------------------------------------- permanent (external callers)
+endpoint	/event	legacy scripted front door: fed by scripts/realday.sh + overnight harness by design; the product front doors are /capture-era successors (/owner/ingest, /listen/*)
+endpoint	/cr	Twilio ConversationRelay websocket: Twilio's cloud dials this URL from the voice webhook config — no in-repo literal can exist
+endpoint	/console	operator dev console served as an HTML page: opened by typing the URL in a browser, never dialed from product code by design
+route	/api/health	uptime monitors and deploy probes hit this from outside the repo (curl/Railway/Vercel checks); it exists to be probed, not fetched by the UI
+# ---------------------------------------------------------------- TODO debt (each one is a severed seam)
+route	/api/anticipate/research	TODO(FIX-02): deep-research seam — route exists, zero UI callers; the research surface was built and never surfaced
+endpoint	/onboard/loop	TODO(FIX-03/FIX-10): onboarding loop endpoint exists but the UI onboarding flow never drives it — the exact deep-scrape-vs-shallow disease
+endpoint	/onboard/deep-read-hand	TODO(FIX-03/FIX-10): deep-read hand exists; UI uses the shallow extension snapshot instead ("plumbed separately")
+route	/api/onboard/owner-scrape	TODO(FIX-03/FIX-10): owner-scrape proxy route has no UI caller — onboarding calls the shallow path
+route	/api/onboard/status	TODO(FIX-03/FIX-10): onboarding status route unpolled by the UI — the flow can't show real progress
+endpoint	/owner/autonomy_mode	TODO(FIX-04): the real engine autonomy gate — the dropdown wrote a local JSON store while this sat unused (the canonical wiring failure)
+route	/api/owner/stop	TODO(FIX-04): owner stop-switch route has no UI caller — the control surface isn't wired to the button
+endpoint	/capture	TODO(FIX-05): generic capture front door unused by product surfaces; product should POST captures here instead of script-only feeding
+endpoint	/memory/history	TODO(FIX-05): memory history endpoint never surfaced in the UI memory/profile seam
+route	/api/memory/open-loops	TODO(FIX-05): open-loops route built, never fetched by the UI — loops invisible to the user
+route	/api/memory/resolve-loop	TODO(FIX-05): resolve-loop route built, no UI resolve action calls it
+route	/api/onboarding/profile	TODO(FIX-05): profile seam route unwired — the profile the onboarding builds never reaches the surface
+route	/api/pending	TODO(FIX-06): pending-asks route has no UI caller — the ask/confirm surface reads elsewhere
+route	/api/memory/remembered	TODO(FIX-08): remembered-memory surface built, never fetched by the UI
+route	/api/memory/remembered/approve	TODO(FIX-08): remembered approve action unwired from any UI button
+route	/api/memory/remembered/dryrun	TODO(FIX-08): remembered dryrun unwired from any UI control
+route	/api/memory/remembered/dryrun-day	TODO(FIX-08): remembered dryrun-day unwired from any UI control
+module	capture/pendant_phone.py	TODO(FIX-09): voice/pendant capture path imported only by tests — the voice seam is not wired into the running engine
+endpoint	/agent/run	TODO(FIX-12): agent control plane only driven by engine/scripts, never by a product surface
+endpoint	/agent/reset	TODO(FIX-12): agent control plane only driven by engine/scripts, never by a product surface
+endpoint	/agent/events	TODO(FIX-12): agent event stream has no product consumer
+endpoint	/agent/resume	TODO(FIX-12): agent resume (wall-handoff continue) has no product caller — the handoff loop can't close from the UI
+endpoint	/agent/judge	TODO(FIX-12): agent judge endpoint script-only
+endpoint	/hands/compose-email	TODO(FIX-13): the Gmail compose hand (the #1 long pole) exists as an endpoint with zero product callers
+endpoint	/scorecard	TODO(FIX-14): glassbox scorecard only read by factory/scripts tooling — the ledger never reaches the product surface
+endpoint	/goals/{goal_id}	TODO(FIX-14): goal drill-down only used by factory/persona tooling, no product caller
+endpoint	/gateway	TODO(FIX-14): gateway ledger dump script-only; the UI reads /proactive/gateway/recent instead — dedupe or wire
+route	/api/glassbox	TODO(FIX-14): glassbox proxy route built, no UI ledger view fetches it
+endpoint	/ws/state	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
+endpoint	/ws/reload	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
+endpoint	/ws/browse	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
+endpoint	/ws/observe	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
+endpoint	/ws/act	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
+route	/api/browser/run	TODO(FIX-15): browser-run proxy route only exercised by scripts/owner_product_runner.py, not the UI
+module	hands/browser_use_runner.py	TODO(FIX-15): browser-use runner imported only from engine/scripts — the hand exists, the product never picks it up
+route	/api/download/anticipy-execute	TODO(FIX-16): the Download route serves (scripts/test_download_route.sh proves it) but no UI href/fetch literal points at it — the button seam is unwired
+route	/api/owner/session	TODO(FIX-17): owner session/auth route only exercised by scripts/test_owner_app_auth.sh — the login UI never calls it
+route	/api/trigger/tick	TODO(FIX-18): scheduler front door with no scheduler — only the overnight harness ticks the engine directly
+module	brain.py	TODO(FIX-01 delete): legacy scaffold brain, nothing imports it — delete
+module	proactive/engine.py	TODO(FIX-01 delete): legacy ProactiveEngine scaffold; its only importers are the dead brain.py and a dead __init__ re-export nobody pulls — delete
+module	actions/layer.py	TODO(FIX-01 delete): action layer of the dead brain scaffold; alive only via dead importers + tests — delete with the cluster
+module	capture/intake.py	TODO(FIX-01 delete): intake of the dead brain scaffold; imported only by dead brain.py + tests — delete with the cluster
+module	model/client.py	TODO(FIX-01 delete): legacy model client of the dead brain scaffold (product model calls go through core); test-only — delete or fold in
+module	core/workers/browser.py	TODO(FIX-01 delete): BrowserStub worker never wired into control_core (channel/memory stubs are; this one is not) — delete or wire
+module	core/workers/connector.py	TODO(FIX-01 delete): ConnectorStub worker never wired into control_core — delete or wire
