@@ -412,3 +412,42 @@ async def decide_transcript(
         decisions=decisions,
         raw_response=(raw or "")[:4000],
     )
+
+
+async def decide_line(gateway: ModelGateway, line: str) -> str:
+    """Room-1.5 adapter (FIX-01 step 2d, 2026-07-02): one line -> "ACT" | "ASK" | "SILENT" | "UNAVAILABLE".
+
+    Maps this pipeline's transcript decision onto the Decider's verdict vocabulary so the
+    spine's commitment judge can (eventually) share the ONE extractor brain. One-way-safe
+    by construction: block/follow_up/ask -> ASK (never ACT), ignore/remember/empty -> SILENT,
+    and only an owner/assistant actionable "act" -> ACT. available=False -> UNAVAILABLE
+    (no judgment happened; the caller's defer/retry machinery owns it).
+
+    NOT the default brain yet: the legacy Decider prompt encodes years of single-line
+    narration-vs-handoff distinctions that were tuned against a live probe bank which no
+    longer exists in-repo. Until a replacement probe bank validates this adapter on that
+    distribution, it runs only behind ANTICIPY_DECIDER_BRAIN=pipeline.
+    """
+    text = str(line or "").strip()
+    if not text:
+        return "SILENT"
+    try:
+        result = await decide_transcript(gateway, text)
+    except Exception:
+        return "UNAVAILABLE"
+    if not getattr(result, "available", False):
+        return "UNAVAILABLE"
+    verdicts = []
+    for d in result.decisions or []:
+        actor = getattr(d, "actor", "") or ""
+        decision = getattr(d, "decision", "") or ""
+        if actor not in {"owner", "assistant"}:
+            continue
+        if decision == "act":
+            verdicts.append("ACT")
+        elif decision in {"ask", "block", "follow_up"}:
+            verdicts.append("ASK")
+    if not verdicts:
+        return "SILENT"
+    # Safest verdict wins when candidates disagree (mirrors decider.parse_verdict's order).
+    return "ASK" if "ASK" in verdicts else "ACT"

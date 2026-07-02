@@ -146,6 +146,18 @@ class Decider:
 
     async def decide(self, line: str) -> str:
         self.calls += 1
+        # FIX-01 step 2d (2026-07-02): opt-in delegation to the ONE extractor
+        # (decision_pipeline.decide_line). NOT the default — the legacy prompt below
+        # encodes single-line narration-vs-handoff distinctions tuned against a live
+        # probe bank that no longer exists in-repo; the flip waits for a rebuilt bank.
+        # Same fail-safety either way: UNAVAILABLE on no-read, SILENT on no-verdict.
+        import os as _os
+        if (_os.environ.get("ANTICIPY_DECIDER_BRAIN", "legacy") or "").strip().lower() == "pipeline":
+            from .decision_pipeline import decide_line as _decide_line
+            word = await _decide_line(self.gateway, line)
+            if self.glassbox is not None:
+                self.glassbox.log("decider", {"line": line, "brain": "pipeline", "verdict": word})
+            return word
         try:
             raw = await self.gateway.think(
                 _PROMPT.format(line=line), tier=CHEAP, caller="decider", temperature=0

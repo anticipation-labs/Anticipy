@@ -30,16 +30,17 @@ async def main():
     core = ControlCore(data_dir=d)
     await core.start()
 
-    # Simulate the moat: mark every observed line as a confident model-caught task (moat_task=True),
-    # exactly what the live model does for a clean real task the regex can't shape.
-    _orig = core.owner_mode.observe
-
-    async def _fake_expand(observed):
+    # Simulate the model brain: mark every observed line as a confident model-caught task
+    # (moat_task=True), exactly what the live extractor does for a clean real task the regex
+    # can't shape. (2026-07-02: the injection seam moved — the old second model brain
+    # _expand_tasks_with_model was deleted in FIX-01 2c; under stub the else-branch now calls
+    # the sync _deterministic_expand, so that is what we patch. Same lock, same assertions.)
+    def _fake_expand(observed):
         for o in observed:
             o.moat_task = True
         return observed
 
-    core._expand_tasks_with_model = _fake_expand  # type: ignore
+    core._deterministic_expand = _fake_expand  # type: ignore
 
     fails = []
 

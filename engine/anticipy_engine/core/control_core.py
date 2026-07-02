@@ -1897,307 +1897,50 @@ class ControlCore:
             shaped.execution = execution
         return shaped
 
-    async def _expand_tasks_with_model(self, observed):
-        """THE MOAT — dispatch. WHOLE-DAY extraction (ONE pass over the full transcript) is the PRIMARY
-        for multi-line input: it eliminates the per-line rolling-context contamination that dropped
-        ~15-30% of real tasks in dense days (the 20-life catch-rate ceiling — the model, reading lines
-        one at a time with a vent in the window, kept tagging clean tasks as vents and dropping them).
-        Single-line input (the proactive path + the safety eval) and any whole-day read failure fall
-        back to the proven per-line path, BYTE-IDENTICAL to before. Generosity is safe: every emitted
-        task still clears the spine's floors downstream (vent guard, money hard-stop, third-party silence)."""
-        if self.gateway.provider != PROVIDER_OPENROUTER:
-            # Model unavailable (stub / the real 429 "starved brain" degraded mode): we can't split
-            # multi-task lines, but the deterministic THIRD-PARTY SILENCE floor MUST still hold — a
-            # question aimed at someone else ("Did you grab the dry cleaning on the way home?") is
-            # never the owner's task and must stay silent even when the model can't run. Without this,
-            # an aside reaches the spine, which (memory-state-dependent) can surface it as a lookup
-            # ASK on the /owner/ingest path — a cardinal-sin cold-start breach the safety eval caught.
-            # The live path already strips asides (extract_day filter + _expand_per_line floor); this
-            # makes the floor model-INDEPENDENT, exactly as the deterministic floors are meant to be.
-            kept = []
-            for l in observed:
-                if _is_interrogative_aside(l.text) or _is_directed_question_to_named_person(l.text):
-                    self.glassbox.log("aside_silenced_no_model", {"line": (l.text or "")[:140]})
-                    continue
-                if _is_noncommittal_noise(l.text):
-                    self.glassbox.log("noncommittal_noise_silenced_no_model", {
-                        "line": (l.text or "")[:140],
-                    })
-                    continue
-                vent_tasks = _deterministic_vent_adjacent_tasks(l.text)
-                if vent_tasks:
-                    for task in vent_tasks:
-                        held = OwnerObservedLine(line_no=l.line_no, text=task, force_ask=True)
-                        held.original_text = l.text
-                        held.money_src = _is_money_action(task)
-                        kept.append(held)
-                    self.glassbox.log("vent_tasks_held_no_model", {
-                        "line": (l.text or "")[:140],
-                        "tasks": vent_tasks,
-                    })
-                    continue
-                # NOTE: do NOT force moat_task on reversible lines here — that routes them through the
-                # confirm-first rescue and DOWNGRADES spine AUTO_DO tasks (reminders/carts) into asks
-                # (over-caution + regression). Stub/no-model surfacing of spine-dropped reversibles
-                # (draft/save/cart) is a known degraded-mode gap; the proper fix is native recognition
-                # in owner_mode._card_for_line, not the heavier moat_task flag. Backlogged.
-                kept.append(l)
-            return kept
-        if len(observed) >= 2:
-            from ..proactive.extract import extract_day
-            # Strip questions-to-others / interrogative asides from what the whole-day model SEES, so it
-            # can't extract the inner action of "Priya, can you reconcile the credit card statements" (the
-            # money-noun then tripped the money block before the third-party-silence floor — run-10 leak).
-            day_text = "\n".join(l.text for l in observed
-                                 if not (_is_interrogative_aside(l.text)
-                                         or _is_directed_question_to_named_person(l.text)))
-            day_tasks = await extract_day(self.gateway, day_text) if day_text.strip() else []
-            if day_tasks:
-                built = self._build_from_day_tasks(observed, day_tasks)
-                self.glassbox.log("extract_day", {"lines": len(observed), "tasks": len(built)})
-                return built
-        return await self._expand_per_line(observed)
+    def _deterministic_expand(self, observed):
+        """The model-independent expansion floor (factored 2026-07-02, byte-identical behavior).
 
-    def _build_from_day_tasks(self, observed, day_tasks):
-        """Build observed lines from a WHOLE-DAY extraction, plus a per-line DETERMINISTIC backstop for
-        any explicit reversible shape (reminder/hold/lookup/draft/cart) the model still missed. Drops
-        third-party requests; marks vented tasks force_ask; carries the raw-line money truth (money_src)
-        so a truncated money fragment still blocks. All safety floors run downstream regardless."""
-        out, n = [], 0
-        ex_toks = []
-        kept_keys: list = []   # [(prefix-stripped key, OwnerObservedLine)] for CONTAINMENT dedup
-        # Raw-line truth the generous whole-day model can lose: which lines are VENTS (so a task the model
-        # pulled out of a dread/hyperbole is dropped — the cardinal vent floor) and which are MONEY ACTIONS
-        # (so a TRUNCATED money fragment, "Refund the gala ticket" stripped of "charge it to their card",
-        # still blocks via money_src). Token-overlap associates a reworded task back to its source line.
-        from ..live_memory.review_infer import is_vent as _is_vent_line
+        Used whenever the ONE extractor (decision_pipeline) can't run: the stub provider, the
+        real 429 "starved brain" degraded mode, an env-disabled pipeline, or a live pipeline
+        outage. We can't split multi-task lines, but the deterministic THIRD-PARTY
+        SILENCE floor MUST still hold — a question aimed at someone else ("Did you grab the dry
+        cleaning on the way home?") is never the owner's task and must stay silent even when the
+        model can't run. Without this, an aside reaches the spine, which (memory-state-dependent)
+        can surface it as a lookup ASK on the /owner/ingest path — a cardinal-sin cold-start
+        breach the safety eval caught."""
+        kept = []
+        for l in observed:
+            if _is_interrogative_aside(l.text) or _is_directed_question_to_named_person(l.text):
+                self.glassbox.log("aside_silenced_no_model", {"line": (l.text or "")[:140]})
+                continue
+            if _is_noncommittal_noise(l.text):
+                self.glassbox.log("noncommittal_noise_silenced_no_model", {
+                    "line": (l.text or "")[:140],
+                })
+                continue
+            vent_tasks = _deterministic_vent_adjacent_tasks(l.text)
+            if vent_tasks:
+                for task in vent_tasks:
+                    held = OwnerObservedLine(line_no=l.line_no, text=task, force_ask=True)
+                    held.original_text = l.text
+                    held.money_src = _is_money_action(task)
+                    kept.append(held)
+                self.glassbox.log("vent_tasks_held_no_model", {
+                    "line": (l.text or "")[:140],
+                    "tasks": vent_tasks,
+                })
+                continue
+            # NOTE: do NOT force moat_task on reversible lines here — that routes them through the
+            # confirm-first rescue and DOWNGRADES spine AUTO_DO tasks (reminders/carts) into asks
+            # (over-caution + regression). Stub/no-model surfacing of spine-dropped reversibles
+            # (draft/save/cart) is a known degraded-mode gap; the proper fix is native recognition
+            # in owner_mode._card_for_line, not the heavier moat_task flag. Backlogged.
+            kept.append(l)
+        return kept
 
-        def _tok(s):
-            return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower())
-                    if len(w) > 2 and w not in _TASK_STOPWORDS}
-
-        vent_line_toks = [_tok(l.text) for l in observed if _is_vent_line(l.text)]
-        money_line_toks = [_tok(l.text) for l in observed if _is_money_action(l.text)]
-        for t in day_tasks:
-            task = (t.get("task") or "").strip()
-            if not task or _is_directed_question_to_named_person(task):
-                continue   # a request aimed at another named person is THEIR task, never the owner's
-            ttoks = _tok(task)
-            # M1a FIX — PER-TASK money truth only. The old token-overlap with the whole money LINE bled the
-            # money flag onto unrelated tasks in the same breath ("pick up the kids" next to "pay the $4,200
-            # invoice" -> kids wrongly blocked as a payment). A genuinely TRUNCATED money fragment is still
-            # re-blocked by the DETERMINISTIC MONEY BACKSTOP in _owner_ingest_inner (it re-injects the raw
-            # money line when no surviving task carries the money signal), so per-task detection here is both
-            # correct and money-safe. money_line_toks kept for the vent floor below.
-            task_money = _is_money_action(task)
-            # CARDINAL VENT FLOOR for the generous whole-day pass: a task whose words come from a VENT line
-            # (the object of a dread/joke/hyperbole, "fill out one more prior auth ... fling into the sun")
-            # and is NOT an explicit reversible task and NOT money -> the model over-extracted a vent. Drop.
-            if (ttoks and not task_money and not _is_explicit_reversible_task(task)
-                    and any(len(ttoks & vt) >= max(2, (len(ttoks) + 1) // 2) for vt in vent_line_toks)):
-                self.glassbox.log("day_vent_dropped", {"task": task[:120], "reason": "vent"})
-                self._silenced_count = getattr(self, "_silenced_count", 0) + 1   # M1d ignore-trace
-                continue
-            key = _task_key(task)   # reminder-prefix-stripped salient tokens
-            # CONTAINMENT dedup: the whole-day model emits the same obligation twice with extra detail —
-            # "back up the folder" vs "Remind me Sunday night to back up the folder before the new week".
-            # If one key is contained in the other (>=2 shared salient tokens, the >=2 floor stops a
-            # single-token over-merge like 'mom'), it's one obligation -> keep the LONGER (most complete)
-            # text. The LLM dedup downstream then catches reworded near-dups ('Okafor' vs 'him').
-            dup = None
-            for entry in kept_keys:
-                ek = entry[0]
-                if key and ek and len(key & ek) >= 2 and (key <= ek or ek <= key):
-                    dup = entry
-                    break
-            if dup is not None:
-                if len(task) > len(dup[1].text or ""):
-                    dup[1].text = task          # keep the more complete wording (with the time/detail)
-                    dup[0] |= key
-                if bool(t.get("vent")) or t.get("kind") == "hold":
-                    dup[1].force_ask = True
-                if task_money:
-                    dup[1].money_src = True
-                continue
-            n += 1
-            o = OwnerObservedLine(line_no=n, text=task, moat_task=True)
-            o.force_ask = bool(t.get("vent")) or t.get("kind") == "hold"
-            o.money_src = task_money
-            out.append(o)
-            kept_keys.append([set(key), o])
-            ex_toks.append({w for w in re.findall(r"[a-z0-9]+", task.lower()) if len(w) > 2})
-        for src_idx, line in enumerate(observed):
-            raw = line.text or ""
-            if _is_interrogative_aside(raw) or _is_directed_question_to_named_person(raw):
-                continue
-            if not _is_explicit_reversible_task(raw):
-                continue
-            rtoks = {w for w in re.findall(r"[a-z0-9]+", raw.lower()) if len(w) > 2}
-            if any(len(rtoks & et) >= 2 for et in ex_toks):
-                continue   # already caught by the whole-day pass
-            n += 1
-            o = OwnerObservedLine(line_no=n, text=raw, moat_task=True)
-            o.src_idx = src_idx
-            o.money_src = _is_money_action(raw)
-            out.append(o)
-            ex_toks.append(rtoks)
-        return out
-
-    async def _expand_per_line(self, observed):
-        """THE PER-LINE MOAT (single-line + whole-day fallback): for each observed line the funded model
-        splits it into distinct tasks AND judges the breath vent-or-not. A VENTED line yields nothing (or
-        only confirm-first held tasks); a clean multi-task line yields one candidate per task. Model
-        unavailable -> the line passes through unchanged (deterministic path + safety eval untouched)."""
-        if self.gateway.provider != PROVIDER_OPENROUTER:
-            return observed
-        from ..proactive.extract import extract
-        out, n = [], 0
-        # Rolling CONTEXT of the earlier lines in this same transcript, so the model can resolve
-        # vague references in a later line ("that thing" -> "the Henderson contract" named earlier).
-        # Bounded to the last few lines (recent referents); empty for a single-line/proactive call,
-        # which keeps that path (and the safety eval) byte-identical to before.
-        prior_lines: list[str] = []
-        for src_idx, line in enumerate(observed):
-            context = "\n".join(prior_lines[-8:])
-            prior_lines.append(line.text)
-            # Money truth of the RAW line — propagated onto every task split from it so a moat
-            # truncation ("refund X back to my card" -> "refund X") can never strip a fragment past
-            # the money gate. Money is the hard stop; the spine blocks any fragment whose source was money.
-            _msrc = _is_money_action(line.text)
-            # DETERMINISTIC ASIDE FLOOR: a question to someone else ("Did you grab the dry
-            # cleaning?") is never the owner's task. Drop it BEFORE the model can strip the
-            # interrogative wrapper and over-extract a bare imperative -> an ASK on a vent/aside.
-            if _is_interrogative_aside(line.text):
-                self.glassbox.log("extract_aside_silenced", {"line": line.text[:140], "reason": "aside"})
-                self._silenced_count = getattr(self, "_silenced_count", 0) + 1   # M1d ignore-trace
-                continue
-            # EXPLICIT REVERSIBLE-TASK BACKSTOP (highest-confidence shapes, checked BEFORE the model):
-            # an explicit reminder / calendar-hold / draft / cart is a real reversible owner task that
-            # must ALWAYS surface — never dropped. The 20-life RE-RUN proved isolated reminders surfaced
-            # but the SAME lines dropped inside a multi-line day: rolling context from a nearby vent line
-            # made the model tag "Set a reminder to finish the discharge summary" a VENT, and the inner
-            # task ("finish ...") was filtered out as non-actionable. Third-party questions are already
-            # silenced just above; money is handled at the spine (blocked, never auto-acted). Emitting
-            # deterministically here removes the model's coin-flip for the shapes Anticipy must never miss.
-            if _is_explicit_reversible_task(line.text):
-                # M1b: a bundled "remind me to call the dentist AND email Priya" must yield BOTH tasks,
-                # not collapse to one (the backstop used to emit the whole line, so the model kept only
-                # the most salient action and the other was silently dropped). Split conservatively.
-                from ..owner_mode import _split_multi_action
-                for _cl in _split_multi_action(line.text):
-                    n += 1
-                    _ot = OwnerObservedLine(line_no=n, text=_cl, moat_task=True)
-                    _ot.src_idx = src_idx
-                    _ot.original_text = line.text   # verbatim source before split/rephrase (sign wording, keywords)
-                    _ot.money_src = _is_money_action(_cl)   # per-clause money truth (M1a-consistent)
-                    out.append(_ot)
-                self.glassbox.log("reminder_hold_backstop",
-                                  {"line": line.text[:140], "clauses": len(_split_multi_action(line.text))})
-                continue
-            try:
-                res = await extract(self.gateway, line.text, context=context)
-            except Exception:
-                res = None
-            if res is None or not res.available:
-                n += 1
-                _ln0 = OwnerObservedLine(line_no=n, text=line.text)   # deterministic fallback
-                _ln0.money_src = _msrc
-                # Even when the model reads the line as thin/unavailable, an EXPLICIT reminder /
-                # calendar-hold / draft-cart is a real reversible task that must never silently drop.
-                if _is_reminder_or_hold(line.text) or _is_draft_or_cart_prep(line.text):
-                    _ln0.moat_task = True
-                out.append(_ln0)
-                continue
-            if res.vent:
-                # The breath carries emotion — but the model may have separated a REAL task from
-                # the vent itself ("email Sarah the budget" inside "...I should just quit..."). The
-                # product is the inference: those real tasks must STILL be caught. They are emitted
-                # as force_ask lines so the spine/preview can only ASK (confirm-first) and NEVER
-                # auto-act in the heat. A PURE vent (no real task) yields [] here -> nothing surfaces,
-                # exactly as before (the cardinal-sin guard holds). The vent clause itself is never
-                # emitted as a task by the model, so it produces no card.
-                # A vent-adjacent "task" only survives the cardinal vent floor if the ASSISTANT could
-                # actually act on it — a delegatable/digital directed action OR a pickup/errand OR money.
-                # The 20-life test caught a PURE complaint ("the kids are trying to end me, three loads of
-                # laundry and it's not even noon") extracted as "do three loads of laundry" (a physical
-                # chore the assistant cannot do) and surfaced as a card. A chore/bare-noun voiced inside a
-                # vent is just the vent -> dropped (silent), preserving the floor. Money still survives
-                # (pay/wire/refund) so it can be BLOCKED, never lost.
-                vent_tasks = [t for t in res.vent_adjacent_tasks()
-                              if _VENT_TASK_ACTIONABLE.search(t.get("task", "") or "")]
-                if not vent_tasks:
-                    self.glassbox.log("extract_vent_silenced", {"line": line.text[:140], "reason": "vent/sarcasm"})
-                    self._silenced_count = getattr(self, "_silenced_count", 0) + 1   # M1d ignore-trace
-                    continue   # pure vent / non-actionable chore -> no card
-                for t in vent_tasks:
-                    n += 1
-                    _vt = OwnerObservedLine(line_no=n, text=t["task"], force_ask=True)
-                    _vt.original_text = line.text   # verbatim source before the moat reworded it
-                    _vt.money_src = _is_money_action(t["task"])   # M1a: per-task money truth (no bleed)
-                    out.append(_vt)
-                self.glassbox.log("extract_vent_tasks_held",
-                                  {"line": line.text[:140],
-                                   "tasks": [t["task"] for t in vent_tasks]})
-                continue
-            tasks = res.actionable()
-            if not tasks:
-                n += 1
-                _ln2 = OwnerObservedLine(line_no=n, text=line.text)   # thin read -> don't lose the line
-                _ln2.money_src = _msrc
-                # REVERSIBLE PREPARE backstop: the moat returns actionable=[] for "draft an email to X
-                # but don't send it" / "cart 200 menus, don't order yet" (the negation reads as no-action),
-                # which then dropped at the shaper. Mark moat_task so the moat-rescue surfaces it as a
-                # confirm-first task — a draft/cart is reversible and must never be silently lost.
-                if _is_draft_or_cart_prep(line.text) or _is_reminder_or_hold(line.text):
-                    _ln2.moat_task = True
-                out.append(_ln2)
-                continue
-            # NOTE: do NOT gate clean tasks on triage.actionable() here. The triage marks a RELAYED
-            # or IMPLIED task ("Maya said can you pick up Leila at 3:15", "my sister mentioned mom's
-            # prescription needs picking up Friday") as non-actionable too — and those are EXACTLY
-            # the unspoken tasks the MOAT exists to catch (the product). Gating on triage silenced
-            # them. The aside/report-vs-task distinction is the MOAT model's job (extract.py prompt);
-            # the cheap deterministic floor here is only the narrow interrogative-aside guard above.
-            for t in tasks:
-                n += 1
-                _ot = OwnerObservedLine(line_no=n, text=t["task"], moat_task=True)
-                _ot.src_idx = src_idx   # which raw line this task was split from (for same-source dedup)
-                _ot.original_text = line.text   # verbatim source before the moat reworded it (sign wording, keywords)
-                _ot.money_src = _is_money_action(t["task"])   # M1a: per-task money truth (no bleed); truncation re-blocked by the money backstop
-                out.append(_ot)
-            self.glassbox.log("extract_tasks", {"line": line.text[:140],
-                              "tasks": [t["task"] for t in tasks]})
-        # SENTENCE-LEVEL WEB-LOOKUP BACKSTOP (browser-only reliability, 2026-06-26): the per-line model
-        # split sometimes DROPS a factual web-lookup buried in an unpunctuated day-blob ("...anyway look up
-        # when the Apple Store opens...") — it vanishes with no card. Recover it: scan each observed line's
-        # sentences and re-emit any FACTUAL web-lookup (the scoped _WEB_LOOKUP only — what-time/hours/price/
-        # status/phone/etc.) not already covered. DELIBERATELY NOT the broad _BROWSER "find" verb: "can't
-        # FIND the energy to care" is a vent, and matching bare "find" leaked a vent into a browser action
-        # (cardinal sin). _WEB_LOOKUP requires a factual target, so emotional language can't match. Money +
-        # vent still gated; the spine + chokepoint route it confirm-first to the hand.
-        from ..owner_mode import _WEB_LOOKUP as _DWL, _sentence_split
-        from ..live_memory.review_infer import is_vent_shape as _ivs
-        covered = [{w for w in re.findall(r"[a-z0-9]+", (o.text or "").lower()) if len(w) > 2} for o in out]
-        for src_idx, line in enumerate(observed):
-            for seg in (_sentence_split(line.text or "") or []):
-                seg = seg.strip()
-                if (not seg or _ivs(seg) or _is_interrogative_aside(seg)
-                        or _is_directed_question_to_named_person(seg)):
-                    continue
-                # Recover a dropped FACTUAL web-lookup OR a dropped SITE-ACTION ("return X on Amazon",
-                # "go to my Amazon and start a return") — both route to the browser hand. _SITE_ACTION is
-                # site-anchored so vents never match. Money is never browser-routed here.
-                if not (_DWL.search(seg) or _SITE_ACTION.search(seg)) or _MONEY_SIGNAL.search(seg):
-                    continue
-                stoks = {w for w in re.findall(r"[a-z0-9]+", seg.lower()) if len(w) > 2}
-                if any(len(stoks & c) >= 2 for c in covered):
-                    continue   # already covered by an extracted/backstopped task
-                n += 1
-                _wt = OwnerObservedLine(line_no=n, text=seg, moat_task=True)
-                _wt.src_idx = src_idx
-                out.append(_wt)
-                covered.append(stoks)
-        return out
+    # (THE MOAT was retired 2026-07-02, FIX-01 step 2c: the second model brain — extract.py
+    #  whole-day + per-line extraction — duplicated the decision pipeline. The pipeline is the
+    #  ONE extractor now; when it cannot run, _deterministic_expand holds the floors.)
 
     async def owner_ingest(self, source: str, text: str, meta: dict | None = None,
                            execute_actions: bool = False) -> dict:
@@ -2574,7 +2317,16 @@ class ControlCore:
                 "source_case": (meta or {}).get("source_case"),
             })
         else:
-            observed = await self._expand_tasks_with_model(raw_observed)   # THE MOAT: model splits + judges
+            # ONE extractor (FIX-01 step 2c, 2026-07-02): decision_pipeline is the only model brain.
+            # When it can't run — stub provider, pipeline env-disabled, a live 429/outage — we degrade
+            # to the DETERMINISTIC expansion, never to a second model. The floors (third-party silence,
+            # vent-adjacent hold, noise drop) are model-independent by construction. (The old fallback,
+            # extract.py "the MOAT", was deleted; A/B'd first: M1 6/6, M2 PASS, M3 ALL PASS with it off.)
+            observed = self._deterministic_expand(raw_observed)
+            self.glassbox.log("deterministic_expand", {
+                "lines": len(raw_observed),
+                "reason": "pipeline_unavailable" if use_decision_pipeline else "pipeline_disabled_or_stub",
+            })
         decision_pipeline_owned = bool(decision_result is not None and getattr(decision_result, "available", False))
         # DETERMINISTIC VENT-ADJACENT BACKSTOP: when the moat fails to split a vent-prefixed line
         # ("ugh my brain is fried, but remind me to send Maya the email before Friday") into its

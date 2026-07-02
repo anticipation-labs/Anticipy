@@ -53,12 +53,31 @@ wiring `WIRING: CLEAN (64 endpoints / 45 routes / 94 modules checked, 43 allowli
 TODO-debt)` — debt burned 45→37 · GATE-M: `M1 BATTERY: 6/6 pass`, `M2 COPY: PASS`,
 `M3 INTEGRATION: ALL PASS`.
 
-## Step 5 — Phase 2: ONE extractor (consolidate MOAT + Room-1.5 onto decision_pipeline)  [ ]
-**What I'll do:** 2a flag the MOAT fallback (`ANTICIPY_MOAT_FALLBACK`, default on; factor the
-deterministic stub branch into a shared helper, byte-identical) → 2b live A/B with the flag off →
-flip default → 2c delete `proactive/extract.py` → 2d `decide_line()` adapter in decision_pipeline;
-`Decider.decide` delegates via `ANTICIPY_DECIDER_BRAIN=pipeline` (constants/class stay — the relay
-and suite import them) → 2e (optional) shrink owner_mode dead branches.
-**Gates per flip:** GATE-M fresh-engine + `engine/scripts/safety_mega_eval.py` PASS.
-**Rollback:** each flip is a one-line env-default revert.
-**WIRING PROOF:** (pending)
+## Step 5 — Phase 2: ONE extractor (consolidate MOAT + Room-1.5 onto decision_pipeline)  [x]
+**What I did:**
+- **2a** factored the deterministic stub branch into `_deterministic_expand()` (byte-identical) +
+  `ANTICIPY_MOAT_FALLBACK` flag, default legacy. GATE-S 110/10 byte-identical; GATE-M all green.
+- **2b** live A/B, fresh engine, `ANTICIPY_MOAT_FALLBACK=0`: `M1 BATTERY: 6/6 pass`, `M2 COPY: PASS`,
+  `M3 INTEGRATION: ALL PASS` (2026-07-02).
+- **2c** deleted the second model brain: `proactive/extract.py` + `_expand_tasks_with_model` +
+  `_build_from_day_tasks` + `_expand_per_line` (−266 lines in control_core + the module). The fork
+  now reads: decision_pipeline OR `_deterministic_expand` — never a second model. The flag was
+  removed (moot). **Honest bump:** `preview_moat_rescue` broke — it monkeypatched the deleted
+  function to simulate the model; adapted its injection seam to `_deterministic_expand` (same lock,
+  same 3 assertions) → PASS. GATE-S back to 110/10 byte-identical. GATE-M fresh post-deletion:
+  6/6 · PASS · ALL PASS.
+- **2d** `decide_line()` adapter added to decision_pipeline (one line → ACT/ASK/SILENT/UNAVAILABLE;
+  one-way safe: block/ask/follow_up→ASK, never ACT; mixed→safest). `Decider.decide` delegates ONLY
+  behind `ANTICIPY_DECIDER_BRAIN=pipeline`; **default stays legacy** — the legacy prompt encodes
+  single-line narration-vs-handoff distinctions tuned against a live probe bank that NO LONGER
+  EXISTS in-repo, so a flip without a rebuilt validation bank would be plausible-but-unproven.
+  Mapping unit-verified 6/6 (act→ACT, block→ASK, ignore→SILENT, third-party→SILENT, mixed→ASK,
+  unavailable→UNAVAILABLE).
+- **2e** (owner_mode shrink) deferred — optional, lowest priority, separate step when taken.
+**WIRING PROOF (2026-07-02):** pasted per sub-step above; final suite tail:
+`==== SUITE: 110 passed, 10 failed ==== FAILED: <byte-identical baseline set>`.
+
+## Deferred (explicit, so nothing silently drifts)
+- **Decider brain flip** (`ANTICIPY_DECIDER_BRAIN=pipeline` as default): BLOCKED-ON a rebuilt
+  single-line probe bank (the old probe_decider.py evidence is gone). Until then legacy stays.
+- **2e owner_mode shrink**: one dead branch per commit, GATE-S each — when prioritized.
