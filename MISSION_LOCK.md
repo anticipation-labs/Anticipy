@@ -232,3 +232,24 @@ M3 INTEGRATION: ALL PASS
 |---|---|---|---|
 | 2026-07-01 | Set up canonical clone off devin branch; sanity-check stack | yes | clone at ~/Anticipy-devin (hoe/build); engine boots; suite RED 109/10 |
 | 2026-07-01 | STOP Amazon return as mission; write this MISSION_LOCK | yes | this file; Amazon plan is not the mission |
+
+## FORWARD-PRODUCT PROGRESS LOG (2026-07-02 overnight — honest, committed, verified)
+Per Omar's "forget safety/money for now, grind forward product" directive. All committed on `hoe/build`
+(mergeable-clean to main, currently 243 ahead). Safety/money gating parked for the final Omar+Devin pass.
+
+- **8c769a8** — MISSION_LOCK created + referenced from CLAUDE.md (mission can't be lost across sessions).
+- **1a8f6df** — M1 brain correctness: 6/6 battery on live engine ($4,200 blocked, sarcasm ignored). PROVEN.
+- **50853fa** — Killed dev-string leaks in the card surface (humanTitle scrubber + 3 raw {card.title}
+  wraps + 'localhost'→'You' user chip). The 'developer UI' feel, in source. Grep-verified clean.
+- **dfb86e3** — Hid engine internals (Live-circuit telemetry panel + source tags) behind a debug toggle;
+  consumer view is now calm/5-yr-old-simple. VERIFIED live on :3100 (renders clean, internals gone,
+  ?debug=1 reveals them). Pure CSS + client body-class — zero functional breakage.
+
+STILL DEVELOPER-Y (next forward polish, safe): the card-detail 'LIVE ENGINE' eyebrow + 'Current engine
+state.' placeholder checkIn copy → make human. Then premium visual pass across welcome/onboarding/board.
+
+NEEDS OMAR (can't finish unattended, queued for morning — NOT faked):
+- M5 deep scrape: needs your real logged-in Chrome (Gmail/Calendar/Contacts) + extension reload.
+- M6 real voice: a live Twilio call to your phone.
+- M8 hosting: Vercel deploy creds (so it's usable from anywhere) + repoint backend Supabase to the live 'handlit' project (ref eawoquqgfndmphogwjeu; the .env still holds the dead ref).
+- The final safety/money-gating pass (your call: you + Devin, last).
