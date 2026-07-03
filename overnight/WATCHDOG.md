@@ -21,6 +21,11 @@ the problem impossible to miss.** This is the enforcement half of the never-rest
      (the build cycle must check for and honor `overnight/HALT`), and scream it in WAKEUP.md.
    - **Engine down?** `curl -s -m3 http://127.0.0.1:8790/health`. If down, restart it per CLAUDE.md
      run command (mock channels/hands, `ANTICIPY_DATA_DIR=$PWD/.anticipy-data-hoe`); log it.
+   - **App down / `.next` flake?** `curl -s -m5 -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/welcome`.
+     If NOT 200 (the recurring stale-`.next` 404/500 — environmental, not code), fix it so the UI never
+     sits broken between cycles: kill the `:3100` listener (`lsof -tiTCP:3100 -sTCP:LISTEN | xargs kill`),
+     `rm -rf .next`, restart `nohup npx next dev -p 3100 > logs/next_dev_3100.log 2>&1 &`, wait for
+     `/welcome`=200; log it as RECOVERED. (Safe mid-build — it doesn't touch git.)
    - **No progress?** If `git log` shows no `Anticipy HoE` commit in the last ~90 min AND no lock is
      held AND no HALT is set → the loop is idle when it shouldn't be; note it loudly (the next build
      cron should fire — if the pattern persists 3 passes, escalate as a real blocker).
