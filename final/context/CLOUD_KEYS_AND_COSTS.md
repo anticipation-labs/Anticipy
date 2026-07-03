@@ -47,3 +47,16 @@ generates the key + provides it.
 Provide the keys and Claude wires them into the engine `.env` behind the store facade, then flips
 memory stub → live (Phases 1 & 4). Also worth refreshing: the existing GEMINI_API_KEY in the env is
 **invalid** — a valid one lets the Phase-2 "smart decider" run on a real model.
+
+## Hosted (Railway) deploy — status + the two blockers (2026-07-03)
+- ✅ Env vars SET on Railway (anticipy-engine/production/engine): Gemini key, NEO4J_* (4), and the
+  flags ANTICIPY_EMBED_PROVIDER=gemini + ANTICIPY_GRAPH=neo4j. Ready for when the code lands.
+- ✅ `neo4j>=5` added to engine/requirements.cloud.txt (Gemini embedder needs NO new dep — it uses stdlib urllib).
+- ⛔ BLOCKER 1 — repo mismatch: Railway builds from **omize10/Anticipy**, but the memory code lives in
+  **omize10/Anticipy-executor-working** (this clone, branch hoe/build). The code must reach the
+  Railway source repo (or point Railway at this repo, or `railway up` the local dir).
+- ⛔ BLOCKER 2 — build context: the Docker build context is **engine/**, but **final/** (the whole
+  context-engine + graph) is at the repo root, OUTSIDE it. Fix options: (a) set Railway Root Dir to the
+  repo root + adjust Dockerfile COPY paths (COPY engine/anticipy_engine + COPY final), or (b) vendor
+  final/ under engine/ (avoid duplication via a build step), or (c) `railway up` from a repo-root context.
+- ⇒ LOCAL cloud memory is fully working + proven now; HOSTED needs this deploy restructure as its own task.
