@@ -77,8 +77,6 @@ const SCREEN_TITLES = {
   sign: "Sign in",
   setup: "Setup",
   board: "",
-  mp3: "MP3 upload",
-  "go-to": "Go-To",
   memory: "Memory",
   settings: "Settings",
 };
@@ -88,7 +86,6 @@ const JOURNEY_ITEMS = [
   { href: "/sign", label: "Sign", screens: ["sign"] },
   { href: "/onboarding/2", label: "You", screens: ["onboarding-2"] },
   { href: "/", label: "Listen", screens: ["board"] },
-  { href: "/go-to", label: "Review", screens: ["go-to"] },
   { href: "/memory", label: "Memory", screens: ["memory", "settings"] },
 ];
 
@@ -1066,32 +1063,6 @@ function ActiveListeningPanel({
   );
 }
 
-function TranscriptInput({ intakeText, setIntakeText, submitTranscript, ingestBusy, ingestMessage, compact = false }) {
-  return (
-    <section className={`pz-panel pz-transcript-input ${compact ? "compact" : ""}`}>
-      <div className="pz-panel-head">
-        <div>
-          <h3>What should I handle?</h3>
-          <p>Type it instead of speaking.</p>
-        </div>
-        <StatusPill value="live" />
-      </div>
-      <textarea
-        value={intakeText}
-        onChange={(event) => setIntakeText(event.target.value)}
-        placeholder="Paste a transcript, or type the messy real-life thing someone asked you to do."
-      />
-      <div className="pz-actions">
-        <button className="pz-button primary" type="button" onClick={submitTranscript} disabled={ingestBusy || !intakeText.trim()}>
-          {ingestBusy ? "Reading..." : "Send"}
-        </button>
-        <a className="pz-button ghost" href="/mp3">Upload</a>
-      </div>
-      {ingestMessage ? <p className="pz-note">{ingestMessage}</p> : null}
-    </section>
-  );
-}
-
 function GatewayCircuit({ gatewayEvents = [], compact = false }) {
   const latest = gatewayEvents.slice(0, compact ? 3 : 6);
   return (
@@ -1132,55 +1103,6 @@ function GatewayCircuit({ gatewayEvents = [], compact = false }) {
         <p className="pz-note">No gateway events yet. Type, upload, approve, or start listening to create the first circuit record.</p>
       )}
     </section>
-  );
-}
-
-function Mp3Screen(props) {
-  return (
-    <div className="pz-scene pz-upload-scene">
-      <section className="pz-stage-hero pz-stage-minimal pz-page-intro">
-        <StatusPill value="live" />
-        <h2>Drop in the messy thing.</h2>
-        <p>Upload audio, paste a transcript, or type a note. Anticipy turns it into review cards.</p>
-      </section>
-      <FileUpload {...props} />
-      <GatewayCircuit gatewayEvents={props.gatewayEvents} compact />
-      <TranscriptInput {...props} />
-    </div>
-  );
-}
-
-function FileUpload({ selectedFile, setSelectedFile, uploadFile, ingestBusy, ingestMessage }) {
-  return (
-    <section className="pz-panel pz-form">
-      <label>
-        <span>Audio or transcript file</span>
-        <input
-          type="file"
-          accept=".txt,.md,.vtt,.srt,.json,.csv,.mp3,.m4a,.wav,.aac,.flac,.ogg"
-          onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
-        />
-      </label>
-      {selectedFile ? <p className="pz-note">Selected: {selectedFile.name}</p> : null}
-      <button className="pz-button primary" type="button" onClick={uploadFile} disabled={ingestBusy || !selectedFile}>
-        {ingestBusy ? "Uploading..." : "Upload and read"}
-      </button>
-      {ingestMessage ? <p className="pz-note">{ingestMessage}</p> : null}
-    </section>
-  );
-}
-
-function GoToScreen(props) {
-  return (
-    <div className="pz-scene pz-review-scene">
-      <section className="pz-stage-hero pz-stage-minimal pz-page-intro">
-        <StatusPill value="live" />
-        <h2>Pick one thing.</h2>
-        <p>Approve it, pause it, or leave a note. Proof is there when you want to open it.</p>
-      </section>
-      <GatewayCircuit gatewayEvents={props.gatewayEvents} compact />
-      <TaskBoard {...props} />
-    </div>
   );
 }
 
@@ -2003,8 +1925,6 @@ export default function PhaseZeroApp({ screen = "board" }) {
   if (screen === "sign") content = <SignScreen {...commonProps} />;
   else if (screen === "setup") content = <SetupScreen {...commonProps} />;
   else if (screen.startsWith("onboarding")) content = <OnboardingScreen screen={screen} {...commonProps} />;
-  else if (screen === "mp3") content = <Mp3Screen {...commonProps} />;
-  else if (screen === "go-to") content = <GoToScreen {...commonProps} />;
   else if (screen === "memory") content = <MemoryScreen {...commonProps} />;
   else if (screen === "settings") content = <SettingsScreen {...commonProps} />;
   else content = <MainScreen {...commonProps} />;
