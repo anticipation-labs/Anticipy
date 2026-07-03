@@ -100,3 +100,6 @@ engine/.venv.bak.310/
 nohup.out
 app/*.bak.*
 .anticipy-data-hoe/
+.env.local.bak*
+.env*.bak*
+Neo4j-*.txt
