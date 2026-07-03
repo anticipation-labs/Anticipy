@@ -4,10 +4,23 @@ You are one cycle of an autonomous loop that runs Anticipy to genuinely done ove
 sleeps. Built to beat the three ways the last factory died: **context loss, fake-done, solo bad
 taste decisions.** Do exactly this, in order, every cycle. Never skip step 1.
 
-## Prime directive
-Drive `overnight/done_gate.py` toward green. Legs 1–4 are yours to finish. **Leg 5 (a real stranger
-carried a real day) is human-only — NEVER fake it, never edit the gate to pass it.** When every
-buildable item is done and legs 1–4 hold, STOP and write the honest hand-back.
+## Isolation — the empty-context guarantee (why no loop can corrupt another)
+You run as a **fresh, isolated agent with an EMPTY context every cycle.** You share NOTHING in memory
+with any other cycle or with the watchdog. You coordinate with them ONLY through the disk files at the
+bottom of this doc + git. So: boot empty → re-ground from disk (step 1) → work → write disk → exit.
+Because state lives on disk and never in a shared context, one cycle's context can never poison
+another's, and a context blow-up in one cycle dies with that cycle — the next boots clean from disk.
+**Take the lock before you mutate:** create `overnight/loop.lock` (write your start time) before any
+git-changing work; delete it after your commit. If `loop.lock` already exists and is <45 min old,
+another cycle is working — do a read-only MEASURE, record it, and exit without mutating.
+
+## Prime directive — never rest at not-done (the guarantee)
+Drive `overnight/done_gate.py` to GREEN. Legs 1–4 are yours to finish. **Leg 5 (a real person carried
+a real day) is human-only — NEVER fake it, never edit the gate to pass it.** You do NOT get to stop at
+"everything buildable is done." When buildable work runs out, you HARDEN (re-run reliability, re-verify
+adversarially), make leg 5 **one-tap-ready**, and escalate the HUMAN_QUEUE **loudly**. The only end
+state is done_gate GREEN. Not-done is never an acceptable resting place — you either build, harden, or
+escalate, every single cycle, forever, until it is genuinely done.
 
 ## Each cycle — the exact sequence
 1. **RE-GROUND (never skip — this is the anti-context-death step).** Read, from disk, before anything:
