@@ -41,6 +41,19 @@ from ..owner_onboarding import OwnerOnboardingIn, build_onboarding_plan
 from ..proactive.gateway import ProactiveGatewayLedger
 from ..proactive.harm import _MONEY_SIGNAL  # the money hard-stop signal (amount/account/transfer-to)
 
+# The final/ area (the ONE clean home of each system) lives at the repo root, one level above
+# the engine package dir, so it is not on the engine's import path by default. Add it, then pull
+# in the Phase-3 learns-you context engine. Fail-open: if final/ is absent the engine still boots
+# (self.context stays None and intake behaves exactly as before).
+try:
+    import sys as _sys, pathlib as _pathlib
+    _REPO_ROOT = str(_pathlib.Path(__file__).resolve().parents[3])
+    if _REPO_ROOT not in _sys.path:
+        _sys.path.insert(0, _REPO_ROOT)
+    from final.context import ContextEngine as _ContextEngine
+except Exception:  # pragma: no cover - final/ missing or import error must never break the engine
+    _ContextEngine = None
+
 
 def _base(data_dir=None) -> Path:
     # ABSOLUTE at construction (cwd-frozen): routes that re-derive data_dir at request time (e.g.
@@ -795,6 +808,11 @@ class ControlCore:
         # REAL memory: four drawers + the live memory agent, on the frozen contract.
         self.memory = Memory(data_dir=base)
         self.live_memory = LiveMemoryBrain(self.memory, gateway=self.gateway, scorecard=self.scorecard)
+        # PHASE 3 (learns-you): the context engine sits behind the live_memory facade and wires into
+        # intake at two seams — observe() captures stated anchors/people/retractions BEFORE the brain,
+        # and resolve_observed() rewrites task lines with what we already know AFTER intent-resolve, so
+        # the assistant resolves "my usual"/the right Sam and never re-asks a known fact.
+        self.context = _ContextEngine(self.memory, self.gateway) if _ContextEngine is not None else None
         self.owner_mode = OwnerMode()
         self.memory_worker = MemoryWorker(self.live_memory)
         self.gateway_ledger = ProactiveGatewayLedger(base, glassbox=self.glassbox)
@@ -2285,6 +2303,17 @@ class ControlCore:
         return card
 
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
+        # PHASE 3 seam 1 (learns-you, before the brain): capture the wearer's stated anchors /
+        # people / preferences (the decision pipeline drops pure facts as "ignore", so they'd be
+        # lost) and apply retractions — a "never mind X" DELETEs the matching open loop instead of
+        # letting a cancelled task linger. Best-effort: a memory hiccup must never break intake.
+        if execute_actions and getattr(self, "context", None) is not None:
+            try:
+                ctx_trace = self.context.observe(text)
+                if ctx_trace.get("captured") or ctx_trace.get("retraction"):
+                    self.glassbox.log("context_observe", ctx_trace)
+            except Exception as _cexc:
+                self.glassbox.log("context_observe_error", {"error": str(_cexc)[:200]})
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
         self._silenced_count = 0   # M1d: vent/sarcasm/aside lines dropped during expansion -> counted in ignored_line_count
@@ -2418,6 +2447,16 @@ class ControlCore:
                 and _NO_BUY_RE.search("\n".join(raw_lines)) and not _NO_BUY_RE.search(_shop[0].text)):
             _shop[0].text = _shop[0].text.rstrip(". ") + " — don't buy it"
         observed, middle_trace = self._intent_resolve(observed, raw_lines)  # GATE MIDDLE-1: ranked recall
+        # PHASE 3 seam 2 (learns-you, after transcript-scoped resolve): rewrite each task line with
+        # what memory already knows — resolve a vague reference ("my usual" -> the stored oat latte),
+        # disambiguate a person against the dossier (two Sams -> ask which / qualify the one), and
+        # fill any slot we were already told (never re-ask). The transcript resolve only sees THIS
+        # utterance; this reaches back into stored memory. Best-effort; empty context = no change.
+        if getattr(self, "context", None) is not None:
+            try:
+                observed = self.context.resolve_observed(observed)
+            except Exception as _rexc:
+                self.glassbox.log("context_resolve_error", {"error": str(_rexc)[:200]})
         observed = self._consolidate_obligations(observed)   # F-012: one real obligation = one card
         observed = await self._semantic_dedup_same_source(observed)  # anti-spam: one obligation -> one card
         # NOTE: the old _completeness_sweep is retired — whole-day extraction (_expand_tasks_with_model)

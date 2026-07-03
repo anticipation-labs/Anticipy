@@ -159,6 +159,15 @@ class MemoryDB:
                 self.conn.execute("DELETE FROM items WHERE kind=?", (kind,))
             self.conn.commit()
 
+    def delete(self, item_id: str) -> bool:
+        """Hard-delete ONE row by id (embedding lives on the row, so it goes too).
+        Used by the memory-reconcile DELETE op — a retraction ("never mind the bank
+        thing") removes the matching open loop instead of leaving it lingering."""
+        with self._lock:
+            cur = self.conn.execute("DELETE FROM items WHERE id=?", (item_id,))
+            self.conn.commit()
+            return cur.rowcount > 0
+
     def purge_everything(self) -> int:
         """RIGHT-TO-DELETE (M5): wipe EVERY table in the db — the four drawers (items) AND any
         auxiliary table (e.g. the inert remember-list `remembered_lines`, review enrichments). No
@@ -237,6 +246,13 @@ class MemoryStore:
 
     def clear(self) -> None:
         self.db.clear(self.kind)
+
+    def delete(self, item_id: str) -> bool:
+        """Remove ONE item of this drawer by id (never crosses drawers)."""
+        item = self.db.get(item_id)
+        if item is None or item.kind != self.kind:
+            return False
+        return self.db.delete(item_id)
 
 
 class Memory:

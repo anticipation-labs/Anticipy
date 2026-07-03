@@ -1,21 +1,34 @@
-# final/context — the ONE final context / memory system  [STATUS: PARTIAL]
+# final/context — the ONE final context / memory system  [STATUS: LEARNS-YOU DONE (Phase 3)]
 
-The "context engineering / vector" layer. What lets the brain **retrieve the right facts** when you
-say "the usual Friday update" or "email Sam," and **learn you** over time so it never re-asks.
+The "context engineering" layer. What lets the brain **resolve the right reference** when you say
+"grab my usual" or "email Sam," and **learn you** over time so it never re-asks a fact it was told.
 
-## What works today
-- Stores facts in typed drawers (people, preferences, open loops), per-user isolated.
-- Retrieves them into the brain's context on each turn.
+## What works today (Phase 3 — the learns-you package, no keys)
+`ContextEngine` (`engine.py`) sits behind the live_memory facade and wires into intake at two seams
+(`control_core._owner_ingest_inner`): `observe()` runs before the brain; `resolve_observed()` runs
+after the transcript-scoped intent resolve. It ships the four learns-you deliverables:
 
-## What's NOT done (the real gap)
-1. **Learns your style** — nothing yet learns *how you write*, so drafts aren't in your voice.
-2. **Never re-asks** — no ledger that guarantees a known fact is never asked twice.
-3. **Resolves references** — "the boss", "the usual place" → the actual thing, ask-once-on-miss.
-4. **Semantic retrieval** — retrieval is by drawer/keyword, not meaning; a vector index is the upgrade.
+- **(a) memory-anchored reference resolution** (`reference_resolver.py`, grafted from DEV-FINAL
+  `app/anticipy/memory.py:260`): "grab my usual coffee" → the stored *large oat milk latte*.
+- **(b) Mem0-style ADD/UPDATE/DELETE/NOOP reconcile** (`reconcile.py`, grafted from
+  `memory.py:185`) incl. explicit retraction: "never mind the bank thing" **DELETEs** the matching
+  open loop instead of leaving it lingering.
+- **(c) per-person dossier** (`dossier.py`, grafted from `product/dossier_active_loader.py`:
+  `Person`/`pronoun_map`/`do_not_touch`): two Sams → resolve the one, or **ask which**.
+- **(d) never-re-ask ledger** (`never_re_ask.py`): before the brain asks for a slot, it checks
+  memory for a known value and fills it instead of asking.
 
-## Done when
-`final/tests/context_eval.py` (many-case, to be written) shows: it drafts in your voice, resolves
-"the usual" correctly, and **never re-asks a fact it already knows** — across varied cases.
+Facts the wearer states ("Sam Rivera is my lawyer", "I'm allergic to penicillin") are captured into
+the profile drawer by `observe()` — the proactive pipeline drops pure facts as "ignore", so without
+this they'd be lost. Everything is fail-safe: a memory hiccup no-ops, an empty context leaves the
+line byte-identical, and per-user isolation + right-to-delete are inherited from the drawers.
 
-## Where the real code assembles
-`live_memory/` (the drawers + retrieval) + ported `resolve_reference` + a new `style_profile`.
+## Proof
+`final/tests/context_eval.py`: **3/8 → 7/8** (resolve 'my usual', disambiguate two Sams, surface a
+known allergy, handle a retraction, + the two never-re-ask cases). Case 7 (standing preferences)
+is the remaining gap. No regression: `proactive_eval.py` 14/15; `run_suite.sh` fail-set unchanged.
+
+## Still open (future phases, per cozy-chasing-comet.md)
+- **Style learning** — nothing yet learns *how you write* (needs real sent-message history).
+- **Standing preferences** — "morning only / never before 9am" not yet applied to scheduling.
+- **Semantic retrieval** — real embeddings + ANN + a temporal knowledge graph (Phases 1 & 4).
