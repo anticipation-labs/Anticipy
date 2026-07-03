@@ -51,6 +51,35 @@ exhausted retries falls back to on-device (never crashes ingest). `embed_batch()
 - **No regression** (flag ON, throwaway :8791 engine, live Gemini — stored vectors verified 768-d):
   `context_eval` **8/8**, `proactive_eval` 14/15 (in-band), suite fail-set unchanged.
 
+## Phase 4 — the Neo4j temporal knowledge graph [behind a flag]
+`graph.py` is a focused, custom entity/relationship graph on the live Neo4j (AuraDB Free),
+behind `ANTICIPY_GRAPH=neo4j`. Default OFF → `ContextEngine.graph is None`, no network is
+touched, and intake is byte-identical to Phase 3. (Chose a custom graph over graphiti-core:
+graphiti pulls a heavy async LLM stack whose Gemini path is finicky to verify in a night; the
+disambiguation + multi-hop we need is a small, provable graph.)
+
+- **Model.** Nodes `(:Owner {scope})` and `(:Entity {name, scope, kind})`; edges
+  `(A)-[:REL {predicate, valid_from, valid_to, ingested_at, invalid, statement}]->(B)` read
+  "A's `predicate` is B". **Bi-temporal:** `valid_from`/`valid_to` are VALID-time, `ingested_at`
+  is TRANSACTION-time. A contradicting fact for a *functional* predicate (one holder:
+  accountant/employer/…) doesn't overwrite history — it sets `invalid=true`+`valid_to` on the
+  prior edge (soft-delete), so "who was my accountant before Bob?" stays answerable.
+- **Wiring.** `ContextEngine` mirrors captured people into the graph on `observe()` (owner
+  relations from "X is my role", person-to-person from "Jane is Mia's assistant"), and consults
+  it in `resolve_observed()`: an ambiguous first name is resolved by **relationship context**
+  (a "signed contract" points at the lawyer Sam, not the brother Sam) instead of always asking,
+  and a possessive chain ("email **my accountant's assistant** the receipt") is answered by a
+  **multi-hop traversal** `Owner-[accountant]->Mia-[assistant]->Jane`. Every call is fail-safe:
+  a missing key / unreachable DB / Cypher error logs and no-ops, reads return empty.
+- **Proof** (`final/tests/graph_proof.py`, live Neo4j, isolated scope, self-cleaning): two Sams
+  with different relationships → traversal disambiguates the lawyer from the brother (and stays
+  ambiguous with no cue); `who is my accountant's assistant?` → Jane via Mia; the accountant
+  changes Mia→Bob → the Mia edge goes `invalid=true`/`valid_to` set (history kept) and the
+  multi-hop correctly returns empty. Also proven end-to-end through the ContextEngine.
+- **No regression** (flag ON, throwaway :8791 engine, live Neo4j): `context_eval` **8/8**
+  (also 8/8 flag OFF), `proactive_eval` 12/15 (in the 11–14 model-noisy band), suite fail-set
+  unchanged. The live Neo4j is DETACH-DELETE cleaned after every run.
+
 ## Still open (future phases, per cozy-chasing-comet.md)
 - **Style learning** — nothing yet learns *how you write* (needs real sent-message history).
-- **ANN + temporal graph** — retrieval is still O(n) cosine; a Neo4j temporal knowledge graph is Phase 4.
+- **ANN** — cosine retrieval is still O(n); an approximate-NN index is the remaining scale item.

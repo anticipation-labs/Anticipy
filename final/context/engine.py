@@ -31,6 +31,7 @@ import re
 
 from . import reconcile
 from .dossier import PersonBook
+from .graph import GraphStore, graph_enabled
 from .never_re_ask import NeverReAskLedger
 from .reference_resolver import resolve_reference
 
@@ -87,6 +88,13 @@ _SCHED_LINE = re.compile(
 _ROLE_LIKE = {"dentist", "doctor", "lawyer", "accountant", "landlord", "barber",
               "mechanic", "vet", "pharmacy", "manager", "boss", "gym", "bank"}
 
+# "<Name> is <Other>'s <role>" -> a person-to-person edge for the graph
+# ("Jane is Mia's assistant" => Mia -[assistant]-> Jane). Enables the multi-hop
+# "who is my accountant's assistant" traversal. Graph-only (Phase 4); inert off-flag.
+_PERSON_POSSESSIVE = re.compile(
+    r"^\s*([\w.'-]+(?:\s+[\w.'-]+){0,2})\s+is\s+"
+    r"([\w.'-]+(?:\s+[\w.'-]+){0,2})['’]s\s+([\w ]{2,30}?)\s*$", re.I)
+
 
 def _fragments(text: str) -> list[str]:
     parts: list[str] = []
@@ -106,6 +114,15 @@ class ContextEngine:
         self.gateway = gateway
         self.people = PersonBook(memory)
         self.ledger = NeverReAskLedger(memory)
+        # PHASE 4: the temporal knowledge graph (Neo4j). Flag-gated (ANTICIPY_GRAPH=neo4j);
+        # default OFF → self.graph is None and intake stays byte-identical to Phase 3. When
+        # on, captured people/relationships are mirrored into Neo4j and consulted for
+        # relationship-aware disambiguation + multi-hop. Fully fail-safe (see graph.py).
+        self.graph = None
+        try:
+            self.graph = GraphStore() if graph_enabled() else None
+        except Exception:
+            self.graph = None
 
     # ---- seam 1: before the brain ------------------------------------------------
     def observe(self, text: str) -> dict:
@@ -135,6 +152,17 @@ class ContextEngine:
                 if self._add_preference(value, frag, is_sched):
                     captured.append({"preference": value, "scheduling": is_sched})
                 continue
+            m = _PERSON_POSSESSIVE.match(frag)
+            if m and self.graph is not None:
+                obj, subj, pred = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+                if subj.lower() not in {"he", "she", "they", "it", "this", "that"} \
+                        and obj.lower() not in {"he", "she", "they", "it", "this", "that"}:
+                    try:
+                        self.graph.add_relation(subj, pred, obj, statement=frag)
+                        captured.append({"relation": f"{subj}'s {pred}", "value": obj})
+                    except Exception:
+                        pass
+                    continue
             m = _NAME_IS_MY.match(frag)
             if m:
                 name, role = m.group(1).strip(), m.group(2).strip()
@@ -188,6 +216,13 @@ class ContextEngine:
                     "cpronouns": pronouns, "context_fact": True},
             provenance="context", confidence=1.0, importance=0.7, status="active",
         )
+        # PHASE 4: mirror the person fact into the temporal graph as an owner relation
+        # ("Sam Rivera is my lawyer" => Owner-[lawyer]->Sam Rivera). Best-effort.
+        if self.graph is not None:
+            try:
+                self.graph.add_owner_relation(role, name, statement=text)
+            except Exception:
+                pass
 
     # ---- standing preferences (durable rules; surfaced at schedule time) ----------
     @staticmethod
@@ -251,6 +286,24 @@ class ContextEngine:
                 continue
         return observed
 
+    def _graph_pick(self, candidates, text):
+        """Ask the graph to resolve an ambiguous first name by relationship context.
+        Returns the matching candidate ``Person`` or None (flag off / no confident pick).
+        """
+        if self.graph is None or not candidates:
+            return None
+        try:
+            g_choice, _ = self.graph.disambiguate(candidates[0].first_name(), hint=text)
+        except Exception:
+            return None
+        gname = (g_choice or {}).get("name", "").lower()
+        if not gname:
+            return None
+        for p in candidates:
+            if p.name.lower() == gname or gname in p.name.lower() or p.name.lower() in gname:
+                return p
+        return None
+
     def _resolve_line(self, line) -> None:
         text = getattr(line, "text", "") or ""
         if not text.strip():
@@ -263,14 +316,35 @@ class ContextEngine:
         if rr.resolved and rr.value and rr.value.lower() not in low:
             additions.append(rr.value)
 
-        # (c) per-person disambiguation (two Sams -> ask which; one -> qualify)
+        # (c) per-person disambiguation (two Sams). With the graph on, an ambiguous
+        # first name can be resolved by RELATIONSHIP context — "email Sam the signed
+        # contract" points at the lawyer Sam, not the brother Sam — instead of always
+        # asking. Off-flag (or when the graph can't decide) it falls back to asking.
         person, candidates = self.people.resolve_name(text)
         if candidates:
-            first = candidates[0].first_name()
-            names = ", ".join(p.label() for p in candidates[:3])
-            additions.append(f"which one — {first}? ({names})")
+            chosen = self._graph_pick(candidates, text)
+            if chosen is not None:
+                additions.append(chosen.label())
+            else:
+                first = candidates[0].first_name()
+                names = ", ".join(p.label() for p in candidates[:3])
+                additions.append(f"which one — {first}? ({names})")
         elif person is not None and person.name.lower() not in low:
             additions.append(person.label())
+
+        # (f) multi-hop relationship answer: "email my accountant's assistant …" ->
+        # traverse Owner-[accountant]->Mia-[assistant]->Jane and name Jane. Graph-only;
+        # fires only on a possessive chain, so it never touches an ordinary task line.
+        if self.graph is not None:
+            try:
+                hops = self.graph.multi_hop_from_question(text)
+            except Exception:
+                hops = []
+            if hops:
+                ans = str(hops[0].get("name") or "").strip()
+                joined = (low + " " + " ".join(additions)).lower()
+                if ans and ans.lower() not in joined:
+                    additions.append(ans)
 
         # (d) never-re-ask: fill any slot named by role that we already know
         joined = " ".join(additions).lower()
