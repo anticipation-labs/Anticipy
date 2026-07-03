@@ -169,14 +169,15 @@ function normalizeEngineCard(card) {
     : [];
   return {
     id: card.id || card.ask_id || `engine-${Math.random().toString(16).slice(2)}`,
-    category: "Live engine",
-    title: card.title || card.action || card.source_text || "Anticipy found something.",
+    // De-jargon (UI step 1): human-facing card copy, never engine internals. CANON/UI_FLOW law.
+    category: card.disposition === "blocked" ? "Needs a yes" : card.status === "waiting" || card.disposition === "ask" ? "Waiting for you" : "On it",
+    title: card.title || card.action || card.source_text || "Caught something for you.",
     heard: card.source_text || card.text || "",
     ignored: "",
-    browserWork: card.execution?.route || card.action || "Engine card",
-    checkIn: card.status === "waiting" ? "Needs your okay." : "Current engine state.",
-    proof: Array.isArray(card.proof) && card.proof.length ? "Proof exists on the engine card." : "No proof attached yet.",
-    memory: card.disposition === "remember" ? "Memory write" : "No memory write shown yet.",
+    browserWork: card.execution?.route || card.action || "",
+    checkIn: card.status === "waiting" || card.disposition === "ask" ? "Okay for me to go ahead?" : "",
+    proof: Array.isArray(card.proof) && card.proof.length ? "Here's what I did." : "",
+    memory: card.disposition === "remember" ? "I'll remember this." : "",
     followUp: card.status || card.disposition || "ready",
     risk: card.disposition === "blocked" || card.status === "blocked" ? "blocked" : card.disposition === "ask" || card.status === "waiting" ? "ask" : "do",
     status: card.status || "ready",
@@ -207,7 +208,10 @@ function StatusPill({ value }) {
   return <span className={`pz-pill pz-pill-${value}`}>{humanStatus(value)}</span>;
 }
 
+// De-jargon (UI step 1, 2026-07-02): engine-internal source tags (ST-*/OPS-*) must never reach a
+// human surface — CANON/UI_FLOW law "zero jargon". Rendered only under ?debug.
 function SourceTagList({ tags = SOURCE_TAGS.slice(0, 4) }) {
+  if (typeof window !== "undefined" && !document.body.classList.contains("pz-debug")) return null;
   return (
     <div className="pz-tags pz-dev-tags" aria-label="Source truth tags" data-source-tags={tags.join(" ")}>
       {tags.map((tag) => (
@@ -274,6 +278,8 @@ function AppShell({ screen, children, profile, session, engineState }) {
 }
 
 function JourneyRail({ screen }) {
+  // Removed from the calm surface (UI step 1): the progress rail is dev-chrome. Debug-only.
+  if (typeof window !== "undefined" && !document.body.classList.contains("pz-debug")) return null;
   return (
     <nav className="pz-journey" aria-label="Anticipy journey">
       {JOURNEY_ITEMS.map((item) => {
@@ -385,6 +391,8 @@ function PendantVisual({ active = false }) {
 }
 
 function SourceTruthStrip() {
+  // The "Source of truth: <path>" strip is pure dev-chrome (UI step 1). Debug-only.
+  if (typeof window !== "undefined" && !document.body.classList.contains("pz-debug")) return null;
   return (
     <section className="pz-source-strip">
       <div>
