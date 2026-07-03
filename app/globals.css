@@ -2428,6 +2428,41 @@ body {
   gap: 14px;
 }
 
+/* Full-width groups (app permissions, memory) that hold their own multi-column panels. */
+.pz-settings-body-wide {
+  grid-template-columns: 1fr;
+}
+
+.pz-perm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.pz-perm-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.pz-perm-row > div {
+  display: grid;
+  gap: 3px;
+}
+
+.pz-perm-row strong {
+  font-size: 15px;
+}
+
+.pz-perm-row small {
+  color: var(--pz-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .pz-settings-body label {
   display: grid;
   gap: 7px;

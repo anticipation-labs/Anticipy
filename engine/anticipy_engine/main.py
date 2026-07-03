@@ -785,18 +785,6 @@ def memory_drawers() -> dict:
     }}
 
 
-@app.get("/memory/context")
-def memory_context(about: str = "", purpose: str = "decide") -> dict:
-    """THE single context seam, exposed for the UI: return the ONE ContextPack the brain
-    would assemble for this moment (decider=decide / hands=act / voice=speak). This is the
-    same builder every consumer uses — the UI shows exactly what the model will see, so the
-    'one context, three consumers' spine is visible and inspectable (never a parallel pipe)."""
-    if purpose not in ("decide", "act", "speak"):
-        purpose = "decide"
-    pack = current_core().live_memory.build_context(about, purpose=purpose)
-    return {"context_pack": pack.model_dump()}
-
-
 # The exact phrase the right-to-delete endpoint requires (money-stop-grade confirmation).
 _FORGET_CONFIRM = "DELETE MY DATA"
 

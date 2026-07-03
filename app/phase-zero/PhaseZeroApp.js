@@ -86,7 +86,7 @@ const JOURNEY_ITEMS = [
   { href: "/sign", label: "Sign", screens: ["sign"] },
   { href: "/onboarding/2", label: "You", screens: ["onboarding-2"] },
   { href: "/", label: "Listen", screens: ["board"] },
-  { href: "/memory", label: "Memory", screens: ["memory", "settings"] },
+  { href: "/settings", label: "Settings", screens: ["settings"] },
 ];
 
 const STATUS_COPY = {
@@ -1063,49 +1063,6 @@ function ActiveListeningPanel({
   );
 }
 
-function GatewayCircuit({ gatewayEvents = [], compact = false }) {
-  const latest = gatewayEvents.slice(0, compact ? 3 : 6);
-  return (
-    <section className={`pz-gateway ${compact ? "compact" : ""}`} aria-label="Proactive gateway circuit">
-      <div className="pz-panel-head">
-        <div>
-          <h3>Live circuit</h3>
-          <p>Input, brain, memory, browser, voice, proof, and follow-up now share one record.</p>
-        </div>
-        <StatusPill value={latest.length ? "live" : "read_only"} />
-      </div>
-      <div className="pz-circuit-line" aria-hidden="true">
-        {["Input", "Brain", "Memory", "Action", "Proof", "Follow-up"].map((label) => (
-          <span key={label}>{label}</span>
-        ))}
-      </div>
-      {latest.length ? (
-        <div className="pz-gateway-list">
-          {latest.map((event) => {
-            const actions = Array.isArray(event.suggested_actions) ? event.suggested_actions.length : 0;
-            const memories = Array.isArray(event.memory_mutations) ? event.memory_mutations.length : 0;
-            const proof = Array.isArray(event.proof) ? event.proof.length : 0;
-            const hasBrowser = Boolean(event.browser_run);
-            return (
-              <article className="pz-gateway-row" key={event.event_id}>
-                <div>
-                  <span>{event.source_label || event.source || "gateway"} · {formatGatewayTime(event.created_at)}</span>
-                  <strong>{event.structured_summary || "Gateway event recorded."}</strong>
-                  <small>{shortId(event.event_id)} · {actions} actions · {memories} memory · {proof} proof{hasBrowser ? " · browser" : ""}</small>
-                </div>
-                <StatusPill value={event.status || "observed"} />
-                <SourceTagList tags={(event.source_of_truth_tags || SOURCE_TAGS).slice(0, 4)} />
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="pz-note">No gateway events yet. Type, upload, approve, or start listening to create the first circuit record.</p>
-      )}
-    </section>
-  );
-}
-
 function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveComment, resolveCard, limit }) {
   const [selectedId, setSelectedId] = useState("");
   const sorted = useMemo(() => {
@@ -1214,27 +1171,6 @@ function TaskCard({ card, comment, mirror, onComment, onResolve }) {
   );
 }
 
-function MemoryScreen({ profile, cards, gatewayEvents }) {
-  const { drawers, error: drawersError, reload } = useMemoryDrawers();
-  return (
-    <div className="pz-scene pz-memory-scene">
-      <section className="pz-stage-hero pz-stage-minimal pz-page-intro">
-        <StatusPill value="live" />
-        <h2>What I know.</h2>
-        <p>This is my real memory — the facts, inferences, open loops, and history I hold. Anything wrong gets corrected here.</p>
-      </section>
-      <GatewayCircuit gatewayEvents={gatewayEvents} compact />
-      <LearnedMemoryPanel drawers={drawers} error={drawersError} />
-      <section className="pz-grid two pz-memory-grid">
-        <ProfileSection title="People who matter" items={(profile.people || []).map((person) => `${person.name}: ${person.role || "important"}`)} />
-        <ProfileSection title="Rules" items={profile.rules || []} />
-      </section>
-      <ContextPackInspector />
-      <ForgetMePanel onDeleted={reload} />
-    </div>
-  );
-}
-
 // RIGHT-TO-DELETE, gated like the money hard-stop: the engine only wipes when the
 // exact confirm phrase is typed. Default-deny — anything else touches nothing.
 function ForgetMePanel({ onDeleted }) {
@@ -1280,80 +1216,48 @@ function ForgetMePanel({ onDeleted }) {
   );
 }
 
-// The single-context spine, made visible. Type a moment; see the EXACT ContextPack the brain
-// assembles — the same builder the decider (decide), the browser/API hands (act), and the
-// voice (speak) all read through. This is the proof that context flows through one source,
-// not three parallel pipes.
-function ContextPackInspector() {
-  const [about, setAbout] = useState("");
-  const [purpose, setPurpose] = useState("decide");
-  const [pack, setPack] = useState(null);
-  const [loading, setLoading] = useState(false);
+// The same readiness checklist /connect uses, shown read-only in Settings so the owner can see
+// at a glance what each connected app is actually allowed to do. Presence/absence of config only,
+// never a secret value; the internal apple_signing release step is hidden (as it is on /connect).
+function AppPermissionsPanel() {
+  const [caps, setCaps] = useState(null);
   const [error, setError] = useState("");
-
-  async function inspect(event) {
-    if (event) event.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(
-        `/api/memory/context?about=${encodeURIComponent(about)}&purpose=${encodeURIComponent(purpose)}`,
-        { cache: "no-store" },
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || "Could not read the context.");
-      setPack(data.context_pack || null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setPack(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await jsonFetch("/api/readiness");
+        const list = (Array.isArray(data.capabilities) ? data.capabilities : [])
+          .filter((cap) => cap.capability !== "apple_signing");
+        setCaps(list);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+  }, []);
+  if (error) return <p className="pz-note">I could not read app permissions right now: {error}</p>;
+  if (!caps) return <p className="pz-note">Checking what each app can do…</p>;
+  if (!caps.length) return <p className="pz-note">Nothing connected yet. Connect your accounts and they show up here.</p>;
   return (
-    <section className="pz-context-inspector">
-      <h3>What I&apos;d see for a moment.</h3>
-      <p className="pz-note">
-        One context source feeds every part of me — the decider, the browser hands, and the
-        voice. Type a moment to see exactly what I&apos;d bring in.
-      </p>
-      <form className="pz-context-controls" onSubmit={inspect}>
-        <input
-          value={about}
-          onChange={(e) => setAbout(e.target.value)}
-          placeholder="e.g. Sam decking, or where do I work"
-          aria-label="Moment to build context for"
-        />
-        <select value={purpose} onChange={(e) => setPurpose(e.target.value)} aria-label="Purpose">
-          <option value="decide">Decide</option>
-          <option value="act">Act</option>
-          <option value="speak">Speak</option>
-        </select>
-        <button className="pz-button primary" type="submit" disabled={loading}>
-          {loading ? "Reading…" : "Show context"}
-        </button>
-      </form>
-      {error ? <p className="pz-error">{error}</p> : null}
-      {pack ? (
-        <div className="pz-context-pack">
-          <div className="pz-context-meta">
-            <span>Purpose: <strong>{pack.purpose}</strong></span>
-            <span>Confidence: <strong>{(pack.top_relevance || 0).toFixed(2)}</strong></span>
-            <span>{pack.abstain ? "Below floor — I won't guess" : "Confident enough to use"}</span>
-            <span>{pack.item_count} item(s), {pack.budget_used} chars</span>
+    <ul className="pz-perm-list">
+      {caps.map((cap) => (
+        <li className="pz-perm-row" key={cap.capability}>
+          <div>
+            <strong>{cap.label}</strong>
+            <small>{cap.what_to_do}</small>
           </div>
-          <ProfileSection title="Open loops (always complete)" items={pack.open_loops || []} />
-          <ProfileSection title="Facts" items={pack.profile || []} />
-          <ProfileSection title="Inferred (never promoted)" items={pack.derived || []} />
-          <ProfileSection title="Recent history" items={pack.history || []} />
-        </div>
-      ) : null}
-    </section>
+          <span className={`pz-pill pz-pill-${cap.status === "live" ? "live" : "coming_soon"}`}>
+            {cap.status === "live" ? "Connected" : "Not connected"}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
-function SettingsScreen({ settings, setSettings, saveSettings, gatewayEvents }) {
+function SettingsScreen({ settings, setSettings, saveSettings }) {
+  // Memory drawers (facts / inferred / open loops / history) + the forget-me control fold in here
+  // from the retired /memory screen (UI_SPEC step 8). One reload() refreshes both after a wipe.
+  const { drawers, error: drawersError, reload } = useMemoryDrawers();
   // FIX-04 (2026-07-02): the dropdown used to write ONLY a local display store — the engine's
   // real autonomy gate never heard about it. Now: read the real mode on mount, POST on change.
   const AUTONOMY_TO_ENGINE = { Limited: "limited", Regular: "regular", "Full-Send": "full_send" };
@@ -1397,7 +1301,6 @@ function SettingsScreen({ settings, setSettings, saveSettings, gatewayEvents }) 
         <h2>Settings.</h2>
         <p>Choose what I can hear, remember, and do. Anything sensitive stays ask-first.</p>
       </section>
-      <GatewayCircuit gatewayEvents={gatewayEvents} compact />
       <section className="pz-settings-list">
         <details className="pz-settings-group" open>
           <summary>
@@ -1461,6 +1364,27 @@ function SettingsScreen({ settings, setSettings, saveSettings, gatewayEvents }) 
               <option value="manual">Manual only</option>
             </select>
           </label>
+          </div>
+        </details>
+        <details className="pz-settings-group">
+          <summary>
+            <span>What each app can do</span>
+            <small>Permissions</small>
+          </summary>
+          <div className="pz-settings-body pz-settings-body-wide">
+            <p className="pz-note">The same connections your accounts hand me. Read-only here — connect or change them from the setup flow. Nothing sensitive ever runs without your okay.</p>
+            <AppPermissionsPanel />
+          </div>
+        </details>
+        <details className="pz-settings-group" id="memory" open>
+          <summary>
+            <span>Memory</span>
+            <small>What I know</small>
+          </summary>
+          <div className="pz-settings-body pz-settings-body-wide">
+            <p className="pz-note">This is my real memory — the facts, inferences, open loops, and history I hold. Anything wrong gets corrected here.</p>
+            <LearnedMemoryPanel drawers={drawers} error={drawersError} />
+            <ForgetMePanel onDeleted={reload} />
           </div>
         </details>
       </section>
@@ -1925,7 +1849,6 @@ export default function PhaseZeroApp({ screen = "board" }) {
   if (screen === "sign") content = <SignScreen {...commonProps} />;
   else if (screen === "setup") content = <SetupScreen {...commonProps} />;
   else if (screen.startsWith("onboarding")) content = <OnboardingScreen screen={screen} {...commonProps} />;
-  else if (screen === "memory") content = <MemoryScreen {...commonProps} />;
   else if (screen === "settings") content = <SettingsScreen {...commonProps} />;
   else content = <MainScreen {...commonProps} />;
 

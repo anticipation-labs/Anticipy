@@ -6,7 +6,6 @@ export const NAV_ITEMS = [
   { href: "/sign", label: "Sign" },
   { href: "/setup", label: "Setup" },
   { href: "/", label: "Board" },
-  { href: "/memory", label: "Memory" },
   { href: "/settings", label: "Settings" },
 ];
 
