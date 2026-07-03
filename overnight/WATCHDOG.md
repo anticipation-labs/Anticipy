@@ -38,11 +38,11 @@ the problem impossible to miss.** This is the enforcement half of the never-rest
 
 ---
 ## STATUS (overwritten each pass)
-**2026-07-02 ~18:30 PDT — ✅ ALL IN ORDER** (watchdog pass #2; no wall clock — time est. from git relative + mtimes)
+**2026-07-02 ~18:40 PDT — ✅ ALL IN ORDER** (watchdog pass #3; no wall clock — time est. from git relative + mtimes)
 - **done_gate:** legs 1–4 PASS, leg 5 FAIL (human-only finish line, expected — no real-stranger proof file yet). No regression vs baseline.
 - **suite:** `113 passed, 9 failed` — EXACT match to loop_state.json baseline (113/9). FAILED set unchanged & identical: owner_mode, owner_ingest_event, owner_upload_ingest, messy_proactive_handoff, onboarding_frontdoor, retraction_silenced, owner_app_product_path, owner_test_day01, create_print_routing_selftest. No new failure, set did not grow → no HALT.
 - **wiring debt:** 35 TODO-debt (== baseline); `check_wiring.py` = CLEAN (non-strict, 66 endpoints / 49 routes / 95 modules, 42 allowlisted).
 - **engine:** UP — 127.0.0.1:8790/health = ok.
 - **locks/HALT:** no `loop.lock`, no `factory/.lock`, no `HALT`. Tree CLEAN (no stash needed).
-- **progress:** last commit `f1c4f4e` (loop: reconcile baseline + seed WAKEUP.md) at 18:21 PDT, ~5–10 min ago. Loop initialized ~11 min prior (`2eac97f`); active commit flow → NOT idle. (Loop tags commits `loop:`/`watchdog`/descriptive, not a literal "Anticipy HoE" string — judged progress by commit recency, which is fresh.)
-- **FYI (non-blocking, not escalated):** loop_state.json baseline (113/9) now reconciled with the live run — drift resolved by pass #1's `f1c4f4e`. CLAUDE.md still cites the older 109/10 GATE-S baseline (cosmetic; live 113/9 beats it).
+- **progress:** last commit `93c905c` (watchdog pass #2) ~9 min ago; last build commit `f1c4f4e` (loop: reconcile baseline + seed WAKEUP.md) ~17 min ago — both well inside the 90-min window → NOT idle. (Loop tags commits `loop:`/`watchdog`, not a literal "Anticipy HoE" string — progress judged by commit recency.)
+- **FYI (non-blocking, not escalated):** baseline (113/9) stable across passes #1–#3; no drift. CLAUDE.md still cites the older 109/10 GATE-S baseline (cosmetic; live 113/9 beats it). Nothing to escalate to Omar this pass.
