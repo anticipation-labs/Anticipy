@@ -38,4 +38,11 @@ the problem impossible to miss.** This is the enforcement half of the never-rest
 
 ---
 ## STATUS (overwritten each pass)
-_(no pass has run yet — the first watchdog fires within 10 minutes)_
+**2026-07-02 18:20 PDT — ✅ ALL IN ORDER** (watchdog pass #1; factory loop just initialized)
+- **done_gate:** legs 1–4 PASS, leg 5 FAIL (human-only finish line, expected — no real-stranger proof file yet). No regression.
+- **suite:** `113 passed, 9 failed` — IMPROVED vs baseline (112/10). FAILED set SHRANK by one: `premium_copy` now PASSES (from the "UI step 1 de-jargon" commit). The 9 current failures are a strict SUBSET of the baseline 10 (owner_mode, owner_ingest_event, owner_upload_ingest, messy_proactive_handoff, onboarding_frontdoor, retraction_silenced, owner_app_product_path, owner_test_day01, create_print_routing_selftest — mostly parked safety/owner-mode tests). No NEW failure → no HALT.
+- **wiring debt:** 35 TODO-debt (== baseline); `check_wiring.py` = CLEAN (non-strict, 66 endpoints / 49 routes / 95 modules).
+- **engine:** UP — 127.0.0.1:8790/health = ok.
+- **locks/HALT:** no `loop.lock`, no `factory/.lock`, no `HALT`. Tree CLEAN (no stash needed).
+- **progress:** latest `Anticipy HoE` commit `2eac97f` (factory loop v2) 4 min ago; last real build "UI step 1" 65 min ago → NOT idle. Loop scaffolding just committed; first build cycle has not fired yet.
+- **FYI (non-blocking, not escalated):** `loop_state.json` baseline reads 112/10 while CLAUDE.md/CANON read 109/10 (cosmetic drift; live run 113/9 beats both). LOOP.md instructs cycles to write `overnight/WAKEUP.md`, but only a SUPERSEDED root `WAKEUP.md` exists — cycles should confirm the correct target.
