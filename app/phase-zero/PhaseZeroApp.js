@@ -456,19 +456,33 @@ function SetupScreen({ engineState, listenStatus, refreshEngine, refreshListenSt
     <div className="pz-scene">
       <section className="pz-stage-hero pz-stage-minimal">
         <StatusPill value={engineState.ok ? "live" : "unavailable"} />
-        <h2>Let me check the basics.</h2>
-        <p>Anticipy needs the engine, browser helper, and listening path. If something is missing, it says so plainly.</p>
+        <h2>Let&rsquo;s get you set up.</h2>
+        <p>Two quick things, then I can start.</p>
         <div className="pz-readiness-list">
-          <ReadinessRow label="Engine" ok={engineState.ok} text={engineState.ok ? "Ready" : "Needs attention"} />
           <ReadinessRow label="Browser helper" ok={engineState.extensionConnected} text={engineState.extensionConnected ? "Connected" : "Not connected yet"} />
           <ReadinessRow label="Listening" ok={listenStatus.status !== "unavailable"} text={humanStatus(listenStatus.status || "read_only")} />
         </div>
+        {!engineState.extensionConnected ? (
+          <div className="pz-setup-helper">
+            <p className="pz-setup-helper-lead">
+              Add the browser helper — it lets me work inside the Chrome you already use.
+              Nothing sends without your okay.
+            </p>
+            <a className="pz-button primary" href="/anticipy-chrome-extension.zip" download>
+              Download the browser helper (.zip)
+            </a>
+            <ol className="pz-setup-steps">
+              <li>Unzip the file you just downloaded.</li>
+              <li>Open your browser&rsquo;s extensions page.</li>
+              <li>Turn on &ldquo;Developer mode&rdquo; (top-right toggle).</li>
+              <li>Click &ldquo;Load unpacked&rdquo; and pick the unzipped folder.</li>
+              <li>The Anticipy icon appears in your toolbar.</li>
+            </ol>
+          </div>
+        ) : null}
       </section>
       <div className="pz-actions pz-actions-simple">
-        <a className="pz-button primary pz-button-xl" href="/onboarding/2">Continue</a>
-        {!engineState.extensionConnected ? (
-          <a className="pz-button ghost" href="/download">Get the browser helper</a>
-        ) : null}
+        <a className="pz-button primary pz-button-xl" href="/connect">Continue</a>
         <button className="pz-button ghost" onClick={() => { refreshEngine(); refreshListenStatus(); }} type="button">Check again</button>
       </div>
     </div>
@@ -625,7 +639,7 @@ function AccountReadStage({ deep = false, engineState }) {
       {!services.length ? <p className="pz-note">Could not load the allow list. Is the engine running?</p> : null}
       {!engineState?.extensionConnected ? (
         <p className="pz-note">
-          Browser helper is not connected. <a href="/download">Get the helper</a> so I can read through your own Chrome.
+          Browser helper is not connected. <a href="/setup">Get the helper</a> so I can read through your own Chrome.
         </p>
       ) : null}
       <button className="pz-button primary" type="button" onClick={runScan} disabled={busy || !anyAllowed}>

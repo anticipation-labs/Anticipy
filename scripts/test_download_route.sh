@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# Regression pin for the /download front-door button.
+# Regression pin for the app-download front door (/api/download/anticipy-execute).
 #
-# The /download page's "Download for macOS" button points at
-# /api/download/anticipy-execute. That route used to be MISSING -> a 404 dead
-# button. This test boots the Next app and proves:
+# The download route used to be MISSING -> a 404 dead button. This test boots the
+# Next app and proves:
 #   - GET /api/download/anticipy-execute is NOT a 404 (the bug);
 #   - with the committed dev bundle present, it returns 200 + a real .zip
 #     (application/zip, attachment) carrying the unsigned developer preview;
 #   - the honest "developer-preview" provenance header is set (never "signed").
+#
+# NOTE (CANON UI_SPEC step 4, 2026-07-02): the standalone /download PAGE was removed and
+# the browser-helper download folded into Setup. This test now probes /setup for the UI and
+# pins /download as intentionally gone (404); the API endpoint guard below is unchanged.
 #
 # No Apple signing/notarization happens here (Omar-gated); no fake binary.
 set -euo pipefail
@@ -36,7 +39,7 @@ PID="$!"
 
 ready=0
 for _ in $(seq 1 120); do
-  if curl -fsS "$BASE/download" -o /dev/null 2>/dev/null; then
+  if curl -fsS "$BASE/setup" -o /dev/null 2>/dev/null; then
     ready=1
     break
   fi
@@ -48,9 +51,13 @@ if [ "$ready" -ne 1 ]; then
   exit 1
 fi
 
-# The download page itself must render.
+# The browser-helper download now lives in Setup (CANON UI_SPEC step 4). Setup must render
+# and carry the browser-helper download; the legacy /download page must be intentionally gone.
+code="$(curl -sS -o /dev/null -w "%{http_code}" "$BASE/setup")"
+test "$code" = "200" || { echo "FAIL: /setup did not render (got $code)"; exit 1; }
+curl -sS "$BASE/setup" | grep -qi 'browser helper' || { echo "FAIL: /setup missing the browser-helper download"; exit 1; }
 code="$(curl -sS -o /dev/null -w "%{http_code}" "$BASE/download")"
-test "$code" = "200" || { echo "FAIL: /download did not render (got $code)"; exit 1; }
+test "$code" = "404" || { echo "FAIL: legacy /download route should be gone (got $code)"; exit 1; }
 
 # The button target must NOT 404 (the regression).
 code="$(curl -sS -D "$HDR" -o "$BODY" -w "%{http_code}" "$BASE/api/download/anticipy-execute")"

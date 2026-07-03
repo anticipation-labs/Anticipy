@@ -1986,6 +1986,34 @@ body {
   color: var(--pz-cream-soft);
 }
 
+/* Setup screen: the folded-in browser-helper download + install steps */
+.pz-setup-helper {
+  width: min(520px, 100%);
+  margin-top: 18px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--pz-line);
+  border-radius: 12px;
+  background: rgba(248, 244, 236, 0.04);
+  text-align: left;
+}
+
+.pz-setup-helper-lead {
+  margin: 0 0 14px;
+  color: var(--pz-cream-soft);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.pz-setup-steps {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  color: var(--pz-cream-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
 .pz-form-shell {
   grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1fr);
 }
