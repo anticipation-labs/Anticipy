@@ -840,6 +840,10 @@ class WebVoyagerAgent:
                 # carried so the endpoint can PERSIST a recipe once (and only once) the judge verifies
                 # this run — a recipe is never saved from inside the agent (which can't grade itself).
                 "recipe_key": getattr(self, "_recipe_key", ""),
+                # cross-page working memory the agent aggregated this run (Phase 5: the browser
+                # writes back what it learns — surfaced so the caller can PERSIST it to memory
+                # via the gated capture path, instead of throwing it away at run end).
+                "notes": list(self._notes or []),
                 "trace": (self._trace if not self._replayed else []),
                 "replayed": self._replayed, **extra}
 

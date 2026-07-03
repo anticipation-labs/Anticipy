@@ -45,11 +45,15 @@ async def research(bus, questions: List[str], max_q: int = MAX_QUESTIONS) -> Lis
             answer = (output.get("answer") or output.get("result") or output.get("note")
                       or output.get("reason") or "")
             proof = getattr(res, "proof", None) or {}
+            # Phase 5: carry the browser agent's cross-page working NOTES alongside the answer so
+            # the caller (derive_tick) can persist the facts it learned — not just the one answer.
+            notes = [str(n)[:300] for n in (output.get("notes") or []) if str(n or "").strip()][:20]
             out.append({
                 "question": q,
                 "ok": status == "success" and bool(str(answer).strip()),
                 "answer": str(answer)[:500],
                 "proof": str(proof.get("url") or proof.get("read_back") or proof or "")[:300],
+                "notes": notes,
             })
         except Exception as exc:
             out.append({"question": q, "ok": False, "answer": "", "proof": "",

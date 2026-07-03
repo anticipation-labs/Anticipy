@@ -262,6 +262,59 @@ class Capturer:
         return {"kept": True, "kind": kind, "item": item, "smart_calls": 0,
                 "superseded": superseded}
 
+    def capture_fact(self, text: str, source: str = "browser",
+                     meta: Optional[Dict[str, object]] = None) -> Dict[str, object]:
+        """Persist a browser-LEARNED fact (a researched answer or a resolved-person dossier)
+        as an inert EPISODIC memory, through the SAME gate as capture().
+
+        Phase 5 ("the browser writes back what it learns"): world_research answers and
+        webvoyager cross-page notes used to be thrown away except a re-composed sentence.
+        This lands them in memory — but SAFELY. It reuses capture()'s exact gate:
+          - redact()      masks NEVER-STORE secret VALUES at the source ("no secrets");
+          - should_keep() drops empty/pure-filler noise;
+          - is_vent_shape() drops a vent/sarcasm ("vent-safe" — the cardinal sin);
+          - the same bi-temporal validity + salience-tiering + sensitivity retention.
+        It is deliberately PINNED to the history drawer and NEVER classify()'d, and it
+        carries NO due/remind field — so a fact the browser read can never be misfiled as a
+        fireable open_loop or a false ACTIVE profile fact. Fail-closed: returns a decision
+        dict, never raises into the caller (derive_tick swallows anything anyway).
+        """
+        # Mask secret VALUES first — the raw secret never reaches the remember-list or a drawer.
+        text, sens_cats = redact(text)
+        people = extract_people(text)
+        # Generous inert remember-list write (the flywheel: what the browser learns becomes
+        # recallable by a later resolve_person). Isolated + fire-and-forget, exactly as capture().
+        self._remember_side_write(text, source=source, people=people, meta=meta)
+        if not should_keep(text):
+            return {"kept": False, "reason": "noise", "smart_calls": 0}
+        # VENT-SAFE: never persist a vent/sarcasm as a durable fact (same guard capture() uses
+        # for the active drawers). A learned browser fact is declarative, so this rarely trips,
+        # but the guard stays so a scraped venty snippet can't become durable memory.
+        if is_vent_shape(text):
+            return {"kept": False, "reason": "vent", "smart_calls": 0}
+        dup = self._dup(text, "history")
+        if dup is not None:
+            return {"kept": False, "reason": "dup", "item": dup, "kind": "history", "smart_calls": 0}
+        anchor = anchor_from_meta(meta)
+        v_to = ephemeral_valid_to(text, anchor)
+        fields: Dict[str, object] = {"source": source or "browser"}
+        # Salience tiering (M4): a low-signal learned line lands in the raw buffer with a short
+        # window and auto-expires; a substantive fact persists. Same rule capture() applies.
+        if not is_durable(text, "history", people):
+            fields["tier"] = "raw"
+            raw_to = anchor.timestamp() + RAW_BUFFER_HOURS * 3600.0
+            v_to = raw_to if v_to is None else min(v_to, raw_to)
+        if sens_cats:
+            fields["sensitivity"] = sorted(sens_cats)
+            if sens_cats & SENSITIVE:
+                retain_to = anchor.timestamp() + RETENTION_DAYS * 86400.0
+                v_to = retain_to if v_to is None else min(v_to, retain_to)
+        item = MemoryItem(kind="history", text=text.strip(), people=people,
+                          fields=fields, provenance=source or "browser",
+                          event_time=anchor.timestamp(), valid_to=v_to, status="active")
+        self.memory.drawer("history").write(item)
+        return {"kept": True, "kind": "history", "item": item, "smart_calls": 0}
+
     def _reconcile(self, item: MemoryItem, kind: str) -> int:
         """UPDATE-on-contradiction: supersede older active profile facts that share this
         fact's subject key. Only genuine single-valued subjects reconcile (employer/name/

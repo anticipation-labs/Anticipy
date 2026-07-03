@@ -3654,6 +3654,17 @@ class ControlCore:
             research_lines = [f"{f['answer']}" for f in findings if f.get("ok")]
             misses = [f["question"] for f in findings if not f.get("ok")]
 
+            # PHASE 5 — the browser writes back what it learns. The researched answers (and the
+            # agent's cross-page notes) and any people this need names get resolved AGAINST what
+            # memory already knows (finally feeding resolve_person its remembered_items, so the
+            # memory arm actually fires) — then both are persisted as durable memory through the
+            # SAME gated capture path (redact secrets + should_keep + vent-safe). Fail-closed:
+            # any error here is logged and never disturbs the tick's act/ask/notify flow.
+            try:
+                await self._persist_browser_learning(need, findings)
+            except Exception as exc:
+                self.glassbox.log("derive_persist_error", {"error": f"{type(exc).__name__}: {exc}"})
+
             # Compose the ONE action sentence and submit through the ONE front door.
             args = need.action_args or {}
             if need.action_kind == "calendar_hold":
@@ -3714,6 +3725,90 @@ class ControlCore:
                     entry["notified"] = False
             out.append(entry)
         return {"derived": out}
+
+    def _remembered_items(self, limit: int = 200) -> list[dict]:
+        """What memory already knows, shaped as resolve_person's remembered_items.
+
+        A flat [{text, people}] list drawn from the active drawers (profile / history /
+        open_loops) plus the inert pull-only remember-list — the exact shape
+        anticipate.search_memory_for_person scans. This is what finally FEEDS the memory arm
+        of resolve_person: before Phase 5 it was always called with an empty list, so the arm
+        the module was built for could never fire. Superseded/archived facts are skipped so a
+        stale answer is never re-surfaced. Fail-closed: returns [] on any error."""
+        items: list[dict] = []
+        try:
+            for drawer in (self.memory.profile, self.memory.history, self.memory.open_loops):
+                for it in drawer.all():
+                    if str(getattr(it, "status", "")) in {"superseded", "archived"}:
+                        continue
+                    items.append({"text": str(getattr(it, "text", "") or ""),
+                                  "people": list(getattr(it, "people", []) or [])})
+        except Exception:
+            pass
+        try:
+            for row in self.live_memory.capturer.remember.recent(limit):
+                items.append({"text": str(row.get("text") or ""),
+                              "people": list(row.get("people") or [])})
+        except Exception:
+            pass
+        return items[:limit]
+
+    async def _persist_browser_learning(self, need, findings: list[dict]) -> None:
+        """Phase 5 write-back: turn what the browser learned this tick into durable memory.
+
+        Two sources, both formerly discarded:
+          (a) researched ANSWERS + the agent's cross-page NOTES (world_research findings) →
+              persisted verbatim as inert episodic facts;
+          (b) the PEOPLE this need names → resolved via resolve_person, FED remembered_items so
+              its memory arm fires, and any dossier with real evidence persisted as a fact.
+        Everything goes through capturer.capture_fact — the SAME gate as ordinary capture
+        (redact secrets, drop noise, vent-safe), pinned to history so nothing here can ever
+        become a fireable reminder. Bounded (≤2 people, ≤5 notes/finding) and best-effort."""
+        cap = self.live_memory.capturer
+        learned = 0
+
+        # (a) researched answers + cross-page notes
+        for f in (findings or []):
+            if not f.get("ok"):
+                continue
+            ans = str(f.get("answer") or "").strip()
+            if ans:
+                res = cap.capture_fact(ans, source="browser_research")
+                learned += 1 if res.get("kept") else 0
+            for note in (f.get("notes") or [])[:5]:
+                n = str(note or "").strip()
+                if n:
+                    res = cap.capture_fact(n, source="browser_research")
+                    learned += 1 if res.get("kept") else 0
+
+        # (b) resolve people the need names, feeding the memory arm, then persist real dossiers
+        try:
+            from ..proactive.anticipate import extract_people_from_task
+            from ..proactive.world_research import resolve_person
+            remembered = self._remembered_items()
+            for name in extract_people_from_task(str(getattr(need, "need", "") or ""))[:2]:
+                try:
+                    dossier = await resolve_person(name, str(getattr(need, "need", "") or ""),
+                                                   self.gateway, remembered_items=remembered)
+                except Exception:
+                    dossier = None
+                if not dossier:
+                    continue
+                # Persist ONLY a dossier grounded in real evidence (a memory hit or a found
+                # email) — a "no prior history found" guess is noise and is never written.
+                has_evidence = bool(dossier.get("memory_hits") or dossier.get("email"))
+                if has_evidence and float(dossier.get("confidence") or 0.0) >= 0.3:
+                    rel = str(dossier.get("relationship") or dossier.get("summary") or "").strip()
+                    if rel and rel.lower() != "mentioned in conversation, no prior history found":
+                        res = cap.capture_fact(f"{name}: {rel}", source="browser_person")
+                        learned += 1 if res.get("kept") else 0
+        except Exception as exc:
+            self.glassbox.log("derive_person_resolve_error",
+                              {"error": f"{type(exc).__name__}: {exc}"})
+
+        if learned:
+            self.glassbox.log("browser_learning_persisted",
+                              {"need": str(getattr(need, "need", ""))[:120], "facts": learned})
 
     async def notify_user(self, text: str, recipient: str | None = None) -> dict:
         """Text the user — the 'ask' half of a wall handoff (pause -> ask -> resume).
