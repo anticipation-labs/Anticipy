@@ -38,12 +38,12 @@ the problem impossible to miss.** This is the enforcement half of the never-rest
 
 ---
 ## STATUS (overwritten each pass)
-**2026-07-02 ~18:59 PDT — ✅ ALL IN ORDER (build cycle running concurrently)** (watchdog pass #5; no wall clock — time est. from git relative + mtimes)
-- **CONCURRENCY:** `overnight/loop.lock` is FRESH — held by a live build cycle (lock stamp `2026-07-02T18:45:43-0700`, ~16 min old vs now; mtime 1783043143 > HEAD ct 1783042782). Per rule → READ-ONLY pass: no git mutation, no stash, no commit. This STATUS block is written UNCOMMITTED; the build cycle or next watchdog commits it. `factory/.lock` absent.
-- **done_gate:** legs 1–4 PASS, leg 5 FAIL (human-only finish line, expected — no real-stranger proof file yet). No regression vs baseline.
-- **suite:** `113 passed, 9 failed` — EXACT match to loop_state.json baseline (113/9). FAILED set unchanged & identical: owner_mode, owner_ingest_event, owner_upload_ingest, messy_proactive_handoff, onboarding_frontdoor, retraction_silenced, owner_app_product_path, owner_test_day01, create_print_routing_selftest. No new failure, set did not grow → no HALT.
+**2026-07-02 ~19:09 PDT — ✅ ALL IN ORDER** (watchdog pass #6; no wall clock — time est. from git `%ci`/`%cr` + mtimes)
+- **CONCURRENCY:** clean handoff since pass #5 — the build cycle that held the lock finished and committed `a9c0abd` "UI step 7 — Main-screen collapse" at 19:01:34 PDT (8 min ago), released `overnight/loop.lock`, and updated loop_state.json / WAKEUP.md / WATCHDOG.md. No lock now held → SAFE full pass (git mutation allowed, this block committed). `factory/.lock` absent.
+- **done_gate:** legs 1–4 PASS, leg 5 FAIL (human-only finish line — "NO PROOF FILE", expected; no real-stranger day yet). No regression vs baseline.
+- **suite:** `113 passed, 9 failed` — EXACT match to loop_state.json baseline (113/9). FAILED set unchanged & identical: owner_mode, owner_ingest_event, owner_upload_ingest, messy_proactive_handoff, onboarding_frontdoor, retraction_silenced, owner_app_product_path, owner_test_day01, create_print_routing_selftest. Set did not grow → no HALT.
 - **wiring debt:** 35 TODO-debt (== baseline); `check_wiring.py` = CLEAN (non-strict, 66 endpoints / 49 routes / 95 modules, 42 allowlisted).
-- **engine:** UP — 127.0.0.1:8790/health = ok (`{"status":"ok"}`).
-- **locks/HALT:** `loop.lock` PRESENT & FRESH (build in flight — left untouched). No `factory/.lock`, no `HALT`. Tree dirty with live build WIP — `M app/globals.css`, `M app/phase-zero/PhaseZeroApp.js` (the UI-2 collapse step, order-of-attack), plus this `M overnight/WATCHDOG.md`. NOT stashed — a live cycle owns the tree.
-- **progress:** last commit `609ebbf` (watchdog pass #3) ~30 min ago, BUT a build cycle is actively holding the lock right now and has uncommitted UI edits in flight → NOT idle. WATCH: lock is now ~16 min old; if it crosses 45 min with no new commit, next watchdog must clear it as stale + recover the tree.
-- **FYI (non-blocking, not escalated):** baseline (113/9) stable across passes #1–#5; no drift. CLAUDE.md still cites the older 109/10 GATE-S baseline (cosmetic; live 113/9 beats it). Nothing new to escalate to Omar this pass.
+- **engine:** UP — 127.0.0.1:8790/health = `{"status":"ok","service":"anticipy-engine","version":"0.1.0"}`.
+- **locks/HALT:** NONE. No `overnight/loop.lock`, no `factory/.lock`, no `overnight/HALT`. Tree CLEAN (`git status --porcelain` empty before this WATCHDOG.md edit) → nothing to stash.
+- **progress:** NOT idle — fresh `Anticipy HoE` commit `a9c0abd` 8 min ago (UI step 7 done: Main-screen = one orb + one word + one input + cards). Order-of-attack now on UI steps 2–6,8,9 + route deletions. Loop is healthy and advancing.
+- **FYI (non-blocking, not escalated):** baseline (113/9) stable across passes #1–#6; no drift. Pre-existing SSR hydration mismatch + dev `/api/*` 503 both environmental (loop_state known_issues), no gate impact. CLAUDE.md still cites the older 109/10 GATE-S baseline (cosmetic; live 113/9 supersedes it). Nothing new to escalate to Omar this pass.
