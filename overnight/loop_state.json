@@ -1,0 +1,23 @@
+{
+  "loop": "anticipy-factory",
+  "started": null,
+  "prime_directive": "drive overnight/done_gate.py to green; legs 1-4 buildable, leg 5 is human-only",
+  "order_of_attack": [
+    {"step": "UI-1 de-jargon + serif", "status": "done"},
+    {"step": "UI-2..9 flow (main-collapse, welcome, setup+download, connect-early, onboarding, settings, coming-soon)", "status": "in_progress"},
+    {"step": "brain recall (graft multi_intent) -> 4/4 dense", "status": "todo"},
+    {"step": "memory compounds (never-re-ask + style + resolve_reference)", "status": "todo"},
+    {"step": "warm inputs/voice (upload front-door + humanize_ask)", "status": "todo"},
+    {"step": "browser to 60% (screenshot-first + voting ensemble + validator)", "status": "todo"},
+    {"step": "wire the 35 seams", "status": "todo"},
+    {"step": "proactive live-tune (calibrate so it doesn't spam)", "status": "todo"}
+  ],
+  "human_only_queue": [
+    "leg 5: a real stranger carried a real day (the finish line)",
+    "load the extension in your real Chrome (real hands)",
+    "one fresh Twilio auth token (real SMS 401s)"
+  ],
+  "gates": {"done_gate": "legs 1-4 pass / leg 5 fails", "suite": "112 passed / 10 failed (baseline)", "wiring_debt": 35},
+  "no_progress_cycles": 0,
+  "K_backstop": 3
+}
