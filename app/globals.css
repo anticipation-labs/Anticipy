@@ -1990,6 +1990,22 @@ body {
   grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1fr);
 }
 
+/* Sign screen: one calm centered panel (overrides the 2-col shell) */
+.pz-form-shell.pz-form-single {
+  grid-template-columns: minmax(0, 440px);
+  justify-content: center;
+}
+
+.pz-form-single .pz-form {
+  gap: 16px;
+}
+
+.pz-form-single .pz-form-sub {
+  margin: -4px 0 4px;
+  color: var(--pz-cream-soft);
+  font-size: 14px;
+}
+
 .pz-onboarding-card {
   align-items: stretch;
 }

@@ -421,16 +421,13 @@ function SignScreen({ auth, setAuth }) {
   }
 
   return (
-    <section className="pz-form-shell">
-      <div className="pz-panel pz-form-intro">
-        <h2>{auth.session ? "You are in." : "Come in."}</h2>
-        <p>
-          Use the same account everywhere. Anticipy keeps the local helper quiet in the background.
-        </p>
-        <SourceTagList tags={["OPS-BASIC-PLUMBING", "ST-TRUST-DIAL"]} />
-      </div>
+    <section className="pz-form-shell pz-form-single">
       <form className="pz-panel pz-form" onSubmit={submit}>
-        {auth.configured ? <StatusPill value="live" /> : <StatusPill value="unavailable" />}
+        <h2>{auth.session ? "You are in." : "Come in."}</h2>
+        <p className="pz-form-sub">One account, everywhere. That's it.</p>
+        <span className="pz-only-debug">
+          {auth.configured ? <StatusPill value="live" /> : <StatusPill value="unavailable" />}
+        </span>
         <label>
           <span>Email</span>
           <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
