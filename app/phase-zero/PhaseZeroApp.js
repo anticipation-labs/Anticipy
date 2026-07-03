@@ -308,35 +308,13 @@ function WelcomeScreen() {
       <section className="pz-land-hero">
         <div className="pz-land-glow" aria-hidden="true" />
         <span className="pz-land-kicker">Vibe your life.</span>
-        <h1>A personal assistant that hears your day — and quietly takes care of it.</h1>
+        <h1>I listen to your day and quietly handle the small stuff.</h1>
         <p className="pz-land-sub">
-          Anticipy listens to your real life, catches the things you&apos;re asked to do, and handles them in your
-          own calendar, email, and accounts — checking with you like a sharp human before anything that matters.
+          I draft — you approve. I never send anything without you.
         </p>
         <div className="pz-land-hero-actions">
           <a className="pz-land-cta pz-land-cta-xl" href="/sign">Come in</a>
           <span className="pz-land-hint">Takes about a minute.</span>
-        </div>
-      </section>
-
-      <section className="pz-land-beats">
-        <h2 className="pz-land-h2">How it works</h2>
-        <div className="pz-land-beat-row">
-          <article className="pz-land-beat">
-            <span className="pz-land-beat-num">01</span>
-            <h3>It hears your day.</h3>
-            <p>Someone says &quot;can you grab the kids at three?&quot; — mid-conversation, in passing. You keep talking. Anticipy caught it.</p>
-          </article>
-          <article className="pz-land-beat">
-            <span className="pz-land-beat-num">02</span>
-            <h3>It quietly handles it.</h3>
-            <p>It works inside your own calendar and email, the same way you would — and gets the next step ready without being asked twice.</p>
-          </article>
-          <article className="pz-land-beat">
-            <span className="pz-land-beat-num">03</span>
-            <h3>It checks in like a human.</h3>
-            <p>&quot;Draft&apos;s ready — okay to send?&quot; One tap from you, and it&apos;s done. Never a robot voice, never twelve pings.</p>
-          </article>
         </div>
       </section>
 
@@ -360,18 +338,6 @@ function WelcomeScreen() {
         <p className="pz-land-moment-note">
           It heard the ask, checked the drive, and put it on the calendar — then asked. That&apos;s the whole product.
         </p>
-      </section>
-
-      <section className="pz-land-trust">
-        <h2 className="pz-land-h2">The honest part</h2>
-        <p className="pz-land-trust-line">Anything that touches money always asks you first. Every mode, every time, no exceptions.</p>
-        <p className="pz-land-trust-line">Venting is never a task. Say you want to quit and move to the woods — nothing happens. That silence is the point.</p>
-      </section>
-
-      <section className="pz-land-door">
-        <h2>Come in.</h2>
-        <p>One calm screen. Nothing sends without your last tap.</p>
-        <a className="pz-land-cta pz-land-cta-xl" href="/sign">Come in</a>
       </section>
 
       <footer className="pz-land-foot">Anticipy — Vibe your life.</footer>
@@ -2028,9 +1994,13 @@ export default function PhaseZeroApp({ screen = "board" }) {
     stopLocalListening,
   };
 
+  // Welcome is a standalone landing page (its own <main className="pz-land">). It must NOT be
+  // wrapped in AppShell — that re-adds the appbar + the pz-top "Vibe your life." H1 + the journey
+  // rail around a page that already has its own bar, i.e. the double-chrome bug. UI_SPEC step 2.
+  if (screen === "welcome") return <WelcomeScreen />;
+
   let content = null;
-  if (screen === "welcome") content = <WelcomeScreen />;
-  else if (screen === "sign") content = <SignScreen {...commonProps} />;
+  if (screen === "sign") content = <SignScreen {...commonProps} />;
   else if (screen === "setup") content = <SetupScreen {...commonProps} />;
   else if (screen.startsWith("onboarding")) content = <OnboardingScreen screen={screen} {...commonProps} />;
   else if (screen === "great") content = <GreatScreen {...commonProps} />;

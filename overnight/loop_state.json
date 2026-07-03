@@ -14,7 +14,9 @@
     },
     {
       "step": "UI-2..6,8,9 flow (welcome-unwrap, sign, setup+download, connect-early, onboarding, settings, coming-soon) + delete /mp3,/go-to,/great,/done routes",
-      "status": "in_progress"
+      "status": "in_progress",
+      "substeps_done": ["UI-2 Welcome: unwrapped from AppShell (early return before wrap -> double-chrome gone: no pz-appbar/pz-top/pz-journey on /welcome) + reskinned to a single hero (new H1 'I listen to your day and quietly handle the small stuff.' + sub 'I draft — you approve. I never send anything without you.'), removed pz-land-beats + pz-land-trust + duplicate pz-land-door, kept the one proof-moment + footer; 'Vibe your life' token retained so done_gate leg1 safe. /welcome & / both 200."],
+      "substeps_remaining": ["UI-3 Sign strip tags", "UI-4 Setup+download fold", "UI-5 Connect wire-in", "UI-6 Onboarding fold great", "UI-8 Settings fold memory", "UI-9 Coming-soon registry", "delete /mp3,/go-to,/great,/done,/download routes"]
     },
     {
       "step": "brain recall (graft multi_intent) -> 4/4 dense",
@@ -53,7 +55,8 @@
   },
   "known_issues": [
     "PRE-EXISTING (from UI step 1, not this cycle): SSR hydration mismatch on every screen from the `typeof window` visibility guards in JourneyRail/SourceTagList/SourceTruthStrip (they render on server, null on client). Cheap next fix: render consistently + hide via the existing body:not(.pz-debug) CSS. Does not affect any gate.",
-    "app->engine proxy returns 503 for /api/* in this dev env (engine bound at :8790, app expects its own binding); environmental, not a code regression."
+    "app->engine proxy returns 503 for /api/* in this dev env (engine bound at :8790, app expects its own binding); environmental, not a code regression.",
+    "ENVIRONMENTAL (recurs each cycle): the running `next dev` on :3100 drifts into a stale/broken .next compile state serving 500/404 on `/` even when source is fine. Fix per LOOP note = `rm -rf .next` + restart `next dev -p 3100`. Cleared this cycle (verified / & /welcome = 200). Not a code regression."
   ],
   "no_progress_cycles": 0,
   "K_backstop": 3

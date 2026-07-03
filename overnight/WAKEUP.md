@@ -4,22 +4,21 @@ _This is the canonical status the factory loop writes every cycle. The root `WAK
 
 ## Where we are (2026-07-02, build cycle just finished)
 - **done_gate:** legs 1–4 PASS, leg 5 (real person, real day) is the human finish line — not yet. Unchanged.
-- **suite:** 113 passed / 9 failed (fail-set identical to baseline — did NOT grow). **wiring debt:** 35 (unchanged).
-- **This cycle built:** UI_SPEC step 7 — the **Main-screen collapse**. The old cluttered board (three-tile dock + "Live circuit" gateway panel + separate transcript box + featured card) is gone. The Main screen (`/`) is now **one orb + one word + one input + cards**:
-  - The listening orb + a single state word (**Listening. / Thinking. / Acting. / Resting.**) — the noisy Start/Mac-mic/Status controls and transcript are still there but only under `?debug`.
-  - **One input** (`OneInput`) that does everything: a mic button (talk), a textarea (type, placeholder "Say it, type it, or drop a recording — I'll catch the task."), and a paperclip (drop an MP3/transcript) → one Send.
-  - Pending "waiting for your yes" asks + a compact review board of the top cards below it.
-  - The page title bar is hidden on Main so the orb is the calm focus.
-- **Proven:** `/` compiles to 200 with no error; SSR HTML shows the new elements and none of the old chrome; a Playwright snapshot confirms orb + "Resting." + OneInput(mic/textarea/clip/Send); all other routes still 200; premium-copy gate CLEAN; no gate regressed.
-- **Also fixed this cycle:** the running dev server had gone into a stale/broken compile state serving **500 on `/` and `/welcome`** (source was fine). A clean dev-server restart cleared it — both are 200 again. No code was to blame.
+- **suite:** 113 passed / 9 failed (fail-set byte-identical to baseline — did NOT grow). **wiring debt:** 35 (unchanged). **premium-copy:** CLEAN.
+- **This cycle built:** UI_SPEC **step 2 — Welcome**. Two fixes:
+  1. **Killed the double-chrome bug.** The Welcome page is its own standalone landing page (its own top bar), but `PhaseZeroApp` was wrapping it in `AppShell`, which re-stacked a second appbar + a "Vibe your life." title header + the journey rail on top of it. Now there's an early `return <WelcomeScreen />` **before** the AppShell wrap, so Welcome renders clean — one bar, one hero.
+  2. **Reskinned it to a single calm hero** per CANON copy: H1 is now **"I listen to your day and quietly handle the small stuff."** and the sub is **"I draft — you approve. I never send anything without you."** Removed the noisy "How it works" 3-beat row, the "The honest part" trust block, and the redundant second "Come in" door section. Kept the one proof-moment (the school-pickup text example) and the footer.
+- **Proven:** `/welcome` and `/` both compile to **200**; the served Welcome HTML now shows the new H1/sub, has **no** `pz-appbar` / `pz-top` / `pz-journey` (double-chrome gone), the beats + trust sections are gone, the proof-moment is kept, and "Vibe your life" is still in the page (so done_gate leg 1's token check stays safe). No gate regressed.
+- **Also cleared this cycle (environmental, not code):** the running `next dev` had again drifted into a stale `.next` state serving 500/404 on `/`. A `rm -rf .next` + dev-server restart fixed it — both routes 200 again. Same recurring flake noted in known_issues; no code was to blame.
 
 ## Honest caveats (pre-existing, not from this cycle)
-- Every screen logs an **SSR hydration mismatch** (server renders the debug rail/tags, client renders null) — introduced by UI step 1's `typeof window` guards, present on untouched screens too. Harmless to the gates; the cheap next fix is to render those consistently and hide via CSS. Noted in `loop_state.json` known_issues.
+- Every screen still logs an **SSR hydration mismatch** (server renders the debug rail/tags, client renders null) — from UI step 1's `typeof window` guards, on untouched screens too. Harmless to the gates.
 - In this dev env the app's `/api/*` proxy returns **503** because the engine is bound at :8790 and the app expects its own binding — environmental, not a regression.
 
-## Next buildable (order-of-attack)
-- The remaining UI steps: 2 (Welcome unwrap from AppShell), 3 (Sign), 4 (Setup + fold download), 5 (Connect wire-in), 6 (Onboarding), 8 (Settings + memory), 9 (Coming-soon registry) — then **delete the now-redundant `/mp3`, `/go-to`, `/great`, `/done` routes** (their content now lives on Main / onboarding; deletion was deferred this cycle to keep the blast radius to `/`).
+## Next buildable (order-of-attack, UI_SPEC build order)
+- **Step 3 — Sign:** strip the intro source-tags, gate the `StatusPill` behind debug, one panel. (smallest next risk)
+- Then step 4 (Setup + fold `/download`), 5 (Connect wire-in), 6 (Onboarding fold `/great`), 8 (Settings fold `/memory`), 9 (Coming-soon registry) — then **delete** the now-redundant `/mp3`, `/go-to`, `/great`, `/done`, `/download` routes.
 - Then the brain/memory/browser legs per THE_MAP §5.
 
 ## What needs Omar
-See `overnight/HUMAN_QUEUE.md` — the short list (leg 5 = a real day on real accounts; load the extension; one Twilio token).
+See `overnight/HUMAN_QUEUE.md` — the short list (leg 5 = a real day on real accounts; load the extension in real Chrome; one Twilio token). None of these are buildable autonomously.
