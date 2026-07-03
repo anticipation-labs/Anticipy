@@ -11,7 +11,7 @@ const PING_MS = 20000;
 // FOREGROUND on every navigate/create so a screen recording shows the page visibly advancing. The
 // real product runs in the BACKGROUND (active:false) so it never steals the user's focus. Flip back
 // to false after recording.
-const ANTICIPY_DEMO_VISIBLE = true;
+const ANTICIPY_DEMO_VISIBLE = false;  // prod: drive backgrounded tabs, never steal focus (set true to watch)
 const TAB_ACTIVE = ANTICIPY_DEMO_VISIBLE ? true : false;
 
 // Onboarding scrape: services to probe for an already-logged-in session (the engine may send its
