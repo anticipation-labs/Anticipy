@@ -37,6 +37,20 @@ known allergy, handle a retraction, apply a standing preference, + the two never
 regression: `proactive_eval.py` 13–14/15 (model-noisy band); `run_suite.sh` 113/9 fail-set
 byte-identical to baseline.
 
+## Phase 1 — real Gemini embeddings (paraphrase-robust recall) [behind a flag]
+`memory/embed.py` now has a THIRD embedder: real Gemini cloud embeddings
+(`gemini-embedding-001`, 768-d) via `GOOGLE_API_KEY`, behind `ANTICIPY_EMBED_PROVIDER=gemini`.
+Default stays on-device (stub / bge), so the free suite + the working 8/8 are untouched. Results
+are L2-normalized + in-process cached; rate limits / 5xx retried with backoff; a missing key or
+exhausted retries falls back to on-device (never crashes ingest). `embed_batch()` uses the
+`batchEmbedContents` endpoint. Swapping providers on an existing store needs `Memory.reindex()`.
+
+- **Proof** (`final/tests/embed_gemini_proof.py`): store "schedule a trim" beside a keyword trap
+  ("book a table"), then query "book a haircut" (zero content-word overlap). STUB is fooled — it
+  ranks the trap #1 and the true memory only 0.33; GEMINI recalls "schedule a trim" #1 at **0.926**.
+- **No regression** (flag ON, throwaway :8791 engine, live Gemini — stored vectors verified 768-d):
+  `context_eval` **8/8**, `proactive_eval` 14/15 (in-band), suite fail-set unchanged.
+
 ## Still open (future phases, per cozy-chasing-comet.md)
 - **Style learning** — nothing yet learns *how you write* (needs real sent-message history).
-- **Semantic retrieval** — real embeddings + ANN + a temporal knowledge graph (Phases 1 & 4).
+- **ANN + temporal graph** — retrieval is still O(n) cosine; a Neo4j temporal knowledge graph is Phase 4.
