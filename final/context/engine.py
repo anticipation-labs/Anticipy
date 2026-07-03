@@ -50,6 +50,39 @@ _ALLERGIC = re.compile(r"\b(?:i'?m|i am)?\s*allergic\s+to\s+(.{2,60}?)\s*$", re.
 # "I live at <X>" -> the address anchor
 _LIVE_AT = re.compile(r"\bI\s+live\s+at\s+(.{3,80}?)\s*$", re.I)
 
+# ---- standing-preference patterns (durable constraints, NOT one-off tasks) ---------
+# A standing preference is a persistent rule about how to schedule/act for the wearer
+# ("I only take meetings in the morning", "never book me anything before 9am",
+# "I prefer afternoon calls"). The decision pipeline drops these as an IGNORED open
+# loop, so without capturing them here the profile stays empty and the constraint is
+# lost — then a later "set up a call with Dana" neither honors nor asks the time.
+# These are deliberately narrow so they never swallow an ordinary task or a "usual"
+# anchor (verbs here are disjoint from _USUAL_CAP's get/order/have/... set).
+_PREF_ONLY = re.compile(r"\bi\s+only\s+(.{3,80}?)\s*[.!]?\s*$", re.I)
+_PREF_NEVER = re.compile(
+    r"\bnever\s+((?:book|schedule|call|ring|meet|put|set|plan|slot)\b.{0,72}?)\s*[.!]?\s*$", re.I)
+_PREF_PREFER = re.compile(
+    r"\bi\s+(?:prefer|only\s+want|would\s+rather)\s+(.{3,80}?)\s*[.!]?\s*$", re.I)
+_PREF_NO = re.compile(
+    r"^\s*no\s+((?:meetings?|calls?|bookings?|appointments?)\b.{0,72}?)\s*[.!]?\s*$", re.I)
+_PREF_ALWAYS = re.compile(
+    r"\bi\s+always\s+((?:take|keep|start|end|book|schedule|meet)\b.{0,72}?)\s*[.!]?\s*$", re.I)
+_PREF_PATTERNS = (_PREF_ONLY, _PREF_NEVER, _PREF_PREFER, _PREF_NO, _PREF_ALWAYS)
+
+# does a preference concern SCHEDULING/time? (so we know to echo it on a scheduling card)
+_SCHED_SIGNAL = re.compile(
+    r"\b(?:meetings?|calls?|appointments?|bookings?|schedule|sync|"
+    r"morning|afternoon|evening|noon|midday|o'?clock|before|after|earlier|later|"
+    r"mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|"
+    r"sat(?:urday)?|sun(?:day)?|weekday|weekend|\d{1,2}\s*(?::\d{2})?\s*(?:am|pm))\b", re.I)
+
+# a scheduling/booking task line — the place a standing time preference must be applied
+_SCHED_LINE = re.compile(
+    r"\b(?:set\s+up|schedule|book|arrange|plan|organi[sz]e|line\s+up)\b"
+    r".*\b(?:call|meeting|meet|appointment|appt|sync|1:1|catch\s*up|chat|interview|session)\b"
+    r"|\b(?:meeting|appointment|appt|1:1|sync)\b"
+    r"|\bcall\s+with\b", re.I)
+
 # roles that are really a category, not a person's name — keep them as anchors too
 _ROLE_LIKE = {"dentist", "doctor", "lawyer", "accountant", "landlord", "barber",
               "mechanic", "vet", "pharmacy", "manager", "boss", "gym", "bank"}
@@ -96,6 +129,12 @@ class ContextEngine:
     def _capture_facts(self, text: str) -> list[dict]:
         captured: list[dict] = []
         for frag in _fragments(text):
+            pref = self._preference_from(frag)
+            if pref is not None:
+                value, is_sched = pref
+                if self._add_preference(value, frag, is_sched):
+                    captured.append({"preference": value, "scheduling": is_sched})
+                continue
             m = _NAME_IS_MY.match(frag)
             if m:
                 name, role = m.group(1).strip(), m.group(2).strip()
@@ -150,6 +189,58 @@ class ContextEngine:
             provenance="context", confidence=1.0, importance=0.7, status="active",
         )
 
+    # ---- standing preferences (durable rules; surfaced at schedule time) ----------
+    @staticmethod
+    def _preference_from(frag: str):
+        """(value, is_scheduling) if ``frag`` states a standing preference, else None.
+        The value is the whole statement so the constraint (e.g. 'morning', '9am') is
+        preserved verbatim for the card echo."""
+        f = (frag or "").strip()
+        for rx in _PREF_PATTERNS:
+            if rx.search(f):
+                return f.rstrip(" ."), bool(_SCHED_SIGNAL.search(f))
+        return None
+
+    def _add_preference(self, value: str, text: str, scheduling: bool) -> bool:
+        """Persist a standing preference as a DURABLE profile fact (not a fireable open
+        loop). Coexists with other constraints; exact repeats NOOP. Returns True if
+        newly written."""
+        val_l = (value or "").strip().lower()
+        if not val_l:
+            return False
+        try:
+            for it in self.memory.profile.all():
+                f = getattr(it, "fields", None) or {}
+                if f.get("ctype") == "preference" \
+                        and str(f.get("cvalue") or "").strip().lower() == val_l:
+                    return False  # already known -> NOOP
+        except Exception:
+            pass
+        self.memory.profile.write_text(
+            text or value,
+            fields={"ctype": "preference", "ckey": "scheduling" if scheduling else "general",
+                    "cvalue": value, "cscheduling": bool(scheduling), "context_fact": True},
+            provenance="context", confidence=1.0, importance=0.7, status="active",
+        )
+        return True
+
+    def _scheduling_prefs(self) -> list[str]:
+        """The stored standing preferences that concern scheduling/time (most recent
+        first), for echoing onto a scheduling card."""
+        out: list[str] = []
+        try:
+            items = self.memory.profile.all()
+        except Exception:
+            return out
+        for it in items:
+            f = getattr(it, "fields", None) or {}
+            if f.get("ctype") != "preference" or not f.get("cscheduling"):
+                continue
+            val = str(f.get("cvalue") or getattr(it, "text", "") or "").strip()
+            if val and val not in out:
+                out.append(val)
+        return out[:2]
+
     # ---- seam 2: after the transcript-scoped resolve -----------------------------
     def resolve_observed(self, observed):
         """Rewrite each task line with what we already know (references, people, slots)."""
@@ -186,6 +277,16 @@ class ContextEngine:
         for hit in self.ledger.known_slots_in(text):
             if hit.value.lower() not in low and hit.value.lower() not in joined:
                 additions.append(f"{hit.slot}: {hit.value}")
+
+        # (e) standing scheduling preference: a scheduling/booking task must honor a
+        #     stored time rule ("mornings only / nothing before 9am"). Echo the stored
+        #     constraint onto the card so the wearer sees it applied instead of ignored.
+        if _SCHED_LINE.search(text):
+            running = low + " " + " ".join(additions).lower()
+            for pref in self._scheduling_prefs():
+                if pref.lower() not in running:
+                    additions.append(pref)
+                    running += " " + pref.lower()
 
         if additions:
             line.text = text.rstrip(" .") + " — " + "; ".join(additions)
