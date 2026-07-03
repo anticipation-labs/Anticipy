@@ -555,6 +555,33 @@ export default function ConnectPage() {
           Money is the only hard stop: I&apos;ll never check out a cart or spend without you, even after
           these are connected.
         </p>
+
+        {/* ---- The one forward action: on to onboarding. Connecting above is optional here — you
+            can come back to it anytime — so Continue is the single primary action on this screen. ---- */}
+        <div className="settle" style={{ marginTop: 40 }}>
+          <a
+            href="/onboarding/2"
+            className="primary"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textDecoration: "none",
+              width: "fit-content",
+              padding: "14px 32px",
+              borderRadius: "var(--radius, 16px)",
+              background: "var(--ink, #141311)",
+              color: "var(--white, #ffffff)",
+              fontWeight: 600,
+              letterSpacing: "0.01em",
+            }}
+          >
+            Continue
+          </a>
+          <p className="block-note" style={{ marginTop: 12 }}>
+            You can connect these anytime — Continue when you&apos;re ready.
+          </p>
+        </div>
       </div>
     </main>
   );
