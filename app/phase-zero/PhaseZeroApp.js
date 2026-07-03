@@ -76,8 +76,6 @@ const SCREEN_TITLES = {
   welcome: "Welcome",
   sign: "Sign in",
   setup: "Setup",
-  great: "Great",
-  done: "Done",
   board: "",
   mp3: "MP3 upload",
   "go-to": "Go-To",
@@ -512,7 +510,6 @@ function OnboardingScreen({ screen, profile, setProfile, saveProfile, saveOnboar
             <StatusPill value="live" />
             <h2>Tell me three simple things.</h2>
             <p>Your name, one sentence about you, and where I should slow down before acting.</p>
-            <SourceTagList tags={stage.sourceTags} />
           </div>
           <ProfileBasicsForm profile={profile} setProfile={setProfile} saveProfile={saveProfile} />
         </section>
@@ -522,6 +519,13 @@ function OnboardingScreen({ screen, profile, setProfile, saveProfile, saveOnboar
   }
 
   const isReadLayer = ["/onboarding/3", "/onboarding/5", "/onboarding/7"].includes(stage.route);
+  // UI_SPEC step 6: the final onboarding stage IS the confirm-mirror (formerly the standalone
+  // /great screen), folded in here so onboarding ends by POSTing /api/onboard/complete and
+  // landing the owner on Main (/). No separate /great or /done screens anymore.
+  const isFinalStage = stage.route === ONBOARDING_STAGES[ONBOARDING_STAGES.length - 1].route;
+  if (isFinalStage) {
+    return <OnboardingFinalStage profile={profile} setProfile={setProfile} saveProfile={saveProfile} />;
+  }
 
   return (
     <div className="pz-scene">
@@ -529,7 +533,6 @@ function OnboardingScreen({ screen, profile, setProfile, saveProfile, saveOnboar
         <StatusPill value={isReadLayer ? "live" : stage.status} />
         <h2>{stage.title}</h2>
         <p>{stage.copy}</p>
-        <SourceTagList tags={stage.sourceTags} />
         <div className="pz-actions pz-actions-simple">
           <button
             className="pz-button ghost"
@@ -661,7 +664,7 @@ function AccountReadStage({ deep = false, engineState }) {
 
 function nextOnboardingHref(route) {
   const index = ONBOARDING_STAGES.findIndex((stage) => stage.route === route);
-  if (index < 0 || index === ONBOARDING_STAGES.length - 1) return "/great";
+  if (index < 0 || index === ONBOARDING_STAGES.length - 1) return "/";
   return ONBOARDING_STAGES[index + 1].route;
 }
 
@@ -777,7 +780,10 @@ function LearnedMemoryPanel({ drawers, error }) {
   );
 }
 
-function GreatScreen({ profile, setProfile, saveProfile }) {
+// The folded final onboarding stage (formerly the standalone /great screen). It mirrors back
+// what onboarding learned, then "Looks right" persists the durable onboarding-done marker
+// (POST /api/onboard/complete) and lands the owner on Main (/). UI_SPEC step 6.
+function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
   const [clarification, setClarification] = useState(profile.lastClarification || "");
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
@@ -794,7 +800,7 @@ function GreatScreen({ profile, setProfile, saveProfile }) {
     try {
       const data = await jsonFetch("/api/onboard/complete", { method: "POST", body: JSON.stringify({ complete: true }) });
       if (data.error) throw new Error(data.error);
-      window.location.href = "/done";
+      window.location.href = "/";
     } catch (err) {
       setConfirmMessage(err instanceof Error ? err.message : String(err));
       setConfirmBusy(false);
@@ -818,7 +824,6 @@ function GreatScreen({ profile, setProfile, saveProfile }) {
         <StatusPill value="live" />
         <h2>Does this feel right?</h2>
         <p>This is the last quiet check before Anticipy starts helping from the board.</p>
-        <SourceTagList tags={["ST-LAYERED-ONBOARDING", "ST-MEMORY-COMPOUNDS", "ST-TRUST-DIAL"]} />
       </section>
       <section className="pz-profile-summary">
         <ProfileSection title="You" items={[
@@ -845,7 +850,7 @@ function GreatScreen({ profile, setProfile, saveProfile }) {
         <button className="pz-button primary" type="submit">Save</button>
       </form>
       <div className="pz-actions pz-actions-simple">
-        <a className="pz-button ghost" href="/onboarding/8">Back</a>
+        <a className="pz-button ghost" href="/onboarding/7">Back</a>
         <button className="pz-button primary pz-button-xl" type="button" onClick={confirmDossier} disabled={confirmBusy}>
           {confirmBusy ? "Saving…" : "Looks right"}
         </button>
@@ -865,22 +870,6 @@ function ProfileSection({ title, items, wide = false }) {
         ))}
       </ul>
     </article>
-  );
-}
-
-function DoneScreen() {
-  return (
-    <div className="pz-scene">
-      <section className="pz-stage-hero pz-stage-minimal">
-        <StatusPill value="live" />
-        <h2>You are ready.</h2>
-        <p>Go to the assistant. Speak, upload, or review what is ready for your last tap.</p>
-        <div className="pz-actions pz-actions-simple">
-          <a className="pz-button primary pz-button-xl" href="/">Open Anticipy</a>
-          <a className="pz-button ghost" href="/settings">Settings</a>
-        </div>
-      </section>
-    </div>
   );
 }
 
@@ -2014,8 +2003,6 @@ export default function PhaseZeroApp({ screen = "board" }) {
   if (screen === "sign") content = <SignScreen {...commonProps} />;
   else if (screen === "setup") content = <SetupScreen {...commonProps} />;
   else if (screen.startsWith("onboarding")) content = <OnboardingScreen screen={screen} {...commonProps} />;
-  else if (screen === "great") content = <GreatScreen {...commonProps} />;
-  else if (screen === "done") content = <DoneScreen />;
   else if (screen === "mp3") content = <Mp3Screen {...commonProps} />;
   else if (screen === "go-to") content = <GoToScreen {...commonProps} />;
   else if (screen === "memory") content = <MemoryScreen {...commonProps} />;

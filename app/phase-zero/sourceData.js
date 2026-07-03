@@ -5,8 +5,6 @@ export const NAV_ITEMS = [
   { href: "/welcome", label: "Welcome" },
   { href: "/sign", label: "Sign" },
   { href: "/setup", label: "Setup" },
-  { href: "/great", label: "Great" },
-  { href: "/done", label: "Done" },
   { href: "/", label: "Board" },
   { href: "/mp3", label: "MP3" },
   { href: "/go-to", label: "Go-To" },
