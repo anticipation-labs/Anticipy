@@ -78,7 +78,7 @@ const SCREEN_TITLES = {
   setup: "Setup",
   great: "Great",
   done: "Done",
-  board: "Board",
+  board: "",
   mp3: "MP3 upload",
   "go-to": "Go-To",
   memory: "Memory",
@@ -261,15 +261,17 @@ function AppShell({ screen, children, profile, session, engineState }) {
         </div>
       ) : null}
       <section className="pz-main">
-        <header className="pz-top" aria-label={currentTitle}>
-          <div>
-            <span className="pz-kicker">Vibe your life.</span>
-            <h1>{currentTitle}</h1>
-          </div>
-          <div className="pz-user">
-            <span>{session?.user?.email || profile.email || profile.name || "You"}</span>
-          </div>
-        </header>
+        {screen !== "board" ? (
+          <header className="pz-top" aria-label={currentTitle}>
+            <div>
+              <span className="pz-kicker">Vibe your life.</span>
+              <h1>{currentTitle}</h1>
+            </div>
+            <div className="pz-user">
+              <span>{session?.user?.email || profile.email || profile.name || "You"}</span>
+            </div>
+          </header>
+        ) : null}
         {children}
         <JourneyRail screen={screen} />
       </section>
@@ -926,21 +928,76 @@ function PendingAsksPanel({ pendingAsks, onResolve }) {
   );
 }
 
-function BoardScreen(props) {
-  const featuredCard = props.cards[0];
+function MainScreen(props) {
   return (
-    <div className="pz-scene pz-board-scene">
+    <div className="pz-scene pz-board-scene pz-main-collapsed">
       <ActiveListeningPanel {...props} />
-      <GatewayCircuit gatewayEvents={props.gatewayEvents} compact />
+      <OneInput {...props} />
       <PendingAsksPanel pendingAsks={props.pendingAsks} onResolve={props.resolvePending} />
-      {featuredCard ? <FeaturedTaskCard card={featuredCard} onResolve={props.resolveCard} onComment={props.saveComment} comment={props.comments[featuredCard.id] || ""} /> : null}
-      <section className="pz-action-dock pz-action-dock-board">
-        <a href="/mp3" className="pz-action-tile"><span>Upload</span><small>MP3 or transcript</small></a>
-        <a href="/go-to" className="pz-action-tile active"><span>Review</span><small>{props.cards.length} things ready</small></a>
-        <a href="/memory" className="pz-action-tile"><span>Memory</span><small>What I know</small></a>
-      </section>
-      <TranscriptInput {...props} compact />
+      {props.cards.length ? <TaskBoard {...props} limit={4} /> : null}
     </div>
+  );
+}
+
+function OneInput({
+  intakeText,
+  setIntakeText,
+  submitTranscript,
+  ingestBusy,
+  ingestMessage,
+  selectedFile,
+  setSelectedFile,
+  uploadFile,
+  listenState,
+  startBrowserListening,
+  stopBrowserListening,
+}) {
+  const fileRef = useRef(null);
+  const active = listenState === "listening" || listenState === "processing";
+  return (
+    <section className="pz-oneinput" aria-label="Say it, type it, or drop a recording">
+      <div className="pz-oneinput-row">
+        <button
+          type="button"
+          className={`pz-oneinput-icon pz-oneinput-mic ${active ? "active" : ""}`}
+          onClick={active ? stopBrowserListening : startBrowserListening}
+          aria-label={active ? "Stop talking" : "Talk to me"}
+        >
+          <span aria-hidden="true">🎙</span>
+        </button>
+        <textarea
+          className="pz-oneinput-text"
+          value={intakeText}
+          onChange={(event) => setIntakeText(event.target.value)}
+          placeholder="Say it, type it, or drop a recording — I'll catch the task."
+        />
+        <button
+          type="button"
+          className="pz-oneinput-icon pz-oneinput-clip"
+          onClick={() => fileRef.current?.click()}
+          aria-label="Attach a recording or transcript"
+        >
+          <span aria-hidden="true">📎</span>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          className="pz-oneinput-file"
+          accept=".txt,.md,.vtt,.srt,.json,.csv,.mp3,.m4a,.wav,.aac,.flac,.ogg"
+          onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+        />
+        <button
+          type="button"
+          className="pz-button primary pz-oneinput-send"
+          onClick={selectedFile ? uploadFile : submitTranscript}
+          disabled={ingestBusy || (!selectedFile && !intakeText.trim())}
+        >
+          {ingestBusy ? "Reading…" : "Send"}
+        </button>
+      </div>
+      {selectedFile ? <p className="pz-note pz-oneinput-filenote">Ready to read: {selectedFile.name}</p> : null}
+      {ingestMessage ? <p className="pz-note">{ingestMessage}</p> : null}
+    </section>
   );
 }
 
@@ -979,6 +1036,20 @@ function FeaturedTaskCard({ card, comment, onComment, onResolve }) {
   );
 }
 
+function stateWord(listenState) {
+  switch (listenState) {
+    case "listening":
+      return "Listening.";
+    case "processing":
+      return "Thinking.";
+    case "working":
+    case "cards_created":
+      return "Acting.";
+    default:
+      return "Resting.";
+  }
+}
+
 function ActiveListeningPanel({
   listenState,
   liveTranscript,
@@ -993,41 +1064,38 @@ function ActiveListeningPanel({
 }) {
   const active = listenState === "listening" || listenState === "processing";
   return (
-    <section className="pz-listen">
-      <div className="pz-listen-copy">
-        <button
-          className={`pz-listen-orb-button ${active ? "active" : ""}`}
-          type="button"
-          onClick={active ? stopBrowserListening : startBrowserListening}
-          aria-label={active ? "Stop browser mic" : "Start browser mic"}
-        >
-          <span className="pz-listen-orb" />
-        </button>
-        <div>
-          <h2>{active ? "I am listening." : "Start listening."}</h2>
-          <p>Say the messy thing. I catch the task and stop before anything important happens.</p>
+    <section className="pz-listen pz-listen-collapsed">
+      <button
+        className={`pz-listen-orb-button ${active ? "active" : ""}`}
+        type="button"
+        onClick={active ? stopBrowserListening : startBrowserListening}
+        aria-label={active ? "Stop listening" : "Start listening"}
+      >
+        <span className="pz-listen-orb" />
+      </button>
+      <p className="pz-listen-word" aria-live="polite">{stateWord(listenState)}</p>
+      <div className="pz-only-debug pz-listen-debug">
+        <div className="pz-listen-controls">
+          <button className="pz-button primary" type="button" onClick={active ? stopBrowserListening : startBrowserListening}>
+            {active ? "Stop" : "Start"}
+          </button>
+          <button className="pz-button ghost" type="button" onClick={isListeningStatus(listenStatus) ? stopLocalListening : startLocalListening}>
+            {isListeningStatus(listenStatus) ? "Stop Mac" : "Mac mic"}
+          </button>
+          <button className="pz-button subtle" type="button" onClick={refreshListenStatus}>Status</button>
         </div>
-      </div>
-      <div className="pz-listen-controls">
-        <button className="pz-button primary" type="button" onClick={active ? stopBrowserListening : startBrowserListening}>
-          {active ? "Stop" : "Start"}
-        </button>
-        <button className="pz-button ghost" type="button" onClick={isListeningStatus(listenStatus) ? stopLocalListening : startLocalListening}>
-          {isListeningStatus(listenStatus) ? "Stop Mac" : "Mac mic"}
-        </button>
-        <button className="pz-button subtle" type="button" onClick={refreshListenStatus}>Status</button>
-      </div>
-      <div className="pz-listen-meta">
-        <StatusPill value={listenState} />
-        <span>Local mic: {isListeningStatus(listenStatus) ? "running" : listenStatus.status || "unknown"}</span>
-      </div>
-      {listenMessage ? <p className="pz-note">{listenMessage}</p> : null}
-      {(liveTranscript.length || interimTranscript) ? (
-        <div className="pz-transcript">
-          {liveTranscript.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}
-          {interimTranscript ? <p className="interim">{interimTranscript}</p> : null}
+        <div className="pz-listen-meta">
+          <StatusPill value={listenState} />
+          <span>Local mic: {isListeningStatus(listenStatus) ? "running" : listenStatus.status || "unknown"}</span>
         </div>
-      ) : null}
+        {listenMessage ? <p className="pz-note">{listenMessage}</p> : null}
+        {(liveTranscript.length || interimTranscript) ? (
+          <div className="pz-transcript">
+            {liveTranscript.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}
+            {interimTranscript ? <p className="interim">{interimTranscript}</p> : null}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -1971,7 +2039,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
   else if (screen === "go-to") content = <GoToScreen {...commonProps} />;
   else if (screen === "memory") content = <MemoryScreen {...commonProps} />;
   else if (screen === "settings") content = <SettingsScreen {...commonProps} />;
-  else content = <BoardScreen {...commonProps} />;
+  else content = <MainScreen {...commonProps} />;
 
   return (
     <AppShell screen={screen} profile={profile} session={auth.session} engineState={engineState}>

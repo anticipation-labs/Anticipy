@@ -8,7 +8,12 @@
       "status": "done"
     },
     {
-      "step": "UI-2..9 flow (main-collapse, welcome, setup+download, connect-early, onboarding, settings, coming-soon)",
+      "step": "UI-7 Main-screen collapse (one orb + one word + one input + cards)",
+      "status": "done",
+      "proof": "/=200 no-compile-error; SSR has pz-listen-word 'Resting.' + pz-oneinput + 'drop a recording'; old dock/GatewayCircuit/'I am listening' gone; Playwright snapshot = orb + word + OneInput(mic,textarea,clip,Send); listen controls debug-gated"
+    },
+    {
+      "step": "UI-2..6,8,9 flow (welcome-unwrap, sign, setup+download, connect-early, onboarding, settings, coming-soon) + delete /mp3,/go-to,/great,/done routes",
       "status": "in_progress"
     },
     {
@@ -42,10 +47,14 @@
     "one fresh Twilio auth token (real SMS 401s)"
   ],
   "gates": {
-    "done_gate": "legs 1-4 pass / leg 5 fails",
-    "suite": "113 passed / 9 failed (live baseline 2026-07-02; FAILED-set may never grow)",
+    "done_gate": "legs 1-4 pass / leg 5 fails (human-only, unchanged)",
+    "suite": "113 passed / 9 failed (fail-set identical to baseline 2026-07-02; FAILED-set may never grow)",
     "wiring_debt": 35
   },
+  "known_issues": [
+    "PRE-EXISTING (from UI step 1, not this cycle): SSR hydration mismatch on every screen from the `typeof window` visibility guards in JourneyRail/SourceTagList/SourceTruthStrip (they render on server, null on client). Cheap next fix: render consistently + hide via the existing body:not(.pz-debug) CSS. Does not affect any gate.",
+    "app->engine proxy returns 503 for /api/* in this dev env (engine bound at :8790, app expects its own binding); environmental, not a code regression."
+  ],
   "no_progress_cycles": 0,
   "K_backstop": 3
 }
