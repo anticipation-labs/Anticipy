@@ -308,6 +308,35 @@ class GraphStore:
         chain = parse_possessive_chain(text)
         return self.multi_hop(chain) if len(chain) >= 2 else []
 
+    def possessive_of_entity(self, name: str, role: str) -> List[dict]:
+        """Resolve '<name>'s <role>' by ONE hop from a NAMED entity:
+        (s:Entity {name~})-[:REL {role}]->(target). ``name`` is matched by prefix so a
+        first name resolves ('Mia' -> 'Mia Torres'). This completes a 2-relationship
+        question after the brain has already resolved the first hop from memory
+        ('my accountant' -> 'Mia Torres'), then the graph resolves 'Mia Torres's
+        assistant' -> 'Jane Doe'. Both edges live in the graph; the on-device store has
+        neither, so it can't answer at all."""
+        nm = self._norm(name).lower()
+        pred = self._pred(role)
+        if not self.ok or not nm or not pred:
+            return []
+        recs = self._run(
+            "MATCH (s:Entity {scope:$scope})-[r:REL {predicate:$pred}]->(e:Entity) "
+            "WHERE coalesce(r.invalid,false)=false AND toLower(s.name) STARTS WITH $nm "
+            "RETURN e.name AS name, e.kind AS kind, s.name AS via",
+            scope=self.scope, pred=pred, nm=nm,
+        )
+        return [dict(r) for r in recs]
+
+    def possessive_from_text(self, text: str) -> List[dict]:
+        """Traverse a NAMED-entity possessive found in ``text`` ('… Mia Torres's
+        assistant …' -> Jane). Returns [] when there's no '<Name>'s <role>' phrase."""
+        parsed = parse_entity_possessive(text)
+        if not parsed:
+            return []
+        name, role = parsed
+        return self.possessive_of_entity(name, role)
+
     # ---- housekeeping ------------------------------------------------------------
     def clear_scope(self) -> int:
         """DETACH DELETE everything in this scope. Returns nodes removed."""
@@ -358,4 +387,27 @@ def parse_possessive_chain(text: str) -> List[str]:
     return out
 
 
-__all__ = ["GraphStore", "graph_enabled", "parse_possessive_chain"]
+# "<Capitalized Name>'s <role>" — a possessive rooted at a NAMED person, not "my".
+# Case-sensitive on the name (leading capitals) so it never fires on a lowercase word;
+# the role is trimmed to its leading words via _CHAIN_STOP so trailing filler drops
+# ("Mia Torres's assistant the receipt" -> ('Mia Torres', 'assistant')).
+_ENTITY_POSSESSIVE = re.compile(
+    r"\b([A-Z][A-Za-z.'\-]+(?:\s+[A-Z][A-Za-z.'\-]+){0,2})['’]s\s+([A-Za-z].*)$")
+
+
+def parse_entity_possessive(text: str):
+    """('Mia Torres', 'assistant') from '… Mia Torres's assistant …', else None."""
+    m = _ENTITY_POSSESSIVE.search(text or "")
+    if not m:
+        return None
+    name = m.group(1).strip()
+    role_words: List[str] = []
+    for w in m.group(2).split():
+        if w.lower() in _CHAIN_STOP:
+            break
+        role_words.append(w)
+    role = " ".join(role_words).strip()
+    return (name, role) if (name and role) else None
+
+
+__all__ = ["GraphStore", "graph_enabled", "parse_possessive_chain", "parse_entity_possessive"]

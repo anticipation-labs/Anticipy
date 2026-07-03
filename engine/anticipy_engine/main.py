@@ -499,6 +499,14 @@ class ForgetMeIn(BaseModel):
     confirm: str = ""
 
 
+class RecallIn(BaseModel):
+    # Read-only SEMANTIC recall probe ("what do you know relevant to <query>?"). Runs the
+    # existing hybrid retriever; writes nothing, fires nothing. Exposes retrieval-by-meaning so
+    # paraphrase recall can be proven end-to-end (stub embed can't; Gemini cloud can).
+    query: str = ""
+    k: int = 8
+
+
 class ConnectionAuthorizeIn(BaseModel):
     id: str
 
@@ -785,6 +793,41 @@ def memory_drawers() -> dict:
     }}
 
 
+@app.post("/memory/recall")
+def memory_recall(body: RecallIn) -> dict:
+    """Read-only SEMANTIC recall surface: "what do you know that's relevant to <query>?".
+
+    Runs the existing hybrid retriever (semantic + keyword + recency + importance) over the
+    fuzzy drawers (profile/history/derived) and returns the surfaced items, ranked, plus the
+    best semantic score. It is a pure READ — it writes nothing and fires no action. Its purpose
+    is to make retrieval-by-MEANING observable end-to-end: with the on-device stub embedder a
+    keyword-disjoint paraphrase scores ~0 and the fact is filtered out; with a real embedder
+    (Gemini cloud when ANTICIPY_EMBED_PROVIDER=gemini) the paraphrase recalls it. Provider is
+    whatever the env selects at call time, so default behavior is the on-device store."""
+    c = current_core()
+    inj = c.live_memory.inject(body.query or "", k=int(body.k or 8))
+    items = inj.get("items", [])
+    return {
+        "query": body.query,
+        "top_relevance": float(inj.get("top_relevance", 0.0)),
+        "abstain": bool(inj.get("abstain", True)),
+        "embedding_dim": _active_embedding_dim(),
+        "count": len(items),
+        "items": [{"kind": i.kind, "text": i.text, "fields": i.fields} for i in items],
+        "text": inj.get("text", ""),
+    }
+
+
+def _active_embedding_dim() -> int:
+    """The width of the ACTIVE embedder (768 for live Gemini, 256 for the stub) — lets a caller
+    prove the cloud embedder is really in use, not a silent fallback to on-device."""
+    try:
+        from .memory.embed import embedding_dim
+        return int(embedding_dim())
+    except Exception:
+        return 0
+
+
 # The exact phrase the right-to-delete endpoint requires (money-stop-grade confirmation).
 _FORGET_CONFIRM = "DELETE MY DATA"
 
@@ -797,8 +840,19 @@ def memory_forget_me(body: ForgetMeIn) -> dict:
     if (body.confirm or "").strip() != _FORGET_CONFIRM:
         return {"deleted": False, "reason": "confirmation required",
                 "confirm_phrase": _FORGET_CONFIRM}
-    res = current_core().live_memory.forget_all()
-    return {"deleted": True, "removed": res["removed"]}
+    core = current_core()
+    res = core.live_memory.forget_all()
+    # right-to-delete also wipes the temporal knowledge graph (Phase 4) for this scope, so a
+    # forget clears people/relationships too. Flag-gated + fail-safe: when the graph is off
+    # (default) ``context.graph`` is None and this no-ops, byte-identical to before.
+    graph_removed = 0
+    try:
+        ctx = getattr(core, "context", None)
+        if ctx is not None and getattr(ctx, "graph", None) is not None:
+            graph_removed = int(ctx.graph.clear_scope())
+    except Exception:
+        graph_removed = 0
+    return {"deleted": True, "removed": res["removed"], "graph_removed": graph_removed}
 
 
 @app.get("/proactive/gateway/recent")

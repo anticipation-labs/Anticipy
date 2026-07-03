@@ -41,6 +41,12 @@ def ingest(text):
     return (_post("/owner/ingest", {"text": text, "execute_actions": True}).get("cards") or [])
 
 
+def recall(query, k=8):
+    """Read-only semantic recall ('what do you know relevant to <query>?'). Exercises the
+    hybrid retriever so paraphrase recall (retrieval by MEANING) is observable end-to-end."""
+    return _post("/memory/recall", {"query": query, "k": k})
+
+
 def blob_of(cards):
     return " ".join((c.get("title") or "") + " " + (c.get("source_text") or "") + " " +
                     (c.get("checkIn") or c.get("check_in") or "") for c in cards).lower()
@@ -100,21 +106,67 @@ CASES = [
 ]
 
 
+# ── CLOUD-DEPTH cases (Anticipy HoE) — capabilities the ON-DEVICE stub store structurally
+# CANNOT do, so they pass ONLY with the cloud stack on (Gemini embeddings + Neo4j graph) and
+# FAIL on-device (that failure is the proof they exercise real cloud depth, not keywords). Kept
+# APPEND-ONLY so the original 8 above stay byte-identical (never at risk).
+CLOUD_CASES = [
+    # (a) PARAPHRASE recall — retrieval by MEANING, zero keyword overlap. The stub embedder is a
+    #     hashed bag-of-tokens: "allergic to penicillin" vs "what antibiotics should the doctor
+    #     avoid for me" share NO tokens -> cosine ~0 -> the fact is filtered out of retrieval
+    #     entirely. Gemini cloud embeddings score the paraphrase ~0.83 -> it surfaces. (Distinct
+    #     from case 5, which only checks the fact was CAPTURED; this checks it's RETRIEVABLE by
+    #     meaning through the live retriever.)
+    {"name": "paraphrase recall — penicillin allergy by meaning (cloud embeddings)",
+     "setup": ["I'm allergic to penicillin"],
+     "recall": "what antibiotics should the doctor avoid for me",
+     "grade_recall": lambda r: ([] if "penicillin" in json.dumps(r.get("items", [])).lower()
+                                 else ["allergy not retrievable by paraphrase — on-device stub scores it ~0; needs Gemini embeddings"])},
+
+    # (a') PARAPHRASE recall #2 — a different fact, still zero keyword overlap. On-device the
+    #      regex resolver only fires on the literal word "usual"; "go-to morning drink order"
+    #      needs a real embedder. Stub -> cosine 0 -> filtered; Gemini -> ~0.85 -> surfaces.
+    {"name": "paraphrase recall — 'go-to morning drink' -> the oat latte (cloud embeddings)",
+     "setup": ["I always get a large oat milk latte"],
+     "recall": "what's my go-to morning drink order",
+     "grade_recall": lambda r: ([] if any(w in json.dumps(r.get("items", [])).lower() for w in ("latte", "oat"))
+                                 else ["usual order not retrievable by paraphrase — on-device stub scores it ~0; needs Gemini embeddings"])},
+
+    # (b) MULTI-HOP graph question across 2 relationships. "my accountant is Mia" + "Jane is
+    #     Mia's assistant" -> "email my accountant's assistant ..." must name JANE via the
+    #     traversal Owner-[accountant]->Mia-[assistant]->Jane. The on-device store has NO graph
+    #     (context.graph is None), so it can't even store the person-to-person edge, let alone
+    #     traverse it — it fills only the direct accountant (Mia). Needs Neo4j.
+    {"name": "multi-hop graph — my accountant's assistant -> Jane (Neo4j, 2 relationships)",
+     "setup": ["my accountant is Mia Torres", "Jane Doe is Mia Torres's assistant"],
+     "probe": "email my accountant's assistant the receipt",
+     "grade": lambda c, d: ([] if "jane" in blob_of(c)
+                            else ["did not traverse accountant->assistant to name Jane — needs the Neo4j graph (2-hop)"])},
+]
+
+
 def main():
     passed = 0
-    print(f"MANY-CASE CONTEXT/MEMORY PROOF  ({len(CASES)} multi-turn cases, live model)\n" + "=" * 66)
-    for i, case in enumerate(CASES, 1):
+    all_cases = CASES + CLOUD_CASES
+    print(f"MANY-CASE CONTEXT/MEMORY PROOF  ({len(all_cases)} multi-turn cases, live model)\n"
+          f"  ({len(CASES)} on-device learns-you + {len(CLOUD_CASES)} cloud-depth: paraphrase recall + multi-hop graph)\n"
+          + "=" * 66)
+    for i, case in enumerate(all_cases, 1):
         try:
             reset()
             for line in case["setup"]:
                 ingest(line); time.sleep(0.2)
-            cards = ingest(case["probe"])
-            drawers = {}
-            try:
-                drawers = _get("/memory/drawers")
-            except Exception:
-                pass
-            fails = case["grade"](cards, drawers)
+            if case.get("recall") is not None:
+                # cloud-depth: retrieval-by-meaning through the read-only recall surface
+                fails = case["grade_recall"](recall(case["recall"]))
+            else:
+                cards = ingest(case["probe"])
+                drawers = {}
+                try:
+                    drawers = _get("/memory/drawers")
+                except Exception:
+                    pass
+                fails = case["grade"](cards, drawers)
         except Exception as e:
             fails = [f"ERROR {type(e).__name__}: {str(e)[:60]}"]
         ok = not fails
@@ -123,7 +175,7 @@ def main():
         if not ok:
             print(f"        → {'; '.join(fails)}")
     print("=" * 66)
-    print(f"SCORE: {passed}/{len(CASES)}  — context memory is done at {len(CASES)}/{len(CASES)}")
+    print(f"SCORE: {passed}/{len(all_cases)}  — context memory is done at {len(all_cases)}/{len(all_cases)}")
     return passed
 
 

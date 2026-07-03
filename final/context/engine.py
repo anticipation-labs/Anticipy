@@ -335,9 +335,17 @@ class ContextEngine:
         # (f) multi-hop relationship answer: "email my accountant's assistant …" ->
         # traverse Owner-[accountant]->Mia-[assistant]->Jane and name Jane. Graph-only;
         # fires only on a possessive chain, so it never touches an ordinary task line.
+        # TWO parsers, because the brain often resolves the FIRST hop from memory before
+        # this runs (owner_context turns "my accountant" into "Mia Torres" inline):
+        #   1. owner-rooted "my X's Y"      (raw line / pipeline-off path)
+        #   2. named-entity "<Name>'s Y"    (after the brain resolved my-role -> Name)
+        # Either way the graph supplies the last hop (Mia -> Jane); the on-device store
+        # has no graph at all, so it can answer neither.
         if self.graph is not None:
+            hops = []
             try:
-                hops = self.graph.multi_hop_from_question(text)
+                hops = self.graph.multi_hop_from_question(text) \
+                    or self.graph.possessive_from_text(text)
             except Exception:
                 hops = []
             if hops:
