@@ -2294,13 +2294,28 @@ class ControlCore:
             and (os.environ.get("ANTICIPY_PROACTIVE_DECISION_PIPELINE", "1") or "").strip().lower()
             not in {"0", "false", "no", "off"}
         )
+        owner_context = None
         if use_decision_pipeline:
+            # PHASE 2: read memory BEFORE the decision. Assemble the ONE ContextPack (loops first,
+            # then the query-relevant standing facts/preferences), already char-budgeted to ~1600
+            # for `decide`, and hand its budget-fit block to the brain so it decides WITH what it
+            # already knows about the owner. Best-effort: a memory hiccup must never break ingest,
+            # and an empty pack leaves the prompt byte-identical to the memory-blind path.
+            try:
+                pack = self.live_memory.build_context(text, purpose="decide")
+                ctx_text = (getattr(pack, "text", "") or "").strip()
+                if ctx_text:
+                    owner_context = ctx_text[:1600]
+            except Exception as exc:
+                owner_context = None
+                self.glassbox.log("proactive_decision_context_error", {"error": str(exc)[:240]})
             try:
                 from ..proactive.decision_pipeline import decide_transcript
                 decision_result = await decide_transcript(
                     self.gateway,
                     text,
                     source_truth_case_id=str((meta or {}).get("source_case") or "") or None,
+                    owner_context=owner_context,
                 )
             except Exception as exc:
                 decision_result = None
@@ -2315,6 +2330,7 @@ class ControlCore:
                 "kept": len(observed),
                 "wearer": decision_result.wearer,
                 "source_case": (meta or {}).get("source_case"),
+                "memory_ctx_chars": len(owner_context or ""),
             })
         else:
             # ONE extractor (FIX-01 step 2c, 2026-07-02): decision_pipeline is the only model brain.

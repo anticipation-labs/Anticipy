@@ -178,10 +178,25 @@ Output ONLY this JSON object:
     }
   ]
 }
-
+%s
 Transcript:
 %s
 JSON:
+"""
+
+# Memory INTO the decider (Phase 2). When the owner path can assemble a ContextPack, we prepend a
+# tight "what you already know about the owner" block so the brain decides WITH standing memory —
+# it can apply a standing preference, resolve "the usual"/"my dentist"/a first name, and never
+# re-ask a fact it already holds. Framed as background truth so a memory line is NEVER re-extracted
+# as its own new task. Empty string when there is no relevant memory -> the prompt is byte-identical
+# to the memory-blind version (no behavior change on a cold store).
+_KNOWN_TEMPLATE = """
+What you already know about the owner (durable memory — standing preferences, known people, \
+addresses/facts, and the owner's open loops). Use this as BACKGROUND TRUTH about the owner: apply \
+their standing preferences to their own tasks, resolve references like "the usual", "my dentist", \
+or a bare first name from it, and do NOT ask the owner for a fact that already appears here. This is \
+context only — it is NOT a list of new tasks; never emit one of these memory lines as its own decision.
+%s
 """
 
 
@@ -334,11 +349,18 @@ async def decide_transcript(
     transcript: str,
     *,
     source_truth_case_id: str | None = None,
+    owner_context: str | None = None,
 ) -> ProactiveDecisionResult:
     """Run the wearer-aware structured decision pass.
 
     Returns available=False when the configured model path cannot run. Callers
     should then use existing deterministic/model fallbacks.
+
+    `owner_context` (Phase 2) is a tight, already-budgeted summary of what the
+    system knows about the owner (standing preferences, known people/addresses,
+    open loops), assembled by live_memory at the call site. When present it is
+    prepended to the prompt so the brain decides WITH memory; when None/blank the
+    prompt is byte-identical to the memory-blind path.
     """
     text = str(transcript or "").strip()
     if not text:
@@ -357,9 +379,16 @@ async def decide_transcript(
             timeout=float(os.environ.get("ANTICIPY_PROACTIVE_DECISION_TIMEOUT", "60")),
         )
 
+    # Respect the decide budget: the memory summary is already ~<=1600 chars from the
+    # context builder; cap defensively so a runaway pack can never crowd out the transcript.
+    known_block = ""
+    ctx = (owner_context or "").strip()
+    if ctx:
+        known_block = _KNOWN_TEMPLATE % ctx[:1600]
+
     try:
         raw = await decision_gateway.think(
-            _PROMPT % text[:7000],
+            _PROMPT % (known_block, text[:7000]),
             tier=SMART,
             caller="gate",
             json_mode=True,
