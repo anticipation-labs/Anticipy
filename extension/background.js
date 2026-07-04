@@ -730,7 +730,25 @@ async function doObserve(msg) {
           const sanc = el.closest('li, article, section, [role="listitem"], [role="article"]');
           const sp = (((sanc || el).innerText || '') + ' ' + (el.getAttribute('aria-label') || '')).slice(0, 240).toLowerCase();
           if (/sponsored|promoted|advertisement/.test(sp)) sponsored = true;
+          // --- L1: DOM-native <select> grounding. Enumerate the <option> visible texts + the chosen
+          // one and ride them on the parent <select>'s payload (native <option>s are deliberately NOT
+          // in `sel` — they would spam the numbered mark list). Without this the actor saw one opaque
+          // "State" box, could echo the task but never GROUND a pick; now it sees the choices and the
+          // engine drives them by visible text via action=select (never a pixel click on the native
+          // overlay). state also carries value=<chosen> (above) so _state_readback binds the selection.
+          let _options, _selected;
+          if (el.tagName === 'SELECT') {
+            try {
+              _options = Array.from(el.options)
+                .map(o => (o.textContent || '').replace(/\s+/g, ' ').trim())
+                .filter(s => s).slice(0, 60);
+              const _cur = el.options[el.selectedIndex];
+              _selected = _cur ? (_cur.textContent || '').replace(/\s+/g, ' ').trim() : '';
+              if (_options.length) stt.push('options=' + _options.length);
+            } catch (e) {}
+          }
           out.push({ idx: i, role: role, name: name, type: (el.getAttribute('type') || ''), state: stt.join(','), inView: inView, sponsored: sponsored,
+            options: _options, selected: _selected,
             rect: inView ? { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) } : null });
           if (++i >= 600) break;
         }
@@ -924,10 +942,18 @@ async function doAct(msg) {
       return result(msg, (r && r.ok) ? "success" : "needs_human", null, { action: "check", ...(r || {}) });
     }
     // --- agent primitive: SELECT (choose an option in a <select>/combobox by VISIBLE TEXT) ---
-    if (a.action === "select") {
+    // CONTRACT (engine must emit this exact shape): { action: "select", idx: <observe idx>, text: "<option visible text>" }
+    //   · "select_option" is accepted as an alias for the same action.
+    //   · idx is the observe element index; a.index is the wire field the engine already sends.
+    //   · text is the VISIBLE option label (o.textContent), matched case-insensitively; a.value works too.
+    //   · The DOM path sets .value/.selectedIndex + dispatches input/change (never a pixel click on the
+    //     native overlay). If the element exposes no native <select> (ARIA combobox / virtualized list),
+    //     it falls back to the TRUSTED keyboard path (focus → type-ahead → Enter).
+    if (a.action === "select" || a.action === "select_option") {
       step = "select";
+      const want = String(a.value || a.text || "");
       const [{ result: r }] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id }, args: [a.index, String(a.value || a.text || "")],
+        target: { tabId: tab.id }, args: [a.index, want],
         func: (i, want) => {
           const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
           if (!e) return { ok: false, reason: 'missing element' };
@@ -950,8 +976,62 @@ async function doAct(msg) {
           return { ok: false, reason: 'not a select', tag: e.tagName, role: e.getAttribute('role') };
         },
       });
-      await sleep(600);
-      return result(msg, (r && r.ok) ? "success" : "needs_human", null, { action: "select", ...(r || {}) });
+      // Native <select> found and set via the DOM — done (no overlay, $0 VLM tokens).
+      if (r && r.ok) {
+        await sleep(600);
+        return result(msg, "success", null, { action: a.action, ...(r || {}) });
+      }
+      // A real <select> exists but no option matched, or the index went stale: hand back the reason +
+      // the visible option list so the engine can retry with a corrected `text` (do NOT keyboard-poke a
+      // native <select>, whose OS overlay CDP keys can't reliably reach).
+      if (r && (r.reason === 'no matching option' || r.reason === 'missing element')) {
+        await sleep(200);
+        return result(msg, "needs_human", null, { action: a.action, ...(r || {}) });
+      }
+      // KEYBOARD FALLBACK — virtualized / ARIA-combobox widgets that expose no native <select>. Synthetic
+      // key events don't drive native option overlays, so use TRUSTED CDP keys: focus/open the control,
+      // type the option text (type-ahead highlights it), press Enter to commit. Independent read-back of
+      // the committed value is the only success proof.
+      step = "select_keyboard";
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id }, args: [a.index],
+          func: (i) => {
+            const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
+            if (e) { e.scrollIntoView({ block: 'center', inline: 'center' }); if (e.focus) e.focus(); if (e.click) e.click(); }
+          },
+        }).catch(() => {});
+        await sleep(200);
+        await ensureDebugger(tab.id);
+        if (want) { await cdpType(tab.id, want); await sleep(250); }
+        else { await cdpKey(tab.id, "ArrowDown"); await sleep(150); }
+        await cdpKey(tab.id, "Enter");
+        await sleep(600);
+        const [{ result: kb }] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id }, args: [a.index, want],
+          func: (i, w) => {
+            const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
+            if (!e) return { ok: false, reason: 'missing after keyboard' };
+            const sel = e.tagName === 'SELECT' ? e : (e.querySelector && e.querySelector('select'));
+            let cur = '';
+            if (sel && sel.options && sel.selectedIndex >= 0) cur = (sel.options[sel.selectedIndex].textContent || '');
+            else {
+              const ad = e.getAttribute && e.getAttribute('aria-activedescendant');
+              const adEl = ad ? document.getElementById(ad) : null;
+              cur = (adEl && (adEl.textContent || adEl.innerText)) || e.value || e.textContent || '';
+            }
+            cur = String(cur || '').replace(/\s+/g, ' ').trim();
+            const lw = String(w || '').trim().toLowerCase();
+            const lc = cur.toLowerCase();
+            const ok = !!cur && (!lw || lc.includes(lw) || lw.includes(lc));
+            return { ok: ok, selected: cur, method: 'keyboard' };
+          },
+        });
+        await sleep(300);
+        return result(msg, (kb && kb.ok) ? "success" : "needs_human", null, { action: a.action, fallback: 'keyboard', ...(kb || {}) });
+      } catch (e) {
+        return result(msg, "needs_human", null, { action: a.action, reason: 'select keyboard fallback error: ' + String(e), ...(r || {}) });
+      }
     }
     if (a.action === "click" || a.action === "type") {
       // locate element, scroll it into view, get its viewport-center coords
@@ -1029,32 +1109,67 @@ async function doAct(msg) {
           await cdpType(tab.id, a.text || "");
         }
         step = "value_setter";
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id }, args: [a.index, a.text || ""],
-          func: (i, text) => {
-            const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
-            if (!e) return { ok: false, reason: 'missing element' };
-            const current = ('value' in e) ? String(e.value || '') : String(e.textContent || '');
-            if (text && current.includes(text)) return { ok: true, method: 'trusted', value: current };
-            if ('value' in e) {
-              const proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-              const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
-              if (setter) setter.call(e, text);
-              else e.value = text;
-              e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
-              e.dispatchEvent(new Event('change', { bubbles: true }));
-              return { ok: true, method: 'value_setter', value: e.value };
-            }
-            if (e.isContentEditable) {
-              e.textContent = text;
-              e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
-              e.dispatchEvent(new Event('change', { bubbles: true }));
-              return { ok: true, method: 'contenteditable', value: e.textContent };
-            }
-            return { ok: false, reason: 'not typeable' };
-          },
-        }).catch(() => {});
-        if (a.enter) { await sleep(120); await cdpKey(tab.id, "Enter"); }
+        let _setRes = null;
+        try {
+          const _vr = await chrome.scripting.executeScript({
+            target: { tabId: tab.id }, args: [a.index, a.text || "", !!a.enter],
+            func: (i, text, doEnter) => {
+              const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
+              if (!e) return { ok: false, reason: 'missing element' };
+              const current = ('value' in e) ? String(e.value || '') : String(e.textContent || '');
+              let res;
+              if (text && current.includes(text)) {
+                res = { ok: true, method: 'trusted', value: current };
+              } else if ('value' in e) {
+                const proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+                const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
+                if (setter) setter.call(e, text);
+                else e.value = text;
+                e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+                e.dispatchEvent(new Event('change', { bubbles: true }));
+                res = { ok: true, method: 'value_setter', value: e.value };
+              } else if (e.isContentEditable) {
+                e.textContent = text;
+                e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+                e.dispatchEvent(new Event('change', { bubbles: true }));
+                res = { ok: true, method: 'contenteditable', value: e.textContent };
+              } else {
+                res = { ok: false, reason: 'not typeable' };
+              }
+              // --- L2: actually SUBMIT the search. Previously this fallback only refilled the box and
+              // relied entirely on the trusted CDP Enter below; when that key didn't land (fail #5,
+              // demowebshop) the page never navigated and the agent re-read the homepage → "no product
+              // information". Fire a full synthetic Enter key sequence (many JS search boxes listen on
+              // keydown) and, if the field lives in a real <form>, requestSubmit() it (validates + runs
+              // submit handlers, unlike bare submit()). `submitted` tells the caller a form-navigation is
+              // underway so it can SKIP the CDP Enter and avoid a double submit; keyless JS searches
+              // (no <form>) leave submitted=false so the trusted CDP Enter still fires as the net.
+              let submitted = false;
+              if (doEnter) {
+                try {
+                  if (e.focus) e.focus();
+                  const kopts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+                  e.dispatchEvent(new KeyboardEvent('keydown', kopts));
+                  e.dispatchEvent(new KeyboardEvent('keypress', kopts));
+                  e.dispatchEvent(new KeyboardEvent('keyup', kopts));
+                  const form = e.form || (e.closest && e.closest('form'));
+                  if (form) {
+                    if (form.requestSubmit) form.requestSubmit();
+                    else form.submit();
+                    submitted = true;
+                  }
+                } catch (_) {}
+              }
+              res.submitted = submitted;
+              return res;
+            },
+          });
+          _setRes = (_vr && _vr[0]) ? _vr[0].result : null;
+        } catch (e) {}
+        // Trusted CDP Enter — fire it only when the JS path did NOT already submit a real <form>, so a
+        // form search navigates via requestSubmit() (guaranteed) while a keyless JS search still gets a
+        // trusted keystroke, and neither double-submits.
+        if (a.enter && !(_setRes && _setRes.submitted)) { await sleep(120); await cdpKey(tab.id, "Enter"); }
       }
       await sleep((a.enter || a.action === "click") ? 1400 : 400);
       return result(msg, "success", null, { ok: true, action: a.action, step: "done", cdp_ready: cdpReady, cdp_error: cdpError,
