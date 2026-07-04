@@ -1710,23 +1710,28 @@ function QuickReplyChips({ onGoAhead, onNotNow, onAlways }) {
 // right, the assistant's warm replies on the left, each grown from a real engine card. A waiting
 // ask carries inline Go ahead / Not now chips; a chip only shows while its ask is genuinely still
 // open (engine truth), so a reaction made anywhere clears it honestly. Auto-scrolls to newest.
-function ConversationThread({ thread, cards, pendingAsks, listenState, onResolve, onAlways }) {
+function ConversationThread({ thread, cards, listenState, onResolve, onAlways }) {
   const endRef = useRef(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [thread]);
 
-  const pendingAskIds = useMemo(() => {
+  // A chip shows while its ask is still open. We decide that from the SOURCE CARD's own state, not
+  // from /pending or an ask_id: many real ask cards (generic confirms, create-and-print) carry no
+  // ask_id and never appear in /pending, yet still need Go ahead / Not now. So the chips ride on
+  // message.chips (this bubble was born from an ask/blocked card) and hide only once the ask is
+  // genuinely settled — locally, when you react (message.resolved), OR by engine truth, when the
+  // source card reaches a terminal state (resolved elsewhere, e.g. via SMS, or auto-run). We key
+  // that terminal check on the card id, which every ask card has.
+  const settledCardIds = useMemo(() => {
     const set = new Set();
     (cards || []).forEach((card) => {
-      if (card.askId && (card.risk === "ask" || card.risk === "blocked")
-        && !["done", "completed", "stopped", "failed"].includes(card.status)) {
-        set.add(card.askId);
+      if (card.id && ["done", "completed", "stopped", "failed", "declined", "ignored"].includes(card.status)) {
+        set.add(card.id);
       }
     });
-    (pendingAsks || []).forEach((ask) => { if (ask.ask_id) set.add(ask.ask_id); });
     return set;
-  }, [cards, pendingAsks]);
+  }, [cards]);
 
   const resting = listenState === "listening" || listenState === "processing";
 
@@ -1750,7 +1755,7 @@ function ConversationThread({ thread, cards, pendingAsks, listenState, onResolve
       <div className="pz-chat-thread">
         {thread.map((message) => {
           const showChips = message.role === "assistant" && message.chips && !message.resolved
-            && message.askId && pendingAskIds.has(message.askId);
+            && !(message.cardId && settledCardIds.has(message.cardId));
           return (
             <div className={`pz-chat-turn ${message.role}`} key={message.id}>
               <div className={`pz-chat-bubble ${message.role}${message.tone ? ` tone-${message.tone}` : ""}`}>
@@ -1782,7 +1787,6 @@ function MainScreen(props) {
       <ConversationThread
         thread={props.thread}
         cards={props.cards}
-        pendingAsks={props.pendingAsks}
         listenState={props.listenState}
         onResolve={props.conversationResolve}
         onAlways={props.conversationAutonomy}
@@ -2443,10 +2447,13 @@ export default function PhaseZeroApp({ screen = "board" }) {
   }
 
   // The most recent assistant bubble still waiting on a yes/no — what a typed "yes"/"no" resolves.
+  // Gated on the bubble being an unresolved ask (chips + not yet reacted to), NOT on it carrying an
+  // ask_id: create-and-print / generic confirm asks expose no ask_id on the card, and requiring one
+  // here was why "yes go ahead" fell through to /owner/ingest as a brand-new task and did nothing.
   function activePendingAsk() {
     for (let i = thread.length - 1; i >= 0; i -= 1) {
       const message = thread[i];
-      if (message.role === "assistant" && message.chips && !message.resolved && message.askId) return message;
+      if (message.role === "assistant" && message.chips && !message.resolved) return message;
     }
     return null;
   }
@@ -2457,27 +2464,46 @@ export default function PhaseZeroApp({ screen = "board" }) {
   async function conversationResolve(message, approved, label) {
     if (!message) return;
     appendUserLine(label || (approved ? "Go ahead" : "Not now"));
+    // Clear THIS bubble's chips right away (optimistic) — the reaction has been made.
     setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
-    await resolveCard({ id: message.cardId, askId: message.askId }, approved);
+    // Resolve a REAL engine ask. The bubble's own card carries the ask_id for most asks; some real
+    // asks (generic confirms, create-and-print) expose NO ask_id on the card and live only in
+    // /pending, so fall back to the most-recent waiting ask there — the one this reaction is about.
+    let askId = message.askId;
+    if (!askId) {
+      try {
+        const data = await jsonFetch("/api/pending");
+        const list = Array.isArray(data.pending) ? data.pending : [];
+        askId = list.length ? (list[list.length - 1].ask_id || "") : "";
+      } catch {
+        askId = "";
+      }
+    }
+    const ok = await resolveCard({ id: message.cardId, askId }, approved);
     if (!approved) {
-      appendMessages({ role: "assistant", text: "Okay — I'll leave that one.", tone: "do" });
+      appendMessages({ role: "assistant", text: "Okay, I'll leave that one.", tone: "do" });
       return;
     }
-    appendMessages({ role: "assistant", text: "On it.", tone: "do" });
+    appendMessages({ role: "assistant", text: "On it…", tone: "do" });
+    // An approve we actually SENT to the engine but that came back with an error must not pretend it
+    // worked — say so honestly and leave it on the list. (No askId at all = nothing durable to fail.)
+    if (askId && !ok) {
+      appendMessages({ role: "assistant", text: "I hit a snag doing that one — it's still on your list.", tone: "do" });
+      return;
+    }
+    // Show the real result if one has already landed; otherwise close warmly.
     try {
       const data = await jsonFetch("/api/owner/cards?limit=50");
       const rawCard = (Array.isArray(data.cards) ? data.cards : []).find((card) => (card.id || card.ask_id) === message.cardId);
-      if (rawCard) {
-        const fresh = normalizeEngineCard(rawCard);
-        if (fresh.browserReceipt?.answer) {
-          appendMessages({ role: "assistant", text: `Here's what I found: ${fresh.browserReceipt.answer}`, tone: "do" });
-        } else if (["done", "completed"].includes(fresh.status)) {
-          appendMessages({ role: "assistant", text: "Done ✓", tone: "do" });
-        }
+      const fresh = rawCard ? normalizeEngineCard(rawCard) : null;
+      if (fresh?.browserReceipt?.answer) {
+        appendMessages({ role: "assistant", text: `Here's what I found: ${fresh.browserReceipt.answer}`, tone: "do" });
+        return;
       }
     } catch {
       /* the tracking drawer still carries the honest state */
     }
+    appendMessages({ role: "assistant", text: "Done — taken care of. ✓", tone: "do" });
   }
 
   // The "…" reply: approve AND opt this kind of thing out of ask-first (raises the real autonomy
@@ -2486,7 +2512,19 @@ export default function PhaseZeroApp({ screen = "board" }) {
     if (!message) return;
     appendUserLine("Go ahead — and stop asking me for these.");
     setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
-    await allowAutonomy({ id: message.cardId, askId: message.askId });
+    // Same ask_id resolution as a plain approve: the card's own id when it has one, else the
+    // most-recent waiting ask in /pending, so this also closes ask cards that expose no ask_id.
+    let askId = message.askId;
+    if (!askId) {
+      try {
+        const data = await jsonFetch("/api/pending");
+        const list = Array.isArray(data.pending) ? data.pending : [];
+        askId = list.length ? (list[list.length - 1].ask_id || "") : "";
+      } catch {
+        askId = "";
+      }
+    }
+    await allowAutonomy({ id: message.cardId, askId });
     appendMessages({
       role: "assistant",
       text: "Got it — I'll take care of these without asking from now on. You can change that anytime in settings.",
@@ -2883,10 +2921,14 @@ export default function PhaseZeroApp({ screen = "board" }) {
           method: "POST",
           body: JSON.stringify({ ask_id: card.askId, approved }),
         });
+        // Reload pending too so a resolved ask's chips clear everywhere the app reads engine truth.
         await loadCards();
+        await loadPending();
         await loadGatewayEvents();
+        return true;
       } catch {
         await setMirror(card.id, "failed");
+        return false;
       }
     }
     // FIX-4.2 (no fake success): a card with no askId has NO engine ask to approve or deny — it is
@@ -2895,6 +2937,8 @@ export default function PhaseZeroApp({ screen = "board" }) {
     // mirror state here, so the button never fakes a close it didn't do. The old else-branch wrote a
     // fabricated "coming_soon" mirror — a silent no-op dressed as success. That lie is gone, and the
     // board also hides the "Go ahead" primary on non-ask cards (see CardRow), so no button lies.
+    // Returning false lets the conversation path tell success (real resolve) from a no-op dismiss.
+    return false;
   }
 
   // A6 swipe deck — "Allow autonomy" on a card = the owner opting this class of work OUT of
