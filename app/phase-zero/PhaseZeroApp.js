@@ -5,6 +5,18 @@ import { createBrowserSupabaseClient } from "../../lib/supabase/client";
 import { supabaseMissingMessage } from "../../lib/supabase/config";
 import { FIXTURES, NAV_ITEMS, ONBOARDING_STAGES, SOURCE_TAGS, SOURCE_TRUTH_PATH } from "./sourceData";
 
+// Hydration-safe debug gate. The old pattern `if (typeof window !== "undefined" && !pz-debug) return
+// null` rendered on the SERVER (no window) but returned null on the CLIENT — a hydration mismatch that
+// aborted React hydration and left every button dead. This renders null on the server AND the first
+// client paint (so SSR HTML matches), then reveals only if body.pz-debug after mount.
+function useDebugVisible() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    try { setShow(document.body.classList.contains("pz-debug")); } catch { /* noop */ }
+  }, []);
+  return show;
+}
+
 // Humanize an engine-supplied title before it reaches the surface: drop implementation/vendor
 // words, turn ASCII arrows into words, tidy whitespace — so a raw engine field can never render
 // as developer text (UX_SPEC §4.8). Empty in → empty out; titles from the copy engine pass through.
@@ -226,7 +238,8 @@ function StatusPill({ value }) {
 // De-jargon (UI step 1, 2026-07-02): engine-internal source tags (ST-*/OPS-*) must never reach a
 // human surface — CANON/UI_FLOW law "zero jargon". Rendered only under ?debug.
 function SourceTagList({ tags = SOURCE_TAGS.slice(0, 4) }) {
-  if (typeof window !== "undefined" && !document.body.classList.contains("pz-debug")) return null;
+  const _dbgVisible = useDebugVisible();
+  if (!_dbgVisible) return null;
   return (
     <div className="pz-tags pz-dev-tags" aria-label="Source truth tags" data-source-tags={tags.join(" ")}>
       {tags.map((tag) => (
@@ -296,7 +309,8 @@ function AppShell({ screen, children, profile, session, engineState }) {
 
 function JourneyRail({ screen }) {
   // Removed from the calm surface (UI step 1): the progress rail is dev-chrome. Debug-only.
-  if (typeof window !== "undefined" && !document.body.classList.contains("pz-debug")) return null;
+  const _dbgVisible = useDebugVisible();
+  if (!_dbgVisible) return null;
   return (
     <nav className="pz-journey" aria-label="Anticipy journey">
       {JOURNEY_ITEMS.map((item) => {
@@ -375,7 +389,8 @@ function PendantVisual({ active = false }) {
 
 function SourceTruthStrip() {
   // The "Source of truth: <path>" strip is pure dev-chrome (UI step 1). Debug-only.
-  if (typeof window !== "undefined" && !document.body.classList.contains("pz-debug")) return null;
+  const _dbgVisible = useDebugVisible();
+  if (!_dbgVisible) return null;
   return (
     <section className="pz-source-strip">
       <div>
