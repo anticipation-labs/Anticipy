@@ -6,6 +6,12 @@ commit_boundary: submit          # grader-owned throwaway backend -> full submit
 # for a live run (the /agent/run SSRF gate refuses loopback start URLs).
 start_url: "{LOCAL_FORM_URL}"
 max_steps: 16
+# LIVE-lane precondition. Without a public tunnel to the loopback grader the
+# /agent/run SSRF gate refuses the start URL, so the live lane marks this BLOCKED-
+# on-Omar (excluded from the pass/fail denominator) rather than scoring it a FAIL.
+# The --selftest lane ignores requires_env and drives the checker fully offline.
+requires_env:
+  - ANTICIPY_LOCALFORM_URL
 task: >
   Fill out this shipping form and submit it. Set full name to
   "Grader {NONCE}", order code to "ORD-{NONCE}", address to

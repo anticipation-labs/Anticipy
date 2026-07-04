@@ -110,31 +110,54 @@ def resolve_task_text(task: dict, ctx: dict) -> str:
     return str(task["spec"].get("task") or "").replace("{NONCE}", ctx["nonce"]).strip()
 
 
+def _missing_env(task: dict) -> list[str]:
+    """Live-lane preconditions a task declares in ``spec.requires_env``. Any env var
+    named there that is unset/blank means the task can't run for real (needs a test
+    account / public tunnel / key) -> the live lane marks it BLOCKED, not FAIL. The
+    --selftest lane never consults this (it drives every checker offline)."""
+    req = task["spec"].get("requires_env") or []
+    if isinstance(req, str):
+        req = [req]
+    return [k for k in req if not (os.environ.get(k) or "").strip()]
+
+
 # ─────────────────────────── scorecard math ───────────────────────────
 
 def summarize(rows: list[dict]) -> dict:
     """pass-rate · $/task · $/successful-task · steps · tier-mix. Pure function so
-    the selftest can prove the aggregation without an engine."""
-    n = len(rows) or 1
-    oks = [r for r in rows if r.get("ok")]
+    the selftest can prove the aggregation without an engine.
+
+    HONEST DENOMINATOR (Omar's rule): a task whose live-lane precondition isn't
+    satisfied (missing test account / tunnel / key) is marked ``blocked`` and is
+    excluded from the pass/fail denominator — it counts as neither pass nor fail
+    and is reported separately. So ``pass_pct`` is over ATTEMPTED tasks only, and
+    the cost/steps/tier averages ignore the do-nothing blocked rows (a blocked task
+    ran nothing, so folding its $0 in would understate the real per-task cost)."""
+    blocked = [r for r in rows if r.get("blocked")]
+    attempted = [r for r in rows if not r.get("blocked")]
+    n = len(attempted) or 1
+    oks = [r for r in attempted if r.get("ok")]
 
     def avg(key: str, source: list[dict]) -> float:
         vals = [(r.get("metrics") or {}).get(key, 0) or 0 for r in source]
         return round(sum(vals) / max(1, len(source)), 4)
 
-    total_cost = sum((r.get("metrics") or {}).get("est_cost_usd", 0) or 0 for r in rows)
-    replay = [r for r in rows if (r.get("metrics") or {}).get("replayed")]
+    total_cost = sum((r.get("metrics") or {}).get("est_cost_usd", 0) or 0 for r in attempted)
+    replay = [r for r in attempted if (r.get("metrics") or {}).get("replayed")]
     return {
         "tasks": len(rows),
+        "attempted": len(attempted),
+        "blocked": len(blocked),
+        "blocked_ids": [r.get("id") for r in blocked],
         "passed": len(oks),
         "pass_pct": round(100.0 * len(oks) / n, 1),
         "avg_cost_usd": round(total_cost / n, 4),
         "cost_per_success_usd": round(total_cost / len(oks), 4) if oks else None,
-        "avg_steps": avg("steps", rows),
+        "avg_steps": avg("steps", attempted),
         "tier_mix": {
-            "frontier_pct": avg("frontier_pct", rows),   # T3 SMART-model share
-            "vision_pct": avg("vision_pct", rows),
-            "region_pct": avg("region_pct", rows),
+            "frontier_pct": avg("frontier_pct", attempted),   # T3 SMART-model share
+            "vision_pct": avg("vision_pct", attempted),
+            "region_pct": avg("region_pct", attempted),
             "replay_pct": round(100.0 * len(replay) / n, 1),
         },
     }
@@ -143,14 +166,19 @@ def summarize(rows: list[dict]) -> dict:
 def print_scorecard(rows: list[dict], summary: dict) -> None:
     print("=" * 72)
     for r in rows:
-        v = "PASS" if r.get("ok") else "FAIL"
         m = r.get("metrics") or {}
+        if r.get("blocked"):
+            print(f"[BLOCK] {r['id']:<13} — {r.get('detail', '')[:78]}")
+            continue
+        v = "PASS" if r.get("ok") else "FAIL"
         print(f"[{v}] {r['id']:<14} ${m.get('est_cost_usd', 0):.4f}  "
               f"{m.get('steps', 0)}st  front={m.get('frontier_pct', 0)}%  "
               f"| {r.get('detail', '')[:70]}")
     print("=" * 72)
     tm = summary["tier_mix"]
-    print(f"SCORE: {summary['passed']}/{summary['tasks']}  ({summary['pass_pct']}%)   "
+    blk = f"  [+{summary['blocked']} blocked: {','.join(summary['blocked_ids'])}]" if summary.get("blocked") else ""
+    print(f"SCORE: {summary['passed']}/{summary['attempted']} attempted  "
+          f"({summary['pass_pct']}%){blk}   "
           f"$/task={summary['avg_cost_usd']}  $/pass={summary['cost_per_success_usd']}  "
           f"steps={summary['avg_steps']}")
     print(f"TIER-MIX: frontier={tm['frontier_pct']}%  vision={tm['vision_pct']}%  "
@@ -200,6 +228,17 @@ def run_live(out_path: str | None) -> int:
 
     rows: list[dict] = []
     for task in tasks:
+        # HONEST DENOMINATOR: a task that declares a live-lane precondition (a test
+        # account / public tunnel / key that only Omar can provide) which isn't
+        # satisfied is marked BLOCKED-on-Omar and excluded from pass/fail — never
+        # silently scored as a FAIL that would depress the true number.
+        missing = _missing_env(task)
+        if missing:
+            detail = "BLOCKED-on-Omar: set " + ", ".join(missing) + " (test account/tunnel/key)"
+            print(f"\n=== {task['id']} ===\n  {detail}")
+            rows.append({"id": task["id"], "ok": None, "blocked": True, "detail": detail,
+                         "metrics": {}, "answer": None})
+            continue
         ctx = make_ctx(task)
         start_url, text = resolve_start_url(task, ctx), resolve_task_text(task, ctx)
         max_steps = int(task["spec"].get("max_steps", 12))
@@ -292,6 +331,26 @@ def run_selftest() -> int:
             failures.append(f"scorecard: {label} wrong ({s})")
         else:
             print(f"[ok]   scorecard      {label}")
+
+    # BLOCKED-tier accounting proof (anti-cheat): a blocked task must count as
+    # NEITHER pass nor fail — excluded from the denominator so pass_pct can't be
+    # inflated by parking hard tasks as "blocked". A pass + a blocked -> 100% of 1.
+    sb = summarize([
+        {"id": "att_pass", "ok": True, "metrics": {"est_cost_usd": 0.01, "steps": 5}},
+        {"id": "blk_task", "ok": None, "blocked": True, "metrics": {}},
+    ])
+    block_checks = [
+        (sb["attempted"] == 1, "blocked excluded from attempted denominator"),
+        (sb["blocked"] == 1, "blocked counted separately"),
+        (sb["passed"] == 1, "passed over attempted"),
+        (sb["pass_pct"] == 100.0, "pass_pct over attempted only (blocked is not a fail)"),
+        (sb["blocked_ids"] == ["blk_task"], "blocked ids surfaced"),
+    ]
+    for good, label in block_checks:
+        if not good:
+            failures.append(f"blocked-tier: {label} wrong ({sb})")
+        else:
+            print(f"[ok]   blocked-tier   {label}")
 
     print("=" * 66)
     if failures:
