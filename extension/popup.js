@@ -18,20 +18,29 @@ function load() {
   chrome.runtime.sendMessage("status", (state) => render(state || {}));
 }
 
+const DEFAULT_ENGINE_HTTP = "http://127.0.0.1:8787";
+
 document.getElementById("pairButton").addEventListener("click", () => {
   const input = document.getElementById("code");
+  const engineInput = document.getElementById("engine");
   const error = document.getElementById("error");
   const code = (input.value || "").trim();
+  // Default to the localhost engine, but let a hosted user paste their cloud https URL.
+  const engineHttp = ((engineInput && engineInput.value) || "").trim() || DEFAULT_ENGINE_HTTP;
   error.textContent = "";
   if (!code) {
     error.textContent = "Enter the code from setup.";
+    return;
+  }
+  if (!/^https?:\/\//i.test(engineHttp)) {
+    error.textContent = "Engine URL must start with http:// or https://";
     return;
   }
   chrome.runtime.sendMessage({
     type: "pair_device",
     pairing_code: code,
     label: "Chrome extension",
-    engine_http: "http://127.0.0.1:8787",
+    engine_http: engineHttp,
   }, (response) => {
     if (!response || !response.ok) {
       error.textContent = (response && response.error) || "Pairing failed.";

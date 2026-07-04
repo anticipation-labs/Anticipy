@@ -37,8 +37,9 @@
     </div>
     <div id="pair" class="pair">
       <input id="code" autocomplete="one-time-code" placeholder="Pairing code" />
+      <input id="engine" autocomplete="off" spellcheck="false" placeholder="Engine URL" value="http://127.0.0.1:8787" />
       <button id="pairButton" type="button">Pair this Chrome</button>
-      <div class="hint">Get the code from the Anticipy setup page.</div>
+      <div class="hint">Get the code from the Anticipy setup page. Leave the engine URL as the localhost default, or paste your cloud engine&rsquo;s https URL.</div>
       <div id="error" class="error"></div>
     </div>
     <script src="popup.js"></script>
