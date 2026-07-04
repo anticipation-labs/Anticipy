@@ -20,7 +20,7 @@ The plan ran end to end. **Track A (local-perfect) + Track B (hosted per-user) a
 
 ## Honest caveats (nothing hidden)
 1. **Vercel runtime unverified** — behind Vercel's SSO protection; deploy status read as "UNKNOWN" through the wall. Disable protection (or log into Vercel) to confirm the board loads + reaches the cloud engine.
-2. **browser_eval is noisy** — dropdown is genuinely fixed; the overall number swings 8–10/11 on live-site variance. Run 3-seed for the real figure.
+2. **browser_eval — 3-SEED AVERAGE = 25/33 (76%)** (seeds 9/11, 8/11, 8/11, on your real Chrome). **Always-pass:** login, checkboxes, quotes, Ada-Lovelace, GitHub, and **dropdown** (the L5/L6 fix holds across both post-fix seeds ✓). **Flaky (the real gap):** saucedemo cart (add-to-cart click flakes), web-scraping + HN-top-story (content-extraction/judge noise). 76% is the honest figure to build from; the flaky trio is where the next levers (L5 validator depth + a stricter checker) apply.
 3. **Twilio dead** — token rotated (401); all SMS/voice code is wired + works "in theory", live on a fresh token.
 4. **Suite RED (8)** — expected: 6 stub-model noise (real model passes), 1 parked safety (`retraction_silenced`), 1 non-blocking (physical-print). Fail-set never grew.
 
