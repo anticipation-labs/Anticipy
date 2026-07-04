@@ -164,6 +164,14 @@ function connectionLine(conn) {
   return `${human} — connected.`;
 }
 
+// B12 — signed per-user browser pairing (OFF by default). On a shared cloud engine the browser
+// helper must attach to YOUR account, not whoever set the engine up. When this build flag is on,
+// we show a "Pair this browser" action that mints a short-lived signed code (server-side, tied to
+// your sign-in) and hands it to the helper to claim. Default off -> this page renders byte-for-byte
+// as today. The helper id is a build-time value so the page can message the installed helper.
+const PER_USER_HANDS_UI = process.env.NEXT_PUBLIC_ANTICIPY_PER_USER_HANDS === "1";
+const BROWSER_HELPER_ID = process.env.NEXT_PUBLIC_ANTICIPY_EXTENSION_ID || "";
+
 // The "get to know me" recap: the accounts I'm signed into, plus a few honest facts I
 // could actually read from them. The facts arrive as plain strings already written for
 // a person — I still pass them through the copy guard so an implementation word can
@@ -461,6 +469,28 @@ export default function ConnectPage() {
     load();
   }, [load]);
 
+  // B12: mint a signed per-user pairing code (tied to your sign-in, server-side) and hand it to
+  // the browser helper so it attaches to YOUR account. Only reachable when PER_USER_HANDS_UI is on.
+  const [pairState, setPairState] = useState({ status: "idle", error: "" });
+  const pairThisBrowser = useCallback(async () => {
+    setPairState({ status: "minting", error: "" });
+    try {
+      const res = await fetch("/api/pairing/mint", { credentials: "same-origin", cache: "no-store" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.code) {
+        throw new Error(body?.message || body?.error || "I couldn't set up this browser yet.");
+      }
+      // Relay the signed code to the installed helper; it claims the code at the engine and binds
+      // its hand to this account. No secret is ever exposed here — only the short-lived code.
+      if (typeof chrome !== "undefined" && chrome?.runtime?.sendMessage && BROWSER_HELPER_ID) {
+        chrome.runtime.sendMessage(BROWSER_HELPER_ID, { type: "pair_device", signed: true, pairing_code: body.code }, () => {});
+      }
+      setPairState({ status: "sent", error: "" });
+    } catch (err) {
+      setPairState({ status: "idle", error: err instanceof Error ? err.message : String(err) });
+    }
+  }, []);
+
   // Only the capabilities a real user can actually connect — internal release steps
   // (apple_signing) are filtered out so they never show on the checklist. Counts are
   // recomputed from the filtered list, not the backend totals (which include the hidden
@@ -549,6 +579,28 @@ export default function ConnectPage() {
               </div>
             ) : null}
             {knowYou ? <div style={{ marginTop: 20 }}><KnowYouRecap result={knowYou} /></div> : null}
+          </div>
+        )}
+
+        {PER_USER_HANDS_UI && !loading && !error && (
+          <div className="block settle" style={{ marginTop: 40 }}>
+            <div className="surface-head" style={{ marginBottom: 16 }}>
+              <h2 className="block-title">Pair this browser to you</h2>
+              <p className="surface-sub" style={{ marginTop: 8 }}>
+                Link the browser helper to your account so it acts as you — never as anyone else who
+                shares this setup.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={pairThisBrowser}
+              className="secondary"
+              disabled={pairState.status === "minting"}
+              style={{ width: "fit-content" }}
+            >
+              {pairState.status === "minting" ? "Pairing…" : pairState.status === "sent" ? "Paired — you can close this" : "Pair this browser"}
+            </button>
+            {pairState.error ? <p className="error" style={{ marginTop: 16 }}>{humanCopy(pairState.error)}</p> : null}
           </div>
         )}
 

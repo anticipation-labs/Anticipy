@@ -47,6 +47,7 @@ from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
 from .core import registry
 from .core.registry import current_core
+from .core.pairing_codes import mint_pairing_code, per_user_hands_enabled, verify_pairing_code
 from .core.envelopes import EventSource, Job, new_id
 from .core.gateway import PROVIDER_OPENROUTER, ModelGateway
 from .hands import browser_use_link
@@ -358,6 +359,15 @@ def _owner_ws_authorized(ws: WebSocket) -> bool:
     return _ws_is_local(ws)
 
 
+def _pairing_claim_public(path: str) -> bool:
+    """True only for the signed-pairing CLAIM endpoint, and only while per-user hands is enabled.
+
+    The extension presents an HMAC-signed pairing code (its own auth) with no Supabase bearer, so
+    /ws/pair must bypass the owner-token gate — but the mint endpoint (/ws/pair_code) must NOT,
+    since it needs the signed-in user's identity. OFF by default -> always False (byte-identical)."""
+    return per_user_hands_enabled() and path == "/ws/pair"
+
+
 @app.middleware("http")
 async def owner_api_auth(request: Request, call_next):
     """Auth guard + per-user identity.
@@ -383,7 +393,11 @@ async def owner_api_auth(request: Request, call_next):
             request.state.user_email = info["email"]
 
     token = _owner_api_token()
-    if token and request.url.path not in PUBLIC_PATHS:
+    # B12: the signed-pairing CLAIM endpoint (/ws/pair) authenticates via its OWN HMAC code — the
+    # extension carries no Supabase bearer — so it bypasses owner auth, but ONLY when per-user hands
+    # is enabled. OFF by default -> _pairing_claim_public() is always False -> this line is
+    # byte-identical to before, and the endpoint itself still 404s while the flag is off.
+    if token and request.url.path not in PUBLIC_PATHS and not _pairing_claim_public(request.url.path):
         if not (_owner_api_authorized(request, token) or request.state.user_id):
             return JSONResponse(
                 {"error": "unauthorized", "message": "Sign in to use Anticipy."},
@@ -1901,6 +1915,45 @@ def ws_token() -> dict:
     # The extension (host-permitted for 127.0.0.1) can read this; a web page can't
     # (no CORS headers). The token gates the WS so no site/process can pilot Chrome.
     return {"token": current_core().browser_link.token}
+
+
+class PairIn(BaseModel):
+    code: str = ""
+
+
+@app.get("/ws/pair_code")
+def ws_pair_code() -> dict:
+    """MINT a signed per-user pairing code (B12, flag-gated).
+
+    The signed-in web app reaches this THROUGH its authenticated proxy, so the auth middleware has
+    already bound this request to the caller's user (current_user()). We hand back a short-lived
+    HMAC-signed code carrying that user id; the web app relays it to the extension via pair_device.
+    OFF by default (404 while per-user hands is disabled) and refuses (503) when no
+    ENGINE_INTERNAL_TOKEN secret is configured — fail closed either way."""
+    if not per_user_hands_enabled():
+        raise HTTPException(status_code=404, detail={"reason": "per_user_hands_disabled"})
+    code = mint_pairing_code(registry.current_user())
+    if not code:
+        raise HTTPException(status_code=503, detail={"reason": "pairing_secret_unconfigured"})
+    return {"ok": True, "code": code}
+
+
+@app.post("/ws/pair")
+def ws_pair(body: PairIn) -> dict:
+    """CLAIM a per-user hand with a signed pairing code (B12, flag-gated).
+
+    The extension presents the signed code (no Supabase bearer — the HMAC IS the auth). We verify
+    the signature + expiry and, only on a valid code, return the TARGET user's per-user
+    browser_link token so the extension binds the WS via /ws/extension?user=<id>&token=<token>. A
+    forged / tampered / expired code is rejected (403). OFF by default (404) -> the single-owner
+    /ws/token path is untouched."""
+    if not per_user_hands_enabled():
+        raise HTTPException(status_code=404, detail={"reason": "per_user_hands_disabled"})
+    user_id = verify_pairing_code(body.code)
+    if not user_id:
+        raise HTTPException(status_code=403, detail={"reason": "invalid_pairing_code"})
+    target = registry.core_for(user_id)
+    return {"ok": True, "user": user_id, "token": target.browser_link.token}
 
 
 @app.post("/ws/reload")

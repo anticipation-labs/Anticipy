@@ -66,9 +66,20 @@ async function fetchToken() {
 
 async function connect() {
   try {
-    const token = await fetchToken();
+    const st = await getState();
     const wsUrl = await engineWs();
-    ws = new WebSocket(wsUrl + "?token=" + encodeURIComponent(token));
+    let full;
+    if (st.per_user_paired && st.per_user_id && st.per_user_token) {
+      // B12 signed per-user pairing: bind the hand to THIS signed-in user's core via ?user=<id>,
+      // using the per-user token the engine handed back at /ws/pair. This is the ONLY path that
+      // differs from today, and only when a signed pairing has been claimed.
+      full = wsUrl + "?user=" + encodeURIComponent(st.per_user_id) + "&token=" + encodeURIComponent(st.per_user_token);
+    } else {
+      // Default single-owner local behavior (unchanged): the engine's default-core token.
+      const token = await fetchToken();
+      full = wsUrl + "?token=" + encodeURIComponent(token);
+    }
+    ws = new WebSocket(full);
     ws.onopen = async () => {
       await setState({ connected: true, lastConnect: Date.now(), error: null });
       sendHeartbeat().catch(() => {});
@@ -1358,7 +1369,8 @@ connect();
 chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m === "status" || (m && m.type === "status")) { getState().then(send); return true; }
   if (m && m.type === "pair_device") {
-    pairDevice(m).then(send).catch((e) => send({ ok: false, error: String(e) }));
+    const handler = (m.signed || isSignedCode(m.pairing_code || m.code)) ? pairUserHands : pairDevice;
+    handler(m).then(send).catch((e) => send({ ok: false, error: String(e) }));
     return true;
   }
   if (m && m.type === "heartbeat") {
@@ -1383,7 +1395,8 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === "pair_device") {
-    pairDevice(msg)
+    const handler = (msg.signed || isSignedCode(msg.pairing_code || msg.code)) ? pairUserHands : pairDevice;
+    handler(msg)
       .then((r) => sendResponse(r))
       .catch((e) => sendResponse({ ok: false, error: String(e) }));
     return true;
@@ -1416,6 +1429,44 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   }
   sendResponse({ ok: false, error: "unknown message type" });
 });
+
+// B12 — a signed per-user pairing code looks like "apc1.<...>.<exp>.<sig>". When the web app
+// sends one (signed:true, or a code with this prefix) we take the signed-pairing CLAIM path
+// (/ws/pair) instead of the legacy device-registry path, so the hand binds to THAT user's core.
+function isSignedCode(code) {
+  return /^apc1\./.test(String(code || ""));
+}
+
+// Claim a per-user hand with a signed pairing code: POST it to /ws/pair; the engine verifies the
+// HMAC + expiry and returns { user, token } for that user's core. We store the binding and
+// reconnect, so connect() dials /ws/extension?user=<id>&token=<token>. Never touches the legacy
+// device path; on any failure we surface the error and leave today's behavior intact.
+async function pairUserHands(msg) {
+  const code = String(msg.pairing_code || msg.code || "").trim();
+  const base = String(msg.engine_http || msg.engineHttp || DEFAULT_ENGINE_HTTP).replace(/\/+$/, "");
+  if (!code) return { ok: false, error: "pairing_code_required" };
+  await setState({ engine_http: base, pairing_error: null });
+  const resp = await fetch(base + "/ws/pair", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || !data.ok || !data.user || !data.token) {
+    const error = (data && (data.reason || (data.detail && (data.detail.reason || data.detail.status)) || data.error)) || ("HTTP " + resp.status);
+    await setState({ per_user_paired: false, pairing_error: error });
+    return { ok: false, error };
+  }
+  await setState({
+    engine_http: base,
+    per_user_paired: true,
+    per_user_id: data.user,
+    per_user_token: data.token,
+    pairing_error: null,
+  });
+  connect();
+  return { ok: true, per_user: true, user: data.user };
+}
 
 async function pairDevice(msg) {
   const pairingCode = String(msg.pairing_code || msg.code || "").trim();
