@@ -9,12 +9,37 @@ export function ownerAccessRequired() {
   return Boolean(configuredOwnerToken());
 }
 
-export function engineHeaders(headers = {}) {
-  const token = process.env.ANTICIPY_OWNER_API_TOKEN;
+// Build the headers for an engine call. When a signed-in Supabase user is behind the request,
+// forward THEIR access token so the engine (owner_api_auth middleware) resolves
+// request.state.user_id and routes to that user's OWN per-user core. Otherwise authenticate to
+// the engine as the owner via the server owner token (owner / local / background paths).
+//
+// We send the user's bearer INSTEAD of the owner token — not both. The engine reads the
+// x-anticipy-owner-token header FIRST when resolving the identity bearer, so sending both would
+// make it treat the opaque owner token as the identity and collapse every caller back onto the
+// owner core (the exact bug this fixes). A valid Supabase user still passes the engine's auth
+// gate on its own (owner_api_auth authorizes on request.state.user_id).
+export function engineHeaders(headers = {}, request = null) {
+  const ownerToken = process.env.ANTICIPY_OWNER_API_TOKEN;
+  const userBearer = incomingSupabaseBearer(request);
+  if (userBearer) {
+    return { ...headers, Authorization: `Bearer ${userBearer}` };
+  }
   return {
     ...headers,
-    ...(token ? { "x-anticipy-owner-token": token } : {}),
+    ...(ownerToken ? { "x-anticipy-owner-token": ownerToken } : {}),
   };
+}
+
+// The incoming request's Supabase access token, or "" when the caller isn't a signed-in user.
+// Only a JWT-shaped bearer (header.payload.sig -> two dots) that ISN'T the owner token counts;
+// the owner authenticates with the opaque server owner token, never a per-user identity.
+function incomingSupabaseBearer(request) {
+  const token = bearerToken(request?.headers?.get?.("authorization"));
+  if (!token || token.split(".").length !== 3) return "";
+  const ownerToken = configuredOwnerToken();
+  if (ownerToken && token === ownerToken) return "";
+  return token;
 }
 
 function bearerToken(value) {
@@ -93,15 +118,18 @@ export function clearOwnerSessionCookie() {
   return `${OWNER_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 }
 
-export async function engineRequest(path, options = {}) {
+export async function engineRequest(path, options = {}, request = null) {
   const url = `${ENGINE_URL}${path}`;
   try {
     const response = await fetch(url, {
       ...options,
-      headers: engineHeaders({
-        "content-type": "application/json",
-        ...(options.headers || {}),
-      }),
+      headers: engineHeaders(
+        {
+          "content-type": "application/json",
+          ...(options.headers || {}),
+        },
+        request,
+      ),
       cache: "no-store",
     });
     const text = await response.text();
@@ -122,5 +150,7 @@ export async function engineRequest(path, options = {}) {
 export async function privateEngineRequest(request, path, options = {}) {
   const denied = requireOwnerRequest(request);
   if (denied) return denied;
-  return engineRequest(path, options);
+  // Forward the incoming request so a signed-in user's Supabase bearer reaches the engine and
+  // routes to their own per-user core (engineHeaders); the owner path is unchanged.
+  return engineRequest(path, options, request);
 }

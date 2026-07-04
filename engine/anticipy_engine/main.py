@@ -85,7 +85,7 @@ REQUEST_SIZE_EXEMPT_PATHS = {"/owner/ingest-file"}
 core = ControlCore()
 # Wire the registry: any NON-default user's core is built by this factory at <base>/users/<id>;
 # the default user maps to the `core` above (so unauthenticated == the module-global core).
-registry.set_factory(lambda data_dir: ControlCore(data_dir=data_dir))
+registry.set_factory(lambda data_dir, user_id: ControlCore(data_dir=data_dir, user_id=user_id))
 registry.register_default(core)
 extension_hello_seen = False
 _mic_source = None  # the always-on Mac-mic CaptureSource when /listen/start is on (None when off)

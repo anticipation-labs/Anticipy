@@ -60,9 +60,11 @@ _current_user: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
 _lock = threading.RLock()
 _cores: dict[str, "ControlCore"] = {}
 _default_core: Optional["ControlCore"] = None
-# How to build a NON-default user's core. Injected by main with the real ControlCore
-# factory so this module has no import-time dependency on the (heavy) control_core module.
-_factory: Optional[Callable[[Path], "ControlCore"]] = None
+# How to build a NON-default user's core, given its data_dir AND its user id (so the core can
+# key per-user action identity off WHO it belongs to). Injected by main with the real
+# ControlCore factory so this module has no import-time dependency on the (heavy) control_core
+# module.
+_factory: Optional[Callable[[Path, str], "ControlCore"]] = None
 
 
 def _safe(user_id: str) -> str:
@@ -87,8 +89,11 @@ def user_data_dir(user_id: str) -> Path:
     return _base_dir() / "users" / _safe(user_id)
 
 
-def set_factory(factory: Callable[[Path], "ControlCore"]) -> None:
-    """Inject the ControlCore factory (called once by main at import time)."""
+def set_factory(factory: Callable[[Path, str], "ControlCore"]) -> None:
+    """Inject the ControlCore factory (called once by main at import time).
+
+    The factory is called ``factory(data_dir, user_id)`` so the per-user core knows WHO it is
+    (its action identity), not just where its data lives."""
     global _factory
     _factory = factory
 
@@ -142,7 +147,7 @@ def core_for(user_id: Optional[str]) -> "ControlCore":
         if core is None:
             if _factory is None:  # pragma: no cover - main injects the factory at import
                 raise RuntimeError("registry factory not set")
-            core = _factory(user_data_dir(uid))
+            core = _factory(user_data_dir(uid), uid)
             _cores[uid] = core
     _ensure_bus_started(core)
     return core

@@ -19,10 +19,15 @@
 (function () {
   "use strict";
 
-  /* ---------- public config (safe to ship) ---------- */
-  var SUPABASE_URL = "https://eawoquqgfndmphogwjeu.supabase.co";
+  /* ---------- public config (safe to ship) ----------
+     These MUST match the engine's NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY
+     (.env.local — the LIVE "Anticipy" project ogbxpqkmsdrcuilafycn). The engine re-verifies
+     every access token against THIS project's /auth/v1/user (engine/.../core/auth.py), so
+     sign-in here MUST mint tokens the engine can verify. Repointed off the dead
+     eawoquqgfndmphogwjeu ref so a hosted signup actually leaves the owner core. */
+  var SUPABASE_URL = "https://ogbxpqkmsdrcuilafycn.supabase.co";
   var SUPABASE_ANON_KEY =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhd29xdXFnZm5kbXBob2d3amV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MDg5ODYsImV4cCI6MjA4NTQ4NDk4Nn0.PW2iGAF2wA-vN8lsGsQq8nu3yRQzXd23KNomlOR__IY";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nYnhwcWttc2RyY3VpbGFmeWNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NDI3NDksImV4cCI6MjA5MDQxODc0OX0.PNfKYanSXJTfrYXWGZoUBFaZVE_jnsV4cqBXgxrRJ-0";
 
   var ANTICIPY = (window.Anticipy = window.Anticipy || {});
 

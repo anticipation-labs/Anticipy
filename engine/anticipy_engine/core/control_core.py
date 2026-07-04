@@ -782,10 +782,14 @@ class GatedApprover(Approver):
 
 
 class ControlCore:
-    def __init__(self, data_dir=None) -> None:
+    def __init__(self, data_dir=None, user_id=None) -> None:
         load_local_env()  # make .env.local keys (Arcade, etc.) available
         base = _base(data_dir)
         self.data_dir = base
+        # WHO this core belongs to. The registry injects the signed-in Supabase user id for a
+        # per-user core; the DEFAULT/owner core is built with no user_id (-> None here), keeping
+        # the owner's action identity on the ARCADE_USER_ID/ADMIN_EMAIL fallback below.
+        self.user_id = (user_id or "").strip() or None
         # M3: the user-facing autonomy DIAL (Full-Send/Regular/Limited) + per-task-type trust ledger.
         from ..proactive.autonomy_mode import TrustLedger, DEFAULT_MODE
         self.trust_ledger = TrustLedger(base / "trust_ledger.json")
@@ -820,8 +824,10 @@ class ControlCore:
         # REAL hands replace connector_stub + browser_stub on the frozen contract.
         # channel_stub (reaching the user: call/text) stays (later chunk).
         hands_mode = os.environ.get("ANTICIPY_HANDS_MODE", MODE_MOCK)
-        # Arcade user_id must match the signed-in Arcade.dev account ("users only" mode)
-        user_id = os.environ.get("ARCADE_USER_ID") or os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
+        # ACTION IDENTITY: a per-user core acts under ITS OWN user's identity, so a user's
+        # real-systems actions never run as the owner. The DEFAULT/owner core (self.user_id is
+        # None) falls back to the signed-in Arcade.dev account ("users only" mode), unchanged.
+        user_id = self.user_id or os.environ.get("ARCADE_USER_ID") or os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
         # Per-person API mesh (hands/token_vault.py): back the hand with the encrypted
         # per-user token vault so a user who connected their OWN app (Gmail, a niche CRM
         # like Cosmolex) authenticates with THEIR short-lived token, not the shared
