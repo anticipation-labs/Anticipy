@@ -3391,6 +3391,7 @@ body:not(.pz-debug) .pz-only-debug { display: none !important; }
 .pz-chat-chips {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 2px 0 2px 6px;
   animation: pzChatIn 320ms cubic-bezier(.22,.61,.36,1) both;
@@ -3444,6 +3445,17 @@ body:not(.pz-debug) .pz-only-debug { display: none !important; }
   border: 1px solid var(--pz-line, #e8e5de);
   border-radius: 12px;
   box-shadow: var(--shadow-md, 0 12px 40px rgba(20,19,17,.14));
+}
+/* On a narrow phone (<=430px) a left-anchored 240px menu can run off the right edge. Anchor it to
+   the trigger's right and cap its width to the viewport so it always fits a 375px screen. */
+@media (max-width: 430px) {
+  .pz-chat-more-menu {
+    left: auto;
+    right: 0;
+    min-width: 0;
+    width: max-content;
+    max-width: min(240px, calc(100vw - 32px));
+  }
 }
 .pz-chat-more-menu button {
   display: block;

@@ -73,6 +73,11 @@ function threadId() {
 const YES_RE = /^\s*(y|yes+|yeah|yep|yup|ya|sure|ok|okay|kk?|go ahead|do it|please do|go for it|sounds good|send it|approve[d]?|yes please)\b/i;
 const NO_RE = /^\s*(n|no+|nope|nah|not now|leave it|leave that|cancel|hold off|skip|don'?t|stop|not this one)\b/i;
 
+// The ONLY engine statuses that count as a real terminal completion — the sole license for "Done ✓".
+// Everything else (waiting/doing/recorded-for-later) means the work isn't finished, so we never
+// claim it is. stopped/failed/declined are terminal but NOT success, so they're intentionally out.
+const TERMINAL_DONE_STATUS = new Set(["done", "completed"]);
+
 const EMPTY_PROFILE = {
   name: "",
   summary: "",
@@ -2459,39 +2464,53 @@ export default function PhaseZeroApp({ screen = "board" }) {
   }
 
   // A reaction, as a conversation turn: it posts as YOUR line, fires the real engine resolve
-  // (/api/resolve via resolveCard), then the assistant answers back — "On it." (plus the real
-  // receipt when one has landed) on a yes, or "Okay, I'll leave that one." on a no.
+  // (/api/resolve via resolveCard) using ONLY this bubble's own ask_id, then the assistant answers
+  // honestly. Two hard rules keep this money-safe: (1) we NEVER borrow an unrelated ask from
+  // /pending — approving THIS bubble may only resolve THIS bubble's ask, never someone else's
+  // (possibly irreversible) one; (2) we NEVER say "Done ✓" without a REAL terminal completion — a
+  // resolve that only records an approval, or that we couldn't honestly match, is told as such.
   async function conversationResolve(message, approved, label) {
     if (!message) return;
     appendUserLine(label || (approved ? "Go ahead" : "Not now"));
-    // Clear THIS bubble's chips right away (optimistic) — the reaction has been made.
-    setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
-    // Resolve a REAL engine ask. The bubble's own card carries the ask_id for most asks; some real
-    // asks (generic confirms, create-and-print) expose NO ask_id on the card and live only in
-    // /pending, so fall back to the most-recent waiting ask there — the one this reaction is about.
-    let askId = message.askId;
-    if (!askId) {
-      try {
-        const data = await jsonFetch("/api/pending");
-        const list = Array.isArray(data.pending) ? data.pending : [];
-        askId = list.length ? (list[list.length - 1].ask_id || "") : "";
-      } catch {
-        askId = "";
-      }
-    }
-    const ok = await resolveCard({ id: message.cardId, askId }, approved);
+    // This bubble's OWN ask_id (from its source card) is the only ask this reaction may resolve.
+    // If the card exposes none, we do NOT reach into /pending for a different ask.
+    const askId = message.askId || "";
+
+    // "Not now" — decline just this one. There's nothing to over-claim; close it warmly.
     if (!approved) {
+      setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
+      await resolveCard({ id: message.cardId, askId }, false);
       appendMessages({ role: "assistant", text: "Okay, I'll leave that one.", tone: "do" });
       return;
     }
+
+    // Approve, but this bubble has NO ask_id we can honestly match to a real engine ask. Do NOT fake
+    // a "Done ✓", and do NOT grab an unrelated /pending ask (that's how the wrong — maybe
+    // irreversible — thing got approved). Record it honestly and leave the ask open (chips stay) so
+    // it can still be resolved for real once the engine exposes an ask_id for it.
+    if (!askId) {
+      appendMessages({
+        role: "assistant",
+        text: "I've got that down — I'll check with you before anything actually goes out.",
+        tone: "do",
+      });
+      return;
+    }
+
+    // A real ask_id for THIS bubble: resolve it for real, optimistically clearing its chips.
+    setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
     appendMessages({ role: "assistant", text: "On it…", tone: "do" });
-    // An approve we actually SENT to the engine but that came back with an error must not pretend it
-    // worked — say so honestly and leave it on the list. (No askId at all = nothing durable to fail.)
-    if (askId && !ok) {
+    const ok = await resolveCard({ id: message.cardId, askId }, true);
+    // A resolve we actually SENT that came back with an error must not pretend it worked.
+    if (!ok) {
       appendMessages({ role: "assistant", text: "I hit a snag doing that one — it's still on your list.", tone: "do" });
       return;
     }
-    // Show the real result if one has already landed; otherwise close warmly.
+    // The resolve succeeded. "Done ✓" is reserved for a REAL terminal completion: a landed browser
+    // receipt, or a card the engine has moved to a done/completed state. If the resolve only RECORDED
+    // the approval (the engine executes it asynchronously, e.g. money/irreversible actions), we
+    // promise a real close instead of claiming one — so "Done ✓" is impossible without a receipt or
+    // a terminal-done card.
     try {
       const data = await jsonFetch("/api/owner/cards?limit=50");
       const rawCard = (Array.isArray(data.cards) ? data.cards : []).find((card) => (card.id || card.ask_id) === message.cardId);
@@ -2500,10 +2519,14 @@ export default function PhaseZeroApp({ screen = "board" }) {
         appendMessages({ role: "assistant", text: `Here's what I found: ${fresh.browserReceipt.answer}`, tone: "do" });
         return;
       }
+      if (fresh && TERMINAL_DONE_STATUS.has(fresh.status)) {
+        appendMessages({ role: "assistant", text: "Done — taken care of. ✓", tone: "do" });
+        return;
+      }
     } catch {
       /* the tracking drawer still carries the honest state */
     }
-    appendMessages({ role: "assistant", text: "Done — taken care of. ✓", tone: "do" });
+    appendMessages({ role: "assistant", text: "On it — I'll let you know the moment it's done.", tone: "do" });
   }
 
   // The "…" reply: approve AND opt this kind of thing out of ask-first (raises the real autonomy
@@ -2512,18 +2535,11 @@ export default function PhaseZeroApp({ screen = "board" }) {
     if (!message) return;
     appendUserLine("Go ahead — and stop asking me for these.");
     setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
-    // Same ask_id resolution as a plain approve: the card's own id when it has one, else the
-    // most-recent waiting ask in /pending, so this also closes ask cards that expose no ask_id.
-    let askId = message.askId;
-    if (!askId) {
-      try {
-        const data = await jsonFetch("/api/pending");
-        const list = Array.isArray(data.pending) ? data.pending : [];
-        askId = list.length ? (list[list.length - 1].ask_id || "") : "";
-      } catch {
-        askId = "";
-      }
-    }
+    // Only ever resolve THIS bubble's own ask (same money-safe rule as conversationResolve): use the
+    // source card's ask_id when it has one, and never borrow an unrelated /pending ask. With no
+    // ask_id, allowAutonomy still raises the real autonomy gate (the honest part of this gesture) and
+    // simply skips the per-ask resolve — it never approves a different, possibly irreversible, ask.
+    const askId = message.askId || "";
     await allowAutonomy({ id: message.cardId, askId });
     appendMessages({
       role: "assistant",
@@ -2798,8 +2814,15 @@ export default function PhaseZeroApp({ screen = "board" }) {
       appendCardReplies(data.cards);
       await loadCards();
       await loadGatewayEvents();
-    } catch (error) {
-      setIngestMessage(error instanceof Error ? error.message : String(error));
+    } catch (_error) {
+      // Never leave the thread on dead silence, and never leak a raw "Request failed: N". Degrade
+      // warmly right in the conversation, the same way runWebTask/runDerive already do.
+      setIngestMessage("");
+      appendMessages({
+        role: "assistant",
+        text: "I'm having trouble reaching my brain for a second — mind trying that again?",
+        tone: "do",
+      });
     } finally {
       setIngestBusy(false);
     }
@@ -2822,8 +2845,14 @@ export default function PhaseZeroApp({ screen = "board" }) {
       appendCardReplies(data.cards);
       await loadCards();
       await loadGatewayEvents();
-    } catch (error) {
-      setIngestMessage(error instanceof Error ? error.message : String(error));
+    } catch (_error) {
+      // Warm degradation instead of dead silence or a raw "Request failed: N".
+      setIngestMessage("");
+      appendMessages({
+        role: "assistant",
+        text: "I couldn't quite catch that recording — mind sending it again?",
+        tone: "do",
+      });
     } finally {
       setIngestBusy(false);
     }
