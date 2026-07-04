@@ -27,7 +27,7 @@ from typing import List, Optional
 
 from ..core.browser_link import BrowserLink
 from ..core.envelopes import new_id
-from ..core.gateway import ACT, CHEAP, SMART, ModelGateway
+from ..core.gateway import ACT, CHEAP, ESCALATE, SMART, ModelGateway
 from .proof import confirm_stable_artifact
 from .guarded_step import MUTATION_CTRL, confirm_irreversible
 from .handoff import ask_message, classify_wall
@@ -79,6 +79,11 @@ MAX_PARSE_FAILS = int(os.environ.get("ANTICIPY_MAX_PARSE_FAILS", "3"))
 # corrected in place; an ungrounded answer sends the agent back to read it off the page. Bounded so a
 # stubborn verifier can never loop forever (then we commit honestly / hand off).
 MAX_ANSWER_CHECKS = int(os.environ.get("ANTICIPY_MAX_ANSWER_CHECKS", "2"))
+# L2 give-up recovery: how many times a "no products/results found" style shrug is routed to a
+# scroll/re-search RETRY before we finally commit it as an honest no-answer + hand off. ~51% of
+# real-world failures are recoverable access/environment issues (results not yet scrolled/loaded, a
+# search that never submitted), so a bounded retry converts many false give-ups into real answers.
+MAX_GIVEUP_RETRIES = int(os.environ.get("ANTICIPY_MAX_GIVEUP_RETRIES", "1"))
 # WALL-CLOCK budgets (seconds). The WebVoyager harness kills a task at 300s with NO result
 # (steps=None, cost=None) — pure loss. We bound ourselves UNDER that: INIT_BUDGET_S caps start-up
 # observe/retry on hang-prone heavy sites; RUN_BUDGET_S caps the whole task and exits with a
@@ -537,11 +542,32 @@ def _sig(url, title, els, scroll=None, text=None) -> str:
 
 _NO_ANSWER_RE = re.compile(
     r"\b(?:not\s+(?:found|present|available|shown|listed|visible|provided|in\s+the\s+page)"
-    r"|no\s+(?:answer|information|result|match)|cannot\s+(?:find|determine|answer)"
+    # "no <noun>" and — L2 — "no <up-to-2-words> <noun>" so a splitter word can't smuggle a shrug
+    # past the guard: "no product information" / "no products found" / "no matching results" /
+    # "no results found" / "has no ... information" all now read as a NON-answer (the demowebshop
+    # give-up class) instead of being committed as a real answer.
+    r"|no\s+(?:\w+\s+){0,2}"
+    r"(?:answer|information|results?|matches?|products?|items?|records?|listings?|entries)"
+    r"|cannot\s+(?:find|determine|answer)"
     r"|could\s+not\s+(?:find|determine)|unable\s+to|isn'?t\s+(?:on|in)\s+the\s+page"
     r"|doesn'?t\s+(?:appear|contain)|n/?a)\b",
     re.I,
 )
+
+
+def _ladder_tier(sub_stuck: int) -> str:
+    """L4 GRADED cost ladder, by stuck-DEPTH (pure so it is unit-testable in isolation):
+      • deep stall  (sub_stuck >= 3) -> ESCALATE (one capped-frontier rescue; the abandon wall is
+        raised to >=4 so this fires before the subgoal is dropped, and the gateway caps it 2/task).
+      • genuine stall (sub_stuck >= 2) -> SMART   (the mid-tier first rescue).
+      • otherwise (a lone forbid / single no-progress step) -> ACT (cheap — the stuck-note + region
+        crop break most single loops far cheaper than a model bump; NO lone-forbid escalation).
+    """
+    if sub_stuck >= 3:
+        return ESCALATE
+    if sub_stuck >= 2:
+        return SMART
+    return ACT
 
 
 def _looks_like_no_answer(s: str) -> bool:
@@ -829,11 +855,116 @@ class WebVoyagerAgent:
         lines = []
         for e in ((out or {}).get("elements") or []):
             st = (e.get("state") or "")
-            if st and any(k in st for k in ("checked", "value=", "filled", "selected", "expanded=")):
+            # value=/selected/options= carry a <select>'s chosen option (L1 dropdown grounding — the
+            # contract exposes state tokens `options=<N>` and `value=<selected>`); checked/expanded a
+            # checkbox/disclosure; in_cart/qty=/count= a per-item cart toggle or cart-badge (L3 proof).
+            if st and any(k in st for k in ("checked", "value=", "filled", "selected", "expanded=",
+                                            "options=", "in_cart", "qty=", "count=")):
                 lines.append(f'[{e.get("idx")}] {e.get("role","")} "{(e.get("name") or "")[:40]}" -> {st}')
             if len(lines) >= 25:
                 break
         return "\n".join(lines)
+
+    def _bind_committed_select(self, task: str, ans: str) -> str:
+        # L1: for a selection-shaped task, ensure the DOM-COMMITTED option text is present in the answer
+        # (a native <select>'s value is not in innerText, so the verified `selected` from the act result
+        # is the reliable carrier). No-op when there was no select, when the option is already in the
+        # answer, or when the task is not a selection task (so ordinary answers are never polluted).
+        sel = getattr(self, "_last_select_text", "") or ""
+        if not sel or sel.lower() in (ans or "").lower():
+            return ans
+        if not re.search(r"\b(?:select|choose|choos\w+|option|dropdown|pick)\b", (task or "").lower()):
+            return ans
+        return f"{ans} (selected: {sel})" if ans else f"Selected: {sel}"
+
+    @staticmethod
+    def _bind_cart_item(ans: str, item: str) -> str:
+        # L3: bind the item CONFIRMED present in the cart into the answer (the verified item, not the
+        # model's self-report). No-op if empty / already present.
+        if not item or item.lower() in (ans or "").lower():
+            return ans
+        return f"{ans} (confirmed in cart: {item})" if ans else f"Added to cart and confirmed: {item}"
+
+    @staticmethod
+    def _looks_like_cart(out) -> bool:
+        # A distinct CART view: the URL is a cart/basket path, or the page text reads as a cart summary.
+        # Used so the L3 re-read only ACCEPTS a page that is really the cart (never a 404 / the same page).
+        u = ((out or {}).get("url") or "").lower()
+        t = ((out or {}).get("text") or "").lower()[:4000]
+        if re.search(r"/(?:cart|basket|bag|shopping-?cart|checkout/cart)(?:\b|/|\.|\?|#|$)", u):
+            return True
+        return any(k in t for k in ("your cart", "shopping cart", "shopping bag", "cart total",
+                                    "cart subtotal", "proceed to checkout", "continue to checkout"))
+
+    def _derive_cart_urls(self, url: str) -> List[str]:
+        # Fallback when there is no on-page cart link: the handful of conventional cart paths on the
+        # current origin (saucedemo /cart.html, most stores /cart, PrestaShop-ish variants).
+        from urllib.parse import urlsplit, urlunsplit
+        try:
+            p = urlsplit(url or "")
+            if not p.scheme or not p.netloc:
+                return []
+            origin = urlunsplit((p.scheme, p.netloc, "", "", ""))
+        except Exception:
+            return []
+        return [origin + s for s in ("/cart.html", "/cart", "/basket", "/shopping-cart", "/checkout/cart")]
+
+    def _finish_cart(self, cart_out, history):
+        # Confirm the task's target item is present in the re-read cart page (independent, state-grounded
+        # — the cart page TEXT, not the actor's self-report), and return (cart_out, item_confirmed).
+        item = getattr(self, "_item_text", "") or ""
+        text = ((cart_out or {}).get("text") or "").lower()
+        toks = _item_tokens(item)[:3]
+        item_seen = item if (item and toks and all(t in text for t in toks)) else ""
+        history.append("L3 cart read-back -> " + ((cart_out or {}).get("url") or "")[:48]
+                       + (f" (item in cart: {item_seen})" if item_seen else " (cart opened)"))
+        return cart_out, item_seen
+
+    async def _reread_cart(self, out, history):
+        # L3: open the CART and re-read it so an add-to-cart is proven against the RESULTING state (the
+        # item actually in the cart), not the inventory page whose Add button merely toggled to Remove.
+        # Prefer an on-page cart link/badge; else navigate a conventional cart URL. Returns (cart_out,
+        # item_confirmed) on success, or None (and RESTORES the original page) if no cart view is reached
+        # — so the caller's generic stable-confirm still grades the right page. Never self-grades.
+        els = (out or {}).get("elements") or []
+        prev_u = ((out or {}).get("url") or "")
+        moved_away = False
+        cart_el = None
+        for e in els:
+            if e.get("role") not in ("a", "link", "button"):
+                continue
+            nm = (e.get("name") or "").strip().lower()
+            if "add" in nm or "remove" in nm:
+                continue
+            if re.search(r"\b(?:cart|basket|bag)\b", nm) or re.search(r"cart|basket", (e.get("state") or "").lower()):
+                cart_el = e
+                break
+        if cart_el is not None:
+            await self._act(_clean_action({"action": "click", "index": cart_el.get("idx")}, ""))
+            cart_out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            if cart_out and (cart_out.get("url") or "") != prev_u:
+                moved_away = True
+            if cart_out and self._looks_like_cart(cart_out):
+                return self._finish_cart(cart_out, history)
+        for cu in self._derive_cart_urls(prev_u):
+            if not cu or cu == prev_u:
+                continue
+            await self._act(_clean_action({"action": "navigate", "url": cu}, ""))
+            nav_out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            moved_away = True
+            if nav_out and self._looks_like_cart(nav_out):
+                return self._finish_cart(nav_out, history)
+        # No cart reached — restore the page we mutated on so the generic confirm grades it, not a 404.
+        if moved_away and prev_u:
+            try:
+                await self._act(_clean_action({"action": "navigate", "url": prev_u}, ""))
+                _o, _s = await self._observe_ready()
+                self._cur_shot = _s
+            except Exception:
+                pass
+        return None
 
     async def _complete_with_artifact_proof(self, out, step, history, ans):
         # S5 (the anti-self-grading completion seam, §4.2 tail): a run that performed an IRREVERSIBLE
@@ -844,6 +975,23 @@ class WebVoyagerAgent:
         # guarded_step.confirm_irreversible). FAIL-OPEN + annotate-only: the returned answer and page
         # evidence are UNCHANGED (the judge grades them against the real page either way); we only add an
         # honest receipt (artifact_confirmed / artifact_reads) and never fabricate a confirmation.
+        #
+        # L3 CART PROOF: an add-to-cart is proven by NAVIGATING TO THE CART and re-reading the item
+        # there — the same inventory page re-read only proves the button toggled, not that the item is
+        # in the cart. Bind the confirmed item into the answer and report the CART page as the graded
+        # evidence. Fail-open: no cart reachable -> fall through to the generic stable-read confirm.
+        if getattr(self, "_mut_is_cart", False):
+            try:
+                proven = await self._reread_cart(out, history)
+            except Exception:
+                proven = None
+            if proven is not None:
+                cart_out, item_seen = proven
+                if item_seen:
+                    ans = self._bind_cart_item(ans, item_seen)
+                return self._done(cart_out, step, history, answer=ans,
+                                  artifact_confirmed=True, artifact_reads=1, cart_verified=True)
+
         async def _read():
             o, sh = await self._observe_ready()
             return (o or {}), sh
@@ -1130,6 +1278,13 @@ class WebVoyagerAgent:
         # S5: did this run perform an IRREVERSIBLE mutation (submit/order/cart-add/pay)? Gates the
         # stronger repeated-read artifact confirm (confirm_stable_artifact) at completion.
         self._did_mutation = False
+        # L3: was the mutation specifically an ADD-TO-CART? If so, completion proves it by navigating to
+        # the CART and re-reading it (not the inventory page). `_item_text` is the task's target item,
+        # used as the independent item to confirm present in the cart. `_last_select_text` (L1) carries
+        # the last DOM-committed <select> option so it can be bound into a selection-task answer.
+        self._mut_is_cart = False
+        self._item_text = ""
+        self._last_select_text = ""
         # CROSS-PAGE AUTO-HARVEST: counting/listing "across ALL pages" can't depend on the cheap model
         # remembering to copy items into a note before each Next click (it forgets, clicks individual
         # items, hits `back`, and contaminates the count). For these tasks the engine itself captures
@@ -1197,6 +1352,7 @@ class WebVoyagerAgent:
         recompleted = False  # the multi-part-answer completeness re-ask fires at most once
         answer_checks = 0  # in-loop answer-verify+correct passes used (cap: MAX_ANSWER_CHECKS)
         parse_fails = 0  # consecutive steps the model returned no parseable action (cap: MAX_PARSE_FAILS)
+        giveup_retries = 0  # L2: give-up shrugs routed to a scroll/re-search retry (cap: MAX_GIVEUP_RETRIES)
         # GLOBAL WANDER CAP: the per-subgoal stuck counter RESETS on every subgoal advance / re-plan,
         # so a task that keeps making shallow PROGRESS (page flips) and re-planning never trips it and
         # runs the whole step budget — the "busy but lost" maxout that ate 61% of total spend for ZERO
@@ -1206,6 +1362,7 @@ class WebVoyagerAgent:
         # max_steps. This cuts $/task hard and never fabricates (read-back is judge-verified).
         churn = 0
         item_text = _search_text(task)
+        self._item_text = item_text  # L3: the task's target item, confirmed present in the cart re-read
 
         _init_t0 = time.monotonic()
         out, shot = await self._observe_ready(start_url)
@@ -1342,13 +1499,20 @@ class WebVoyagerAgent:
                 page_text=(out.get("text") or ""),
                 notes=self._notes,
             )
-            # two-tier ladder: the cheap ACT tier (a capable VLM, split out of the old blanket
-            # caller="agent") drives routine steps; escalate to SMART only when stuck (no progress
-            # last step, or an action was forbidden by the anti-loop guard). The per-step actor is
-            # labeled caller="actor" so plan/replan/judge (caller="agent") keep SMART to themselves
-            # and the cost ledger can see the actor's tier-mix.
-            escalate = (sub_stuck >= 2) or (forbid is not None)
-            tier = SMART if escalate else ACT
+            # GRADED cost ladder (L4 — the frontier≈45% fix). The old rule escalated on `sub_stuck>=2
+            # OR forbid is not None`, and `forbid` is set on ANY single NO_CHANGE/blocked/in-place step
+            # and only cleared on progress — so ONE no-progress step forced EVERY later step onto SMART
+            # until progress (the ~45% cost bleed). Now the ladder is graded by stuck-DEPTH:
+            #   • a LONE forbid / one no-progress step stays on ACT — the stuck-note + region crop break
+            #     most single loops far cheaper than a model bump;
+            #   • a GENUINE stall (sub_stuck>=2) escalates to the mid-tier SMART (first rescue);
+            #   • a DEEP stall (sub_stuck>=3) that SMART already failed spends ONE capped-frontier
+            #     ESCALATE (hard-capped 2/task in the gateway; degrades to SMART past the cap and, on
+            #     the free-Gemini env, ESCALATE routes to the SMART model anyway — no paid bleed).
+            # The per-step actor is caller="actor" so plan/replan/judge (caller="agent") keep SMART to
+            # themselves and the cost ledger can see the actor's true tier-mix. Decision extracted to a
+            # pure function so it is unit-testable in isolation (test_graded_ladder.py).
+            tier = _ladder_tier(sub_stuck)
             # DOM-FIRST: the VISIBLE ELEMENTS list (in the prompt) is the primary input every step.
             # Attach the screenshot only when the DOM alone is ambiguous (sparse page / visual task /
             # stuck-recovery). This is the single biggest cost+latency win — vision tokens are ~10×
@@ -1502,6 +1666,27 @@ class WebVoyagerAgent:
                     reflection = ("That was a PLAN, not a result. Do NOT answer with your intentions. "
                                   "Perform the next concrete action toward the task now.")
                     continue
+                # GIVE-UP RECOVERY (L2): the cheap actor often "answers" with a shrug — "no products
+                # found", "the page has no ... information" — when the results simply haven't scrolled/
+                # loaded into view yet, or the search never actually submitted. A shrug is NOT an answer:
+                # scroll to reveal more and re-search ONCE before ever committing it. Bounded by
+                # MAX_GIVEUP_RETRIES so a genuine no-answer still hands off honestly (below / at handoff).
+                if ans and _looks_like_no_answer(ans) and giveup_retries < MAX_GIVEUP_RETRIES:
+                    giveup_retries += 1
+                    history.append(f"{step}: give-up answer ({ans[:48]!r}) -> scroll/re-search retry "
+                                   f"({giveup_retries}/{MAX_GIVEUP_RETRIES})")
+                    try:
+                        await self._act(_clean_action({"action": "scroll", "dir": "down"}, item_text))
+                        out, shot = await self._observe_ready()
+                        self._cur_shot = shot
+                    except Exception:
+                        pass
+                    reflection = ("You reported nothing was found, but do NOT give up yet: the results "
+                                  "may be further down the page, or the search may not have submitted. "
+                                  "SCROLL through the page; if there is a search box, RE-ENTER the query "
+                                  "and submit (press Enter). Only answer that nothing was found AFTER you "
+                                  "have actually looked and re-searched.")
+                    continue
                 if not ans:
                     # the model chose action=answer but produced NO text (truncation / dropped field) —
                     # do not bail to a blank on a readable page; re-ask once for JUST the answer text
@@ -1555,6 +1740,9 @@ class WebVoyagerAgent:
                                           + verdict["why"][:200] + " Do NOT answer from memory. Navigate/scroll "
                                           "to the exact place on the page that states it, read it, THEN answer.")
                             continue
+                # L1: bind the DOM-committed <select> option into a selection-task answer so the
+                # verified choice (not the model's echo) is what completes the task.
+                ans = self._bind_committed_select(task, ans)
                 # S5: if this run performed an irreversible mutation, gate the completion on a stable
                 # repeated read-back of the artifact (annotate-only, fail-open). Otherwise complete now.
                 if getattr(self, "_did_mutation", False):
@@ -1766,6 +1954,13 @@ class WebVoyagerAgent:
             # actually clicking" falsifiable on the recording.
             _ar = act_res if isinstance(act_res, dict) else {}
             _aout = (_ar.get("output") or {}) if isinstance(_ar.get("output"), dict) else {}
+            # L1: a DOM select returns the committed option text ({ok:true,"selected":"<text>"} per the
+            # extension contract). Capture it so the confirmed choice — not the model's echo — can be
+            # bound into a selection-task answer at completion.
+            if action.get("action") == "select":
+                _sel = (_aout.get("selected") or action.get("text") or action.get("value") or "")
+                if _sel:
+                    self._last_select_text = str(_sel).strip()[:80]
             _xy = (f" @({_aout['x']},{_aout['y']})" if ("x" in _aout and "y" in _aout) else "")
             _trusted = (" cdp=trusted" if _aout.get("cdp_ready") else (" cdp=fallback" if _aout.get("cdp_ready") is False else ""))
             history.append(f"{step}: {action.get('action')} idx={action.get('index')} "
@@ -1776,7 +1971,8 @@ class WebVoyagerAgent:
                 "x": _aout.get("x"), "y": _aout.get("y"),
                 "cdp": ("trusted" if _aout.get("cdp_ready") else ("fallback" if _aout.get("cdp_ready") is False else None)),
                 "progress": progress, "url": out.get("url"), "title": out.get("title"),
-                "tier": ("smart" if tier == SMART else "cheap"), "vision": bool(img),
+                "tier": ("escalate" if tier == ESCALATE else "smart" if tier == SMART else "cheap"),
+                "vision": bool(img),
             })
 
             # RECORD for the recipe cache: only actions that actually MOVED the page forward become
@@ -1795,6 +1991,10 @@ class WebVoyagerAgent:
                 _mlabel = (label or "") + " " + (_tgt_name or "")
                 if action.get("action") == "submit" or MUTATION_CTRL.search(_mlabel or ""):
                     self._did_mutation = True
+                    # L3: an ADD-TO-CART specifically is proven by re-reading the CART page, not this
+                    # inventory page — flag it so completion navigates there for the item read-back.
+                    if CART_ADD_CTRL.search(_mlabel or ""):
+                        self._mut_is_cart = True
 
             # RECORD the in-place-mutation lock EARLY — before the subgoal_done branch can `continue`
             # past it. The model often marks the sort subgoal done on the very click that sorted; if we
@@ -1862,8 +2062,11 @@ class WebVoyagerAgent:
                               "re-sorts/undoes it). OBSERVE the updated page and read the exact row/"
                               "result the task asks for, then action=answer.")
 
-            # per-subgoal budget / stuck escalation -> fail subgoal -> alternative or handoff
-            if (sub_stuck >= 3 or sub_steps >= self.per_subgoal) and state.current:
+            # per-subgoal budget / stuck escalation -> fail subgoal -> alternative or handoff.
+            # Wall raised 3->4 (L4): at sub_stuck==3 the graded ladder fires ONE capped-frontier
+            # ESCALATE rescue on the NEXT step; abandoning the subgoal at 3 would reset sub_stuck to 0
+            # first and that rescue would never run. Let the deep-stall rung fire, THEN abandon at 4.
+            if (sub_stuck >= 4 or sub_steps >= self.per_subgoal) and state.current:
                 state.fail_current()
                 history.append(f"{step}: subgoal failed ('{subgoal_text[:40]}') -> moving on")
                 committed, sub_steps, sub_stuck, forbid, reflection = None, 0, 0, None, ""
@@ -1934,7 +2137,14 @@ async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] 
     # otherwise-correct verdict to false (which then hands a correct answer to a human). When we already
     # hold strong text evidence, drop the image so the same evidence yields the same verdict every run
     # (also cheaper). Keep the image ONLY when there is no text/state/corpus to grade against.
-    if has_text or has_state or has_corpus:
+    # L1 EXCEPTION — action / visual-STATE claims: when the answer is about interactive STATE that the
+    # read-back TEXT is blind to (a native <select>'s chosen option, a checkbox/disclosure toggle, a
+    # per-item cart toggle — none of which live in innerText), the SCREENSHOT is the grounding the judge
+    # needs, so KEEP it. Gated to genuine widget-state tokens (options=/selected/checked/in_cart) and
+    # only when there is no multi-page corpus, so table/count/text verdicts stay deterministic as before.
+    _ui_state_claim = has_state and not has_corpus and any(
+        tok in state_text for tok in ("options=", "selected", "checked", "in_cart"))
+    if (has_text or has_state or has_corpus) and not _ui_state_claim:
         image = None
     has_shot = bool(image)
     evidence = (

@@ -34,7 +34,13 @@ GROUND = "ground"
 ESCALATE = "escalate"
 # Frontier tiers are gated to trusted callers (SMART_CALLERS) exactly like SMART always was.
 FRONTIER_TIERS = frozenset({SMART, ESCALATE})
-COST = {CHEAP: 0.0005, ACT: 0.001, GROUND: 0.001, SMART: 0.02, ESCALATE: 0.05}
+# Real BLENDED per-call USD estimates (in+out, ~one screenshot + text at the locked cost ladder),
+# so est_cost_usd / frontier_pct reflect ACTUAL spend instead of round-number fiction: the cheap
+# web-agent tiers (CHEAP/ACT/GROUND, a Qwen-VL-8B-class model) ~$0.0004/call; the mid-tier planner/
+# verifier + first rescue (SMART, a GLM-4.6V-class model) ~$0.003; the capped frontier rescue
+# (ESCALATE, Opus, hard-capped 2/task) ~$0.022. Routing NEVER reads these numbers — the tier ladder
+# is by stuck-depth (L4) — this dict only makes the cost LEDGER honest.
+COST = {CHEAP: 0.0004, ACT: 0.0004, GROUND: 0.0004, SMART: 0.003, ESCALATE: 0.022}
 
 PROVIDER_STUB = "stub"
 PROVIDER_OPENROUTER = "openrouter"
@@ -126,10 +132,14 @@ class ModelGateway:
         # their env is unset, so behavior is unchanged until a dedicated model is configured.
         self.act_model = act_model or os.environ.get("ANTICIPY_MODEL_ACT") or self.cheap_model
         self.ground_model = ground_model or os.environ.get("ANTICIPY_MODEL_GROUND") or self.cheap_model
-        # ESCALATE is the rare frontier rescue. Default names claude-opus-4-8; if that model is not
-        # reachable the OpenRouter path degrades to "" and the actor's existing retry owns it.
+        # ESCALATE is the rare frontier rescue. SAFE DEFAULT: when neither the constructor arg nor
+        # ANTICIPY_MODEL_ESCALATE is set, it falls back to the SMART model — NOT a paid frontier — so
+        # the graded ladder's deep-stall rung stays on whatever ladder the env already runs (on the
+        # live free-Gemini env that is Flash, ~$0) and never silently flips routine traffic to Opus.
+        # A paid frontier fires ONLY when explicitly configured (ANTICIPY_MODEL_ESCALATE=
+        # anthropic/claude-opus-4-8, per .env.local §2 of the cost-lock recipe).
         self.escalate_model = (escalate_model or os.environ.get("ANTICIPY_MODEL_ESCALATE")
-                               or "anthropic/claude-opus-4-8")
+                               or self.smart_model)
         # Hard per-task cap on frontier ESCALATE calls (uncapped escalation is the one thing that
         # silently reinflates cost toward Opus-solo). Beyond the cap, ESCALATE degrades to SMART.
         # reset_escalations() re-arms the budget at each task boundary (the actor calls it in run()).
