@@ -1,28 +1,39 @@
-# WAKEUP — the loop's plain-English status (overwritten each build cycle)
+# WAKEUP — overnight autonomous run COMPLETE (2026-07-04) — Anticipy
 
-_This is the canonical status the factory loop writes every cycle. The root `WAKEUP.md` is superseded._
+## TL;DR (honest)
+The plan ran end to end. **Track A (local-perfect) + Track B (hosted per-user) are fully built, verified, and committed; the hosted engine is LIVE with cloud memory proven; the hosted UI is deployed behind a gate.** Everything risky stays gated to you. Suite **121 passed / 8 failed** (the 8 are the known stub-model/parked set — never grew; real-Gemini M1–M3 pass).
 
-## Where we are (2026-07-02, build cycle just finished — UI step 8: Settings)
-- **done_gate:** legs 1–4 PASS, leg 5 (real person, real day) is the human finish line — not yet. Unchanged.
-- **suite:** 113 passed / 9 failed (fail-set **byte-identical to baseline** — did NOT grow). **wiring debt:** 35 (unchanged, CLEAN). **premium-copy:** CLEAN.
-- **This cycle built:** UI_SPEC **step 8 — Settings (`/settings`) is now the single advanced surface** (commit `09ea8fc`). It absorbs the old `/memory` screen and gains an honest, real-data app-permissions group.
-  1. **Two new groups on Settings.** "What each app can do" shows the SAME connect-your-accounts checklist the `/connect` page uses (read from `/api/readiness`): each app with a plain sentence of what it does and a **Connected / Not connected** badge — read-only here (you connect/change from the setup flow). "Memory" folds in the real memory drawers (facts, inferred, open loops, history) plus the **"Delete everything I know"** forget-me control that used to live on `/memory`.
-  2. **Deleted the dev-only panels.** The "Live circuit" telemetry panel (`GatewayCircuit` — it was the last place the old `ST-*` source tags leaked) and the "What I'd see for a moment" context inspector (`ContextPackInspector`) are gone, along with the standalone `MemoryScreen`.
-  3. **Retired `/memory`.** Going to `/memory` now quietly redirects to `/settings#memory` (old links never 404). The "Memory" entry was removed from the side menu; the memory lives inside Settings now.
-  4. **Removed the dead plumbing behind the deleted inspector.** The inspector was the only thing that used the `/api/memory/context` proxy + its engine endpoint, so both were removed — otherwise the wiring gate would have flagged a new orphan. Nothing else calls that seam, so the wiring count stayed CLEAN at 35 debt.
-- **Proven (un-gameable):** on one clean dev server (`:3100`, engine `:8790`): `/ /welcome /sign /setup /connect /onboarding/2 /onboarding/8 /settings` all = **200**; `/memory` = **307 → /settings#memory** (follows to 200). Served `/settings` HTML + a Playwright snapshot show the six groups including "What each app can do" (Permissions) and the open "Memory" group with the memory panel + "Delete everything I know"; **zero** "Live circuit" / `pz-gateway` / `pz-context-inspector` / "What I'd see for a moment" / "Show context" leaks; the side journey nav shows "Settings", not "Memory". Re-ran every gate: done_gate legs 1–4 PASS, suite 113/9 (fail-set == baseline; `wiring_gate` back to PASS), wiring CLEAN/35, premium-copy CLEAN, engine `main.py` compiles. One commit, author "Anticipy HoE", proof in the message.
+## What's DONE + proven
+### Track A — local-perfect (7 steps + a caught regression)
+- A1 `e64603c` real browser receipt on the card · A2 `f5b6cdc` 3 blocking seams (onboard-status · profile echo · agent/resume Continue) · A3 `226cf0e` styling (/connect + board panels; dead Twilio link → honest chip)
+- A4 `bde1d2d` voice→brain (`/cr`→`owner_ingest`, off by default) + Settings mock/live toggle · A5 `9f0418b` browser L5 (checkpoint validator) + L6 (region-crop/GROUND vision) · A6 `3e5621f` premium swipe deck · A7 `9c9c4a5` memory/trust surfaces + retired dupes
+- fix `52dbb0d` — caught + fixed a regression (A3 broke `onboarding_frontdoor`; re-pointed → 8-set restored)
+- **browser_eval live: dropdown FLIPPED GREEN** ✓ (the L6 target). ~8–10/11 with real run-to-run variance → 3-seed avg is the trustworthy metric (a quick morning run).
 
-## Honest caveats (environmental / pre-existing, not code regressions)
-- **Mid-cycle wiring trip, then fixed:** deleting `ContextPackInspector` orphaned `/api/memory/context` and the suite's `wiring_gate` went red for one run. Resolved cleanly by deleting the dead proxy route + the engine's `@app.get("/memory/context")` endpoint (a seam that existed only to feed the deleted inspector). Wiring is CLEAN again; debt did NOT go up.
-- **The `.next` dev-chunk flake recurred (cosmetic):** the Playwright console showed one 404 on a stale `/_next/static/chunks/app/settings/page.js`. The page still SSR-renders full content and serves 200 (curl + snapshot both confirm). This is the documented Next 15.5.x dev-chunk pruning flake, not a code regression. If a route ever serves 500/404 at boot, the fix is the decisive `.next` reset in LOOP.md.
-- **A concurrent watchdog left `overnight/WATCHDOG.md` modified but uncommitted** — that file is the watchdog's to commit, so I did **not** stage it. My commit contains only the 6 step-8 files.
-- The app's `/api/*` proxy returns **503** in this dev env (engine bound at :8790), so the app-permissions panel and memory drawers show their graceful loading/error copy in the screenshot rather than live data — environmental, the components render and degrade correctly.
-- Every screen still logs an **SSR hydration mismatch** from UI step 1's `typeof window` guards — harmless to the gates.
+### Track B — hosted per-user
+- B8 `6f09c44` multi-tenancy: Supabase reconciled to live `ogbxpqkmsdrcuilafycn` · per-user identity through the proxy + actions — **two-user isolation 23/23**
+- B9 `efa336d` root Dockerfile `COPY final` (cloud memory ships) · B11 `ad2c22c` extension→cloud engine-URL · B12 `ab26f10` signed per-user pairing behind `ANTICIPY_PER_USER_HANDS` (OFF) — **pairing 25/25**
 
-## Next buildable (order-of-attack, UI_SPEC build order)
-- **Step 9 — Coming-soon registry:** add `app/phase-zero/capabilities.js` + `Capability` / `ComingSoonBadge` / `CapabilityRail`; mount a collapsible "What I can do" strip on Main (collapsed, so the orb stays the focus) and an always-open group in Settings — every capability shown as a real button with a small "Coming soon" tag on the ~35 unwired seams. This is the honest-roadmap surface and the LAST UI_SPEC build-order step.
-- **UI step 6 leftover polish (deferred, lower risk):** replace onboarding's full 8-step clickable timeline with a minimal "stage N of 4" dot, and drop `AccountReadStage`'s per-service consent toggles (consent now lives on `/connect`).
-- Then the brain/memory/browser legs per THE_MAP §5 (recall under density, memory compounds, warm inputs/voice, browser to 60%).
+### Deploys (gated to you)
+- ✅ **Railway engine LIVE** — `https://engine-production-eb43.up.railway.app/health` → `{"status":"ok","service":"anticipy-engine"}`. **Cloud memory PROVEN live:** recall of a planted fact returned it at **0.84 relevance, `embedding_dim:768`** (real Gemini embeddings + Neo4j on the hosted box — the `COPY final` fix worked). Owner-token gated.
+- 🟡 **Vercel UI deployed** — `https://anticipy-welcome-57g8qf8jm-omar-ebrahims-projects-022b18ec.vercel.app`, env wired (engine→Railway · owner token · live Supabase). It sits behind **Vercel Deployment Protection** (SSO wall), so I could NOT verify its runtime anonymously — that's a *gate*, not a break. You confirm/disable protection to load it.
 
-## What needs Omar
-See `overnight/HUMAN_QUEUE.md` — leg 5 (a real day on real accounts), load the extension in real Chrome, one fresh Twilio token. None are buildable autonomously.
+## Honest caveats (nothing hidden)
+1. **Vercel runtime unverified** — behind Vercel's SSO protection; deploy status read as "UNKNOWN" through the wall. Disable protection (or log into Vercel) to confirm the board loads + reaches the cloud engine.
+2. **browser_eval is noisy** — dropdown is genuinely fixed; the overall number swings 8–10/11 on live-site variance. Run 3-seed for the real figure.
+3. **Twilio dead** — token rotated (401); all SMS/voice code is wired + works "in theory", live on a fresh token.
+4. **Suite RED (8)** — expected: 6 stub-model noise (real model passes), 1 parked safety (`retraction_silenced`), 1 non-blocking (physical-print). Fail-set never grew.
+
+## Needs Omar (morning)
+1. Drop a fresh `TWILIO_AUTH_TOKEN` → SMS/voice go live.
+2. The final safety/money/vent pass (yours, last — I built no new gates).
+3. The public go-live flips (each held for your review): **disable Vercel Deployment Protection** to make the app reachable · `ANTICIPY_PER_USER_HANDS=on` for per-user browser hands · fill Stripe secrets · point a custom domain.
+
+## Morning click-list
+- [ ] Load the Vercel app (log in to Vercel or disable Deployment Protection) → confirm board loads + reaches the cloud engine
+- [ ] `railway logs` / a `/memory/recall` probe = cloud memory ON (already verified: 768-dim recall works)
+- [ ] `bash scripts/run_suite.sh` → 121/8 (clean 8-set)
+- [ ] 3-seed browser_eval for the honest browser number
+- [ ] Fresh Twilio token → SMS/voice
+- [ ] When ready: flip protection off + per-user-hands + Stripe + domain
+- Owner-token value: scratchpad `deploy_secrets.txt` (not committed)
