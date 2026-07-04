@@ -11,8 +11,9 @@
 // real place they have to act — they do not perform any login, send, or payment.
 //
 // Copy note: the user never sees a vendor/implementation name (ANTICIPY_UX_SPEC
-// §4.8). The links still point at the real provider consoles; only the *words* are
-// human ("the place this connects"), never the brand.
+// §4.8). Connect actions either launch the provider's own consent in-app (calendar &
+// email) or show an honest "coming soon" chip — never a dead deep-link into a vendor
+// console. Only the *words* are human ("the place this connects"), never the brand.
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -43,12 +44,16 @@ const CONNECT_LINKS = {
     todo: "Connect this and I can add events to your calendar and draft emails for you.",
   },
   twilio: {
-    href: "https://www.twilio.com/console",
+    href: null,
+    // Text & calls isn't user-connectable in-app yet (it's the comms channel, wired
+    // on our side), so we show an honest "coming soon" chip instead of a dead deep-link
+    // to a vendor console the user has no business visiting.
+    soon: true,
     title: "Text & calls",
-    label: "Set up text & calls",
-    external: true,
+    label: "Coming soon",
+    external: false,
     live: "Connected. I can text you and call you back to close the loop.",
-    todo: "Set this up and I can text you and call you back to close the loop.",
+    todo: "Text and calls are on the way — soon I'll be able to text you and call you back to close the loop.",
   },
   browser_bridge: {
     href: null,
@@ -261,27 +266,23 @@ function CapabilityRow({ cap, oauthState, onConnect, onRecheck }) {
 
       {!live && link.oauth ? (
         <OauthConnect link={link} oauthState={oauthState} onConnect={onConnect} onRecheck={onRecheck} />
-      ) : !live &&
-        (link.href ? (
+      ) : !live && link.soon ? (
+        <span className="soon-chip" role="note">{link.label || "Coming soon"}</span>
+      ) : !live ? (
+        link.href ? (
           <a
             href={link.href}
             target={link.external ? "_blank" : undefined}
             rel={link.external ? "noopener noreferrer" : undefined}
             className="secondary"
-            style={{
-              alignSelf: "flex-start",
-              display: "inline-flex",
-              alignItems: "center",
-              textDecoration: "none",
-              width: "fit-content",
-              marginTop: 4,
-            }}
+            style={{ alignSelf: "flex-start", textDecoration: "none", width: "fit-content", marginTop: 4 }}
           >
             {link.label}{link.external ? <span aria-hidden style={{ marginLeft: 6, opacity: 0.7 }}>↗</span> : null}
           </a>
         ) : (
           <span className="row-source" style={{ marginTop: 4 }}>{link.label}</span>
-        ))}
+        )
+      ) : null}
     </li>
   );
 }
@@ -562,19 +563,7 @@ export default function ConnectPage() {
           <a
             href="/onboarding/2"
             className="primary"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              textDecoration: "none",
-              width: "fit-content",
-              padding: "14px 32px",
-              borderRadius: "var(--radius, 16px)",
-              background: "var(--ink, #141311)",
-              color: "var(--white, #ffffff)",
-              fontWeight: 600,
-              letterSpacing: "0.01em",
-            }}
+            style={{ textDecoration: "none", width: "fit-content" }}
           >
             Continue
           </a>

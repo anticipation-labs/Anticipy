@@ -3095,3 +3095,252 @@ body:not(.pz-debug) .pz-only-debug { display: none !important; }
 .pz-oneinput-file { display: none; }
 .pz-oneinput-send { flex: 0 0 auto; align-self: center; white-space: nowrap; }
 .pz-oneinput-filenote { text-align: center; }
+
+/* ============================================================
+   Board action panels — WebActionPanel + BoardActionsPanel (A3)
+   These sit in the collapsed board (a stretch flex column), so
+   they mirror .pz-oneinput: a 720px card that carries the pz
+   surface/line language, with inputs and buttons that match the
+   .pz-button pill. Receipts pick up ok/warn colour from the
+   shared pz palette.
+   ============================================================ */
+.pz-webaction,
+.pz-board-actions {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+.pz-webaction {
+  padding: 20px;
+  border: 1px solid var(--pz-line, rgba(248, 244, 236, 0.14));
+  border-radius: 18px;
+  background: var(--pz-surface, rgba(245, 242, 235, 0.08));
+  box-shadow: 0 18px 80px rgba(0, 0, 0, 0.24);
+}
+.pz-webaction-head { display: grid; gap: 4px; }
+.pz-webaction-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 20px;
+  color: var(--pz-cream, #f8f4ec);
+}
+.pz-webaction-sub {
+  margin: 0;
+  color: var(--pz-cream-soft, rgba(248, 244, 236, 0.68));
+  font-size: 14px;
+  line-height: 1.55;
+}
+.pz-webaction-row { display: flex; align-items: center; gap: 10px; }
+.pz-webaction-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  background: var(--pz-surface-strong, rgba(245, 242, 235, 0.13));
+  border: 1px solid var(--pz-line, rgba(248, 244, 236, 0.14));
+  border-radius: 12px;
+  color: var(--pz-cream, #f8f4ec);
+  font: inherit;
+  outline: none;
+  transition: border-color 160ms ease;
+}
+.pz-webaction-input::placeholder { color: var(--pz-muted, rgba(248, 244, 236, 0.48)); }
+.pz-webaction-input:focus { border-color: var(--pz-line-strong, rgba(248, 244, 236, 0.24)); }
+.pz-webaction-go { flex: 0 0 auto; white-space: nowrap; padding-inline: 20px; }
+.pz-board-actions-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.pz-note-ok { color: var(--pz-good, #53c391); }
+.pz-note-warn { color: var(--pz-red, #d65b4a); }
+
+@media (max-width: 600px) {
+  .pz-webaction-row { flex-wrap: wrap; }
+  .pz-webaction-input { flex: 1 1 100%; }
+  .pz-webaction-go { width: 100%; }
+}
+
+/* ============================================================
+   Connect flow — app/connect (A3)
+   The guided "give me a way to help" step sits mid-onboarding,
+   between the pz-* screens, so it wears the same dark, cream-on-
+   charcoal, gold-accent language. These class names are generic
+   but used ONLY on the connect page, so every rule is scoped
+   under .shell — they never leak into the pz board or the light
+   marketing pages.
+   ============================================================ */
+.shell {
+  min-height: 100vh;
+  color: var(--pz-cream);
+  font-family: var(--sans);
+  background:
+    radial-gradient(circle at 50% 16%, rgba(215, 179, 106, 0.12), transparent 28rem),
+    radial-gradient(circle at 72% 34%, rgba(255, 255, 255, 0.05), transparent 22rem),
+    linear-gradient(180deg, #050505 0%, var(--pz-bg) 48%, #0c0b09 100%);
+  padding: clamp(28px, 6vw, 72px) 0 96px;
+}
+.shell .column {
+  width: min(720px, calc(100vw - 32px));
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.shell .settle { animation: pzRise 420ms ease-out both; }
+
+.shell .surface-head { display: flex; flex-direction: column; gap: 12px; }
+.shell .surface-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(34px, 5vw, 54px);
+  line-height: 1.02;
+  color: var(--pz-cream);
+}
+.shell .surface-sub {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--pz-cream-soft);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.shell .glance { margin: 24px 0 0; color: var(--pz-cream-soft); font-size: 15px; }
+.shell .glance strong { color: var(--pz-cream); }
+
+/* the "still checking" orb */
+.shell .orb-wrap { display: flex; align-items: center; gap: 14px; margin-top: 32px; color: var(--pz-muted); }
+.shell .orb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--pz-gold), rgba(215, 179, 106, 0.22));
+  box-shadow: 0 0 22px rgba(215, 179, 106, 0.42);
+  animation: connectPulse 1.6s ease-in-out infinite;
+}
+.shell .orb-word { margin: 0; font-size: 14px; }
+@keyframes connectPulse {
+  0%, 100% { transform: scale(1); opacity: 0.82; }
+  50% { transform: scale(1.16); opacity: 1; }
+}
+
+/* card sections (error notice, "get to know me") */
+.shell .block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 24px;
+  border: 1px solid var(--pz-line);
+  border-radius: 8px;
+  background: var(--pz-surface);
+  box-shadow: 0 18px 80px rgba(0, 0, 0, 0.24);
+}
+.shell .block-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(22px, 3vw, 28px);
+  color: var(--pz-cream);
+}
+.shell .block-note { margin: 0; color: var(--pz-muted); font-size: 13px; line-height: 1.55; }
+.shell .error { margin: 0; color: var(--pz-red); font-size: 14px; line-height: 1.55; }
+
+/* the capability checklist */
+.shell .rows {
+  list-style: none;
+  border: 1px solid var(--pz-line);
+  border-radius: 8px;
+  background: var(--pz-surface);
+  box-shadow: 0 18px 80px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+.shell .row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--pz-line);
+}
+.shell .rows > .row:first-child { border-top: 0; }
+.shell .row-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.shell .row-title { margin: 0; font-size: 17px; font-weight: 600; color: var(--pz-cream); }
+.shell .row-why { margin: 0; color: var(--pz-cream-soft); font-size: 14px; line-height: 1.55; }
+.shell .row-source { color: var(--pz-muted); font-size: 13px; }
+.shell .row-state { display: inline-flex; align-items: center; gap: 8px; color: var(--pz-muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.shell .state-dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(248, 244, 236, 0.28); }
+.shell .state-dot.handled { background: var(--pz-good); box-shadow: 0 0 14px rgba(83, 195, 145, 0.4); }
+.shell .state-dot.waiting { background: var(--pz-gold); box-shadow: 0 0 14px rgba(215, 179, 106, 0.4); }
+
+/* oauth account sub-rows */
+.shell .stack { display: flex; flex-direction: column; }
+.shell .control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+
+/* buttons + links (shared pill language with .pz-button) */
+.shell .primary,
+.shell .secondary,
+.shell .quiet-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+.shell .primary {
+  border: 1px solid var(--pz-cream);
+  background: var(--pz-cream);
+  color: var(--pz-bg);
+}
+.shell .secondary {
+  border: 1px solid var(--pz-line);
+  background: rgba(248, 244, 236, 0.1);
+  color: var(--pz-cream);
+}
+.shell .quiet-button {
+  min-height: 0;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--pz-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.shell .primary:hover,
+.shell .secondary:hover { transform: translateY(-1px); }
+.shell .secondary:hover { background: rgba(248, 244, 236, 0.15); }
+.shell .quiet-button:hover { color: var(--pz-cream); }
+.shell .primary:disabled,
+.shell .secondary:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+/* honest "coming soon" chip — replaces the dead vendor-console link */
+.shell .soon-chip {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 5px 12px;
+  border: 1px solid var(--pz-line-strong);
+  border-radius: 999px;
+  background: rgba(215, 179, 106, 0.12);
+  color: var(--pz-gold);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+/* "get to know me" recap */
+.shell .recap {
+  width: 100%;
+  padding: 18px 20px;
+  border: 1px solid var(--pz-line);
+  border-radius: 8px;
+  background: var(--pz-surface-strong);
+}
+.shell .recap-head { color: var(--pz-cream); font-size: 14px; }
+.shell .recap-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.shell .recap-fact { margin: 0; }
+.shell .recap-value { margin: 0; color: var(--pz-cream-soft); font-size: 14px; line-height: 1.5; }
+.shell .recap-empty { margin: 0; color: var(--pz-muted); font-size: 14px; font-style: italic; }
