@@ -52,6 +52,7 @@ __all__ = [
     "readback_verify",
     "classify_contingency",
     "next_recovery",
+    "captcha_recovery",
     "confirm_irreversible",
     "MUTATION_CTRL",
     "TRANSIENT_MARKERS",
@@ -395,6 +396,12 @@ class LadderState:
     nav_blocks: int = 0
     max_nav_blocks: int = 3
     steps_exhausted: bool = False     # step/$/wall-clock ceiling reached
+    # S6 — captcha auto-solve budget. When a solver (CapSolver/2Captcha) is configured,
+    # a captcha wall is auto-solved first (L0) instead of handed off; only after
+    # ``max_captcha_solves`` failed solves does it fall through to the L4 human gate.
+    captcha_solver_available: bool = False
+    captcha_solves_used: int = 0
+    max_captcha_solves: int = 2
     frontier: FrontierBudget = field(default_factory=FrontierBudget)
 
     def on_progress(self) -> None:
@@ -403,6 +410,11 @@ class LadderState:
 
     def on_stuck(self) -> None:
         self.consecutive_stuck += 1
+
+    def on_captcha_solve_fail(self) -> None:
+        """A solve attempt didn't clear the wall — burn one of the solve budget so the
+        ladder can eventually fall through to L4 handoff instead of looping forever."""
+        self.captcha_solves_used += 1
 
 
 @dataclass(frozen=True)
@@ -430,6 +442,7 @@ def next_recovery(contingency: Contingency, state: LadderState) -> RecoveryDecis
 
     Order of resolution:
       * hard ceiling (steps/$/wall-clock) with nothing left        -> L5 honest abandon
+      * a captcha wall + a solver configured + solve budget left   -> L0 auto-solve (S6)
       * an unresolved wall (captcha/login/mfa)                      -> L4 human gate
       * a transient (429/spinner/stale)                            -> L1 tactical retry
       * else escalate by how stuck we are:
@@ -442,6 +455,19 @@ def next_recovery(contingency: Contingency, state: LadderState) -> RecoveryDecis
     if state.steps_exhausted:
         return RecoveryDecision(Ladder.L5_ABANDON, "abandon",
                                 "budget/step ceiling reached — best-effort read-back, never fake success")
+
+    # L0 (S6) — CAPTCHA auto-solve (build-plan directive-delta #3): when a solver is
+    # configured and solve budget remains, clear the captcha deterministically (0 LLM, no
+    # frontier spend) BEFORE the human gate. On solve-fail the loop calls
+    # ``state.on_captcha_solve_fail()`` and re-enters, eventually falling through to L4.
+    # Default (no solver configured) preserves the design-of-record pause->text (§4.4 row 5).
+    if (contingency == Contingency.CAPTCHA
+            and state.captcha_solver_available
+            and state.captcha_solves_used < state.max_captcha_solves):
+        return RecoveryDecision(
+            Ladder.L0_REROUTE, "solve_captcha",
+            "captcha wall — auto-solve (CapSolver/2Captcha), inject token, verify cleared, "
+            "continue; handoff only if solve fails")
 
     # L4 — a wall we cannot pass here: pause -> text user -> resume.
     if contingency in _WALL:
@@ -476,6 +502,19 @@ def next_recovery(contingency: Contingency, state: LadderState) -> RecoveryDecis
                                 "L2/L3 exhausted — pause and text the user with the specific artifact")
     return RecoveryDecision(Ladder.L5_ABANDON, "abandon",
                             "no remaining path — honest read-back, never fake success")
+
+
+def captcha_recovery(page: Observation, solver: Any):
+    """Executor for the L0 ``solve_captcha`` remedy — wires ``hands.captcha_solver`` into
+    the ladder (S6). Detect the challenge on the reached page, auto-solve it, and return a
+    ``CaptchaOutcome`` carrying the token + the JS the extension injects to place it. A
+    non-solved outcome (no captcha / no solver / solve failed) is the caller's signal to call
+    ``LadderState.on_captcha_solve_fail()`` and let the ladder fall to L4 handoff — never to
+    fake progress. The import is lazy so this reliability cell stays dependency-light at
+    import time (it must never pull ``requests`` into engine boot).
+    """
+    from ..hands.captcha_solver import resolve_captcha
+    return resolve_captcha(page, solver)
 
 
 # ── Irreversible-artifact confirmation — the repeated-read proof (§4.2 tail) ──

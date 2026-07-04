@@ -19,6 +19,7 @@ from anticipy_engine.agent.guarded_step import (
     LadderState,
     LoopDetector,
     Progress,
+    captcha_recovery,
     classify_contingency,
     confirm_irreversible,
     next_recovery,
@@ -203,6 +204,47 @@ async def test_confirm_irreversible_wires_proof():
     print("PASS confirm_irreversible: confirm_stable_artifact enforces repeated read-back")
 
 
+# ── S6 §4.4 row 5 amended: CAPTCHA auto-solve wired into the ladder ───────────
+class _FakeSolver:
+    """Minimal captcha solver stand-in for the bridge test."""
+
+    def __init__(self, token="TOK"):
+        self.available = True
+        self._token = token
+
+    def solve(self, challenge):
+        from anticipy_engine.hands.captcha_solver import SolveResult
+        if self._token:
+            return SolveResult(True, token=self._token, provider="fake", kind=challenge.kind)
+        return SolveResult(False, kind=challenge.kind, error="fake fail")
+
+
+def test_captcha_autosolve_wiring():
+    # Default (no solver configured) preserves the design-of-record pause->text.
+    st = LadderState()
+    assert next_recovery(Contingency.CAPTCHA, st).level is Ladder.L4_HANDOFF
+
+    # Solver configured + budget remaining -> L0 auto-solve (0 LLM, no frontier spend).
+    st = LadderState(captcha_solver_available=True, max_captcha_solves=2)
+    d = next_recovery(Contingency.CAPTCHA, st)
+    assert d.level is Ladder.L0_REROUTE and d.remedy == "solve_captcha" and not d.uses_frontier, d
+
+    # Solve budget exhausted -> fall through to the L4 human gate (never loop forever).
+    st.on_captcha_solve_fail()
+    st.on_captcha_solve_fail()
+    assert next_recovery(Contingency.CAPTCHA, st).level is Ladder.L4_HANDOFF
+
+    # The bridge really solves: detect a captcha + a solver -> token + injection.
+    page = {"url": "https://x.test", "html": '<div class="g-recaptcha" data-sitekey="K"></div>'}
+    out = captcha_recovery(page, _FakeSolver(token="ABC"))
+    assert out.solved and out.token == "ABC" and "ABC" in out.injection, out
+    # A failed solve -> not solved (caller bumps the budget -> L4).
+    assert captcha_recovery(page, _FakeSolver(token="")).solved is False
+    # No captcha on the page -> not solved, no crash.
+    assert captcha_recovery({"url": "u", "html": "<p>clean</p>"}, _FakeSolver()).solved is False
+    print("PASS captcha auto-solve: ladder solves-then-handoff; bridge returns token+injection")
+
+
 async def main():
     test_state_delta()
     test_typed_field_readback()
@@ -211,6 +253,7 @@ async def main():
     test_contingency_classifier()
     test_recovery_ladder()
     test_loop_detector_and_frontier_cap()
+    test_captcha_autosolve_wiring()
     await test_confirm_irreversible_wires_proof()
     print("ALL GUARDED-STEP TESTS PASSED")
 

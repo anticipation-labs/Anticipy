@@ -1,0 +1,46 @@
+{
+  "name": "signup-and-verify",
+  "version": "0.1.0",
+  "class": "workflow",
+  "description": "Create an account on an arbitrary web service and clear its email-verification step, end to end. Selector-free, service-agnostic.",
+  "core": "engine/anticipy_engine/agent/signup_verify.py",
+  "uses": [
+    "engine/anticipy_engine/hands/captcha_solver.py",
+    "engine/anticipy_engine/hands/email_verifier.py"
+  ],
+  "params": {
+    "service_url": {"type": "string", "required": true, "description": "signup/home URL of the service"},
+    "email": {"type": "string", "required": true, "description": "inbox that receives the verification code"},
+    "password": {"type": "string", "required": false},
+    "username": {"type": "string", "required": false},
+    "first_name": {"type": "string", "required": false},
+    "last_name": {"type": "string", "required": false}
+  },
+  "precondition": {
+    "fn": "check_precondition",
+    "requires": ["valid_params", "actor_connected", "inbox_ready"],
+    "recommends": ["captcha_solver"],
+    "note": "no captcha solver -> a captcha wall degrades to handoff, never a fake success"
+  },
+  "steps": [
+    "navigate", "find_signup_form", "fill_identity", "submit_signup",
+    "solve_captcha", "await_verification", "read_email_code", "enter_code", "verify_signed_up"
+  ],
+  "verify_contract": {
+    "fn": "verify_signed_up",
+    "proof": "confirm_signed_up",
+    "kind": "deterministic_signed_in_readback",
+    "repeated_reads": 3,
+    "must_not": ["model_self_claim", "form_submitted_only"],
+    "expected_token": "account email or dashboard URL (account-specific receipt)"
+  },
+  "anti_cheat": {
+    "hardcoded_selectors": false,
+    "per_site_branches": false,
+    "external_verification": true
+  },
+  "safety": {
+    "real_signup_during_build": false,
+    "money_or_tos_or_user_identity": "pause_handoff"
+  }
+}

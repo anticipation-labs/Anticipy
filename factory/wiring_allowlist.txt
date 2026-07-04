@@ -59,3 +59,4 @@ route	/api/digest	TODO(FIX-14): digest-now button not in the UI yet — the prox
 route	/api/derive	TODO(FIX-07): the "anticipate now" button lands with the board UI pass — proxy wired, UI caller pending
 route	/api/owner/stop	TODO(FIX-06b): the STOP control for in-flight "on it" cards — engine route live (2026-07-02), the button itself is not rendered yet
 endpoint	/memory/recall	TODO(FIX-05): semantic recall read surface ("what do you know relevant to X") — built + proven by final/tests/context_eval.py paraphrase cases (retrieval-by-meaning); UI memory/profile seam caller pending
+module	agent/signup_verify.py	TODO(FIX-20/browser-S6): signup-and-verify skill core (skills/signup-and-verify) composing hands/captcha_solver + hands/email_verifier behind the deterministic signed-in verify contract; acquire-before-task loop registration is the S8 skills pipeline step
