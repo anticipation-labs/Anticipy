@@ -34,7 +34,6 @@ route	/api/memory/remembered/approve	TODO(FIX-08): remembered approve action unw
 route	/api/memory/remembered/dryrun	TODO(FIX-08): remembered dryrun unwired from any UI control
 route	/api/memory/remembered/dryrun-day	TODO(FIX-08): remembered dryrun-day unwired from any UI control
 module	capture/pendant_phone.py	TODO(FIX-09): voice/pendant capture path imported only by tests — the voice seam is not wired into the running engine
-endpoint	/agent/run	TODO(FIX-12): agent control plane only driven by engine/scripts, never by a product surface
 endpoint	/agent/reset	TODO(FIX-12): agent control plane only driven by engine/scripts, never by a product surface
 endpoint	/agent/events	TODO(FIX-12): agent event stream has no product consumer
 endpoint	/agent/resume	TODO(FIX-12): agent resume (wall-handoff continue) has no product caller — the handoff loop can't close from the UI
@@ -48,7 +47,7 @@ endpoint	/ws/reload	TODO(FIX-15): browser-hand control plane driven only by engi
 endpoint	/ws/browse	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
 endpoint	/ws/observe	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
 endpoint	/ws/act	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
-route	/api/browser/run	TODO(FIX-15): browser-run proxy route only exercised by scripts/owner_product_runner.py, not the UI
+endpoint	/agent/act	TODO(FIX-15): throwaway browser-use arm, superseded as the product path by the connected-Chrome /agent/run (wired to the board "do it on the web" control 2026-07-03); browse_act stays the no-extension fallback inside _run_browser_and_confirm, but the HTTP endpoint itself has no product caller
 module	hands/browser_use_runner.py	by-design subprocess: executed by the 3.11 bridge venv via browser_use_link (never imported by the 3.10 engine — the isolation IS the design); product-wired 2026-07-02 as the research/no-link browser arm
 route	/api/download/anticipy-execute	TODO(FIX-16): the Download route serves (scripts/test_download_route.sh proves it) but no UI href/fetch literal points at it — the button seam is unwired
 route	/api/owner/session	TODO(FIX-17): owner session/auth route only exercised by scripts/test_owner_app_auth.sh — the login UI never calls it

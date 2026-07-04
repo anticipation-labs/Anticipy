@@ -896,9 +896,51 @@ function MainScreen(props) {
     <div className="pz-scene pz-board-scene pz-main-collapsed">
       <ActiveListeningPanel {...props} />
       <OneInput {...props} />
+      <WebActionPanel {...props} />
       <PendingAsksPanel pendingAsks={props.pendingAsks} onResolve={props.resolvePending} />
       {props.cards.length ? <TaskBoard {...props} limit={4} /> : null}
     </div>
+  );
+}
+
+// "Do it on the web" — the direct hand. The user types a real-world task and I run it on THEIR own
+// logged-in browser (the connected Chrome helper), then land a judge-verified receipt. This is the
+// board's front door to the connected-Chrome path (/api/browser/run -> engine /agent/run); it never
+// spends, checks out, or signs in on its own.
+function WebActionPanel({ webTask, setWebTask, webBusy, webReceipt, runWebTask, engineState }) {
+  const connected = Boolean(engineState?.extensionConnected);
+  return (
+    <section className="pz-webaction" aria-label="Do it on the web">
+      <div className="pz-webaction-head">
+        <h3 className="pz-webaction-title">Do it on the web</h3>
+        <p className="pz-webaction-sub">Type a real-world task and I'll do it on your own logged-in browser, then tell you what I found.</p>
+      </div>
+      <div className="pz-webaction-row">
+        <input
+          className="pz-webaction-input"
+          type="text"
+          value={webTask}
+          onChange={(event) => setWebTask(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") runWebTask(); }}
+          placeholder="e.g. find my last order and start a return"
+          aria-label="What should I do on the web?"
+        />
+        <button
+          type="button"
+          className="pz-button primary pz-webaction-go"
+          onClick={runWebTask}
+          disabled={webBusy || !webTask.trim()}
+        >
+          {webBusy ? "On it…" : "Do it on the web"}
+        </button>
+      </div>
+      {!connected ? (
+        <p className="pz-note">Connect the Chrome helper from Setup to run this on your logged-in browser.</p>
+      ) : null}
+      {webReceipt ? (
+        <p className={`pz-note ${webReceipt.ok ? "pz-note-ok" : "pz-note-warn"}`}>{webReceipt.text}</p>
+      ) : null}
+    </section>
   );
 }
 
@@ -1421,6 +1463,9 @@ export default function PhaseZeroApp({ screen = "board" }) {
   const [comments, setComments] = useState({});
   const [textMirror, setTextMirror] = useState({});
   const [sortModeState, setSortModeState] = useState("priority");
+  const [webTask, setWebTask] = useState("");
+  const [webBusy, setWebBusy] = useState(false);
+  const [webReceipt, setWebReceipt] = useState(null);
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
   const mediaStreamRef = useRef(null);
@@ -1672,6 +1717,37 @@ export default function PhaseZeroApp({ screen = "board" }) {
     }
   }
 
+  // "Do it on the web": POST the task to /api/browser/run -> engine /agent/run (the connected
+  // Chrome). /agent/run returns a JUDGE-verified outcome, so I only say "done" when the judge
+  // blessed it — a walled/unverified run is handed back honestly, never faked as complete.
+  async function runWebTask() {
+    const task = webTask.trim();
+    if (!task || webBusy) return;
+    setWebBusy(true);
+    setWebReceipt(null);
+    try {
+      const data = await jsonFetch("/api/browser/run", {
+        method: "POST",
+        body: JSON.stringify({ task }),
+      });
+      const done = Boolean(data.task_succeeded);
+      const answer = String(data.answer || "").trim();
+      if (done && answer) {
+        setWebReceipt({ ok: true, text: `Here's what I found: ${answer.slice(0, 500)}` });
+      } else if (done) {
+        setWebReceipt({ ok: true, text: "Done — I finished that on the web." });
+      } else {
+        setWebReceipt({ ok: false, text: "I couldn't finish that one on the site. Want me to try again, or take it from here?" });
+      }
+      await loadCards();
+      await loadGatewayEvents();
+    } catch (_error) {
+      setWebReceipt({ ok: false, text: "I couldn't reach the web helper just now. Try again in a moment." });
+    } finally {
+      setWebBusy(false);
+    }
+  }
+
   async function resolveCard(card, approved) {
     if (card.askId) {
       try {
@@ -1824,6 +1900,11 @@ export default function PhaseZeroApp({ screen = "board" }) {
     textMirror,
     sortMode: sortModeState,
     setSortMode,
+    webTask,
+    setWebTask,
+    webBusy,
+    webReceipt,
+    runWebTask,
     saveProfile,
     saveSettings,
     saveOnboarding,
