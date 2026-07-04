@@ -5,7 +5,16 @@ export function configuredOwnerToken() {
   return process.env.ANTICIPY_APP_OWNER_TOKEN || process.env.ANTICIPY_OWNER_API_TOKEN || "";
 }
 
+// OPEN MODE: single-user hosted app — the app is one person's (the owner's), so grant access with
+// NO login. The multi-user per-user auth (Supabase + signed pairing) stays built and gated for when
+// strangers use it. Enable by setting ANTICIPY_APP_OPEN=1 on the deploy.
+export function appOpenMode() {
+  const v = (process.env.ANTICIPY_APP_OPEN || "").toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
 export function ownerAccessRequired() {
+  if (appOpenMode()) return false;
   return Boolean(configuredOwnerToken());
 }
 
@@ -76,6 +85,7 @@ export function ownerTokenMatches(value) {
 }
 
 export function ownerAccessGranted(request) {
+  if (appOpenMode()) return true;
   const token = configuredOwnerToken();
   if (!token) {
     // DEFAULT-SECURE: with no owner token configured, grant ONLY a local (same-machine) request.
@@ -88,6 +98,7 @@ export function ownerAccessGranted(request) {
 }
 
 export function ownerAccessStatus(request) {
+  if (appOpenMode()) return { required: false, authenticated: true };
   const token = configuredOwnerToken();
   if (!token) {
     // no token: local is open (single-owner dev), public is locked-out (must configure a token)
