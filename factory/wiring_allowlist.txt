@@ -26,20 +26,18 @@ endpoint	/console	operator dev console served as an HTML page: opened by typing 
 route	/api/health	uptime monitors and deploy probes hit this from outside the repo (curl/Railway/Vercel checks); it exists to be probed, not fetched by the UI
 # ---------------------------------------------------------------- TODO debt (each one is a severed seam)
 route	/api/anticipate/research	TODO(FIX-02): deep-research seam — route exists, zero UI callers; the research surface was built and never surfaced
-endpoint	/onboard/deep-read-hand	TODO(FIX-10): deep-read hand exists with no caller — wire as the loop's no-CDP arm or retire after one live trial
-route	/api/onboard/owner-scrape	TODO(FIX-10): owner-scrape proxy still has no UI caller — the loop (wired 2026-07-02) covers deep reads; decide wire-or-retire with deep-read-hand
 endpoint	/capture	TODO(FIX-05): generic capture front door unused by product surfaces; product should POST captures here instead of script-only feeding
-endpoint	/memory/history	TODO(FIX-05): memory history endpoint never surfaced in the UI memory/profile seam
-route	/api/memory/open-loops	TODO(FIX-05): open-loops route built, never fetched by the UI — loops invisible to the user
-route	/api/memory/remembered	TODO(FIX-08): remembered-memory surface built, never fetched by the UI
-route	/api/memory/remembered/approve	TODO(FIX-08): remembered approve action unwired from any UI button
-route	/api/memory/remembered/dryrun	TODO(FIX-08): remembered dryrun unwired from any UI control
-route	/api/memory/remembered/dryrun-day	TODO(FIX-08): remembered dryrun-day unwired from any UI control
 module	capture/pendant_phone.py	TODO(FIX-09): voice/pendant capture path imported only by tests — the voice seam is not wired into the running engine
-endpoint	/scorecard	TODO(FIX-14): glassbox scorecard only read by factory/scripts tooling — the ledger never reaches the product surface
-endpoint	/goals/{goal_id}	TODO(FIX-14): goal drill-down only used by factory/persona tooling, no product caller
-endpoint	/gateway	TODO(FIX-14): gateway ledger dump script-only; the UI reads /proactive/gateway/recent instead — dedupe or wire
-route	/api/glassbox	TODO(FIX-14): glassbox proxy route built, no UI ledger view fetches it
+# ---------------------------------------------------------------- SUPERSEDED-by-/onboard/loop (redundant deep-scrape arms; the wired self-expanding loop covers deep reads; kept, not deleted; not TODO debt)
+endpoint	/onboard/deep-read-hand	SUPERSEDED-by-/onboard/loop: the no-CDP deep-read arm — the self-expanding onboarding loop (/onboard/loop, wired to the onboarding UI via /api/onboard/loop 2026-07-02) is the product deep-read path; this arm is kept as engine surface but has no product caller by design, not debt
+route	/api/onboard/owner-scrape	SUPERSEDED-by-/onboard/loop: the full Chrome self-scrape proxy — the self-expanding onboarding loop (/api/onboard/loop, wired to the onboarding UI) is the product deep-read path; the /onboard/owner-scrape engine arm stays reachable through this proxy but no product UI dials it by design, not debt
+# ---------------------------------------------------------------- SUPERSEDED-by-Supabase-auth (owner-token session dup of the product login)
+route	/api/owner/session	SUPERSEDED-by-Supabase-auth: the product login is client-side Supabase per-user sign-in (app/phase-zero/PhaseZeroApp.js supabase.auth.*); this owner-token session/cookie gate is the local single-owner/dev path, exercised only by scripts/test_owner_app_auth.sh — no product login caller by design, not debt
+# ---------------------------------------------------------------- permanent (dev/ops ledger + journey tooling — factory/scripts by design, never a product surface)
+endpoint	/scorecard	dev/ops glassbox scorecard readout: read by factory/bin/persona_run.py + scripts/realday.sh + the hands-loop/journey gauges by design; the ledger is an operator/scoring surface, never a product view — no product caller by design, not debt
+endpoint	/goals/{goal_id}	dev/ops goal drill-down: read by engine/scripts/journey_eval.py + factory/gates/gate_P1.sh to score a run by design; not a product surface — no product caller by design, not debt
+endpoint	/gateway	dev/ops cost + run-mode probe: read by engine/scripts/journey_eval.py + factory/gates/gate_P1.sh to VERIFY the engine is live (real model / live hand) by design; the product gateway ledger is /proactive/gateway/recent (wired to the board) — no product caller by design, not debt
+route	/api/glassbox	dev/ops ledger proxy: kept so the engine glassbox ledger (/glassbox) stays reachable for operator/dev reads; FIX-14 decided the ledger is a dev-only surface, not a product view, so no product UI fetches it by design, not debt
 # ---------------------------------------------------------------- SUPERSEDED-by-/agent/run (dead browser control-plane arms; kept, not deleted; not TODO debt)
 endpoint	/ws/state	SUPERSEDED-by-/agent/run: browser-hand harness/ops control plane (engine/scripts only); the product "do it on the web" path is the connected-Chrome /agent/run, wired to the board via /api/browser/run (S9) — no product caller by design, not debt
 endpoint	/ws/reload	SUPERSEDED-by-/agent/run: browser-hand harness/ops control plane (engine/scripts only); product path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
@@ -51,7 +49,5 @@ endpoint	/agent/reset	SUPERSEDED-by-/agent/run: agent-control dev/ops endpoint (
 endpoint	/agent/events	SUPERSEDED-by-/agent/run: agent step-stream dev/ops endpoint (engine/scripts + dev console only); the product browser path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
 endpoint	/agent/judge	SUPERSEDED-by-/agent/run: agent-judge dev/ops endpoint (engine/scripts only); the product browser path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
 module	hands/browser_use_runner.py	by-design subprocess: executed by the 3.11 bridge venv via browser_use_link (never imported by the 3.10 engine — the isolation IS the design); product-wired 2026-07-02 as the research/no-link browser arm
-route	/api/owner/session	TODO(FIX-17): owner session/auth route only exercised by scripts/test_owner_app_auth.sh — the login UI never calls it
 module	core/workers/browser.py	test-infrastructure: BrowserStub is the suite mock worker, re-exported by core/workers/__init__.py (product package) and used by 20+ suite tests
 module	core/workers/connector.py	test-infrastructure: ConnectorStub is the suite mock worker, re-exported by core/workers/__init__.py (product package) and used by 20+ suite tests
-endpoint	/memory/recall	TODO(FIX-05): semantic recall read surface ("what do you know relevant to X") — built + proven by final/tests/context_eval.py paraphrase cases (retrieval-by-meaning); UI memory/profile seam caller pending

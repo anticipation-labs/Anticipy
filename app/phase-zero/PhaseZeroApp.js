@@ -874,6 +874,231 @@ function OpenLoopsSection({ drawer, onResolveLoop }) {
   );
 }
 
+// FIX-05: the memory recall/search surface. One box asks the engine "what do you know relevant
+// to X" (POST /api/memory/recall -> /memory/recall, the hybrid retriever) and renders the ranked
+// hits; the live backlog (/api/memory/open-loops) and recent history (/api/memory/history) load
+// from their own dedicated read routes. Pure display — nothing here writes memory or acts.
+function MemoryRecallPanel() {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [loops, setLoops] = useState(null);
+  const [history, setHistory] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await jsonFetch("/api/memory/open-loops?limit=20");
+        setLoops(Array.isArray(data.loops) ? data.loops : []);
+      } catch { setLoops([]); }
+    })();
+    (async () => {
+      try {
+        const data = await jsonFetch("/api/memory/history");
+        setHistory(Array.isArray(data.items) ? data.items : []);
+      } catch { setHistory([]); }
+    })();
+  }, []);
+
+  async function runSearch(event) {
+    event.preventDefault();
+    const q = query.trim();
+    if (!q || searching) return;
+    setSearching(true);
+    setSearchError("");
+    try {
+      const data = await jsonFetch("/api/memory/recall", { method: "POST", body: JSON.stringify({ query: q }) });
+      setResult(data);
+    } catch (err) {
+      setResult(null);
+      setSearchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  const hits = Array.isArray(result?.items) ? result.items : [];
+  const bestPct = Math.round((Number(result?.top_relevance) || 0) * 100);
+  return (
+    <section className="pz-panel pz-form pz-memory-recall">
+      <h3>Search what I know</h3>
+      <p className="pz-note">Ask by meaning — &ldquo;what did I say about the dentist?&rdquo; — and I search memory. Read-only: nothing here acts.</p>
+      <form className="pz-recall-form" onSubmit={runSearch}>
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="What do you know about…"
+          aria-label="Search memory"
+        />
+        <button className="pz-button subtle" type="submit" disabled={searching || !query.trim()}>
+          {searching ? "Searching…" : "Search"}
+        </button>
+      </form>
+      {searchError ? <p className="pz-note">I could not search memory: {searchError}</p> : null}
+      {result ? (
+        hits.length ? (
+          <ul className="pz-list">
+            {hits.map((item, index) => (
+              <li key={`recall-${index}`}>{item.text}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pz-note">Nothing relevant surfaced (closest match {bestPct}%).</p>
+        )
+      ) : null}
+      <div className="pz-grid two pz-memory-grid">
+        <article className="pz-panel">
+          <h3>Open loops I&rsquo;m tracking ({loops ? loops.length : 0})</h3>
+          <ul className="pz-list">
+            {loops === null ? <li>Reading the backlog…</li>
+              : loops.length ? loops.map((item, index) => <li key={item.id || `ol-${index}`}>{item.text}</li>)
+              : <li>Nothing open right now.</li>}
+          </ul>
+        </article>
+        <article className="pz-panel">
+          <h3>Recent history</h3>
+          <ul className="pz-list">
+            {history === null ? <li>Reading history…</li>
+              : history.length ? history.slice(-8).map((item, index) => <li key={`hist-${index}`}>{item.text}</li>)
+              : <li>Nothing recorded yet.</li>}
+          </ul>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+// FIX-08: the remembered-list review panel. Reads the INERT remember-list
+// (/api/memory/remembered — on no loop, carrying no trigger field), lets the owner preview
+// EXACTLY what a line would do without doing it (/api/memory/remembered/dryrun, or the whole
+// day at once via /api/memory/remembered/dryrun-day), and approve ONE line
+// (/api/memory/remembered/approve). Approve is default-deny at the engine: it runs only the
+// whitelisted reversible intents and hands everything else back. This panel triggers nothing on
+// its own — every write is an explicit owner tap, and dry-run/day-preview execute nothing.
+function RememberedReviewPanel() {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState("");
+  const [previews, setPreviews] = useState({});
+  const [day, setDay] = useState(null);
+  const [dayBusy, setDayBusy] = useState(false);
+
+  async function reload() {
+    try {
+      const data = await jsonFetch("/api/memory/remembered?limit=50");
+      setRows(Array.isArray(data.remembered) ? data.remembered : []);
+      setError("");
+    } catch (err) {
+      setRows([]);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+  useEffect(() => { reload(); }, []);
+
+  function describe(preview) {
+    if (!preview) return "";
+    if (preview.error) return `I could not preview that: ${preview.error}`;
+    if (preview.approved) return "Done — I ran this one.";
+    if (preview.approved === false && preview.reason) return `Handed back to you: ${preview.reason}`;
+    if (preview.would_execute) return preview.would_do || "Ready to run once your accounts are connected.";
+    if (preview.handback) return `I would hand this back for you — nothing runs on its own.`;
+    return "Nothing runs automatically for this one.";
+  }
+
+  async function dryRun(id) {
+    if (!id || busyId) return;
+    setBusyId(`dry-${id}`);
+    try {
+      const data = await jsonFetch("/api/memory/remembered/dryrun", { method: "POST", body: JSON.stringify({ line_id: id }) });
+      setPreviews((current) => ({ ...current, [id]: data }));
+    } catch (err) {
+      setPreviews((current) => ({ ...current, [id]: { error: err instanceof Error ? err.message : String(err) } }));
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function approve(id) {
+    if (!id || busyId) return;
+    setBusyId(`go-${id}`);
+    try {
+      const data = await jsonFetch("/api/memory/remembered/approve", { method: "POST", body: JSON.stringify({ line_id: id }) });
+      setPreviews((current) => ({ ...current, [id]: data }));
+      await reload();
+    } catch (err) {
+      setPreviews((current) => ({ ...current, [id]: { error: err instanceof Error ? err.message : String(err) } }));
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function previewDay() {
+    if (dayBusy) return;
+    setDayBusy(true);
+    try {
+      const data = await jsonFetch("/api/memory/remembered/dryrun-day?limit=50");
+      setDay(data);
+    } catch {
+      setDay({ error: true });
+    } finally {
+      setDayBusy(false);
+    }
+  }
+
+  return (
+    <section className="pz-panel pz-form pz-remembered-review">
+      <div className="pz-remembered-head">
+        <h3>Remembered — review before I act</h3>
+        <button type="button" className="pz-button subtle" onClick={previewDay} disabled={dayBusy}>
+          {dayBusy ? "Previewing…" : "Preview my day"}
+        </button>
+      </div>
+      <p className="pz-note">These are things I&rsquo;m holding for you. Nothing here runs until you approve it, and I&rsquo;ll only ever run safe, reversible steps — everything else I hand back.</p>
+      {day ? (
+        <p className="pz-note">
+          {day.error
+            ? "I could not preview the day just now."
+            : `Of ${day.count || 0} held, ${day.would_execute_count || 0} would run on their own once connected — the rest I&rsquo;d hand back.`}
+        </p>
+      ) : null}
+      {error ? <p className="pz-note">I could not read the remembered list: {error}</p> : null}
+      {rows === null ? <p className="pz-note">Reading what I&rsquo;m holding…</p> : null}
+      {rows && rows.length === 0 ? <p className="pz-note">Nothing held right now.</p> : null}
+      <ul className="pz-list">
+        {(rows || []).map((row, index) => {
+          const id = row.id != null ? String(row.id) : "";
+          const preview = previews[id];
+          return (
+            <li key={id || `rmb-${index}`} className="pz-remembered-row">
+              <span>{row.text}</span>
+              <div className="pz-remembered-actions">
+                <button
+                  type="button"
+                  className="pz-button subtle"
+                  onClick={() => dryRun(id)}
+                  disabled={!id || busyId === `dry-${id}`}
+                >
+                  {busyId === `dry-${id}` ? "Checking…" : "Preview"}
+                </button>
+                <button
+                  type="button"
+                  className="pz-button subtle"
+                  onClick={() => approve(id)}
+                  disabled={!id || busyId === `go-${id}`}
+                >
+                  {busyId === `go-${id}` ? "Working…" : "Approve"}
+                </button>
+              </div>
+              {preview ? <small className="pz-remembered-preview">{describe(preview)}</small> : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 // The folded final onboarding stage (formerly the standalone /great screen). It mirrors back
 // what onboarding learned, then "Looks right" persists the durable onboarding-done marker
 // (POST /api/onboard/complete) and lands the owner on Main (/). UI_SPEC step 6.
@@ -1994,6 +2219,8 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
           <div className="pz-settings-body pz-settings-body-wide">
             <p className="pz-note">This is my real memory — the facts, inferences, open loops, and history I hold. Anything wrong gets corrected here.</p>
             <LearnedMemoryPanel drawers={drawers} error={drawersError} onResolveLoop={reload} />
+            <MemoryRecallPanel />
+            <RememberedReviewPanel />
             <ForgetMePanel onDeleted={reload} />
           </div>
         </details>
