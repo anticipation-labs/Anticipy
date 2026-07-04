@@ -172,7 +172,7 @@ def app_source_wiring():
     assert "connect_url" in connect, "connect must render the returned connect_url"
     assert "window.open" in connect, "connect must launch the provider's real consent"
     assert "arcade.dev" not in connect, "the dead vendor-console deep-link must be removed"
-    assert "twilio.com/console" in connect, "twilio setup link may remain (config, not OAuth)"
+    assert "Text & calls" in connect, "twilio comms row present (honest 'coming soon' chip, not a dead vendor-console link)"
     # the "invented nothing" honesty recap now lives on the connect page (post-refactor home).
     assert "/api/onboard_scan" in connect, "connect must show the read-only onboard recap"
     assert "invented" in connect.lower(), "connect recap must keep the 'invented nothing' honesty"
