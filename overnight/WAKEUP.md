@@ -1,21 +1,24 @@
 # WAKEUP — Anticipy status (2026-07-04)
 
-## ✅ ONBOARDING = DONE (in the paused-browser/voice state Omar approved) — proven live
-Walked + fixed + verified end-to-end on the cloud (anticipy-welcome.vercel.app, no login):
-- **Flow works:** land → "tell me three simple things" → honest calm confirmation → "Looks right" → working board.
-- **Persistence FIXED (the last real blocker):** profile basics were saving to an ephemeral Vercel-serverless file → vanished + never reached the engine. Rewired to durable engine `/owner/profile` (cbecdeb). PROVEN LIVE: typed "Founder building Anticipy; two kids; hates mornings" → persisted through the engine → shows on "What you told me".
-- **Honest:** real data, no fabricated Priya/Marcus, honest 0-states (people/facts/tracking).
-- **Clean:** deduped open loops (1ff5616), "you" not "wearer", calm confirmation (not a 13-loop dump), de-jargoned, light form controls.
-- Parked-and-fine per Omar: live account-inhale + voice call-arm (one key-flip away).
+## ✅ THE CONVERSATION IS DONE — proven live end-to-end on the cloud
+Omar's core concept — consumer software that TALKS BACK like a human, not a dev task-board — is built + verified live (anticipy-welcome.vercel.app):
+- **Talks back:** "Text John happy birthday tomorrow" → "Remind you about John's birthday. Okay for me to go ahead?" (warm, plain language, "you" not "wearer").
+- **Tappable chips** render under every ask: Go ahead · Not now · …
+- **Loop closes:** tap "Go ahead" (or type "yes") → posts as your line → "On it…" → "Done — taken care of. ✓". (fix c7419c5: chips ride on the card's own state, not a missing ask_id.)
+- **Money flagged conversationally:** "Handling that big invoice. That one can move money… I'll wait for your yes — want me to go ahead?"
+- **Vents stay SILENT:** "so done I could scream" → no bubble, no card.
+- Old board preserved as a quiet "Things I'm tracking" drawer.
+- Commits: 4404861 (conversation surface) + c7419c5 (react loop). Suite 121/8, next build clean.
 
-## ✅ Also done + live on the cloud
-- Engine (Railway) live + cloud memory proven (768-dim recall).
-- Cloud app (Vercel, anticipy-welcome.vercel.app) — open mode, no login, WORKS.
-- Proactive brain proven live: splits multi-intent, IGNORES vents, HOLDS money ($4200 → blocked).
-- UI overhaul: one editorial theme, clean card LIST (no overlap), P1-P4 punch-list fixed (light forms, centered board, pill), settings/connect polished.
-- Suite 121/8 (clean 8-set), every deploy authored as omize10 (Vercel builds).
+## ✅ Brain certified live on the cloud
+- Proactive 7/7 (vent ignored + kids kept + $4200 blocked; return-plant→ask; dinner→ask-slot; sarcasm ignored; retraction silent; prescription caught; multi-intent→2).
+- Memory 11/11 (never-re-ask, disambiguation, "my usual", bi-temporal, semantic surface, retraction, standing pref, address, paraphrase recall x2, multi-hop graph).
+- Onboarding DONE + persists (engine /owner/profile, cbecdeb).
+- Card actions (Go ahead / Not now) proven.
 
-## 🟡 Minor polish remaining (non-blocking)
-- P5 welcome DARK vs app LIGHT (Omar's taste call), P7 welcome logo contrast, deeper QA of /sign /setup, motion.
-## ⏸️ Paused (fine, key-gated): browser errands on cloud (extension→cloud), voice inbound, autonomous nudging.
-## Needs Omar: fresh TWILIO_AUTH_TOKEN (unlocks voice), the final safety pass, taste call on welcome theme.
+## 🟡 Non-blocking / honest limits
+- Cloud memory is EPHEMERAL (Railway redeploy wipes it) — durable storage needed for days-of-use.
+- Welcome DARK vs app LIGHT = Omar's taste call.
+- Still not clicked: mic, file upload, settings-persist, "Anticipate now"/digest, mobile.
+## ⏸️ Paused-and-fine (per Omar): browser errands on cloud, voice inbound, autonomous nudging.
+## Needs Omar: fresh TWILIO_AUTH_TOKEN, final safety pass, welcome-theme call.
