@@ -28,17 +28,14 @@ route	/api/health	uptime monitors and deploy probes hit this from outside the re
 route	/api/anticipate/research	TODO(FIX-02): deep-research seam — route exists, zero UI callers; the research surface was built and never surfaced
 endpoint	/onboard/deep-read-hand	TODO(FIX-10): deep-read hand exists with no caller — wire as the loop's no-CDP arm or retire after one live trial
 route	/api/onboard/owner-scrape	TODO(FIX-10): owner-scrape proxy still has no UI caller — the loop (wired 2026-07-02) covers deep reads; decide wire-or-retire with deep-read-hand
-route	/api/onboard/status	TODO(FIX-03/FIX-10): onboarding status route unpolled by the UI — the flow can't show real progress
 endpoint	/capture	TODO(FIX-05): generic capture front door unused by product surfaces; product should POST captures here instead of script-only feeding
 endpoint	/memory/history	TODO(FIX-05): memory history endpoint never surfaced in the UI memory/profile seam
 route	/api/memory/open-loops	TODO(FIX-05): open-loops route built, never fetched by the UI — loops invisible to the user
-route	/api/onboarding/profile	TODO(FIX-05): profile seam route unwired — the profile the onboarding builds never reaches the surface
 route	/api/memory/remembered	TODO(FIX-08): remembered-memory surface built, never fetched by the UI
 route	/api/memory/remembered/approve	TODO(FIX-08): remembered approve action unwired from any UI button
 route	/api/memory/remembered/dryrun	TODO(FIX-08): remembered dryrun unwired from any UI control
 route	/api/memory/remembered/dryrun-day	TODO(FIX-08): remembered dryrun-day unwired from any UI control
 module	capture/pendant_phone.py	TODO(FIX-09): voice/pendant capture path imported only by tests — the voice seam is not wired into the running engine
-endpoint	/agent/resume	TODO(FIX-12): agent resume (wall-handoff continue) has no product caller — the wall-handoff loop can't close from the UI yet; genuine future wiring, NOT superseded (the connected-Chrome /agent/run pauses on a login/captcha wall, texts the user, and resumes here)
 endpoint	/scorecard	TODO(FIX-14): glassbox scorecard only read by factory/scripts tooling — the ledger never reaches the product surface
 endpoint	/goals/{goal_id}	TODO(FIX-14): goal drill-down only used by factory/persona tooling, no product caller
 endpoint	/gateway	TODO(FIX-14): gateway ledger dump script-only; the UI reads /proactive/gateway/recent instead — dedupe or wire

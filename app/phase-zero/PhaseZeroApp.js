@@ -576,12 +576,38 @@ function AccountReadStage({ deep = false, engineState }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [message, setMessage] = useState("");
+  // FIX-03: during a scan, poll the engine's onboarding marker so the pill shows REAL live progress
+  // (a heartbeat straight from the engine) instead of a static decoration. GET /api/onboard/status.
+  const [scanProgress, setScanProgress] = useState(null);
 
   useEffect(() => {
     jsonFetch("/api/onboard/permissions")
       .then((data) => setServices(Array.isArray(data.services) ? data.services : []))
       .catch(() => setServices([]));
   }, []);
+
+  useEffect(() => {
+    if (!busy) return undefined;
+    let alive = true;
+    let polls = 0;
+    setScanProgress({ polls: 0, complete: false });
+    const tick = async () => {
+      try {
+        const status = await jsonFetch("/api/onboard/status");
+        if (!alive) return;
+        polls += 1;
+        setScanProgress({ polls, complete: Boolean(status.onboarding_complete) });
+      } catch {
+        /* keep the last known progress; the scan message still narrates what happened */
+      }
+    };
+    tick();
+    const id = setInterval(tick, 2500);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [busy]);
 
   async function toggle(service, allowed) {
     setServices((current) => current.map((s) => (s.service === service ? { ...s, allowed } : s)));
@@ -644,7 +670,14 @@ function AccountReadStage({ deep = false, engineState }) {
           <h3>{deep ? "Where I go deeper" : "What I may read"}</h3>
           <p>Nothing is read until you allow it. Reading is read-only — no sending, no spending.</p>
         </div>
-        <StatusPill value={engineState?.extensionConnected ? "live" : "unavailable"} />
+        {busy ? (
+          <span className="pz-pill pz-pill-working" aria-live="polite">
+            {scanProgress?.complete ? "Saved" : "Reading your world…"}
+            {scanProgress?.polls ? ` (${scanProgress.polls})` : ""}
+          </span>
+        ) : (
+          <StatusPill value={engineState?.extensionConnected ? "live" : "unavailable"} />
+        )}
       </div>
       {services.map((service) => (
         <label key={service.service} className="pz-check">
@@ -849,10 +882,38 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const { drawers, error: drawersError, reload: reloadDrawers } = useMemoryDrawers();
+  // FIX-05: surface the REAL trust-graded profile the onboarding built (POST /api/onboarding/profile),
+  // so step 3's payoff — "a real profile now exists" — is visible, not just promised. Honest by
+  // construction: with no readable sources the engine returns an empty scaffold (browser_available
+  // false, zero facts) and we echo THAT, never an invented dossier.
+  const [builtProfile, setBuiltProfile] = useState(null);
+  const [builtError, setBuiltError] = useState("");
 
   useEffect(() => {
     setClarification(profile.lastClarification || "");
   }, [profile.lastClarification]);
+
+  useEffect(() => {
+    let alive = true;
+    const name = (profile.name || "").trim();
+    if (!name) {
+      setBuiltProfile(null);
+      return undefined;
+    }
+    const sources = Array.isArray(profile.sources) ? profile.sources : [];
+    jsonFetch("/api/onboarding/profile", { method: "POST", body: JSON.stringify({ name, sources }) })
+      .then((data) => {
+        if (!alive) return;
+        setBuiltProfile(data && !data.error ? data : null);
+        setBuiltError(data && data.error ? String(data.message || data.error) : "");
+      })
+      .catch((err) => {
+        if (alive) setBuiltError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [profile.name]);
 
   // "Looks right" persists the durable onboarding-done marker on the engine, then moves on.
   async function confirmDossier() {
@@ -896,6 +957,7 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
         <ProfileSection title="Tools and systems" items={profile.tools || []} />
         <ProfileSection title="Open loops" items={profile.openLoops || []} />
       </section>
+      <ProfileBuiltPanel built={builtProfile} error={builtError} />
       <LearnedMemoryPanel drawers={drawers} error={drawersError} onResolveLoop={reloadDrawers} />
       <form className="pz-panel pz-form" onSubmit={submitClarification}>
         <h3>Anything to fix?</h3>
@@ -918,6 +980,36 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
       </div>
       {confirmMessage ? <p className="pz-note">{confirmMessage}</p> : null}
     </div>
+  );
+}
+
+// FIX-05: echo the trust-graded profile the engine built from public sources (POST
+// /api/onboarding/profile). Honest by construction — an empty scaffold (no readable sources / no
+// browser helper) is shown AS a scaffold, never dressed up as a finished dossier.
+function ProfileBuiltPanel({ built, error }) {
+  if (error) return <p className="pz-note">I could not build your profile just now: {error}</p>;
+  if (!built) return <p className="pz-note">Building the profile I have of you…</p>;
+  const summary = built.summary || {};
+  const facts = Number(summary.facts || 0);
+  const readOk = Number(summary.sources_read_ok || 0);
+  const total = Number(summary.sources_total || 0);
+  const toCheck = Number(summary.needs_cross_check || 0);
+  const scaffoldOnly = !built.browser_available || facts === 0;
+  return (
+    <section className="pz-panel">
+      <h3>The profile I built for you</h3>
+      <ul className="pz-list">
+        <li>{`${facts} fact${facts === 1 ? "" : "s"} gathered${toCheck ? `, ${toCheck} still to double-check` : ""}.`}</li>
+        <li>{`${readOk} of ${total} public source${total === 1 ? "" : "s"} read.`}</li>
+        {built.role ? <li>{`Role: ${built.role}`}</li> : null}
+        {built.org ? <li>{`Where: ${built.org}`}</li> : null}
+      </ul>
+      <p className="pz-note">
+        {scaffoldOnly
+          ? "This is the honest starting point — I'll fill it in as I read more of your world. Nothing was invented."
+          : "A real profile now exists — every fact carries its own source."}
+      </p>
+    </section>
   );
 }
 
@@ -1225,7 +1317,7 @@ function ActiveListeningPanel({
   );
 }
 
-function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveComment, resolveCard, stopCard, limit }) {
+function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveComment, resolveCard, continueCard, stopCard, limit }) {
   const [selectedId, setSelectedId] = useState("");
   const sorted = useMemo(() => {
     const copy = [...cards];
@@ -1274,6 +1366,7 @@ function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveCom
             mirror={textMirror[selected.id]?.status || "coming_soon"}
             onComment={saveComment}
             onResolve={resolveCard}
+            onContinue={continueCard}
             onStop={stopCard}
           />
         ) : null}
@@ -1282,8 +1375,9 @@ function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveCom
   );
 }
 
-function TaskCard({ card, comment, mirror, onComment, onResolve, onStop }) {
+function TaskCard({ card, comment, mirror, onComment, onResolve, onContinue, onStop }) {
   const [draft, setDraft] = useState(comment);
+  const [continuing, setContinuing] = useState(false);
 
   useEffect(() => {
     setDraft(comment);
@@ -1295,6 +1389,24 @@ function TaskCard({ card, comment, mirror, onComment, onResolve, onStop }) {
   const canStop = Boolean(onStop)
     && Boolean(raw.execution?.opt_out || raw.args?.opt_out)
     && !["stopped", "done", "failed", "blocked"].includes(card.status);
+
+  // FIX-12: a browser run that hit a login/verification wall handed this card back to you. Once you
+  // clear the wall in your own browser, "Continue" resumes from the now-unblocked page. Precise by
+  // construction: only a browser card that actually ran (landed a receipt) and came back unfinished.
+  const canContinue = Boolean(onContinue)
+    && (raw.route === "browser" || raw.action === "browser_action")
+    && Boolean(card.browserReceipt)
+    && ["failed", "blocked"].includes(card.status);
+
+  async function handleContinue() {
+    if (continuing) return;
+    setContinuing(true);
+    try {
+      await onContinue(card);
+    } finally {
+      setContinuing(false);
+    }
+  }
 
   return (
     <article className={`pz-task pz-task-${card.risk}`}>
@@ -1332,8 +1444,15 @@ function TaskCard({ card, comment, mirror, onComment, onResolve, onStop }) {
         <span>Comment</span>
         <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Add a note for this task." />
       </label>
+      {canContinue ? (
+        <p className="pz-note">I paused on a sign-in or verification step. Clear it in your own browser, then tap Continue and I'll pick up where I left off.</p>
+      ) : null}
       <div className="pz-actions">
-        {canStop ? (
+        {canContinue ? (
+          <button className="pz-button primary" type="button" onClick={handleContinue} disabled={continuing}>
+            {continuing ? "Picking it back up…" : "Continue"}
+          </button>
+        ) : canStop ? (
           <button className="pz-button ghost" type="button" onClick={() => onStop(card)}>Stop</button>
         ) : (
           <>
@@ -1982,6 +2101,27 @@ export default function PhaseZeroApp({ screen = "board" }) {
     }
   }
 
+  // FIX-12: close the wall-handoff loop from the board. A connected-Chrome run that paused on a
+  // login/verification wall hands back (and texts you); once you've cleared the wall in your own
+  // browser, "Continue" resumes from the now-unblocked page. POST /api/agent/resume -> engine
+  // /agent/resume. It never types credentials, clears the wall, spends, or checks out.
+  async function continueCard(card) {
+    const raw = card.raw || {};
+    const args = raw.args || {};
+    const task = String(args.task_text || card.heard || card.title || "").trim();
+    const startUrl = String(card.browserReceipt?.url || args.start_url || "").trim();
+    if (!task || !startUrl) return;
+    try {
+      await jsonFetch("/api/agent/resume", {
+        method: "POST",
+        body: JSON.stringify({ task, start_url: startUrl }),
+      });
+    } catch {
+      /* the reload below shows the honest state either way */
+    }
+    await Promise.allSettled([loadCards(), loadGatewayEvents()]);
+  }
+
   async function startLocalListening() {
     try {
       await jsonFetch("/api/listen/start", { method: "POST" });
@@ -2139,6 +2279,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
     uploadFile,
     saveComment,
     resolveCard,
+    continueCard,
     startBrowserListening,
     stopBrowserListening,
     startLocalListening,
