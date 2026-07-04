@@ -55,8 +55,14 @@ memory stub → live (Phases 1 & 4). Also worth refreshing: the existing GEMINI_
 - ⛔ BLOCKER 1 — repo mismatch: Railway builds from **omize10/Anticipy**, but the memory code lives in
   **omize10/Anticipy-executor-working** (this clone, branch hoe/build). The code must reach the
   Railway source repo (or point Railway at this repo, or `railway up` the local dir).
-- ⛔ BLOCKER 2 — build context: the Docker build context is **engine/**, but **final/** (the whole
-  context-engine + graph) is at the repo root, OUTSIDE it. Fix options: (a) set Railway Root Dir to the
-  repo root + adjust Dockerfile COPY paths (COPY engine/anticipy_engine + COPY final), or (b) vendor
-  final/ under engine/ (avoid duplication via a build step), or (c) `railway up` from a repo-root context.
+- ✅ BLOCKER 2 (code-side RESOLVED 2026-07-04) — the ROOT `/Dockerfile` (context = repo root) now has
+  `COPY final ./final` placed while `WORKDIR /app` is active (right after `COPY web ./web`, BEFORE
+  `WORKDIR /app/engine`), so final/ lands at `/app/final`. This matches control_core.py's fail-open
+  import, which resolves `parents[3]` of `.../engine/anticipy_engine/core/control_core.py` to `/app`
+  and imports `final.context` from `/app/final`. WITHOUT this line the import fails open and cloud
+  memory is SILENTLY OFF (self.context stays None). `.railwayignore` does NOT exclude final/ (only
+  its `__pycache__`/`.pyc`, which the import doesn't need). The deploy itself (Railway Root Dir =
+  repo root, or `railway up` from repo root) is still done supervised — this task was code-only.
+  Original blocker (for history): build context was **engine/** while **final/** sits at repo root
+  outside it; the fix is (a) Railway Root Dir = repo root + the root Dockerfile COPY paths above.
 - ⇒ LOCAL cloud memory is fully working + proven now; HOSTED needs this deploy restructure as its own task.

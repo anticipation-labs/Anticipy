@@ -13,6 +13,11 @@ RUN pip install --no-cache-dir -r engine/requirements.cloud.txt
 # app code + the static web UI the engine can serve same-origin
 COPY engine/anticipy_engine ./engine/anticipy_engine
 COPY web ./web
+# cloud memory / context engine — control_core.py resolves it via parents[3] of
+# .../engine/anticipy_engine/core/control_core.py == /app, importing final.context from /app/final.
+# WORKDIR is still /app here, so this lands at /app/final. WITHOUT this COPY the fail-open import
+# silently leaves self.context=None and cloud memory is OFF. Keep this BEFORE `WORKDIR /app/engine`.
+COPY final ./final
 
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app/engine
