@@ -4,6 +4,12 @@
 // chrome.storage (SW globals are lost when Chrome idle-kills the worker ~30s).
 // Browse-job execution (page read / input / screenshot) is wired in piece 3.
 
+// Humanlike motion + timing helpers (Bezier + Gaussian), shared with the Node unit test.
+// Classic MV3 service workers support importScripts; the file lives at the extension root
+// alongside this one, so it is resolved relative to background.js. Exposes bezierPath /
+// gaussianDelay / typingInterCharDelays as globals used by cdpClick/cdpType below.
+importScripts("humanlike.js");
+
 const DEFAULT_ENGINE_HTTP = "http://127.0.0.1:8787";
 const PING_MS = 20000;
 
@@ -384,12 +390,78 @@ function cdp(tabId, method, params) {
     });
   });
 }
-async function cdpClick(tabId, x, y) {
-  await cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
-  await cdp(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
-  await cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 1, clickCount: 1 });
+// Where the synthetic cursor currently sits (viewport CSS px). Persisted across clicks so each
+// move curves FROM the last resting point, like a real hand. SW-global; fine because there is one
+// working tab. Starts at the top-left (0,0) for the first move of a session.
+let cursorX = 0, cursorY = 0;
+
+// --- VISIBLE cursor overlay (content-script dot) ---------------------------------------------
+// Injected only into the WORKING tab the agent drives (never the user's other tabs), so when a
+// human WATCHES the backgrounded Anticipy tab the motion looks natural. It is a pointer-events:none
+// dot that follows the REAL DOM mousemove events CDP's Input.dispatchMouseEvent generates — so it
+// tracks the synthetic cursor for free without a round-trip per point. Does NOT steal focus and is
+// fully compatible with ANTICIPY_DEMO_VISIBLE=false (background) operation.
+function injectCursorOverlay() {
+  if (window.__anticipyCursorInstalled) return;
+  window.__anticipyCursorInstalled = true;
+  var dot = document.createElement("div");
+  dot.id = "anticipy-cursor";
+  dot.style.cssText = [
+    "position:fixed", "left:0", "top:0", "width:18px", "height:18px",
+    "border-radius:50%", "background:rgba(200,169,126,0.55)",           // Anticipy gold, translucent
+    "box-shadow:0 0 0 2px rgba(200,169,126,0.95),0 0 12px 3px rgba(200,169,126,0.45)",
+    "z-index:2147483647", "pointer-events:none",
+    "transition:transform 90ms ease-out,opacity 300ms ease-out",
+    "transform-origin:center center", "opacity:0", "will-change:transform"
+  ].join(";");
+  var attach = function () { (document.body || document.documentElement).appendChild(dot); };
+  if (document.body) attach(); else document.addEventListener("DOMContentLoaded", attach, { once: true });
+  var lx = 0, ly = 0, scale = 1, raf = 0;
+  var place = function () {
+    raf = 0;
+    dot.style.opacity = "1";
+    dot.style.transform = "translate(" + (lx - 9) + "px," + (ly - 9) + "px) scale(" + scale + ")";
+  };
+  document.addEventListener("mousemove", function (e) {
+    lx = e.clientX; ly = e.clientY;
+    if (!raf) raf = requestAnimationFrame(place);
+  }, true);
+  document.addEventListener("mousedown", function () { scale = 0.6; place(); }, true);
+  document.addEventListener("mouseup", function () { scale = 1; place(); }, true);
 }
-async function cdpType(tabId, text) { if (text) await cdp(tabId, "Input.insertText", { text }); }
+async function ensureCursorOverlay(tabId) {
+  try { await chrome.scripting.executeScript({ target: { tabId }, func: injectCursorOverlay }); } catch (e) {}
+}
+
+// Humanlike CLICK: glide the cursor along a Bezier path (many mouseMoved events with Gaussian
+// per-point delays) then press/release with human dwell — replaces the old teleport
+// (single mouseMoved -> press -> release). Trusted isTrusted=true input the whole way.
+async function cdpClick(tabId, x, y) {
+  await ensureCursorOverlay(tabId);                    // dot follows the real mousemoves below
+  const path = bezierPath(cursorX, cursorY, x, y, 30, 0.10);
+  for (const pt of path) {
+    await sleep(pt.delayMs);
+    await cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x: pt.x, y: pt.y, button: "none" });
+  }
+  await sleep(gaussianDelay(80.0, 30.0, 30.0, 200.0)); // settle before the press
+  await cdp(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
+  await sleep(gaussianDelay(60.0, 20.0, 30.0, 150.0)); // press dwell
+  await cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 1, clickCount: 1 });
+  cursorX = x; cursorY = y;
+}
+// Humanlike TYPE: per-char keyDown/keyUp with Gaussian inter-char delays (occasional thinking
+// pauses) — replaces the instant Input.insertText. The value_setter backstop in doAct still
+// corrects the field afterward, so any char a raw keyDown misses is fixed (behavior preserved).
+async function cdpType(tabId, text) {
+  if (!text) return;
+  const delays = typingInterCharDelays(text);
+  for (let i = 0; i < text.length; i++) {
+    await sleep(delays[i]);
+    const ch = text[i];
+    await cdp(tabId, "Input.dispatchKeyEvent", { type: "keyDown", text: ch, key: ch, unmodifiedText: ch });
+    await cdp(tabId, "Input.dispatchKeyEvent", { type: "keyUp", key: ch });
+  }
+}
 // Clean-slate reset: clear cookies + the current origin's storage (localStorage/IndexedDB/etc) so the
 // next task is not contaminated by what a prior task saved. Best-effort; never throws into the caller.
 async function doResetState(msg) {
