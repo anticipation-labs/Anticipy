@@ -20,7 +20,21 @@ from ..shared.schedule_change import match_schedule_change_hold
 
 CHEAP = "cheap"
 SMART = "smart"
-COST = {CHEAP: 0.0005, SMART: 0.02}
+# Browser-agent tier ladder (S3 — the cost fix). Before this, the per-step ACTOR shared
+# caller="agent" and could only pick CHEAP or the frontier SMART, so every escalation ran the
+# expensive planner model. Split into three env-driven tiers, all over the SAME OpenRouter path:
+#   ACT      — the per-step actor: a cheap but capable VLM (e.g. Qwen VL), ANTICIPY_MODEL_ACT.
+#   GROUND   — pixel→coordinate grounder (e.g. UI-TARS), ANTICIPY_MODEL_GROUND.
+#   ESCALATE — rare frontier rescue (claude-opus-4-8), ANTICIPY_MODEL_ESCALATE, hard-capped/task.
+# SMART stays reserved for PLANNER/VERIFIER (_plan / _replan / judge). Defaults are SAFE: ACT and
+# GROUND fall back to the existing cheap model when their env is unset, so an unconfigured deploy
+# behaves exactly as before.
+ACT = "act"
+GROUND = "ground"
+ESCALATE = "escalate"
+# Frontier tiers are gated to trusted callers (SMART_CALLERS) exactly like SMART always was.
+FRONTIER_TIERS = frozenset({SMART, ESCALATE})
+COST = {CHEAP: 0.0005, ACT: 0.001, GROUND: 0.001, SMART: 0.02, ESCALATE: 0.05}
 
 PROVIDER_STUB = "stub"
 PROVIDER_OPENROUTER = "openrouter"
@@ -90,21 +104,41 @@ def _retry_hint_seconds(resp) -> Optional[float]:
 
 
 class ModelGateway:
-    # gate + plan (proactive brain), agent (the web-agent loop), and make_sign (the create+print sign-
+    # gate + plan (proactive brain), agent (the web-agent loop), actor (the split-out per-step web
+    # actor — may take the SMART/ESCALATE escalation rung), and make_sign (the create+print sign-
     # wording fallback when the deterministic deriver has no confident headline) may use smart. Without
     # make_sign the fallback raised PermissionError -> was swallowed -> every novel-phrasing sign shipped
     # the generic "Notice" (overnight bug-hunt #2; the deterministic keyword path still runs FIRST).
-    SMART_CALLERS = frozenset({"gate", "plan", "agent", "make_sign"})
+    SMART_CALLERS = frozenset({"gate", "plan", "agent", "actor", "make_sign"})
 
     def __init__(self, provider: Optional[str] = None, endpoint: Optional[str] = None,
                  stub=None, timeout: float = 60.0,
                  cheap_model: Optional[str] = None, smart_model: Optional[str] = None,
+                 act_model: Optional[str] = None, ground_model: Optional[str] = None,
+                 escalate_model: Optional[str] = None, escalate_cap: Optional[int] = None,
                  transport=None) -> None:
         self.provider = provider or os.environ.get("ANTICIPY_MODEL_PROVIDER", PROVIDER_STUB)
         self.endpoint = endpoint  # optional custom OpenAI-compatible endpoint
         self.timeout = timeout
         self.cheap_model = cheap_model or os.environ.get("ANTICIPY_MODEL_CHEAP", "openai/gpt-4o-mini")
         self.smart_model = smart_model or os.environ.get("ANTICIPY_MODEL_SMART", "openai/gpt-4o")
+        # ACT/GROUND are the cheap web-agent tiers; both default to the existing cheap model when
+        # their env is unset, so behavior is unchanged until a dedicated model is configured.
+        self.act_model = act_model or os.environ.get("ANTICIPY_MODEL_ACT") or self.cheap_model
+        self.ground_model = ground_model or os.environ.get("ANTICIPY_MODEL_GROUND") or self.cheap_model
+        # ESCALATE is the rare frontier rescue. Default names claude-opus-4-8; if that model is not
+        # reachable the OpenRouter path degrades to "" and the actor's existing retry owns it.
+        self.escalate_model = (escalate_model or os.environ.get("ANTICIPY_MODEL_ESCALATE")
+                               or "anthropic/claude-opus-4-8")
+        # Hard per-task cap on frontier ESCALATE calls (uncapped escalation is the one thing that
+        # silently reinflates cost toward Opus-solo). Beyond the cap, ESCALATE degrades to SMART.
+        # reset_escalations() re-arms the budget at each task boundary (the actor calls it in run()).
+        try:
+            self.escalate_cap = int(escalate_cap if escalate_cap is not None
+                                    else os.environ.get("ANTICIPY_ESCALATE_CAP", "2"))
+        except (TypeError, ValueError):
+            self.escalate_cap = 2
+        self._escalate_used = 0
         self.calls: List[dict] = []
         self._stub = stub or default_stub
         # The "openrouter" path speaks plain OpenAI chat-completions. Any compatible
@@ -118,17 +152,48 @@ class ModelGateway:
     async def think(self, task: str, tier: str, caller: str, image: Optional[str] = None,
                     json_mode: bool = False, temperature: Optional[float] = None,
                     max_tokens: Optional[int] = None) -> str:
-        if tier == SMART and caller not in self.SMART_CALLERS:
-            raise PermissionError(f"smart tier not allowed from caller '{caller}'")
-        self.calls.append({"tier": tier, "caller": caller, "cost": COST.get(tier, 0.0)})
+        if tier in FRONTIER_TIERS and caller not in self.SMART_CALLERS:
+            raise PermissionError(f"{tier} tier not allowed from caller '{caller}'")
+        # ESCALATE is the rare frontier rescue and is HARD-CAPPED per task. Within budget it spends
+        # one escalation and runs the frontier model; beyond it, it degrades to SMART so cost can't
+        # creep back toward Opus-solo. eff_tier is what actually runs (and what the ledger records);
+        # the originally-requested tier is kept for postmortems.
+        eff_tier = tier
+        if tier == ESCALATE:
+            if self._escalate_used < self.escalate_cap:
+                self._escalate_used += 1
+            else:
+                eff_tier = SMART
+        entry = {"tier": eff_tier, "caller": caller, "cost": COST.get(eff_tier, 0.0)}
+        if eff_tier != tier:
+            entry["requested_tier"] = tier  # capped-escalation trail
+        self.calls.append(entry)
 
         if self.provider == PROVIDER_OPENROUTER:
-            return await self._openrouter(task, tier, image, json_mode, temperature, max_tokens)
+            return await self._openrouter(task, eff_tier, image, json_mode, temperature, max_tokens)
         if self.provider == PROVIDER_GEMINI:
-            return await self._gemini(task, tier, json_mode, temperature, max_tokens)
+            return await self._gemini(task, eff_tier, json_mode, temperature, max_tokens)
         if self.endpoint:
-            return await self._custom_endpoint(task, tier)
-        return self._stub(task, tier, caller)
+            return await self._custom_endpoint(task, eff_tier)
+        return self._stub(task, eff_tier, caller)
+
+    def reset_escalations(self) -> None:
+        """Re-arm the per-task frontier-ESCALATE budget. The web-agent loop calls this at the start
+        of each task (run()) so the ≤N cap is genuinely per-task and not a process-lifetime counter."""
+        self._escalate_used = 0
+
+    def _model_for_tier(self, tier: str) -> str:
+        """Map a routing tier to its concrete model. SMART/ESCALATE are the frontier rungs; ACT and
+        GROUND are the cheap web-agent tiers; everything else is the cheap default."""
+        if tier == SMART:
+            return self.smart_model
+        if tier == ESCALATE:
+            return self.escalate_model
+        if tier == ACT:
+            return self.act_model
+        if tier == GROUND:
+            return self.ground_model
+        return self.cheap_model
 
     @property
     def smart_calls(self) -> List[dict]:
@@ -144,7 +209,7 @@ class ModelGateway:
             raise RuntimeError("no model API key: set ANTICIPY_MODEL_API_KEY (or OPENROUTER_API_KEY)")
         import httpx
 
-        model = self.smart_model if tier == SMART else self.cheap_model
+        model = self._model_for_tier(tier)
         content = task if image is None else [
             {"type": "text", "text": task},
             {"type": "image_url", "image_url": {"url": image}},
@@ -234,7 +299,7 @@ class ModelGateway:
         if not fb_key or fb_url == self._url:
             return ""
         import httpx
-        model = (os.environ.get("ANTICIPY_FALLBACK_MODEL_SMART") if tier == SMART
+        model = (os.environ.get("ANTICIPY_FALLBACK_MODEL_SMART") if tier in FRONTIER_TIERS
                  else os.environ.get("ANTICIPY_FALLBACK_MODEL_CHEAP"))
         if not model:
             return ""
@@ -268,7 +333,7 @@ class ModelGateway:
             raise RuntimeError("no Google API key: set GOOGLE_API_KEY")
         import httpx
 
-        model = self.smart_model if tier == SMART else self.cheap_model
+        model = self._model_for_tier(tier)
         model = model.split("/")[-1] if "/" in model else model
         if not model.startswith("gemini-"):
             model = "gemini-2.5-flash"

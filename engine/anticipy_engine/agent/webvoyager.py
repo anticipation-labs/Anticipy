@@ -27,7 +27,7 @@ from typing import List, Optional
 
 from ..core.browser_link import BrowserLink
 from ..core.envelopes import new_id
-from ..core.gateway import CHEAP, SMART, ModelGateway
+from ..core.gateway import ACT, CHEAP, SMART, ModelGateway
 from .proof import confirm_stable_artifact
 from .handoff import ask_message, classify_wall
 from .recipes import RECIPE_CACHE, RecipeStore, descriptor, match_index, recipe_key
@@ -1100,6 +1100,10 @@ class WebVoyagerAgent:
         self._call_base = len(self.gw.calls) if hasattr(self.gw, "calls") else 0
         self._cost_base = self.gw.total_cost() if hasattr(self.gw, "total_cost") else 0.0
         self._smart_base = len(self.gw.smart_calls) if hasattr(self.gw, "smart_calls") else 0
+        # Re-arm the gateway's per-task ESCALATE (frontier-rescue) budget so the ≤N cap is genuinely
+        # per task. Optional gateway capability — minimal test doubles won't have it.
+        if hasattr(self.gw, "reset_escalations"):
+            self.gw.reset_escalations()
 
         # ── LEARNED-RECIPE REPLAY (Pillar 4) ─────────────────────────────────────────────
         # Before spending a single planner/actor LLM call, see if THIS task on THIS site has a
@@ -1274,10 +1278,13 @@ class WebVoyagerAgent:
                 page_text=(out.get("text") or ""),
                 notes=self._notes,
             )
-            # two-tier ladder: cheap by default; escalate to smart only when stuck
-            # (no progress last step, or an action was forbidden by the anti-loop guard)
+            # two-tier ladder: the cheap ACT tier (a capable VLM, split out of the old blanket
+            # caller="agent") drives routine steps; escalate to SMART only when stuck (no progress
+            # last step, or an action was forbidden by the anti-loop guard). The per-step actor is
+            # labeled caller="actor" so plan/replan/judge (caller="agent") keep SMART to themselves
+            # and the cost ledger can see the actor's tier-mix.
             escalate = (sub_stuck >= 2) or (forbid is not None)
-            tier = SMART if escalate else CHEAP
+            tier = SMART if escalate else ACT
             # DOM-FIRST: the VISIBLE ELEMENTS list (in the prompt) is the primary input every step.
             # Attach the screenshot only when the DOM alone is ambiguous (sparse page / visual task /
             # stuck-recovery). This is the single biggest cost+latency win — vision tokens are ~10×
@@ -1314,16 +1321,16 @@ class WebVoyagerAgent:
                 self._vision_steps += 1
             else:
                 self._dom_steps += 1
-            raw1 = await _think(self.gw, step_prompt, tier=tier, caller="agent", image=img,
+            raw1 = await _think(self.gw, step_prompt, tier=tier, caller="actor", image=img,
                                 json_mode=True, temperature=0.1, max_tokens=AGENT_MAX_TOKENS)
             if not (raw1 or "").strip() and img:
                 # Some model/provider paths return empty content for image+JSON.
                 # The prompt already carries the element list, so a text-only retry
                 # keeps the same planner in the loop without faking.
-                raw1 = await _think(self.gw, prompt, tier=tier, caller="agent", image=None,
+                raw1 = await _think(self.gw, prompt, tier=tier, caller="actor", image=None,
                                     json_mode=True, temperature=0.1, max_tokens=AGENT_MAX_TOKENS)
             if not (raw1 or "").strip():
-                raw1 = await _think(self.gw, prompt, tier=tier, caller="agent", image=None,
+                raw1 = await _think(self.gw, prompt, tier=tier, caller="actor", image=None,
                                     json_mode=False, temperature=0.1, max_tokens=AGENT_MAX_TOKENS)
             action = _parse_json(raw1)
             raw2 = ""
@@ -1337,19 +1344,19 @@ class WebVoyagerAgent:
                 raw2 = await _think(  # a non-answer always escalates to smart
                     self.gw,
                     prompt + "\n\nReturn ONE JSON action now with an \"action\" field.",
-                    tier=SMART, caller="agent", image=shot, json_mode=True, temperature=0.1,
+                    tier=SMART, caller="actor", image=shot, json_mode=True, temperature=0.1,
                     max_tokens=AGENT_MAX_TOKENS)
                 if not (raw2 or "").strip() and shot:
                     raw2 = await _think(
                         self.gw,
                         prompt + "\n\nReturn ONE JSON action now with an \"action\" field.",
-                        tier=SMART, caller="agent", image=None, json_mode=True, temperature=0.1,
+                        tier=SMART, caller="actor", image=None, json_mode=True, temperature=0.1,
                         max_tokens=AGENT_MAX_TOKENS)
                 if not (raw2 or "").strip():
                     raw2 = await _think(
                         self.gw,
                         prompt + "\n\nReturn ONE JSON action now with an \"action\" field.",
-                        tier=SMART, caller="agent", image=None, json_mode=False, temperature=0.1,
+                        tier=SMART, caller="actor", image=None, json_mode=False, temperature=0.1,
                         max_tokens=AGENT_MAX_TOKENS)
                 action = _parse_json(raw2)
             if not action or not action.get("action"):
