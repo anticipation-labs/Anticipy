@@ -14,6 +14,11 @@
 # Everything else is PERMANENT and must name a real out-of-repo caller (a monitor, Twilio,
 # a browser typing a URL) — "we'll wire it later" is never a permanent justification.
 #
+# THE SUPERSEDED CONVENTION: a justification starting with "SUPERSEDED-by-<successor>" is a
+# THIRD case — the endpoint's PRODUCT path was replaced by a wired successor (named inline),
+# so having no in-repo caller is correct-by-design, NOT debt. It is PERMANENT (passes --strict):
+# the dead arm is KEPT as engine surface (never deleted) but must never be re-wired for product.
+#
 # ---------------------------------------------------------------- permanent (external callers)
 endpoint	/event	legacy scripted front door: fed by scripts/realday.sh + overnight harness by design; the product front doors are /capture-era successors (/owner/ingest, /listen/*)
 endpoint	/cr	Twilio ConversationRelay websocket: Twilio's cloud dials this URL from the voice webhook config — no in-repo literal can exist
@@ -33,20 +38,21 @@ route	/api/memory/remembered/approve	TODO(FIX-08): remembered approve action unw
 route	/api/memory/remembered/dryrun	TODO(FIX-08): remembered dryrun unwired from any UI control
 route	/api/memory/remembered/dryrun-day	TODO(FIX-08): remembered dryrun-day unwired from any UI control
 module	capture/pendant_phone.py	TODO(FIX-09): voice/pendant capture path imported only by tests — the voice seam is not wired into the running engine
-endpoint	/agent/reset	TODO(FIX-12): agent control plane only driven by engine/scripts, never by a product surface
-endpoint	/agent/events	TODO(FIX-12): agent event stream has no product consumer
-endpoint	/agent/resume	TODO(FIX-12): agent resume (wall-handoff continue) has no product caller — the handoff loop can't close from the UI
-endpoint	/agent/judge	TODO(FIX-12): agent judge endpoint script-only
+endpoint	/agent/resume	TODO(FIX-12): agent resume (wall-handoff continue) has no product caller — the wall-handoff loop can't close from the UI yet; genuine future wiring, NOT superseded (the connected-Chrome /agent/run pauses on a login/captcha wall, texts the user, and resumes here)
 endpoint	/scorecard	TODO(FIX-14): glassbox scorecard only read by factory/scripts tooling — the ledger never reaches the product surface
 endpoint	/goals/{goal_id}	TODO(FIX-14): goal drill-down only used by factory/persona tooling, no product caller
 endpoint	/gateway	TODO(FIX-14): gateway ledger dump script-only; the UI reads /proactive/gateway/recent instead — dedupe or wire
 route	/api/glassbox	TODO(FIX-14): glassbox proxy route built, no UI ledger view fetches it
-endpoint	/ws/state	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
-endpoint	/ws/reload	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
-endpoint	/ws/browse	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
-endpoint	/ws/observe	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
-endpoint	/ws/act	TODO(FIX-15): browser-hand control plane driven only by engine/scripts harnesses, never by a product surface
-endpoint	/agent/act	TODO(FIX-15): throwaway browser-use arm, superseded as the product path by the connected-Chrome /agent/run (wired to the board "do it on the web" control 2026-07-03); browse_act stays the no-extension fallback inside _run_browser_and_confirm, but the HTTP endpoint itself has no product caller
+# ---------------------------------------------------------------- SUPERSEDED-by-/agent/run (dead browser control-plane arms; kept, not deleted; not TODO debt)
+endpoint	/ws/state	SUPERSEDED-by-/agent/run: browser-hand harness/ops control plane (engine/scripts only); the product "do it on the web" path is the connected-Chrome /agent/run, wired to the board via /api/browser/run (S9) — no product caller by design, not debt
+endpoint	/ws/reload	SUPERSEDED-by-/agent/run: browser-hand harness/ops control plane (engine/scripts only); product path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
+endpoint	/ws/browse	SUPERSEDED-by-/agent/run: throwaway browser-use arm control plane (engine/scripts only); product path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
+endpoint	/ws/observe	SUPERSEDED-by-/agent/run: throwaway browser-use arm control plane (engine/scripts only); product path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
+endpoint	/ws/act	SUPERSEDED-by-/agent/run: throwaway browser-use arm control plane (engine/scripts only); product path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
+endpoint	/agent/act	SUPERSEDED-by-/agent/run: throwaway browser-use arm HTTP endpoint; the connected-Chrome /agent/run (board "do it on the web" control, wired via /api/browser/run S9, 2026-07-03) is the product path — browse_act stays the no-extension fallback inside _run_browser_and_confirm, but the endpoint itself has no product caller by design, not debt
+endpoint	/agent/reset	SUPERSEDED-by-/agent/run: agent-control dev/ops endpoint (engine/scripts only); the product browser path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
+endpoint	/agent/events	SUPERSEDED-by-/agent/run: agent step-stream dev/ops endpoint (engine/scripts + dev console only); the product browser path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
+endpoint	/agent/judge	SUPERSEDED-by-/agent/run: agent-judge dev/ops endpoint (engine/scripts only); the product browser path is the connected-Chrome /agent/run via /api/browser/run (S9) — no product caller by design, not debt
 module	hands/browser_use_runner.py	by-design subprocess: executed by the 3.11 bridge venv via browser_use_link (never imported by the 3.10 engine — the isolation IS the design); product-wired 2026-07-02 as the research/no-link browser arm
 route	/api/owner/session	TODO(FIX-17): owner session/auth route only exercised by scripts/test_owner_app_auth.sh — the login UI never calls it
 module	core/workers/browser.py	test-infrastructure: BrowserStub is the suite mock worker, re-exported by core/workers/__init__.py (product package) and used by 20+ suite tests
