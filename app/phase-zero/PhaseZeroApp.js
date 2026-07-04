@@ -1549,6 +1549,59 @@ function AppPermissionsPanel() {
   );
 }
 
+// The comms-line mock/live toggle — Omar's ask: one button in Settings to flip it. Reads the REAL
+// engine mode (not a local display store) and flips it in place. Test mode keeps everything on this
+// machine; live lets the assistant text and call for real. Going live still needs the credentials +
+// phone configured — when they're missing the label says so and the line stays safe, so the button
+// flips the intent honestly without ever fabricating a live line out of thin config.
+function ChannelModePanel() {
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setState(await jsonFetch("/api/channels/mode"));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+  }, []);
+
+  async function flip() {
+    if (busy || !state) return;
+    setBusy(true);
+    const next = state.mode === "live" ? "mock" : "live";
+    try {
+      setState(await jsonFetch("/api/channels/mode", { method: "POST", body: JSON.stringify({ mode: next }) }));
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error) return <p className="pz-note">I could not read the line status right now: {error}</p>;
+  if (!state) return <p className="pz-note">Checking the line…</p>;
+  const isLive = state.mode === "live";
+  return (
+    <div className="pz-channel-mode">
+      <div className="pz-perm-row">
+        <div>
+          <strong>{isLive ? "Live — I can text and call you for real." : "Test mode — nothing real leaves this machine."}</strong>
+          <small>{state.label || (isLive ? "Live line active" : "Safe by default")}</small>
+        </div>
+        <span className={`pz-pill pz-pill-${isLive ? "live" : "coming_soon"}`}>{isLive ? "Live" : "Test"}</span>
+      </div>
+      <button className="pz-button ghost" type="button" onClick={flip} disabled={busy}>
+        {busy ? "Switching…" : isLive ? "Switch to test mode" : "Switch to live"}
+      </button>
+    </div>
+  );
+}
+
 function SettingsScreen({ settings, setSettings, saveSettings }) {
   // Memory drawers (facts / inferred / open loops / history) + the forget-me control fold in here
   // from the retired /memory screen (UI_SPEC step 8). One reload() refreshes both after a wipe.
@@ -1658,6 +1711,16 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
             <input value={settings.textCall?.phone || ""} onChange={(event) => patch("textCall.phone", event.target.value)} />
           </label>
           <p className="pz-note">Text mirror: {humanStatus(settings.textCall?.proofMirror || "coming_soon")}.</p>
+          </div>
+        </details>
+        <details className="pz-settings-group">
+          <summary>
+            <span>Live actions</span>
+            <small>Test or live</small>
+          </summary>
+          <div className="pz-settings-body">
+            <p className="pz-note">Test mode keeps everything on this machine — nothing real is sent. Switch to live and I can text and call you for real. Anything sensitive still asks first.</p>
+            <ChannelModePanel />
           </div>
         </details>
         <details className="pz-settings-group">

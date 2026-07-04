@@ -23,12 +23,28 @@ act/ask still flows through the proactive spine on the ambient transcript, exact
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from ..core.gateway import PROVIDER_OPENROUTER, SMART
 from ..proactive.agent_reply import _FALLBACK as _REPLY_FALLBACK
 from ..proactive.agent_reply import agent_reply
 from ..proactive.decider import ACT, ASK, SILENT, UNAVAILABLE, Decider
+
+
+def voice_execute_enabled() -> bool:
+    """Config-ready gate: does a spoken /cr utterance ALSO run through the owner action spine?
+
+    The spoken reply above is words only. When this is on, the /cr handler ADDITIONALLY feeds
+    each owner utterance into ``ControlCore.owner_ingest(execute_actions=True)`` — the exact same
+    door as typed/MP3/SMS intake — so a spoken task actually creates a card/errand. Safety is the
+    spine's, unchanged: no new gate is added here; owner_ingest holds money/irreversible as an ASK
+    and a vent stays SILENT, exactly as the typed path already does.
+
+    OFF by default (mirrors ``InboundPoller.live_ready()``): the dev-proven words-only voice path is
+    untouched unless the operator opts in with ``ANTICIPY_VOICE_EXECUTE`` truthy, so the suite and
+    every existing call flow are unaffected until voice→act is deliberately turned on."""
+    return (os.environ.get("ANTICIPY_VOICE_EXECUTE", "") or "").strip().lower() in {"1", "true", "yes", "on"}
 
 # Spoken renderings of each verdict. Short, plain sentences — they are read aloud by
 # Twilio TTS, so no markup, no lists, no jargon. Each maps 1:1 to a decider verdict so

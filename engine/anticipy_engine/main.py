@@ -37,7 +37,12 @@ from . import __version__
 from .agent import WebVoyagerAgent, judge
 from .agent import events as agent_events
 from .capture.transcribe import is_audio_file, transcribe_audio
-from .channels.conversation_relay import ConversationRelayBrain, OnboardingCallBrain, stream_tokens
+from .channels.conversation_relay import (
+    ConversationRelayBrain,
+    OnboardingCallBrain,
+    stream_tokens,
+    voice_execute_enabled,
+)
 from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
 from .core import registry
@@ -738,6 +743,37 @@ def readiness() -> dict:
     need-connecting, with the honest one-liner of what to do — exposing PRESENCE/ABSENCE
     of config only, never any secret value. Read-only; grants and connects nothing."""
     return _connect_readiness(current_core())
+
+
+class ChannelModeIn(BaseModel):
+    mode: str  # "mock" | "live"
+
+
+@app.get("/channels/mode")
+def channels_mode_get() -> dict:
+    """Current comms-line mode + readiness for the Settings mock/live toggle.
+
+    Read-only. Reports mode (mock/live), whether the credentials and owner contact needed to
+    actually go live are present, and a human label — presence/absence of config only, never a
+    secret value or the phone number. The one honest source the toggle button reads."""
+    return current_core().channel_status()
+
+
+@app.post("/channels/mode")
+def channels_mode_set(body: ChannelModeIn) -> dict:
+    """Flip the comms line between MOCK (nothing real leaves the machine) and LIVE (real
+    text/call) — the single Settings button. Process-local: it sets ANTICIPY_CHANNELS_MODE,
+    which every send path re-reads at call time, so the flip is immediate and consistent across
+    text, call, and the inbound reply poll. Going LIVE still needs the credentials + owner phone;
+    the returned status reports if they're missing, and the send path stays mock-safe until they
+    are present — flipping the intent never fabricates a live transport out of thin config."""
+    mode = (body.mode or "").strip().lower()
+    if mode not in {"mock", "live"}:
+        raise HTTPException(status_code=400, detail="mode must be 'mock' or 'live'")
+    os.environ["ANTICIPY_CHANNELS_MODE"] = mode
+    c = current_core()
+    c.glassbox.log("channels_mode_set", {"mode": mode})
+    return c.channel_status()
 
 
 @app.get("/health")
@@ -2331,6 +2367,23 @@ async def conversation_relay(ws: WebSocket) -> None:
                 await ws.send_json({"type": "text", "token": "", "last": True})
                 core.glassbox.log("conversation_relay",
                                   {"event": "turn", "verdict": turn.verdict})
+                # VOICE -> ACT: the spoken reply above is words only. When voice execution is
+                # turned on (config-ready, OFF by default — see voice_execute_enabled(), the
+                # InboundPoller-style gate), ALSO route the utterance into the SAME owner action
+                # spine as typed/MP3/SMS intake, so a spoken task actually creates a card/errand.
+                # Safety is the spine's, reused not rebuilt: owner_ingest holds money/irreversible
+                # as an ASK and a vent stays SILENT. Best-effort — an ingest error never breaks the
+                # live call (the reply already streamed); it can never SEND on the call itself.
+                if voice_execute_enabled():
+                    with suppress(Exception):
+                        ingest = await core.owner_ingest(
+                            "voice", msg.get("voicePrompt") or "",
+                            {"channel": "conversation_relay", "from": "owner"},
+                            execute_actions=True)
+                        core.glassbox.log(
+                            "conversation_relay",
+                            {"event": "voice_ingested",
+                             "cards": len((ingest or {}).get("cards") or [])})
             elif kind in ("interrupt", "dtmf", "setup"):
                 # Twilio control frames — nothing to say back; the next prompt drives.
                 continue
