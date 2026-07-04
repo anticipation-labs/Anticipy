@@ -2,39 +2,58 @@
 
 :root {
   color-scheme: light;
-  --bg: #faf9f7;
-  --bg-2: #f3f1ed;
-  --ink: #141311;
-  --ink-soft: #2e2d2a;
-  --muted: #6b6860;
-  --faint: #9e9a92;
-  --line: #e8e5de;
-  --line-soft: #f0ede6;
-  --panel: #ffffff;
-  --panel-2: #f6f4f0;
-  --white: #ffffff;
 
-  --do: #1a7f55;
-  --do-bg: #eaf7f0;
-  --ask: #b07912;
-  --ask-bg: #fef8eb;
-  --blocked: #c4423a;
-  --blocked-bg: #fdf0ee;
-  --remember: #3570a7;
-  --remember-bg: #edf3fa;
-  --calm: #8a857b;
-  --calm-bg: #f3f1ed;
+  /* Surfaces (charcoal / cream) */
+  --bg:#faf9f7; --bg-tint:#f4f1eb; --panel:#ffffff; --panel-tint:#f6f4f0;
 
-  --shadow-xs: 0 1px 2px rgba(20, 19, 17, 0.04);
-  --shadow-sm: 0 1px 3px rgba(20, 19, 17, 0.06), 0 1px 2px rgba(20, 19, 17, 0.04);
-  --shadow: 0 4px 16px rgba(20, 19, 17, 0.06), 0 1px 3px rgba(20, 19, 17, 0.04);
-  --shadow-lg: 0 16px 48px rgba(20, 19, 17, 0.1), 0 4px 12px rgba(20, 19, 17, 0.04);
-  --shadow-listen: 0 20px 60px rgba(20, 19, 17, 0.14), 0 6px 20px rgba(20, 19, 17, 0.06);
-  --radius: 16px;
-  --radius-sm: 12px;
-  --radius-xs: 8px;
-  --serif: "DM Serif Display", "Fraunces", Georgia, "Times New Roman", serif;
-  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Ink */
+  --ink:#141311; --ink-soft:#2e2d2a; --muted:#6b6860; --faint:#9e9a92;
+
+  /* Lines (hairlines do the separating) */
+  --line:#e8e5de; --line-soft:#f0ede6; --line-strong:#d9d5cc;
+
+  /* Gold — the single brand accent */
+  --gold:#b07912; --gold-strong:#97650a; --gold-tint:#fef8eb;
+  --gold-ring:rgba(176,121,18,.28);
+
+  /* Semantic (muted, editorial — never neon) */
+  --do:#1a7f55;      --do-bg:#eaf7f0;    /* On it */
+  --ask:#b07912;     --ask-bg:#fef8eb;   /* Waiting for you (== gold) */
+  --blocked:#c4423a; --blocked-bg:#fdf0ee;/* Needs a yes */
+  --remember:#3570a7;--remember-bg:#edf3fa;/* I'll remember */
+  --calm:#8a857b;    --calm-bg:#f3f1ed;  /* Resting */
+
+  /* Spacing: 4px base, 8px rhythm */
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px;
+  --s-5:24px; --s-6:32px; --s-7:48px; --s-8:64px;
+
+  /* Radius (continuous feel) */
+  --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:20px; --r-pill:999px;
+
+  /* Elevation: low, warm, charcoal-tinted (never black) */
+  --shadow-xs:0 1px 2px rgba(20,19,17,.04);
+  --shadow-sm:0 1px 3px rgba(20,19,17,.06), 0 1px 2px rgba(20,19,17,.04);
+  --shadow-md:0 4px 16px rgba(20,19,17,.06), 0 1px 3px rgba(20,19,17,.04);
+  --shadow-lg:0 16px 48px rgba(20,19,17,.10), 0 4px 12px rgba(20,19,17,.04);
+  --ring:0 0 0 1px var(--line);           /* elevation-by-hairline */
+  --ring-gold:0 0 0 1px var(--gold-ring); /* active / focus */
+
+  /* Type */
+  --serif:"DM Serif Display","Fraunces",Georgia,serif;
+  --sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+
+  /* Motion (one ease, one spring, three durations) */
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --ease-in-out:cubic-bezier(.4,0,.2,1);
+  --spring:cubic-bezier(.34,1.56,.64,1);  /* checkbox / commit overshoot */
+  --t-fast:120ms; --t:180ms; --t-slow:280ms;
+
+  /* Legacy aliases — old names still referenced across globals.css; retire in the
+     mechanical §9 sed cleanup. Same values, so visuals are unchanged. */
+  --bg-2:var(--bg-tint); --panel-2:var(--panel-tint); --white:#ffffff;
+  --shadow:var(--shadow-md);
+  --shadow-listen:0 20px 60px rgba(20,19,17,.14), 0 6px 20px rgba(20,19,17,.06);
+  --radius:var(--r-md); --radius-sm:var(--r-sm); --radius-xs:var(--r-xs);
 }
 
 * { box-sizing: border-box; }
@@ -52,6 +71,10 @@ body {
 button, textarea, select, input { font: inherit; color: inherit; }
 button { border: 0; cursor: pointer; }
 a { color: inherit; }
+
+/* §1.5 global focus + motion defaults */
+:focus-visible { box-shadow: var(--ring-gold); outline: none; border-radius: inherit; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition-duration: 1ms !important; } }
 
 /* Phase Zero full-flow UI */
 .pz {
@@ -173,8 +196,8 @@ a { color: inherit; }
 }
 
 .pz-top h1 {
-  font-size: clamp(32px, 5vw, 56px);
-  line-height: 1;
+  font: 400 clamp(28px, 4vw, 34px)/1.08 var(--serif);
+  color: var(--ink);
 }
 
 .pz-kicker {
@@ -1555,34 +1578,29 @@ a { color: inherit; }
   .ant-hero { padding: 32px 0 0; }
 }
 
-/* Phase Zero V2: consumer app surface */
+/* Phase Zero V2 surface — was the dark block; now aliases to the light system (§1.2).
+   One edit flips board/orb/deck/settings/connect to the cohesive editorial theme;
+   trivially revertible. The 73 --pz-* call sites resolve to light tokens. */
 :root {
-  --pz-bg: #080807;
-  --pz-bg-soft: #10100e;
-  --pz-surface: rgba(245, 242, 235, 0.08);
-  --pz-surface-strong: rgba(245, 242, 235, 0.13);
-  --pz-cream: #f8f4ec;
-  --pz-cream-soft: rgba(248, 244, 236, 0.68);
-  --pz-muted: rgba(248, 244, 236, 0.48);
-  --pz-line: rgba(248, 244, 236, 0.14);
-  --pz-line-strong: rgba(248, 244, 236, 0.24);
-  --pz-gold: #d7b36a;
-  --pz-good: #53c391;
-  --pz-red: #d65b4a;
+  --pz-bg:var(--bg);          --pz-bg-soft:var(--bg-tint);
+  --pz-surface:var(--panel);  --pz-surface-strong:var(--panel-tint);
+  --pz-cream:var(--ink);      --pz-cream-soft:var(--ink-soft);
+  --pz-muted:var(--muted);    --pz-faint:var(--faint);
+  --pz-line:var(--line);      --pz-line-strong:var(--line-strong);
+  --pz-gold:var(--gold);      --pz-gold-soft:var(--gold-tint);
+  --pz-good:var(--do);        --pz-red:var(--blocked);
 }
 
 body {
-  background: var(--pz-bg);
+  background: var(--bg);
+  color: var(--ink);
 }
 
 .pz {
   min-height: 100vh;
   display: block;
-  color: var(--pz-cream);
-  background:
-    radial-gradient(circle at 50% 18%, rgba(215, 179, 106, 0.12), transparent 28rem),
-    radial-gradient(circle at 72% 34%, rgba(255, 255, 255, 0.05), transparent 22rem),
-    linear-gradient(180deg, #050505 0%, var(--pz-bg) 48%, #0c0b09 100%);
+  color: var(--ink);
+  background: var(--bg);
 }
 
 .pz-appbar {
@@ -1722,13 +1740,8 @@ body {
   align-items: center;
 }
 
-.pz-top h1 {
-  color: var(--pz-muted);
-  font-family: var(--sans);
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.2;
-}
+/* §1.4 double-title fix: the tiny-grey 15px sans override is deleted so the single
+   serif Title rule (globals.css §1.4) wins on Sign in / Setup / Settings. */
 
 .pz-kicker {
   color: var(--pz-gold);
