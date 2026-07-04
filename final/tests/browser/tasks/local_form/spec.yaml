@@ -1,0 +1,20 @@
+id: local_form
+kind: form_action
+commit_boundary: submit          # grader-owned throwaway backend -> full submit is safe
+# The harness substitutes the real start URL at run time: the embedded server's
+# loopback URL in --selftest, or ANTICIPY_LOCALFORM_URL (a public tunnel to it)
+# for a live run (the /agent/run SSRF gate refuses loopback start URLs).
+start_url: "{LOCAL_FORM_URL}"
+max_steps: 16
+task: >
+  Fill out this shipping form and submit it. Set full name to
+  "Grader {NONCE}", order code to "ORD-{NONCE}", address to
+  "500 Test Ave", choose "express" ship speed, and put "handle-with-care" in
+  the notes. Then submit the order.
+needs:
+  - a public tunnel to the grader form (ANTICIPY_LOCALFORM_URL) for the live lane
+notes: >
+  (B) The gold-standard independent postcondition. The backend STORES the exact
+  fields it received; the checker re-reads them from GET /last on the same server,
+  so it verifies what the server actually got — never the agent's transcript. A
+  DOM-only "fill" with no trusted submit produces no /last record and fails.

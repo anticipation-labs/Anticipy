@@ -1,0 +1,18 @@
+id: wiki_search
+kind: search_readback
+commit_boundary: read             # read-only; no state changes
+start_url: https://en.wikipedia.org/wiki/Main_Page
+max_steps: 12
+task: >
+  Use the search box on this page to find the article about the Eiffel Tower,
+  open it, and tell me the year in which construction of the tower was completed.
+needs:
+  - live Chrome + extension connected on :8787
+notes: >
+  (C) search + click-through + page-content assertion. Independent re-read: the
+  checker itself fetches the canonical Eiffel Tower article and confirms the
+  ground-truth token (1889) is actually on the page, then asserts (i) the agent's
+  answer contains it and (ii) the agent actually navigated to the article
+  (final_url), so a guessed-from-memory answer without the click-through fails.
+assert_contains: "1889"
+target_url: https://en.wikipedia.org/wiki/Eiffel_Tower

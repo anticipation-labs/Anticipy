@@ -1,0 +1,20 @@
+id: httpbin_form
+kind: form_action
+commit_boundary: submit          # this form is disposable/stateless -> full submit is safe
+start_url: https://httpbin.org/forms/post
+max_steps: 16
+# {NONCE} is substituted by the harness at run time so every run plants a fresh,
+# unforgeable marker that can ONLY appear in the echoed JSON if a real submit happened.
+task: >
+  Fill out this pizza order form and submit it. Use customer name
+  "ANTICIPY-{NONCE}", telephone "5551234567", email "eval-{NONCE}@example.com",
+  choose the "large" pizza size, and put "order-{NONCE}" in the comments box.
+  After you submit, the server responds with a JSON page echoing what it
+  received; report the exact value the server shows for the "custname" field.
+needs:
+  - live Chrome + extension connected on :8787
+notes: >
+  (A) The stateless-echo template. httpbin echoes POSTed fields as JSON, so the
+  planted {NONCE} round-trips ONLY through a genuine submit. The independent
+  re-read is the browser's own DOM read-back of the echo page (result.final_text),
+  never the model's self-narration.
