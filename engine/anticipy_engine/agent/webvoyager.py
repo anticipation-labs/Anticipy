@@ -32,6 +32,7 @@ from .proof import confirm_stable_artifact
 from .guarded_step import MUTATION_CTRL, confirm_irreversible
 from .handoff import ask_message, classify_wall
 from .recipes import RECIPE_CACHE, RecipeStore, descriptor, match_index, recipe_key
+from .skills import SKILLS_ENABLED, SkillStore, retrieve as _retrieve_skills
 from . import events as _events
 
 # ── THE ONE UNLOCK FLAG ──────────────────────────────────────────────────────
@@ -592,6 +593,8 @@ class WebVoyagerAgent:
         self.per_subgoal = per_subgoal
         self.notifier = notifier  # async callable(str)->None; texts the user on a wall (None = log only)
         self.recipes = RecipeStore()  # learned-recipe cache (Pillar 4 / the cost-bend lever)
+        self.skills = SkillStore()    # S8: acquire-before-task skills registry (LIFT/ADMIT/RETRIEVE/PRUNE)
+        self._skill_candidates: List[dict] = []  # skills the classifier acquired for THIS task (observational)
         self._trace: List[dict] = []  # this run's PROGRESS actions, recorded for a future recipe
         self._notes: List[str] = []   # cross-page working memory: facts the agent records to aggregate later
         self._replayed = False        # True when this run was served from a cached recipe (no planner LLM)
@@ -1139,6 +1142,25 @@ class WebVoyagerAgent:
         self._page_corpus: dict = {}
         self._recipe_key = recipe_key(task, start_url)
         _events.publish({"type": "task_start", "task": task, "url": start_url, "max_steps": self.max_steps})
+
+        # ── S8 ACQUIRE-BEFORE-TASK ────────────────────────────────────────────────────────
+        # The agent decides FOR ITSELF whether a learned skill applies — by classifying the task's
+        # action-shape (never a hardcoded per-site rule) — then retrieves the 1-3 best by
+        # intent-match + hard rerank and surfaces them. This is additive/observational in the loop
+        # (the recipe-replay path below still serves the warm flow); the S9 product wire binds an
+        # actor and replays a matched skill via the SAME match_index self-heal. Best-effort: skill
+        # retrieval can never break the live loop.
+        self._skill_candidates = []
+        if SKILLS_ENABLED:
+            try:
+                self._skill_candidates = [
+                    {"id": s.skill_id, "tier": s.tier, "kind": s.kind}
+                    for s in _retrieve_skills(task, start_url, self.skills)
+                ]
+                if self._skill_candidates:
+                    _events.publish({"type": "skills", "acquire_before_task": self._skill_candidates})
+            except Exception:
+                self._skill_candidates = []
         self._call_base = len(self.gw.calls) if hasattr(self.gw, "calls") else 0
         self._cost_base = self.gw.total_cost() if hasattr(self.gw, "total_cost") else 0.0
         self._smart_base = len(self.gw.smart_calls) if hasattr(self.gw, "smart_calls") else 0
