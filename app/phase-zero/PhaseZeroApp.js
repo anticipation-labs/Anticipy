@@ -1047,6 +1047,239 @@ function PendingAsksPanel({ pendingAsks, onResolve }) {
   );
 }
 
+// A6 — the premium swipe deck (M7 shell). The owner-cards board is a calm, one-at-a-time deck: the
+// top card is draggable and every gesture fires a REAL engine mutation — never a decorative
+// animation. Swipe right = confirm (/api/resolve approved), left = not now (/api/resolve deny, or
+// /api/owner/stop for an in-flight opt-out chore), up = allow autonomy (/api/owner/autonomy). The
+// note affordance writes real feedback (/api/tasks/comments). Cards leave the deck only because the
+// action behind them committed; the /api/owner/cards reload the handlers trigger is the truth.
+const SWIPE_THRESHOLD = 96;
+
+function SwipeDeck({ cards, comments, textMirror, sortMode, setSortMode, resolveCard, stopCard, allowAutonomy, saveComment }) {
+  const [handled, setHandled] = useState(() => new Set());
+
+  const sorted = useMemo(() => {
+    const copy = [...cards];
+    if (sortMode === "needs_approval") copy.sort((a, b) => Number(b.risk === "ask") - Number(a.risk === "ask"));
+    if (sortMode === "source") copy.sort((a, b) => a.category.localeCompare(b.category));
+    if (sortMode === "newest") copy.reverse();
+    return copy;
+  }, [cards, sortMode]);
+
+  const deck = useMemo(() => sorted.filter((card) => !handled.has(card.id)), [sorted, handled]);
+
+  // A card the engine dropped after its action no longer needs a slot in `handled` — prune stale
+  // ids so the set never leaks (and a re-created card id can reappear honestly).
+  useEffect(() => {
+    setHandled((current) => {
+      if (current.size === 0) return current;
+      const live = new Set(sorted.map((card) => card.id));
+      let changed = false;
+      const next = new Set();
+      current.forEach((id) => { if (live.has(id)) next.add(id); else changed = true; });
+      return changed ? next : current;
+    });
+  }, [sorted]);
+
+  function retire(cardId) {
+    setHandled((current) => {
+      if (current.has(cardId)) return current;
+      const next = new Set(current);
+      next.add(cardId);
+      return next;
+    });
+  }
+
+  // Route each gesture to its real, already-wired handler. Deny stops an in-flight opt-out chore
+  // (/api/owner/stop) when there is one, otherwise it declines the ask (/api/resolve approved:false).
+  function actionFor(card, direction) {
+    if (direction === "confirm") return resolveCard(card, true);
+    if (direction === "autonomy") return allowAutonomy(card);
+    const raw = card.raw || {};
+    const optOut = Boolean(raw.execution?.opt_out || raw.args?.opt_out);
+    const inFlight = !["stopped", "done", "failed", "blocked"].includes(card.status);
+    if (stopCard && optOut && inFlight) return stopCard(card);
+    return resolveCard(card, false);
+  }
+
+  const remaining = deck.length;
+  return (
+    <section className="pz-deck-shell" aria-label="Your cards">
+      <div className="pz-deck-head">
+        <div>
+          <h3>{remaining ? `${remaining} thing${remaining === 1 ? "" : "s"} for you` : "All caught up"}</h3>
+          <p className="pz-deck-sub">Swipe or tap — every choice runs for real.</p>
+        </div>
+        <select
+          className="pz-deck-sort"
+          value={sortMode}
+          onChange={(event) => setSortMode(event.target.value)}
+          aria-label="Order the deck"
+        >
+          <option value="priority">Priority</option>
+          <option value="needs_approval">Needs approval</option>
+          <option value="source">Source</option>
+          <option value="newest">Newest</option>
+        </select>
+      </div>
+      {remaining ? (
+        <div className="pz-deck-stack">
+          {deck.slice(0, 3).map((card, index) => (
+            <DeckCard
+              key={card.id}
+              card={card}
+              comment={comments[card.id] || ""}
+              mirror={textMirror[card.id]?.status || "coming_soon"}
+              depth={index}
+              interactive={index === 0}
+              onAction={(direction) => actionFor(card, direction)}
+              onRetire={() => retire(card.id)}
+              onFeedback={(note) => saveComment(card.id, note)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="pz-deck-empty">
+          <span className="pz-deck-empty-mark" aria-hidden="true">✓</span>
+          <p>Nothing waiting. I'll surface the next thing here the moment it lands.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DeckCard({ card, comment, mirror, depth, interactive, onAction, onRetire, onFeedback }) {
+  const [drag, setDrag] = useState({ x: 0, y: 0, active: false });
+  const [exit, setExit] = useState(null); // "confirm" | "deny" | "autonomy"
+  const [busy, setBusy] = useState(false);
+  const [showNote, setShowNote] = useState(false);
+  const [note, setNote] = useState(comment || "");
+  const [noteSaved, setNoteSaved] = useState(false);
+  const startRef = useRef(null);
+
+  useEffect(() => { setNote(comment || ""); }, [comment]);
+
+  const raw = card.raw || {};
+  const optOut = Boolean(raw.execution?.opt_out || raw.args?.opt_out);
+  const inFlight = !["stopped", "done", "failed", "blocked"].includes(card.status);
+  const denyLabel = optOut && inFlight ? "Stop" : "Not now";
+
+  function commit(direction) {
+    if (busy || !interactive) return;
+    setBusy(true);
+    setExit(direction);
+    try { Promise.resolve(onAction(direction)); } catch { /* reload behind the card is the truth */ }
+    // Let the card slide off, then drop it from the deck — the engine reload the handler fired is
+    // the source of truth, this only clears the acted-on card from view.
+    window.setTimeout(() => onRetire(), 260);
+  }
+
+  function onPointerDown(event) {
+    if (!interactive || busy) return;
+    if (event.target.closest("button, textarea, select, a, summary, input")) return;
+    startRef.current = { x: event.clientX, y: event.clientY };
+    setDrag({ x: 0, y: 0, active: true });
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* capture is best-effort */ }
+  }
+  function onPointerMove(event) {
+    if (!drag.active || !startRef.current) return;
+    setDrag({ x: event.clientX - startRef.current.x, y: event.clientY - startRef.current.y, active: true });
+  }
+  function onPointerUp() {
+    if (!drag.active) return;
+    const { x, y } = drag;
+    startRef.current = null;
+    setDrag({ x: 0, y: 0, active: false });
+    if (x > SWIPE_THRESHOLD) commit("confirm");
+    else if (x < -SWIPE_THRESHOLD) commit("deny");
+    else if (y < -SWIPE_THRESHOLD) commit("autonomy");
+  }
+
+  async function sendNote() {
+    setNoteSaved(false);
+    try { await onFeedback(note); setNoteSaved(true); } catch { /* stays open so the note isn't lost */ }
+  }
+
+  let transform;
+  let transition;
+  let opacity = 1;
+  if (exit) {
+    const offX = exit === "confirm" ? "130%" : exit === "deny" ? "-130%" : "0%";
+    const offY = exit === "autonomy" ? "-150%" : "0%";
+    const rot = exit === "confirm" ? 14 : exit === "deny" ? -14 : 0;
+    transform = `translate(${offX}, ${offY}) rotate(${rot}deg)`;
+    transition = "transform 260ms ease, opacity 260ms ease";
+    opacity = 0;
+  } else if (interactive) {
+    transform = `translate(${drag.x}px, ${drag.y}px) rotate(${(drag.x * 0.04).toFixed(2)}deg)`;
+    transition = drag.active ? "none" : "transform 240ms cubic-bezier(.2,.8,.2,1)";
+  } else {
+    transform = `translateY(${depth * 12}px) scale(${(1 - depth * 0.045).toFixed(3)})`;
+    transition = "transform 240ms ease";
+    opacity = 1 - depth * 0.14;
+  }
+
+  const hint = !exit && interactive && drag.active
+    ? (drag.x > 40 ? "confirm" : drag.x < -40 ? "deny" : drag.y < -40 ? "autonomy" : null)
+    : null;
+
+  return (
+    <article
+      className={`pz-deck-card pz-task-${card.risk}${hint ? ` hint-${hint}` : ""}${interactive ? " is-top" : ""}`}
+      style={{ transform, transition, opacity, zIndex: 30 - depth, position: depth === 0 ? "relative" : "absolute" }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      aria-hidden={!interactive}
+    >
+      <div className="pz-deck-card-top">
+        <span className="pz-category">{card.category}</span>
+        <StatusPill value={card.status === "needs_approval" ? "coming_soon" : card.status} />
+      </div>
+      <h4 className="pz-deck-title">{humanTitle(card.title)}</h4>
+      {card.checkIn ? <p className="pz-deck-checkin">{card.checkIn}</p> : null}
+      {interactive ? (
+        <>
+          <details className="pz-proof-details pz-deck-proof">
+            <summary>Proof</summary>
+            <dl className="pz-task-detail">
+              <div><dt>Heard</dt><dd>{card.heard || "—"}</dd></div>
+              <div><dt>Browser work</dt><dd>{card.browserWork || "—"}</dd></div>
+              <div><dt>Proof</dt><dd>{card.browserReceipt ? <BrowserReceipt receipt={card.browserReceipt} /> : (card.proof || "—")}</dd></div>
+              <div><dt>Memory</dt><dd>{card.memory || "—"}</dd></div>
+            </dl>
+            <p className="pz-deck-mirror">Text mirror: {humanStatus(mirror)}</p>
+            <SourceTagList tags={card.sourceTags} />
+          </details>
+          {showNote ? (
+            <div className="pz-deck-feedback">
+              <textarea
+                value={note}
+                onChange={(event) => { setNote(event.target.value); setNoteSaved(false); }}
+                placeholder="Tell me what to change — I'll keep it on this one."
+                aria-label="Feedback note"
+              />
+              <div className="pz-deck-feedback-row">
+                <button type="button" className="pz-button subtle" onClick={() => setShowNote(false)}>Close</button>
+                <button type="button" className="pz-button ghost" onClick={sendNote} disabled={!note.trim()}>
+                  {noteSaved ? "Saved" : "Send note"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <div className="pz-deck-actions">
+            <button type="button" className="pz-deck-act deny" onClick={() => commit("deny")} disabled={busy}>{denyLabel}</button>
+            <button type="button" className="pz-deck-act note" onClick={() => setShowNote((open) => !open)} disabled={busy}>Note</button>
+            <button type="button" className="pz-deck-act autonomy" onClick={() => commit("autonomy")} disabled={busy}>Autonomy</button>
+            <button type="button" className="pz-deck-act confirm" onClick={() => commit("confirm")} disabled={busy}>Confirm</button>
+          </div>
+        </>
+      ) : null}
+    </article>
+  );
+}
+
 function MainScreen(props) {
   return (
     <div className="pz-scene pz-board-scene pz-main-collapsed">
@@ -1055,7 +1288,7 @@ function MainScreen(props) {
       <WebActionPanel {...props} />
       <BoardActionsPanel {...props} />
       <PendingAsksPanel pendingAsks={props.pendingAsks} onResolve={props.resolvePending} />
-      {props.cards.length ? <TaskBoard {...props} limit={4} /> : null}
+      {props.cards.length ? <SwipeDeck {...props} /> : null}
     </div>
   );
 }
@@ -2164,6 +2397,23 @@ export default function PhaseZeroApp({ screen = "board" }) {
     }
   }
 
+  // A6 swipe deck — "Allow autonomy" on a card = the owner opting this class of work OUT of
+  // ask-first. It raises the REAL engine autonomy gate (POST /api/owner/autonomy full_send — the
+  // same gate the Settings dropdown drives, FIX-04), and when the card is a waiting ask it approves
+  // that ask in the same gesture so the deck advances honestly. Fully reversible from Settings; it
+  // never bypasses the money/irreversible hard-stop, which stays ask-first at any autonomy level.
+  async function allowAutonomy(card) {
+    try {
+      await jsonFetch("/api/owner/autonomy", { method: "POST", body: JSON.stringify({ mode: "full_send" }) });
+      if (card?.askId) {
+        await jsonFetch("/api/resolve", { method: "POST", body: JSON.stringify({ ask_id: card.askId, approved: true }) });
+      }
+    } catch {
+      /* the reload below shows the honest state either way */
+    }
+    await Promise.allSettled([loadCards(), loadPending(), loadGatewayEvents()]);
+  }
+
   // FIX-12: close the wall-handoff loop from the board. A connected-Chrome run that paused on a
   // login/verification wall hands back (and texts you); once you've cleared the wall in your own
   // browser, "Continue" resumes from the now-unblocked page. POST /api/agent/resume -> engine
@@ -2342,6 +2592,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
     uploadFile,
     saveComment,
     resolveCard,
+    allowAutonomy,
     continueCard,
     startBrowserListening,
     stopBrowserListening,

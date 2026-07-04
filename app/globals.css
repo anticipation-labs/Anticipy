@@ -3344,3 +3344,247 @@ body:not(.pz-debug) .pz-only-debug { display: none !important; }
 .shell .recap-fact { margin: 0; }
 .shell .recap-value { margin: 0; color: var(--pz-cream-soft); font-size: 14px; line-height: 1.5; }
 .shell .recap-empty { margin: 0; color: var(--pz-muted); font-size: 14px; font-style: italic; }
+
+/* A6 — premium swipe deck (M7 shell) on the board. Calm, one card at a time; the top card is
+   draggable and every gesture is a real action, so the motion is honest, not decorative. */
+.pz-deck-shell {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 16px;
+}
+
+.pz-deck-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pz-deck-head h3 {
+  margin: 0;
+  color: var(--pz-cream);
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(26px, 3.4vw, 40px);
+  line-height: 1.04;
+}
+
+.pz-deck-sub {
+  margin: 6px 0 0;
+  color: var(--pz-muted);
+  font-size: 13px;
+}
+
+.pz-deck-sort {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--pz-line);
+  border-radius: 999px;
+  background: rgba(248, 244, 236, 0.05);
+  color: var(--pz-cream);
+}
+
+.pz-deck-stack {
+  position: relative;
+  display: block;
+  min-height: 300px;
+  padding: 8px 0 2px;
+}
+
+.pz-deck-card {
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 22px 24px;
+  border: 1px solid var(--pz-line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(248, 244, 236, 0.09), rgba(248, 244, 236, 0.045));
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.34);
+  display: grid;
+  gap: 12px;
+  will-change: transform;
+}
+
+.pz-deck-card.is-top {
+  cursor: grab;
+  touch-action: none;
+}
+
+.pz-deck-card.is-top:active {
+  cursor: grabbing;
+}
+
+.pz-deck-card[aria-hidden="true"] {
+  pointer-events: none;
+}
+
+.pz-deck-card.hint-confirm {
+  border-color: rgba(83, 195, 145, 0.6);
+  box-shadow: 0 0 0 1px rgba(83, 195, 145, 0.45), 0 26px 90px rgba(0, 0, 0, 0.34);
+}
+
+.pz-deck-card.hint-deny {
+  border-color: rgba(214, 91, 74, 0.6);
+  box-shadow: 0 0 0 1px rgba(214, 91, 74, 0.42), 0 26px 90px rgba(0, 0, 0, 0.34);
+}
+
+.pz-deck-card.hint-autonomy {
+  border-color: rgba(215, 179, 106, 0.7);
+  box-shadow: 0 0 0 1px rgba(215, 179, 106, 0.5), 0 26px 90px rgba(0, 0, 0, 0.34);
+}
+
+.pz-deck-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pz-deck-title {
+  margin: 0;
+  color: var(--pz-cream);
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.08;
+}
+
+.pz-deck-checkin {
+  margin: 0;
+  color: var(--pz-cream-soft);
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 60ch;
+}
+
+.pz-deck-proof summary {
+  color: var(--pz-muted);
+  font-size: 13px;
+}
+
+.pz-deck-mirror {
+  margin: 10px 0 0;
+  color: var(--pz-muted);
+  font-size: 12px;
+}
+
+.pz-deck-feedback {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--pz-line);
+  border-radius: 12px;
+  background: rgba(248, 244, 236, 0.04);
+}
+
+.pz-deck-feedback textarea {
+  min-height: 74px;
+  padding: 10px 12px;
+  border: 1px solid var(--pz-line);
+  border-radius: 10px;
+  background: rgba(8, 8, 7, 0.35);
+  color: var(--pz-cream);
+  resize: vertical;
+}
+
+.pz-deck-feedback-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pz-deck-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.pz-deck-act {
+  min-height: 48px;
+  border: 1px solid var(--pz-line);
+  border-radius: 12px;
+  background: rgba(248, 244, 236, 0.05);
+  color: var(--pz-cream);
+  font-size: 13px;
+  font-weight: 600;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.pz-deck-act:hover {
+  transform: translateY(-1px);
+}
+
+.pz-deck-act.confirm {
+  border-color: rgba(83, 195, 145, 0.5);
+  color: var(--pz-good);
+}
+
+.pz-deck-act.confirm:hover {
+  background: rgba(83, 195, 145, 0.12);
+}
+
+.pz-deck-act.deny {
+  border-color: rgba(214, 91, 74, 0.42);
+  color: #f0a99e;
+}
+
+.pz-deck-act.deny:hover {
+  background: rgba(214, 91, 74, 0.12);
+}
+
+.pz-deck-act.autonomy {
+  border-color: rgba(215, 179, 106, 0.45);
+  color: var(--pz-gold);
+}
+
+.pz-deck-act.autonomy:hover {
+  background: rgba(215, 179, 106, 0.12);
+}
+
+.pz-deck-act.note {
+  color: var(--pz-muted);
+}
+
+.pz-deck-act:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.pz-deck-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  border: 1px solid var(--pz-line);
+  border-radius: 18px;
+  background: rgba(248, 244, 236, 0.04);
+  text-align: center;
+}
+
+.pz-deck-empty-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid rgba(83, 195, 145, 0.45);
+  color: var(--pz-good);
+  font-size: 20px;
+}
+
+.pz-deck-empty p {
+  margin: 0;
+  color: var(--pz-muted);
+  max-width: 42ch;
+}
+
+@media (max-width: 720px) {
+  .pz-deck-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
