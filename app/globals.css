@@ -418,6 +418,12 @@ a { color: inherit; }
 .pz-pill {
   display: inline-flex;
   align-items: center;
+  /* P3 (2026-07-04): the pill was stretching to full card width as a flex/grid
+     child. Hug its text: auto width + start-align on both axes so it never
+     spans the header in a flex-column (.pz-stage-hero) or grid (.pz-form-intro). */
+  width: auto;
+  align-self: flex-start;
+  justify-self: start;
   min-height: 24px;
   padding: 0 8px;
   border-radius: 999px;
@@ -2063,7 +2069,10 @@ body {
 }
 
 .pz-onboarding-card {
-  align-items: stretch;
+  /* P4 (2026-07-04): was `stretch`, which pulled the short intro panel up to the
+     tall form's height — a near-empty box. `start` lets the intro card hug its
+     content so the stage reads balanced. */
+  align-items: start;
 }
 
 .pz-onboarding-card .pz-form-intro {
@@ -2102,9 +2111,13 @@ body {
 .pz-settings-body textarea,
 .pz-settings-body select,
 .pz-task-toolbar select {
-  border-color: var(--pz-line);
-  background: rgba(8, 8, 7, 0.52);
-  color: var(--pz-cream);
+  /* P1 (2026-07-04): the S1 light-theme flip missed form controls — they were
+     rgba(8,8,7,.52) dark-grey against the cream surface. Now light cream fields
+     with charcoal ink, matching the editorial theme. */
+  background: var(--panel-tint, #f6f4f0);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
 }
 
 .pz-form input:focus,
@@ -2115,8 +2128,8 @@ body {
 .pz-settings-body input:focus,
 .pz-settings-body textarea:focus,
 .pz-settings-body select:focus {
-  border-color: rgba(215, 179, 106, 0.54);
-  box-shadow: 0 0 0 3px rgba(215, 179, 106, 0.1);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-ring);
 }
 
 .pz-form label,
@@ -2290,35 +2303,38 @@ body {
   color: var(--pz-muted);
 }
 
+/* P3/S1 (2026-07-04): these were dark-theme flip leftovers (pale mint/gold/salmon
+   text on faint fills) that render low-contrast on cream — the "Live" pill was
+   near-illegible. Restored to the light semantic tokens (dark ink on pale tint). */
 .pz-pill,
 .pz-tags span {
-  border-color: var(--pz-line);
-  background: rgba(248, 244, 236, 0.08);
-  color: var(--pz-cream-soft);
+  border-color: var(--line);
+  background: var(--panel-tint);
+  color: var(--muted);
 }
 
 .pz-pill-live,
 .pz-pill-ready,
 .pz-pill-cards_created {
-  border-color: rgba(83, 195, 145, 0.34);
-  background: rgba(83, 195, 145, 0.11);
-  color: #9ae6c3;
+  border-color: rgba(26, 127, 85, 0.22);
+  background: var(--do-bg);
+  color: var(--do);
 }
 
 .pz-pill-coming_soon,
 .pz-pill-seeded,
 .pz-pill-processing {
-  border-color: rgba(215, 179, 106, 0.32);
-  background: rgba(215, 179, 106, 0.1);
-  color: #f0d99b;
+  border-color: rgba(176, 121, 18, 0.24);
+  background: var(--ask-bg);
+  color: var(--ask);
 }
 
 .pz-pill-unavailable,
 .pz-pill-permission_denied,
 .pz-pill-blocked {
-  border-color: rgba(214, 91, 74, 0.32);
-  background: rgba(214, 91, 74, 0.1);
-  color: #ffb1a6;
+  border-color: rgba(196, 66, 58, 0.22);
+  background: var(--blocked-bg);
+  color: var(--blocked);
 }
 
 .pz-featured-task {
@@ -2631,6 +2647,23 @@ body {
   min-height: 100px;
   padding: 12px;
   resize: vertical;
+}
+
+/* P1 (2026-07-04): native <select> — strip the dark OS chrome (appearance:none)
+   and paint a light custom chevron so the control reads as a cream field, never
+   a dark-grey system dropdown. Placed after the padding rules above so its
+   padding-right (chevron gutter) wins the cascade. */
+.pz-form select,
+.pz-settings-body select,
+.pz-task-toolbar select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5l3.5 3.5 3.5-3.5' fill='none' stroke='%236b6860' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
 }
 
 /* S3 §3.8: on/off prefs are real pill switches — label left, 44x26 track on the
@@ -3249,6 +3282,9 @@ body:not(.pz-debug) .pz-only-debug { display: none !important; }
 /* UI step 7 — Main-screen collapse: one orb + one word + one input + cards (CANON/UI_SPEC §6). */
 .pz-main-collapsed { display: flex; flex-direction: column; gap: 28px; align-items: stretch; }
 .pz-listen-collapsed {
+  /* P2 (2026-07-04): was full-scene width and drifted off the right edge — now
+     constrained + centered to the same 720px column as .pz-oneinput / .pz-board. */
+  width: 100%; max-width: 720px; margin-inline: auto;
   display: flex; flex-direction: column; align-items: center; gap: 18px;
   padding: 48px 0 8px; text-align: center;
 }
