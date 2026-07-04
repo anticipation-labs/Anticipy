@@ -837,16 +837,71 @@ function drawerTexts(drawer, { activeOnly = true } = {}) {
     .filter(Boolean);
 }
 
+// S5 — per-person DOSSIERS, surfaced from REAL memory. The engine's people-discovery +
+// dossier synthesis tags each learned fact with the person it is about (MemoryItem.people;
+// see onboarding/dossier.py write_dossier_to_memory). Group the real drawer items by person
+// so the user can review the dossier Anticipy actually built for each person who matters.
+// Nothing is invented: a person only appears when a real, learned fact names them, and the
+// empty state is honest.
+function peopleDossiers(drawers) {
+  const byPerson = new Map();
+  for (const drawer of [drawers?.profile, drawers?.derived, drawers?.history]) {
+    const items = Array.isArray(drawer?.recent) ? drawer.recent : [];
+    for (const item of items) {
+      const text = String(item?.text || "").trim();
+      if (!text) continue;
+      const names = Array.isArray(item?.people) ? item.people : [];
+      for (const raw of names) {
+        const name = String(raw || "").trim();
+        if (!name) continue;
+        if (!byPerson.has(name)) byPerson.set(name, new Set());
+        byPerson.get(name).add(text);
+      }
+    }
+  }
+  return [...byPerson.entries()]
+    .map(([name, facts]) => ({ name, facts: [...facts] }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function PeopleDossierSection({ drawers }) {
+  const people = peopleDossiers(drawers);
+  return (
+    <section className="pz-people-dossiers">
+      <h3 className="pz-people-dossiers-head">People I know about ({people.length})</h3>
+      {people.length ? (
+        <div className="pz-grid two">
+          {people.map((person) => (
+            <article key={person.name} className="pz-panel pz-dossier-card">
+              <h4>{person.name}</h4>
+              <ul className="pz-list">
+                {person.facts.map((fact, index) => (
+                  <li key={`${person.name}-${index}`}>{fact}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="pz-note">No people yet — as I read your world, everyone who matters gets their own dossier here.</p>
+      )}
+    </section>
+  );
+}
+
 function LearnedMemoryPanel({ drawers, error, onResolveLoop }) {
   if (error) return <p className="pz-note">I could not read memory: {error}</p>;
   if (!drawers) return <p className="pz-note">Reading what I learned…</p>;
   return (
-    <section className="pz-grid two pz-memory-grid">
-      <ProfileSection title={`Facts I learned (${drawers.profile?.count || 0})`} items={drawerTexts(drawers.profile)} />
-      <ProfileSection title={`What I inferred — never promoted (${drawers.derived?.count || 0})`} items={drawerTexts(drawers.derived)} />
-      <OpenLoopsSection drawer={drawers.open_loops} onResolveLoop={onResolveLoop} />
-      <ProfileSection title={`Recent history (${drawers.history?.count || 0})`} items={drawerTexts(drawers.history).slice(-6)} />
-    </section>
+    <div className="pz-dossier">
+      <PeopleDossierSection drawers={drawers} />
+      <section className="pz-grid two pz-memory-grid">
+        <ProfileSection title={`Facts I learned (${drawers.profile?.count || 0})`} items={drawerTexts(drawers.profile)} />
+        <ProfileSection title={`What I inferred — never promoted (${drawers.derived?.count || 0})`} items={drawerTexts(drawers.derived)} />
+        <OpenLoopsSection drawer={drawers.open_loops} onResolveLoop={onResolveLoop} />
+        <ProfileSection title={`Recent history (${drawers.history?.count || 0})`} items={drawerTexts(drawers.history).slice(-6)} />
+      </section>
+    </div>
   );
 }
 
@@ -1168,15 +1223,19 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
         <h2>Does this feel right?</h2>
         <p>This is the last quiet check before Anticipy starts helping from the board.</p>
       </section>
-      <section className="pz-profile-summary">
-        <ProfileSection title="You" items={[
-          profile.name || "Name not confirmed yet.",
-          profile.summary || "Summary not confirmed yet.",
+      {/* S5: "What you told me" is a single honest confirmation of the CUSTOM PROFILE the user
+          stated (name/summary/trust/guardrails) — these are also pushed into the engine "You"
+          drawer by saveProfile (FIX-4.4). The old 4-column pz-profile-summary rendered People /
+          Tools / Open-loops from the (now-empty, FIX-4.1) LOCAL store, a dead scaffold competing
+          with the real learned dossier below. Removed per §3.6 + §5#3: the engine-backed
+          LearnedMemoryPanel (with per-person dossiers) is the ONE dossier surface. */}
+      <section className="pz-profile-you">
+        <ProfileSection title="What you told me" items={[
+          profile.name ? `Name: ${profile.name}` : "Name — not set yet.",
+          profile.summary ? profile.summary : "One-sentence summary — not set yet.",
           `Trust dial: ${profile.trustDial || "Regular"}`,
+          ...(profile.doNotTouch ? [`Always ask before: ${profile.doNotTouch}`] : []),
         ]} />
-        <ProfileSection title="People" items={(profile.people || []).map((person) => `${person.name}: ${person.role || person.relationship || "important"}`)} />
-        <ProfileSection title="Tools and systems" items={profile.tools || []} />
-        <ProfileSection title="Open loops" items={profile.openLoops || []} />
       </section>
       <LearnedMemoryPanel drawers={drawers} error={drawersError} onResolveLoop={reloadDrawers} />
       <form className="pz-panel pz-form" onSubmit={submitClarification}>

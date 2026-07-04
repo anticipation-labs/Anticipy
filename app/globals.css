@@ -2139,6 +2139,40 @@ body {
   gap: var(--s-3);
 }
 
+/* S5: onboarding-final "what you told me" — a single honest confirmation of the stated
+   custom profile (not a competing 4-column dossier). */
+.pz-profile-you {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-3);
+}
+
+/* S5: the learned dossier surface — the real per-person dossiers on top, the four
+   memory drawers below, one calm vertical rhythm. */
+.pz-dossier {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.pz-people-dossiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.pz-people-dossiers-head {
+  font: 600 17px/1.4 var(--sans);
+  color: var(--ink);
+  margin: 0;
+}
+
+.pz-dossier-card h4 {
+  font: 400 20px/1.15 var(--serif);
+  color: var(--ink);
+  margin: 0 0 var(--s-2);
+}
+
 /* S3 §3.5: the onboarding progress rail is a calm vertical list of status rows
    (label left, status word right), not a cramped 8-across strip. */
 .pz-timeline {
