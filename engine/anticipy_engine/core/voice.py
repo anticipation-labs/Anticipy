@@ -40,6 +40,29 @@ def reads_like_a_robot(text: str) -> bool:
     return any(w in low for w in JARGON_WORDS)
 
 
+# The device is a pendant, so an internal transcript/normalization sometimes names the speaker in
+# the THIRD person as "the wearer" ("Remind the wearer to email Priya"). But the person reading a
+# card or open loop IS that speaker — never a "wearer" — so render that framing in plain second
+# person. Possessive first ("the wearer's calendar" -> "your calendar"), then the bare noun.
+_WEARER_POSSESSIVE = re.compile(r"\b(?:the\s+)?wearer'?s\b", re.IGNORECASE)
+_WEARER = re.compile(r"\bthe\s+wearer\b|\bwearer\b", re.IGNORECASE)
+
+
+def humanize_person_framing(text: str) -> str:
+    """Rewrite the internal third-person 'the wearer' framing into plain second person — the user
+    reading this is that person, so 'Remind wearer to email Priya' must read 'Remind you to email
+    Priya'. Words only; leaves everything that isn't the wearer token untouched."""
+    if not text or "wearer" not in text.lower():
+        return text
+    out = _WEARER_POSSESSIVE.sub("your", text)
+    out = _WEARER.sub("you", out)
+    out = re.sub(r"\s{2,}", " ", out).strip()
+    # a sentence that STARTED with the wearer token now starts with a lowercased "you" — fix the case
+    if out[:4] == "you " and (text[:1].isupper() or text[:4].lower() == "the "):
+        out = "You " + out[4:]
+    return out
+
+
 _REMIND_PREFIX = re.compile(
     r"^\s*(?:please\s+)?(?:remind me to|remind me|remember to|don'?t forget to|"
     r"make sure (?:to|i)|i need to|i have to|i gotta|i should|note to self:?)\s+",
@@ -118,6 +141,21 @@ def ask_line(action: str, code: str, category: str = "", reason: str = "") -> st
     return line
 
 
+def humanize_reason(reason: str, category: str = "") -> str:
+    """Plain-language WHY for a paused ask, for surfaces that render the reason as a subtitle (the
+    app's pending-ask card). The engine's raw reason is internal shorthand ('send to a real person;
+    memory low-confidence on recipient -> fail-safe ask') and must NEVER reach the user. Prefer the
+    category line; else pass a genuinely human reason through; else a safe, plain generic."""
+    why = _WHY.get((category or "").strip())
+    if why:
+        return why
+    r = (reason or "").strip()
+    if (r and not reads_like_a_robot(r) and "->" not in r and "→" not in r
+            and ";" not in r and len(r) < 90):
+        return r[0].upper() + r[1:]
+    return "I'd rather check with you before I do this one."
+
+
 # ---- CARD COPY (M2): turn the engine's structured card into the human line the user sees ----
 # The card's title/reason are born as engine templates ("Block money action", "Owner task: ...",
 # "...-> fail-safe ask"). The user must NEVER see those. This is the single seam that renders every
@@ -133,7 +171,8 @@ _PREFIX_RE = re.compile(
 
 
 def _clean_task_text(text: str) -> str:
-    t = _ID_RE.sub("", _PREFIX_RE.sub("", (text or "").strip())).strip()
+    t = humanize_person_framing((text or "").strip())
+    t = _ID_RE.sub("", _PREFIX_RE.sub("", t)).strip()
     t = _REMIND_PREFIX.sub("", t).strip() or t
     return t
 

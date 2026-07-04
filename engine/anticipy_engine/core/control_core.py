@@ -3842,7 +3842,13 @@ class ControlCore:
         Excludes opt_out_stop entries: an AUTO_DO_WITH_OPT_OUT chore is STARTED, not awaiting a
         yes — its pending entry is only the STOP handle (resolved by /owner/stop). Surfacing it
         here would wrongly render it as a Yes/Not-now approval (the approval-machine bug)."""
-        return [{"ask_id": aid, "action": p["action"], "reason": p["reason"],
+        # Render the app surface in the product voice: the raw reason is internal shorthand
+        # ("send to a real person; memory low-confidence on recipient -> fail-safe ask") and the
+        # action can carry the third-person "wearer" framing — neither may reach the user.
+        from . import voice as _voice
+        return [{"ask_id": aid,
+                 "action": _voice.humanize_person_framing(p["action"]),
+                 "reason": _voice.humanize_reason(p.get("reason", ""), p.get("category", "")),
                  "category": p.get("category", ""), "goal_id": p["goal_id"]}
                 for aid, p in self.proactive.pending.items()
                 if p.get("category") != "opt_out_stop"]

@@ -832,13 +832,28 @@ def memory_drawers() -> dict:
     """Read surface for all four memory drawers — count + recent items each (the dossier writes land in
     profile [stated] and derived [inferred]). Fixes the harness G4 read + the missing-read-surface gap."""
     c = current_core()
+    from .core import voice as _voice
+
+    def _scrub(d: dict) -> dict:
+        # third-person "the wearer" -> plain second person on every surfaced line
+        if isinstance(d.get("text"), str):
+            d["text"] = _voice.humanize_person_framing(d["text"])
+        return d
+
     def snap(store):
         items = store.all()
-        return {"count": len(items), "recent": [i.model_dump() for i in items[-15:]]}
+        return {"count": len(items), "recent": [_scrub(i.model_dump()) for i in items[-15:]]}
+
+    # Open loops go through the SAME dedupe + active filter as the /memory/open-loops backlog, so
+    # the count and the list never show the raw-capture + owner-card double row for one task (the
+    # "Pay the $4,200 invoice ×2" duplicates). One dictated task -> one row, here and on the board.
+    ol = c.memory_open_loops(limit=1000)
+    open_loops_snap = {"count": ol["count"],
+                       "recent": [_scrub(dict(x)) for x in ol["loops"][:15]]}
     return {"drawers": {
         "profile": snap(c.memory.profile),
         "derived": snap(c.memory.derived),
-        "open_loops": snap(c.memory.open_loops),
+        "open_loops": open_loops_snap,
         "history": snap(c.memory.history),
     }}
 

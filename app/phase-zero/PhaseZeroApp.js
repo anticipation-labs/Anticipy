@@ -949,6 +949,48 @@ function OpenLoopsSection({ drawer, onResolveLoop }) {
   );
 }
 
+// The onboarding-final "does this feel right?" check is a CALM confirmation, not a database view.
+// It shows who Anticipy knows (per-person dossiers, or the honest 0-state) and a SUMMARY of what
+// it's already tracking — a count plus the top few — never the full backlog with Resolve buttons.
+// The full, editable lists live on the board and in Settings (LearnedMemoryPanel), not here.
+function OnboardingDossierSummary({ drawers, error }) {
+  if (error) return <p className="pz-note">I could not read what I learned: {error}</p>;
+  if (!drawers) return <p className="pz-note">Reading what I learned…</p>;
+  const loops = (Array.isArray(drawers.open_loops?.recent) ? drawers.open_loops.recent : [])
+    .filter((l) => !l.status || ["active", "open", "waiting"].includes(l.status));
+  const loopCount = drawers.open_loops?.count || 0;
+  const topLoops = loops.map((l) => l.text).filter(Boolean).slice(0, 3);
+  const moreCount = Math.max(0, loopCount - topLoops.length);
+  const historyCount = drawers.history?.count || 0;
+  return (
+    <div className="pz-dossier pz-dossier-calm">
+      <PeopleDossierSection drawers={drawers} />
+      <section className="pz-panel pz-tracking-summary">
+        <h3>{loopCount
+          ? `${loopCount} thing${loopCount === 1 ? "" : "s"} I'm already tracking`
+          : "Nothing to track yet"}</h3>
+        {topLoops.length ? (
+          <>
+            <ul className="pz-list">
+              {topLoops.map((text, index) => <li key={`track-${index}`}>{text}</li>)}
+            </ul>
+            <p className="pz-note">
+              {moreCount
+                ? `…and ${moreCount} more. You can see and resolve everything on your board.`
+                : "You can see and resolve these on your board anytime."}
+            </p>
+          </>
+        ) : (
+          <p className="pz-note">As your day goes, I'll quietly catch the things you mean to do and start tracking them here.</p>
+        )}
+        {historyCount ? (
+          <p className="pz-note">I've also noted {historyCount} moment{historyCount === 1 ? "" : "s"} from what you shared.</p>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
 // FIX-05: the memory recall/search surface. One box asks the engine "what do you know relevant
 // to X" (POST /api/memory/recall -> /memory/recall, the hybrid retriever) and renders the ranked
 // hits; the live backlog (/api/memory/open-loops) and recent history (/api/memory/history) load
@@ -1181,7 +1223,7 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
   const [clarification, setClarification] = useState(profile.lastClarification || "");
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
-  const { drawers, error: drawersError, reload: reloadDrawers } = useMemoryDrawers();
+  const { drawers, error: drawersError } = useMemoryDrawers();
   // FIX-4.5: the old ProfileBuiltPanel called /api/onboarding/profile with sources:[] (the UI never
   // has source URLs), so it ALWAYS rendered a dead 0-fact scaffold competing with the real dossier.
   // Removed. LearnedMemoryPanel (/memory/drawers) below is the single, honest source of truth — it
@@ -1237,7 +1279,7 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
           ...(profile.doNotTouch ? [`Always ask before: ${profile.doNotTouch}`] : []),
         ]} />
       </section>
-      <LearnedMemoryPanel drawers={drawers} error={drawersError} onResolveLoop={reloadDrawers} />
+      <OnboardingDossierSummary drawers={drawers} error={drawersError} />
       <form className="pz-panel pz-form" onSubmit={submitClarification}>
         <h3>Anything to fix?</h3>
         <p className="pz-note">One note is enough. This saves back into memory.</p>
