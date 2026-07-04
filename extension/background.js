@@ -500,15 +500,42 @@ async function cdpKey(tabId, key) {
 // Screenshot via CDP (Page.captureScreenshot) — works on the working tab even when
 // it isn't the active/visible one, unlike tabs.captureVisibleTab (which fails with
 // "Failed to capture tab: image" on heavy/backgrounded tabs). Falls back if needed.
+// Downscale full-frame sends to <=1280x800 CSS px (~5x cheaper per vision step): capture a
+// viewport-sized clip at a scale that caps the longer send dimension. clip is CSS px (no
+// devicePixelRatio math); `scale` just downsamples the output. Best-effort — returns null on any
+// page where the viewport can't be read (chrome://, discarded tab), and the caller then captures
+// the frame unscaled rather than dropping it.
+async function viewportClip(tabId) {
+  try {
+    const [{ result: vp }] = await chrome.scripting.executeScript({ target: { tabId },
+      func: () => ({ w: window.innerWidth, h: window.innerHeight }) });
+    if (!vp || !vp.w || !vp.h) return null;
+    const scale = Math.min(1, 1280 / vp.w, 800 / vp.h);
+    return { x: 0, y: 0, width: vp.w, height: vp.h, scale };
+  } catch (e) { return null; }
+}
 async function cdpScreenshot(tabId) {
   // Capture the WORKING tab only, via CDP. NEVER fall back to captureVisibleTab —
   // that can grab whatever tab the user is looking at. The only fallback allowed
   // here first proves the requested tab is the active tab in its own window.
+  const clip = await viewportClip(tabId);
+  const shotArgs = { format: "jpeg", quality: 55, captureBeyondViewport: false };
+  if (clip) shotArgs.clip = clip;   // L6: downscale sends to <=1280x800
   try {
     await ensureDebugger(tabId);
-    const r = await cdp(tabId, "Page.captureScreenshot", { format: "jpeg", quality: 55, captureBeyondViewport: false });
+    const r = await cdp(tabId, "Page.captureScreenshot", shotArgs);
     if (r && r.data) return "data:image/jpeg;base64," + r.data;
-  } catch (e) {}
+    // A BACKGROUNDED tab can return an empty capture even though attachedTab still points here:
+    // the debugger silently detached without onDetach firing, so ensureDebugger's early-return
+    // skipped a real attach. Force a fresh attach and retry the capture ONCE before giving up —
+    // this is the "vision = 0%" runtime bug (shot=null -> vision never fires, judge loses its image).
+    console.warn("cdpScreenshot: empty CDP capture on tab " + tabId + " -> force re-attach + retry");
+    attachedTab = null;
+    await ensureDebugger(tabId);
+    const r2 = await cdp(tabId, "Page.captureScreenshot", shotArgs);
+    if (r2 && r2.data) return "data:image/jpeg;base64," + r2.data;
+    console.warn("cdpScreenshot: still empty after re-attach on tab " + tabId);
+  } catch (e) { console.warn("cdpScreenshot: CDP capture failed on tab " + tabId + ": " + String(e)); }
   try {
     const tab = await chrome.tabs.get(tabId);
     const [active] = await chrome.tabs.query({ active: true, windowId: tab.windowId });

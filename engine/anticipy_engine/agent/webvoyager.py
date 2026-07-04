@@ -27,7 +27,7 @@ from typing import List, Optional
 
 from ..core.browser_link import BrowserLink
 from ..core.envelopes import new_id
-from ..core.gateway import ACT, CHEAP, ESCALATE, SMART, ModelGateway
+from ..core.gateway import ACT, CHEAP, ESCALATE, GROUND, SMART, ModelGateway
 from .proof import confirm_stable_artifact
 from .guarded_step import MUTATION_CTRL, confirm_irreversible
 from .handoff import ask_message, classify_wall
@@ -77,8 +77,17 @@ MAX_PARSE_FAILS = int(os.environ.get("ANTICIPY_MAX_PARSE_FAILS", "3"))
 # In-loop answer verification (judge-in-the-loop self-correction): before committing a final answer,
 # a strict smart-tier verifier checks it against the page evidence. A wrong-but-fixable answer is
 # corrected in place; an ungrounded answer sends the agent back to read it off the page. Bounded so a
-# stubborn verifier can never loop forever (then we commit honestly / hand off).
-MAX_ANSWER_CHECKS = int(os.environ.get("ANTICIPY_MAX_ANSWER_CHECKS", "2"))
+# stubborn verifier can never loop forever (then we commit honestly / hand off). Default 1 (L5):
+# the L5 checkpoint validator is now the standing grounded pass, so the in-loop answer check is ONE
+# grounded pass, not a per-answer SMART tax (a second re-verify rarely changed the verdict).
+MAX_ANSWER_CHECKS = int(os.environ.get("ANTICIPY_MAX_ANSWER_CHECKS", "1"))
+# L5 checkpoint validator: after a subgoal is marked done, run ONE state-grounded check that the
+# page reached actually reflects that subgoal being achieved; on failure, REPLAN FROM THE PAGE
+# REACHED (reuse _replan) rather than continuing on a plan built for a state we never reached.
+# Adding a Validator is the single largest documented recovery lever (Skyvern v1->v2 ~45->85.85);
+# replan-from-page does not regress easy tasks and cuts steps. Bounded by MAX_REPLANS so it cannot
+# loop; fail-open (no clear verdict never blocks a subgoal the actor believes it finished).
+CHECKPOINT_VALIDATE = _env_on("ANTICIPY_CHECKPOINT_VALIDATE", True)
 # L2 give-up recovery: how many times a "no products/results found" style shrug is routed to a
 # scroll/re-search RETRY before we finally commit it as an honest no-answer + hand off. ~51% of
 # real-world failures are recoverable access/environment issues (results not yet scrolled/loaded, a
@@ -239,9 +248,12 @@ COMMERCE_STOP = {
 # the single biggest quality lever: a pure-DOM loop bailed at 2 steps on client-rendered pages
 # (Apple/ESPN) where the DOM serialized nearly empty, and could not ground purely visual widgets.
 # Vision-first fixes that at cheap-VLM (Gemini Flash) prices; recipe-replay makes repeats ~$0.
-# ANTICIPY_VISION_MODE: "always" (default now, screenshot every step), "auto" (attach-when-needed),
-# or "off" (never attach — pure DOM, legacy).
-VISION_MODE = (os.environ.get("ANTICIPY_VISION_MODE") or "always").strip().lower()
+# ANTICIPY_VISION_MODE: "auto" (default — attach a screenshot only when the DOM alone is ambiguous,
+# so the cheap REGION-CROP + GROUND-tier path fires instead of a whole-page frame every step),
+# "always" (screenshot every step), or "off" (never attach — pure DOM, legacy). Default is "auto"
+# (L6): "always" made _wants_full_shot always True, so _region_crop and the GROUND tier were dead
+# by construction — a full-frame vision tax on every step for no grounding gain over the crop.
+VISION_MODE = (os.environ.get("ANTICIPY_VISION_MODE") or "auto").strip().lower()
 # Below this many actionable elements the page is likely canvas/image/custom-widget heavy and the
 # DOM tells us too little — fall back to vision. (0–1 actionable elements by default.)
 MIN_DOM_ELEMENTS = max(0, int(os.environ.get("ANTICIPY_MIN_DOM_ELEMENTS", "2")))
@@ -1190,6 +1202,38 @@ class WebVoyagerAgent:
         return {"ok": bool(v.get("ok")), "fix": (v.get("fix") or "").strip(),
                 "why": (v.get("why") or "").strip()}
 
+    async def _verify_checkpoint(self, task: str, subgoal: str, out: dict) -> bool:
+        """L5 checkpoint validator: one state-grounded check that the JUST-COMPLETED subgoal actually
+        produced its intended state on the page reached (Planner->Actor->Validator; Skyvern v1->v2's
+        Validator moved WebVoyager ~45->85.85). Returns True when the reached page's text + interactive
+        element STATES support the subgoal being done, False when they do not (the caller then replans
+        FROM here). Judged ONLY from the evidence — never the actor's self-report. SMART tier; ~$0 on
+        the free Gemini tier. FAIL-OPEN: any empty/garbled/error verdict returns True so a genuinely
+        advanced task is never blocked by a flaky verify."""
+        page = ((out or {}).get("text") or "")[:PAGE_TEXT_CHARS]
+        state = self._state_readback(out)
+        prompt = (
+            "You are a strict CHECKPOINT VALIDATOR for a web agent. The agent just reported it "
+            "COMPLETED the SUBGOAL below. Decide, from the EVIDENCE ONLY, whether the page the agent "
+            "is now on actually reflects that subgoal being achieved (the target page/results/"
+            "selection/cart state is present). Judge the STATE, not intentions or self-report.\n"
+            "- If the evidence clearly shows the subgoal's intended state, set done=true.\n"
+            "- If the page does NOT show that state (still on the wrong page, empty results, nothing "
+            "selected/added), set done=false so the agent can re-plan a new route from HERE.\n"
+            'Output ONE JSON object exactly: {"done": true|false, "why": "<one short sentence>"}.\n\n'
+            f"TASK: {task}\n\nSUBGOAL CLAIMED DONE: {subgoal}\n"
+            f"\nURL: {(out or {}).get('url')}\nPAGE TEXT:\n{page}"
+            + (f"\n\nINTERACTIVE ELEMENT STATES:\n{state}" if state else ""))
+        try:
+            raw = await _think(self.gw, prompt, tier=SMART, caller="agent", json_mode=True,
+                               temperature=0.0, max_tokens=max(AGENT_MAX_TOKENS, 512))
+        except Exception:
+            return True
+        v = _parse_json(raw)
+        if not v or "done" not in v:
+            return True   # no clear verdict -> do not block a subgoal the actor believes it finished
+        return bool(v.get("done"))
+
     async def _try_replay(self, rec: dict, task: str, start_url: str) -> Optional[dict]:
         """Replay a learned recipe with ZERO planner/actor LLM calls. Returns a finished result on a
         clean replay, or None on ANY divergence (caller then falls back to the full live loop)."""
@@ -1538,6 +1582,12 @@ class WebVoyagerAgent:
                     if crop:
                         img = crop
                         self._region_steps += 1
+                        # L6: a region crop IS the pixel->coord grounding, so route THIS decision
+                        # through the cheap GROUND tier (ANTICIPY_MODEL_GROUND) instead of the ladder's
+                        # SMART/ESCALATE rung — frontier is never needed for coordinate localization
+                        # (an 8B open grounder lands within ~19pt of Opus on SS-Pro). If it still can't
+                        # act, the no-parse recovery below escalates to SMART with the whole-page shot.
+                        tier = GROUND
                         step_prompt = prompt + (
                             "\n\nNOTE: the attached image is a CROPPED region zoomed in on the "
                             "candidate elements (NOT the whole page). Use it to disambiguate exactly "
@@ -2007,8 +2057,23 @@ class WebVoyagerAgent:
 
             # subgoal completion
             if action.get("subgoal_done") and state.current:
+                done_subgoal = state.current["text"]
                 state.advance()
                 committed, sub_steps, sub_stuck, forbid, reflection = None, 0, 0, None, ""
+                # L5 CHECKPOINT VALIDATOR: one state-grounded check that the subgoal just marked done
+                # actually produced its intended state on the page reached; on FAILURE, REPLAN FROM
+                # THE PAGE REACHED (reuse _replan) — not the opening plan, which was written for a
+                # state we never got to (Skyvern Validator +40pp; WebDART replan-from-page +8.8pp
+                # while cutting steps). Bounded by MAX_REPLANS so it can never loop; only fires while
+                # subgoals remain to re-route (a validated FINAL subgoal goes straight to answer).
+                if (CHECKPOINT_VALIDATE and replans < MAX_REPLANS and not state.done()
+                        and not await self._verify_checkpoint(task, done_subgoal, out)):
+                    new_subs = await self._replan(task, out, history)
+                    if new_subs:
+                        replans += 1
+                        state = TaskState(new_subs)
+                        history.append(f"{step}: checkpoint FAILED ('{done_subgoal[:40]}') -> "
+                                       f"replan ({replans}) -> {len(new_subs)} subgoals")
                 prev_sig = new_sig
                 continue
 
