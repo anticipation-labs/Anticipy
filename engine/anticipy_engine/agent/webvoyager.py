@@ -29,6 +29,7 @@ from ..core.browser_link import BrowserLink
 from ..core.envelopes import new_id
 from ..core.gateway import ACT, CHEAP, SMART, ModelGateway
 from .proof import confirm_stable_artifact
+from .guarded_step import MUTATION_CTRL, confirm_irreversible
 from .handoff import ask_message, classify_wall
 from .recipes import RECIPE_CACHE, RecipeStore, descriptor, match_index, recipe_key
 from . import events as _events
@@ -87,6 +88,12 @@ RUN_BUDGET_S = float(os.environ.get("ANTICIPY_RUN_BUDGET_S", "255"))
 # "circling, not converging" and stop with a read-back. Tuned so a task making real forward motion
 # never trips it, but the busy-but-lost maxouts (which ate 61% of spend for 0 passes) end early.
 CHURN_CAP = int(os.environ.get("ANTICIPY_CHURN_CAP", "8"))
+# S5 irreversible-artifact confirm (agent.proof.confirm_stable_artifact via guarded_step): when a run
+# performed a real mutation (submitted a form / placed an order / cart-add), the resulting artifact must
+# stay stable across this many DELAYED re-reads before we call it done. Annotate-only + fail-open — the
+# returned answer never changes; a flicker only records confirmed=false so the receipt stays honest.
+ARTIFACT_CONFIRM_READS = max(1, int(os.environ.get("ANTICIPY_ARTIFACT_CONFIRM_READS", "2")))
+ARTIFACT_CONFIRM_DELAY_S = max(0.0, float(os.environ.get("ANTICIPY_ARTIFACT_CONFIRM_DELAY_S", "0.4")))
 REPLAN_SYS = """You are re-planning a browser task that did NOT finish with the first plan.
 You are given the original TASK, the PAGE you are on now (url + readable text), and what was already
 TRIED. Write a NEW 2-5 step plan to finish the task FROM HERE — do not repeat steps that clearly
@@ -825,6 +832,38 @@ class WebVoyagerAgent:
                 break
         return "\n".join(lines)
 
+    async def _complete_with_artifact_proof(self, out, step, history, ans):
+        # S5 (the anti-self-grading completion seam, §4.2 tail): a run that performed an IRREVERSIBLE
+        # mutation (submitted a form / placed an order / added to cart) must not call itself done off a
+        # single optimistic read — a flicker, an optimistic-then-reverted UI, or a slow redirect looks
+        # exactly like success and then vanishes. Require the artifact page to stay stable across
+        # ARTIFACT_CONFIRM_READS DELAYED re-reads via agent.proof.confirm_stable_artifact (wired through
+        # guarded_step.confirm_irreversible). FAIL-OPEN + annotate-only: the returned answer and page
+        # evidence are UNCHANGED (the judge grades them against the real page either way); we only add an
+        # honest receipt (artifact_confirmed / artifact_reads) and never fabricate a confirmation.
+        async def _read():
+            o, sh = await self._observe_ready()
+            return (o or {}), sh
+
+        def _stable(o):
+            # The artifact must still be showing: a non-empty page (a redirect to a blank/error/login
+            # page means the mutation did not hold). Deterministic — never the acting model self-grading.
+            return not self._empty_obs(o) and bool((o or {}).get("url"))
+
+        try:
+            proof = await confirm_irreversible(
+                _read, _stable, reads=ARTIFACT_CONFIRM_READS,
+                delay_seconds=ARTIFACT_CONFIRM_DELAY_S)
+            history.append(f"{step}: irreversible-artifact read-back x{proof.reads} -> "
+                           f"{'confirmed' if proof.confirmed else 'UNSTABLE (honest receipt)'}")
+            return self._done(out, step, history, answer=ans,
+                              artifact_confirmed=bool(proof.confirmed),
+                              artifact_reads=int(proof.reads))
+        except Exception:
+            # Read-back could not run (transport hiccup) — never let the confirm BLOCK an otherwise
+            # honest completion. Fall through to the normal terminal read-back.
+            return self._done(out, step, history, answer=ans)
+
     def _done(self, out, step, history, **extra):
         # final_text is the read-back of the resulting page (DOM-first verification evidence):
         # the verifier confirms completion against the actual page state, not a screenshot it
@@ -1085,6 +1124,9 @@ class WebVoyagerAgent:
         self._trace = []
         self._notes = []
         self._replayed = False
+        # S5: did this run perform an IRREVERSIBLE mutation (submit/order/cart-add/pay)? Gates the
+        # stronger repeated-read artifact confirm (confirm_stable_artifact) at completion.
+        self._did_mutation = False
         # CROSS-PAGE AUTO-HARVEST: counting/listing "across ALL pages" can't depend on the cheap model
         # remembering to copy items into a note before each Next click (it forgets, clicks individual
         # items, hits `back`, and contaminates the count). For these tasks the engine itself captures
@@ -1491,6 +1533,10 @@ class WebVoyagerAgent:
                                           + verdict["why"][:200] + " Do NOT answer from memory. Navigate/scroll "
                                           "to the exact place on the page that states it, read it, THEN answer.")
                             continue
+                # S5: if this run performed an irreversible mutation, gate the completion on a stable
+                # repeated read-back of the artifact (annotate-only, fail-open). Otherwise complete now.
+                if getattr(self, "_did_mutation", False):
+                    return await self._complete_with_artifact_proof(out, step + 1, history, ans)
                 return self._done(out, step + 1, history, answer=ans)
 
             # GUARDRAILS (only when LOCKED — ANTICIPY_BROWSER_UNLOCKED=0). When UNLOCKED (default),
@@ -1719,6 +1765,14 @@ class WebVoyagerAgent:
                     "action": _clean_action(action, item_text),
                     "descriptor": descriptor(_el) if _el else {},
                 })
+
+            # S5: flag an IRREVERSIBLE mutation the moment it lands (a submit, or a click/check on a
+            # submit/order/pay/cart-add control that actually moved the page). This gates the stronger
+            # repeated-read artifact confirm at completion — a plain read/nav answer skips it.
+            if progress == "PROGRESS" and action.get("action") in ("click", "submit", "check", "type"):
+                _mlabel = (label or "") + " " + (_tgt_name or "")
+                if action.get("action") == "submit" or MUTATION_CTRL.search(_mlabel or ""):
+                    self._did_mutation = True
 
             # RECORD the in-place-mutation lock EARLY — before the subgoal_done branch can `continue`
             # past it. The model often marks the sort subgoal done on the very click that sorted; if we
