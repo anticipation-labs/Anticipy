@@ -2989,6 +2989,106 @@ class ControlCore:
         return {"source": plan.source, "written": written,
                 "missing_connections": plan.missing_connections}
 
+    # ---- STATED onboarding basics (name / summary / phone / timezone / trust dial / always-ask) ----
+    # The onboarding form's basics live in the DURABLE profile memory drawer — the same drawer the
+    # brain reads — not an ephemeral local file. Before this, the hosted app saved them to a per-
+    # request JSON store that Vercel serverless throws away, so a fresh user's basics vanished and
+    # the assistant never learned them. One idempotent "owner_basics" record round-trips exactly and
+    # carries a plain-language line so the facts are brain-visible; `fields['timezone']` also feeds
+    # the owner-timezone reader.
+    _OWNER_BASICS_KEY = "phase_zero:owner_basics"
+
+    def _owner_basics_item(self):
+        """The single durable 'stated basics' record in the profile drawer, or None."""
+        for item in reversed(self.memory.profile.all()):
+            if str((item.fields or {}).get("kind") or "") == "owner_basics":
+                return item
+        return None
+
+    def owner_profile_basics(self) -> dict:
+        """Read the owner's STATED basics from the durable profile drawer. Empty strings when
+        nothing has been stated yet — a brand-new user sees no invented facts (honesty)."""
+        item = self._owner_basics_item()
+        if item is not None:
+            f = item.fields or {}
+            return {
+                "name": str(f.get("name") or ""),
+                "summary": str(f.get("summary") or ""),
+                "phone": str(f.get("phone") or ""),
+                "timezone": str(f.get("timezone") or ""),
+                "trust_dial": str(f.get("trust_dial") or ""),
+                "always_ask": str(f.get("always_ask") or ""),
+                "last_clarification": str(f.get("last_clarification") or ""),
+            }
+        # Backward-read: reconstruct from an earlier owner_onboard identity write (pre-owner_basics)
+        # so a profile onboarded the old way still shows up. Read-only; invents nothing.
+        out = {"name": "", "summary": "", "phone": "", "timezone": "",
+               "trust_dial": "", "always_ask": "", "last_clarification": ""}
+        for p in self.memory.profile.all():
+            f = p.fields or {}
+            kind = str(f.get("kind") or "")
+            if kind == "owner_identity":
+                out["name"] = str(f.get("owner_name") or out["name"])
+                out["phone"] = str(f.get("phone") or out["phone"])
+                out["timezone"] = str(f.get("timezone") or out["timezone"])
+            elif kind == "preference":
+                pref = str(f.get("preference") or "")
+                if pref.startswith("Trust dial: "):
+                    out["trust_dial"] = pref[len("Trust dial: "):].strip()
+                elif pref.startswith("Always ask before: "):
+                    out["always_ask"] = pref[len("Always ask before: "):].strip()
+            elif kind == "raw_onboarding_notes":
+                text = str(p.text or "")
+                if text.startswith("Onboarding notes: "):
+                    out["summary"] = text[len("Onboarding notes: "):].strip()
+        return out
+
+    def set_owner_profile_basics(self, basics: dict) -> dict:
+        """Persist the owner's STATED basics durably into the profile memory drawer (the same drawer
+        the brain reads) and return the stored record. Idempotent: upserts the single 'owner_basics'
+        record in place so re-saving the onboarding form never piles duplicates."""
+        def clean(key: str) -> str:
+            return " ".join(str(basics.get(key) or "").split())
+        name, summary, phone = clean("name"), clean("summary"), clean("phone")
+        timezone, trust_dial = clean("timezone"), clean("trust_dial")
+        always_ask, last_clarification = clean("always_ask"), clean("last_clarification")
+        fields = {
+            "source": "phase_zero_basics",
+            "kind": "owner_basics",
+            "onboarding_key": self._OWNER_BASICS_KEY,
+            "name": name, "summary": summary, "phone": phone, "timezone": timezone,
+            "trust_dial": trust_dial, "always_ask": always_ask,
+            "last_clarification": last_clarification,
+        }
+        bits = [b for b in (name, summary) if b]
+        text = "You: " + (" — ".join(bits) if bits else "(stated basics)")
+        tail = []
+        if timezone:
+            tail.append(f"timezone {timezone}")
+        if trust_dial:
+            tail.append(f"trust dial {trust_dial}")
+        if always_ask:
+            tail.append(f"always ask before {always_ask}")
+        if tail:
+            text += ". " + "; ".join(tail) + "."
+        item = self._owner_basics_item()
+        if item is None:
+            self.memory.profile.write_text(
+                text, fields=fields, provenance="owner:phase_zero_basics",
+                confidence=1.0, importance=0.95, status="active")
+        else:
+            item.text = text
+            item.fields = fields
+            item.provenance = "owner:phase_zero_basics"
+            item.confidence = 1.0
+            item.importance = 0.95
+            item.status = "active"
+            self.memory.profile.update(item)
+        self.glassbox.log("owner_profile_basics_set",
+                          {"has_name": bool(name), "has_summary": bool(summary),
+                           "timezone": timezone or None})
+        return self.owner_profile_basics()
+
     async def onboard_scan_api(self) -> dict:
         """SERVER-SIDE onboarding — the reliable 'it knows you' step, no Chrome-extension round-trip.
         Discovers the user's CONNECTED accounts straight from the live API mesh (the vault holds

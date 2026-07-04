@@ -1324,6 +1324,31 @@ async def owner_onboard(body: OwnerOnboardingIn) -> dict:
     return await current_core().owner_onboard(body)
 
 
+class OwnerProfileIn(BaseModel):
+    name: str = ""
+    summary: str = ""
+    phone: str = ""
+    timezone: str = ""
+    trust_dial: str = ""
+    always_ask: str = ""
+    last_clarification: str = ""
+
+
+@app.get("/owner/profile")
+def owner_profile() -> dict:
+    """The owner's STATED onboarding basics (name / one-sentence summary / phone / timezone /
+    trust dial / always-ask), read from the DURABLE profile memory drawer — the same drawer the
+    brain reads. Survives restarts and serverless, unlike the old ephemeral local-file store."""
+    return {"profile": current_core().owner_profile_basics()}
+
+
+@app.post("/owner/profile")
+def owner_profile_set(body: OwnerProfileIn) -> dict:
+    """Persist the owner's stated basics into the durable profile drawer (brain-visible). Idempotent
+    upsert: re-saving the onboarding form updates the one 'You' record in place, never duplicates."""
+    return {"profile": current_core().set_owner_profile_basics(body.model_dump())}
+
+
 class DiscoverConnectionsIn(BaseModel):
     discovered: list[dict] = Field(default_factory=list)
     source: str = "chrome_scrape"

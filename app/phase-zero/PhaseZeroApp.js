@@ -2302,46 +2302,46 @@ export default function PhaseZeroApp({ screen = "board" }) {
     }
   }
 
+  // Map the engine's durable profile record (snake_case) onto the UI profile shape.
+  function profileFromEngine(p, base = EMPTY_PROFILE) {
+    const src = p || {};
+    return {
+      ...base,
+      name: src.name || "",
+      summary: src.summary || "",
+      phone: src.phone || "",
+      timezone: src.timezone || base.timezone || EMPTY_PROFILE.timezone,
+      trustDial: src.trust_dial || base.trustDial || EMPTY_PROFILE.trustDial,
+      doNotTouch: src.always_ask || "",
+      lastClarification: src.last_clarification || "",
+    };
+  }
+
   async function loadProfile() {
-    const data = await jsonFetch("/api/profile");
-    setProfile({ ...EMPTY_PROFILE, ...(data.profile || {}) });
+    // Read the stated basics from the ENGINE's durable profile drawer (survives serverless + the
+    // brain reads it) — NOT the old ephemeral local-file store where a fresh user's basics vanished.
+    const data = await jsonFetch("/api/owner/profile");
+    setProfile(profileFromEngine(data.profile, EMPTY_PROFILE));
   }
 
   async function saveProfile(nextProfile = profile) {
-    const data = await jsonFetch("/api/profile", {
+    const source = { ...EMPTY_PROFILE, ...(nextProfile || {}) };
+    // Persist the stated basics to the ENGINE's durable, brain-visible profile drawer. The
+    // confirmation screen ("What you told me") reads them straight back from here, so what a user
+    // tells Anticipy in onboarding now actually survives and the assistant learns it.
+    const data = await jsonFetch("/api/owner/profile", {
       method: "POST",
-      body: JSON.stringify({ profile: nextProfile }),
+      body: JSON.stringify({
+        name: (source.name || "").trim(),
+        summary: (source.summary || "").trim(),
+        phone: (source.phone || "").trim(),
+        timezone: source.timezone || "",
+        trust_dial: source.trustDial || "",
+        always_ask: (source.doNotTouch || "").trim(),
+        last_clarification: (source.lastClarification || "").trim(),
+      }),
     });
-    const saved = { ...EMPTY_PROFILE, ...(data.profile || {}) };
-    setProfile(saved);
-    // FIX-4.4: the stated basics must reach the BRAIN, not just the local store. Push name/summary/
-    // trust-dial/phone/timezone into the engine's profile drawer (the "You" drawer read by
-    // /memory/drawers) via owner_onboard (idempotent upsert). Only when a name is actually stated,
-    // so unrelated saves never write a blank identity. Best-effort: a brain-sync failure must never
-    // fail the local save — the next save re-syncs.
-    const statedName = (saved.name || "").trim();
-    if (statedName) {
-      const preferences = [
-        (saved.summary || "").trim(),
-        saved.trustDial ? `Trust dial: ${saved.trustDial}` : "",
-        (saved.doNotTouch || "").trim() ? `Always ask before: ${(saved.doNotTouch || "").trim()}` : "",
-      ].filter(Boolean);
-      try {
-        await jsonFetch("/api/owner/onboard", {
-          method: "POST",
-          body: JSON.stringify({
-            owner_name: statedName,
-            timezone: saved.timezone || "",
-            phone: saved.phone || "",
-            preferences,
-            raw_notes: (saved.summary || "").trim(),
-            source: "phase_zero_basics",
-          }),
-        });
-      } catch {
-        /* local save already succeeded; the brain re-syncs on the next profile save */
-      }
-    }
+    setProfile(profileFromEngine(data.profile, source));
   }
 
   async function loadSettings() {
