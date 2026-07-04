@@ -764,16 +764,60 @@ function drawerTexts(drawer, { activeOnly = true } = {}) {
     .filter(Boolean);
 }
 
-function LearnedMemoryPanel({ drawers, error }) {
+function LearnedMemoryPanel({ drawers, error, onResolveLoop }) {
   if (error) return <p className="pz-note">I could not read memory: {error}</p>;
   if (!drawers) return <p className="pz-note">Reading what I learned…</p>;
   return (
     <section className="pz-grid two pz-memory-grid">
       <ProfileSection title={`Facts I learned (${drawers.profile?.count || 0})`} items={drawerTexts(drawers.profile)} />
       <ProfileSection title={`What I inferred — never promoted (${drawers.derived?.count || 0})`} items={drawerTexts(drawers.derived)} />
-      <ProfileSection title={`Open loops (${drawers.open_loops?.count || 0})`} items={drawerTexts(drawers.open_loops)} />
+      <OpenLoopsSection drawer={drawers.open_loops} onResolveLoop={onResolveLoop} />
       <ProfileSection title={`Recent history (${drawers.history?.count || 0})`} items={drawerTexts(drawers.history).slice(-6)} />
     </section>
+  );
+}
+
+// Open loops, each with a "Resolve" action (FIX-05). Resolve POSTs /api/memory/resolve-loop
+// -> engine /memory/open-loops/resolve {id,status:"done"}, then reloads the drawers so the loop
+// drops off. The button only shows when a reload callback is wired (the Settings/onboarding
+// memory panels); read-only renders degrade to the plain list.
+function OpenLoopsSection({ drawer, onResolveLoop }) {
+  const [busyId, setBusyId] = useState("");
+  const items = (Array.isArray(drawer?.recent) ? drawer.recent : [])
+    .filter((item) => !item.status || ["active", "open"].includes(item.status));
+  async function resolveLoop(id) {
+    if (!id || busyId) return;
+    setBusyId(id);
+    try {
+      await jsonFetch("/api/memory/resolve-loop", { method: "POST", body: JSON.stringify({ id, status: "done" }) });
+      if (onResolveLoop) await onResolveLoop();
+    } catch {
+      /* leave the loop open; the next drawer read shows the honest state */
+    } finally {
+      setBusyId("");
+    }
+  }
+  return (
+    <article className="pz-panel">
+      <h3>{`Open loops (${drawer?.count || 0})`}</h3>
+      <ul className="pz-list">
+        {items.length ? items.map((item, index) => (
+          <li key={item.id || `loop-${index}`} className="pz-loop-row">
+            <span>{item.text}</span>
+            {onResolveLoop && item.id ? (
+              <button
+                type="button"
+                className="pz-button subtle"
+                onClick={() => resolveLoop(item.id)}
+                disabled={busyId === item.id}
+              >
+                {busyId === item.id ? "Resolving…" : "Resolve"}
+              </button>
+            ) : null}
+          </li>
+        )) : <li>Nothing confirmed yet.</li>}
+      </ul>
+    </article>
   );
 }
 
@@ -784,7 +828,7 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
   const [clarification, setClarification] = useState(profile.lastClarification || "");
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
-  const { drawers, error: drawersError } = useMemoryDrawers();
+  const { drawers, error: drawersError, reload: reloadDrawers } = useMemoryDrawers();
 
   useEffect(() => {
     setClarification(profile.lastClarification || "");
@@ -832,7 +876,7 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
         <ProfileSection title="Tools and systems" items={profile.tools || []} />
         <ProfileSection title="Open loops" items={profile.openLoops || []} />
       </section>
-      <LearnedMemoryPanel drawers={drawers} error={drawersError} />
+      <LearnedMemoryPanel drawers={drawers} error={drawersError} onResolveLoop={reloadDrawers} />
       <form className="pz-panel pz-form" onSubmit={submitClarification}>
         <h3>Anything to fix?</h3>
         <p className="pz-note">One note is enough. This saves back into memory.</p>
@@ -897,6 +941,7 @@ function MainScreen(props) {
       <ActiveListeningPanel {...props} />
       <OneInput {...props} />
       <WebActionPanel {...props} />
+      <BoardActionsPanel {...props} />
       <PendingAsksPanel pendingAsks={props.pendingAsks} onResolve={props.resolvePending} />
       {props.cards.length ? <TaskBoard {...props} limit={4} /> : null}
     </div>
@@ -939,6 +984,40 @@ function WebActionPanel({ webTask, setWebTask, webBusy, webReceipt, runWebTask, 
       ) : null}
       {webReceipt ? (
         <p className={`pz-note ${webReceipt.ok ? "pz-note-ok" : "pz-note-warn"}`}>{webReceipt.text}</p>
+      ) : null}
+    </section>
+  );
+}
+
+// The board's proactive controls. "Anticipate now" (FIX-07) runs one derive pass so the assistant
+// gets ahead of unspoken needs on demand; "Send my digest now" (FIX-14) flushes the day's quiet
+// items as one message. Each POSTs its existing proxy and shows an honest receipt in place.
+function BoardActionsPanel({ runDerive, deriveBusy, deriveReceipt, runDigest, digestBusy, digestReceipt }) {
+  return (
+    <section className="pz-board-actions" aria-label="Proactive controls">
+      <div className="pz-board-actions-row">
+        <button
+          type="button"
+          className="pz-button primary"
+          onClick={runDerive}
+          disabled={deriveBusy}
+        >
+          {deriveBusy ? "Thinking ahead…" : "Anticipate now"}
+        </button>
+        <button
+          type="button"
+          className="pz-button ghost"
+          onClick={runDigest}
+          disabled={digestBusy}
+        >
+          {digestBusy ? "Sending…" : "Send my digest now"}
+        </button>
+      </div>
+      {deriveReceipt ? (
+        <p className={`pz-note ${deriveReceipt.ok ? "pz-note-ok" : "pz-note-warn"}`}>{deriveReceipt.text}</p>
+      ) : null}
+      {digestReceipt ? (
+        <p className={`pz-note ${digestReceipt.ok ? "pz-note-ok" : "pz-note-warn"}`}>{digestReceipt.text}</p>
       ) : null}
     </section>
   );
@@ -1105,7 +1184,7 @@ function ActiveListeningPanel({
   );
 }
 
-function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveComment, resolveCard, limit }) {
+function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveComment, resolveCard, stopCard, limit }) {
   const [selectedId, setSelectedId] = useState("");
   const sorted = useMemo(() => {
     const copy = [...cards];
@@ -1154,6 +1233,7 @@ function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveCom
             mirror={textMirror[selected.id]?.status || "coming_soon"}
             onComment={saveComment}
             onResolve={resolveCard}
+            onStop={stopCard}
           />
         ) : null}
       </div>
@@ -1161,12 +1241,19 @@ function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveCom
   );
 }
 
-function TaskCard({ card, comment, mirror, onComment, onResolve }) {
+function TaskCard({ card, comment, mirror, onComment, onResolve, onStop }) {
   const [draft, setDraft] = useState(comment);
 
   useEffect(() => {
     setDraft(comment);
   }, [comment]);
+
+  // FIX-06b: an in-flight "On it — you can stop me" reversible chore (opt-out) can be STOPped.
+  // Only show it while the chore is actually running/preparing — never on a finished/stopped card.
+  const raw = card.raw || {};
+  const canStop = Boolean(onStop)
+    && Boolean(raw.execution?.opt_out || raw.args?.opt_out)
+    && !["stopped", "done", "failed", "blocked"].includes(card.status);
 
   return (
     <article className={`pz-task pz-task-${card.risk}`}>
@@ -1205,8 +1292,14 @@ function TaskCard({ card, comment, mirror, onComment, onResolve }) {
         <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Add a note for this task." />
       </label>
       <div className="pz-actions">
-        <button className="pz-button primary" type="button" onClick={() => onResolve(card, true)}>Approve</button>
-        <button className="pz-button ghost" type="button" onClick={() => onResolve(card, false)}>Not now</button>
+        {canStop ? (
+          <button className="pz-button ghost" type="button" onClick={() => onStop(card)}>Stop</button>
+        ) : (
+          <>
+            <button className="pz-button primary" type="button" onClick={() => onResolve(card, true)}>Approve</button>
+            <button className="pz-button ghost" type="button" onClick={() => onResolve(card, false)}>Not now</button>
+          </>
+        )}
         <button className="pz-button subtle" type="button" onClick={() => onComment(card.id, draft)}>Save note</button>
       </div>
     </article>
@@ -1300,6 +1393,25 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
   // Memory drawers (facts / inferred / open loops / history) + the forget-me control fold in here
   // from the retired /memory screen (UI_SPEC step 8). One reload() refreshes both after a wipe.
   const { drawers, error: drawersError, reload } = useMemoryDrawers();
+  // FIX-18: "Run a tick" — one deterministic watcher pass (same path the scheduler would take).
+  const [tickBusy, setTickBusy] = useState(false);
+  const [tickMessage, setTickMessage] = useState("");
+  async function runTick() {
+    if (tickBusy) return;
+    setTickBusy(true);
+    setTickMessage("");
+    try {
+      const data = await jsonFetch("/api/trigger/tick", { method: "POST" });
+      const fired = Array.isArray(data.fired) ? data.fired.length : 0;
+      setTickMessage(fired
+        ? `Ran a tick — ${fired} thing${fired === 1 ? "" : "s"} fired.`
+        : "Ran a tick — nothing to fire right now.");
+    } catch {
+      setTickMessage("I couldn't run a tick just now. Try again in a moment.");
+    } finally {
+      setTickBusy(false);
+    }
+  }
   // FIX-04 (2026-07-02): the dropdown used to write ONLY a local display store — the engine's
   // real autonomy gate never heard about it. Now: read the real mode on mount, POST on change.
   const AUTONOMY_TO_ENGINE = { Limited: "limited", Regular: "regular", "Full-Send": "full_send" };
@@ -1425,15 +1537,21 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
           </summary>
           <div className="pz-settings-body pz-settings-body-wide">
             <p className="pz-note">This is my real memory — the facts, inferences, open loops, and history I hold. Anything wrong gets corrected here.</p>
-            <LearnedMemoryPanel drawers={drawers} error={drawersError} />
+            <LearnedMemoryPanel drawers={drawers} error={drawersError} onResolveLoop={reload} />
             <ForgetMePanel onDeleted={reload} />
           </div>
         </details>
       </section>
       <div className="pz-actions pz-actions-simple">
         <button className="pz-button primary pz-button-xl" type="submit">Save settings</button>
+        <button className="pz-button ghost" type="button" onClick={runTick} disabled={tickBusy}>
+          {tickBusy ? "Running…" : "Run a tick"}
+        </button>
+        {/* FIX-16: the Mac app download — a plain GET link straight at the download route. */}
+        <a className="pz-button ghost" href="/api/download/anticipy-execute">Download the Mac app</a>
         <a className="pz-button ghost" href="/">Back to assistant</a>
       </div>
+      {tickMessage ? <p className="pz-note">{tickMessage}</p> : null}
     </form>
   );
 }
@@ -1466,6 +1584,10 @@ export default function PhaseZeroApp({ screen = "board" }) {
   const [webTask, setWebTask] = useState("");
   const [webBusy, setWebBusy] = useState(false);
   const [webReceipt, setWebReceipt] = useState(null);
+  const [deriveBusy, setDeriveBusy] = useState(false);
+  const [deriveReceipt, setDeriveReceipt] = useState(null);
+  const [digestBusy, setDigestBusy] = useState(false);
+  const [digestReceipt, setDigestReceipt] = useState(null);
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
   const mediaStreamRef = useRef(null);
@@ -1748,6 +1870,60 @@ export default function PhaseZeroApp({ screen = "board" }) {
     }
   }
 
+  // "Anticipate now" (FIX-07): one derive pass — the engine reads its world (memory, open loops,
+  // calendar), derives at most two UNSPOKEN needs, acts browser-only, and texts. A quiet day
+  // returns {"derived": []} and lands nothing. POST /api/derive -> engine /derive/tick.
+  async function runDerive() {
+    if (deriveBusy) return;
+    setDeriveBusy(true);
+    setDeriveReceipt(null);
+    try {
+      const data = await jsonFetch("/api/derive", { method: "POST" });
+      const derived = Array.isArray(data.derived) ? data.derived : [];
+      setDeriveReceipt(derived.length
+        ? { ok: true, text: `I got ahead of ${derived.length} thing${derived.length === 1 ? "" : "s"} for you.` }
+        : { ok: true, text: "Quiet right now — nothing worth getting ahead of." });
+      await loadCards();
+      await loadGatewayEvents();
+    } catch {
+      setDeriveReceipt({ ok: false, text: "I couldn't run that just now. Try again in a moment." });
+    } finally {
+      setDeriveBusy(false);
+    }
+  }
+
+  // "Send my digest now" (FIX-14/NF10): deliver the day's accumulated non-urgent items as ONE
+  // message and clear the queue. A quiet day returns {sent:false}. POST /api/digest -> /digest/deliver.
+  async function runDigest() {
+    if (digestBusy) return;
+    setDigestBusy(true);
+    setDigestReceipt(null);
+    try {
+      const data = await jsonFetch("/api/digest", { method: "POST" });
+      setDigestReceipt(data.sent
+        ? { ok: true, text: `Sent — your ${data.count || ""} quiet item${data.count === 1 ? "" : "s"} went out as one note.`.replace("  ", " ") }
+        : { ok: true, text: "Nothing to send yet — I'll gather the day's quiet items for the next digest." });
+      await loadGatewayEvents();
+    } catch {
+      setDigestReceipt({ ok: false, text: "I couldn't send the digest just now. Try again in a moment." });
+    } finally {
+      setDigestBusy(false);
+    }
+  }
+
+  // STOP for an in-flight "On it — you can stop me" chore (FIX-06b): halt the reversible chore and
+  // flip the card to stopped. POST /api/owner/stop -> engine /owner/stop. Reversible chores only;
+  // an unknown/finished card no-ops honestly.
+  async function stopOwnerCard(card) {
+    if (!card?.id) return;
+    try {
+      await jsonFetch("/api/owner/stop", { method: "POST", body: JSON.stringify({ card_id: card.id }) });
+    } catch {
+      /* the reload below shows the honest state either way */
+    }
+    await Promise.allSettled([loadCards(), loadGatewayEvents()]);
+  }
+
   async function resolveCard(card, approved) {
     if (card.askId) {
       try {
@@ -1905,6 +2081,13 @@ export default function PhaseZeroApp({ screen = "board" }) {
     webBusy,
     webReceipt,
     runWebTask,
+    deriveBusy,
+    deriveReceipt,
+    runDerive,
+    digestBusy,
+    digestReceipt,
+    runDigest,
+    stopCard: stopOwnerCard,
     saveProfile,
     saveSettings,
     saveOnboarding,
