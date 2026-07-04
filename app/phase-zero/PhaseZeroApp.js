@@ -32,6 +32,47 @@ function humanTitle(text) {
     .trim();
 }
 
+// ── Conversation surface (2026-07-04) ─────────────────────────────────────────────────────────
+// Anticipy talks BACK. The board's cards are the engine's real decisions; here we turn each one
+// into a warm, plain-language message a person would actually text — the whole product is this
+// back-and-forth, not a grid of dev cards. These helpers are pure presentation over the same
+// engine fields (title / check-in / disposition); no engine logic changes.
+function stripDot(text) {
+  return String(text || "").replace(/\s*[.!?]+\s*$/, "").trim();
+}
+
+// One engine card -> the assistant's spoken reply + whether it needs a yes/no reaction.
+//   do            -> a calm "Got it — I'm on it." (no chips; nothing to approve)
+//   ask           -> the plan + the engine's own check-in line, with Go ahead / Not now chips
+//   blocked/money -> the plan, flagged as needing an explicit yes, with chips
+function assistantReplyForCard(card) {
+  const title = stripDot(humanTitle(card.title)) || "I caught something for you";
+  if (card.risk === "blocked") {
+    return {
+      text: `${title}. That one can move money or can't easily be undone, so I'll wait for your yes — want me to go ahead?`,
+      chips: true,
+      tone: "blocked",
+    };
+  }
+  if (card.risk === "ask" || card.askId) {
+    const ask = (card.checkIn || "").trim() || "Okay for me to go ahead?";
+    return { text: `${title}. ${ask}`, chips: true, tone: "ask" };
+  }
+  return { text: `Got it — ${title}. I'm on it.`, chips: false, tone: "do" };
+}
+
+let _threadSeq = 0;
+function threadId() {
+  _threadSeq += 1;
+  return `m${Date.now().toString(36)}-${_threadSeq}`;
+}
+
+// A typed reply in the composer that is a short yes/no resolves the most recent waiting ask (the
+// same as tapping a chip). Kept short-only so a real instruction ("make it shorter", "email Bob
+// too") still flows to the brain as a new capture instead of being swallowed as an approval.
+const YES_RE = /^\s*(y|yes+|yeah|yep|yup|ya|sure|ok|okay|kk?|go ahead|do it|please do|go for it|sounds good|send it|approve[d]?|yes please)\b/i;
+const NO_RE = /^\s*(n|no+|nope|nah|not now|leave it|leave that|cancel|hold off|skip|don'?t|stop|not this one)\b/i;
+
 const EMPTY_PROFILE = {
   name: "",
   summary: "",
@@ -1641,15 +1682,125 @@ function CardRow({ card, token, index, comment, mirror, expanded, exiting, onTog
   );
 }
 
+// The conversational quick-reply chips that sit under an assistant bubble that's waiting on you.
+// Tapping one posts as YOUR line in the thread AND fires the real engine resolve — the "…" opens
+// the one honest extra: stop asking for this kind of thing (raises the real autonomy gate).
+function QuickReplyChips({ onGoAhead, onNotNow, onAlways }) {
+  return (
+    <div className="pz-chat-chips" role="group" aria-label="Reply">
+      <button type="button" className="pz-chat-chip primary" onClick={onGoAhead}>Go ahead</button>
+      <button type="button" className="pz-chat-chip" onClick={onNotNow}>Not now</button>
+      <details className="pz-chat-more">
+        <summary className="pz-chat-more-trigger" aria-label="More replies">…</summary>
+        <div className="pz-chat-more-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={(event) => { const d = event.currentTarget.closest("details"); if (d) d.open = false; onAlways(); }}
+          >
+            Go ahead — and stop asking for these
+          </button>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+// THE CONVERSATION — the primary surface. An ongoing thread of chat bubbles: your lines on the
+// right, the assistant's warm replies on the left, each grown from a real engine card. A waiting
+// ask carries inline Go ahead / Not now chips; a chip only shows while its ask is genuinely still
+// open (engine truth), so a reaction made anywhere clears it honestly. Auto-scrolls to newest.
+function ConversationThread({ thread, cards, pendingAsks, listenState, onResolve, onAlways }) {
+  const endRef = useRef(null);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [thread]);
+
+  const pendingAskIds = useMemo(() => {
+    const set = new Set();
+    (cards || []).forEach((card) => {
+      if (card.askId && (card.risk === "ask" || card.risk === "blocked")
+        && !["done", "completed", "stopped", "failed"].includes(card.status)) {
+        set.add(card.askId);
+      }
+    });
+    (pendingAsks || []).forEach((ask) => { if (ask.ask_id) set.add(ask.ask_id); });
+    return set;
+  }, [cards, pendingAsks]);
+
+  const resting = listenState === "listening" || listenState === "processing";
+
+  if (!thread.length) {
+    return (
+      <section className="pz-chat" aria-label="Your conversation">
+        <div className="pz-chat-rest">
+          <span className={`pz-chat-rest-orb${resting ? " active" : ""}`} aria-hidden="true" />
+          <p className="pz-chat-rest-word">{resting ? "I'm listening…" : "I'm here."}</p>
+          <p className="pz-chat-rest-sub">
+            Tell me what's on your plate — say it, type it, or drop a recording. I'll catch what
+            needs doing and check in with you before I act.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="pz-chat" aria-label="Your conversation">
+      <div className="pz-chat-thread">
+        {thread.map((message) => {
+          const showChips = message.role === "assistant" && message.chips && !message.resolved
+            && message.askId && pendingAskIds.has(message.askId);
+          return (
+            <div className={`pz-chat-turn ${message.role}`} key={message.id}>
+              <div className={`pz-chat-bubble ${message.role}${message.tone ? ` tone-${message.tone}` : ""}`}>
+                {message.text}
+              </div>
+              {showChips ? (
+                <QuickReplyChips
+                  onGoAhead={() => onResolve(message, true, "Go ahead")}
+                  onNotNow={() => onResolve(message, false, "Not now")}
+                  onAlways={() => onAlways(message)}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+    </section>
+  );
+}
+
+// The main surface is now a CONVERSATION. The composer (OneInput) stays pinned below it as the
+// chat input. Everything the board used to front-and-center — the pending-ask list, the card
+// board, the "do it on the web" hand, the proactive controls, the listening debug — is preserved
+// but tucked into a quiet, collapsed "Things I'm tracking" drawer. The talk-back is the product.
 function MainScreen(props) {
   return (
-    <div className="pz-scene pz-board-scene pz-main-collapsed">
-      <ActiveListeningPanel {...props} />
+    <div className="pz-scene pz-chat-scene">
+      <ConversationThread
+        thread={props.thread}
+        cards={props.cards}
+        pendingAsks={props.pendingAsks}
+        listenState={props.listenState}
+        onResolve={props.conversationResolve}
+        onAlways={props.conversationAutonomy}
+      />
       <OneInput {...props} />
-      <WebActionPanel {...props} />
-      <BoardActionsPanel {...props} />
-      <PendingAsksPanel pendingAsks={props.pendingAsks} onResolve={props.resolvePending} />
-      <CardBoard {...props} />
+      <details className="pz-tracking">
+        <summary className="pz-tracking-summary">
+          <span>Things I&apos;m tracking</span>
+          <span className="pz-tracking-hint" aria-hidden="true">tap to open</span>
+        </summary>
+        <div className="pz-tracking-body">
+          <PendingAsksPanel pendingAsks={props.pendingAsks} onResolve={props.resolvePending} />
+          <CardBoard {...props} />
+          <WebActionPanel {...props} />
+          <BoardActionsPanel {...props} />
+          <ActiveListeningPanel {...props} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -2233,6 +2384,8 @@ export default function PhaseZeroApp({ screen = "board" }) {
   const [deriveReceipt, setDeriveReceipt] = useState(null);
   const [digestBusy, setDigestBusy] = useState(false);
   const [digestReceipt, setDigestReceipt] = useState(null);
+  const [thread, setThread] = useState([]);
+  const seededRef = useRef(false);
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
   const mediaStreamRef = useRef(null);
@@ -2251,6 +2404,109 @@ export default function PhaseZeroApp({ screen = "board" }) {
     const live = engineCards.map(normalizeEngineCard);
     return SHOW_FIXTURES ? [...live, ...FIXTURES.map(fixtureToCard)] : live;
   }, [engineCards]);
+
+  // ── Conversation transcript ────────────────────────────────────────────────────────────────
+  // The thread is the live session's back-and-forth. It's appended to as things happen (you talk,
+  // the assistant replies, you react, it reports back). The engine cards remain the source of
+  // truth for what's actually pending; the thread is the human-readable surface over them.
+  function appendMessages(input) {
+    const list = (Array.isArray(input) ? input : [input]).filter(Boolean);
+    if (!list.length) return;
+    const stamped = list.map((message) => ({ id: threadId(), ...message }));
+    setThread((current) => [...current, ...stamped]);
+  }
+
+  function appendUserLine(text) {
+    const clean = String(text || "").trim();
+    if (clean) appendMessages({ role: "user", text: clean });
+  }
+
+  // Turn the cards the engine just made into the assistant's spoken replies — one warm bubble per
+  // actionable card. A vent / ignored line makes NO card and therefore NO bubble: silence is the
+  // correct answer to a vent (the cardinal-sin rule, surfaced as calm quiet).
+  function appendCardReplies(rawCards) {
+    const bubbles = (Array.isArray(rawCards) ? rawCards : [])
+      .filter((card) => card && card.disposition !== "ignore" && card.status !== "ignored")
+      .map(normalizeEngineCard)
+      .map((card) => {
+        const reply = assistantReplyForCard(card);
+        return {
+          role: "assistant",
+          text: reply.text,
+          tone: reply.tone,
+          chips: reply.chips,
+          cardId: card.id,
+          askId: card.askId,
+        };
+      });
+    appendMessages(bubbles);
+  }
+
+  // The most recent assistant bubble still waiting on a yes/no — what a typed "yes"/"no" resolves.
+  function activePendingAsk() {
+    for (let i = thread.length - 1; i >= 0; i -= 1) {
+      const message = thread[i];
+      if (message.role === "assistant" && message.chips && !message.resolved && message.askId) return message;
+    }
+    return null;
+  }
+
+  // A reaction, as a conversation turn: it posts as YOUR line, fires the real engine resolve
+  // (/api/resolve via resolveCard), then the assistant answers back — "On it." (plus the real
+  // receipt when one has landed) on a yes, or "Okay, I'll leave that one." on a no.
+  async function conversationResolve(message, approved, label) {
+    if (!message) return;
+    appendUserLine(label || (approved ? "Go ahead" : "Not now"));
+    setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
+    await resolveCard({ id: message.cardId, askId: message.askId }, approved);
+    if (!approved) {
+      appendMessages({ role: "assistant", text: "Okay — I'll leave that one.", tone: "do" });
+      return;
+    }
+    appendMessages({ role: "assistant", text: "On it.", tone: "do" });
+    try {
+      const data = await jsonFetch("/api/owner/cards?limit=50");
+      const rawCard = (Array.isArray(data.cards) ? data.cards : []).find((card) => (card.id || card.ask_id) === message.cardId);
+      if (rawCard) {
+        const fresh = normalizeEngineCard(rawCard);
+        if (fresh.browserReceipt?.answer) {
+          appendMessages({ role: "assistant", text: `Here's what I found: ${fresh.browserReceipt.answer}`, tone: "do" });
+        } else if (["done", "completed"].includes(fresh.status)) {
+          appendMessages({ role: "assistant", text: "Done ✓", tone: "do" });
+        }
+      }
+    } catch {
+      /* the tracking drawer still carries the honest state */
+    }
+  }
+
+  // The "…" reply: approve AND opt this kind of thing out of ask-first (raises the real autonomy
+  // gate via allowAutonomy). Fully reversible from Settings; never touches the money hard-stop.
+  async function conversationAutonomy(message) {
+    if (!message) return;
+    appendUserLine("Go ahead — and stop asking me for these.");
+    setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
+    await allowAutonomy({ id: message.cardId, askId: message.askId });
+    appendMessages({
+      role: "assistant",
+      text: "Got it — I'll take care of these without asking from now on. You can change that anytime in settings.",
+      tone: "do",
+    });
+  }
+
+  // Seed the thread once, on load, from any asks already waiting on you — so a returning user drops
+  // straight back into the conversation with their open questions (and chips) rather than a blank
+  // slate. A truly fresh user has no waiting asks, so the calm "I'm here." resting state stays.
+  useEffect(() => {
+    if (seededRef.current || thread.length) return;
+    if (!engineCards.length) return;
+    const waiting = engineCards.filter((card) => card
+      && card.disposition !== "ignore"
+      && (card.disposition === "ask" || card.disposition === "blocked" || card.status === "waiting" || card.status === "blocked"));
+    if (!waiting.length) return;
+    seededRef.current = true;
+    appendCardReplies(waiting);
+  }, [engineCards, thread.length]);
 
   useEffect(() => {
     const client = createBrowserSupabaseClient();
@@ -2467,8 +2723,27 @@ export default function PhaseZeroApp({ screen = "board" }) {
   }
 
   async function submitTranscript() {
+    const typed = intakeText.trim();
+    if (!typed) return;
+
+    // A short "yes"/"no" typed into the composer resolves the most recent waiting ask — the same
+    // as tapping its chip. A real instruction (more than a few words) always flows to the brain.
+    const active = activePendingAsk();
+    const shortReply = typed.split(/\s+/).length <= 5;
+    if (active && shortReply && YES_RE.test(typed)) {
+      setIntakeText("");
+      await conversationResolve(active, true, typed);
+      return;
+    }
+    if (active && shortReply && NO_RE.test(typed)) {
+      setIntakeText("");
+      await conversationResolve(active, false, typed);
+      return;
+    }
+
     setIngestBusy(true);
     setIngestMessage("");
+    appendUserLine(typed);
     try {
       const data = await jsonFetch("/api/owner/ingest", {
         method: "POST",
@@ -2480,8 +2755,9 @@ export default function PhaseZeroApp({ screen = "board" }) {
         }),
       });
       setEngineCards(Array.isArray(data.cards) ? data.cards : []);
-      setIngestMessage(`Read ${data.observed_lines?.length || 0} lines. Created ${data.cards?.length || 0} cards.`);
+      setIngestMessage("");
       setIntakeText("");
+      appendCardReplies(data.cards);
       await loadCards();
       await loadGatewayEvents();
     } catch (error) {
@@ -2495,6 +2771,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
     if (!selectedFile) return;
     setIngestBusy(true);
     setIngestMessage("");
+    appendUserLine(`Sent a recording to read${selectedFile?.name ? `: ${selectedFile.name}` : ""}.`);
     try {
       const form = new FormData();
       form.append("file", selectedFile);
@@ -2502,8 +2779,9 @@ export default function PhaseZeroApp({ screen = "board" }) {
       form.append("execute_actions", "true");
       const data = await jsonFetch("/api/owner/upload", { method: "POST", body: form });
       setEngineCards(Array.isArray(data.cards) ? data.cards : []);
-      setIngestMessage(`Upload read. Created ${data.cards?.length || 0} cards.`);
+      setIngestMessage("");
       setSelectedFile(null);
+      appendCardReplies(data.cards);
       await loadCards();
       await loadGatewayEvents();
     } catch (error) {
@@ -2715,6 +2993,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
           const result = msg.result || {};
           setEngineCards(Array.isArray(result.cards) ? result.cards : []);
           setListenState(result.cards?.length ? "cards_created" : "no_task_created");
+          appendCardReplies(result.cards);
           loadCards();
           loadGatewayEvents();
         }
@@ -2773,6 +3052,9 @@ export default function PhaseZeroApp({ screen = "board" }) {
     setSettings,
     pendingAsks,
     resolvePending,
+    thread,
+    conversationResolve,
+    conversationAutonomy,
     onboarding,
     engineState,
     listenStatus,

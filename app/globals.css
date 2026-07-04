@@ -3320,6 +3320,226 @@ body:not(.pz-debug) .pz-only-debug { display: none !important; }
 .pz-oneinput-filenote { text-align: center; }
 
 /* ============================================================
+   THE CONVERSATION (2026-07-04) — Anticipy talks back.
+   The primary surface is now a chat thread, not a card board:
+   your lines on the right in a warm gold-tinted fill, the
+   assistant's replies on the left in a soft-edged panel bubble.
+   The composer (.pz-oneinput) stays pinned just below it. On
+   theme: cream/charcoal/gold, editorial serif for the resting
+   line, chat-bubble shaped everywhere else.
+   ============================================================ */
+.pz-chat-scene {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
+}
+.pz-chat {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.pz-chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(58vh, 640px);
+  overflow-y: auto;
+  padding: 8px 4px 6px;
+  scroll-behavior: smooth;
+}
+.pz-chat-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+}
+.pz-chat-turn.user { align-items: flex-end; }
+.pz-chat-turn.assistant { align-items: flex-start; }
+
+.pz-chat-bubble {
+  max-width: 84%;
+  padding: 12px 16px;
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: .005em;
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(20,19,17,.05));
+  animation: pzChatIn 320ms cubic-bezier(.22,.61,.36,1) both;
+  overflow-wrap: anywhere;
+}
+/* Assistant: a soft-edged panel bubble with a tail toward the bottom-left. */
+.pz-chat-bubble.assistant {
+  background: var(--pz-surface, #ffffff);
+  color: var(--pz-cream, #141311);
+  border: 1px solid var(--pz-line, #e8e5de);
+  border-radius: 18px 18px 18px 6px;
+}
+/* A waiting-on-you reply carries a quiet gold hairline on its leading edge. */
+.pz-chat-bubble.assistant.tone-ask,
+.pz-chat-bubble.assistant.tone-blocked {
+  border-left: 2px solid var(--pz-gold, #b07912);
+}
+/* You: a warm gold-tinted fill with a tail toward the bottom-right. */
+.pz-chat-bubble.user {
+  background: var(--gold-tint, #fef8eb);
+  color: var(--pz-cream, #141311);
+  border: 1px solid var(--gold-ring, rgba(176,121,18,.28));
+  border-radius: 18px 18px 6px 18px;
+}
+
+/* Inline conversational quick-replies — they read as chips, act as your next message. */
+.pz-chat-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 2px 6px;
+  animation: pzChatIn 320ms cubic-bezier(.22,.61,.36,1) both;
+}
+.pz-chat-chip {
+  border: 1px solid var(--gold-ring, rgba(176,121,18,.4));
+  background: var(--pz-surface, #ffffff);
+  color: var(--pz-gold, #b07912);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 7px 15px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, transform .1s ease;
+}
+.pz-chat-chip:hover { background: var(--gold-tint, #fef8eb); }
+.pz-chat-chip:active { transform: translateY(1px); }
+.pz-chat-chip.primary {
+  background: var(--pz-gold, #b07912);
+  border-color: transparent;
+  color: #ffffff;
+}
+.pz-chat-chip.primary:hover { background: var(--gold-strong, #97650a); }
+.pz-chat-more { position: relative; }
+.pz-chat-more-trigger {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--pz-line, #e8e5de);
+  color: var(--pz-muted, #6b6860);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+.pz-chat-more-trigger::-webkit-details-marker { display: none; }
+.pz-chat-more[open] .pz-chat-more-trigger { border-color: var(--pz-gold, #b07912); color: var(--pz-gold, #b07912); }
+.pz-chat-more-menu {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  bottom: calc(100% + 8px);
+  min-width: 240px;
+  padding: 6px;
+  background: var(--pz-surface, #ffffff);
+  border: 1px solid var(--pz-line, #e8e5de);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md, 0 12px 40px rgba(20,19,17,.14));
+}
+.pz-chat-more-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pz-cream, #141311);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.pz-chat-more-menu button:hover { background: var(--gold-tint, #fef8eb); }
+
+/* The calm resting state — the thread's start. "I'm listening…" / "I'm here." */
+.pz-chat-rest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 56px 16px 24px;
+  animation: pzChatIn 480ms ease-out both;
+}
+.pz-chat-rest-orb {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 40%, var(--gold-tint, #fef8eb), var(--pz-surface, #fff));
+  border: 1px solid var(--gold-ring, rgba(176,121,18,.28));
+  box-shadow: 0 0 0 6px rgba(176,121,18,.06);
+}
+.pz-chat-rest-orb.active { animation: pzOrbPulse 2s ease-in-out infinite; }
+.pz-chat-rest-word {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 30px;
+  line-height: 1.1;
+  color: var(--pz-cream, #141311);
+}
+.pz-chat-rest-sub {
+  margin: 0;
+  max-width: 420px;
+  color: var(--pz-muted, #6b6860);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+/* "Things I'm tracking" — the old board, kept honest but quiet and collapsed. */
+.pz-tracking {
+  width: 100%;
+  max-width: 720px;
+  margin: 4px auto 0;
+  border-top: 1px solid var(--pz-line, #e8e5de);
+  padding-top: 12px;
+}
+.pz-tracking-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--pz-muted, #6b6860);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 6px 2px;
+  user-select: none;
+}
+.pz-tracking-summary::-webkit-details-marker { display: none; }
+.pz-tracking-hint { font-weight: 500; opacity: .7; }
+.pz-tracking[open] .pz-tracking-hint { opacity: 0; }
+.pz-tracking-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px 0 4px;
+}
+
+@keyframes pzChatIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pzOrbPulse {
+  0%, 100% { box-shadow: 0 0 0 6px rgba(176,121,18,.06); }
+  50% { box-shadow: 0 0 0 12px rgba(176,121,18,.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pz-chat-bubble, .pz-chat-chips, .pz-chat-rest { animation: none; }
+  .pz-chat-rest-orb.active { animation: none; }
+  .pz-chat-thread { scroll-behavior: auto; }
+}
+
+/* ============================================================
    Board action panels — WebActionPanel + BoardActionsPanel (A3)
    These sit in the collapsed board (a stretch flex column), so
    they mirror .pz-oneinput: a 720px card that carries the pz
