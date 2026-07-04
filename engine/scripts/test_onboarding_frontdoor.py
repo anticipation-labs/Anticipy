@@ -17,13 +17,20 @@ at the contract level, both sides:
        reads what onboarding wrote" is proven, not assumed.
 
   APP SOURCE (static asserts, no bundler needed for these):
-    4. The /welcome front door exists and POSTs to /api/owner/onboard and
-       /api/connections/authorize and renders the returned connect_url (window.open).
-    5. The /connect page connects FOR REAL (calls /api/connections/authorize and opens the
-       consent URL) — the dead vendor-console deep-links (arcade.dev) are gone.
-    6. Demo scaffolding is gone: the home page's SAMPLE transcript is empty, DEFAULT_MEMORY
-       seeds NO example people (no Maya/Sam), and "start over" blanks rather than restoring
-       a sample.
+    Post Phase-Zero refactor: app/welcome/page.js and app/page.js are thin server wrappers
+    that mount ONE client app, app/phase-zero/PhaseZeroApp.js, with a screen prop. The
+    marketing front door is its WelcomeScreen; the onboard/connect/consent wiring moved into
+    app/connect/page.js. These asserts point at the real current files.
+    4. The /welcome front door exists: it mounts the Phase-Zero client app, which renders the
+       trust-first WelcomeScreen and still drives the read-only onboard recap (/api/onboard_scan).
+    5. The /connect page connects FOR REAL: it ensures the connect open-loops (/api/owner/onboard,
+       connect_account), calls /api/connections/authorize, renders the returned connect_url and
+       opens the provider's consent (window.open) — the dead vendor-console deep-link (arcade.dev)
+       is gone — and it keeps the "invented nothing" recap honesty (this is where that guarantee
+       now lives after the refactor).
+    6. Demo scaffolding is gone: the board's default profile is EMPTY_PROFILE (blank owner name,
+       no example people — no Maya/Sam/Omar), and the demo scenario FIXTURES are env-gated
+       (NEXT_PUBLIC_ANTICIPY_SHOW_FIXTURES) and OFF by default.
 
 Run:
   PYTHONPATH=engine ANTICIPY_MODEL_PROVIDER=stub ANTICIPY_HANDS_MODE=mock \
@@ -139,27 +146,36 @@ def read(path: Path) -> str:
 
 
 def app_source_wiring():
-    # --- 4. the front door exists and is wired to the right endpoints. ---
-    welcome = read(APP / "welcome" / "page.js")
-    assert '"use client"' in welcome, "welcome must be a client component"
-    assert "/api/owner/onboard" in welcome, "welcome must POST the profile to /api/owner/onboard"
-    assert "/api/connections/authorize" in welcome, "welcome must call /api/connections/authorize"
-    assert "connect_url" in welcome, "welcome must render the returned connect_url"
-    assert "window.open" in welcome, "welcome must launch the provider's real consent in a new tab"
-    assert "connect_account" in welcome, "welcome must map the connect open-loops by action"
-    # trust-first first screen copy is present (the front door must lead with trust).
-    assert "who am i helping" in welcome.lower(), "welcome must open trust-first"
-    # the recap reward (read-only, invents nothing) is part of the flow.
-    assert "/api/onboard_scan" in welcome, "welcome must show the read-only onboard recap"
-    assert "invented" in welcome.lower(), "welcome recap must keep the 'invented nothing' honesty"
+    # --- 4. the front door exists: /welcome mounts the Phase-Zero client app + WelcomeScreen. ---
+    # app/welcome/page.js is a thin server wrapper; the client marketing view lives in
+    # app/phase-zero/PhaseZeroApp.js (WelcomeScreen), which also drives the read-only recap.
+    welcome_wrap = read(APP / "welcome" / "page.js")
+    assert "PhaseZeroApp" in welcome_wrap, "welcome page must mount the Phase-Zero app"
+    assert 'screen="welcome"' in welcome_wrap, "welcome page must render the welcome screen"
+
+    pz = read(APP / "phase-zero" / "PhaseZeroApp.js")
+    assert '"use client"' in pz, "the Phase-Zero app must be a client component"
+    assert "function WelcomeScreen" in pz, "the marketing front-door view (WelcomeScreen) must exist"
+    # trust-first copy: the front door leads with the never-send-without-you promise.
+    assert "never send anything without you" in pz.lower(), \
+        "WelcomeScreen must open trust-first (I draft, you approve, I never send without you)"
+    # the recap reward (read-only, invents nothing) is still driven from the app.
+    assert "/api/onboard_scan" in pz, "the Phase-Zero app must call the read-only onboard recap"
 
     # --- 5. the connect page connects for real; dead vendor deep-links are gone. ---
+    # The onboard/connect/consent wiring moved here from the old /welcome page.
     connect = read(APP / "connect" / "page.js")
-    assert "/api/connections/authorize" in connect, "connect must call /api/connections/authorize for real"
+    assert '"use client"' in connect, "connect must be a client component"
     assert "/api/owner/onboard" in connect, "connect must ensure the connect open-loops exist"
+    assert "connect_account" in connect, "connect must map the connect open-loops by action"
+    assert "/api/connections/authorize" in connect, "connect must call /api/connections/authorize for real"
+    assert "connect_url" in connect, "connect must render the returned connect_url"
     assert "window.open" in connect, "connect must launch the provider's real consent"
     assert "arcade.dev" not in connect, "the dead vendor-console deep-link must be removed"
     assert "twilio.com/console" in connect, "twilio setup link may remain (config, not OAuth)"
+    # the "invented nothing" honesty recap now lives on the connect page (post-refactor home).
+    assert "/api/onboard_scan" in connect, "connect must show the read-only onboard recap"
+    assert "invented" in connect.lower(), "connect recap must keep the 'invented nothing' honesty"
 
     # the Next proxy routes that forward to the engine must exist.
     auth_route = read(APP / "api" / "connections" / "authorize" / "route.js")
@@ -167,28 +183,29 @@ def app_source_wiring():
     onboard_route = read(APP / "api" / "owner" / "onboard" / "route.js")
     assert "/owner/onboard" in onboard_route, onboard_route
 
-    # --- 6. demo scaffolding is gone from the home screen. ---
-    home = read(APP / "page.js")
-    # SAMPLE transcript is blanked.
-    m = re.search(r"const SAMPLE\s*=\s*(.+?);", home, re.S)
-    assert m, "could not find SAMPLE declaration"
-    sample_val = m.group(1).strip()
-    assert sample_val in ('""', "''", "``"), f"SAMPLE must be empty, got: {sample_val[:60]}"
-    # DEFAULT_MEMORY seeds NO example people and no seeded owner identity.
-    dm = re.search(r"const DEFAULT_MEMORY\s*=\s*\{(.+?)\};", home, re.S)
-    assert dm, "could not find DEFAULT_MEMORY"
-    dm_block = dm.group(1)
-    assert "Maya" not in dm_block and "Sam" not in dm_block, "DEFAULT_MEMORY must not seed example people"
-    assert "Omar" not in dm_block, "DEFAULT_MEMORY must not seed an example owner name"
-    # the people/preferences seeds are empty strings.
-    for field in ("people", "preferences", "ownerName"):
-        fm = re.search(rf'{field}:\s*("(.*?)"|\'(.*?)\')', dm_block)
-        assert fm, f"DEFAULT_MEMORY.{field} not found"
-        assert (fm.group(2) or fm.group(3) or "") == "", f"DEFAULT_MEMORY.{field} must be blank"
-    # "start over" / clear blanks the box rather than restoring a sample (no setText(SAMPLE)).
-    assert "setText(SAMPLE)" not in home, "the reset button must blank, never restore the sample"
+    # --- 6. demo scaffolding is gone: the board starts empty and invents no example people. ---
+    # app/page.js is a thin wrapper onto PhaseZeroApp screen="board"; the real default state
+    # lives in the Phase-Zero app (EMPTY_PROFILE), and the demo scenario FIXTURES are env-gated.
+    home_wrap = read(APP / "page.js")
+    assert "PhaseZeroApp" in home_wrap and 'screen="board"' in home_wrap, \
+        "home page must mount the Phase-Zero board"
+    # the board's default profile is EMPTY (no seeded owner, no example people).
+    ep = re.search(r"const EMPTY_PROFILE\s*=\s*\{(.+?)\};", pz, re.S)
+    assert ep, "could not find EMPTY_PROFILE"
+    ep_block = ep.group(1)
+    assert "Maya" not in ep_block and "Sam" not in ep_block, "EMPTY_PROFILE must not seed example people"
+    assert "Omar" not in ep_block, "EMPTY_PROFILE must not seed an example owner name"
+    # name is blank and people is an empty array (nothing invented on day one).
+    nm = re.search(r'name:\s*("(.*?)"|\'(.*?)\')', ep_block)
+    assert nm and (nm.group(2) or nm.group(3) or "") == "", "EMPTY_PROFILE.name must be blank"
+    assert re.search(r"people:\s*\[\s*\]", ep_block), "EMPTY_PROFILE.people must be an empty array"
+    assert "useState(EMPTY_PROFILE)" in pz, "the board must initialize from the empty profile"
+    # demo scenario cards are gated behind an env flag and OFF by default (no auto-seeded demo).
+    assert 'process.env.NEXT_PUBLIC_ANTICIPY_SHOW_FIXTURES === "1"' in pz, \
+        "demo fixtures must be off unless NEXT_PUBLIC_ANTICIPY_SHOW_FIXTURES is explicitly set"
+    assert "SHOW_FIXTURES ?" in pz, "the board must only append demo fixtures when the flag is on"
 
-    print("PASS frontdoor app source: /welcome wired, /connect connects for real, demo data gone")
+    print("PASS frontdoor app source: /welcome mounts WelcomeScreen, /connect connects for real, board starts empty")
 
 
 def main():
