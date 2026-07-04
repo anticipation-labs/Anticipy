@@ -158,10 +158,27 @@ function fixtureToCard(fixture) {
   };
 }
 
+// A1: pull the REAL browser receipt the engine landed on the card. control_core's
+// _land_browser_result_on_card writes execution.proof = {type:"browser_receipt", url, answer,
+// screenshot, screenshot_path}. We render the ACTUAL answer + URL + screenshot affordance from
+// it instead of the old canned "Here's what I did." Only fields truly present are surfaced
+// (honest proof — nothing invented).
+function extractBrowserReceipt(card) {
+  const receipt = card.execution?.proof;
+  if (!receipt || typeof receipt !== "object" || receipt.type !== "browser_receipt") return null;
+  const answer = typeof receipt.answer === "string" ? receipt.answer.trim() : "";
+  const url = typeof receipt.url === "string" ? receipt.url.trim() : "";
+  const screenshot = Boolean(receipt.screenshot);
+  const screenshotPath = typeof receipt.screenshot_path === "string" ? receipt.screenshot_path.trim() : "";
+  if (!answer && !url && !screenshot) return null;
+  return { answer, url, screenshot, screenshotPath };
+}
+
 function normalizeEngineCard(card) {
   const gatewayTags = Array.isArray(card.gateway?.source_of_truth_tags)
     ? card.gateway.source_of_truth_tags
     : [];
+  const browserReceipt = extractBrowserReceipt(card);
   return {
     id: card.id || card.ask_id || `engine-${Math.random().toString(16).slice(2)}`,
     // De-jargon (UI step 1): human-facing card copy, never engine internals. CANON/UI_FLOW law.
@@ -171,7 +188,10 @@ function normalizeEngineCard(card) {
     ignored: "",
     browserWork: card.execution?.route || card.action || "",
     checkIn: card.status === "waiting" || card.disposition === "ask" ? "Okay for me to go ahead?" : "",
-    proof: Array.isArray(card.proof) && card.proof.length ? "Here's what I did." : "",
+    // With a real browser receipt the structured render takes over; the string is only a fallback
+    // for non-browser live cards (kept honest — no receipt means no fabricated answer).
+    proof: browserReceipt ? "" : Array.isArray(card.proof) && card.proof.length ? "Here's what I did." : "",
+    browserReceipt,
     memory: card.disposition === "remember" ? "I'll remember this." : "",
     followUp: card.status || card.disposition || "ready",
     risk: card.disposition === "blocked" || card.status === "blocked" ? "blocked" : card.disposition === "ask" || card.status === "waiting" ? "ask" : "do",
@@ -1085,6 +1105,27 @@ function OneInput({
   );
 }
 
+// A1: the browser receipt, rendered honestly — the actual answer the agent read back, the URL it
+// landed on, and a screenshot affordance (the captured-flag + its path when the engine saved one).
+// No route serves the image, so we surface where it is rather than a link that would 404.
+function BrowserReceipt({ receipt }) {
+  if (!receipt) return null;
+  return (
+    <div className="pz-receipt">
+      {receipt.answer ? <p className="pz-receipt-answer">{receipt.answer}</p> : null}
+      {receipt.url ? (
+        <a className="pz-receipt-url" href={receipt.url} target="_blank" rel="noreferrer">{receipt.url}</a>
+      ) : null}
+      {receipt.screenshot ? (
+        <span className="pz-receipt-shot" title={receipt.screenshotPath || undefined}>
+          Screenshot captured
+          {receipt.screenshotPath ? <code>{receipt.screenshotPath}</code> : null}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function FeaturedTaskCard({ card, comment, onComment, onResolve }) {
   const [draft, setDraft] = useState(comment);
 
@@ -1103,7 +1144,7 @@ function FeaturedTaskCard({ card, comment, onComment, onResolve }) {
         <summary>Proof</summary>
         <dl>
           <div><dt>Heard</dt><dd>{card.heard}</dd></div>
-          <div><dt>Proof</dt><dd>{card.proof}</dd></div>
+          <div><dt>Proof</dt><dd>{card.browserReceipt ? <BrowserReceipt receipt={card.browserReceipt} /> : card.proof}</dd></div>
           <div><dt>Memory</dt><dd>{card.memory}</dd></div>
         </dl>
       </details>
@@ -1274,7 +1315,7 @@ function TaskCard({ card, comment, mirror, onComment, onResolve, onStop }) {
           <div><dt>Heard</dt><dd>{card.heard}</dd></div>
           <div><dt>Ignored</dt><dd>{card.ignored || "Nothing ignored on this card."}</dd></div>
           <div><dt>Browser work</dt><dd>{card.browserWork}</dd></div>
-          <div><dt>Proof</dt><dd>{card.proof}</dd></div>
+          <div><dt>Proof</dt><dd>{card.browserReceipt ? <BrowserReceipt receipt={card.browserReceipt} /> : card.proof}</dd></div>
           <div><dt>Memory</dt><dd>{card.memory}</dd></div>
           <div><dt>Follow-up</dt><dd>{card.followUp}</dd></div>
         </dl>
