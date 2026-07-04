@@ -277,7 +277,12 @@ function AppShell({ screen, children, profile, session, engineState }) {
               <button type="button" onClick={() => setMenuOpen(false)}>Close</button>
             </div>
             {NAV_ITEMS.map((item) => {
-              const current = (screen === "board" && item.href === "/") || item.href.includes(screen);
+              // S3 §3.5: any onboarding-* screen lights the single "Onboarding" destination.
+              const isOnboarding = screen.startsWith("onboarding");
+              const current =
+                (screen === "board" && item.href === "/") ||
+                (isOnboarding && item.href.startsWith("/onboarding")) ||
+                (!isOnboarding && item.href !== "/onboarding/2" && item.href.includes(screen));
               return (
                 <a key={item.href} className={current ? "active" : ""} href={item.href}>
                   <span>{item.label}</span>
@@ -453,7 +458,7 @@ function SignScreen({ auth, setAuth }) {
   return (
     <section className="pz-form-shell pz-form-single">
       <form className="pz-panel pz-form" onSubmit={submit}>
-        <h2>{auth.session ? "You are in." : "Come in."}</h2>
+        <p className="pz-form-lead">{auth.session ? "You are in." : "Come in."}</p>
         <p className="pz-form-sub">One account, everywhere. That's it.</p>
         <span className="pz-only-debug">
           {auth.configured ? <StatusPill value="live" /> : <StatusPill value="unavailable" />}
@@ -510,11 +515,11 @@ function SetupScreen({ engineState, listenStatus, refreshEngine, refreshListenSt
             </ol>
           </div>
         ) : null}
+        <div className="pz-actions pz-actions-simple pz-actions-in-card">
+          <a className="pz-button primary pz-button-xl" href="/connect">Continue</a>
+          <button className="pz-button ghost" onClick={() => { refreshEngine(); refreshListenStatus(); }} type="button">Check again</button>
+        </div>
       </section>
-      <div className="pz-actions pz-actions-simple">
-        <a className="pz-button primary pz-button-xl" href="/connect">Continue</a>
-        <button className="pz-button ghost" onClick={() => { refreshEngine(); refreshListenStatus(); }} type="button">Check again</button>
-      </div>
     </div>
   );
 }

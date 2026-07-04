@@ -5,6 +5,9 @@ export const NAV_ITEMS = [
   { href: "/welcome", label: "Welcome" },
   { href: "/sign", label: "Sign" },
   { href: "/setup", label: "Setup" },
+  // S3 §3.5: one Onboarding destination so onboarding-2/3/5/7 always highlight
+  // here (the active check in PhaseZeroApp maps any onboarding-* screen to this).
+  { href: "/onboarding/2", label: "Onboarding" },
   { href: "/", label: "Board" },
   { href: "/settings", label: "Settings" },
 ];
