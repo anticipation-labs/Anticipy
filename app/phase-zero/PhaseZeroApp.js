@@ -1127,38 +1127,14 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const { drawers, error: drawersError, reload: reloadDrawers } = useMemoryDrawers();
-  // FIX-05: surface the REAL trust-graded profile the onboarding built (POST /api/onboarding/profile),
-  // so step 3's payoff — "a real profile now exists" — is visible, not just promised. Honest by
-  // construction: with no readable sources the engine returns an empty scaffold (browser_available
-  // false, zero facts) and we echo THAT, never an invented dossier.
-  const [builtProfile, setBuiltProfile] = useState(null);
-  const [builtError, setBuiltError] = useState("");
+  // FIX-4.5: the old ProfileBuiltPanel called /api/onboarding/profile with sources:[] (the UI never
+  // has source URLs), so it ALWAYS rendered a dead 0-fact scaffold competing with the real dossier.
+  // Removed. LearnedMemoryPanel (/memory/drawers) below is the single, honest source of truth — it
+  // shows only what the engine actually learned (You / People / Tools / Open loops), or empty.
 
   useEffect(() => {
     setClarification(profile.lastClarification || "");
   }, [profile.lastClarification]);
-
-  useEffect(() => {
-    let alive = true;
-    const name = (profile.name || "").trim();
-    if (!name) {
-      setBuiltProfile(null);
-      return undefined;
-    }
-    const sources = Array.isArray(profile.sources) ? profile.sources : [];
-    jsonFetch("/api/onboarding/profile", { method: "POST", body: JSON.stringify({ name, sources }) })
-      .then((data) => {
-        if (!alive) return;
-        setBuiltProfile(data && !data.error ? data : null);
-        setBuiltError(data && data.error ? String(data.message || data.error) : "");
-      })
-      .catch((err) => {
-        if (alive) setBuiltError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      alive = false;
-    };
-  }, [profile.name]);
 
   // "Looks right" persists the durable onboarding-done marker on the engine, then moves on.
   async function confirmDossier() {
@@ -1202,7 +1178,6 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
         <ProfileSection title="Tools and systems" items={profile.tools || []} />
         <ProfileSection title="Open loops" items={profile.openLoops || []} />
       </section>
-      <ProfileBuiltPanel built={builtProfile} error={builtError} />
       <LearnedMemoryPanel drawers={drawers} error={drawersError} onResolveLoop={reloadDrawers} />
       <form className="pz-panel pz-form" onSubmit={submitClarification}>
         <h3>Anything to fix?</h3>
@@ -1228,35 +1203,9 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
   );
 }
 
-// FIX-05: echo the trust-graded profile the engine built from public sources (POST
-// /api/onboarding/profile). Honest by construction — an empty scaffold (no readable sources / no
-// browser helper) is shown AS a scaffold, never dressed up as a finished dossier.
-function ProfileBuiltPanel({ built, error }) {
-  if (error) return <p className="pz-note">I could not build your profile just now: {error}</p>;
-  if (!built) return <p className="pz-note">Building the profile I have of you…</p>;
-  const summary = built.summary || {};
-  const facts = Number(summary.facts || 0);
-  const readOk = Number(summary.sources_read_ok || 0);
-  const total = Number(summary.sources_total || 0);
-  const toCheck = Number(summary.needs_cross_check || 0);
-  const scaffoldOnly = !built.browser_available || facts === 0;
-  return (
-    <section className="pz-panel">
-      <h3>The profile I built for you</h3>
-      <ul className="pz-list">
-        <li>{`${facts} fact${facts === 1 ? "" : "s"} gathered${toCheck ? `, ${toCheck} still to double-check` : ""}.`}</li>
-        <li>{`${readOk} of ${total} public source${total === 1 ? "" : "s"} read.`}</li>
-        {built.role ? <li>{`Role: ${built.role}`}</li> : null}
-        {built.org ? <li>{`Where: ${built.org}`}</li> : null}
-      </ul>
-      <p className="pz-note">
-        {scaffoldOnly
-          ? "This is the honest starting point — I'll fill it in as I read more of your world. Nothing was invented."
-          : "A real profile now exists — every fact carries its own source."}
-      </p>
-    </section>
-  );
-}
+// FIX-4.5: ProfileBuiltPanel removed — it always sent sources:[] and so always rendered an empty
+// 0-fact scaffold, a dead surface competing with the real learned dossier (LearnedMemoryPanel →
+// /memory/drawers). One dossier surface, and it only ever shows what the engine truly learned.
 
 function ProfileSection({ title, items, wide = false }) {
   return (
@@ -1553,10 +1502,13 @@ function CardRow({ card, token, index, comment, mirror, expanded, exiting, onTog
             </details>
             {noteOpen ? (
               <div className="pz-row-note">
+                {/* FIX-4.3 (honest copy): this note is saved LOCALLY on the card, for you — it is not
+                    fed to the brain as a correction/feedback signal (there is no engine feedback route
+                    yet), so the copy must not imply the assistant learns or changes behavior from it. */}
                 <textarea
                   value={note}
                   onChange={(event) => { setNote(event.target.value); setNoteSaved(false); }}
-                  placeholder="Tell me what to change — I'll keep it on this one."
+                  placeholder="A private note kept on this card — just for you."
                   aria-label="Private note for this card"
                 />
                 <div className="pz-row-note-row">
@@ -1566,7 +1518,10 @@ function CardRow({ card, token, index, comment, mirror, expanded, exiting, onTog
               </div>
             ) : null}
             <div className="pz-row-actions">
-              {isDoing ? null : (
+              {/* FIX-4.2: "Go ahead" APPROVES a real engine ask (/api/resolve). Show it only when the
+                  card actually has an askId — never on an "On it" chore (checkbox instead) or a non-ask
+                  status card, where it would just no-op. No button pretends to close what it can't. */}
+              {isDoing || !card.askId ? null : (
                 <button type="button" className="pz-button primary" onClick={onConfirm}>Go ahead</button>
               )}
               <button type="button" className="pz-button ghost" onClick={onDeny}>{denyLabel}</button>
@@ -2040,6 +1995,10 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
           <label className="pz-check"><input type="checkbox" checked={Boolean(settings.confirmBefore?.money)} onChange={(event) => patch("confirmBefore.money", event.target.checked)} /> Money always asks</label>
           <label className="pz-check"><input type="checkbox" checked={Boolean(settings.confirmBefore?.sendToPerson)} onChange={(event) => patch("confirmBefore.sendToPerson", event.target.checked)} /> Sending to people asks</label>
           <label className="pz-check"><input type="checkbox" checked={Boolean(settings.confirmBefore?.irreversible)} onChange={(event) => patch("confirmBefore.irreversible", event.target.checked)} /> Irreversible work asks</label>
+          {/* FIX-4.6 (honesty): the autonomy dial above is a live engine gate. The always-ask guards
+              below are recorded preferences only — the engine's money/irreversible hard-stops are
+              always on regardless and cannot be turned off here, so no toggle claims a gate it can't drive. */}
+          <p className="pz-note">The autonomy dial is live. The always-ask guards are recorded preferences — sensitive actions (money, anything irreversible) always ask first no matter what, and can't be switched off here.</p>
           </div>
         </details>
         <details className="pz-settings-group">
@@ -2051,6 +2010,9 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
           <label className="pz-check"><input type="checkbox" checked={Boolean(settings.listening?.browserMic)} onChange={(event) => patch("listening.browserMic", event.target.checked)} /> Browser mic enabled</label>
           <label className="pz-check"><input type="checkbox" checked={Boolean(settings.listening?.localMacMic)} onChange={(event) => patch("listening.localMacMic", event.target.checked)} /> Local Mac mic enabled</label>
           <label className="pz-check"><input type="checkbox" checked={Boolean(settings.listening?.activeByDefault)} onChange={(event) => patch("listening.activeByDefault", event.target.checked)} /> Start active by default</label>
+          {/* FIX-4.6 (honesty): recorded preferences, not live switches — the mic is actually started
+              and stopped from the board and Setup, so ticking these here doesn't open or silence a mic. */}
+          <p className="pz-note">Recorded preferences. The mic is started and stopped from the board and Setup — these don't open or silence a live mic on their own.</p>
           </div>
         </details>
         <details className="pz-settings-group">
@@ -2095,6 +2057,9 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
               <option value="manual">Manual only</option>
             </select>
           </label>
+          {/* FIX-4.6 (honesty): recorded preferences — retention/promotion aren't yet wired into the
+              engine, so these describe intent rather than enforce a rule. Marked display-only, not faked. */}
+          <p className="pz-note">Recorded preferences — retention and promotion aren't wired into the engine yet, so these describe intent rather than enforce it.</p>
           </div>
         </details>
         <details className="pz-settings-group">
@@ -2246,7 +2211,36 @@ export default function PhaseZeroApp({ screen = "board" }) {
       method: "POST",
       body: JSON.stringify({ profile: nextProfile }),
     });
-    setProfile({ ...EMPTY_PROFILE, ...(data.profile || {}) });
+    const saved = { ...EMPTY_PROFILE, ...(data.profile || {}) };
+    setProfile(saved);
+    // FIX-4.4: the stated basics must reach the BRAIN, not just the local store. Push name/summary/
+    // trust-dial/phone/timezone into the engine's profile drawer (the "You" drawer read by
+    // /memory/drawers) via owner_onboard (idempotent upsert). Only when a name is actually stated,
+    // so unrelated saves never write a blank identity. Best-effort: a brain-sync failure must never
+    // fail the local save — the next save re-syncs.
+    const statedName = (saved.name || "").trim();
+    if (statedName) {
+      const preferences = [
+        (saved.summary || "").trim(),
+        saved.trustDial ? `Trust dial: ${saved.trustDial}` : "",
+        (saved.doNotTouch || "").trim() ? `Always ask before: ${(saved.doNotTouch || "").trim()}` : "",
+      ].filter(Boolean);
+      try {
+        await jsonFetch("/api/owner/onboard", {
+          method: "POST",
+          body: JSON.stringify({
+            owner_name: statedName,
+            timezone: saved.timezone || "",
+            phone: saved.phone || "",
+            preferences,
+            raw_notes: (saved.summary || "").trim(),
+            source: "phase_zero_basics",
+          }),
+        });
+      } catch {
+        /* local save already succeeded; the brain re-syncs on the next profile save */
+      }
+    }
   }
 
   async function loadSettings() {
@@ -2515,9 +2509,13 @@ export default function PhaseZeroApp({ screen = "board" }) {
       } catch {
         await setMirror(card.id, "failed");
       }
-    } else {
-      await setMirror(card.id, "coming_soon");
     }
+    // FIX-4.2 (no fake success): a card with no askId has NO engine ask to approve or deny — it is
+    // a status object ("On it"/informational/resting). Clearing it is a LOCAL dismiss only (the row
+    // retires from view via CardBoard.commit -> retire); we deliberately write NO engine or text-
+    // mirror state here, so the button never fakes a close it didn't do. The old else-branch wrote a
+    // fabricated "coming_soon" mirror — a silent no-op dressed as success. That lie is gone, and the
+    // board also hides the "Go ahead" primary on non-ask cards (see CardRow), so no button lies.
   }
 
   // A6 swipe deck — "Allow autonomy" on a card = the owner opting this class of work OUT of
