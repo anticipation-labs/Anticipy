@@ -2963,7 +2963,7 @@ body:not(.pz-debug) .pz-dev-tags,
 body:not(.pz-debug) .pz-gateway { display: none !important; }
 
 /* FIX-06: the "Waiting for your yes" room — pending asks, finally visible. */
-.pz-pending-asks { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid rgba(212,175,55,.35); border-radius: 14px; background: rgba(212,175,55,.06); }
+.pz-pending-asks { width: 100%; max-width: 720px; margin-inline: auto; display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--gold-ring); border-radius: var(--r-md); background: var(--gold-tint); box-shadow: var(--shadow-xs); }
 .pz-pending-asks h3 { margin: 0; font-size: 15px; }
 .pz-pending-ask { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .pz-pending-ask p { margin: 2px 0 0; opacity: .75; font-size: 13px; }
@@ -3125,12 +3125,13 @@ body:not(.pz-debug) .pz-only-debug { display: none !important; }
   display: grid;
   gap: 14px;
 }
-.pz-webaction {
+.pz-webaction,
+.pz-board-actions {
   padding: 20px;
-  border: 1px solid var(--pz-line, rgba(248, 244, 236, 0.14));
-  border-radius: 18px;
-  background: var(--pz-surface, rgba(245, 242, 235, 0.08));
-  box-shadow: 0 18px 80px rgba(0, 0, 0, 0.24);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
 }
 .pz-webaction-head { display: grid; gap: 4px; }
 .pz-webaction-title {
@@ -3358,246 +3359,350 @@ body:not(.pz-debug) .pz-only-debug { display: none !important; }
 .shell .recap-value { margin: 0; color: var(--pz-cream-soft); font-size: 14px; line-height: 1.5; }
 .shell .recap-empty { margin: 0; color: var(--pz-muted); font-size: 14px; font-style: italic; }
 
-/* A6 — premium swipe deck (M7 shell) on the board. Calm, one card at a time; the top card is
-   draggable and every gesture is a real action, so the motion is honest, not decorative. */
-.pz-deck-shell {
-  grid-column: 1 / -1;
+/* THE BOARD — a calm grouped vertical list (replaces the old swipe-stack). One warm editorial
+   surface: opaque cream rows on hairlines, grouped by need, expanding as an accordion. No stack,
+   so the old bleed-through bug is gone by construction. The only spring in the system is the
+   completion checkbox fill. */
+.pz-board {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
   display: grid;
-  gap: 16px;
+  gap: var(--s-6);
 }
 
-.pz-deck-head {
+.pz-board-head {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--s-4);
 }
 
-.pz-deck-head h3 {
-  margin: 0;
-  color: var(--pz-cream);
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: clamp(26px, 3.4vw, 40px);
-  line-height: 1.04;
-}
-
-.pz-deck-sub {
-  margin: 6px 0 0;
-  color: var(--pz-muted);
-  font-size: 13px;
-}
-
-.pz-deck-sort {
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--pz-line);
-  border-radius: 999px;
-  background: rgba(248, 244, 236, 0.05);
-  color: var(--pz-cream);
-}
-
-.pz-deck-stack {
-  position: relative;
+.pz-board-kicker {
   display: block;
-  min-height: 300px;
-  padding: 8px 0 2px;
+  color: var(--gold);
+  font: 600 11px/1.4 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.pz-deck-card {
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  max-width: 620px;
-  margin: 0 auto;
-  padding: 22px 24px;
-  border: 1px solid var(--pz-line);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(248, 244, 236, 0.09), rgba(248, 244, 236, 0.045));
-  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.34);
+.pz-board-title {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font: 400 clamp(28px, 4vw, 34px)/1.08 var(--serif);
+}
+
+.pz-board-order {
+  min-height: 34px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  color: var(--muted);
+  font: 500 13px/1 var(--sans);
+  cursor: pointer;
+}
+
+.pz-board-section {
   display: grid;
-  gap: 12px;
-  will-change: transform;
+  gap: var(--s-3);
 }
 
-.pz-deck-card.is-top {
-  cursor: grab;
-  touch-action: none;
+.pz-board-section-label {
+  margin: 0;
+  color: var(--muted);
+  font: 500 13px/1.5 var(--sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.pz-deck-card.is-top:active {
-  cursor: grabbing;
+.pz-board-section-count {
+  margin-left: var(--s-1);
+  color: var(--faint);
 }
 
-.pz-deck-card[aria-hidden="true"] {
-  pointer-events: none;
+.pz-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-3);
 }
 
-.pz-deck-card.hint-confirm {
-  border-color: rgba(83, 195, 145, 0.6);
-  box-shadow: 0 0 0 1px rgba(83, 195, 145, 0.45), 0 26px 90px rgba(0, 0, 0, 0.34);
+/* Row — the atom. A grid collapser wraps the card so confirm/deny can ease it out (collapse +
+   fade), never a fling. */
+.pz-row {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: pzRowIn var(--t-slow) var(--ease) backwards;
+  animation-delay: calc(var(--row-index, 0) * 40ms);
+  transition: grid-template-rows var(--t-slow) var(--ease), opacity var(--t) var(--ease), transform var(--t) var(--ease);
 }
 
-.pz-deck-card.hint-deny {
-  border-color: rgba(214, 91, 74, 0.6);
-  box-shadow: 0 0 0 1px rgba(214, 91, 74, 0.42), 0 26px 90px rgba(0, 0, 0, 0.34);
+.pz-row.is-exiting {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: scale(0.98);
 }
 
-.pz-deck-card.hint-autonomy {
-  border-color: rgba(215, 179, 106, 0.7);
-  box-shadow: 0 0 0 1px rgba(215, 179, 106, 0.5), 0 26px 90px rgba(0, 0, 0, 0.34);
+.pz-row-card {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
-.pz-deck-card-top {
+.pz-row-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--line-strong);
+}
+
+.pz-row-line {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.pz-row-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--calm, #8a857b);
+}
+.pz-dot-ask { background: var(--ask); }
+.pz-dot-do { background: var(--do); }
+.pz-dot-blocked { background: var(--blocked); }
+.pz-dot-calm { background: var(--calm, #8a857b); }
+
+/* Things-style completion checkbox — the one delight. Spring-fills green on commit. */
+.pz-row-check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color var(--t) var(--ease), background var(--t) var(--ease);
+}
+.pz-row-check:hover { border-color: var(--do); }
+.pz-row-check .pz-row-check-mark {
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity var(--t) var(--ease), transform var(--t) var(--spring);
+}
+.pz-row-check.is-filled {
+  background: var(--do);
+  border-color: var(--do);
+}
+.pz-row-check.is-filled .pz-row-check-mark {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.pz-row-head {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--s-3);
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--r-xs);
 }
 
-.pz-deck-title {
+.pz-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink);
+  font: 400 clamp(20px, 2.6vw, 24px)/1.15 var(--serif);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pz-row-tail {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--muted);
+}
+
+.pz-row-meta {
+  color: var(--muted);
+  font: 500 13px/1.5 var(--sans);
+}
+
+.pz-row-chevron {
+  color: var(--faint);
+  transition: transform var(--t) var(--ease);
+}
+.pz-row-chevron.open { transform: rotate(180deg); }
+
+.pz-row-heard {
   margin: 0;
-  color: var(--pz-cream);
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: clamp(24px, 3vw, 34px);
-  line-height: 1.08;
+  padding-left: calc(22px + var(--s-3));
+  color: var(--ink-soft);
+  font: 400 15px/1.6 var(--sans);
+  max-width: 62ch;
 }
 
-.pz-deck-checkin {
-  margin: 0;
-  color: var(--pz-cream-soft);
-  font-size: 15px;
-  line-height: 1.6;
-  max-width: 60ch;
-}
-
-.pz-deck-proof summary {
-  color: var(--pz-muted);
-  font-size: 13px;
-}
-
-.pz-deck-mirror {
-  margin: 10px 0 0;
-  color: var(--pz-muted);
-  font-size: 12px;
-}
-
-.pz-deck-feedback {
+.pz-row-drawer {
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--pz-line);
-  border-radius: 12px;
-  background: rgba(248, 244, 236, 0.04);
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--t-slow) var(--ease);
+}
+.pz-row-drawer.open { grid-template-rows: 1fr; }
+
+.pz-row-drawer-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  gap: var(--s-3);
+  padding-top: var(--s-2);
+  padding-left: calc(22px + var(--s-3));
 }
 
-.pz-deck-feedback textarea {
-  min-height: 74px;
+.pz-row-checkin {
+  margin: 0;
+  color: var(--ink);
+  font: 400 15px/1.6 var(--sans);
+}
+
+.pz-row-mirror {
+  margin: var(--s-2) 0 0;
+  color: var(--muted);
+  font: 500 12px/1.5 var(--sans);
+}
+
+.pz-row-note {
+  display: grid;
+  gap: var(--s-2);
+}
+.pz-row-note textarea {
+  min-height: 72px;
   padding: 10px 12px;
-  border: 1px solid var(--pz-line);
-  border-radius: 10px;
-  background: rgba(8, 8, 7, 0.35);
-  color: var(--pz-cream);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel-tint);
+  color: var(--ink);
+  font: inherit;
   resize: vertical;
 }
-
-.pz-deck-feedback-row {
+.pz-row-note-row {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--s-2);
 }
 
-.pz-deck-actions {
+.pz-row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.pz-row-more {
+  position: relative;
+  margin-left: auto;
+}
+.pz-row-more-trigger {
+  list-style: none;
+  min-width: 40px;
+  min-height: 40px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 2px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
 }
-
-.pz-deck-act {
-  min-height: 48px;
-  border: 1px solid var(--pz-line);
-  border-radius: 12px;
-  background: rgba(248, 244, 236, 0.05);
-  color: var(--pz-cream);
-  font-size: 13px;
-  font-weight: 600;
-  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+.pz-row-more-trigger::-webkit-details-marker { display: none; }
+.pz-row-more[open] .pz-row-more-trigger { border-color: var(--line-strong); color: var(--ink); }
+.pz-row-more-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--s-2));
+  z-index: 20;
+  min-width: 210px;
+  display: grid;
+  gap: 2px;
+  padding: var(--s-1);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
 }
-
-.pz-deck-act:hover {
-  transform: translateY(-1px);
+.pz-row-more-menu button {
+  text-align: left;
+  padding: var(--s-2) var(--s-3);
+  border: 0;
+  background: none;
+  border-radius: var(--r-xs);
+  color: var(--ink);
+  font: 400 14px/1.4 var(--sans);
+  cursor: pointer;
 }
+.pz-row-more-menu button:hover { background: var(--panel-tint); }
 
-.pz-deck-act.confirm {
-  border-color: rgba(83, 195, 145, 0.5);
-  color: var(--pz-good);
-}
-
-.pz-deck-act.confirm:hover {
-  background: rgba(83, 195, 145, 0.12);
-}
-
-.pz-deck-act.deny {
-  border-color: rgba(214, 91, 74, 0.42);
-  color: #f0a99e;
-}
-
-.pz-deck-act.deny:hover {
-  background: rgba(214, 91, 74, 0.12);
-}
-
-.pz-deck-act.autonomy {
-  border-color: rgba(215, 179, 106, 0.45);
-  color: var(--pz-gold);
-}
-
-.pz-deck-act.autonomy:hover {
-  background: rgba(215, 179, 106, 0.12);
-}
-
-.pz-deck-act.note {
-  color: var(--pz-muted);
-}
-
-.pz-deck-act:disabled {
-  opacity: 0.5;
-  cursor: default;
-  transform: none;
-}
-
-.pz-deck-empty {
+/* Empty state — one calm line. */
+.pz-board-empty {
   display: grid;
   justify-items: center;
-  gap: 12px;
-  padding: 48px 24px;
-  border: 1px solid var(--pz-line);
-  border-radius: 18px;
-  background: rgba(248, 244, 236, 0.04);
+  gap: var(--s-3);
+  padding: var(--s-8) var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-xs);
   text-align: center;
 }
-
-.pz-deck-empty-mark {
+.pz-board-empty-mark {
   display: grid;
   place-items: center;
   width: 46px;
   height: 46px;
-  border-radius: 999px;
-  border: 1px solid rgba(83, 195, 145, 0.45);
-  color: var(--pz-good);
-  font-size: 20px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  color: var(--do);
+}
+.pz-board-empty-title {
+  margin: 0;
+  color: var(--ink);
+  font: 400 clamp(20px, 3vw, 26px)/1.1 var(--serif);
+}
+.pz-board-empty-sub {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--muted);
+  font: 400 15px/1.6 var(--sans);
 }
 
-.pz-deck-empty p {
-  margin: 0;
-  color: var(--pz-muted);
-  max-width: 42ch;
+@keyframes pzRowIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
 }
 
 @media (max-width: 720px) {
-  .pz-deck-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  .pz-row-actions .pz-button.primary,
+  .pz-row-actions .pz-button.ghost { flex: 1 1 auto; }
 }

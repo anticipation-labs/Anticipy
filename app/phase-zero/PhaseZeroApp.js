@@ -1287,16 +1287,45 @@ function PendingAsksPanel({ pendingAsks, onResolve }) {
   );
 }
 
-// A6 — the premium swipe deck (M7 shell). The owner-cards board is a calm, one-at-a-time deck: the
-// top card is draggable and every gesture fires a REAL engine mutation — never a decorative
-// animation. Swipe right = confirm (/api/resolve approved), left = not now (/api/resolve deny, or
-// /api/owner/stop for an in-flight opt-out chore), up = allow autonomy (/api/owner/autonomy). The
-// note affordance writes real feedback (/api/tasks/comments). Cards leave the deck only because the
-// action behind them committed; the /api/owner/cards reload the handlers trigger is the truth.
-const SWIPE_THRESHOLD = 96;
+// THE BOARD — a calm grouped vertical list (replaces the old Tinder swipe-stack). Cards are
+// glanceable status objects grouped into "Needs a yes" / "Waiting for you" / "On it", not a
+// decision queue: no drag, no off-screen throw. Every action still fires a REAL engine mutation
+// (resolveCard=/api/resolve, stopCard=/api/owner/stop, allowAutonomy=/api/owner/autonomy,
+// saveComment=/api/tasks/comments) — the /api/owner/cards reload the handlers trigger is the truth.
+// Rows expand as an accordion (one open at a time); keyboard-first (Up/Down move, Enter expand,
+// Y/N confirm/deny). The bleed-through bug is gone by construction: a flat list has no stack.
+const BOARD_SECTIONS = [
+  { category: "Needs a yes", token: "blocked" },
+  { category: "Waiting for you", token: "ask" },
+  { category: "On it", token: "do" },
+];
 
-function SwipeDeck({ cards, comments, textMirror, sortMode, setSortMode, resolveCard, stopCard, allowAutonomy, saveComment }) {
+function ChevronIcon({ open }) {
+  return (
+    <svg className={`pz-row-chevron${open ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M8 10l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12.5l4.4 4.4L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function closeRowMenu(event) {
+  const menu = event.currentTarget.closest("details");
+  if (menu) menu.open = false;
+}
+
+function CardBoard({ cards, comments, textMirror, sortMode, setSortMode, resolveCard, stopCard, allowAutonomy, saveComment }) {
   const [handled, setHandled] = useState(() => new Set());
+  const [exiting, setExiting] = useState({});
+  const [openId, setOpenId] = useState("");
+  const headerRefs = useRef({});
 
   const sorted = useMemo(() => {
     const copy = [...cards];
@@ -1306,20 +1335,36 @@ function SwipeDeck({ cards, comments, textMirror, sortMode, setSortMode, resolve
     return copy;
   }, [cards, sortMode]);
 
-  const deck = useMemo(() => sorted.filter((card) => !handled.has(card.id)), [sorted, handled]);
+  const live = useMemo(() => sorted.filter((card) => !handled.has(card.id)), [sorted, handled]);
 
   // A card the engine dropped after its action no longer needs a slot in `handled` — prune stale
   // ids so the set never leaks (and a re-created card id can reappear honestly).
   useEffect(() => {
     setHandled((current) => {
       if (current.size === 0) return current;
-      const live = new Set(sorted.map((card) => card.id));
+      const liveIds = new Set(sorted.map((card) => card.id));
       let changed = false;
       const next = new Set();
-      current.forEach((id) => { if (live.has(id)) next.add(id); else changed = true; });
+      current.forEach((id) => { if (liveIds.has(id)) next.add(id); else changed = true; });
       return changed ? next : current;
     });
   }, [sorted]);
+
+  // Group by card.category into the three sections; anything unexpected falls to a calm "Resting"
+  // tail so no card is ever silently dropped. Empty sections don't render.
+  const sections = useMemo(() => {
+    const groups = BOARD_SECTIONS.map((section) => ({ ...section, items: [] }));
+    const extra = [];
+    live.forEach((card) => {
+      const hit = groups.find((group) => group.category === card.category);
+      if (hit) hit.items.push(card);
+      else extra.push(card);
+    });
+    if (extra.length) groups.push({ category: "Resting", token: "calm", items: extra });
+    return groups.filter((group) => group.items.length);
+  }, [live]);
+
+  const flatOrder = useMemo(() => sections.flatMap((section) => section.items.map((card) => card.id)), [sections]);
 
   function retire(cardId) {
     setHandled((current) => {
@@ -1328,13 +1373,12 @@ function SwipeDeck({ cards, comments, textMirror, sortMode, setSortMode, resolve
       next.add(cardId);
       return next;
     });
+    setOpenId((open) => (open === cardId ? "" : open));
   }
 
-  // Route each gesture to its real, already-wired handler. Deny stops an in-flight opt-out chore
-  // (/api/owner/stop) when there is one, otherwise it declines the ask (/api/resolve approved:false).
-  function actionFor(card, direction) {
-    if (direction === "confirm") return resolveCard(card, true);
-    if (direction === "autonomy") return allowAutonomy(card);
+  // Deny stops an in-flight opt-out chore (/api/owner/stop) when there is one, otherwise it declines
+  // the ask (/api/resolve approved:false) — the exact routing the old swipe-left used.
+  function denyAction(card) {
     const raw = card.raw || {};
     const optOut = Boolean(raw.execution?.opt_out || raw.args?.opt_out);
     const inFlight = !["stopped", "done", "failed", "blocked"].includes(card.status);
@@ -1342,60 +1386,103 @@ function SwipeDeck({ cards, comments, textMirror, sortMode, setSortMode, resolve
     return resolveCard(card, false);
   }
 
-  const remaining = deck.length;
+  // One commit path for buttons and keys. The mutation runs for real; the row then eases out
+  // (scale .98 + fade + collapse, never a fling) and the engine reload behind it is the truth.
+  function commit(card, kind) {
+    if (exiting[card.id]) return;
+    if (kind === "autonomy") {
+      const ok = typeof window !== "undefined" && window.confirm("Let me do things like this without asking first?");
+      if (!ok) return;
+      try { allowAutonomy(card); } catch { /* reload behind is the truth */ }
+    } else if (kind === "confirm") {
+      try { resolveCard(card, true); } catch { /* reload behind is the truth */ }
+    } else {
+      try { denyAction(card); } catch { /* reload behind is the truth */ }
+    }
+    const exitKind = kind === "deny" ? "deny" : "confirm";
+    setExiting((current) => ({ ...current, [card.id]: exitKind }));
+    window.setTimeout(() => retire(card.id), 260);
+  }
+
+  function focusRow(id) {
+    headerRefs.current[id]?.focus();
+  }
+
+  function onRowKey(event, card) {
+    const idx = flatOrder.indexOf(card.id);
+    if (event.key === "ArrowDown") { event.preventDefault(); focusRow(flatOrder[Math.min(idx + 1, flatOrder.length - 1)]); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); focusRow(flatOrder[Math.max(idx - 1, 0)]); }
+    else if (event.key === "y" || event.key === "Y") { event.preventDefault(); commit(card, "confirm"); }
+    else if (event.key === "n" || event.key === "N") { event.preventDefault(); commit(card, "deny"); }
+  }
+
+  const total = live.length;
+
   return (
-    <section className="pz-deck-shell" aria-label="Your cards">
-      <div className="pz-deck-head">
+    <section className="pz-board" aria-label="Your day">
+      <header className="pz-board-head">
         <div>
-          <h3>{remaining ? `${remaining} thing${remaining === 1 ? "" : "s"} for you` : "All caught up"}</h3>
-          <p className="pz-deck-sub">Swipe or tap — every choice runs for real.</p>
+          <span className="pz-board-kicker">Vibe your life.</span>
+          <h3 className="pz-board-title">Your day</h3>
         </div>
         <select
-          className="pz-deck-sort"
+          className="pz-board-order"
           value={sortMode}
           onChange={(event) => setSortMode(event.target.value)}
-          aria-label="Order the deck"
+          aria-label="Order your day"
         >
           <option value="priority">Priority</option>
           <option value="needs_approval">Needs approval</option>
           <option value="source">Source</option>
           <option value="newest">Newest</option>
         </select>
-      </div>
-      {remaining ? (
-        <div className="pz-deck-stack">
-          {deck.slice(0, 3).map((card, index) => (
-            <DeckCard
-              key={card.id}
-              card={card}
-              comment={comments[card.id] || ""}
-              mirror={textMirror[card.id]?.status || "coming_soon"}
-              depth={index}
-              interactive={index === 0}
-              onAction={(direction) => actionFor(card, direction)}
-              onRetire={() => retire(card.id)}
-              onFeedback={(note) => saveComment(card.id, note)}
-            />
-          ))}
-        </div>
+      </header>
+
+      {total ? (
+        sections.map((section) => (
+          <div className="pz-board-section" key={section.category}>
+            <p className="pz-board-section-label">
+              {section.category}
+              <span className="pz-board-section-count" aria-hidden="true">· {section.items.length}</span>
+            </p>
+            <ul className="pz-board-list">
+              {section.items.map((card, index) => (
+                <CardRow
+                  key={card.id}
+                  card={card}
+                  token={section.token}
+                  index={index}
+                  comment={comments[card.id] || ""}
+                  mirror={textMirror[card.id]?.status || "coming_soon"}
+                  expanded={openId === card.id}
+                  exiting={exiting[card.id]}
+                  onToggle={() => setOpenId((open) => (open === card.id ? "" : card.id))}
+                  headerRef={(el) => { if (el) headerRefs.current[card.id] = el; else delete headerRefs.current[card.id]; }}
+                  onKey={(event) => onRowKey(event, card)}
+                  onConfirm={() => commit(card, "confirm")}
+                  onDeny={() => commit(card, "deny")}
+                  onAutonomy={() => commit(card, "autonomy")}
+                  onNote={(note) => saveComment(card.id, note)}
+                />
+              ))}
+            </ul>
+          </div>
+        ))
       ) : (
-        <div className="pz-deck-empty">
-          <span className="pz-deck-empty-mark" aria-hidden="true">✓</span>
-          <p>Nothing waiting. I'll surface the next thing here the moment it lands.</p>
+        <div className="pz-board-empty">
+          <span className="pz-board-empty-mark" aria-hidden="true"><CheckIcon /></span>
+          <p className="pz-board-empty-title">Nothing needs you right now.</p>
+          <p className="pz-board-empty-sub">I'm listening. I'll surface things as they come.</p>
         </div>
       )}
     </section>
   );
 }
 
-function DeckCard({ card, comment, mirror, depth, interactive, onAction, onRetire, onFeedback }) {
-  const [drag, setDrag] = useState({ x: 0, y: 0, active: false });
-  const [exit, setExit] = useState(null); // "confirm" | "deny" | "autonomy"
-  const [busy, setBusy] = useState(false);
-  const [showNote, setShowNote] = useState(false);
+function CardRow({ card, token, index, comment, mirror, expanded, exiting, onToggle, headerRef, onKey, onConfirm, onDeny, onAutonomy, onNote }) {
   const [note, setNote] = useState(comment || "");
+  const [noteOpen, setNoteOpen] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
-  const startRef = useRef(null);
 
   useEffect(() => { setNote(comment || ""); }, [comment]);
 
@@ -1403,120 +1490,93 @@ function DeckCard({ card, comment, mirror, depth, interactive, onAction, onRetir
   const optOut = Boolean(raw.execution?.opt_out || raw.args?.opt_out);
   const inFlight = !["stopped", "done", "failed", "blocked"].includes(card.status);
   const denyLabel = optOut && inFlight ? "Stop" : "Not now";
-
-  function commit(direction) {
-    if (busy || !interactive) return;
-    setBusy(true);
-    setExit(direction);
-    try { Promise.resolve(onAction(direction)); } catch { /* reload behind the card is the truth */ }
-    // Let the card slide off, then drop it from the deck — the engine reload the handler fired is
-    // the source of truth, this only clears the acted-on card from view.
-    window.setTimeout(() => onRetire(), 260);
-  }
-
-  function onPointerDown(event) {
-    if (!interactive || busy) return;
-    if (event.target.closest("button, textarea, select, a, summary, input")) return;
-    startRef.current = { x: event.clientX, y: event.clientY };
-    setDrag({ x: 0, y: 0, active: true });
-    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* capture is best-effort */ }
-  }
-  function onPointerMove(event) {
-    if (!drag.active || !startRef.current) return;
-    setDrag({ x: event.clientX - startRef.current.x, y: event.clientY - startRef.current.y, active: true });
-  }
-  function onPointerUp() {
-    if (!drag.active) return;
-    const { x, y } = drag;
-    startRef.current = null;
-    setDrag({ x: 0, y: 0, active: false });
-    if (x > SWIPE_THRESHOLD) commit("confirm");
-    else if (x < -SWIPE_THRESHOLD) commit("deny");
-    else if (y < -SWIPE_THRESHOLD) commit("autonomy");
-  }
+  const isDoing = token === "do";
+  const tsValue = [raw.created_at, raw.created, raw.ts, raw.timestamp].find((value) => typeof value === "number" && Number.isFinite(value));
+  const time = tsValue ? formatGatewayTime(tsValue) : "";
+  const statusWord = isDoing ? humanStatus(card.status === "prepared" ? "working" : card.status) : "";
 
   async function sendNote() {
     setNoteSaved(false);
-    try { await onFeedback(note); setNoteSaved(true); } catch { /* stays open so the note isn't lost */ }
+    try { await onNote(note); setNoteSaved(true); } catch { /* stays open so the note isn't lost */ }
   }
-
-  let transform;
-  let transition;
-  let opacity = 1;
-  if (exit) {
-    const offX = exit === "confirm" ? "130%" : exit === "deny" ? "-130%" : "0%";
-    const offY = exit === "autonomy" ? "-150%" : "0%";
-    const rot = exit === "confirm" ? 14 : exit === "deny" ? -14 : 0;
-    transform = `translate(${offX}, ${offY}) rotate(${rot}deg)`;
-    transition = "transform 260ms ease, opacity 260ms ease";
-    opacity = 0;
-  } else if (interactive) {
-    transform = `translate(${drag.x}px, ${drag.y}px) rotate(${(drag.x * 0.04).toFixed(2)}deg)`;
-    transition = drag.active ? "none" : "transform 240ms cubic-bezier(.2,.8,.2,1)";
-  } else {
-    transform = `translateY(${depth * 12}px) scale(${(1 - depth * 0.045).toFixed(3)})`;
-    transition = "transform 240ms ease";
-    opacity = 1 - depth * 0.14;
-  }
-
-  const hint = !exit && interactive && drag.active
-    ? (drag.x > 40 ? "confirm" : drag.x < -40 ? "deny" : drag.y < -40 ? "autonomy" : null)
-    : null;
 
   return (
-    <article
-      className={`pz-deck-card pz-task-${card.risk}${hint ? ` hint-${hint}` : ""}${interactive ? " is-top" : ""}`}
-      style={{ transform, transition, opacity, zIndex: 30 - depth, position: depth === 0 ? "relative" : "absolute" }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      aria-hidden={!interactive}
-    >
-      <div className="pz-deck-card-top">
-        <span className="pz-category">{card.category}</span>
-        <StatusPill value={card.status === "needs_approval" ? "coming_soon" : card.status} />
-      </div>
-      <h4 className="pz-deck-title">{humanTitle(card.title)}</h4>
-      {card.checkIn ? <p className="pz-deck-checkin">{card.checkIn}</p> : null}
-      {interactive ? (
-        <>
-          <details className="pz-proof-details pz-deck-proof">
-            <summary>Proof</summary>
-            <dl className="pz-task-detail">
-              <div><dt>Heard</dt><dd>{card.heard || "—"}</dd></div>
-              <div><dt>Browser work</dt><dd>{card.browserWork || "—"}</dd></div>
-              <div><dt>Proof</dt><dd>{card.browserReceipt ? <BrowserReceipt receipt={card.browserReceipt} /> : (card.proof || "—")}</dd></div>
-              <div><dt>Memory</dt><dd>{card.memory || "—"}</dd></div>
-            </dl>
-            <p className="pz-deck-mirror">Text mirror: {humanStatus(mirror)}</p>
-            <SourceTagList tags={card.sourceTags} />
-          </details>
-          {showNote ? (
-            <div className="pz-deck-feedback">
-              <textarea
-                value={note}
-                onChange={(event) => { setNote(event.target.value); setNoteSaved(false); }}
-                placeholder="Tell me what to change — I'll keep it on this one."
-                aria-label="Feedback note"
-              />
-              <div className="pz-deck-feedback-row">
-                <button type="button" className="pz-button subtle" onClick={() => setShowNote(false)}>Close</button>
-                <button type="button" className="pz-button ghost" onClick={sendNote} disabled={!note.trim()}>
-                  {noteSaved ? "Saved" : "Send note"}
-                </button>
+    <li className={`pz-row${exiting ? ` is-exiting is-exiting-${exiting}` : ""}`} style={{ "--row-index": index }}>
+      <div className="pz-row-card" data-token={token}>
+        <div className="pz-row-line">
+          {isDoing ? (
+            <button
+              type="button"
+              className={`pz-row-check${exiting === "confirm" ? " is-filled" : ""}`}
+              onClick={onConfirm}
+              aria-label="Mark done"
+            >
+              <span className="pz-row-check-mark"><CheckIcon /></span>
+            </button>
+          ) : (
+            <span className={`pz-row-dot pz-dot-${token}`} aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            className="pz-row-head"
+            onClick={onToggle}
+            onKeyDown={onKey}
+            aria-expanded={expanded}
+            ref={headerRef}
+          >
+            <span className="pz-row-title">{humanTitle(card.title)}</span>
+            <span className="pz-row-tail">
+              {time ? <time className="pz-row-meta">{time}</time> : statusWord ? <span className="pz-row-meta">{statusWord}</span> : null}
+              <ChevronIcon open={expanded} />
+            </span>
+          </button>
+        </div>
+        {card.heard ? <p className="pz-row-heard">“{card.heard}”</p> : null}
+        <div className={`pz-row-drawer${expanded ? " open" : ""}`}>
+          <div className="pz-row-drawer-inner">
+            {card.checkIn ? <p className="pz-row-checkin">{card.checkIn}</p> : null}
+            <details className="pz-proof-details">
+              <summary>Proof</summary>
+              <dl className="pz-task-detail">
+                <div><dt>Heard</dt><dd>{card.heard || "—"}</dd></div>
+                <div><dt>Browser work</dt><dd>{card.browserWork || "—"}</dd></div>
+                <div><dt>Proof</dt><dd>{card.browserReceipt ? <BrowserReceipt receipt={card.browserReceipt} /> : (card.proof || "—")}</dd></div>
+                <div><dt>Memory</dt><dd>{card.memory || "—"}</dd></div>
+              </dl>
+              <p className="pz-row-mirror">Text mirror: {humanStatus(mirror)}</p>
+              <SourceTagList tags={card.sourceTags} />
+            </details>
+            {noteOpen ? (
+              <div className="pz-row-note">
+                <textarea
+                  value={note}
+                  onChange={(event) => { setNote(event.target.value); setNoteSaved(false); }}
+                  placeholder="Tell me what to change — I'll keep it on this one."
+                  aria-label="Private note for this card"
+                />
+                <div className="pz-row-note-row">
+                  <button type="button" className="pz-button subtle" onClick={() => setNoteOpen(false)}>Close</button>
+                  <button type="button" className="pz-button ghost" onClick={sendNote} disabled={!note.trim()}>{noteSaved ? "Saved" : "Save note"}</button>
+                </div>
               </div>
+            ) : null}
+            <div className="pz-row-actions">
+              {isDoing ? null : (
+                <button type="button" className="pz-button primary" onClick={onConfirm}>Go ahead</button>
+              )}
+              <button type="button" className="pz-button ghost" onClick={onDeny}>{denyLabel}</button>
+              <details className="pz-row-more">
+                <summary className="pz-row-more-trigger" aria-label="More actions">⋯</summary>
+                <div className="pz-row-more-menu" role="menu">
+                  <button type="button" role="menuitem" onClick={(event) => { closeRowMenu(event); onAutonomy(); }}>Always okay to do this</button>
+                  <button type="button" role="menuitem" onClick={(event) => { closeRowMenu(event); setNoteOpen(true); }}>Note</button>
+                </div>
+              </details>
             </div>
-          ) : null}
-          <div className="pz-deck-actions">
-            <button type="button" className="pz-deck-act deny" onClick={() => commit("deny")} disabled={busy}>{denyLabel}</button>
-            <button type="button" className="pz-deck-act note" onClick={() => setShowNote((open) => !open)} disabled={busy}>Note</button>
-            <button type="button" className="pz-deck-act autonomy" onClick={() => commit("autonomy")} disabled={busy}>Autonomy</button>
-            <button type="button" className="pz-deck-act confirm" onClick={() => commit("confirm")} disabled={busy}>Confirm</button>
           </div>
-        </>
-      ) : null}
-    </article>
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -1528,7 +1588,7 @@ function MainScreen(props) {
       <WebActionPanel {...props} />
       <BoardActionsPanel {...props} />
       <PendingAsksPanel pendingAsks={props.pendingAsks} onResolve={props.resolvePending} />
-      {props.cards.length ? <SwipeDeck {...props} /> : null}
+      <CardBoard {...props} />
     </div>
   );
 }
@@ -1691,41 +1751,6 @@ function BrowserReceipt({ receipt }) {
   );
 }
 
-function FeaturedTaskCard({ card, comment, onComment, onResolve }) {
-  const [draft, setDraft] = useState(comment);
-
-  useEffect(() => {
-    setDraft(comment);
-  }, [comment]);
-
-  return (
-    <article className={`pz-featured-task pz-task-${card.risk}`}>
-      <div>
-        <span className="pz-category">{card.category}</span>
-        <h3>{humanTitle(card.title)}</h3>
-        <p>{card.checkIn}</p>
-      </div>
-      <details>
-        <summary>Proof</summary>
-        <dl>
-          <div><dt>Heard</dt><dd>{card.heard}</dd></div>
-          <div><dt>Proof</dt><dd>{card.browserReceipt ? <BrowserReceipt receipt={card.browserReceipt} /> : card.proof}</dd></div>
-          <div><dt>Memory</dt><dd>{card.memory}</dd></div>
-        </dl>
-      </details>
-      <label className="pz-comment">
-        <span>Quick note</span>
-        <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Add a note before I continue." />
-      </label>
-      <div className="pz-actions pz-actions-simple">
-        <button className="pz-button primary" type="button" onClick={() => onResolve(card, true)}>Approve</button>
-        <button className="pz-button ghost" type="button" onClick={() => onResolve(card, false)}>Not now</button>
-        <button className="pz-button subtle" type="button" onClick={() => onComment(card.id, draft)}>Save note</button>
-      </div>
-    </article>
-  );
-}
-
 function stateWord(listenState) {
   switch (listenState) {
     case "listening":
@@ -1787,155 +1812,6 @@ function ActiveListeningPanel({
         ) : null}
       </div>
     </section>
-  );
-}
-
-function TaskBoard({ cards, comments, textMirror, sortMode, setSortMode, saveComment, resolveCard, continueCard, stopCard, limit }) {
-  const [selectedId, setSelectedId] = useState("");
-  const sorted = useMemo(() => {
-    const copy = [...cards];
-    if (sortMode === "needs_approval") copy.sort((a, b) => Number(b.risk === "ask") - Number(a.risk === "ask"));
-    if (sortMode === "source") copy.sort((a, b) => a.category.localeCompare(b.category));
-    if (sortMode === "newest") copy.reverse();
-    return limit ? copy.slice(0, limit) : copy;
-  }, [cards, sortMode, limit]);
-  const selected = sorted.find((card) => card.id === selectedId) || sorted[0];
-
-  useEffect(() => {
-    if (selected && !sorted.some((card) => card.id === selectedId)) setSelectedId(selected.id);
-  }, [selected, selectedId, sorted]);
-
-  return (
-    <section className="pz-task-shell">
-      <div className="pz-task-toolbar">
-        <h3>{sorted.length} things ready</h3>
-        <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
-          <option value="priority">Priority</option>
-          <option value="needs_approval">Needs approval</option>
-          <option value="source">Source</option>
-          <option value="newest">Newest</option>
-        </select>
-      </div>
-      <div className="pz-queue">
-        <div className="pz-queue-list" aria-label="Task queue">
-          {sorted.map((card) => (
-            <button
-              key={card.id}
-              type="button"
-              className={`pz-queue-item ${selected?.id === card.id ? "active" : ""}`}
-              onClick={() => setSelectedId(card.id)}
-            >
-              <span>{card.category}</span>
-              <strong>{humanTitle(card.title)}</strong>
-              <small>{card.risk === "ask" ? "Needs your okay" : card.risk === "blocked" ? "Stopped" : "Prepared"}</small>
-            </button>
-          ))}
-        </div>
-        {selected ? (
-          <TaskCard
-            key={selected.id}
-            card={selected}
-            comment={comments[selected.id] || ""}
-            mirror={textMirror[selected.id]?.status || "coming_soon"}
-            onComment={saveComment}
-            onResolve={resolveCard}
-            onContinue={continueCard}
-            onStop={stopCard}
-          />
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function TaskCard({ card, comment, mirror, onComment, onResolve, onContinue, onStop }) {
-  const [draft, setDraft] = useState(comment);
-  const [continuing, setContinuing] = useState(false);
-
-  useEffect(() => {
-    setDraft(comment);
-  }, [comment]);
-
-  // FIX-06b: an in-flight "On it — you can stop me" reversible chore (opt-out) can be STOPped.
-  // Only show it while the chore is actually running/preparing — never on a finished/stopped card.
-  const raw = card.raw || {};
-  const canStop = Boolean(onStop)
-    && Boolean(raw.execution?.opt_out || raw.args?.opt_out)
-    && !["stopped", "done", "failed", "blocked"].includes(card.status);
-
-  // FIX-12: a browser run that hit a login/verification wall handed this card back to you. Once you
-  // clear the wall in your own browser, "Continue" resumes from the now-unblocked page. Precise by
-  // construction: only a browser card that actually ran (landed a receipt) and came back unfinished.
-  const canContinue = Boolean(onContinue)
-    && (raw.route === "browser" || raw.action === "browser_action")
-    && Boolean(card.browserReceipt)
-    && ["failed", "blocked"].includes(card.status);
-
-  async function handleContinue() {
-    if (continuing) return;
-    setContinuing(true);
-    try {
-      await onContinue(card);
-    } finally {
-      setContinuing(false);
-    }
-  }
-
-  return (
-    <article className={`pz-task pz-task-${card.risk}`}>
-      <div className="pz-task-head">
-        <div>
-          <span className="pz-category">{card.category}</span>
-          <h4>{humanTitle(card.title)}</h4>
-        </div>
-        <div className="pz-task-pills">
-          <StatusPill value={card.mode || "seeded"} />
-          <StatusPill value={card.status === "needs_approval" ? "coming_soon" : card.status} />
-        </div>
-      </div>
-      <p className="pz-task-checkin">{card.checkIn}</p>
-      <details className="pz-proof-details">
-        <summary>Proof</summary>
-        <dl className="pz-task-detail">
-          <div><dt>Heard</dt><dd>{card.heard}</dd></div>
-          <div><dt>Ignored</dt><dd>{card.ignored || "Nothing ignored on this card."}</dd></div>
-          <div><dt>Browser work</dt><dd>{card.browserWork}</dd></div>
-          <div><dt>Proof</dt><dd>{card.browserReceipt ? <BrowserReceipt receipt={card.browserReceipt} /> : card.proof}</dd></div>
-          <div><dt>Memory</dt><dd>{card.memory}</dd></div>
-          <div><dt>Follow-up</dt><dd>{card.followUp}</dd></div>
-        </dl>
-      </details>
-      <div className="pz-task-footer">
-        <span>
-          Text mirror: {humanStatus(mirror)}
-          {card.gatewayEventId ? ` · Gateway ${shortId(card.gatewayEventId)}` : ""}
-          {card.browserGatewayEventId ? ` · Browser ${shortId(card.browserGatewayEventId)}` : ""}
-        </span>
-        <SourceTagList tags={card.sourceTags} />
-      </div>
-      <label className="pz-comment">
-        <span>Comment</span>
-        <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Add a note for this task." />
-      </label>
-      {canContinue ? (
-        <p className="pz-note">I paused on a sign-in or verification step. Clear it in your own browser, then tap Continue and I'll pick up where I left off.</p>
-      ) : null}
-      <div className="pz-actions">
-        {canContinue ? (
-          <button className="pz-button primary" type="button" onClick={handleContinue} disabled={continuing}>
-            {continuing ? "Picking it back up…" : "Continue"}
-          </button>
-        ) : canStop ? (
-          <button className="pz-button ghost" type="button" onClick={() => onStop(card)}>Stop</button>
-        ) : (
-          <>
-            <button className="pz-button primary" type="button" onClick={() => onResolve(card, true)}>Approve</button>
-            <button className="pz-button ghost" type="button" onClick={() => onResolve(card, false)}>Not now</button>
-          </>
-        )}
-        <button className="pz-button subtle" type="button" onClick={() => onComment(card.id, draft)}>Save note</button>
-      </div>
-    </article>
   );
 }
 
