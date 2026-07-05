@@ -96,13 +96,40 @@ _PERSON_POSSESSIVE = re.compile(
     r"([\w.'-]+(?:\s+[\w.'-]+){0,2})['’]s\s+([\w ]{2,30}?)\s*$", re.I)
 
 
+# ---- abbreviation-aware sentence split (mirrors owner_mode._sentence_split) ---------
+# A period that belongs to a known title/abbreviation is NOT a sentence end, so the naive
+# ``re.split(r"(?<=[.!?])\s+")`` wrongly severs "Dr. Lee" into "…Dr." + "Lee" — and then
+# _MY_ROLE_IS captures a bare "Dr"/"Dr." into the person-book instead of "Dr. Lee". The set is
+# the common personal titles + street/time/Latin abbreviations, matched case-insensitively on
+# the token just before the period. Multi-dot forms ("a.m.", "e.g.", "i.e.") get their own
+# pattern because each internal dot would otherwise look like a sentence break.
+_ABBREVIATIONS = {
+    "dr", "mr", "mrs", "ms", "prof", "sr", "jr", "st", "mt", "ave", "rd", "blvd",
+    "apt", "dept", "vs", "etc", "no", "fig", "approx", "min", "hr", "hrs", "sgt",
+    "lt", "gen", "col", "capt", "rev", "gov", "sen", "rep", "messrs", "ft",
+}
+_DOTTED_ABBREV = re.compile(r"(?:[ap]\.m|e\.g|i\.e|a\.k\.a|u\.s|p\.s)\.$", re.I)
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+")
+
+
 def _fragments(text: str) -> list[str]:
     parts: list[str] = []
     for line in (text or "").splitlines():
-        for frag in re.split(r"(?<=[.!?])\s+", line):
-            frag = frag.strip()
-            if frag:
-                parts.append(frag)
+        start = 0
+        for m in _SENTENCE_BOUNDARY.finditer(line):
+            head = line[start:m.start()]
+            # the token immediately before the boundary period, e.g. "Dr." -> "dr"
+            prev = re.search(r"([A-Za-z]+)\.\s*$", head)
+            token = prev.group(1).lower() if prev else ""
+            if token in _ABBREVIATIONS or _DOTTED_ABBREV.search(head):
+                continue  # abbreviation period, not a sentence end — keep it glued forward
+            seg = head.strip()
+            if seg:
+                parts.append(seg)
+            start = m.end()
+        tail = line[start:].strip()
+        if tail:
+            parts.append(tail)
     return parts or ([text.strip()] if (text or "").strip() else [])
 
 
