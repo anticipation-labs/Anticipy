@@ -256,3 +256,15 @@ NEEDS OMAR (can't finish unattended, queued for morning — NOT faked):
 - M6 real voice: a live Twilio call to your phone.
 - M8 hosting: Vercel deploy creds (so it's usable from anywhere) + repoint backend Supabase to the live 'handlit' project (ref eawoquqgfndmphogwjeu; the .env still holds the dead ref).
 - The final safety/money-gating pass (your call: you + Devin, last).
+
+## 2026-07-05 — DEVIN TAKEOVER (SSH from Devin VM, proofs run on this Mac)
+- **RE-BASELINE at HEAD:** M1 6/6 · M2 PASS · M3 9/9 ALL PASS · done_gate legs 1–4 PASS · suite 122/7
+  (fail-set strict SUBSET of the 9-name baseline; download_route + owner_app_auth need npm on PATH — they
+  pass; onboarding_frontdoor + retraction_silenced back to PASS).
+- **FIXED (commit 307ad3c): the used-brain silence bug.** Re-mentioning a task whose loop is STILL OPEN
+  returned nothing (model labels it already_done → ignore). This was the real cause of "M1 fails 4/6 on a
+  reused data dir" and done_gate leg-4 reliability failing on run 2. Now the engine echoes the EXISTING
+  open card ("already on it") instead of silence. Proof in the commit message; leg 4 now 3/3.
+- **Archive:** uncommitted ~/Anticipy factory/build diff snapshotted to archive/factory-build-uncommitted-20260705.patch (82508f8).
+- Scoreboard now: only leg 5 (a REAL stranger carried through a real day) is not green — human-only.
+  Frontier work: the hands (extension→cloud browser-action end-to-end, WAKEUP items 3–4) + UI-9 + brain recall.
