@@ -2295,6 +2295,57 @@ class ControlCore:
                 card.args["autonomy_auto_run"] = True
         return card
 
+    def _ensure_resolvable_ask(self, card, line, source):
+        """WIRING CONTRACT (APPROVE->ACT): every confirm-first ASK the engine emits on the owner
+        lane MUST carry a REAL resolvable ask_id at card.execution.ask_id AND be registered in
+        proactive.pending — so POST /resolve FINDS it, resumes the paused goal, and actually runs
+        it, exactly like the moat-rescue 'waiting' ask that already resolves.
+
+        Without this, three shapes reached the board with execution=None and DEAD-ENDED on approve:
+          1. an autonomy-dial DOWNGRADE (do -> ask): _apply_autonomy_dial strips execution but never
+             registers a pending ask, so the ask had no id;
+          2. the spine's reversible-task rescue (_generic_force_ask_card, action=confirm_owner_task);
+          3. a routing chokepoint that nondeterministically left a site/web action as a generic
+             confirm_owner_task instead of the browser round-trip.
+        Route ALL of them through the SAME _confirm_task_goal funnel the moat rescue uses (a PAUSED,
+        whitelisted goal + proactive._send_ask registration) and stamp the resolvable execution back
+        onto the card.
+
+        Scope is surgical + safety-preserving:
+          * NEVER a vent-adjacent (force_ask) card — those are HELD display-only by design (the
+            cardinal-sin floor); making a vent resolvable is out of scope and unsafe.
+          * NEVER money/blocked/remember — money is a hard wall (no pending, ask_id None; the safety
+            corpus + test_public_backend_path/test_pending_persistence enforce it), remember writes
+            memory not an ask.
+          * A card that ALREADY carries a resolvable ask_id (the spine send/ask path, the moat
+            rescue, browser_action, create_and_print) is left untouched — no double goal.
+        """
+        if card is None:
+            return card
+        if getattr(line, "force_ask", False):
+            return card
+        if getattr(card, "disposition", None) != "ask":
+            return card
+        execu = card.execution or {}
+        if execu.get("ask_id"):
+            return card
+        try:
+            ask_id, goal_id, would = self._confirm_task_goal(line)
+        except Exception as exc:
+            self.glassbox.log("ensure_resolvable_ask_error",
+                              {"line": (getattr(line, "text", "") or "")[:140],
+                               "error": str(exc)[:200]})
+            return card
+        card.execution = {"decision": "ask", "goal_id": goal_id, "ask_id": ask_id,
+                          "goal_state": "waiting"}
+        card.reason = card.reason or would or "confirm before I act"
+        self.glassbox.log("ask_made_resolvable",
+                          {"card_id": card.id, "ask_id": ask_id,
+                           "action": getattr(card, "action", None),
+                           "route": getattr(card, "route", None),
+                           "line": (getattr(line, "text", "") or "")[:140]})
+        return card
+
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
         # PHASE 3 seam 1 (learns-you, before the brain): capture the wearer's stated anchors /
         # people / preferences (the decision pipeline drops pure facts as "ignore", so they'd be
@@ -2632,6 +2683,13 @@ class ControlCore:
                 if execute_actions:
                     ignored_captures.append((captured_by_line.get(line.line_no), line.line_no))
                 continue
+            # WIRING CONTRACT (APPROVE->ACT): before we persist, guarantee that every confirm-first
+            # ASK carries a REAL resolvable ask_id + a registered pending entry, so the app's YES
+            # actually runs it. Autonomy-dial downgrades and generic confirm_owner_task cards
+            # otherwise reach the board with execution=None and dead-end on approve. Money/blocked/
+            # remember + vent-adjacent (force_ask) cards are deliberately excluded (hard wall / held).
+            if execute_actions:
+                card = self._ensure_resolvable_ask(card, line, source)
             existing = self._existing_owner_card(card)
             if existing is not None:
                 cards.append(existing)
@@ -3004,8 +3062,71 @@ class ControlCore:
         first cards are re-aimed. Mock-safe + deterministic; live is a one-flag flip
         (ANTICIPY_CHANNELS_MODE=live). Delegates to onboarding.call_out."""
         from ..onboarding.call_out import run_onboarding_call as _run_onboarding_call
-        return await _run_onboarding_call(self, dossier, to=to, max_questions=max_questions,
-                                          answers=answers)
+        result = await _run_onboarding_call(self, dossier, to=to, max_questions=max_questions,
+                                            answers=answers)
+        # CLOSE THE ONBOARDING->BOARD LOOP: the deep flow (inhale + dossier + call answers) wrote only
+        # to the memory DRAWERS — owner_cards stayed empty, so a fresh user who finished onboarding saw
+        # a blank action board. Derive the FIRST cards from what was actually learned (the concrete
+        # people + systems in the dossier) and route them through the SAME durable CARD path
+        # (_persist_card) the ambient lane uses, so GET /owner/cards returns them. Honest by
+        # construction: cards are grounded ONLY in learned nouns — nothing readable -> no cards, never a
+        # fabricated one. Best-effort: a hiccup here never breaks a call that already succeeded.
+        if result.get("initiated") or result.get("answers"):
+            try:
+                first = self._emit_onboarding_first_cards(dossier, result)
+                if first:
+                    result["first_cards"] = first
+            except Exception as _fc_exc:
+                self.glassbox.log("onboarding_first_cards_error", {"error": str(_fc_exc)[:200]})
+        return result
+
+    def _emit_onboarding_first_cards(self, dossier: dict, call_result: dict) -> list[dict]:
+        """Derive a fresh user's FIRST action-board cards from what onboarding actually LEARNED and
+        persist them through the durable card path so GET /owner/cards returns them.
+
+        HONEST + MINIMAL: each card is grounded in a concrete learned NOUN — an important person or a
+        real system (act_on_site) the inhale/dossier surfaced. A dossier with no such nouns yields ZERO
+        cards (never a fabricated one). Each card is a confirm-first ASK made resolvable (via the same
+        _confirm_task_goal funnel), so a YES on the board actually tracks it — no dead first cards."""
+        inner = dossier.get("dossier") if isinstance(dossier, dict) and isinstance(dossier.get("dossier"), dict) else (
+            dossier if isinstance(dossier, dict) else {})
+        if not isinstance(inner, dict):
+            return []
+        source = "onboarding_first_card"
+        candidates: list[str] = []
+        seen: set[str] = set()
+
+        def _add(task: str) -> None:
+            key = " ".join((task or "").lower().split())
+            if task and key not in seen:
+                seen.add(key)
+                candidates.append(task)
+
+        for person in (inner.get("people") or []):
+            name = (person.get("name") if isinstance(person, dict) else str(person or "")).strip()
+            if name:
+                _add(f"help you keep up with {name}")
+        for site in (inner.get("act_on_sites") or []):
+            name = (site.get("name") if isinstance(site, dict) else str(site or "")).strip()
+            if name:
+                _add(f"take a first look at {name} and flag what needs your attention")
+
+        emitted: list[dict] = []
+        for i, task in enumerate(candidates[:5]):
+            line = OwnerObservedLine(line_no=i + 1, text=task)
+            card = OwnerTaskCard(
+                source=source, line_no=line.line_no, source_text=task,
+                title=f"Want me to {task}?", disposition="ask", route="voice_text",
+                action="confirm_owner_task", args={"task_text": task, "from_onboarding": True},
+                confidence=0.7,
+                reason="a first thing I can start on from your setup — confirm and I'll track it")
+            card = self._ensure_resolvable_ask(card, line, source)
+            if self._persist_card(card, source, True, None):
+                emitted.append({"id": card.id, "title": card.title,
+                                "ask_id": (card.execution or {}).get("ask_id")})
+        self.glassbox.log("onboarding_first_cards",
+                          {"emitted": len(emitted), "candidates": len(candidates)})
+        return emitted
 
     # ---- STATED onboarding basics (name / summary / phone / timezone / trust dial / always-ask) ----
     # The onboarding form's basics live in the DURABLE profile memory drawer — the same drawer the
@@ -4274,6 +4395,17 @@ class ControlCore:
                 self.glassbox.log("owner_card_resolved",
                                   {"card_id": link["card_id"], "ask_id": ask_id,
                                    "approved": approved, "state": record["state"]})
+        # HONESTY GATE (no fabricated receipts): record_approval unconditionally writes an
+        # "Approved"/should_act=true/status='working' success envelope. resolve_ask returns
+        # {resolved: False} when the ask is unknown or already-resolved — the action did NOTHING,
+        # so writing that success receipt is a FABRICATED proof (bug: a no-op logged as a done
+        # action). Only ledger the approval when the resolve GENUINELY resolved (a real approve/
+        # decline/held); on a failed/unknown resolve, write NOTHING and log the honest no-op.
+        if isinstance(out, dict) and out.get("resolved") is False:
+            self.glassbox.log("resolve_no_pending_no_receipt",
+                              {"ask_id": ask_id, "approved": approved,
+                               "reason": out.get("reason")})
+            return out
         try:
             out["gateway_event"] = self.gateway_ledger.record_approval(
                 ask_id=ask_id,
