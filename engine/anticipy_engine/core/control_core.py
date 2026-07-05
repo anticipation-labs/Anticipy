@@ -2345,8 +2345,16 @@ class ControlCore:
                 return card   # defense in depth: never wire a vent-shape line, even if mis-flagged
         if getattr(card, "disposition", None) != "ask":
             return card
+        # MODEL-AGNOSTIC: a real ask is defined by its FINAL disposition being "ask" (already filtered
+        # to non-vent, non-money/blocked, non-remember above) — NOT by which label the model happened
+        # to emit. "Already resolvable" means the ask_id is truthy AND actually registered in the
+        # pending store; an ask_id that the spine feed set WITHOUT registering a pending entry (some
+        # gemini/act classifications gate an ask but return no pending id), or a stale id from a
+        # popped/resolved ask, is NOT resolvable and must be re-wired. So EVERY ask that isn't
+        # genuinely resolvable gets a real ask_id + pending entry here, regardless of confirm_ask.
         execu = card.execution or {}
-        if execu.get("ask_id"):
+        _aid = execu.get("ask_id")
+        if _aid and _aid in self.proactive.pending:
             return card
         try:
             ask_id, goal_id, would = self._confirm_task_goal(line)
@@ -2722,12 +2730,16 @@ class ControlCore:
             # actually runs it. Autonomy-dial downgrades and generic confirm_owner_task cards
             # otherwise reach the board with execution=None and dead-end on approve. Money/blocked/
             # remember + vent-adjacent (force_ask) cards are deliberately excluded (hard wall / held).
-            if execute_actions:
-                card = self._ensure_resolvable_ask(card, line, source)
             existing = self._existing_owner_card(card)
             if existing is not None:
+                # A dedupe HIT (a prior preview / re-ingest of the same line) must NOT return a stale,
+                # non-resolvable ask: re-wire the RETURNED card so the app's YES resolves it too.
+                if execute_actions:
+                    existing = self._ensure_resolvable_ask(existing, line, source)
                 cards.append(existing)
                 continue
+            if execute_actions:
+                card = self._ensure_resolvable_ask(card, line, source)
             persisted = self._persist_card(card, source, execute_actions,
                                            captured_by_line.get(line.line_no))
             if not persisted:
