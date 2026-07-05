@@ -2684,6 +2684,32 @@ export default function PhaseZeroApp({ screen = "board" }) {
     // irreversible — thing got approved). Record it honestly and leave the ask open (chips stay) so
     // it can still be resolved for real once the engine exposes an ask_id for it.
     if (!askId) {
+      // FIX: approving a browse/research ask in chat must actually LAUNCH the hands, not just
+      // record the yes. This runs ONLY this bubble's own task text through the same judge-verified
+      // connected-Chrome path as the web box (/api/browser/run -> engine /agent/run) — it never
+      // borrows another ask, and money/irreversible actions stay behind the engine's hard stops.
+      const sourceCard = cards.find((item) => item.id === message.cardId);
+      const task = String(sourceCard?.browserWork || sourceCard?.title || "").trim();
+      if (task) {
+        setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
+        appendMessages({ role: "assistant", text: "On it — doing that in your Chrome now…", tone: "do" });
+        try {
+          const data = await jsonFetch("/api/browser/run", { method: "POST", body: JSON.stringify({ task }) });
+          const done = Boolean(data.task_succeeded);
+          const answer = String(data.answer || "").trim();
+          if (done && answer) {
+            appendMessages({ role: "assistant", text: `Here's what I found: ${answer.slice(0, 500)}`, tone: "do" });
+          } else if (done) {
+            appendMessages({ role: "assistant", text: "Done — I finished that on the web. ✓", tone: "do" });
+          } else {
+            appendMessages({ role: "assistant", text: "I couldn't finish that one on the site — it's still on your list.", tone: "do" });
+          }
+          await loadCards();
+        } catch (_error) {
+          appendMessages({ role: "assistant", text: "I couldn't reach the web helper just now — it's still on your list.", tone: "do" });
+        }
+        return;
+      }
       appendMessages({
         role: "assistant",
         text: "I've got that down — I'll check with you before anything actually goes out.",
