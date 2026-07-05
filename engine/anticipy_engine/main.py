@@ -368,6 +368,33 @@ def _pairing_claim_public(path: str) -> bool:
     return per_user_hands_enabled() and path == "/ws/pair"
 
 
+# Extension HTTP callbacks (results posted back OUTSIDE the WS) that may authenticate with
+# the per-user hand token instead of a Supabase bearer — the extension holds no bearer.
+_HAND_CALLBACK_PATHS = {"/onboard/discover", "/onboard/deep-scrape", "/devices/heartbeat"}
+
+
+def _hand_token_user(request: Request) -> Optional[str]:
+    """Resolve the paired user for an extension HTTP callback, or None.
+
+    The extension proves identity with the SAME per-user browser_link token it uses on the
+    WS (x-anticipy-hand-user / x-anticipy-hand-token headers): valid pair -> that user's id;
+    anything else -> None. Only honored on _HAND_CALLBACK_PATHS while per-user hands is on."""
+    if not per_user_hands_enabled():
+        return None
+    if request.url.path not in _HAND_CALLBACK_PATHS:
+        return None
+    uid = (request.headers.get("x-anticipy-hand-user") or "").strip()
+    tok = (request.headers.get("x-anticipy-hand-token") or "").strip()
+    if not uid or not tok:
+        return None
+    try:
+        if registry.core_for(uid).browser_link.check_token(tok):
+            return uid
+    except Exception:
+        return None
+    return None
+
+
 @app.middleware("http")
 async def owner_api_auth(request: Request, call_next):
     """Auth guard + per-user identity.
@@ -391,6 +418,10 @@ async def owner_api_auth(request: Request, call_next):
         if info:
             request.state.user_id = info["user_id"]
             request.state.user_email = info["email"]
+    if not request.state.user_id:
+        _hand_uid = _hand_token_user(request)
+        if _hand_uid:
+            request.state.user_id = _hand_uid
 
     token = _owner_api_token()
     # B12: the signed-pairing CLAIM endpoint (/ws/pair) authenticates via its OWN HMAC code — the

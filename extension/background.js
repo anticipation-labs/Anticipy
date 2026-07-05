@@ -56,6 +56,16 @@ async function engineHttp() {
   return (st.engine_http || DEFAULT_ENGINE_HTTP).replace(/\/+$/, "");
 }
 
+// Per-user-paired hands prove identity on HTTP callbacks with the SAME token the WS uses;
+// a cloud engine behind auth rejects a bare POST, so results must carry the pairing identity.
+async function handAuthHeaders() {
+  const st = await getState();
+  if (st.per_user_paired && st.per_user_id && st.per_user_token) {
+    return { "x-anticipy-hand-user": st.per_user_id, "x-anticipy-hand-token": st.per_user_token };
+  }
+  return {};
+}
+
 async function engineWs() {
   const base = await engineHttp();
   return base.replace(/^http:/, "ws:").replace(/^https:/, "wss:") + "/ws/extension";
@@ -348,7 +358,7 @@ async function doDiscoverConnections(msg) {
   try {
     const resp = await fetch((await engineHttp()) + "/onboard/discover", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Object.assign({ "Content-Type": "application/json" }, await handAuthHeaders()),
       body: JSON.stringify({ discovered: discovered, source: "chrome_scrape" }),
     });
     posted = !!(resp && resp.ok);
@@ -1511,7 +1521,7 @@ async function sendHeartbeat() {
   if (!st.device_id || !st.device_token) return { ok: false, skipped: true, reason: "not_paired" };
   const resp = await fetch((await engineHttp()) + "/devices/heartbeat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: Object.assign({ "Content-Type": "application/json" }, await handAuthHeaders()),
     body: JSON.stringify({ device_id: st.device_id, device_token: st.device_token }),
   });
   const data = await resp.json().catch(() => ({}));
@@ -1617,7 +1627,7 @@ async function doDeepScrape(msg) {
   try {
     const resp = await fetch((await engineHttp()) + "/onboard/deep-scrape", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Object.assign({ "Content-Type": "application/json" }, await handAuthHeaders()),
       body: JSON.stringify({ scraped: scraped, source: "chrome_deep_scrape" }),
     });
     posted = !!(resp && resp.ok);
