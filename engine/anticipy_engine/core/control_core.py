@@ -2404,6 +2404,7 @@ class ControlCore:
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
         self._silenced_count = 0   # M1d: vent/sarcasm/aside lines dropped during expansion -> counted in ignored_line_count
+        self._already_open_spans = []   # re-mentioned tasks whose loop is still open -> echoed, not silenced
         decision_result = None
         use_decision_pipeline = (
             self.gateway.provider in {PROVIDER_OPENROUTER, PROVIDER_GEMINI}
@@ -2456,6 +2457,15 @@ class ControlCore:
             self._silenced_count = sum(
                 1 for d in (decision_result.decisions or []) if getattr(d, "decision", None) == "ignore"
             )
+            # A repeat mention of a tracked task reads as "already_done" to the brain because the
+            # open loop sits in its memory context — but if that loop is STILL OPEN, silence is
+            # wrong: the owner should get the existing card back ("already on it"), never nothing.
+            self._already_open_spans = [
+                (getattr(d, "evidence_span", "") or getattr(d, "task_text", "") or "").strip()
+                for d in (decision_result.decisions or [])
+                if getattr(d, "decision", None) == "ignore"
+                and getattr(d, "realness", "") == "already_done"
+            ]
             self.glassbox.log("proactive_decision_pipeline", {
                 "decisions": len(decision_result.decisions or []),
                 "kept": len(observed),
@@ -2779,6 +2789,17 @@ class ControlCore:
             for capture_result, _line_no in ignored_captures:
                 self._sync_capture_result_status(capture_result, "ignored")
 
+        # "Already on it" echo: a task the brain ignored as already_done whose durable loop is
+        # still open surfaces its EXISTING card, so a repeat mention never returns silence.
+        _echo_ids = {getattr(c, "id", None) for c in cards}
+        for _span in getattr(self, "_already_open_spans", []) or []:
+            _echo = self._open_card_for_text(_span)
+            if _echo is not None and _echo.id not in _echo_ids:
+                cards.append(_echo)
+                _echo_ids.add(_echo.id)
+                self.glassbox.log("owner_card_already_open_echo",
+                                  {"span": _span[:120], "card_id": _echo.id})
+
         self.glassbox.log(
             "owner_ingest",
             {"source": source, "lines": len(observed), "cards": len(cards),
@@ -3067,6 +3088,46 @@ class ControlCore:
         record_path.parent.mkdir(parents=True, exist_ok=True)
         record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
         return True
+
+    def _open_card_for_text(self, span: str) -> OwnerTaskCard | None:
+        """Newest STILL-OPEN durable card matching a re-mentioned task span (token overlap)."""
+        toks = {w for w in re.findall(r"[a-z0-9]+", (span or "").lower()) if len(w) > 2}
+        if not toks:
+            return None
+        need = 2 if len(toks) >= 2 else 1
+        cards_dir = self.data_dir / "owner_cards"
+        if not cards_dir.is_dir():
+            return None
+        for path in sorted(cards_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(record, dict):
+                continue
+            state = str(record.get("state") or "").lower()
+            if state not in {"open", "waiting", "pending", "ask"}:
+                continue
+            record_card = record.get("owner_card")
+            if not isinstance(record_card, dict):
+                continue
+            hay = f"{record_card.get('title', '')} {record_card.get('source_text', '')}".lower()
+            card_toks = {w for w in re.findall(r"[a-z0-9]+", hay) if len(w) > 2}
+            if len(toks & card_toks) < need:
+                continue
+            try:
+                card_data = {**record_card, "status": state}
+                execution = card_data.get("execution")
+                if isinstance(execution, dict):
+                    card_data["execution"] = {
+                        **execution,
+                        "goal_state": state,
+                        "ask_id": execution.get("ask_id") if state == "waiting" else None,
+                    }
+                return OwnerTaskCard.model_validate(card_data)
+            except Exception:
+                continue
+        return None
 
     def _existing_owner_card(self, card: OwnerTaskCard) -> OwnerTaskCard | None:
         """Return the durable card for an accidental replay, before re-executing."""
