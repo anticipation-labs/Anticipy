@@ -916,7 +916,22 @@ def memory_forget_me(body: ForgetMeIn) -> dict:
             graph_removed = int(ctx.graph.clear_scope())
     except Exception:
         graph_removed = 0
-    return {"deleted": True, "removed": res["removed"], "graph_removed": graph_removed}
+    # Right-to-delete also clears the BOARD: durable owner cards and the onboarding stamp are
+    # user data too — leaving them behind meant a "forgotten" user still saw their old cards.
+    cards_removed = 0
+    try:
+        cards_dir = core.data_dir / "owner_cards"
+        if cards_dir.is_dir():
+            for f in cards_dir.glob("*.json"):
+                f.unlink()
+                cards_removed += 1
+        stamp = core.data_dir / "onboard_complete.json"
+        if stamp.exists():
+            stamp.unlink()
+    except Exception:
+        pass
+    return {"deleted": True, "removed": res["removed"], "graph_removed": graph_removed,
+            "cards_removed": cards_removed}
 
 
 @app.get("/proactive/gateway/recent")

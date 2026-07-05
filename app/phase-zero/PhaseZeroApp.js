@@ -921,11 +921,16 @@ function nextOnboardingHref(route) {
 }
 
 function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
+  // Saving must be VISIBLE: the button reflects in-flight state and a confirmation line appears
+  // after the engine round-trip, so pressing Save never feels like a dead button.
+  const [saveState, setSaveState] = useState("idle");
+  const [saveError, setSaveError] = useState("");
+
   function patch(next) {
     setProfile((current) => ({ ...current, ...next }));
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     // Three simple things only. Phone / timezone / the how-much-should-I-do setting live in Settings
@@ -937,7 +942,15 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
       doNotTouch: String(form.get("doNotTouch") || ""),
     };
     setProfile(next);
-    saveProfile(next);
+    setSaveState("saving");
+    setSaveError("");
+    try {
+      await saveProfile(next);
+      setSaveState("saved");
+    } catch (error) {
+      setSaveState("error");
+      setSaveError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   return (
@@ -972,9 +985,13 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
         />
       </label>
       <div className="pz-form-submit-row">
-        <button className="pz-button primary" type="submit">Save</button>
+        <button className="pz-button primary" type="submit" disabled={saveState === "saving"}>
+          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : "Save"}
+        </button>
         <a className="pz-button ghost" href="/onboarding/3">Next</a>
       </div>
+      {saveState === "saved" ? <p className="pz-note">Got it — I&rsquo;ll remember that. Press Next when you&rsquo;re ready.</p> : null}
+      {saveState === "error" ? <p className="pz-note">That didn&rsquo;t save: {saveError || "something went wrong"}. Try again.</p> : null}
     </form>
   );
 }
