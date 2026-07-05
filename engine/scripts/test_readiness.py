@@ -5,15 +5,19 @@ for each capability that turns an owner action LIVE, whether it is connected or 
 needs connecting, plus an honest one-liner of what to do. It exposes only the
 PRESENCE/ABSENCE of config — NEVER a secret value.
 
+BROWSER-ONLY (Omar signed off 2026-07-04): the API-connect arm (Arcade/OAuth "connect
+your calendar & email") is deleted, so the checklist no longer carries a google_arcade
+row — the browser hand + comms line are the live capabilities it reports.
+
 Asserts, against ONE booted engine:
-  - default (mock) env -> all four capabilities (google_arcade, twilio,
-    browser_bridge, apple_signing) report status "needs_connect", each with a
-    non-empty what_to_do, overall "needs_connect".
+  - default (mock) env -> all three capabilities (twilio, browser_bridge,
+    apple_signing) report status "needs_connect", each with a non-empty
+    what_to_do, overall "needs_connect".
   - the shape is stable: {overall, live_count, total, capabilities:[{capability,
     label, status, what_to_do}]} and status is always live|needs_connect.
-  - presence flips the status: with ARCADE_API_KEY + live hands, live channels +
-    Twilio creds + owner phone, and APPLE_DEVELOPER_ID set, those three flip to
-    "live"; NONE of the secret VALUES appear anywhere in the response.
+  - presence flips the status: with live channels + Twilio creds + owner phone,
+    and APPLE_DEVELOPER_ID set, those two flip to "live"; NONE of the secret
+    VALUES appear anywhere in the response.
   - it is owner-gated: with ANTICIPY_OWNER_API_TOKEN set, an anonymous GET is 401;
     the same GET with the token succeeds.
 
@@ -33,7 +37,7 @@ os.environ["ANTICIPY_DATA_DIR"] = tempfile.mkdtemp(prefix="anticipy-readiness-")
 # so this test never depends on whether engine/.bu-venv happens to be installed in CI.
 os.environ["ANTICIPY_BROWSERUSE_PYTHON"] = "/nonexistent/anticipy/bridge/python"
 
-CAPS = {"google_arcade", "twilio", "browser_bridge", "apple_signing"}
+CAPS = {"twilio", "browser_bridge", "apple_signing"}
 SECRETS = {
     "ARCADE_API_KEY": "SUPERSECRET_ARC_xyz",
     "TWILIO_ACCOUNT_SID": "ACtotallysecret123",
@@ -107,7 +111,7 @@ def main():
         with client:
             data = client.get("/readiness").json()
             by = _check_shape(data, fails)
-            for name in ("google_arcade", "twilio", "apple_signing"):
+            for name in ("twilio", "apple_signing"):
                 if by.get(name, {}).get("status") != "live":
                     fails.append(f"{name} should be live with creds present: {by.get(name)}")
             import json as _json

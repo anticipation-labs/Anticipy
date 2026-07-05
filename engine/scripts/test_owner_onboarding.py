@@ -80,25 +80,16 @@ async def main():
 
     gmail_loop = next(i for i in core.memory.open_loops.all() if "Gmail" in i.text)
     assert gmail_loop.status == "done", gmail_loop.model_dump(mode="json")
-    gmail_connect = core.authorize_connection_loop(gmail_loop.id)
-    assert gmail_connect["ok"] is True, gmail_connect
-    assert gmail_connect["status"] == "mock", gmail_connect
-    assert gmail_connect["tool"] == "Gmail.WriteDraftEmail", gmail_connect
-    assert "connect URL" in gmail_connect["message"], gmail_connect
 
-    target_loop = next(i for i in visible["loops"] if "Target" in i["text"])
-    target_connect = core.authorize_connection_loop(target_loop["id"])
-    assert target_connect["ok"] is True, target_connect
-    assert target_connect["route"] == "browser", target_connect
-    assert target_connect["status"] in {"needs_setup", "connected"}, target_connect
-
+    # BROWSER-ONLY (Omar signed off 2026-07-04): the API-connect arm
+    # (authorize_connection_loop / /connections/authorize) was deleted. Onboarding still
+    # writes the connect_account setup loops; they now resolve through the browser flow.
     done = core.resolve_memory_loop(gmail_loop.id)
     assert done["resolved"] is True and done["status"] == "done", done
     after_done = core.memory_open_loops()
     assert after_done["count"] == 1, after_done
     kinds = {e["kind"] for e in core.glassbox.entries()}
     assert "memory_loop_resolved" in kinds, kinds
-    assert "connection_checked" in kinds, kinds
     assert "handoff" not in serialized
     assert len(out["written"]) == len(profile) + len(loops)
     print("PASS owner_onboarding: first-run setup writes profile mesh and connection loops")

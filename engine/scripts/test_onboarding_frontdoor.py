@@ -8,10 +8,10 @@ at the contract level, both sides:
        profile (every memory carries fields['source'] — nothing is unattributed) plus a
        'connect_account' open-loop per unconnected account, and returns each loop's
        memory_id (what the connect step needs).
-    2. The connect action's payload to /connections/authorize (the loop's memory_id) is a
-       real connect_account loop the engine accepts: authorize_connection_loop returns ok
-       with a connect-status (mock here; in live mode this is the connector's real consent
-       URL). A non-connection loop id is correctly rejected.
+    2. BROWSER-ONLY (Omar signed off 2026-07-04): the API-connect arm
+       (authorize_connection_loop / /connections/authorize) was deleted. Onboarding still
+       writes a connect_account loop per unconnected account; those loops now resolve
+       through the browser flow, not an Arcade/OAuth authorize handshake.
     3. The SAME profile the onboarding write produced is readable back through the memory
        path the main app uses (memory.profile.all() / memory_open_loops()), so "the app
        reads what onboarding wrote" is proven, not assumed.
@@ -19,15 +19,13 @@ at the contract level, both sides:
   APP SOURCE (static asserts, no bundler needed for these):
     Post Phase-Zero refactor: app/welcome/page.js and app/page.js are thin server wrappers
     that mount ONE client app, app/phase-zero/PhaseZeroApp.js, with a screen prop. The
-    marketing front door is its WelcomeScreen; the onboard/connect/consent wiring moved into
-    app/connect/page.js. These asserts point at the real current files.
+    marketing front door is its WelcomeScreen. These asserts point at the real current files.
     4. The /welcome front door exists: it mounts the Phase-Zero client app, which renders the
        trust-first WelcomeScreen and still drives the read-only onboard recap (/api/onboard_scan).
-    5. The /connect page connects FOR REAL: it ensures the connect open-loops (/api/owner/onboard,
-       connect_account), calls /api/connections/authorize, renders the returned connect_url and
-       opens the provider's consent (window.open) — the dead vendor-console deep-link (arcade.dev)
-       is gone — and it keeps the "invented nothing" recap honesty (this is where that guarantee
-       now lives after the refactor).
+    5. BROWSER-ONLY (Omar signed off 2026-07-04): the API-connect /connect page and the
+       /api/connections/authorize proxy were DELETED — there is no "connect your calendar &
+       email" API arm. The onboarding proxy (/api/owner/onboard) that forwards to the engine
+       still exists and stays wired.
     6. Demo scaffolding is gone: the board's default profile is EMPTY_PROFILE (blank owner name,
        no example people — no Maya/Sam/Omar), and the demo scenario FIXTURES are env-gated
        (NEXT_PUBLIC_ANTICIPY_SHOW_FIXTURES) and OFF by default.
@@ -106,26 +104,10 @@ async def engine_wiring():
         for w in connect_written:
             assert w.get("memory_id"), w  # the id the connect step posts to /connections/authorize
 
-        # --- 2. the connect action: the loop memory_id is a real connect_account loop. ---
-        cal_id = by_name["Google Calendar"]["memory_id"]
-        connect = core.authorize_connection_loop(cal_id)
-        assert connect["ok"] is True, connect
-        # In mock hands the connector returns 'mock' with a message about needing live mode for a
-        # real URL; in live mode this same call returns status 'needs_auth' + connect_url (the
-        # provider's real consent). The app renders connect_url when present.
-        assert connect["status"] in {"mock", "needs_auth", "connected"}, connect
-        assert connect["route"] == "api", connect
-        assert "connect_url" in connect or connect["status"] == "mock", connect
-
-        # a NON-connection loop id is rejected (the authorize path can't be abused for any loop).
-        non_connect = next(
-            (i for i in core.memory.open_loops.all()
-             if i.fields.get("action") != "connect_account"),
-            None,
-        )
-        if non_connect is not None:
-            bad = core.authorize_connection_loop(non_connect.id)
-            assert bad.get("ok") is False, bad
+        # --- 2. BROWSER-ONLY (Omar signed off 2026-07-04): the API-connect arm
+        #     (authorize_connection_loop / /connections/authorize) was deleted. Onboarding
+        #     still writes the connect_account setup loops (asserted above); they now resolve
+        #     through the browser flow, not an Arcade/OAuth authorize handshake. ---
 
         # --- 3. the app reads what onboarding wrote: same memory path the home screen uses. ---
         visible = core.memory_open_loops()
@@ -137,7 +119,7 @@ async def engine_wiring():
         assert "Dana Rivers" in readback, readback
     finally:
         await core.stop()
-    print("PASS frontdoor engine: /welcome -> sourced profile + connect loops -> authorize -> readback")
+    print("PASS frontdoor engine: /welcome -> sourced profile + connect loops (browser-only) -> readback")
 
 
 def read(path: Path) -> str:
@@ -162,24 +144,13 @@ def app_source_wiring():
     # the recap reward (read-only, invents nothing) is still driven from the app.
     assert "/api/onboard_scan" in pz, "the Phase-Zero app must call the read-only onboard recap"
 
-    # --- 5. the connect page connects for real; dead vendor deep-links are gone. ---
-    # The onboard/connect/consent wiring moved here from the old /welcome page.
-    connect = read(APP / "connect" / "page.js")
-    assert '"use client"' in connect, "connect must be a client component"
-    assert "/api/owner/onboard" in connect, "connect must ensure the connect open-loops exist"
-    assert "connect_account" in connect, "connect must map the connect open-loops by action"
-    assert "/api/connections/authorize" in connect, "connect must call /api/connections/authorize for real"
-    assert "connect_url" in connect, "connect must render the returned connect_url"
-    assert "window.open" in connect, "connect must launch the provider's real consent"
-    assert "arcade.dev" not in connect, "the dead vendor-console deep-link must be removed"
-    assert "Text & calls" in connect, "twilio comms row present (honest 'coming soon' chip, not a dead vendor-console link)"
-    # the "invented nothing" honesty recap now lives on the connect page (post-refactor home).
-    assert "/api/onboard_scan" in connect, "connect must show the read-only onboard recap"
-    assert "invented" in connect.lower(), "connect recap must keep the 'invented nothing' honesty"
-
-    # the Next proxy routes that forward to the engine must exist.
-    auth_route = read(APP / "api" / "connections" / "authorize" / "route.js")
-    assert "/connections/authorize" in auth_route, auth_route
+    # --- 5. BROWSER-ONLY (Omar signed off 2026-07-04): the API-connect /connect page and the
+    #     /api/connections/authorize proxy were DELETED. There is no "connect your calendar &
+    #     email" API arm. The onboarding proxy that forwards to the engine still exists and
+    #     stays wired; the /setup onboarding flow (PhaseZeroApp) is its caller. ---
+    assert not (APP / "connect").exists(), "the API-connect /connect page must be gone (browser-only)"
+    assert not (APP / "api" / "connections").exists(), \
+        "the /api/connections/authorize proxy must be gone (browser-only)"
     onboard_route = read(APP / "api" / "owner" / "onboard" / "route.js")
     assert "/owner/onboard" in onboard_route, onboard_route
 
@@ -205,13 +176,13 @@ def app_source_wiring():
         "demo fixtures must be off unless NEXT_PUBLIC_ANTICIPY_SHOW_FIXTURES is explicitly set"
     assert "SHOW_FIXTURES ?" in pz, "the board must only append demo fixtures when the flag is on"
 
-    print("PASS frontdoor app source: /welcome mounts WelcomeScreen, /connect connects for real, board starts empty")
+    print("PASS frontdoor app source: /welcome mounts WelcomeScreen, API-connect arm deleted (browser-only), board starts empty")
 
 
 def main():
     asyncio.run(engine_wiring())
     app_source_wiring()
-    print("PASS onboarding_frontdoor: a new user can onboard -> connect (real consent) -> recap")
+    print("PASS onboarding_frontdoor: a new user can onboard (browser-only; no API-connect arm) -> recap")
 
 
 if __name__ == "__main__":

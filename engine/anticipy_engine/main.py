@@ -526,10 +526,6 @@ class RecallIn(BaseModel):
     k: int = 8
 
 
-class ConnectionAuthorizeIn(BaseModel):
-    id: str
-
-
 class OnboardingProfileIn(BaseModel):
     """Build-my-profile request: a subject name + a few PUBLIC source URLs.
 
@@ -648,46 +644,19 @@ def _env_present(*names: str) -> bool:
     return any((os.environ.get(n) or "").strip() for n in names)
 
 
-def _user_vault_connected(core) -> bool:
-    """Has THIS engine's configured user connected any app through the per-user token
-    vault? Reads only the vault's app-name index (never a token); returns False on any
-    error so a missing/locked vault never throws into the readiness checklist."""
-    broker = getattr(core.api_hand, "_broker", None)
-    vault = getattr(broker, "vault", None) if broker is not None else None
-    if vault is None:
-        return False
-    try:
-        return bool(vault.apps(core.api_hand.user_id))
-    except Exception:  # noqa: BLE001 — readiness must never fail on vault state
-        return False
-
-
 def _connect_readiness(core) -> dict:
-    """The guided 'Connect your accounts' checklist. For each capability that unlocks a
-    LIVE owner action, report {capability, status: live|needs_connect, what_to_do} using
+    """The guided readiness checklist. For each capability that unlocks a LIVE owner
+    action, report {capability, status: live|needs_connect, what_to_do} using
     PRESENCE/ABSENCE of config only — never a secret value, number, or token. This turns
     the live-unlock into an honest checklist the owner can work through; it grants nothing
-    and connects nothing."""
-    channels = core.channel_status()
+    and connects nothing.
 
-    # Google / Arcade — the API hand. Live needs the shared ARCADE_API_KEY OR this user's
-    # per-user vault connection, AND the hand running in live mode.
-    arcade_key = _env_present("ARCADE_API_KEY")
-    per_user_vault = _user_vault_connected(core)
-    api_live = core.api_hand.mode == "live" and (arcade_key or per_user_vault)
-    if api_live:
-        google_what = "Connected. Google Calendar / Gmail run as live API actions."
-    elif arcade_key or per_user_vault:
-        google_what = (
-            "Credentials present but the API hand is in mock mode. Start the engine with "
-            "ANTICIPY_HANDS_MODE=live to run real Google actions."
-        )
-    else:
-        google_what = (
-            "Sign in to Arcade and authorize Google (Calendar + Gmail), then set "
-            "ARCADE_API_KEY (or connect your account to the per-user vault) and run the "
-            "engine with ANTICIPY_HANDS_MODE=live."
-        )
+    BROWSER-ONLY (Omar signed off 2026-07-04): the API-connect arm (Arcade/OAuth "connect
+    your calendar & email") was deleted, so this checklist advertises no API-connect row —
+    every user-visible action runs through the browser hand (the extension) + the comms
+    line. The subordinate read-only api_hand still exists for verification read-backs but
+    is never surfaced here as an account the owner must connect."""
+    channels = core.channel_status()
 
     # Twilio voice/text — channels mode + creds (presence only via channel_status()).
     channels_mode = channels.get("mode")
@@ -737,7 +706,6 @@ def _connect_readiness(core) -> dict:
         }
 
     items = [
-        _cap("google_arcade", "Google (Calendar + Gmail) via Arcade", api_live, google_what),
         _cap("twilio", "Voice + SMS line (Twilio)", twilio_live, twilio_what),
         _cap("browser_bridge", "Browser hand (your Chrome)", browser_live, browser_what),
         _cap("apple_signing", "Signed public download (Apple)", apple_live, apple_what),
@@ -1007,14 +975,6 @@ def memory_loop_resolve(body: MemoryLoopResolveIn) -> dict:
     out = current_core().resolve_memory_loop(body.id, body.status)
     if not out.get("resolved"):
         raise HTTPException(status_code=400, detail=out.get("reason") or "could not resolve memory loop")
-    return out
-
-
-@app.post("/connections/authorize")
-def connection_authorize(body: ConnectionAuthorizeIn) -> dict:
-    out = current_core().authorize_connection_loop(body.id)
-    if not out.get("ok"):
-        raise HTTPException(status_code=400, detail=out.get("reason") or "could not prepare connection")
     return out
 
 

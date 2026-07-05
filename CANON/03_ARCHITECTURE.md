@@ -26,7 +26,8 @@ drawers → on each tick (every `ANTICIPY_TICK_SECONDS`, default 30s) the proact
 ContextPack** — a single typed bundle of "what memory knows that matters right now"
 (`live_memory/context_builder.py`; the core deliberately has ONE builder, `core/control_core.py:884`)
 — → the decision pipeline picks **act / ask / silent** (vents are never tasks; money is a hard stop)
-→ an act goes to a hand (browser via the extension, or the Arcade API hand) → the result is
+→ an act goes to a hand (the browser via the extension is THE hand; the Arcade API hand survives
+only as a subordinate read-only connector — browser-only, Omar 2026-07-04, §7) → the result is
 **verified by read-back**, never assumed → the outcome is written back to memory and the glassbox
 log, and the user is told through a channel. A piece that isn't on this spine isn't a feature — it's
 an orphan, and Section 5 lists every one.
@@ -76,7 +77,7 @@ must always agree; change them in the same commit. FIX-nn = plans on the `PLANS/
 | 1 | Deep onboarding scrape | `/onboard/owner-scrape` (deep CDP read of the owner's world, `main.py:1221`) + the four-layer `/onboard/loop` (`main.py:1335`) | The shipped UI calls only `/onboard/deep-scan` (`app/phase-zero/PhaseZeroApp.js:540`) — a shallow extension page-snapshot | Onboarding runs the deep scrape + loop through the paired extension | FIX-03 |
 | 2 | Anticipatory person research | `proactive/anticipate.py` (+ `POST /anticipate/research` + an app proxy) | Nothing in the proactive tick calls it and no page fetches it — endpoint-only orphan | "Hear a name → research fires" inside the decide step, or delete | FIX-02 |
 | 3 | Voice line | `/voice` webhook + `WS /cr` (`main.py:2149,2171`), `channels/call.py` | No frontend; `ANTICIPY_CR_WSS_URL` unset in `.env.local` (0 matches, 2026-07-02) so the live-call relay can't connect | Twilio number webhook → `/voice` → real two-way call | FIX-09 |
-| 4 | Hands go live | `hands/api_hand.py` + browser hand; code defaults to MOCK when `ANTICIPY_HANDS_MODE` is unset (`core/control_core.py:804`) | Suite forces mock; NOTE `.env.local` sets `live`, so a plainly-launched engine runs live hands | A deliberate, proven "hands live" flip (the L3 flip), never an env accident | go-live flip |
+| 4 | Hands go live | `hands/api_hand.py` (subordinate read-only connector only — browser-only verdict, Omar 2026-07-04; the API-connect arm + `/connect` are deleted, §7) + the primary browser hand; code defaults to MOCK when `ANTICIPY_HANDS_MODE` is unset (`core/control_core.py:804`) | Suite forces mock; NOTE `.env.local` sets `live`, so a plainly-launched engine runs live hands | A deliberate, proven "hands live" flip (the L3 flip), never an env accident | go-live flip |
 | 5 | Channels go live | `channels/text.py` + `call.py`; MOCK unless `ANTICIPY_CHANNELS_MODE=live` (`core/control_core.py:927`) | Suite forces mock; `.env.local` sets `live` + real Twilio creds | A deliberate "channels live" flip (the L2 flip) | go-live flip |
 | 6 | Browser-agent UI | `/agent/act|run|events|judge|resume` (`main.py:1854+`) | No `app/api/agent/*` proxy exists; no Next.js page calls any of it | A Mission-Control view driving `/agent/run` and streaming `/agent/events` | FIX-12 |
 | 7 | Profile page | `app/api/profile/route.js` | Reads/writes a local JSON store (`lib/phase-zero/store`), never engine memory | Profile backed by `GET /memory/drawers` | FIX-05 |
@@ -86,6 +87,7 @@ must always agree; change them in the same commit. FIX-nn = plans on the `PLANS/
 | 11 | Deep read hand | `POST /onboard/deep-read-hand` (`main.py:1278`) | No caller anywhere (repo-wide grep, 2026-07-02) | Fold into the onboarding loop, or delete | FIX-10 |
 | 12 | Old scaffold brain | `engine/anticipy_engine/brain.py` + `proactive/engine.py` ("proposals are always empty in the scaffold", its own docstring) | Nothing imports `brain.py`; the live core builds its own pipeline | Delete | FIX-01 (first phase) |
 | 13 | Legacy/loose endpoints — verdicts split per `factory/wiring_allowlist.txt` (2026-07-02) | `/hands/compose-email` imports `hands/cdp_client`, a file that DOES NOT EXIST (`main.py:1400`; broken at call time) → **FIX-13**. Ledger surfaces `/scorecard`, `/goals/{id}`, `/gateway`, `/api/glassbox` → **FIX-14**. Browser control plane `/ws/state|reload|browse|observe|act`, `/api/browser/run` → **FIX-15**. `/api/download/anticipy-execute` (button unwired) → **FIX-16**. `/api/owner/session` (login UI never calls it) → **FIX-17**. `/api/trigger/tick` (no scheduler caller) → **FIX-18**. `/event` → **KEEP, permanent** (legacy scripted front door, by design). | No product caller found (2026-07-02) | Per-item verdicts as listed | FIX-13…18 |
+| 14 | Onboarding + pairing UI callers | `/api/owner/onboard` + `/api/pairing/mint` (Next proxies to the engine) | `/connect` (their sole UI caller) was DELETED with the API-connect arm (browser-only, Omar 2026-07-04, §7); no UI page fetches them right now — declared `TODO(FIX-20)` debt in `factory/wiring_allowlist.txt` | The `/setup` onboarding reroute (`app/phase-zero/PhaseZeroApp.js`, concurrent) becomes the caller | FIX-20 |
 
 ## 6. CONFIG & DATA
 
@@ -125,5 +127,15 @@ hand survives only as a subordinate connector for cases where it is strictly bet
 verification read-backs), and it is NEVER the reason a browser flow doesn't get built. This also kills
 the calendar-spam class of failure, which came from the API arm acting invisibly.
 
-**Status: DECISION PENDING Omar's sign-off (2026-07-02).** Until signed, build browser-first and do
-not extend the API hand. When signed, record the verdict HERE and in MISSION_LOCK's status table.
+**VERDICT — BROWSER-ONLY, signed off by Omar 2026-07-04.** Every user-visible action runs through the
+browser hand (the Chrome extension dialing out to the cloud). The **API-connect arm is deleted**: the
+user-facing "Connect calendar & email / Text & calls" checklist page (`app/connect/`), its Next proxy
+(`app/api/connections/authorize/`), the engine route `POST /connections/authorize`, the
+`authorize_connection_loop()` core helper (+ its `_connect_tool` / `_CONNECT_TOOL_BY_IDENTIFIER`
+helpers and the "live connector mode is required to generate a connect URL" string), and the
+`google_arcade` row of the readiness checklist are all gone — nothing advertises "connect your accounts
+via OAuth/Arcade" anymore. **`engine/anticipy_engine/hands/api_hand.py` is KEPT** but only as a
+subordinate, read-only connector (verification read-backs / bulk reads); it is NEVER a user-facing
+connect flow and NEVER the reason a browser flow isn't built. This also kills the calendar-spam class
+of failure, which came from the API arm acting invisibly. The `/readiness` checklist now reports only
+the browser hand + comms line + signed-download rows (no API-connect row).
