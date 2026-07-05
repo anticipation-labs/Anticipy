@@ -199,11 +199,28 @@ function isListeningStatus(data = {}) {
   return Boolean(data.running || data.listening);
 }
 
+// The signed-in user's Supabase access token, or "" when nobody is signed in. Every API call
+// must carry it — the server routes a request WITH a user bearer to that user's OWN per-user
+// core and a request without one to the owner core. Missing it here was the account-isolation
+// leak: a signed-in user's board/profile/onboarding calls all landed on the shared owner brain.
+async function sessionBearer() {
+  try {
+    const client = createBrowserSupabaseClient();
+    if (!client) return "";
+    const { data } = await client.auth.getSession();
+    return data?.session?.access_token || "";
+  } catch {
+    return "";
+  }
+}
+
 async function jsonFetch(url, options = {}) {
+  const bearer = await sessionBearer();
   const response = await fetch(url, {
     ...options,
     headers: {
       ...(options.body instanceof FormData ? {} : { "content-type": "application/json" }),
+      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
       ...(options.headers || {}),
     },
     credentials: "same-origin",
