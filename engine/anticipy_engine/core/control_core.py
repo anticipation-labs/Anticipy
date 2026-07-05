@@ -1214,7 +1214,7 @@ class ControlCore:
             reason="real task voiced inside a vent — confirm before acting",
         )
 
-    def _confirm_task_goal(self, line: OwnerObservedLine) -> tuple[str, str, str]:
+    def _confirm_task_goal(self, line: OwnerObservedLine, goal_id: str | None = None) -> tuple[str, str, str]:
         """Build a PAUSED, resolvable goal for a model-caught task so the app's YES actually
         EXECUTES it — instead of a dead display card that does nothing on press (the "where's the
         action engine / I press yes and nothing happens" bug). Mirrors approve_remembered's proven
@@ -1243,7 +1243,10 @@ class ControlCore:
             step = Step(intent="write_memory",
                         args={"kind": "open_loop", "text": task, "approved": True}, risk=Risk.low)
             would = f"Keep this on your list: {task}"
-        goal = Goal(intent=task, description=would, steps=[step], state=GoalState.waiting)
+        _gkwargs = {"intent": task, "description": would, "steps": [step], "state": GoalState.waiting}
+        if goal_id:
+            _gkwargs["id"] = goal_id   # deterministic id -> idempotent ask (re-ingest reuses it)
+        goal = Goal(**_gkwargs)
         self.store.save(goal)
         ask_id = self.proactive._send_ask(goal, task, "confirm before I act", category="")
         return ask_id, goal.id, would
@@ -2356,8 +2359,21 @@ class ControlCore:
         _aid = execu.get("ask_id")
         if _aid and _aid in self.proactive.pending:
             return card
+        # DETERMINISTIC + IDEMPOTENT ask id: keyed on (source, task text) so re-ingesting the SAME
+        # line — or the PREVIEW (execute_actions=False) pass followed by the execute pass, or a
+        # repeated preview as the composer re-sends — reuses the SAME pending ask instead of spawning
+        # a duplicate goal/ask each time. If a prior pass already prepared it, just point the card at
+        # that pending entry; otherwise prepare it once via the proven _confirm_task_goal funnel.
+        _task = (getattr(card, "source_text", None) or getattr(line, "text", "") or "").strip()
+        det_id = "ca_" + hashlib.sha256(f"confirm_ask|{source}|{_task}".encode("utf-8")).hexdigest()[:20]
+        _p = self.proactive.pending.get(det_id)
+        if isinstance(_p, dict):
+            card.execution = {"decision": "ask", "goal_id": _p.get("goal_id") or det_id,
+                              "ask_id": det_id, "goal_state": "waiting"}
+            card.reason = card.reason or "confirm before I act"
+            return card
         try:
-            ask_id, goal_id, would = self._confirm_task_goal(line)
+            ask_id, goal_id, would = self._confirm_task_goal(line, goal_id=det_id)
         except Exception as exc:
             self.glassbox.log("ensure_resolvable_ask_error",
                               {"line": (getattr(line, "text", "") or "")[:140],
@@ -2730,16 +2746,20 @@ class ControlCore:
             # actually runs it. Autonomy-dial downgrades and generic confirm_owner_task cards
             # otherwise reach the board with execution=None and dead-end on approve. Money/blocked/
             # remember + vent-adjacent (force_ask) cards are deliberately excluded (hard wall / held).
+            # WIRING CONTRACT runs in BOTH preview and execute: the composer's typed send AND the
+            # preview both render a "Go ahead" chip on every ask card, and the app resolves it off
+            # card.execution.ask_id — so a preview ask with execution=None dead-ends exactly like an
+            # execute one did. The prepared ask is idempotent (deterministic id) and NEVER auto-acts;
+            # only an explicit /resolve drives it. (Money/blocked, remember, and vent-adjacent
+            # force_ask cards are excluded inside _ensure_resolvable_ask.)
             existing = self._existing_owner_card(card)
             if existing is not None:
                 # A dedupe HIT (a prior preview / re-ingest of the same line) must NOT return a stale,
                 # non-resolvable ask: re-wire the RETURNED card so the app's YES resolves it too.
-                if execute_actions:
-                    existing = self._ensure_resolvable_ask(existing, line, source)
+                existing = self._ensure_resolvable_ask(existing, line, source)
                 cards.append(existing)
                 continue
-            if execute_actions:
-                card = self._ensure_resolvable_ask(card, line, source)
+            card = self._ensure_resolvable_ask(card, line, source)
             persisted = self._persist_card(card, source, execute_actions,
                                            captured_by_line.get(line.line_no))
             if not persisted:
