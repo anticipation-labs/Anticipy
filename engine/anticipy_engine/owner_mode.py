@@ -33,6 +33,13 @@ class OwnerObservedLine(BaseModel):
     # the lever that lets a vent-adjacent task be surfaced WITHOUT ever committing the
     # cardinal sin (a vent producing an act). Pure-vent clauses never become a line.
     force_ask: bool = False
+    # When True the BRAIN classified this line as a confirm-first ASK (a real, reversible task that
+    # needs the owner's okay before acting — e.g. "email Priya the deck", "text Maya happy birthday") —
+    # NOT a vent. It is force_ask ONLY to guarantee it never AUTO-acts, but unlike a vent-adjacent held
+    # task it is a legitimate ask the owner can approve: it MUST carry a resolvable ask_id + a pending
+    # entry so tapping "Go ahead" actually runs it. Disambiguates the force_ask overload (vent-held vs
+    # confirm-first ask) so _ensure_resolvable_ask wires the ask instead of leaving it a dead display card.
+    confirm_ask: bool = False
     # When True the MOAT model CONFIDENTLY extracted this as a clean real task (vent=False) from
     # casual/vague speech ("I owe my mom a call" -> "call mom"; "I gotta do that email of the thing
     # next weekend"). The model is the brain; the deterministic regex triage must NOT silently VETO

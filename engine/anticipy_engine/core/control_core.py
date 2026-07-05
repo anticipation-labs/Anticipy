@@ -2078,6 +2078,8 @@ class ControlCore:
                         # fold into the existing obligation; propagate the stricter guards
                         if getattr(line, "force_ask", False):
                             entry[0].force_ask = True
+                        if getattr(line, "confirm_ask", False):
+                            entry[0].confirm_ask = True
                         if getattr(line, "moat_task", False):
                             entry[0].moat_task = True
                         # keep the broader signature so further variants still match
@@ -2137,6 +2139,8 @@ class ControlCore:
                     continue
                 if getattr(mm, "force_ask", False):
                     keep.force_ask = True
+                if getattr(mm, "confirm_ask", False):
+                    keep.confirm_ask = True
                 if getattr(mm, "money_src", False):
                     keep.money_src = True
                 drop_ids.add(id(mm))
@@ -2165,6 +2169,13 @@ class ControlCore:
             line.original_text = (decision.evidence_span or task).strip() or task
             if decision.decision in {"ask", "follow_up"}:
                 line.force_ask = True
+            # A brain "ask" is a real confirm-first task (a send/booking/lookup that needs the owner's
+            # okay), NOT a vent — it is force_ask ONLY to block auto-act. Mark it confirm_ask so the
+            # ask gets a resolvable ask_id + pending entry (tapping "Go ahead" runs it), instead of
+            # inheriting the vent-adjacent held-display floor and dead-ending on approve. (follow_up is
+            # a scheduled nudge, NOT a tap-YES ask, so it is deliberately NOT marked confirm_ask.)
+            if decision.decision == "ask":
+                line.confirm_ask = True
             if decision.decision in {"act", "ask", "block", "follow_up"}:
                 line.moat_task = True
             if decision.decision == "block" or _is_money_action(task) or _is_money_action(line.original_text or ""):
@@ -2312,8 +2323,12 @@ class ControlCore:
         onto the card.
 
         Scope is surgical + safety-preserving:
-          * NEVER a vent-adjacent (force_ask) card — those are HELD display-only by design (the
-            cardinal-sin floor); making a vent resolvable is out of scope and unsafe.
+          * A GENUINE vent-adjacent (force_ask) card stays HELD display-only (the cardinal-sin floor);
+            making a vent resolvable is out of scope and unsafe. BUT a brain "ask" decision (a real
+            send/booking/lookup — action=draft_or_confirm_message et al.) is force_ask ONLY to block
+            auto-act; it is flagged line.confirm_ask and IS a legitimate confirm-first ask that must
+            resolve on an explicit YES. So the exclusion is: force_ask AND NOT confirm_ask. Defense in
+            depth: a confirm_ask line whose text still reads as a vent shape is left held anyway.
           * NEVER money/blocked/remember — money is a hard wall (no pending, ask_id None; the safety
             corpus + test_public_backend_path/test_pending_persistence enforce it), remember writes
             memory not an ask.
@@ -2322,8 +2337,12 @@ class ControlCore:
         """
         if card is None:
             return card
-        if getattr(line, "force_ask", False):
+        if getattr(line, "force_ask", False) and not getattr(line, "confirm_ask", False):
             return card
+        if getattr(line, "confirm_ask", False):
+            from ..live_memory.review_infer import is_vent_shape as _ivs
+            if _ivs(getattr(line, "text", "") or ""):
+                return card   # defense in depth: never wire a vent-shape line, even if mis-flagged
         if getattr(card, "disposition", None) != "ask":
             return card
         execu = card.execution or {}
@@ -2395,6 +2414,21 @@ class ControlCore:
                 self.glassbox.log("proactive_decision_pipeline_error", {"error": str(exc)[:240]})
         if decision_result is not None and getattr(decision_result, "available", False):
             observed = self._build_from_proactive_decisions(decision_result)
+            # CARDINAL-SIN FLOOR beats the pipeline: if the raw breath is a VENT ("ugh I'm fried,
+            # but remind me to send Sarah the budget"), EVERY task pulled from it is vent-adjacent
+            # and must stay HELD (surfaced, NEVER a tap-YES ask) — regardless of the per-task label
+            # the (non-deterministic) brain returned (sometimes "ask", sometimes "act"). Force the
+            # vent-held lever on and clear confirm_ask so _apply_force_ask coerces each to a held
+            # display card and _ensure_resolvable_ask never wires it. Money stays blocked and
+            # remember stays silent (the _apply_force_ask guards). This completes the existing
+            # vent-adjacent backstop, which misses tasks the model already stripped of their vent
+            # words. A CLEAN (non-vent) breath is untouched, so a real send still resolves. Erring
+            # toward held is the safe, mission-#1 direction; the stub suite never runs this branch.
+            from ..live_memory.review_infer import is_vent as _is_vent_src
+            if _is_vent_src(text or ""):
+                for _o in observed:
+                    _o.force_ask = True
+                    _o.confirm_ask = False
             self._silenced_count = sum(
                 1 for d in (decision_result.decisions or []) if getattr(d, "decision", None) == "ignore"
             )
