@@ -152,6 +152,77 @@ _RETRACTION = re.compile(
     r"nix that|cancel that|disregard that|belay that|we might cancel|might just cancel)\b",
     re.I,
 )
+# ---------------------------------------------------------------------------
+# CLAUSE-SCOPED retraction (the live decide-path floor). is_vent_shape above already silences a
+# WHOLE line that reads as a retraction, but the owner decide path splits a bundled utterance into
+# clauses and can pull a pre-retraction command out ("schedule the meeting... no, hold off on
+# that" -> the split kept "schedule the meeting" and dropped the retraction). These helpers scope
+# the retraction to the exact clause(s) it cancels, so a retracted command yields NO card while a
+# SIBLING command in the same breath survives ("email Priya the deck, and never mind the dinner
+# reservation" -> the email stands, the dinner is silenced).
+# ---------------------------------------------------------------------------
+# Split an utterance into ordered clauses: sentence/ellipsis punctuation, commas, and coordinating
+# "and"/"then" (so a retraction in one breath silences only the clause it cancels, not a sibling).
+_RETRACT_CLAUSE_SEP = re.compile(r"[.;!?…]+|,|\s+\b(?:and|then)\b\s+", re.I)
+# A clause that is a BARE back-reference retraction — leading discourse fillers, a retraction
+# marker, and at most a trailing "that/it". Such a clause cancels the PRECEDING command too
+# ("scratch that", "no actually hold off on that", "we might cancel"). A retraction that names
+# its OWN object ("never mind the dinner reservation") has content after the marker, so it does
+# NOT match here and silences only its own clause.
+_RETRACT_BAREREF = re.compile(
+    r"^(?:(?:no|nah|well|ok|okay|um|uh|so|and|then|oh|actually|honestly|wait|yeah|hmm)[\s,]+)*"
+    r"(?:never ?mind|scratch that|forget (?:it|that)|hold off(?:\s+on\s+(?:it|that|this|those))?"
+    r"|on second thought|nix that|cancel that|disregard that|belay that"
+    r"|we might cancel|might just cancel|actually no|no actually)"
+    r"[\s,.!…]*(?:on\s+)?(?:it|that|this|those|them|everything|the whole thing)?[\s,.!…]*$",
+    re.I,
+)
+
+
+def _norm_clause(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
+def surviving_clauses_after_retraction(text: str) -> List[str]:
+    """Split the utterance into ordered clauses and drop the ones a retraction cancels.
+
+    A clause carrying a retraction marker is dropped; when that marker is a BARE back-reference
+    ("scratch that", "hold off on that"), the nearest PRECEDING surviving clause is dropped too
+    (that is the command being taken back). A retraction that names its own object ("never mind
+    the dinner reservation") silences only itself, so a sibling command in the same breath
+    survives. Returns the surviving clause strings (empty when every clause was retracted)."""
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    clauses = [c.strip(" ,.;:-") for c in _RETRACT_CLAUSE_SEP.split(raw) if c and c.strip(" ,.;:-")]
+    if not clauses:
+        return []
+    silenced = [False] * len(clauses)
+    for i, c in enumerate(clauses):
+        if not _RETRACTION.search(c):
+            continue
+        silenced[i] = True   # the retraction clause itself is never a standing task
+        if _RETRACT_BAREREF.match(c):
+            for j in range(i - 1, -1, -1):
+                if not silenced[j]:
+                    silenced[j] = True
+                    break
+    return [c for i, c in enumerate(clauses) if not silenced[i]]
+
+
+def clause_is_retracted(task: str, full_text: str) -> bool:
+    """True iff `task` (a candidate action clause pulled from `full_text`) is cancelled by a
+    retraction elsewhere in `full_text`. No retraction present -> always False (never silences a
+    real task). This is the primitive the owner decide path uses to keep a retracted clause from
+    ever becoming a card, while a sibling command in the same utterance still surfaces."""
+    raw = (full_text or "").strip()
+    if not raw or not _RETRACTION.search(raw):
+        return False
+    t = _norm_clause(task)
+    if not t:
+        return False
+    survivors = [_norm_clause(s) for s in surviving_clauses_after_retraction(raw)]
+    return not any(t in s or s in t for s in survivors if s)
 # A trailing self-cancelling hedge ("... probably.", "we'll see") makes it a non-plan. A
 # clause-final LAUGH / JOKE tag does the SAME (this MIRRORS triage's _TRAILING_HEDGE, which
 # this display guard had diverged from): a laugh-hedged commitment self-cancels into a

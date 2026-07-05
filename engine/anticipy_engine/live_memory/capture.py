@@ -74,6 +74,12 @@ _NOT_NAME = {"I", "I'll", "I'm", "Monday", "Tuesday", "Wednesday", "Thursday", "
              "Saturday", "Sunday", "Today", "Tomorrow", "Tonight", "January", "February",
              "March", "April", "May", "June", "July", "August", "September", "October",
              "November", "December"}
+# Personal TITLES ("Dr. Lee", "Mr Okafor", "Prof. Chen"). A title is NOT a name on its own —
+# "my dentist is Dr. Lee" must surface "Dr. Lee" as ONE person, never a bare "Dr." (and never
+# a split "Dr" + "Lee"). Matched case-insensitively on the token with any trailing dot stripped.
+_NAME_TITLES = {"dr", "mr", "mrs", "ms", "miss", "prof", "professor", "sir", "madam", "madame",
+                "rev", "fr", "capt", "sgt", "lt", "col", "gen", "gov", "sen", "rep", "coach",
+                "officer", "judge", "dame", "lord", "lady", "auntie", "uncle", "aunt"}
 
 
 def should_keep(text: str) -> bool:
@@ -121,10 +127,27 @@ def classify(text: str) -> Tuple[str, Dict[str, object]]:
 def extract_people(text: str) -> List[str]:
     out: List[str] = []
     toks = text.split()
-    for i, raw in enumerate(toks):
+    n = len(toks)
+    i = 0
+    while i < n:
+        raw = toks[i]
         w = raw.strip(".,!?;:'\"")
+        # A personal TITLE glued to the FOLLOWING capitalized surname is ONE person
+        # ("Dr. Lee", "Mr Okafor") — NOT a bare "Dr" and NOT a split "Dr" + "Lee". This is the
+        # name-parse fix: "my dentist is Dr. Lee" now captures the whole name. A title may open a
+        # sentence ("Dr. Lee is my dentist"), so this branch is not gated on i > 0.
+        if w.lower() in _NAME_TITLES:
+            nxt = toks[i + 1].strip(".,!?;:'\"") if i + 1 < n else ""
+            if re.fullmatch(r"[A-Z][a-z]+", nxt) and nxt not in _NOT_NAME:
+                out.append(f"{w.capitalize()}. {nxt}")
+                i += 2
+                continue
+            # a bare title with no following name is not a person — never surface "Dr." alone
+            i += 1
+            continue
         if i > 0 and re.fullmatch(r"[A-Z][a-z]+", w) and w not in _NOT_NAME:
             out.append(w)
+        i += 1
     for w in re.findall(r"[a-z]+", text.lower()):
         if w in _REL:
             out.append(w)

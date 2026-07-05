@@ -478,6 +478,15 @@ def _deterministic_vent_adjacent_tasks(text: str) -> list[str]:
         from ..owner_mode import _split_multi_action
     except Exception:
         _split_multi_action = lambda s: [s]  # type: ignore[assignment]
+    # RETRACTION FLOOR (clause-scoped): a task the owner took back in the same breath
+    # ("schedule the meeting... no, hold off on that", "book the flight, scratch that") must
+    # never be resurrected as a held task here — the vent-split would otherwise keep the
+    # pre-retraction command and drop the retraction. clause_is_retracted silences ONLY the
+    # cancelled clause, so a sibling command survives.
+    try:
+        from ..live_memory.review_infer import clause_is_retracted
+    except Exception:
+        clause_is_retracted = lambda task, full: False  # type: ignore[assignment]
 
     chunks = [c.strip(" \t,;:-") for c in re.split(r"[.;!?]+|,", raw) if c.strip(" \t,;:-")]
     out: list[str] = []
@@ -486,9 +495,11 @@ def _deterministic_vent_adjacent_tasks(text: str) -> list[str]:
             continue
         if _is_interrogative_aside(chunk) or _is_directed_question_to_named_person(chunk):
             continue
+        if clause_is_retracted(chunk, raw):
+            continue
         for clause in _split_multi_action(chunk):
             task = str(clause or "").strip(" \t,;:-")
-            if task and _VENT_TASK_ACTIONABLE.search(task):
+            if task and _VENT_TASK_ACTIONABLE.search(task) and not clause_is_retracted(task, raw):
                 out.append(task)
     deduped: list[str] = []
     for task in out:
@@ -2412,6 +2423,25 @@ class ControlCore:
                 _ln.force_ask = True
             _rebuilt.append(_ln)
         observed = _rebuilt
+        # RETRACTION FLOOR (clause-scoped, model-independent): drop any observed line the owner
+        # took back in the same breath — "book the flight, actually scratch that", "confirm the
+        # reservation... we might cancel". The whole-line vent guard (card_for_line's is_vent)
+        # already catches a bare retraction, but a bundled/expanded line can carry the command
+        # WITHOUT the retraction marker (the marker rode a sibling clause), so this floor checks
+        # each line against its own source utterance. clause_is_retracted silences ONLY the
+        # cancelled clause, so a sibling command ("email Priya the deck") still surfaces. Covers
+        # both the deterministic held tasks and the live decision-pipeline decisions.
+        from ..live_memory.review_infer import clause_is_retracted as _clause_retracted
+        _kept_after_retraction = []
+        for _ln in observed:
+            _ctx = getattr(_ln, "original_text", None) or getattr(_ln, "text", "") or ""
+            if _clause_retracted(getattr(_ln, "text", "") or "", _ctx):
+                self._silenced_count += 1
+                self.glassbox.log("retraction_silenced", {"line": (getattr(_ln, "text", "") or "")[:140],
+                                                           "source": _ctx[:160]})
+                continue
+            _kept_after_retraction.append(_ln)
+        observed = _kept_after_retraction
         # DETERMINISTIC MONEY BACKSTOP — money is the ONLY hard stop, so a directed money action must
         # NEVER be dropped or amount-stripped past the floor. The 20-life test caught the moat DROPPING
         # "Transfer 1.2 million ... to the new SPV ... do it now" ENTIRELY (no card at all — the worst
