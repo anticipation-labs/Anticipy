@@ -268,3 +268,12 @@ NEEDS OMAR (can't finish unattended, queued for morning — NOT faked):
 - **Archive:** uncommitted ~/Anticipy factory/build diff snapshotted to archive/factory-build-uncommitted-20260705.patch (82508f8).
 - Scoreboard now: only leg 5 (a REAL stranger carried through a real day) is not green — human-only.
   Frontier work: the hands (extension→cloud browser-action end-to-end, WAKEUP items 3–4) + UI-9 + brain recall.
+
+## 2026-07-05 — COLD-STRANGER CLOUD E2E (run from Devin VM, NOT this Mac)
+Fresh Chrome + extension from hoe/build source, against live Vercel + Railway:
+- One-click pairing: setup page -> "Chrome paired ✓" (extension WS bound to cloud engine).
+- Onboarding scan drove real tabs in the stranger Chrome; honest per-site signed-in vs needs-sign-in.
+  (wart: "extension did not confirm posting" status line — results surfaced anyway.)
+- Messy day line -> Sarah email card approval-gated; vent silent. (kids-pickup card not visible in day view — OPEN.)
+- "Ask me to do something online" -> hands opened real HN tab, answered "Organic Maps" — verified
+  independently via curl against the live front page. Recording + report with Omar.
