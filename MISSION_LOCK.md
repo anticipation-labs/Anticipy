@@ -309,3 +309,10 @@ Diagnosed on the LIVE cloud engine (same text replayed with brain_decisions trac
   - Result bubble: "Here's what I found: New users can earn their first dollar on Swagbucks by completing everyday tasks online such as taking paid surveys, playing mobile games, shopping online, watching videos, and searching the web."
   - Recording captured (first run shows the wrong-task failure honestly; second run passes).
 - Deployed: Vercel prod aliased https://anticipy-welcome.vercel.app (deploys 3wqsCFGm blocked-author lesson: commit author must be a Vercel team member; empty commit as omize10 unblocks).
+
+## 2026-07-05 — PENDING FOR OMAR (the short list, nothing buried)
+1. **done_gate leg 5 — real stranger, real day.** Human-only by design: a real person's real messy day carried end-to-end, signed by you. Everything software-side for it is live and tested.
+2. **M6 voice call.** Needs a call placed to your real phone number (channels stay mock until you okay a live call). Say the word + the number and I run it.
+3. **M5 deep scrape live proof.** Needs your own logged-in Chrome on your Mac (your real Gmail/Calendar/etc.) — I never drive your real profile without your one-line ok first.
+4. **Gmail→Amazon account-creation chain.** Blocked by Google phone verification (honest needs_human wall). If you want it pushed through, provide a number to receive the code.
+5. **M7 judgment.** Screenshots of every live screen sent — your call: premium enough, or specific screens to redo.
