@@ -263,7 +263,7 @@ function normalizeEngineCard(card) {
     title: card.title || card.action || card.source_text || "Caught something for you.",
     heard: card.source_text || card.text || "",
     ignored: "",
-    browserWork: card.execution?.route || card.action || "",
+    browserWork: card.args?.task_text || card.execution?.route || card.source_text || "",
     checkIn: card.status === "waiting" || card.disposition === "ask" ? "Okay for me to go ahead?" : "",
     // With a real browser receipt the structured render takes over; the string is only a fallback
     // for non-browser live cards (kept honest — no receipt means no fabricated answer).
