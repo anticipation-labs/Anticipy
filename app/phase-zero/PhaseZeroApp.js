@@ -130,6 +130,13 @@ const DEFAULT_SETTINGS = {
 
 const SHOW_FIXTURES = process.env.NEXT_PUBLIC_ANTICIPY_SHOW_FIXTURES === "1";
 
+// Single-owner "open mode". While true (the pre-multi-user default) the board, onboarding, setup,
+// and settings render without a Supabase session, so today's single-owner flow keeps working
+// unchanged. At the multi-user deploy this flips off (NEXT_PUBLIC_ANTICIPY_APP_OPEN=0) in the SAME
+// change that turns email login on, and the session gate in PhaseZeroApp takes effect. Only /welcome
+// and /sign are ever public. Defaults OPEN so nothing breaks before that coordinated deploy.
+const APP_OPEN = process.env.NEXT_PUBLIC_ANTICIPY_APP_OPEN !== "0";
+
 const SCREEN_TITLES = {
   welcome: "Welcome",
   sign: "Sign in",
@@ -562,7 +569,7 @@ function SetupScreen({ engineState, listenStatus, refreshEngine, refreshListenSt
           </div>
         ) : null}
         <div className="pz-actions pz-actions-simple pz-actions-in-card">
-          <a className="pz-button primary pz-button-xl" href="/connect">Continue</a>
+          <a className="pz-button primary pz-button-xl" href="/onboarding/2">Continue</a>
           <button className="pz-button ghost" onClick={() => { refreshEngine(); refreshListenStatus(); }} type="button">Check again</button>
         </div>
       </section>
@@ -792,13 +799,12 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
   function submit(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    // Three simple things only. Phone / timezone / the how-much-should-I-do setting live in Settings
+    // now, so we keep any existing values via ...profile instead of wiping them from this form.
     const next = {
       ...profile,
       name: String(form.get("name") || ""),
       summary: String(form.get("summary") || ""),
-      phone: String(form.get("phone") || ""),
-      timezone: String(form.get("timezone") || "America/Vancouver"),
-      trustDial: String(form.get("trustDial") || "Regular"),
       doNotTouch: String(form.get("doNotTouch") || ""),
     };
     setProfile(next);
@@ -808,32 +814,33 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
   return (
     <form className="pz-panel pz-form" onSubmit={submit}>
       <label>
-        <span>Name</span>
-        <input name="name" value={profile.name || ""} onChange={(event) => patch({ name: event.target.value })} />
+        <span>Your name</span>
+        <input
+          name="name"
+          value={profile.name || ""}
+          onChange={(event) => patch({ name: event.target.value })}
+          placeholder="What should I call you?"
+        />
       </label>
       <label>
-        <span>One-sentence summary</span>
-        <input name="summary" value={profile.summary || ""} onChange={(event) => patch({ summary: event.target.value })} />
+        <span>About you</span>
+        <small className="pz-note">One sentence — who you are and what you&rsquo;re juggling right now.</small>
+        <input
+          name="summary"
+          value={profile.summary || ""}
+          onChange={(event) => patch({ summary: event.target.value })}
+          placeholder="e.g. Founder of a small studio, always mid-launch."
+        />
       </label>
       <label>
-        <span>Phone</span>
-        <input name="phone" value={profile.phone || ""} onChange={(event) => patch({ phone: event.target.value })} />
-      </label>
-      <label>
-        <span>Timezone</span>
-        <input name="timezone" value={profile.timezone || ""} onChange={(event) => patch({ timezone: event.target.value })} />
-      </label>
-      <label>
-        <span>Trust dial</span>
-        <select name="trustDial" value={profile.trustDial || "Regular"} onChange={(event) => patch({ trustDial: event.target.value })}>
-          <option>Regular</option>
-          <option>Limited</option>
-          <option>Full-Send</option>
-        </select>
-      </label>
-      <label>
-        <span>Always ask before</span>
-        <textarea name="doNotTouch" value={profile.doNotTouch || ""} onChange={(event) => patch({ doNotTouch: event.target.value })} />
+        <span>Things I should always check with you first</span>
+        <small className="pz-note">Where I should slow down and ask before acting — money, certain people, anything you&rsquo;d hate me to get wrong.</small>
+        <textarea
+          name="doNotTouch"
+          value={profile.doNotTouch || ""}
+          onChange={(event) => patch({ doNotTouch: event.target.value })}
+          placeholder="Example: always ask before emailing a client, or before spending money."
+        />
       </label>
       <div className="pz-form-submit-row">
         <button className="pz-button primary" type="submit">Save</button>
@@ -844,12 +851,17 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
 }
 
 function OnboardingTimeline({ onboarding, activeRoute }) {
+  // Only user-facing stages (visible === true) reach the surface — the internal LAYER/CALL pipeline
+  // steps stay hidden. Codenames become a plain "Step X of N", and every status runs through
+  // humanStatus() so a raw enum ("seeded" / "coming_soon" / "read_only") can never render.
+  const steps = ONBOARDING_STAGES.filter((stage) => stage.visible === true);
+  if (!steps.length) return null;
   return (
     <section className="pz-timeline">
-      {ONBOARDING_STAGES.map((stage) => (
+      {steps.map((stage, index) => (
         <a key={stage.route} className={`pz-timeline-step ${activeRoute === stage.route ? "active" : ""}`} href={stage.route}>
-          <span>{stage.label}</span>
-          <small>{onboarding.statusByStep?.[stage.route] || stage.status}</small>
+          <span>{`Step ${index + 1} of ${steps.length}`}</span>
+          <small>{humanStatus(onboarding.statusByStep?.[stage.route] || stage.status)}</small>
         </a>
       ))}
     </section>
@@ -1319,10 +1331,11 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
           LearnedMemoryPanel (with per-person dossiers) is the ONE dossier surface. */}
       <section className="pz-profile-you">
         <ProfileSection title="What you told me" items={[
-          profile.name ? `Name: ${profile.name}` : "Name — not set yet.",
-          profile.summary ? profile.summary : "One-sentence summary — not set yet.",
-          `Trust dial: ${profile.trustDial || "Regular"}`,
-          ...(profile.doNotTouch ? [`Always ask before: ${profile.doNotTouch}`] : []),
+          profile.name ? `You go by ${profile.name}.` : "Your name — not set yet.",
+          profile.summary ? profile.summary : "A sentence about you — not set yet.",
+          profile.doNotTouch
+            ? `I'll always check with you first before: ${profile.doNotTouch}`
+            : "I'll ask before anything that involves money or is hard to undo.",
         ]} />
       </section>
       <OnboardingDossierSummary drawers={drawers} error={drawersError} />
@@ -1814,17 +1827,17 @@ function MainScreen(props) {
   );
 }
 
-// "Do it on the web" — the direct hand. The user types a real-world task and I run it on THEIR own
+// "Ask me to do something online" — the direct hand. The user types a real-world task and I run it on THEIR own
 // logged-in browser (the connected Chrome helper), then land a judge-verified receipt. This is the
 // board's front door to the connected-Chrome path (/api/browser/run -> engine /agent/run); it never
 // spends, checks out, or signs in on its own.
 function WebActionPanel({ webTask, setWebTask, webBusy, webReceipt, runWebTask, engineState }) {
   const connected = Boolean(engineState?.extensionConnected);
   return (
-    <section className="pz-webaction" aria-label="Do it on the web">
+    <section className="pz-webaction" aria-label="Ask me to do something online">
       <div className="pz-webaction-head">
-        <h3 className="pz-webaction-title">Do it on the web</h3>
-        <p className="pz-webaction-sub">Type a real-world task and I'll do it on your own logged-in browser, then tell you what I found.</p>
+        <h3 className="pz-webaction-title">Ask me to do something online</h3>
+        <p className="pz-webaction-sub">Tell me a real-world task and I'll handle it in your own logged-in browser, then tell you what I found.</p>
       </div>
       <div className="pz-webaction-row">
         <input
@@ -1842,7 +1855,7 @@ function WebActionPanel({ webTask, setWebTask, webBusy, webReceipt, runWebTask, 
           onClick={runWebTask}
           disabled={webBusy || !webTask.trim()}
         >
-          {webBusy ? "On it…" : "Do it on the web"}
+          {webBusy ? "On it…" : "Do it"}
         </button>
       </div>
       {!connected ? (
@@ -1859,6 +1872,11 @@ function WebActionPanel({ webTask, setWebTask, webBusy, webReceipt, runWebTask, 
 // gets ahead of unspoken needs on demand; "Send my digest now" (FIX-14) flushes the day's quiet
 // items as one message. Each POSTs its existing proxy and shows an honest receipt in place.
 function BoardActionsPanel({ runDerive, deriveBusy, deriveReceipt, runDigest, digestBusy, digestReceipt }) {
+  // "Anticipate now" / "Send my digest now" are manual cron/loop triggers — internal ops, not
+  // consumer controls (a person never hand-runs a derive pass or flushes the digest; that's
+  // automatic). Hidden from the board and revealed only under ?debug, matching SourceTagList.
+  const _dbgVisible = useDebugVisible();
+  if (!_dbgVisible) return null;
   return (
     <section className="pz-board-actions" aria-label="Proactive controls">
       <div className="pz-board-actions-row">
@@ -3182,8 +3200,15 @@ export default function PhaseZeroApp({ screen = "board" }) {
   // rail around a page that already has its own bar, i.e. the double-chrome bug. UI_SPEC step 2.
   if (screen === "welcome") return <WelcomeScreen />;
 
+  // SESSION GATE (multi-user). Only /welcome and /sign are public. Every other surface — the board,
+  // onboarding, setup, settings — holds a real person's data, so without an authenticated Supabase
+  // session we render the sign-in screen instead of the protected surface. APP_OPEN preserves today's
+  // single-owner flow and flips off at the multi-user deploy (see the constant near the top).
+  const gated = !APP_OPEN && !auth.session && screen !== "sign";
+
   let content = null;
-  if (screen === "sign") content = <SignScreen {...commonProps} />;
+  if (gated) content = <SignScreen {...commonProps} />;
+  else if (screen === "sign") content = <SignScreen {...commonProps} />;
   else if (screen === "setup") content = <SetupScreen {...commonProps} />;
   else if (screen.startsWith("onboarding")) content = <OnboardingScreen screen={screen} {...commonProps} />;
   else if (screen === "settings") content = <SettingsScreen {...commonProps} />;
