@@ -2464,8 +2464,21 @@ class ControlCore:
                 (getattr(d, "evidence_span", "") or getattr(d, "task_text", "") or "").strip()
                 for d in (decision_result.decisions or [])
                 if getattr(d, "decision", None) == "ignore"
-                and getattr(d, "realness", "") == "already_done"
+                and getattr(d, "realness", "") in {"already_done", "real", "ambiguous",
+                                                   "physical_only", "status_question"}
             ]
+            # Per-decision drop trace: when a span the owner spoke produces no card, the
+            # WHY must be reconstructable from glassbox alone (the summary counters above
+            # cannot distinguish a vent from a mislabeled real task).
+            self.glassbox.log("proactive_decisions_detail", {
+                "decisions": [
+                    {"decision": getattr(d, "decision", None),
+                     "realness": getattr(d, "realness", None),
+                     "span": ((getattr(d, "evidence_span", "") or getattr(d, "task_text", "") or "")[:120]),
+                     "reason": (getattr(d, "reason", "") or "")[:160]}
+                    for d in (decision_result.decisions or [])
+                ],
+            })
             self.glassbox.log("proactive_decision_pipeline", {
                 "decisions": len(decision_result.decisions or []),
                 "kept": len(observed),

@@ -268,6 +268,19 @@ def _normalize_decision(raw: dict[str, Any], *, source_truth_case_id: str | None
         if not task_text:
             task_text = evidence
 
+    # A PHYSICAL task with a CONCRETE time ("grab the kids at 3", "pharmacy run tonight") is
+    # reminder-worthy: the digital deliverable is the check-in/reminder itself. The model
+    # labels these physical_only nondeterministically; without this rescue the realness floor
+    # below silences them on some runs. Vague physical/social mentions (no concrete time, or
+    # deliberately hedged "later/sometime") stay ignored.
+    if (realness == "physical_only" and (task_text or evidence)
+            and _CONCRETE_TIME.search(combined)
+            and not _PHYSICAL_OR_SOCIAL_NON_TASK.search(combined)
+            and actor in {"owner", "assistant"}):
+        realness = "ambiguous"
+        decision = "ask"
+        reason = reason or "timed physical task — worth a check-in, never silence"
+
     # Deterministic floor around the model: only owner/assistant-owned real or
     # ambiguous items may produce work. Third-party/listener/hypothetical output
     # cannot sneak through as a card even if the model's decision field disagrees.
