@@ -1,8 +1,8 @@
 [
   {
     "name": "1 mom/plant -> ask",
-    "pass": true,
-    "detail": "dispositions=['ask']"
+    "pass": false,
+    "detail": "dispositions=[]"
   },
   {
     "name": "2 Sarah/deck -> ask",
@@ -16,8 +16,8 @@
   },
   {
     "name": "4 traffic+kids+$4,200 (kids!=money, $4,200 blocked, never dropped)",
-    "pass": true,
-    "detail": "kids_ok(not money)=True $4200_present=True $4200_blocked=True | Pick up kids at 2:45::ask/create_calendar_or_reminder | Pay the $4,200 invoice::blocked/prepare_purchase_path_without_payment"
+    "pass": false,
+    "detail": "kids_ok(not money)=False $4200_present=True $4200_blocked=True | Pay the $4,200 invoice::blocked/prepare_purchase_path_without_payment"
   },
   {
     "name": "5 dinner(no restaurant) -> ask-for-slot",
