@@ -1,24 +1,34 @@
-# WAKEUP — Anticipy status (2026-07-04)
+# WAKEUP — Anticipy overnight status (2026-07-04 → 05)
 
-## ✅ THE CONVERSATION IS DONE — proven live end-to-end on the cloud
-Omar's core concept — consumer software that TALKS BACK like a human, not a dev task-board — is built + verified live (anticipy-welcome.vercel.app):
-- **Talks back:** "Text John happy birthday tomorrow" → "Remind you about John's birthday. Okay for me to go ahead?" (warm, plain language, "you" not "wearer").
-- **Tappable chips** render under every ask: Go ahead · Not now · …
-- **Loop closes:** tap "Go ahead" (or type "yes") → posts as your line → "On it…" → "Done — taken care of. ✓". (fix c7419c5: chips ride on the card's own state, not a missing ask_id.)
-- **Money flagged conversationally:** "Handling that big invoice. That one can move money… I'll wait for your yes — want me to go ahead?"
-- **Vents stay SILENT:** "so done I could scream" → no bubble, no card.
-- Old board preserved as a quiet "Things I'm tracking" drawer.
-- Commits: 4404861 (conversation surface) + c7419c5 (react loop). Suite 121/8, next build clean.
+## The bar Omar set (asleep ~6h, checks hourly, no complaints by morning)
+CLOUD is the system (LOCAL PAUSED). "Done" = the extension paired to the CLOUD engine, tap "Go ahead"
+→ the browser ACTUALLY does it → verified by the REAL ARTIFACT (a draft in Gmail), never a log.
+Browser-only, no APIs. Never fake; never touch Omar's real accounts overnight.
 
-## ✅ Brain certified live on the cloud
-- Proactive 7/7 (vent ignored + kids kept + $4200 blocked; return-plant→ask; dinner→ask-slot; sarcasm ignored; retraction silent; prescription caught; multi-intent→2).
-- Memory 11/11 (never-re-ask, disambiguation, "my usual", bi-temporal, semantic surface, retraction, standing pref, address, paraphrase recall x2, multi-hop graph).
-- Onboarding DONE + persists (engine /owner/profile, cbecdeb).
-- Card actions (Go ahead / Not now) proven.
+## What's genuinely DONE + verified live (cold-walked, not "proven in code")
+- **approve→ACT WIRING** (a30e06f, deployed d90e1022): type task → card+chips (live, no reload) → tap
+  "Go ahead" → real /resolve → "Done ✓". Root cause was the whole ask machinery gated on
+  `execute_actions:true` but the composer previews with `execute_actions:false`. Money held, vents silent.
+- Theme, browser-only (/connect deleted, API arm gone), clean onboarding, clean board, retraction
+  cardinal-sin wired, send→reply live-append, honest failed-copy, polling. All deployed + verified.
+- **HONEST**: that "Done ✓" is the engine RESOLVING in mock hands — it does NOT actually draft the email.
+  That's the frontier below.
 
-## 🟡 Non-blocking / honest limits
-- Cloud memory is EPHEMERAL (Railway redeploy wipes it) — durable storage needed for days-of-use.
-- Welcome DARK vs app LIGHT = Omar's taste call.
-- Still not clicked: mic, file upload, settings-persist, "Anticipate now"/digest, mobile.
-## ⏸️ Paused-and-fine (per Omar): browser errands on cloud, voice inbound, autonomous nudging.
-## Needs Omar: fresh TWILIO_AUTH_TOKEN, final safety pass, welcome-theme call.
+## THE REAL REMAINING WORK — "the hands" (task #31): extension → CLOUD browser-action
+Audit found MOST of it is already real: extension CDP observe→act, WebVoyagerAgent, per-user pairing
+crypto (/ws/pair, signed apc1 codes), judge-verified receipt. MOCK/MISSING = 4 narrow things:
+1. Extension defaulted to localhost → repoint to cloud + rebuild the .zip.  [agent a9fcbd95 RUNNING]
+2. NO pairing UI in the app (the "at scale" gap) → build SetupScreen mint-code→pair flow.  [agent aa239f5c RUNNING]
+3. Railway engine flags off → set ANTICIPY_PER_USER_HANDS=1 + ENGINE_INTERNAL_TOKEN=<secret>.  [TODO config]
+4. No independent artifact re-verification (Done = judge+screenshot, not a re-read of the real draft).  [TODO]
++ Second-wave audit fixes #30 (jsonFetch Supabase bearer, ephemeral stores, per-card autonomy, onboarding routing).
+
+## Deploy discipline (learned the hard way — DO NOT SKIP)
+`railway up` can silently NOT land; builds ~2-8min. ALWAYS: note current top deployment id
+(`railway deployment list`) → `railway up --detach` → poll until a NEW id shows SUCCESS → verify by the
+cloud's real behavior (execution.ask_id / the artifact), NOT /health. Vercel: --prod --yes, wait READY, alias.
+
+## The one honest wall (NEEDS-OMAR — get one-click-ready, do NOT fake or touch his account)
+The final "extension drafts in YOUR real Gmail, verified by the draft" needs Omar's Chrome + extension +
+logged-in Gmail. I build everything to one-click-ready + flag it. Also: Supabase email provider confirm
+(ogbxpqkmsdrcuilafycn), TWILIO_AUTH_TOKEN, first live call, final safety pass.
