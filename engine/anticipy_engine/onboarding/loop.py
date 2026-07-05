@@ -8,12 +8,24 @@ nothing new. Genuine + honest throughout — it reuses owner_scrape, which never
 """
 from __future__ import annotations
 
+import os
 from urllib.parse import urlparse
 
 from ..core.navwall import nav_block_reason
 from . import dossier as _dossier
 from .owner_scrape import DEFAULT_SURFACES, scrape_owner
 from .permissions import SURFACE_SERVICE
+
+
+def _onboard_call_enabled() -> bool:
+    """Config gate: after the inhale, does the loop AUTO-INITIATE the outbound clarifying call?
+
+    OFF by default (mirrors channels/inbound/voice-execute gating) so run_loop's existing behavior —
+    and the whole suite — is byte-identical unless the call arm is deliberately turned on with
+    ANTICIPY_ONBOARD_CALL truthy. When on, a loop that finished with nothing left to log into but
+    still-open dossier gaps places the gap-filling call (mock-simulated in mock channels, a real
+    Twilio dial when ANTICIPY_CHANNELS_MODE=live) and writes the answers back — closing the loop."""
+    return (os.environ.get("ANTICIPY_ONBOARD_CALL", "") or "").strip().lower() in {"1", "true", "yes", "on"}
 
 # FIX-11 (2026-07-02): layer 2+ EXPANDS. Before this, every layer re-scrolled the same fixed
 # surface set deeper — "layer 2/3" was depth on identical inputs, not the graph expansion the
@@ -116,6 +128,23 @@ async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYER
 
     final = layers[-1] if layers else {}
     done = bool(final and not final.get("needs_login") and final.get("confidence", 0) >= _CONFIDENT)
+
+    # CLOSE THE LOOP: once there's nothing left to log into but the inhale left open gaps, hand the
+    # dossier to the CALL arm — clarify ranks the dossier's gaps into a couple of spoken questions,
+    # the outbound call is placed (CallChannel.send; mock-simulated / live-dialed), and the answers
+    # are written back so the dossier + first cards are re-aimed. Gated OFF by default; a glassbox/
+    # call hiccup can never break the inhale that already succeeded.
+    onboarding_call = None
+    gaps_final = final.get("gaps") or []
+    if _onboard_call_enabled() and gaps_final and not final.get("needs_login"):
+        try:
+            onboarding_call = await core.run_onboarding_call(doss)
+        except Exception as e:  # never let the call arm break a good inhale
+            onboarding_call = {"ok": False, "initiated": False, "error": str(e)[:180]}
+        core.glassbox.log("onboard_loop_call",
+                          {"initiated": bool((onboarding_call or {}).get("initiated")),
+                           "questions": len((onboarding_call or {}).get("questions") or [])})
+
     return {
         "ok": True,
         "layers": layers,
@@ -125,6 +154,7 @@ async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYER
         "confidence": final.get("confidence", 0),
         "needs_login": final.get("needs_login", []),
         "gaps": final.get("gaps", []),
+        "onboarding_call": onboarding_call,
         "permissions": perms.state(),
         "confirm_prompt": ("Here's what I learned about you — confirm and we're set."
                            if done else

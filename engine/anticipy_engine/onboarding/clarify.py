@@ -310,3 +310,155 @@ def clarify_payload(
             "delivery": "live-deferred (Twilio voice)",
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# OWNER INHALE DOSSIER path — the clarify planner FED BY THE SCRAPE it follows.
+#
+# The functions above plan a call over a public-web ``Profile`` (profile_builder.py). But the
+# onboarding scrape<->call loop follows a DIFFERENT input: the owner's own inhaled accounts,
+# synthesized by dossier.py into a dossier that itself lists the ``gaps`` a short call should
+# fill. THIS is the input the outbound onboarding call must follow up on. The functions below
+# read that owner inhale dossier (the dict returned by dossier.synthesize_dossier / loop.run_loop)
+# and rank its gaps into the same ``ClarifyingQuestion`` shape, so the call arm (call_out.py) can
+# ask exactly what the inhale left open — never a public-web profile it never scraped.
+# ---------------------------------------------------------------------------
+
+# Core identity fields a useful owner dossier should carry; an absent one is a plain gap to ask.
+_DOSSIER_CORE_FIELDS = ("role", "location")
+
+# Keyword -> core field, so a free-text model gap ("your role or title") is tagged to a field
+# instead of a generic bucket (lets the call arm re-aim identity when the owner answers).
+_GAP_FIELD_HINTS = (
+    ("role", ("role", "title", "job", "what you do", "position")),
+    ("org", ("org", "company", "startup", "employer", "business", "team you")),
+    ("location", ("location", "based", "where you", "city", "timezone", "time zone")),
+)
+
+
+def _dossier_inner(dossier: Any) -> Dict[str, Any]:
+    """The inner profile dict, accepting either the synthesize RESULT ({"dossier": {...}, "gaps":..})
+    or a bare inner dossier ({"identity":.., "gaps":..})."""
+    if not isinstance(dossier, dict):
+        return {}
+    inner = dossier.get("dossier")
+    if isinstance(inner, dict):
+        return inner
+    return dossier
+
+
+def _dossier_gaps(dossier: Any) -> List[str]:
+    """The dossier's own list of still-unknown gaps (top-level or inner), cleaned of blanks."""
+    if not isinstance(dossier, dict):
+        return []
+    gaps = dossier.get("gaps")
+    if gaps is None:
+        gaps = _dossier_inner(dossier).get("gaps")
+    out: List[str] = []
+    seen: set = set()
+    for g in (gaps or []):
+        if not isinstance(g, str):
+            continue
+        g = g.strip()
+        if not g or g.lower() in seen:
+            continue
+        seen.add(g.lower())
+        out.append(g)
+    return out
+
+
+def _dossier_identity(dossier: Any) -> Dict[str, Any]:
+    ident = _dossier_inner(dossier).get("identity")
+    return ident if isinstance(ident, dict) else {}
+
+
+def _gap_field(gap: str) -> str:
+    low = gap.lower()
+    for fld, kws in _GAP_FIELD_HINTS:
+        if any(kw in low for kw in kws):
+            return fld
+    return "profile"
+
+
+def _gap_as_question(gap: str) -> str:
+    """Phrase a free-text gap as a spoken question, deterministically."""
+    g = gap.strip()
+    if g.endswith("?"):
+        return g[0].upper() + g[1:]
+    lead = g[0].lower() + g[1:] if g else g
+    return f"Can you tell me about {lead}?"
+
+
+def clarifying_questions_from_dossier(
+    dossier: Any,
+    *,
+    max_questions: int = DEFAULT_MAX_QUESTIONS,
+) -> List[ClarifyingQuestion]:
+    """Rank the OWNER INHALE DOSSIER's gaps into the couple of questions the setup call should ask.
+
+    Reads the dict dossier.synthesize_dossier / loop.run_loop produce (never a public-web Profile):
+      1. the dossier's OWN ``gaps`` — the model-flagged still-unknowns, most-useful first (order kept);
+      2. any CORE identity field (role / location) still empty and not already covered by a gap.
+    Honest by construction: it only asks about what the inhale actually left open — an empty ``gaps``
+    on a confident dossier yields NO questions (no call needed). Deterministic; no model, no network.
+    """
+    questions: List[ClarifyingQuestion] = []
+    covered: set = set()
+
+    for gap in _dossier_gaps(dossier):
+        fld = _gap_field(gap)
+        questions.append(
+            ClarifyingQuestion(
+                field=fld,
+                question_text=_gap_as_question(gap),
+                why=f"the inhale dossier flagged this as still unknown: {gap}",
+                reason="gap",
+                candidates=[],
+            )
+        )
+        covered.add(fld)
+
+    identity = _dossier_identity(dossier)
+    for fld in _DOSSIER_CORE_FIELDS:
+        if fld in covered:
+            continue
+        val = identity.get(fld)
+        if isinstance(val, str) and val.strip():
+            continue
+        questions.append(
+            ClarifyingQuestion(
+                field=fld,
+                question_text=f"What's your {_field_noun(fld)}?",
+                why=f"the inhale produced no {fld} for the owner",
+                reason="gap",
+                candidates=[],
+            )
+        )
+        covered.add(fld)
+
+    if max_questions is not None and max_questions >= 0:
+        questions = questions[:max_questions]
+    return questions
+
+
+def clarify_dossier_payload(
+    dossier: Any,
+    *,
+    max_questions: int = DEFAULT_MAX_QUESTIONS,
+) -> Dict[str, Any]:
+    """Serializable clarify plan for the OWNER INHALE DOSSIER (the call arm's agenda)."""
+    questions = clarifying_questions_from_dossier(dossier, max_questions=max_questions)
+    by_reason: Dict[str, int] = {}
+    for q in questions:
+        by_reason[q.reason] = by_reason.get(q.reason, 0) + 1
+    return {
+        "name": _dossier_identity(dossier).get("name"),
+        "questions": [q.as_dict() for q in questions],
+        "summary": {
+            "count": len(questions),
+            "by_reason": by_reason,
+            "needs_call": bool(questions),
+            "delivery": "outbound onboarding call (Twilio; live-gated, mock-simulated)",
+            "source": "owner_inhale_dossier",
+        },
+    }

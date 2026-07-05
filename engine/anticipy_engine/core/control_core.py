@@ -2995,6 +2995,18 @@ class ControlCore:
         return {"source": plan.source, "written": written,
                 "missing_connections": plan.missing_connections}
 
+    async def run_onboarding_call(self, dossier: dict, *, to: str | None = None,
+                                  max_questions: int = 5, answers: dict | None = None) -> dict:
+        """Initiate the outbound onboarding/gap-filling CALL for a built inhale dossier and close
+        the scrape<->call loop: plan the ranked gap-questions (clarify, over the OWNER dossier),
+        DIAL the owner (CallChannel.send — mock records / live places a real Twilio call), run the
+        warm OnboardingCallBrain over those questions, and write the answers back so the dossier and
+        first cards are re-aimed. Mock-safe + deterministic; live is a one-flag flip
+        (ANTICIPY_CHANNELS_MODE=live). Delegates to onboarding.call_out."""
+        from ..onboarding.call_out import run_onboarding_call as _run_onboarding_call
+        return await _run_onboarding_call(self, dossier, to=to, max_questions=max_questions,
+                                          answers=answers)
+
     # ---- STATED onboarding basics (name / summary / phone / timezone / trust dial / always-ask) ----
     # The onboarding form's basics live in the DURABLE profile memory drawer — the same drawer the
     # brain reads — not an ephemeral local file. Before this, the hosted app saved them to a per-
