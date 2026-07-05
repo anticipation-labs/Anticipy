@@ -288,3 +288,13 @@ Diagnosed on the LIVE cloud engine (same text replayed with brain_decisions trac
 - Verdict: capture never lost the task; first-pass card emission for multi-span lines is the
   remaining reliability edge. OPEN: consider capture->card consistency check at ingest
   (if a new open loop was captured this turn, a card must exist or be echoed).
+
+### 2026-07-05 — kids-card class FIXED (commit 73d2ef2, deployed to cloud)
+- decision_pipeline: timed physical task + owner actor -> rescued to ask (never silenced by the
+  physical_only floor). Unit floor tests: kids-at-3 -> ask; park-later/coffee-sometime/vent/
+  third-party -> ignore.
+- control_core: already-on-it echo broadened to any task-like ignore realness (only surfaces
+  EXISTING open cards). Glassbox now logs per-decision drop detail (proactive_decisions_detail).
+- PROOF: M1 6/6 · M2 PASS · M3 ALL PASS · done_gate legs 1-4 PASS · suite 122/7 (fail-set strict
+  subset of 9-name baseline). Railway deploy e390790d SUCCESS; live cloud verified: "pharmacy run
+  at 5 today ... exhausting lately" -> timed-task card + vent silent.
