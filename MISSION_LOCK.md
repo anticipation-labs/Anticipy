@@ -277,3 +277,14 @@ Fresh Chrome + extension from hoe/build source, against live Vercel + Railway:
 - Messy day line -> Sarah email card approval-gated; vent silent. (kids-pickup card not visible in day view — OPEN.)
 - "Ask me to do something online" -> hands opened real HN tab, answered "Organic Maps" — verified
   independently via curl against the live front page. Recording + report with Omar.
+
+### Follow-up on the cold-stranger e2e kids-card gap (2026-07-05, Devin)
+Diagnosed on the LIVE cloud engine (same text replayed with brain_decisions traced):
+- First pass: the brain captured "grab the kids at 3" into durable memory as an open loop but
+  emitted no card (one-off extraction miss; the Sarah task carded fine).
+- Next mention: the already_done echo path (307ad3c) surfaced BOTH existing cards — board now
+  shows school pickup + Sarah. Money guard also proven live on cloud: "text Mike about the
+  invoice" -> blocked, waits for explicit yes.
+- Verdict: capture never lost the task; first-pass card emission for multi-span lines is the
+  remaining reliability edge. OPEN: consider capture->card consistency check at ingest
+  (if a new open loop was captured this turn, a card must exist or be echoed).
