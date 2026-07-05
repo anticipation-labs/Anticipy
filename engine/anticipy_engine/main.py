@@ -2044,7 +2044,9 @@ async def agent_act(body: AgentActIn) -> dict:
     # a false success. A hard infra error stays a tool failure (not a human-clearable wall).
     agent_finished = bool(res.success)
     if res.error is None and agent_finished and res.result:
-        verdict = await judge(gateway_agent, body.task, {"answer": res.result, "final_url": res.url})
+        verdict = await judge(gateway_agent, body.task,
+                              {"answer": res.result, "final_url": res.url,
+                               "final_text": (res.raw or {}).get("final_text")})
     else:
         verdict = {"success": False, "reason": "agent did not finish or returned no result"}
     task_succeeded = bool(verdict.get("success")) and agent_finished and bool(res.result)

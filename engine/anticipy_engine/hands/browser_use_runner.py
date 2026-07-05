@@ -545,6 +545,16 @@ async def _run(req: dict) -> dict:
             out["steps"] = len(history.urls() or [])
         except Exception:
             out["steps"] = max_steps
+        # DOM READ-BACK: capture the FINAL page's visible text so the judge grades the
+        # claim against the page itself, not the agent's self-report. Never invented;
+        # simply absent when the page is gone.
+        try:
+            _getter = getattr(session, "get_current_page", None)
+            _page = await _getter() if _getter is not None else None
+            if _page is not None:
+                out["final_text"] = (await _page.inner_text("body"))[:20000]
+        except Exception:
+            pass
         # Honest success: the runner only claims success when browser-use
         # itself reports done WITH a non-empty final result. Never invent it.
         is_done = False

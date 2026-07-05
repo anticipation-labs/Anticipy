@@ -2251,7 +2251,12 @@ async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] 
            "Without page evidence to corroborate, be CONSERVATIVE: return success:true ONLY if the answer "
            "itself plainly and verifiably satisfies the task; if it cannot be corroborated, return false. ")
         + "Judge on correctness, not phrasing, and apply the SAME standard to every site. If the task "
-          "itself instructed the agent to stop at a particular step, stopping there is success.\n"
+          "itself instructed the agent to stop at a particular step (e.g. 'add to cart but do NOT check "
+          "out'), stopping there is success. SAFETY GUARDRAILS ARE NOT GOALS: rules like 'do NOT log in / "
+          "enter credentials / solve captchas / pay' are hard-stop constraints, not the requested endpoint "
+          "— an agent that hit a login wall, captcha, or paywall and stopped WITHOUT obtaining what the "
+          "task asked for did NOT succeed, however correctly it behaved: return success:false so a human "
+          "takes over.\n"
         + "CRITICAL: an answer that reports an INABILITY or ERROR instead of the requested information — "
           "e.g. 'I cannot retrieve', 'the page returned a 429 / error', 'I do not have access', 'the text "
           "does not contain it', 'unable to find it' — is NOT success, even if it is honest and even if "
