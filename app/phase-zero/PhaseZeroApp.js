@@ -551,7 +551,89 @@ function SignScreen({ auth, setAuth }) {
   );
 }
 
+// The cloud that runs your Anticipy. Pairing binds THIS Chrome to your own account there, so the
+// helper acts as you and only you — the per-user "hands" the hosted product needs at scale.
+const CLOUD_ENGINE = "https://engine-production-eb43.up.railway.app";
+
 function SetupScreen({ engineState, listenStatus, refreshEngine, refreshListenStatus }) {
+  // Pairing UX (B12): drive the already-built per-user pairing handshake from the setup step.
+  //   idle -> pairing -> sent (helper accepted; wait for it to connect)
+  //                    -> fallback (helper not reachable on this page; show the code to paste)
+  //                    -> disabled (per-user hands flag off; mint 404s — soft, never a crash)
+  //                    -> error   (something transient; invite a retry)
+  const [pairState, setPairState] = useState("idle");
+  const [pairCode, setPairCode] = useState("");
+  const paired = engineState.extensionConnected;
+
+  // Keep the latest refreshEngine without re-arming the poll every parent render.
+  const refreshRef = useRef(refreshEngine);
+  refreshRef.current = refreshEngine;
+
+  // While we're waiting for the just-paired Chrome to phone home, quietly re-check readiness so
+  // "Chrome paired ✓" appears on its own — no "Check again" tap required. Stops once connected.
+  useEffect(() => {
+    if (paired) return undefined;
+    if (pairState !== "sent" && pairState !== "fallback") return undefined;
+    const timer = setInterval(() => { try { refreshRef.current?.(); } catch { /* noop */ } }, 2500);
+    return () => clearInterval(timer);
+  }, [pairState, paired]);
+
+  async function pairThisChrome() {
+    setPairState("pairing");
+    // The mint proxy binds the code to the signed-in caller via their Supabase bearer, so send it.
+    let token = "";
+    try {
+      const client = createBrowserSupabaseClient();
+      if (client) {
+        const { data } = await client.auth.getSession();
+        token = data?.session?.access_token || "";
+      }
+    } catch { /* not signed in / local — the engine falls back to owner, or 404s below */ }
+
+    let code = "";
+    try {
+      const res = await fetch("/api/pairing/mint", {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.status === 404) { setPairState("disabled"); return; } // per-user hands not switched on
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.code) { setPairState("error"); return; }
+      code = data.code;
+    } catch {
+      setPairState("error");
+      return;
+    }
+    setPairCode(code);
+
+    // content.js drops a hidden marker carrying the helper's id when it's loaded on this page.
+    let extId = "";
+    try { extId = document.getElementById("anticipy-ext-id")?.dataset?.id || ""; } catch { extId = ""; }
+    const runtime = (typeof window !== "undefined" && window.chrome) ? window.chrome.runtime : null;
+
+    if (extId && runtime?.sendMessage) {
+      // Hand the signed code straight to the loaded helper — it claims it and binds to your account.
+      try {
+        runtime.sendMessage(
+          extId,
+          { type: "pair_device", signed: true, pairing_code: code, engine_http: CLOUD_ENGINE },
+          (response) => {
+            const failed = runtime.lastError || !response || !response.ok;
+            if (failed) { setPairState("fallback"); return; }
+            setPairState("sent");
+            try { refreshRef.current?.(); } catch { /* noop */ }
+          },
+        );
+      } catch {
+        setPairState("fallback");
+      }
+    } else {
+      // Helper isn't reachable on this page — show the code so it can be pasted into the helper.
+      setPairState("fallback");
+    }
+  }
+
   return (
     <div className="pz-scene">
       <section className="pz-stage-hero pz-stage-minimal">
@@ -559,10 +641,10 @@ function SetupScreen({ engineState, listenStatus, refreshEngine, refreshListenSt
         <h2>Let&rsquo;s get you set up.</h2>
         <p>Two quick things, then I can start.</p>
         <div className="pz-readiness-list">
-          <ReadinessRow label="Browser helper" ok={engineState.extensionConnected} text={engineState.extensionConnected ? "Connected" : "Not connected yet"} />
+          <ReadinessRow label="Browser helper" ok={paired} text={paired ? "Connected" : "Not connected yet"} />
           <ReadinessRow label="Listening" ok={listenStatus.status !== "unavailable"} text={humanStatus(listenStatus.status || "read_only")} />
         </div>
-        {!engineState.extensionConnected ? (
+        {!paired ? (
           <div className="pz-setup-helper">
             <p className="pz-setup-helper-lead">
               Add the browser helper — it lets me work inside the Chrome you already use.
@@ -578,8 +660,43 @@ function SetupScreen({ engineState, listenStatus, refreshEngine, refreshListenSt
               <li>Click &ldquo;Load unpacked&rdquo; and pick the unzipped folder.</li>
               <li>The Anticipy icon appears in your toolbar.</li>
             </ol>
+            <div className="pz-pair-block">
+              <p className="pz-setup-helper-lead">
+                Loaded it already? Link this Chrome to your account so I work as you &mdash; and only you.
+              </p>
+              <button
+                className="pz-button primary"
+                onClick={pairThisChrome}
+                disabled={pairState === "pairing"}
+                type="button"
+              >
+                {pairState === "pairing" ? "Linking…" : "Pair this Chrome to your account"}
+              </button>
+              {pairState === "sent" ? (
+                <p className="pz-pair-note">Linking this Chrome to you&hellip; this only takes a moment.</p>
+              ) : null}
+              {pairState === "disabled" ? (
+                <p className="pz-pair-note">Account linking isn&rsquo;t switched on yet &mdash; the steps above have you set for now.</p>
+              ) : null}
+              {pairState === "error" ? (
+                <p className="pz-pair-note">That didn&rsquo;t go through. Give it another try in a moment.</p>
+              ) : null}
+              {pairState === "fallback" ? (
+                <div className="pz-pair-fallback">
+                  <p className="pz-pair-note">
+                    Almost there. Open the Anticipy helper in your toolbar and paste these two lines:
+                  </p>
+                  <span className="pz-pair-label">Your code</span>
+                  <code className="pz-pair-code">{pairCode}</code>
+                  <span className="pz-pair-label">Where to connect</span>
+                  <code className="pz-pair-code">{CLOUD_ENGINE}</code>
+                </div>
+              ) : null}
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <p className="pz-pair-done">Chrome paired &#10003;</p>
+        )}
         <div className="pz-actions pz-actions-simple pz-actions-in-card">
           <a className="pz-button primary pz-button-xl" href="/onboarding/2">Continue</a>
           <button className="pz-button ghost" onClick={() => { refreshEngine(); refreshListenStatus(); }} type="button">Check again</button>
