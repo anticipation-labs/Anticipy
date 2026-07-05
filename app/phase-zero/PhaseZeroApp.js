@@ -2451,13 +2451,20 @@ export default function PhaseZeroApp({ screen = "board" }) {
   // Turn the cards the engine just made into the assistant's spoken replies — one warm bubble per
   // actionable card. A vent / ignored line makes NO card and therefore NO bubble: silence is the
   // correct answer to a vent (the cardinal-sin rule, surfaced as calm quiet).
+  //
+  // Idempotent by card id: the dedupe runs INSIDE the state updater against the LIVE thread (not a
+  // closed-over snapshot), so this can be called from every path that learns about a card — the
+  // ingest response, the authoritative board reconcile after a send, and the on-load seed — without
+  // ever voicing the same card twice or dropping one to a stale-closure race. A card already voiced
+  // (its id is on an assistant bubble) is skipped; a brand-new card is appended.
   function appendCardReplies(rawCards) {
-    const bubbles = (Array.isArray(rawCards) ? rawCards : [])
+    const candidates = (Array.isArray(rawCards) ? rawCards : [])
       .filter((card) => card && card.disposition !== "ignore" && card.status !== "ignored")
       .map(normalizeEngineCard)
       .map((card) => {
         const reply = assistantReplyForCard(card);
         return {
+          id: threadId(),
           role: "assistant",
           text: reply.text,
           tone: reply.tone,
@@ -2466,7 +2473,22 @@ export default function PhaseZeroApp({ screen = "board" }) {
           askId: card.askId,
         };
       });
-    appendMessages(bubbles);
+    if (!candidates.length) return;
+    setThread((current) => {
+      // Dedupe against the LIVE thread (not a closed-over snapshot) so calling this from every path
+      // that learns of a card — ingest response, board reconcile, on-load seed — is race-free and
+      // never voices the same card twice. Also collapse same-card duplicates within this batch.
+      const voiced = new Set(
+        current.filter((m) => m.role === "assistant" && m.cardId).map((m) => m.cardId),
+      );
+      const fresh = [];
+      for (const bubble of candidates) {
+        if (bubble.cardId && voiced.has(bubble.cardId)) continue;
+        if (bubble.cardId) voiced.add(bubble.cardId);
+        fresh.push(bubble);
+      }
+      return fresh.length ? [...current, ...fresh] : current;
+    });
   }
 
   // The most recent assistant bubble still waiting on a yes/no — what a typed "yes"/"no" resolves.
@@ -2721,12 +2743,20 @@ export default function PhaseZeroApp({ screen = "board" }) {
     }
   }
 
+  // Returns the freshly-loaded cards (not just setState) so callers can reconcile against the
+  // AUTHORITATIVE board — the durable record is the source of truth, and a send's live reply is
+  // driven off it, not only off the ingest response (which can race-return an empty cards list
+  // even though the card was persisted). Null on a failed load so a caller can tell "no board"
+  // apart from "board is genuinely empty".
   async function loadCards() {
     try {
       const data = await jsonFetch("/api/owner/cards?limit=50");
-      setEngineCards(Array.isArray(data.cards) ? data.cards : []);
+      const list = Array.isArray(data.cards) ? data.cards : [];
+      setEngineCards(list);
+      return list;
     } catch {
       setEngineCards([]);
+      return null;
     }
   }
 
@@ -2816,25 +2846,42 @@ export default function PhaseZeroApp({ screen = "board" }) {
     setIngestBusy(true);
     setIngestMessage("");
     appendUserLine(typed);
+    // Snapshot the cards already on the board so the reconcile below can tell a card THIS send just
+    // created apart from the ones already there (returning users carry many). id OR ask_id — a card
+    // may key on either.
+    const priorIds = new Set((engineCards || []).map((c) => c && (c.id || c.ask_id)).filter(Boolean));
     try {
       const data = await jsonFetch("/api/owner/ingest", {
         method: "POST",
         body: JSON.stringify({
-          text: intakeText,
+          text: typed,
           source: "phase_zero_text",
           execute_actions: true,
           meta: { ui: "phase_zero" },
         }),
       });
-      setEngineCards(Array.isArray(data.cards) ? data.cards : []);
       setIngestMessage("");
       setIntakeText("");
-      appendCardReplies(data.cards);
-      await loadCards();
-      await loadGatewayEvents();
+      // 1) Voice whatever the ingest response returned (deduped by card id inside appendCardReplies).
+      const responseCards = Array.isArray(data.cards) ? data.cards : [];
+      if (responseCards.length) setEngineCards(responseCards);
+      appendCardReplies(responseCards);
+      // 2) AUTHORITATIVE RECONCILE — the durable board is the source of truth, so drive the live reply
+      // off it too, not only off the ingest response. The response's `cards` list can race-return
+      // empty even when the card WAS persisted (the exact "no bubble live, but it's there after a
+      // reload" bug). Reload the board and voice any card that appeared with THIS send but wasn't in
+      // the response — scoped to genuinely new ids so a returning user's older cards are never
+      // re-voiced, and deduped so a card already voiced in step 1 is never doubled.
+      const board = await loadCards();
+      const newlyAppeared = (Array.isArray(board) ? board : []).filter((c) => {
+        const id = c && (c.id || c.ask_id);
+        return id && !priorIds.has(id);
+      });
+      appendCardReplies(newlyAppeared);
     } catch (_error) {
       // Never leave the thread on dead silence, and never leak a raw "Request failed: N". Degrade
-      // warmly right in the conversation, the same way runWebTask/runDerive already do.
+      // warmly right in the conversation, the same way runWebTask/runDerive already do. Only the
+      // ingest fetch itself can land here — loadCards/loadGatewayEvents each swallow their own errors.
       setIngestMessage("");
       appendMessages({
         role: "assistant",
@@ -2844,6 +2891,9 @@ export default function PhaseZeroApp({ screen = "board" }) {
     } finally {
       setIngestBusy(false);
     }
+    // Telemetry refresh is best-effort and self-swallowing; kept out of the try so a gateway hiccup
+    // can never masquerade as an ingest failure once the reply has already landed.
+    await loadGatewayEvents();
   }
 
   async function uploadFile() {
@@ -2851,18 +2901,26 @@ export default function PhaseZeroApp({ screen = "board" }) {
     setIngestBusy(true);
     setIngestMessage("");
     appendUserLine(`Sent a recording to read${selectedFile?.name ? `: ${selectedFile.name}` : ""}.`);
+    const priorIds = new Set((engineCards || []).map((c) => c && (c.id || c.ask_id)).filter(Boolean));
     try {
       const form = new FormData();
       form.append("file", selectedFile);
       form.append("source", "phase_zero_upload");
       form.append("execute_actions", "true");
       const data = await jsonFetch("/api/owner/upload", { method: "POST", body: form });
-      setEngineCards(Array.isArray(data.cards) ? data.cards : []);
       setIngestMessage("");
       setSelectedFile(null);
-      appendCardReplies(data.cards);
-      await loadCards();
-      await loadGatewayEvents();
+      // Same authoritative-reconcile as the typed send: voice the response cards, then voice any card
+      // that appeared on the durable board with this upload but wasn't in the response (deduped).
+      const responseCards = Array.isArray(data.cards) ? data.cards : [];
+      if (responseCards.length) setEngineCards(responseCards);
+      appendCardReplies(responseCards);
+      const board = await loadCards();
+      const newlyAppeared = (Array.isArray(board) ? board : []).filter((c) => {
+        const id = c && (c.id || c.ask_id);
+        return id && !priorIds.has(id);
+      });
+      appendCardReplies(newlyAppeared);
     } catch (_error) {
       // Warm degradation instead of dead silence or a raw "Request failed: N".
       setIngestMessage("");
@@ -2874,6 +2932,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
     } finally {
       setIngestBusy(false);
     }
+    await loadGatewayEvents();
   }
 
   // "Do it on the web": POST the task to /api/browser/run -> engine /agent/run (the connected
@@ -3082,10 +3141,23 @@ export default function PhaseZeroApp({ screen = "board" }) {
         if (msg.type === "processing") setListenState("processing");
         if (msg.type === "ingest_result") {
           const result = msg.result || {};
-          setEngineCards(Array.isArray(result.cards) ? result.cards : []);
-          setListenState(result.cards?.length ? "cards_created" : "no_task_created");
-          appendCardReplies(result.cards);
-          loadCards();
+          const responseCards = Array.isArray(result.cards) ? result.cards : [];
+          const priorIds = new Set((engineCards || []).map((c) => c && (c.id || c.ask_id)).filter(Boolean));
+          if (responseCards.length) setEngineCards(responseCards);
+          setListenState(responseCards.length ? "cards_created" : "no_task_created");
+          // Voice the response cards, then reconcile off the authoritative board — same guard the
+          // typed/upload sends use, so a race-empty voice ingest still lands the reply live (deduped).
+          appendCardReplies(responseCards);
+          loadCards().then((board) => {
+            const newlyAppeared = (Array.isArray(board) ? board : []).filter((c) => {
+              const id = c && (c.id || c.ask_id);
+              return id && !priorIds.has(id);
+            });
+            if (newlyAppeared.length) {
+              appendCardReplies(newlyAppeared);
+              setListenState((cur) => (cur === "no_task_created" ? "cards_created" : cur));
+            }
+          });
           loadGatewayEvents();
         }
         if (msg.type === "ingest_error" || msg.type === "error") {
