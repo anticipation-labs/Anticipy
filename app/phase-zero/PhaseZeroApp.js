@@ -47,6 +47,18 @@ function stripDot(text) {
 //   blocked/money -> the plan, flagged as needing an explicit yes, with chips
 function assistantReplyForCard(card) {
   const title = stripDot(humanTitle(card.title)) || "I caught something for you";
+  // Bug-3 (honest failure): a card the engine actually TRIED and could not finish — its status is a
+  // terminal non-success and the board shows "Failed"/"Stopped" — must NEVER be narrated as "I'm on
+  // it." These carry risk "do", so without this guard they fell straight through to the cheerful
+  // on-it line below and lied about an action that errored. We report the snag honestly instead.
+  // (A money/irreversible ask is disposition "blocked" with status "waiting" here — never "failed"
+  // /"stopped" — so the money-yes branch below is left completely untouched.)
+  if (card.status === "failed") {
+    return { text: `I hit a snag on ${title} — want me to try again?`, chips: false, tone: "blocked" };
+  }
+  if (card.status === "stopped") {
+    return { text: `I've stopped ${title}. Tell me if you want me to pick it back up.`, chips: false, tone: "do" };
+  }
   if (card.risk === "blocked") {
     return {
       text: `${title}. That one can move money or can't easily be undone, so I'll wait for your yes — want me to go ahead?`,
@@ -1440,6 +1452,10 @@ function CardBoard({ cards, comments, textMirror, sortMode, setSortMode, resolve
   const [exiting, setExiting] = useState({});
   const [openId, setOpenId] = useState("");
   const headerRefs = useRef({});
+  // Bug-4: commit() now AWAITS the engine resolve before retiring, so a rapid double-tap could fire
+  // two resolves in the await window (the exiting[] guard hasn't been set yet). This tracks the ids
+  // mid-commit so a second tap is ignored until the first settles.
+  const committingRef = useRef(new Set());
 
   const sorted = useMemo(() => {
     const copy = [...cards];
@@ -1500,19 +1516,41 @@ function CardBoard({ cards, comments, textMirror, sortMode, setSortMode, resolve
     return resolveCard(card, false);
   }
 
-  // One commit path for buttons and keys. The mutation runs for real; the row then eases out
-  // (scale .98 + fade + collapse, never a fling) and the engine reload behind it is the truth.
-  function commit(card, kind) {
-    if (exiting[card.id]) return;
-    if (kind === "autonomy") {
-      const ok = typeof window !== "undefined" && window.confirm("Let me do things like this without asking first?");
-      if (!ok) return;
-      try { allowAutonomy(card); } catch { /* reload behind is the truth */ }
-    } else if (kind === "confirm") {
-      try { resolveCard(card, true); } catch { /* reload behind is the truth */ }
-    } else {
-      try { denyAction(card); } catch { /* reload behind is the truth */ }
+  // One commit path for buttons and keys. Bug-4: the row must retire ONLY when the engine mutation
+  // genuinely landed. The old code fired the resolve WITHOUT awaiting and always retired + animated
+  // out — so a failed /api/resolve silently dismissed the card as if it had gone through. Now we
+  // await the outcome and, on a real failure, LEAVE the card in place (resolveCard has already
+  // flipped its text-mirror to "failed", so the row honestly shows it didn't go through) and let the
+  // poll re-sync. Local dismisses (no ask_id "On it" cards, fire-and-forget stops, autonomy) still
+  // retire, since there is no engine resolve that can fail for them.
+  async function commit(card, kind) {
+    if (exiting[card.id] || committingRef.current.has(card.id)) return;
+    committingRef.current.add(card.id);
+    let retireOk = true;
+    try {
+      if (kind === "autonomy") {
+        const ok = typeof window !== "undefined" && window.confirm("Let me do things like this without asking first?");
+        if (!ok) return;
+        try { await allowAutonomy(card); } catch { /* reload behind is the truth */ }
+      } else if (kind === "confirm") {
+        // "Go ahead" only renders on a card with a real ask_id, so this ALWAYS drives a live
+        // /api/resolve — retire only if that resolve actually returned success.
+        try { retireOk = await resolveCard(card, true); }
+        catch { retireOk = false; }
+      } else {
+        // Deny: a card WITH an ask_id declines it for real (retire only on a genuine decline); a
+        // no-ask "On it"/stop card is a local dismiss / fire-and-forget stop, which always retires.
+        try {
+          const result = await denyAction(card);
+          retireOk = card.askId ? Boolean(result) : true;
+        } catch {
+          retireOk = !card.askId;
+        }
+      }
+    } finally {
+      committingRef.current.delete(card.id);
     }
+    if (!retireOk) return;
     const exitKind = kind === "deny" ? "deny" : "confirm";
     setExiting((current) => ({ ...current, [card.id]: exitKind }));
     window.setTimeout(() => retire(card.id), 260);
@@ -2594,8 +2632,14 @@ export default function PhaseZeroApp({ screen = "board" }) {
   useEffect(() => {
     if (seededRef.current || thread.length) return;
     if (!engineCards.length) return;
+    // Bug-5: never re-seed an ask that's already been answered. A declined ask keeps its disposition
+    // ("ask"/"blocked") even after you say "Not now" — only its STATUS goes terminal ("declined") —
+    // so the disposition test alone re-added it on every reload. Excluding terminal statuses up front
+    // means a declined (or done/stopped/failed) ask stays gone once resolved, in-band or out.
+    const TERMINAL_STATUS = ["done", "completed", "stopped", "failed", "declined", "ignored"];
     const waiting = engineCards.filter((card) => card
       && card.disposition !== "ignore"
+      && !TERMINAL_STATUS.includes(card.status)
       && (card.disposition === "ask" || card.disposition === "blocked" || card.status === "waiting" || card.status === "blocked"));
     if (!waiting.length) return;
     seededRef.current = true;
@@ -2622,6 +2666,24 @@ export default function PhaseZeroApp({ screen = "board" }) {
   useEffect(() => {
     refreshAll();
     return () => stopBrowserListening();
+  }, []);
+
+  // Bug-2: keep the board LIVE. refreshAll ran only once on mount, so a card the engine raised
+  // proactively never appeared until a manual reload, and an ask resolved out-of-band (e.g. by SMS)
+  // kept showing its Go ahead / Not now chips forever — the settled-card check drives off the cards
+  // prop, which was frozen at mount. Poll the authoritative engine every ~16s (skipped while the tab
+  // is hidden, guarded against overlap, cleared on unmount) so proactively-raised cards show up and
+  // terminal statuses re-sync so already-answered asks stop offering a reaction. Pure reads only.
+  useEffect(() => {
+    let inFlight = false;
+    const tick = async () => {
+      if (inFlight) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      inFlight = true;
+      try { await refreshAll(); } finally { inFlight = false; }
+    };
+    const id = setInterval(tick, 16000);
+    return () => clearInterval(id);
   }, []);
 
   async function refreshAll() {
