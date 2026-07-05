@@ -273,7 +273,7 @@ NEEDS OMAR (can't finish unattended, queued for morning — NOT faked):
 Fresh Chrome + extension from hoe/build source, against live Vercel + Railway:
 - One-click pairing: setup page -> "Chrome paired ✓" (extension WS bound to cloud engine).
 - Onboarding scan drove real tabs in the stranger Chrome; honest per-site signed-in vs needs-sign-in.
-  (wart: "extension did not confirm posting" status line — results surfaced anyway.)
+  (wart: "extension did not confirm posting" — FIXED 5685a5b: cloud auth was rejecting the extension's /onboard/discover POST (401, no credential); the extension now authenticates callbacks with its per-user pairing token and the engine verifies it against that user's core. PROOF 2026-07-05: live cloud rescan through the real app now reads "scan completed in your Chrome; results were posted to /onboard/discover"; unauthenticated + wrong-token POSTs still 401 (fail closed); suite 122/7 fail-set unchanged.)
 - Messy day line -> Sarah email card approval-gated; vent silent. (kids-pickup card not visible in day view — OPEN.)
 - "Ask me to do something online" -> hands opened real HN tab, answered "Organic Maps" — verified
   independently via curl against the live front page. Recording + report with Omar.
