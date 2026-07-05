@@ -10,7 +10,10 @@
 // gaussianDelay / typingInterCharDelays as globals used by cdpClick/cdpType below.
 importScripts("humanlike.js");
 
-const DEFAULT_ENGINE_HTTP = "http://127.0.0.1:8787";
+// Default target is the hosted CLOUD engine so a freshly-downloaded extension connects out of the
+// box. Still overridable at runtime via chrome.storage `anticipy.engine_http` (see engineHttp()) and
+// the popup's Engine URL field. Local-dev fallback: "http://127.0.0.1:8787".
+const DEFAULT_ENGINE_HTTP = "https://engine-production-eb43.up.railway.app";
 const PING_MS = 20000;
 
 // DEMO-ONLY (temporary, not for production): when true the agent's working tab is brought to the
