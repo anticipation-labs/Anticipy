@@ -149,7 +149,10 @@ _DIRECTED_THREAT = re.compile(
 # silences the task. Ambiguous "hold on" (filler vs cancel) is deliberately excluded.
 _RETRACTION = re.compile(
     r"\b(?:never ?mind|scratch that|forget it|hold off|on second thought|"
-    r"nix that|cancel that|disregard that|belay that|we might cancel|might just cancel)\b",
+    # "cancel that" is only a RETRACTION when bare ("...actually, cancel that.") — followed by an
+    # object noun it is a real task ("cancel that Planet Fitness membership", "cancel that order").
+    r"nix that|cancel that(?!\s+(?!one\b|please\b|actually\b|though\b|and\b|for now\b)\w)|"
+    r"disregard that|belay that|we might cancel|might just cancel)\b",
     re.I,
 )
 # ---------------------------------------------------------------------------
