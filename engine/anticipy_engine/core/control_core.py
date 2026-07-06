@@ -2943,13 +2943,17 @@ class ControlCore:
                     cards.append(_open)
                     _echo_ids.add(_open.id)
         for _line in observed:
-            if not _TASK_UPDATE_MARKER.search(getattr(_line, "text", "") or ""):
+            _lt = " ".join(filter(None, [getattr(_line, "text", "") or "",
+                                         getattr(_line, "original_text", "") or ""]))
+            if not _TASK_UPDATE_MARKER.search(_lt):
+                self.glassbox.log("update_supersede_skip", {"line": _lt[:160]})
                 continue
             _new = next((c for c in cards
                          if getattr(c, "source_text", "") == _line.text
                          or len({w for w in re.findall(r"[a-z0-9]+", (getattr(c, 'source_text', '') or getattr(c, 'title', '') or '').lower()) if len(w) > 2}
                                 & {w for w in re.findall(r"[a-z0-9]+", _line.text.lower()) if len(w) > 2}) >= 2), None)
             if _new is None:
+                self.glassbox.log("update_supersede_no_new", {"line": _lt[:160]})
                 continue
             _span = " ".join(filter(None, [
                 _line.text, getattr(_line, "original_text", "") or "",
@@ -2959,6 +2963,8 @@ class ControlCore:
             if _old is not None and _old.id != _new.id:
                 self._complete_owner_card(_old.id, state="superseded",
                                           reason="revised_by_newer_card", spoken=_line.text)
+            else:
+                self.glassbox.log("update_supersede_no_old", {"line": _lt[:160]})
 
         self.glassbox.log(
             "owner_ingest",
