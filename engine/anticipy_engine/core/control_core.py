@@ -2927,7 +2927,10 @@ class ControlCore:
                 if _open.id not in _echo_ids:
                     _open.status = "done"
                     _ex = getattr(_open, "execution", None)
-                    if _ex is not None:
+                    if isinstance(_ex, dict):
+                        _ex["goal_state"] = "done"
+                        _ex["ask_id"] = None
+                    elif _ex is not None:
                         _ex.goal_state = "done"
                         _ex.ask_id = None
                     cards.append(_open)
