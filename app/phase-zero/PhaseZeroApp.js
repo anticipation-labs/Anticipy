@@ -59,6 +59,13 @@ function assistantReplyForCard(card) {
   if (card.status === "stopped") {
     return { text: `I've stopped ${title}. Tell me if you want me to pick it back up.`, chips: false, tone: "do" };
   }
+  // The owner said this one's finished ("I sent it already") — acknowledge the close, never re-nag.
+  if (card.status === "done" || card.status === "completed") {
+    return { text: `Nice — I've marked that one done: ${title}.`, chips: false, tone: "do" };
+  }
+  if (card.status === "superseded") {
+    return { text: `Updated — I've swapped out the old version of ${title}.`, chips: false, tone: "do" };
+  }
   if (card.risk === "blocked") {
     return {
       text: `${title}. That one can move money or can't easily be undone, so I'll wait for your yes — want me to go ahead?`,

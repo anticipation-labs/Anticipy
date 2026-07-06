@@ -92,6 +92,30 @@ _QUESTION_TO_OTHER = re.compile(
     r"\b(did|didn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|were|weren'?t|was|wasn'?t)\s+"
     r"(you|u|ya|anyone|someone|anybody|somebody)\b",
     re.I)
+# A first-person COMPLETION CLAIM — "I sent mom the photos already, that's done", "I paid it,
+# handled" — closes the matching still-open card instead of echoing it or opening a new one.
+# Requires a past-tense first-person verb PLUS an explicit done marker (or a bare "that's done/
+# handled") so a mere status mention ("I called the dentist and left a voicemail") never closes.
+_COMPLETION_CLAIM = re.compile(
+    r"(?:\bi (?:already )?(?:sent|did|called|paid|booked|emailed|texted|finished|handled|"
+    r"cancell?ed|mailed|submitted|returned|signed|picked up|dropped off|took care of)\b"
+    r".{0,80}?(?:\balready\b|\bthat'?s (?:done|handled|sorted)\b|\bit'?s done\b|\ball set\b|\bdone\b))"
+    r"|(?:\b(?:that'?s|it'?s) (?:done|handled|sorted|taken care of)\b)",
+    re.I | re.S)
+# A LINGERING OBLIGATION voiced as self-reproach — "I keep forgetting to cancel the gym",
+# "I've been meaning to renew my plates", "I never got around to booking it" — is a REAL task
+# a person expects caught, but the phrasing reads as narration and gets dropped. Surfaced as a
+# confirm-first ask (never auto-act), only when no surviving line already covers it.
+_LINGERING_OBLIGATION = re.compile(
+    r"\bi(?:'?ve)?\s+(?:keep\s+(?:forgetting|meaning)|been\s+meaning|"
+    r"never\s+got\s+around|really\s+need)\s+to\s+\w+",
+    re.I)
+# An UPDATE to an existing task — "make it Thursday", "move it to next week", "actually
+# Thursday works better" — should REVISE the tracked card, never sit beside it as a duplicate.
+_TASK_UPDATE_MARKER = re.compile(
+    r"\b(?:make (?:it|that)|move (?:it|that)|change (?:it|that) to|push (?:it|that) to|"
+    r"reschedule|works better|instead of (?:that|tomorrow|today)|actually .{0,40}\b(?:better|instead)\b)",
+    re.I)
 # A QUESTION/REQUEST ADDRESSED TO A NAMED THIRD PARTY — "Jordan, can you pull the freight numbers?",
 # "Mom, could you grab milk?", "Sam can you take the on-call handoff?" — is THEIR task, never the owner's.
 # It opens with a proper-name vocative + a present/future request aux ("can/could/would/will/do/are you").
@@ -1444,6 +1468,35 @@ class ControlCore:
             execution={"decision": "act", "goal_id": card_id, "ask_id": None,
                        "goal_state": state, "opt_out": True})
 
+    def _complete_owner_card(self, card_id: str, state: str = "done",
+                             reason: str = "", spoken: str = "") -> bool:
+        """Flip a durable owner card record (and its synced loop) to a terminal closed state —
+        'done' when the owner said the task is finished, 'superseded' when a newer card revises
+        it. Mirrors stop_owner_card's record surgery so the board and the trigger ledger agree."""
+        path = self.data_dir / "owner_cards" / f"{card_id}.json"
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            record = None
+        if not isinstance(record, dict):
+            return False
+        record["state"] = state
+        if isinstance(record.get("owner_card"), dict):
+            record["owner_card"]["status"] = state
+            ex = record["owner_card"].get("execution")
+            if isinstance(ex, dict):
+                ex["goal_state"] = state
+                ex["ask_id"] = None
+        try:
+            path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+        except Exception:
+            return False
+        self._sync_owner_loop_status(card_id, state)
+        self.glassbox.log("owner_card_closed",
+                          {"card_id": card_id, "state": state, "reason": reason,
+                           "spoken": (spoken or "")[:160]})
+        return True
+
     def stop_owner_card(self, card_id: str) -> dict:
         """STOP control for an AUTO_DO_WITH_OPT_OUT chore: the owner said 'stop'. Marks the pending
         opt-out stopped (so any in-flight/queued work halts) and flips the durable card record to
@@ -2460,12 +2513,17 @@ class ControlCore:
             # A repeat mention of a tracked task reads as "already_done" to the brain because the
             # open loop sits in its memory context — but if that loop is STILL OPEN, silence is
             # wrong: the owner should get the existing card back ("already on it"), never nothing.
+            # A first-person completion CLAIM ("I sent mom the photos already, that's done") is
+            # the owner CLOSING the loop, not re-mentioning it — route it to the closure pass
+            # below instead of the already-on-it echo.
             self._already_open_spans = [
-                (getattr(d, "evidence_span", "") or getattr(d, "task_text", "") or "").strip()
-                for d in (decision_result.decisions or [])
-                if getattr(d, "decision", None) == "ignore"
-                and getattr(d, "realness", "") in {"already_done", "real", "ambiguous",
-                                                   "physical_only", "status_question"}
+                span for span in (
+                    (getattr(d, "evidence_span", "") or getattr(d, "task_text", "") or "").strip()
+                    for d in (decision_result.decisions or [])
+                    if getattr(d, "decision", None) == "ignore"
+                    and getattr(d, "realness", "") in {"already_done", "real", "ambiguous",
+                                                       "physical_only", "status_question"}
+                ) if not _COMPLETION_CLAIM.search(span)
             ]
             # Per-decision drop trace: when a span the owner spoke produces no card, the
             # WHY must be reconstructable from glassbox alone (the summary counters above
@@ -2577,6 +2635,35 @@ class ControlCore:
                     _n = max([getattr(l, "line_no", 0) for l in observed], default=0) + 1
                     observed.append(OwnerObservedLine(line_no=_n, text=_raw))
                     self.glassbox.log("money_backstop_reinjected", {"line": _raw[:160]})
+        # COMPLETION-CLAIM CLOSURE (deterministic, both pipelines): the owner saying a tracked
+        # task IS done — "I sent mom the photos already, that's done" — must CLOSE its card, not
+        # echo it and never re-open it. Collected here from the RAW lines; the closure itself
+        # (flip the durable record + its loop to done) runs after cards are built, where the
+        # still-open record can be looked up.
+        self._completion_claim_lines = [r for r in raw_lines if _COMPLETION_CLAIM.search(r)]
+        if self._completion_claim_lines:
+            _claim_toks = [_mtok(r) for r in self._completion_claim_lines]
+            observed = [l for l in observed
+                        if not any(len(_mtok(l.text) & ct) >= 2 for ct in _claim_toks)]
+        # LINGERING-OBLIGATION BACKSTOP (deterministic, both pipelines): a real task voiced as
+        # self-reproach — "I keep forgetting to cancel that gym membership" — reads as narration
+        # to the model and gets silently dropped. If a raw line carries the lingering shape, is
+        # not a vent-retraction, and no surviving line covers it (>=2 shared tokens), surface it
+        # as a confirm-first ASK. Erring toward a benign ask is the safe direction; dropping the
+        # owner's task is the cardinal 'you keep dropping my tasks' failure.
+        for _raw in raw_lines:
+            if not _LINGERING_OBLIGATION.search(_raw) or _COMPLETION_CLAIM.search(_raw):
+                continue
+            if _is_vent(_raw):
+                continue
+            _rtok = _mtok(_raw)
+            if any(len(_rtok & _mtok(l.text)) >= 2 for l in observed):
+                continue
+            _n = max([getattr(l, "line_no", 0) for l in observed], default=0) + 1
+            _nl = OwnerObservedLine(line_no=_n, text=_raw)
+            _nl.force_ask = True
+            observed.append(_nl)
+            self.glassbox.log("lingering_obligation_rescued", {"line": _raw[:160]})
         # PRESERVE THE NO-BUY BOUND THROUGH THE MOAT (narrow + safe): the owner's explicit "...put it in
         # the cart, DON'T buy it" is a deliberate purchase ceiling that should keep a money-flavored
         # shopping line as a reversible CART-PREP, not the money wall. The moat sometimes rewords the
@@ -2613,6 +2700,19 @@ class ControlCore:
                 source=source,
                 meta={**meta, "owner_ingest": True, "line_no": line.line_no},
             )
+        # MEMORY COMPLETENESS: a raw line the brain ignored for the ACTION path ("My landlord is
+        # named Priya") is still knowledge the owner expects remembered — capture it into the
+        # drawers too. capture() carries its own noise/vent/dedupe gates, so a vent or filler
+        # line never becomes durable memory and an already-captured line never doubles.
+        _kept_norm = {re.sub(r"\s+", " ", (l.text or "").strip().lower()) for l in observed}
+        for _raw in raw_lines:
+            if re.sub(r"\s+", " ", (_raw or "").strip().lower()) in _kept_norm:
+                continue
+            try:
+                self.live_memory.capturer.capture(
+                    _raw, source=source, meta={**meta, "owner_ingest": True, "dropped_line": True})
+            except Exception as _cap_exc:  # pragma: no cover - memory must never break intake
+                self.glassbox.log("raw_line_capture_error", {"error": str(_cap_exc)[:160]})
 
         cards: list[OwnerTaskCard] = []
         ignored = 0
@@ -2813,6 +2913,39 @@ class ControlCore:
                 self.glassbox.log("owner_card_already_open_echo",
                                   {"span": _span[:120], "card_id": _echo.id})
 
+        # COMPLETION-CLAIM CLOSURE: the owner said a tracked task IS done ("I sent mom the photos
+        # already, that's done") — close the matching still-open card + its loop, and hand the
+        # closed card back so the surface can acknowledge instead of going silent or re-nagging.
+        # UPDATE-SUPERSEDE: a card born from an UPDATE line ("make it Thursday") replaces the
+        # older open card it revises — the old one flips to superseded, never a duplicate pair.
+        for _claim in getattr(self, "_completion_claim_lines", []) or []:
+            _open = self._open_card_for_text(_claim)
+            if _open is None:
+                self.glassbox.log("completion_claim_no_match", {"line": _claim[:160]})
+                continue
+            if self._complete_owner_card(_open.id, reason="owner_said_done", spoken=_claim):
+                if _open.id not in _echo_ids:
+                    _open.status = "done"
+                    _ex = getattr(_open, "execution", None)
+                    if _ex is not None:
+                        _ex.goal_state = "done"
+                        _ex.ask_id = None
+                    cards.append(_open)
+                    _echo_ids.add(_open.id)
+        for _line in observed:
+            if not _TASK_UPDATE_MARKER.search(getattr(_line, "text", "") or ""):
+                continue
+            _new = next((c for c in cards
+                         if getattr(c, "source_text", "") == _line.text
+                         or len({w for w in re.findall(r"[a-z0-9]+", (getattr(c, 'source_text', '') or getattr(c, 'title', '') or '').lower()) if len(w) > 2}
+                                & {w for w in re.findall(r"[a-z0-9]+", _line.text.lower()) if len(w) > 2}) >= 2), None)
+            if _new is None:
+                continue
+            _old = self._open_card_for_text(_line.text, exclude_id=getattr(_new, "id", ""))
+            if _old is not None and _old.id != _new.id:
+                self._complete_owner_card(_old.id, state="superseded",
+                                          reason="revised_by_newer_card", spoken=_line.text)
+
         self.glassbox.log(
             "owner_ingest",
             {"source": source, "lines": len(observed), "cards": len(cards),
@@ -2863,6 +2996,10 @@ class ControlCore:
             # claiming a verified 'done', so it is exempt (flipping it back to an ask is the exact
             # approval-machine bug the autonomy law forbids).
             if (c.get("execution") or {}).get("opt_out"):
+                continue
+            # A card the OWNER just closed ("I sent it already, that's done") is done on their
+            # say-so — it is their own task, not the agent attesting to its own work.
+            if c.get("status") in ("done", "superseded", "stopped", "declined"):
                 continue
             if (c.get("execution") or {}).get("decision") == "act" and not c.get("proof"):
                 c["disposition"] = "ask"
@@ -3102,7 +3239,7 @@ class ControlCore:
         record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
         return True
 
-    def _open_card_for_text(self, span: str) -> OwnerTaskCard | None:
+    def _open_card_for_text(self, span: str, exclude_id: str = "") -> OwnerTaskCard | None:
         """Newest STILL-OPEN durable card matching a re-mentioned task span (token overlap)."""
         toks = {w for w in re.findall(r"[a-z0-9]+", (span or "").lower()) if len(w) > 2}
         if not toks:
@@ -3117,6 +3254,8 @@ class ControlCore:
             except Exception:
                 continue
             if not isinstance(record, dict):
+                continue
+            if exclude_id and path.stem == exclude_id:
                 continue
             state = str(record.get("state") or "").lower()
             if state not in {"open", "waiting", "pending", "ask"}:
