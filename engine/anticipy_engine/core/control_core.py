@@ -112,6 +112,13 @@ _LINGERING_OBLIGATION = re.compile(
     re.I)
 # An UPDATE to an existing task — "make it Thursday", "move it to next week", "actually
 # Thursday works better" — should REVISE the tracked card, never sit beside it as a duplicate.
+# Long words too generic to anchor a cross-card match on their own ("thing", "tomorrow").
+_GENERIC_ANCHOR_WORDS = {
+    "thing", "things", "stuff", "today", "tomorrow", "tonight", "morning", "evening",
+    "please", "gonna", "going", "really", "actually", "checking", "check", "little",
+    "about", "should", "would", "could", "still", "again", "later", "sometime", "maybe",
+    "appointment", "reminder", "remind", "schedule", "reschedule", "instead", "better",
+}
 _TASK_UPDATE_MARKER = re.compile(
     r"\b(?:make (?:it|that)|move (?:it|that)|change (?:it|that) to|push (?:it|that) to|"
     r"reschedule|works better|instead of (?:that|tomorrow|today)|actually .{0,40}\b(?:better|instead)\b)",
@@ -2944,7 +2951,11 @@ class ControlCore:
                                 & {w for w in re.findall(r"[a-z0-9]+", _line.text.lower()) if len(w) > 2}) >= 2), None)
             if _new is None:
                 continue
-            _old = self._open_card_for_text(_line.text, exclude_id=getattr(_new, "id", ""))
+            _span = " ".join(filter(None, [
+                _line.text, getattr(_line, "original_text", "") or "",
+                getattr(_new, "title", "") or "", getattr(_new, "source_text", "") or ""]))
+            _old = self._open_card_for_text(_span, exclude_id=getattr(_new, "id", ""),
+                                            anchor_ok=True)
             if _old is not None and _old.id != _new.id:
                 self._complete_owner_card(_old.id, state="superseded",
                                           reason="revised_by_newer_card", spoken=_line.text)
@@ -3242,8 +3253,11 @@ class ControlCore:
         record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
         return True
 
-    def _open_card_for_text(self, span: str, exclude_id: str = "") -> OwnerTaskCard | None:
-        """Newest STILL-OPEN durable card matching a re-mentioned task span (token overlap)."""
+    def _open_card_for_text(self, span: str, exclude_id: str = "",
+                            anchor_ok: bool = False) -> OwnerTaskCard | None:
+        """Newest STILL-OPEN durable card matching a re-mentioned task span (token overlap).
+        With anchor_ok, one shared DISTINCTIVE token (a long content word like 'dentist') is
+        enough — an update line often shares only the subject noun with the card it revises."""
         toks = {w for w in re.findall(r"[a-z0-9]+", (span or "").lower()) if len(w) > 2}
         if not toks:
             return None
@@ -3268,7 +3282,10 @@ class ControlCore:
                 continue
             hay = f"{record_card.get('title', '')} {record_card.get('source_text', '')}".lower()
             card_toks = {w for w in re.findall(r"[a-z0-9]+", hay) if len(w) > 2}
-            if len(toks & card_toks) < need:
+            shared = toks & card_toks
+            if len(shared) < need and not (
+                anchor_ok and any(len(w) >= 5 and w not in _GENERIC_ANCHOR_WORDS for w in shared)
+            ):
                 continue
             try:
                 card_data = {**record_card, "status": state}
