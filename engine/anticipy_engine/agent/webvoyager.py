@@ -1912,7 +1912,14 @@ class WebVoyagerAgent:
                     _destd = (urllib.parse.urlparse(_dest if "://" in _dest else "https://" + _dest).hostname or "").split(".")[-2:]
                 except Exception:
                     _wantd, _destd = [], []
-                if _wantd and _destd and _wantd != _destd:
+                # The guard only binds when the task LIVES on the start site. A research task that
+                # starts on a search engine MUST hop to result sites, and a destination whose name
+                # appears in the task itself ("Planet Fitness" -> planetfitness.com) is on-task.
+                _search_start = bool(_wantd) and _wantd[0] in {
+                    "google", "bing", "duckduckgo", "startpage", "ecosia", "yahoo", "brave"}
+                _task_squash = re.sub(r"[^a-z0-9]", "", (task or "").lower())
+                _dest_named = bool(_destd) and len(_destd[0]) >= 4 and _destd[0] in _task_squash
+                if _wantd and _destd and _wantd != _destd and not _search_start and not _dest_named:
                     history.append(f"{step}: navigate OFF-SITE to {_dest[:40]} -> blocked; STAY on the task "
                                    f"site and interact with THIS page (search box / links), do not leave it")
                     sub_stuck += 1
