@@ -3976,7 +3976,8 @@ class ControlCore:
         self.glassbox.log("onboard_deep_scrape", {"source": source, "surfaces": summary, "wrote": counts})
         return {"dossier": doss, "surfaces": summary, "memory_written": counts}
 
-    async def onboard_deep_read_via_hand(self, targets: list, source: str = "hand_deep_read") -> dict:
+    async def onboard_deep_read_via_hand(self, targets: list, source: str = "hand_deep_read",
+                                         scroll_rounds: int = 0) -> dict:
         """ONBOARDING via the LIVE hands (Step 3): for each {url,label}, drive the connected Chrome to
         OPEN the page and READ its real content — the observe primitive returns the page text PLUS the
         visible items/sections (the inbox's emails, the calendar's events, the article's headings) —
@@ -4014,8 +4015,28 @@ class ControlCore:
             # the visible ITEMS/sections the hand opened onto (emails, events, headings, links)
             items = [str(e.get("name")).strip() for e in elements
                      if isinstance(e, dict) and str(e.get("name") or "").strip() and e.get("inView")][:20]
+            # DEEPER layers SCROLL: each round scrolls the page and re-reads, unioning in the
+            # content below the fold (older emails, further events) — a real scroll-through,
+            # not the first screen only. New text/items only; a round that adds nothing stops.
+            seen_text = {text}
+            for _round in range(max(0, int(scroll_rounds))):
+                try:
+                    await self.browser_link.send_browse(new_id(), "act", {"action": "scroll"}, timeout=30.0)
+                    r2 = await self.browser_link.send_browse(new_id(), "observe", {}, timeout=30.0)
+                except Exception:
+                    break
+                o2 = r2.get("output") or {}
+                t2 = (o2.get("text") or "").strip()
+                if not t2 or t2 in seen_text:
+                    break
+                seen_text.add(t2)
+                text = (text + "\n" + t2)
+                items += [str(e.get("name")).strip() for e in (o2.get("elements") or [])
+                          if isinstance(e, dict) and str(e.get("name") or "").strip()
+                          and e.get("inView") and str(e.get("name")).strip() not in items][:10]
             scraped.append({"service": label, "url": url, "signed_in": True,
-                            "extracted": {"text": text[:1800], "notes": items}})
+                            "extracted": {"text": text[:1800 + 1200 * max(0, int(scroll_rounds))],
+                                          "notes": items[:40]}})
             self.glassbox.log("hand_deep_read", {"url": url, "label": label, "chars": len(text),
                                                  "items": len(items), "final_url": o.get("url")})
         return await self.ingest_deep_scrape(scraped, source=source)

@@ -73,6 +73,99 @@ _CONFIDENT = 0.7
 _BUDGET_S = 300.0  # sweep #4: overall wall-clock budget so the loop can never block indefinitely
 
 
+# Hand-driven loop depth: scroll rounds per layer. Layer 1 catalogues the first screen; later
+# layers scroll further through each surface (older mail, further events) before re-synthesizing.
+_HAND_DEPTH = {1: 0, 2: 2, 3: 4, 4: 6}
+
+
+async def run_loop_via_hand(core, targets: list, max_layers: int = MAX_LAYERS) -> dict:
+    """The SAME multi-round get-to-know-you loop, driven through the user's OWN paired Chrome
+    (the extension) instead of a CDP debug browser — the only hands available on the cloud
+    engine. Each layer re-opens the allowed surfaces, scrolls DEEPER (see _HAND_DEPTH),
+    re-synthesizes the dossier, expands into the systems the dossier discovered (consent-gated),
+    and stops when confident / no progress / out of layers / over budget. Honest throughout:
+    a login wall is reported needs_login, never faked."""
+    import time
+    if not targets:
+        return {"ok": False, "reason": "no service allowed yet — approve at least one account first",
+                "layers": [], "done": False, "permissions": core.onboard_permissions.state()}
+    if not getattr(core.browser_link, "connected", False):
+        return {"ok": False, "reason": "no browser extension connected — pair Chrome first",
+                "layers": [], "done": False, "permissions": core.onboard_permissions.state()}
+
+    layers: list = []
+    doss: dict = {}
+    last_conf = -1.0
+    started = time.monotonic()
+    timed_out = False
+    current = [dict(t) for t in targets]
+    bounced: set = set()
+    for layer in range(1, min(max_layers, MAX_LAYERS) + 1):
+        if time.monotonic() - started > _BUDGET_S:
+            timed_out = True
+            break
+        res = await core.onboard_deep_read_via_hand(
+            current, source=f"hand_loop_layer_{layer}", scroll_rounds=_HAND_DEPTH.get(layer, 4))
+        doss = res.get("dossier") or {}
+        conf = float(doss.get("confidence", 0.0) or 0.0)
+        needs_login = [s["key"] for s in (res.get("surfaces") or []) if s.get("status") == "needs_login"]
+        bounced |= set(needs_login)
+        layers.append({
+            "layer": layer,
+            "scraped": [s["key"] for s in (res.get("surfaces") or []) if s.get("status") == "ok"],
+            "needs_login": needs_login,
+            "gaps": doss.get("gaps", []),
+            "confidence": conf,
+            "memory_written": res.get("memory_written"),
+        })
+        core.glassbox.log("onboard_hand_loop_layer", {"layer": layer, "scraped": layers[-1]["scraped"],
+                                                      "needs_login": needs_login, "confidence": conf})
+        if core.onboard_permissions.is_allowed("discovered"):
+            new_surfaces = _discovered_surfaces(doss, [{"host": (urlparse(t.get("url") or "").hostname or "")
+                                                        .lower().removeprefix("www.")} for t in current], bounced)
+            if new_surfaces:
+                current = current + [{"url": s["url"], "label": s["label"]} for s in new_surfaces]
+                layers[-1]["discovered"] = [s["host"] for s in new_surfaces]
+                core.glassbox.log("onboard_hand_loop_expanded", {"layer": layer,
+                                                                 "added": [s["host"] for s in new_surfaces]})
+        if not needs_login and conf >= _CONFIDENT:
+            break
+        if layer > 1 and conf <= last_conf:
+            break
+        last_conf = conf
+
+    final = layers[-1] if layers else {}
+    done = bool(final and not final.get("needs_login") and final.get("confidence", 0) >= _CONFIDENT)
+
+    onboarding_call = None
+    gaps_final = final.get("gaps") or []
+    if _onboard_call_enabled() and gaps_final and not final.get("needs_login"):
+        try:
+            onboarding_call = await core.run_onboarding_call(doss)
+        except Exception as e:
+            onboarding_call = {"ok": False, "initiated": False, "error": str(e)[:180]}
+        core.glassbox.log("onboard_loop_call",
+                          {"initiated": bool((onboarding_call or {}).get("initiated")),
+                           "questions": len((onboarding_call or {}).get("questions") or [])})
+
+    return {
+        "ok": True,
+        "via": "hand",
+        "layers": layers,
+        "done": done,
+        "timed_out": timed_out,
+        "dossier": doss.get("dossier", {}),
+        "confidence": final.get("confidence", 0),
+        "needs_login": final.get("needs_login", []),
+        "gaps": final.get("gaps", []),
+        "onboarding_call": onboarding_call,
+        "permissions": core.onboard_permissions.state(),
+        "confirm_prompt": ("Here's what I learned about you — confirm and we're set."
+                           if done else
+                           "Log into the accounts above in your Chrome and I'll go deeper."),
+    }
+
+
 async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYERS) -> dict:
     import time
     from fastapi.concurrency import run_in_threadpool

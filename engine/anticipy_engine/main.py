@@ -1524,9 +1524,18 @@ class OnboardLoopIn(BaseModel):
 @app.post("/onboard/loop")
 async def onboard_loop(body: OnboardLoopIn) -> dict:
     """The four-layer onboarding loop: guided layer 1 (allow + login), then autonomous deeper passes —
-    scrape ONLY allowed services, rebuild the dossier, report what still needs login + the gaps."""
-    from .onboarding.loop import run_loop
-    return await run_loop(current_core(), body.cdp_url, body.max_layers)
+    scrape ONLY allowed services, rebuild the dossier, report what still needs login + the gaps.
+
+    With no CDP debug browser (the cloud engine), the loop runs through the user's OWN paired
+    Chrome (the extension) instead — same layers, same expansion, same consent gates."""
+    from .onboarding.loop import run_loop, run_loop_via_hand
+    c = current_core()
+    if not body.cdp_url and getattr(c.browser_link, "connected", False):
+        targets = [{"url": url, "label": label}
+                   for key, (label, url) in _DEEP_SCAN_URLS.items()
+                   if c.onboard_permissions.is_allowed(key)]
+        return await run_loop_via_hand(c, targets, body.max_layers)
+    return await run_loop(c, body.cdp_url, body.max_layers)
 
 
 class OnboardCompleteIn(BaseModel):
