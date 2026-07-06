@@ -827,6 +827,7 @@ class ControlCore:
         # silently unpaired every Chrome (403 storm) until the user clicked Pair again.
         try:
             _tok_path = base / "browser_link_token"
+            _tok_path.parent.mkdir(parents=True, exist_ok=True)
             if _tok_path.exists():
                 _saved = _tok_path.read_text().strip()
                 if _saved:
