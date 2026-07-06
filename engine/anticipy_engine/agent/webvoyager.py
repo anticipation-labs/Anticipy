@@ -221,6 +221,9 @@ CHECKOUT_URL_RE = re.compile(
 BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha",
                  "are you a robot", "are you a human", "unusual traffic", "verify you are human",
                  "press & hold", "access denied", "checking your browser",
+                 # Cloudflare interstitial wording (PF et al.) — sparse-page gated like the rest
+                 "verifying you are human", "just a moment", "needs to review the security",
+                 "security of your connection", "security verification", "performance & security by",
                  # datacenter-IP block pages (Allrecipes/People Inc. et al.) — only fire with the
                  # sparse-page gate, so these phrases can't false-positive on real content pages
                  "experiencing an access issue", "access to this page has been denied",
