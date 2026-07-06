@@ -1445,6 +1445,7 @@ class WebVoyagerAgent:
         prev_sig = _sig(out.get("url"), out.get("title"), out.get("elements") or [], out.get("scrollY"), out.get("text"))
         visited[prev_sig] = 1
         progress = "START"
+        walled_domains: set = set()  # result-site domains that showed a bot wall this run
         # Listing pages for a "page through this category" task live UNDER the start URL's directory
         # (…/mystery_3/index.html, …/mystery_3/page-2.html). Individual item pages and the home page do
         # NOT — so the corpus is harvested only from URLs sharing this prefix, which keeps stray clicks
@@ -1499,6 +1500,24 @@ class WebVoyagerAgent:
             # AND a sparse page (few interactive elements) before we give up.
             _n_interactive = len([e for e in (out.get("elements") or []) if e.get("inView")])
             if any(k in text for k in BLOCK_MARKERS) and _n_interactive <= 8:
+                # A research task that started on a search engine has OTHER sources: a bot-walled
+                # result site is not the end of the task. Go back to the results, ban that domain,
+                # and let the model pick a different source. Only after a second walled source (or
+                # when the task lives ON the walled site) does the honest handoff fire.
+                _startd = (urllib.parse.urlparse(start_url if "://" in start_url else "https://" + start_url).hostname or "").split(".")[-2:]
+                _hered = (urllib.parse.urlparse(out.get("url") or "").hostname or "").split(".")[-2:]
+                if (_startd and _startd[0] in {"google", "bing", "duckduckgo", "startpage",
+                                               "ecosia", "yahoo", "brave"}
+                        and _hered and _hered != _startd
+                        and tuple(_hered) not in walled_domains and len(walled_domains) < 2):
+                    walled_domains.add(tuple(_hered))
+                    history.append(f"{step}: {'.'.join(_hered)} is bot-walled -> back to search, trying a different source")
+                    reflection = (f"The site {'.'.join(_hered)} blocks automated visits — do NOT open it "
+                                  f"again. Answer the task from a DIFFERENT source: use the search result "
+                                  f"snippets themselves, or open another result site.")
+                    out, shot = await self._observe_ready(start_url)
+                    self._cur_shot = shot
+                    continue
                 return await self._handoff(out, step + 1, history, classify_wall(text),
                                            "captcha / anti-bot wall — handed back with the page open")
 
@@ -1919,6 +1938,11 @@ class WebVoyagerAgent:
                     "google", "bing", "duckduckgo", "startpage", "ecosia", "yahoo", "brave"}
                 _task_squash = re.sub(r"[^a-z0-9]", "", (task or "").lower())
                 _dest_named = bool(_destd) and len(_destd[0]) >= 4 and _destd[0] in _task_squash
+                if _destd and tuple(_destd) in walled_domains:
+                    history.append(f"{step}: navigate to bot-walled {_dest[:40]} -> blocked; use a different source")
+                    sub_stuck += 1
+                    forbid = sig_here
+                    continue
                 if _wantd and _destd and _wantd != _destd and not _search_start and not _dest_named:
                     history.append(f"{step}: navigate OFF-SITE to {_dest[:40]} -> blocked; STAY on the task "
                                    f"site and interact with THIS page (search box / links), do not leave it")
