@@ -822,6 +822,19 @@ class ControlCore:
         except Exception:
             self._autonomy_mode = DEFAULT_MODE
         self.browser_link = BrowserLink()
+        # The WS token must survive an engine restart/redeploy: the extension stores it at
+        # pair time and reconnects with it forever after. A fresh random token on every boot
+        # silently unpaired every Chrome (403 storm) until the user clicked Pair again.
+        try:
+            _tok_path = base / "browser_link_token"
+            if _tok_path.exists():
+                _saved = _tok_path.read_text().strip()
+                if _saved:
+                    self.browser_link.token = _saved
+            else:
+                _tok_path.write_text(self.browser_link.token)
+        except Exception:
+            pass
         self.glassbox = GlassBox(base / "glassbox.jsonl")
         self.scorecard = Scorecard(base / "scorecard.jsonl")
         self.bus = Bus(glassbox=self.glassbox)
