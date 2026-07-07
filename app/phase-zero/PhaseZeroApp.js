@@ -222,14 +222,22 @@ async function sessionBearer() {
 }
 
 // The last few trace ids the server echoed back (x-anticipy-trace), newest first — one id per
-// user action. The trace view turns any of these into the full end-to-end replay of that action.
-const recentTraces = [];
+// user action. Kept in sessionStorage so they survive board ↔ settings navigation; the trace
+// view turns any of these into the full end-to-end replay of that action.
+function recentTracesList() {
+  try {
+    return JSON.parse(sessionStorage.getItem("pz-recent-traces") || "[]");
+  } catch {
+    return [];
+  }
+}
 function rememberTrace(url, response) {
   try {
     const trace = response?.headers?.get?.("x-anticipy-trace") || "";
     if (!trace) return;
-    recentTraces.unshift({ trace, url, at: new Date().toLocaleTimeString() });
-    if (recentTraces.length > 12) recentTraces.length = 12;
+    const rows = recentTracesList().filter((row) => row.trace !== trace);
+    rows.unshift({ trace, url, at: new Date().toLocaleTimeString() });
+    sessionStorage.setItem("pz-recent-traces", JSON.stringify(rows.slice(0, 12)));
   } catch { /* trace capture must never break a call */ }
 }
 
@@ -2596,6 +2604,8 @@ function TraceViewPanel() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recent, setRecent] = useState([]);
+  useEffect(() => { setRecent(recentTracesList()); }, []);
 
   async function loadTrace(id) {
     const target = (id || traceId).trim();
@@ -2618,9 +2628,9 @@ function TraceViewPanel() {
     <section className="pz-panel">
       <h3>Trace one action</h3>
       <p className="pz-note">Every call carries one trace id, end to end. Pick a recent one (or paste an id) and I show every step that action took — nothing gets to drop silently.</p>
-      {recentTraces.length ? (
+      {recent.length ? (
         <ul className="pz-list">
-          {recentTraces.slice(0, 6).map((row) => (
+          {recent.slice(0, 6).map((row) => (
             <li key={row.trace}>
               <button className="pz-button subtle" type="button" onClick={() => loadTrace(row.trace)}>
                 {row.at} — {row.url.replace("/api/", "")} — {row.trace.slice(0, 8)}…
