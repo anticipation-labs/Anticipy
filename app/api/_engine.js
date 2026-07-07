@@ -86,6 +86,9 @@ export function ownerTokenMatches(value) {
 
 export function ownerAccessGranted(request) {
   if (appOpenMode()) return true;
+  // A signed-in Supabase user passes the site gate; the engine verifies the token against
+  // Supabase and routes to that user's own per-user core (invalid tokens get the engine's 401).
+  if (incomingSupabaseBearer(request)) return true;
   const token = configuredOwnerToken();
   if (!token) {
     // DEFAULT-SECURE: with no owner token configured, grant ONLY a local (same-machine) request.
@@ -99,6 +102,7 @@ export function ownerAccessGranted(request) {
 
 export function ownerAccessStatus(request) {
   if (appOpenMode()) return { required: false, authenticated: true };
+  if (incomingSupabaseBearer(request)) return { required: true, authenticated: true };
   const token = configuredOwnerToken();
   if (!token) {
     // no token: local is open (single-owner dev), public is locked-out (must configure a token)
