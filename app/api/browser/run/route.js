@@ -20,8 +20,11 @@ export async function POST(request) {
   // DuckDuckGo, not Google: Google throws a consent/CAPTCHA wall at automated browsers (which the
   // agent won't solve), DDG doesn't — so the open-web roam actually starts cleanly.
   if (!start) start = "https://duckduckgo.com/?q=" + encodeURIComponent(task);
+  // card_id (optional): the durable owner card this run closes — the engine lands the judged
+  // result on it so the board and a reloaded thread show the settled outcome, not the open ask.
+  const cardId = String(body?.card_id || "").trim();
   return privateEngineRequest(request, "/agent/run", {
     method: "POST",
-    body: JSON.stringify({ task, start_url: start, max_steps: 18 }),
+    body: JSON.stringify({ task, start_url: start, max_steps: 18, card_id: cardId }),
   });
 }

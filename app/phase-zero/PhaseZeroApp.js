@@ -3033,7 +3033,7 @@ export default function PhaseZeroApp({ screen = "board" }) {
         setThread((current) => current.map((item) => (item.id === message.id ? { ...item, resolved: true } : item)));
         appendMessages({ role: "assistant", text: "On it — doing that in your Chrome now…", tone: "do" });
         try {
-          const data = await jsonFetch("/api/browser/run", { method: "POST", body: JSON.stringify({ task }) });
+          const data = await jsonFetch("/api/browser/run", { method: "POST", body: JSON.stringify({ task, card_id: message.cardId || "" }) });
           const done = Boolean(data.task_succeeded);
           const answer = String(data.answer || "").trim();
           if (done && answer) {

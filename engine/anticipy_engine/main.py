@@ -2213,6 +2213,7 @@ class AgentRunIn(BaseModel):
     max_steps: int = 8
     judge: bool = False
     model: Optional[str] = None  # per-run brain override (model bake-off); None = default ladder
+    card_id: str = ""  # optional: the durable owner card this run closes — the result lands on it
 
 
 class AgentActIn(BaseModel):
@@ -2318,6 +2319,16 @@ async def agent_run(body: AgentRunIn) -> dict:
         "metrics": result.get("metrics") or {},
         "judge_reason": (result.get("judgment") or {}).get("reason"),
     })
+    # CARD↔MESSAGE SYNC: when the run was approved from a card's chat ask, land the judged
+    # result on that durable card (same receipt writer as the text/call arm), so the board
+    # and a reloaded thread show the settled outcome instead of resurrecting the open ask.
+    if body.card_id:
+        c._land_browser_result_on_card(
+            body.card_id,
+            success=bool(result.get("task_succeeded")),
+            answer=str(result.get("answer") or ""),
+            url=result.get("final_url"),
+            screenshot=False)
     result.pop("trace", None)  # internal-only; don't ship the raw trace over HTTP
     # M4 (audit #5): a wall handoff mints a resume_token — PERSIST the run state under it so a later
     # /agent/resume can be VALIDATED and resumed with context, instead of a blind cold restart.
