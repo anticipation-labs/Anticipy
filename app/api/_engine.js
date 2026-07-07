@@ -142,22 +142,46 @@ function traceId(request) {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
+// Absorb the brief engine-restart window during a deploy: a read (GET) that hits the
+// cutover blip (502/503/504 or a dropped socket) is retried once so a mid-session
+// deploy stays invisible to the user. Writes are never auto-retried.
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+const RETRY_DELAY_MS = 1500;
+
 export async function engineRequest(path, options = {}, request = null) {
   const url = `${ENGINE_URL}${path}`;
   const trace = traceId(request);
+  const method = (options.method || "GET").toUpperCase();
+  const attempts = method === "GET" ? 2 : 1;
   try {
-    const response = await fetch(url, {
-      ...options,
-      headers: engineHeaders(
-        {
-          "content-type": "application/json",
-          "x-anticipy-trace": trace,
-          ...(options.headers || {}),
-        },
-        request,
-      ),
-      cache: "no-store",
-    });
+    let response;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        response = await fetch(url, {
+          ...options,
+          headers: engineHeaders(
+            {
+              "content-type": "application/json",
+              "x-anticipy-trace": trace,
+              ...(options.headers || {}),
+            },
+            request,
+          ),
+          cache: "no-store",
+        });
+      } catch (fetchError) {
+        if (attempt < attempts) {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+          continue;
+        }
+        throw fetchError;
+      }
+      if (RETRYABLE_STATUS.has(response.status) && attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+      break;
+    }
     const text = await response.text();
     const data = text ? JSON.parse(text) : {};
     return Response.json(data, { status: response.status, headers: { "x-anticipy-trace": trace } });
