@@ -133,14 +133,25 @@ export function clearOwnerSessionCookie() {
   return `${OWNER_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 }
 
+// One trace id per user action, threaded site → engine → back. The browser may supply its own
+// x-anticipy-trace; otherwise the site mints one here, so every engine glassbox line for this
+// action carries the same id and the whole action can be replayed from /api/trace/<id>.
+function traceId(request) {
+  const incoming = (request?.headers?.get?.("x-anticipy-trace") || "").trim();
+  if (/^[A-Za-z0-9_-]{8,64}$/.test(incoming)) return incoming;
+  return crypto.randomUUID().replaceAll("-", "");
+}
+
 export async function engineRequest(path, options = {}, request = null) {
   const url = `${ENGINE_URL}${path}`;
+  const trace = traceId(request);
   try {
     const response = await fetch(url, {
       ...options,
       headers: engineHeaders(
         {
           "content-type": "application/json",
+          "x-anticipy-trace": trace,
           ...(options.headers || {}),
         },
         request,
@@ -149,7 +160,7 @@ export async function engineRequest(path, options = {}, request = null) {
     });
     const text = await response.text();
     const data = text ? JSON.parse(text) : {};
-    return Response.json(data, { status: response.status });
+    return Response.json(data, { status: response.status, headers: { "x-anticipy-trace": trace } });
   } catch (error) {
     return Response.json(
       {

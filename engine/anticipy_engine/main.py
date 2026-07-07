@@ -442,9 +442,18 @@ async def owner_api_auth(request: Request, call_next):
     # in the handlers below then resolves to the right per-user ControlCore. Reset in finally
     # so the binding never leaks to the next request on this task/thread.
     _user_token = registry.set_current_user(request.state.user_id)
+    # One trace id per user action: honor the caller's x-anticipy-trace (the site mints one per
+    # request) or mint one here, bind it for the whole request so every glassbox line carries it,
+    # and echo it back so any layer can hand the id to the trace view.
+    from .core.glassbox import bind_trace, new_trace_id, normalize_trace_id, unbind_trace
+    _trace_id = normalize_trace_id(request.headers.get("x-anticipy-trace")) or new_trace_id()
+    _trace_token = bind_trace(_trace_id)
     try:
-        return await call_next(request)
+        response = await call_next(request)
+        response.headers["x-anticipy-trace"] = _trace_id
+        return response
     finally:
+        unbind_trace(_trace_token)
         registry.reset_current_user(_user_token)
 
 
@@ -1881,6 +1890,25 @@ async def digest_deliver() -> dict:
 @app.get("/glassbox")
 def glassbox(limit: int = 50) -> dict:
     return {"entries": current_core().glassbox.summaries(limit)}
+
+
+@app.get("/trace/{trace_id}")
+def trace_view(trace_id: str, limit: int = 200) -> dict:
+    """Everything one user action did, end to end — every glassbox line written under the
+    trace id that the middleware bound for that request. The single-action replay."""
+    from .core.glassbox import _summarize, normalize_trace_id
+    tid = normalize_trace_id(trace_id)
+    if not tid:
+        return {"trace": trace_id, "entries": [], "error": "bad_trace_id"}
+    entries = current_core().glassbox.trace(tid, limit)
+    return {
+        "trace": tid,
+        "count": len(entries),
+        "entries": [
+            {"ts": e["ts"], "kind": e["kind"], "summary": _summarize(e), "data": e.get("data", {})}
+            for e in entries
+        ],
+    }
 
 
 @app.get("/pending")

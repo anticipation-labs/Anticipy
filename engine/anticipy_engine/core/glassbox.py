@@ -7,12 +7,42 @@ allowed. Local only.
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import os
+import re
+import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from .envelopes import now_ts
+
+# One trace id per user action, threaded through every layer. The HTTP middleware binds the
+# incoming x-anticipy-trace header (or mints one) here; every glassbox line written while
+# handling that request carries it, so a whole action can be replayed from one id.
+_current_trace: contextvars.ContextVar[str] = contextvars.ContextVar("anticipy_trace", default="")
+_TRACE_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
+def new_trace_id() -> str:
+    return uuid.uuid4().hex
+
+
+def normalize_trace_id(raw: Optional[str]) -> str:
+    value = (raw or "").strip()
+    return value if _TRACE_RE.match(value) else ""
+
+
+def bind_trace(trace_id: str) -> contextvars.Token:
+    return _current_trace.set(trace_id)
+
+
+def unbind_trace(token: contextvars.Token) -> None:
+    _current_trace.reset(token)
+
+
+def current_trace() -> str:
+    return _current_trace.get()
 
 # Size cap so the append-only log can NEVER grow unbounded (a runaway glassbox.jsonl once hit
 # 21GB and filled the disk). On overflow we keep the most recent lines and drop the old head.
@@ -29,6 +59,9 @@ class GlassBox:
 
     def log(self, kind: str, data: dict) -> None:
         entry = {"ts": now_ts(), "kind": kind, "data": data}
+        trace = current_trace()
+        if trace:
+            entry["trace"] = trace
         with self.path.open("a") as fh:
             fh.write(json.dumps(entry) + "\n")
         self._maybe_rotate()
@@ -78,6 +111,10 @@ class GlassBox:
 
     def tail(self, n: int = 50) -> List[dict]:
         return self.entries()[-n:]
+
+    def trace(self, trace_id: str, limit: int = 200) -> List[dict]:
+        """Every entry written under one trace id, oldest first — the single-action replay."""
+        return [e for e in self.entries() if e.get("trace") == trace_id][-limit:]
 
     def summaries(self, n: int = 50) -> List[dict]:
         """Pre-rendered, human-readable rows for the app feed (so the Swift side

@@ -221,6 +221,18 @@ async function sessionBearer() {
   }
 }
 
+// The last few trace ids the server echoed back (x-anticipy-trace), newest first — one id per
+// user action. The trace view turns any of these into the full end-to-end replay of that action.
+const recentTraces = [];
+function rememberTrace(url, response) {
+  try {
+    const trace = response?.headers?.get?.("x-anticipy-trace") || "";
+    if (!trace) return;
+    recentTraces.unshift({ trace, url, at: new Date().toLocaleTimeString() });
+    if (recentTraces.length > 12) recentTraces.length = 12;
+  } catch { /* trace capture must never break a call */ }
+}
+
 async function jsonFetch(url, options = {}) {
   const bearer = await sessionBearer();
   const response = await fetch(url, {
@@ -233,6 +245,7 @@ async function jsonFetch(url, options = {}) {
     credentials: "same-origin",
     cache: "no-store",
   });
+  rememberTrace(url, response);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.message || data.error || `Request failed: ${response.status}`);
@@ -2557,6 +2570,7 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
             <LearnedMemoryPanel drawers={drawers} error={drawersError} onResolveLoop={reload} />
             <MemoryRecallPanel />
             <RememberedReviewPanel />
+            <TraceViewPanel />
             <ForgetMePanel onDeleted={reload} />
           </div>
         </details>
@@ -2572,6 +2586,73 @@ function SettingsScreen({ settings, setSettings, saveSettings }) {
       </div>
       {tickMessage ? <p className="pz-note">{tickMessage}</p> : null}
     </form>
+  );
+}
+
+// The trace view: pick (or paste) one action's trace id and see everything it did, end to end —
+// every engine step written under that id. Silent drops become visible here instead of invisible.
+function TraceViewPanel() {
+  const [traceId, setTraceId] = useState("");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function loadTrace(id) {
+    const target = (id || traceId).trim();
+    if (!target || busy) return;
+    setBusy(true);
+    setTraceId(target);
+    try {
+      const data = await jsonFetch(`/api/trace/${encodeURIComponent(target)}`);
+      setResult(data);
+      setError("");
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="pz-panel">
+      <h3>Trace one action</h3>
+      <p className="pz-note">Every call carries one trace id, end to end. Pick a recent one (or paste an id) and I show every step that action took — nothing gets to drop silently.</p>
+      {recentTraces.length ? (
+        <ul className="pz-list">
+          {recentTraces.slice(0, 6).map((row) => (
+            <li key={row.trace}>
+              <button className="pz-button subtle" type="button" onClick={() => loadTrace(row.trace)}>
+                {row.at} — {row.url.replace("/api/", "")} — {row.trace.slice(0, 8)}…
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <form className="pz-recall-form" onSubmit={(event) => { event.preventDefault(); loadTrace(); }}>
+        <input
+          value={traceId}
+          onChange={(event) => setTraceId(event.target.value)}
+          placeholder="Trace id…"
+          aria-label="Trace id"
+        />
+        <button className="pz-button subtle" type="submit" disabled={busy || !traceId.trim()}>
+          {busy ? "Reading…" : "Show the steps"}
+        </button>
+      </form>
+      {error ? <p className="pz-note">I could not read that trace: {error}</p> : null}
+      {result ? (
+        result.entries?.length ? (
+          <ul className="pz-list">
+            {result.entries.map((entry, index) => (
+              <li key={`tr-${index}`}>{entry.summary}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pz-note">No engine steps recorded under that id — the action never reached the engine, or it predates the trace log.</p>
+        )
+      ) : null}
+    </section>
   );
 }
 
