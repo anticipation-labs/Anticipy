@@ -1090,9 +1090,12 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
   const [saveState, setSaveState] = useState("idle");
   const [saveError, setSaveError] = useState("");
 
-  function patch(next) {
-    setProfile((current) => ({ ...current, ...next }));
-  }
+  // The fields are UNCONTROLLED (defaultValue + FormData on submit). Controlled inputs here had a
+  // real clobber: a state update that landed while the user was mid-typing (profile fetch resolving,
+  // any sibling re-render) forced the DOM back to the stale state value, so a fast typist's name and
+  // phone were silently blanked before Save read the form. The DOM is the single source of truth
+  // until submit; the loaded profile re-seeds the fields via the form key below.
+  const formKey = `${profile.name || ""}\u0001${profile.phone || ""}\u0001${profile.summary || ""}\u0001${profile.doNotTouch || ""}`;
 
   async function submit(event) {
     event.preventDefault();
@@ -1119,13 +1122,12 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
   }
 
   return (
-    <form className="pz-panel pz-form" onSubmit={submit}>
+    <form key={formKey} className="pz-panel pz-form" onSubmit={submit}>
       <label>
         <span>Your name</span>
         <input
           name="name"
-          value={profile.name || ""}
-          onChange={(event) => patch({ name: event.target.value })}
+          defaultValue={profile.name || ""}
           placeholder="What should I call you?"
         />
       </label>
@@ -1134,8 +1136,7 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
         <small className="pz-note">So I can call or text you when something matters — urgent things get a call, everything else a text. Nothing is dialed without your say-so.</small>
         <input
           name="phone"
-          value={profile.phone || ""}
-          onChange={(event) => patch({ phone: event.target.value })}
+          defaultValue={profile.phone || ""}
           placeholder="+1 555 010 0000"
           inputMode="tel"
         />
@@ -1145,8 +1146,7 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
         <small className="pz-note">One sentence — who you are and what you&rsquo;re juggling right now.</small>
         <input
           name="summary"
-          value={profile.summary || ""}
-          onChange={(event) => patch({ summary: event.target.value })}
+          defaultValue={profile.summary || ""}
           placeholder="e.g. Founder of a small studio, always mid-launch."
         />
       </label>
@@ -1155,8 +1155,7 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
         <small className="pz-note">Where I should slow down and ask before acting — money, certain people, anything you&rsquo;d hate me to get wrong.</small>
         <textarea
           name="doNotTouch"
-          value={profile.doNotTouch || ""}
-          onChange={(event) => patch({ doNotTouch: event.target.value })}
+          defaultValue={profile.doNotTouch || ""}
           placeholder="Example: always ask before emailing a client, or before spending money."
         />
       </label>
