@@ -231,13 +231,13 @@ function recentTracesList() {
     return [];
   }
 }
-function rememberTrace(url, response) {
+function rememberTrace(url, method, response) {
   try {
     const trace = response?.headers?.get?.("x-anticipy-trace") || "";
     if (!trace) return;
     const rows = recentTracesList().filter((row) => row.trace !== trace);
-    rows.unshift({ trace, url, at: new Date().toLocaleTimeString() });
-    sessionStorage.setItem("pz-recent-traces", JSON.stringify(rows.slice(0, 12)));
+    rows.unshift({ trace, url, method, at: new Date().toLocaleTimeString() });
+    sessionStorage.setItem("pz-recent-traces", JSON.stringify(rows.slice(0, 30)));
   } catch { /* trace capture must never break a call */ }
 }
 
@@ -253,7 +253,7 @@ async function jsonFetch(url, options = {}) {
     credentials: "same-origin",
     cache: "no-store",
   });
-  rememberTrace(url, response);
+  rememberTrace(url, (options.method || "GET").toUpperCase(), response);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.message || data.error || `Request failed: ${response.status}`);
@@ -2605,7 +2605,11 @@ function TraceViewPanel() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState([]);
-  useEffect(() => { setRecent(recentTracesList()); }, []);
+  // Real user actions (writes) first — the background read polls matter less for a replay.
+  useEffect(() => {
+    const rows = recentTracesList();
+    setRecent([...rows.filter((r) => r.method && r.method !== "GET"), ...rows.filter((r) => !r.method || r.method === "GET")]);
+  }, []);
 
   async function loadTrace(id) {
     const target = (id || traceId).trim();
@@ -2633,7 +2637,7 @@ function TraceViewPanel() {
           {recent.slice(0, 6).map((row) => (
             <li key={row.trace}>
               <button className="pz-button subtle" type="button" onClick={() => loadTrace(row.trace)}>
-                {row.at} — {row.url.replace("/api/", "")} — {row.trace.slice(0, 8)}…
+                {row.at} — {row.method && row.method !== "GET" ? `${row.method} ` : ""}{row.url.replace("/api/", "")} — {row.trace.slice(0, 8)}…
               </button>
             </li>
           ))}
