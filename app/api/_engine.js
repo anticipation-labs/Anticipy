@@ -142,9 +142,11 @@ function traceId(request) {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
-// Absorb the brief engine-restart window during a deploy: a read (GET) that hits the
-// cutover blip (502/503/504 or a dropped socket) is retried once so a mid-session
-// deploy stays invisible to the user. Writes are never auto-retried.
+// Absorb the brief engine-restart window during a deploy: a request that hits the
+// cutover blip (502/503/504 or a dropped socket) is retried so a mid-session deploy
+// stays invisible to the user. Writes are safe to retry because the engine treats the
+// trace id as an idempotency key — a repeat of an already-processed action returns the
+// recorded response instead of running twice.
 const RETRYABLE_STATUS = new Set([502, 503, 504]);
 const RETRY_DELAY_MS = 1500;
 
@@ -152,7 +154,7 @@ export async function engineRequest(path, options = {}, request = null) {
   const url = `${ENGINE_URL}${path}`;
   const trace = traceId(request);
   const method = (options.method || "GET").toUpperCase();
-  const attempts = method === "GET" ? 2 : 1;
+  const attempts = method === "GET" ? 2 : 3;
   try {
     let response;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from collections import OrderedDict
 import hashlib
 import json
 import hmac
@@ -29,7 +30,7 @@ from typing import Optional
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from json import JSONDecodeError
 from pydantic import BaseModel, Field
 
@@ -449,12 +450,37 @@ async def owner_api_auth(request: Request, call_next):
     _trace_id = normalize_trace_id(request.headers.get("x-anticipy-trace")) or new_trace_id()
     _trace_token = bind_trace(_trace_id)
     try:
+        # Idempotent writes: the trace id doubles as an idempotency key, so the site can safely
+        # retry a write whose response was lost (e.g. a deploy cutover) — a repeat of an
+        # already-processed action returns the recorded response instead of running twice.
+        if request.method == "POST" and _trace_id in _IDEMPOTENT_RESPONSES:
+            status, body = _IDEMPOTENT_RESPONSES[_trace_id]
+            return Response(content=body, status_code=status, media_type="application/json",
+                            headers={"x-anticipy-trace": _trace_id, "x-anticipy-replayed": "1"})
         response = await call_next(request)
+        if request.method == "POST" and response.status_code < 500:
+            body = b"".join([chunk async for chunk in response.body_iterator])
+            _remember_idempotent(_trace_id, response.status_code, body)
+            return Response(content=body, status_code=response.status_code,
+                            media_type=response.media_type,
+                            headers={**dict(response.headers), "x-anticipy-trace": _trace_id})
         response.headers["x-anticipy-trace"] = _trace_id
         return response
     finally:
         unbind_trace(_trace_token)
         registry.reset_current_user(_user_token)
+
+
+# Recorded responses of completed writes, keyed by trace id (bounded, newest kept).
+_IDEMPOTENT_RESPONSES: "OrderedDict[str, tuple]" = OrderedDict()
+_IDEMPOTENT_MAX = 500
+
+
+def _remember_idempotent(trace_id: str, status: int, body: bytes) -> None:
+    _IDEMPOTENT_RESPONSES[trace_id] = (status, body)
+    _IDEMPOTENT_RESPONSES.move_to_end(trace_id)
+    while len(_IDEMPOTENT_RESPONSES) > _IDEMPOTENT_MAX:
+        _IDEMPOTENT_RESPONSES.popitem(last=False)
 
 
 def _max_request_bytes() -> int:
