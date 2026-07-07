@@ -296,27 +296,35 @@ function extractBrowserReceipt(card) {
   return { answer, url, screenshot, screenshotPath };
 }
 
+// A settled card (answered, executed, or declined) never re-asks — its status is terminal, so
+// disposition "ask" no longer means an open question.
+const TERMINAL_CARD_STATUS = new Set(["done", "completed", "failed", "stopped", "declined"]);
+
 function normalizeEngineCard(card) {
   const gatewayTags = Array.isArray(card.gateway?.source_of_truth_tags)
     ? card.gateway.source_of_truth_tags
     : [];
   const browserReceipt = extractBrowserReceipt(card);
+  const settled = TERMINAL_CARD_STATUS.has(card.status);
+  const asking = !settled && (card.status === "waiting" || card.disposition === "ask");
   return {
     id: card.id || card.ask_id || `engine-${Math.random().toString(16).slice(2)}`,
     // De-jargon (UI step 1): human-facing card copy, never engine internals. CANON/UI_FLOW law.
-    category: card.disposition === "blocked" ? "Needs a yes" : card.status === "waiting" || card.disposition === "ask" ? "Waiting for you" : "On it",
+    category: settled
+      ? (TERMINAL_DONE_STATUS.has(card.status) ? "Done" : card.status === "declined" ? "Set aside" : "Couldn't finish")
+      : card.disposition === "blocked" ? "Needs a yes" : asking ? "Waiting for you" : "On it",
     title: card.title || card.action || card.source_text || "Caught something for you.",
     heard: card.source_text || card.text || "",
     ignored: "",
     browserWork: card.args?.task_text || card.execution?.route || card.source_text || "",
-    checkIn: card.status === "waiting" || card.disposition === "ask" ? "Okay for me to go ahead?" : "",
+    checkIn: asking ? "Okay for me to go ahead?" : "",
     // With a real browser receipt the structured render takes over; the string is only a fallback
     // for non-browser live cards (kept honest — no receipt means no fabricated answer).
     proof: browserReceipt ? "" : Array.isArray(card.proof) && card.proof.length ? "Here's what I did." : "",
     browserReceipt,
     memory: card.disposition === "remember" ? "I'll remember this." : "",
     followUp: card.status || card.disposition || "ready",
-    risk: card.disposition === "blocked" || card.status === "blocked" ? "blocked" : card.disposition === "ask" || card.status === "waiting" ? "ask" : "do",
+    risk: card.disposition === "blocked" || card.status === "blocked" ? "blocked" : asking ? "ask" : "do",
     status: card.status || "ready",
     askId: card.execution?.ask_id || card.ask_id || "",
     sourceTags: gatewayTags.length ? gatewayTags : ["ST-NO-FAKE-DONE", "OPS-BASIC-PLUMBING"],
