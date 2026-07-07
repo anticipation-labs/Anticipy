@@ -1657,6 +1657,7 @@ class ControlCore:
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
+            self.glassbox.log("browser_result_card_missing", {"card_id": ask_id})
             return
         state = "done" if (success and (answer or "").strip()) else "failed"
         proof = {
