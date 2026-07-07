@@ -1569,8 +1569,65 @@ async def onboard_loop(body: OnboardLoopIn) -> dict:
         targets = [{"url": url, "label": label}
                    for key, (label, url) in _DEEP_SCAN_URLS.items()
                    if c.onboard_permissions.is_allowed(key)]
-        return await run_loop_via_hand(c, targets, body.max_layers)
-    return await run_loop(c, body.cdp_url, body.max_layers)
+        result = await run_loop_via_hand(c, targets, body.max_layers)
+    else:
+        result = await run_loop(c, body.cdp_url, body.max_layers)
+    _persist_last_dossier(c, result)
+    return result
+
+
+def _persist_last_dossier(core, result: dict) -> None:
+    """Keep the newest inhale dossier on disk so the setup call can pick up its gap agenda later."""
+    doss = result.get("dossier") if isinstance(result, dict) else None
+    if not isinstance(doss, dict) or not doss:
+        return
+    try:
+        (core.data_dir / "last_dossier.json").write_text(
+            json.dumps({"dossier": doss, "gaps": result.get("gaps") or doss.get("gaps") or []}),
+            encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _load_last_dossier(core) -> dict:
+    """The newest persisted inhale dossier, or a minimal one seeded from the stated profile so the
+    setup call can run (asking the plain core-identity questions) even before any deep read."""
+    p = core.data_dir / "last_dossier.json"
+    try:
+        if p.exists():
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data.get("dossier"):
+                return data
+    except Exception:
+        pass
+    name = ""
+    try:
+        name = (core.owner_profile_basics() or {}).get("name", "")
+    except Exception:
+        pass
+    return {"dossier": {"identity": {"name": name}, "gaps": []}, "gaps": []}
+
+
+class OnboardCallIn(BaseModel):
+    to: Optional[str] = None
+    answers: Optional[dict] = None
+    max_questions: int = 4
+
+
+@app.post("/onboard/call")
+async def onboard_call(body: OnboardCallIn) -> dict:
+    """The onboarding \"can I call you?\" arm: plan the gap questions from the newest inhale dossier
+    (or the plain core-identity questions before any read) and place the call. Mock records the
+    whole simulated conversation; live dials Twilio and hands the two-way talk to /cr."""
+    c = current_core()
+    doss = _load_last_dossier(c)
+    to = (body.to or "").strip()
+    if not to:
+        with suppress(Exception):
+            to = (c.owner_profile_basics() or {}).get("phone", "").strip()
+    result = await c.run_onboarding_call(doss, to=to or None, answers=body.answers,
+                                         max_questions=body.max_questions)
+    return result
 
 
 class OnboardCompleteIn(BaseModel):
@@ -1609,6 +1666,36 @@ def onboard_complete(body: OnboardCompleteIn) -> dict:
             pass
         return {"onboarding_complete": False, "error": "could not persist onboarding completion"}
     return data
+
+
+class MemoryEditIn(BaseModel):
+    id: str
+    text: str
+
+
+@app.post("/memory/edit")
+def memory_edit(body: MemoryEditIn) -> dict:
+    """Correct ONE remembered fact in place (the \"fix a wrong fact on the Who-I-Am page\" surface).
+    The item keeps its id and drawer; the text is replaced and re-embedded, so every recall —
+    semantic or keyword — sees the corrected fact immediately."""
+    c = current_core()
+    new_text = (body.text or "").strip()
+    if not new_text:
+        raise HTTPException(status_code=400, detail="empty replacement text")
+    for store in (c.memory.profile, c.memory.derived, c.memory.open_loops, c.memory.history):
+        item = store.get(body.id)
+        if item is None:
+            continue
+        old_text = item.text
+        item.text = new_text
+        item.provenance = "owner_correction"
+        item.confidence = 1.0
+        store.update(item)
+        with suppress(Exception):
+            c.glassbox.log("memory_fact_corrected",
+                           {"id": body.id, "drawer": store.name, "old": old_text, "new": new_text})
+        return {"ok": True, "id": body.id, "drawer": store.name, "text": new_text}
+    raise HTTPException(status_code=404, detail="no remembered fact with that id")
 
 
 # (The /hands/compose-email endpoint was deleted 2026-07-02: it imported hands/cdp_client,

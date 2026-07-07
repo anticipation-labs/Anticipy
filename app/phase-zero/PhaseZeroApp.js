@@ -782,7 +782,13 @@ function OnboardingScreen({ screen, profile, setProfile, saveProfile, saveOnboar
     );
   }
 
-  const isReadLayer = ["/onboarding/3", "/onboarding/5", "/onboarding/7"].includes(stage.route);
+  if (screen === "onboarding-3") {
+    return <HowItWorksStage onboarding={onboarding} />;
+  }
+  if (screen === "onboarding-4") {
+    return <CallStage profile={profile} onboarding={onboarding} />;
+  }
+  const isReadLayer = stage.route === "/onboarding/5";
   // UI_SPEC step 6: the final onboarding stage IS the confirm-mirror (formerly the standalone
   // /great screen), folded in here so onboarding ends by POSTing /api/onboard/complete and
   // landing the owner on Main (/). No separate /great or /done screens anymore.
@@ -808,8 +814,121 @@ function OnboardingScreen({ screen, profile, setProfile, saveProfile, saveOnboar
           <a className="pz-button primary pz-button-xl" href={nextOnboardingHref(stage.route)}>Next</a>
         </div>
       </section>
-      {isReadLayer ? <AccountReadStage deep={stage.route !== "/onboarding/3"} engineState={engineState} /> : null}
+      {isReadLayer ? <AccountReadStage deep engineState={engineState} /> : null}
       <OnboardingTimeline onboarding={onboarding} activeRoute={stage.route} />
+    </div>
+  );
+}
+
+// "How this whole thing works" — the one clean explainer screen from the map: I listen,
+// I catch the real tasks, I ask before acting, I remember. No settings here, just the story.
+function HowItWorksStage({ onboarding }) {
+  const steps = [
+    { head: "I listen to your day", body: "Talk near the mic, paste a voice note, or type. Vents stay vents — I only catch the things you actually mean to do." },
+    { head: "I ask before I act", body: "Anything real becomes a card with a plain question: \"want me to handle this?\" Money and anything hard to undo always waits for your yes." },
+    { head: "My hands are your browser", body: "When you say yes, I work inside your own Chrome — your logins, your accounts — and I tell you honestly if I get stuck." },
+    { head: "I remember everything you tell me", body: "Facts said in passing, who your people are, what got done — so tomorrow I'm smarter than today, and I never ask twice." },
+  ];
+  return (
+    <div className="pz-scene">
+      <section className="pz-stage-hero pz-stage-minimal">
+        <StatusPill value="live" />
+        <h2>How this whole thing works</h2>
+        <p>Four things. That's the whole system.</p>
+      </section>
+      <section className="pz-grid two">
+        {steps.map((step, index) => (
+          <article key={`how-${index}`} className="pz-panel">
+            <h3>{index + 1}. {step.head}</h3>
+            <p className="pz-note">{step.body}</p>
+          </article>
+        ))}
+      </section>
+      <div className="pz-actions pz-actions-simple">
+        <a className="pz-button ghost" href="/onboarding/2">Back</a>
+        <a className="pz-button primary pz-button-xl" href="/onboarding/4">Makes sense</a>
+      </div>
+      <OnboardingTimeline onboarding={onboarding} activeRoute="/onboarding/3" />
+    </div>
+  );
+}
+
+// The "can I call you?" stage from the map: one clear ask, one button that places the REAL
+// onboarding call (POST /api/onboard/call → engine plans the gap questions from the newest
+// dossier and dials). Honest about mode: mock records the conversation without ringing a phone.
+function CallStage({ profile, onboarding }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [message, setMessage] = useState("");
+  const phone = (profile?.phone || "").trim();
+
+  async function placeCall() {
+    setBusy(true);
+    setMessage("");
+    setResult(null);
+    try {
+      const data = await jsonFetch("/api/onboard/call", { method: "POST", body: "{}" });
+      setResult(data);
+      if (data.initiated === false && data.reason) {
+        setMessage(String(data.reason));
+      } else if (data.mode === "mock" || data.simulated) {
+        setMessage("Call placed in practice mode — no phone rang, but here's the real conversation I would have had:");
+      } else {
+        setMessage(phone ? `Calling ${phone} now — pick up and we'll talk.` : "Calling you now — pick up and we'll talk.");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const questions = Array.isArray(result?.questions) ? result.questions : [];
+  const transcript = Array.isArray(result?.transcript) ? result.transcript : [];
+
+  return (
+    <div className="pz-scene">
+      <section className="pz-stage-hero pz-stage-minimal">
+        <StatusPill value="live" />
+        <h2>Can I call you?</h2>
+        <p>
+          A short call — a few sharp questions so I get you right, and your say-so before I look
+          through your world. You can skip it; everything still works.
+        </p>
+      </section>
+      <section className="pz-panel pz-form">
+        <p className="pz-note">
+          {phone
+            ? `I'll call ${phone} — the number you gave me.`
+            : "You haven't given me a number yet — add one on the previous \"You\" step, or skip the call."}
+        </p>
+        <button className="pz-button primary" type="button" onClick={placeCall} disabled={busy}>
+          {busy ? "Setting up the call…" : "Yes — call me"}
+        </button>
+        {message ? <p className="pz-note">{message}</p> : null}
+        {transcript.length ? (
+          <ul className="pz-list">
+            {transcript.map((line, index) => (
+              <li key={`callt-${index}`}>
+                <strong>{line.speaker === "owner" ? "You" : "Anticipy"}:</strong> {line.text}
+              </li>
+            ))}
+          </ul>
+        ) : questions.length ? (
+          <ul className="pz-list">
+            {questions.map((q, index) => (
+              <li key={`callq-${index}`}>{q.question_text || q.question || String(q)}</li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+      <div className="pz-actions pz-actions-simple">
+        <a className="pz-button ghost" href="/onboarding/3">Back</a>
+        <a className="pz-button primary pz-button-xl" href="/onboarding/5">
+          {result ? "Next" : "Skip the call"}
+        </a>
+      </div>
+      <OnboardingTimeline onboarding={onboarding} activeRoute="/onboarding/4" />
     </div>
   );
 }
@@ -983,6 +1102,7 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
     const next = {
       ...profile,
       name: String(form.get("name") || ""),
+      phone: String(form.get("phone") || ""),
       summary: String(form.get("summary") || ""),
       doNotTouch: String(form.get("doNotTouch") || ""),
     };
@@ -1007,6 +1127,17 @@ function ProfileBasicsForm({ profile, setProfile, saveProfile }) {
           value={profile.name || ""}
           onChange={(event) => patch({ name: event.target.value })}
           placeholder="What should I call you?"
+        />
+      </label>
+      <label>
+        <span>Your phone number</span>
+        <small className="pz-note">So I can call or text you when something matters — urgent things get a call, everything else a text. Nothing is dialed without your say-so.</small>
+        <input
+          name="phone"
+          value={profile.phone || ""}
+          onChange={(event) => patch({ phone: event.target.value })}
+          placeholder="+1 555 010 0000"
+          inputMode="tel"
         />
       </label>
       <label>
@@ -1472,7 +1603,7 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
   const [clarification, setClarification] = useState(profile.lastClarification || "");
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
-  const { drawers, error: drawersError } = useMemoryDrawers();
+  const { drawers, error: drawersError, reload: reloadDrawers } = useMemoryDrawers();
   // FIX-4.5: the old ProfileBuiltPanel called /api/onboarding/profile with sources:[] (the UI never
   // has source URLs), so it ALWAYS rendered a dead 0-fact scaffold competing with the real dossier.
   // Removed. LearnedMemoryPanel (/memory/drawers) below is the single, honest source of truth — it
@@ -1530,6 +1661,7 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
         ]} />
       </section>
       <OnboardingDossierSummary drawers={drawers} error={drawersError} />
+      <EditableFactsPanel drawers={drawers} onSaved={reloadDrawers} />
       <form className="pz-panel pz-form" onSubmit={submitClarification}>
         <h3>Anything to fix?</h3>
         <p className="pz-note">One note is enough. This saves back into memory.</p>
@@ -1544,7 +1676,7 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
         <button className="pz-button primary" type="submit">Save</button>
       </form>
       <div className="pz-actions pz-actions-simple">
-        <a className="pz-button ghost" href="/onboarding/7">Back</a>
+        <a className="pz-button ghost" href="/onboarding/5">Back</a>
         <button className="pz-button primary pz-button-xl" type="button" onClick={confirmDossier} disabled={confirmBusy}>
           {confirmBusy ? "Saving…" : "Looks right"}
         </button>
@@ -1557,6 +1689,78 @@ function OnboardingFinalStage({ profile, setProfile, saveProfile }) {
 // FIX-4.5: ProfileBuiltPanel removed — it always sent sources:[] and so always rendered an empty
 // 0-fact scaffold, a dead surface competing with the real learned dossier (LearnedMemoryPanel →
 // /memory/drawers). One dossier surface, and it only ever shows what the engine truly learned.
+
+// The "fix a wrong fact" surface on the Who-I-Am mirror: every learned fact gets a Fix
+// button; the correction replaces the SAME memory item in place (POST /api/memory/edit →
+// engine /memory/edit, re-embedded), so every later recall sees the corrected fact.
+function EditableFactsPanel({ drawers, onSaved }) {
+  const [editingId, setEditingId] = useState("");
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const facts = [];
+  for (const drawer of [drawers?.profile, drawers?.derived]) {
+    for (const item of Array.isArray(drawer?.recent) ? drawer.recent : []) {
+      if (item?.id && String(item?.text || "").trim()) facts.push(item);
+    }
+  }
+  if (!facts.length) return null;
+
+  async function saveFix(id) {
+    const text = draft.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const data = await jsonFetch("/api/memory/edit", { method: "POST", body: JSON.stringify({ id, text }) });
+      if (data.error) throw new Error(data.error);
+      setEditingId("");
+      setDraft("");
+      setMessage("Fixed — corrected everywhere I remember it.");
+      if (onSaved) await onSaved();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="pz-panel pz-form">
+      <h3>Fix anything I got wrong</h3>
+      <p className="pz-note">These are the facts I learned. Fix one and it's corrected everywhere, immediately.</p>
+      <ul className="pz-list">
+        {facts.map((item) => (
+          <li key={item.id} className="pz-loop-row">
+            {editingId === item.id ? (
+              <>
+                <input
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  aria-label="Corrected fact"
+                />
+                <button className="pz-button primary" type="button" disabled={busy || !draft.trim()} onClick={() => saveFix(item.id)}>
+                  {busy ? "Saving…" : "Save"}
+                </button>
+                <button className="pz-button subtle" type="button" onClick={() => { setEditingId(""); setDraft(""); }}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <span>{item.text}</span>
+                <button className="pz-button subtle" type="button" onClick={() => { setEditingId(item.id); setDraft(item.text); setMessage(""); }}>
+                  Fix
+                </button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      {message ? <p className="pz-note">{message}</p> : null}
+    </section>
+  );
+}
 
 function ProfileSection({ title, items, wide = false }) {
   return (

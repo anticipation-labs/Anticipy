@@ -1,5 +1,6 @@
-import PhaseZeroApp from "../../phase-zero/PhaseZeroApp";
+import { redirect } from "next/navigation";
 
+// The old Layer-3 stage folded into the deep read on /onboarding/5.
 export default function OnboardingSevenPage() {
-  return <PhaseZeroApp screen="onboarding-7" />;
+  redirect("/onboarding/8");
 }
