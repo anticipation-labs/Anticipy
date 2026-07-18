@@ -12,7 +12,6 @@ const FRAMES: (
   | { type: "image"; src: string; caption: string }
 )[] = [
   { type: "video", src: "/videos/overhead-slate.mp4", caption: "At rest" },
-  { type: "image", src: "/images/flatlay.png", caption: "Titanium and chain" },
   { type: "video", src: "/videos/macro-sweep.mp4", caption: "Up close" },
   { type: "image", src: "/images/nightstand.png", caption: "Charging, untouched" },
   { type: "image", src: "/images/unbox.png", caption: "Out of the box" },
