@@ -7,8 +7,7 @@ const navLinks = [
   { label: "Product", href: "#product" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "Privacy", href: "#privacy" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Pre-order", href: "/pre-orders/purchase" },
+  { label: "Waitlist", href: "#waitlist" },
 ];
 
 export function Nav() {
@@ -73,7 +72,27 @@ export function Nav() {
             }
           }}
         >
-          Anticipy
+          <span className="inline-flex items-center gap-2.5">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 32 32"
+              fill="none"
+              className="w-6 h-6"
+            >
+              <rect width="32" height="32" rx="6" fill="#0C0C0C" />
+              <rect
+                x="10.5"
+                y="3"
+                width="11"
+                height="26"
+                rx="5.5"
+                stroke="#F5F0EB"
+                strokeWidth="2"
+              />
+              <circle cx="16" cy="20" r="1.8" fill="#C8A97E" />
+            </svg>
+            Anticipy
+          </span>
         </a>
 
         {/* Desktop links */}
