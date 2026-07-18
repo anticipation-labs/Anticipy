@@ -6,10 +6,17 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const CHAPTERS = [
+const CHAPTERS: {
+  k: string;
+  title: string;
+  body: string;
+  media?: string;
+  card: JSX.Element;
+}[] = [
   {
     k: "01",
     title: "You speak",
+    media: "/videos/worn-body.mp4",
     body: "At dinner. On a walk. Mid-meeting. \u201CI\u2019ll send Marcus the notes tonight \u2014 actually, drop the budget slide.\u201D You just talk.",
     card: (
       <div className="space-y-3">
@@ -29,6 +36,7 @@ const CHAPTERS = [
   {
     k: "02",
     title: "It understands",
+    media: "/videos/listen-pulse.mp4",
     body: "Not just the words \u2014 the correction. Who Marcus is. What \u201Ctonight\u201D means. What must never be in that email.",
     card: (
       <div className="space-y-2.5 text-[14px]">
@@ -54,6 +62,7 @@ const CHAPTERS = [
   {
     k: "03",
     title: "It executes",
+    media: "/videos/night-charge.mp4",
     body: "The exact email, drafted and shown to you first. One tap to approve. Sent once, verified in your Sent folder. Receipt kept. Closed.",
     card: (
       <div className="space-y-3">
@@ -138,15 +147,29 @@ export function Chapters() {
               </p>
             </div>
             <div className="md:[direction:ltr]">
-              <div
-                className="chapter-anim rounded-2xl p-7 max-w-sm mx-auto"
-                style={{
-                  background: "var(--dark-elevated)",
-                  border: "1px solid var(--dark-border)",
-                  boxShadow: "0 30px 60px rgba(0,0,0,0.45)",
-                }}
-              >
-                {c.card}
+              <div className="max-w-sm mx-auto">
+                {c.media && (
+                  <video
+                    className="chapter-anim w-full aspect-video object-cover rounded-2xl mb-[-28px] relative"
+                    style={{ border: "1px solid var(--dark-border)" }}
+                    src={c.media}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    aria-hidden
+                  />
+                )}
+                <div
+                  className="chapter-anim rounded-2xl p-7 relative"
+                  style={{
+                    background: "var(--dark-elevated)",
+                    border: "1px solid var(--dark-border)",
+                    boxShadow: "0 30px 60px rgba(0,0,0,0.45)",
+                  }}
+                >
+                  {c.card}
+                </div>
               </div>
             </div>
           </div>

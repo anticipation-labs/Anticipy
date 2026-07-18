@@ -63,7 +63,7 @@ export function Close() {
     >
       <video
         className="absolute inset-0 w-full h-full object-cover opacity-40"
-        src="/videos/hero-glint.mp4"
+        src="/videos/unbox-light.mp4"
         autoPlay
         muted
         loop

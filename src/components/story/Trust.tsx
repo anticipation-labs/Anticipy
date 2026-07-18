@@ -41,9 +41,25 @@ export function Trust() {
     <section
       ref={rootRef}
       id="privacy"
-      className="section-dark py-[140px] px-6"
+      className="relative section-dark py-[140px] px-6 overflow-hidden"
     >
-      <div className="max-w-xl mx-auto text-center">
+      <video
+        className="absolute inset-0 w-full h-full object-cover opacity-[0.16]"
+        src="/videos/listen-pulse.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        aria-hidden
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to bottom, var(--dark) 0%, rgba(12,12,12,0.35) 50%, var(--dark) 100%)",
+        }}
+      />
+      <div className="relative max-w-xl mx-auto text-center">
         <p className="trust-line text-[12px] uppercase tracking-[0.3em] text-gold mb-10">
           Three rules, engraved
         </p>
