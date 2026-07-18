@@ -6,7 +6,9 @@ import { Chapters } from "@/components/story/Chapters";
 import { ObjectSection } from "@/components/story/ObjectSection";
 import { Worn } from "@/components/story/Worn";
 import { Trust } from "@/components/story/Trust";
+import { Faq } from "@/components/story/Faq";
 import { Close } from "@/components/story/Close";
+import { StickyBuyBar } from "@/components/StickyBuyBar";
 import { Footer } from "@/components/Footer";
 
 export default function Home() {
@@ -35,8 +37,13 @@ export default function Home() {
       {/* 07 — Trust: three quiet rules */}
       <Trust />
 
-      {/* 08 — The close: three doors out */}
+      {/* 08 — Objections answered, founder's word */}
+      <Faq />
+
+      {/* 09 — The close: three doors out */}
       <Close />
+
+      <StickyBuyBar />
 
       <Footer />
     </>
