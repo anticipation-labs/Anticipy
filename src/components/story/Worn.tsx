@@ -11,11 +11,10 @@ const FRAMES: (
   | { type: "video"; src: string; caption: string }
   | { type: "image"; src: string; caption: string }
 )[] = [
-  { type: "video", src: "/videos/overhead-slate.mp4", caption: "On the nightstand" },
-  { type: "image", src: "/images/flatlay.png", caption: "In the flat lay" },
+  { type: "video", src: "/videos/overhead-slate.mp4", caption: "At rest" },
+  { type: "image", src: "/images/flatlay.png", caption: "Titanium and chain" },
   { type: "video", src: "/videos/macro-sweep.mp4", caption: "Up close" },
   { type: "image", src: "/images/nightstand.png", caption: "Charging, untouched" },
-  { type: "video", src: "/videos/pendant-leather.mp4", caption: "Against leather" },
   { type: "image", src: "/images/unbox.png", caption: "Out of the box" },
 ];
 

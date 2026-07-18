@@ -152,6 +152,28 @@ export function Chapters() {
           </div>
         ))}
       </div>
+
+      <div className="chapter-panel max-w-container mx-auto px-6 md:px-12 pb-[130px] text-center">
+        <p className="chapter-anim font-serif italic text-[clamp(22px,3vw,32px)] text-[var(--text-on-dark)]">
+          That&apos;s one promise. It does this with all of them.
+        </p>
+        <div className="chapter-anim mt-8">
+          <a
+            href="/pre-orders/purchase"
+            className="inline-block rounded-pill text-[16px] font-medium transition-all duration-300 hover:scale-[1.02]"
+            style={{
+              background: "var(--text-on-dark)",
+              color: "var(--dark)",
+              padding: "16px 44px",
+            }}
+          >
+            Pre-order &mdash; $149.99
+          </a>
+          <p className="text-[12px] uppercase tracking-[0.18em] text-[var(--text-on-dark-muted)] mt-4">
+            Ships August 2026 &middot; Full refund anytime before shipping
+          </p>
+        </div>
+      </div>
     </section>
   );
 }

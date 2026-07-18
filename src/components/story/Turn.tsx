@@ -73,7 +73,7 @@ export function Turn() {
     >
       <video
         className="turn-video absolute inset-0 w-full h-full object-cover opacity-0"
-        src="/videos/pendant-leather.mp4"
+        src="/videos/turn-catch.mp4"
         autoPlay
         muted
         loop
