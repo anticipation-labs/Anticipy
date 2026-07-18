@@ -70,7 +70,7 @@ export function StoryHero() {
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse at center, rgba(12,12,12,0) 30%, rgba(12,12,12,0.75) 100%)",
+            "linear-gradient(rgba(12,12,12,0.35), rgba(12,12,12,0.35)), radial-gradient(ellipse at center, rgba(12,12,12,0) 30%, rgba(12,12,12,0.8) 100%)",
         }}
       />
 
