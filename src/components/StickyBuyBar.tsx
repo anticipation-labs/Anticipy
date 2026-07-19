@@ -11,7 +11,13 @@ export function StickyBuyBar() {
       const nearEnd =
         window.scrollY + window.innerHeight >
         document.documentElement.scrollHeight - 900;
-      setVisible(past && !nearEnd);
+      const covered = Array.from(
+        document.querySelectorAll("[data-hide-sticky]")
+      ).some((el) => {
+        const r = el.getBoundingClientRect();
+        return r.top < window.innerHeight * 0.6 && r.bottom > window.innerHeight * 0.6;
+      });
+      setVisible(past && !nearEnd && !covered);
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });

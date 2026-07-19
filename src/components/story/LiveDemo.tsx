@@ -86,7 +86,11 @@ export function LiveDemo() {
   }, []);
 
   return (
-    <section ref={rootRef} className="section-dark relative overflow-hidden">
+    <section
+      ref={rootRef}
+      data-hide-sticky
+      className="section-dark relative overflow-hidden"
+    >
       <div className="min-h-screen flex flex-col items-center justify-center px-6 py-[90px]">
         <p className="text-[12px] uppercase tracking-[0.3em] text-gold mb-4 text-center">
           Watch one promise get kept
