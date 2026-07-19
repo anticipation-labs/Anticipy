@@ -143,16 +143,10 @@ export default function PreOrderPurchasePage({
                 $149.99
               </span>
               <span
-                className="text-[20px] line-through opacity-50"
+                className="text-[15px]"
                 style={{ color: "var(--text-on-light-muted)" }}
               >
-                $199.00
-              </span>
-              <span
-                className="text-[14px] font-medium"
-                style={{ color: "var(--gold)" }}
-              >
-                Save $49.01
+                $199 at launch
               </span>
             </div>
 

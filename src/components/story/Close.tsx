@@ -63,7 +63,7 @@ export function Close() {
     >
       <video
         className="absolute inset-0 w-full h-full object-cover opacity-40"
-        src="/videos/glove-reveal.mp4"
+        src="/videos/night-charge.mp4"
         autoPlay
         muted
         loop
@@ -95,14 +95,14 @@ export function Close() {
               padding: "18px 56px",
             }}
           >
-            Pre-order &mdash;{" "}
-            <span className="line-through opacity-50 mr-1">$199</span>$149.99
+            Pre-order &mdash; $149.99
           </a>
         </div>
 
         <p className="close-anim text-[13px] text-[var(--text-on-dark-muted)] mt-5">
-          First year of service included &middot; Free shipping (US &amp; Canada)
-          &middot; Ships August 2026 &middot; Full refund anytime before shipping
+          $199 at launch &middot; First year of service included &middot; Free
+          shipping (US &amp; Canada) &middot; Ships August 2026 &middot; Full
+          refund anytime before shipping
         </p>
 
         <div className="close-anim flex items-center justify-center gap-8 mt-10">

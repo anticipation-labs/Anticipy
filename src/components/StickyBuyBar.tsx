@@ -38,12 +38,9 @@ export function StickyBuyBar() {
       >
         <div className="pl-2">
           <p className="text-[14px] text-[var(--text-on-dark)] leading-tight">
-            <span className="line-through text-[var(--text-on-dark-muted)] mr-2">
-              $199
-            </span>
-            $149.99
+            Anticipy AM6 &middot; $149.99
           </p>
-          <p className="text-[11px] text-[var(--text-on-dark-muted)] leading-tight">
+          <p className="text-[11px] text-[var(--text-on-dark-muted)] leading-tight mt-0.5">
             Ships Aug 2026 &middot; Full refund before shipping
           </p>
         </div>

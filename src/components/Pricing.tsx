@@ -65,10 +65,10 @@ export function Pricing() {
                 </span>
               </h2>
               <span
-                className="text-[24px] md:text-[28px] line-through opacity-50"
+                className="text-[15px] md:text-[17px]"
                 style={{ color: "var(--text-on-light-muted)" }}
               >
-                ${RETAIL_PRICE}
+                ${RETAIL_PRICE} at launch
               </span>
             </div>
           </ScrollReveal>

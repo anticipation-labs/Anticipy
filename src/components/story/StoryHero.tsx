@@ -97,8 +97,7 @@ export function StoryHero() {
               padding: "16px 44px",
             }}
           >
-            Pre-order &mdash;{" "}
-            <span className="line-through opacity-50 mr-1">$199</span>$149.99
+            Pre-order &mdash; $149.99
           </a>
           <p className="text-[12px] uppercase tracking-[0.18em] text-[var(--text-on-dark-muted)] mt-4">
             First year of service included &middot; Ships August 2026 &middot;
