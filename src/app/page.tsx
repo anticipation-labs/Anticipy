@@ -6,6 +6,7 @@ import { Chapters } from "@/components/story/Chapters";
 import { ObjectSection } from "@/components/story/ObjectSection";
 import { Worn } from "@/components/story/Worn";
 import { Trust } from "@/components/story/Trust";
+import { Compare } from "@/components/story/Compare";
 import { Faq } from "@/components/story/Faq";
 import { Close } from "@/components/story/Close";
 import { StickyBuyBar } from "@/components/StickyBuyBar";
@@ -27,6 +28,9 @@ export default function Home() {
 
       {/* 04 — Comprehension: one promise, closed */}
       <Chapters />
+
+      {/* 04b — Why not the others */}
+      <Compare />
 
       {/* 05 — Desire: the object itself */}
       <ObjectSection />

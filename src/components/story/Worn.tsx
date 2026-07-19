@@ -11,11 +11,10 @@ const FRAMES: (
   | { type: "video"; src: string; caption: string }
   | { type: "image"; src: string; caption: string }
 )[] = [
-  { type: "video", src: "/videos/worn-body.mp4", caption: "Worn all day" },
-  { type: "video", src: "/videos/overhead-slate.mp4", caption: "At rest" },
-  { type: "video", src: "/videos/macro-sweep.mp4", caption: "Up close" },
-  { type: "video", src: "/videos/night-charge.mp4", caption: "Charging, untouched" },
-  { type: "video", src: "/videos/unbox-light.mp4", caption: "Out of the box" },
+  { type: "video", src: "/videos/on-body.mp4", caption: "Worn all day" },
+  { type: "video", src: "/videos/flatlay-done.mp4", caption: "At rest" },
+  { type: "video", src: "/videos/macro-listen.mp4", caption: "Up close" },
+  { type: "video", src: "/videos/glove-reveal.mp4", caption: "Out of the box" },
 ];
 
 export function Worn() {

@@ -58,7 +58,7 @@ export function ObjectSection() {
       <div className="relative overflow-hidden">
         <video
           className="object-video w-full h-[70vh] object-cover"
-          src="/videos/macro-metal.mp4"
+          src="/videos/glove-reveal.mp4"
           autoPlay
           muted
           loop

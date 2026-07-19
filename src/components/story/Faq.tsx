@@ -110,13 +110,6 @@ export function Faq() {
             border: "1px solid var(--dark-border)",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/omar.jpg"
-            alt="Omar, founder of Anticipy"
-            className="w-20 h-20 rounded-full object-cover shrink-0"
-            style={{ filter: "grayscale(1) contrast(1.05)", objectPosition: "center 30%" }}
-          />
           <div className="text-center sm:text-left">
             <p className="text-[15px] leading-relaxed text-[var(--text-on-dark)]">
               &ldquo;I built Anticipy because I was tired of being the person

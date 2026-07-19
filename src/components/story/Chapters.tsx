@@ -16,7 +16,7 @@ const CHAPTERS: {
   {
     k: "01",
     title: "You speak",
-    media: "/videos/worn-body.mp4",
+    media: "/videos/on-body.mp4",
     body: "At dinner. On a walk. Mid-meeting. \u201CI\u2019ll send Marcus the notes tonight \u2014 actually, drop the budget slide.\u201D You just talk.",
     card: (
       <div className="space-y-3">
@@ -36,7 +36,7 @@ const CHAPTERS: {
   {
     k: "02",
     title: "It understands",
-    media: "/videos/listen-pulse.mp4",
+    media: "/videos/macro-listen.mp4",
     body: "Not just the words \u2014 the correction. Who Marcus is. What \u201Ctonight\u201D means. What must never be in that email.",
     card: (
       <div className="space-y-2.5 text-[14px]">
@@ -62,7 +62,7 @@ const CHAPTERS: {
   {
     k: "03",
     title: "It executes",
-    media: "/videos/night-charge.mp4",
+    media: "/videos/flatlay-done.mp4",
     body: "The exact email, drafted and shown to you first. One tap to approve. Sent once, verified in your Sent folder. Receipt kept. Closed.",
     card: (
       <div className="space-y-3">

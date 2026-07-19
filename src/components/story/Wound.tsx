@@ -73,15 +73,6 @@ export function Wound() {
       ref={rootRef}
       className="relative min-h-screen overflow-hidden section-dark"
     >
-      <video
-        className="absolute inset-0 w-full h-full object-cover opacity-[0.18]"
-        src="/videos/mood.mp4"
-        autoPlay
-        muted
-        loop
-        playsInline
-        aria-hidden
-      />
       <div className="relative z-10 min-h-screen flex items-center justify-center px-6">
         <div className="text-center max-w-3xl">
           {PROMISES.map((p, i) => (
