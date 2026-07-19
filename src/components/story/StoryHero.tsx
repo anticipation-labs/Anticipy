@@ -59,7 +59,7 @@ export function StoryHero() {
     >
       <video
         className="hero-video absolute inset-0 w-full h-full object-cover"
-        src="/videos/hero-pendant.mp4"
+        src="/videos/hero-pendant.mp4?v=2"
         autoPlay
         muted
         loop
