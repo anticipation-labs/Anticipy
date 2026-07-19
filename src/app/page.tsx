@@ -3,6 +3,7 @@ import { StoryHero } from "@/components/story/StoryHero";
 import { Wound } from "@/components/story/Wound";
 import { Turn } from "@/components/story/Turn";
 import { Chapters } from "@/components/story/Chapters";
+import { LiveDemo } from "@/components/story/LiveDemo";
 import { ObjectSection } from "@/components/story/ObjectSection";
 import { Worn } from "@/components/story/Worn";
 import { Trust } from "@/components/story/Trust";
@@ -28,6 +29,9 @@ export default function Home() {
 
       {/* 04 — Comprehension: one promise, closed */}
       <Chapters />
+
+      {/* 04a — Proof of mechanism: watch it happen on the phone */}
+      <LiveDemo />
 
       {/* 04b — Why not the others */}
       <Compare />

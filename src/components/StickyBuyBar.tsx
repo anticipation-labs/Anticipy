@@ -38,7 +38,7 @@ export function StickyBuyBar() {
       >
         <div className="pl-2">
           <p className="text-[14px] text-[var(--text-on-dark)] leading-tight">
-            Anticipy AM6 &middot; $149.99
+            Anticipy pendant &middot; $149.99
           </p>
           <p className="text-[11px] text-[var(--text-on-dark-muted)] leading-tight mt-0.5">
             Pre-order price ends at launch &middot; Full refund before
