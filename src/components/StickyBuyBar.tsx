@@ -41,7 +41,8 @@ export function StickyBuyBar() {
             Anticipy AM6 &middot; $149.99
           </p>
           <p className="text-[11px] text-[var(--text-on-dark-muted)] leading-tight mt-0.5">
-            Ships Aug 2026 &middot; Full refund before shipping
+            Pre-order price ends at launch &middot; Full refund before
+            shipping
           </p>
         </div>
         <a
@@ -53,7 +54,7 @@ export function StickyBuyBar() {
             padding: "11px 26px",
           }}
         >
-          Pre-order
+          Reserve yours
         </a>
       </div>
     </div>

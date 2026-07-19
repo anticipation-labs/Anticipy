@@ -95,14 +95,14 @@ export function Close() {
               padding: "18px 56px",
             }}
           >
-            Pre-order &mdash; $149.99
+            Reserve yours &mdash; $149.99
           </a>
         </div>
 
         <p className="close-anim text-[13px] text-[var(--text-on-dark-muted)] mt-5">
-          $199 at launch &middot; First year of service included &middot; Free
-          shipping (US &amp; Canada) &middot; Ships August 2026 &middot; Full
-          refund anytime before shipping
+          Pre-order price ends at launch ($199 after) &middot; First year of
+          service included &middot; Free shipping (US &amp; Canada) &middot;
+          Ships August 2026 &middot; Change your mind? One email, full refund
         </p>
 
         <div className="close-anim flex items-center justify-center gap-8 mt-10">
