@@ -24,12 +24,13 @@ export function StickyBuyBar() {
       style={{
         transform: visible ? "translateY(0)" : "translateY(110%)",
         opacity: visible ? 1 : 0,
-        pointerEvents: visible ? "auto" : "none",
+        pointerEvents: "none",
       }}
     >
       <div
         className="mx-auto max-w-xl mb-4 px-5 py-3 rounded-pill flex items-center justify-between gap-4 backdrop-blur-md"
         style={{
+          pointerEvents: visible ? "auto" : "none",
           background: "rgba(18,18,18,0.88)",
           border: "1px solid var(--dark-border)",
           boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
