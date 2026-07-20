@@ -71,13 +71,17 @@ anticipy_app/
 
 ## Built, pending final proof
 
-### 7. Firmware: "Friend" → "Anticipy" + smooth battery %
-- Source changes done in the Omi firmware (DK1 config): BLE name **Anticipy**,
-  model **Anticipy Pendant**, and an exponential-moving-average smoother in
-  `battery.c` that fixes the jumpy 15→18→16→19% you saw (voltage wobbles under
-  charge+radio load; now it's averaged).
-- Building the .uf2/.zip in Docker (Zephyr/NCS toolchain) — flashing happens
-  over your Mac tunnel exactly like last time.
+### 7. Firmware: "Friend" → "Anticipy" + smooth battery % — BUILT
+- Rebuilt from the **exact release tag running on your board** (v2.0.1-Omi),
+  with: BLE name **Anticipy** (config + the hardcoded advertising string in
+  transport.c), model **Anticipy Pendant**, and an exponential-moving-average
+  smoother in `battery.c` that fixes the jumpy 15→18→16→19% (voltage wobbles
+  under charge+radio load; now it's averaged over time).
+- Compiled clean in the official Zephyr/NCS 2.7 Docker toolchain. Artifacts:
+  `firmware/anticipy.uf2` (drag-and-drop flash) and `firmware/anticipy_dfu.zip`
+  (serial DFU over the Mac tunnel, same as last time). Binary verified: zero
+  "Friend" strings remain.
+- Not yet flashed — needs your Mac tunnel (one paste).
 
 ### 8. iPhone app (TestFlight)
 - Full native SwiftUI app written: background BLE (your pendant's exact,
