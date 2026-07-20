@@ -69,6 +69,21 @@ anticipy_app/
   ("I'll send you the pitch deck") stopped at **"Draft ready — send it?"**
   Action-first, confirm-before-send — exactly the product behavior. **PASS**
 
+## LIVE proofs with your OpenRouter key (added after key arrived)
+
+### 6b. Live brain: real DeepSeek V3.2 via OpenRouter
+- 5 transcript lines triaged by the actual model (not the fallback):
+  pitch deck → act; movie joke → ignore; vague dinner → ask; landlord
+  reminder → act; blue-or-black → ask. All correct, JSON contract held.
+
+### 6c. Live browser-use agent (the PRODUCT's browser agent, not my tools)
+- browser-use launched its own Chromium, was given only the natural-language
+  goal "open the Mystery category and report the first 3 books", and
+  autonomously navigated, clicked, extracted, and reported:
+  Sharp Objects £47.82 · In a Dark, Dark Wood £19.63 · The Past Never Ends
+  £56.50 — verified correct against the live site. Model: DeepSeek V3.2
+  through OpenRouter. **PASS**
+
 ## Built, pending final proof
 
 ### 7. Firmware: "Friend" → "Anticipy" + smooth battery % — BUILT
