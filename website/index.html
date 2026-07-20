@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Anticipy — the assistant that already did it</title>
+<style>
+  :root {
+    --bg: #07080a;
+    --panel: #0e1013;
+    --line: rgba(255,255,255,.08);
+    --text: #eef1f4;
+    --muted: #9aa3ad;
+    --accent: #3ddc84;
+    --accent-dim: rgba(61,220,132,.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    line-height: 1.6; overflow-x: hidden;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .3px; }
+  .logo .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 18px var(--accent); animation: pulse 2.6s infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 8px var(--accent); } 50% { box-shadow: 0 0 26px var(--accent); } }
+  nav a { color: var(--muted); text-decoration: none; margin-left: 26px; font-size: 14px; }
+  nav a:hover { color: var(--text); }
+
+  .hero { padding: 96px 0 60px; text-align: center; }
+  .hero h1 {
+    font-size: clamp(38px, 6vw, 68px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.08;
+    animation: rise .8s ease both;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p.sub {
+    margin: 22px auto 0; max-width: 620px; color: var(--muted); font-size: 19px;
+    animation: rise .8s .15s ease both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+  .cta { margin-top: 36px; animation: rise .8s .3s ease both; }
+  .btn {
+    display: inline-block; padding: 14px 28px; border-radius: 12px; font-weight: 600;
+    text-decoration: none; font-size: 16px; transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .btn.primary { background: var(--accent); color: #04220f; }
+  .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(61,220,132,.35); }
+  .btn.ghost { color: var(--text); border: 1px solid var(--line); margin-left: 12px; }
+  .btn.ghost:hover { border-color: var(--accent); }
+
+  /* live demo strip */
+  .demo {
+    margin: 70px auto 0; max-width: 760px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 18px; padding: 26px 30px; text-align: left; position: relative; overflow: hidden;
+  }
+  .demo::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(61,220,132,.06) 50%, transparent 70%);
+    animation: sheen 5s infinite;
+  }
+  @keyframes sheen { 0% { transform: translateX(-100%);} 100% { transform: translateX(100%);} }
+  .demo .line { display: flex; gap: 12px; margin: 14px 0; opacity: 0; animation: rise .6s ease forwards; }
+  .demo .line:nth-child(2) { animation-delay: .6s; }
+  .demo .line:nth-child(3) { animation-delay: 1.6s; }
+  .demo .line:nth-child(4) { animation-delay: 2.8s; }
+  .tag { flex-shrink: 0; font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 20px; height: fit-content; margin-top: 2px; }
+  .tag.heard { background: rgba(255,255,255,.07); color: var(--muted); }
+  .tag.brain { background: var(--accent-dim); color: var(--accent); }
+  .demo .txt { font-size: 15px; color: var(--text); }
+  .demo .txt small { display: block; color: var(--muted); margin-top: 3px; }
+
+  section { padding: 90px 0 0; }
+  h2 { font-size: 32px; letter-spacing: -.5px; margin-bottom: 10px; }
+  .lead { color: var(--muted); max-width: 560px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 40px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px;
+    transition: transform .2s ease, border-color .2s ease;
+  }
+  .card:hover { transform: translateY(-4px); border-color: rgba(61,220,132,.4); }
+  .card .n { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+  .card h3 { margin: 8px 0 8px; font-size: 18px; }
+  .card p { color: var(--muted); font-size: 14.5px; }
+
+  /* install walkthrough */
+  .steps { counter-reset: step; margin-top: 44px; display: grid; gap: 16px; }
+  .step {
+    display: flex; gap: 20px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 24px 26px; align-items: flex-start;
+  }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent-dim); color: var(--accent); font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h4 { font-size: 16px; margin-bottom: 4px; }
+  .step p { color: var(--muted); font-size: 14.5px; }
+  .step code {
+    background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 6px;
+    padding: 1px 7px; font-size: 13px; color: var(--accent);
+  }
+
+  footer { margin-top: 110px; padding: 34px 0 44px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 13.5px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="logo"><span class="dot"></span>Anticipy</div>
+    <div>
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="#pendant">Pendant</a>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <h1>You mention it.<br /><em>It's already done.</em></h1>
+    <p class="sub">Anticipy is a pendant that hears your day and an agent that acts on it —
+      drafting the email, finding the reservation, chasing the follow-up — then asks
+      one question: <b>“good to send?”</b></p>
+    <div class="cta">
+      <a class="btn primary" href="#install">Install the browser agent</a>
+      <a class="btn ghost" href="#how">See it work</a>
+    </div>
+
+    <div class="demo">
+      <div class="line"><span class="tag heard">Heard</span>
+        <div class="txt">“I'll send you the pitch deck right after this call.”</div></div>
+      <div class="line"><span class="tag brain">Anticipy</span>
+        <div class="txt">Found the investor in your inbox. Draft written, deck attached, DocSend link included.
+          <small>Sitting in your Gmail drafts — nothing sent yet.</small></div></div>
+      <div class="line"><span class="tag brain">Anticipy</span>
+        <div class="txt">Good to send it on your behalf?</div></div>
+      <div class="line"><span class="tag heard">You</span>
+        <div class="txt">Yes.</div></div>
+    </div>
+  </div>
+
+  <section id="how">
+    <h2>Three pieces. One assistant.</h2>
+    <p class="lead">Everything runs on your accounts, in your browser, with your confirmation
+      before anything irreversible.</p>
+    <div class="grid">
+      <div class="card"><div class="n">01 — EARS</div>
+        <h3>The pendant</h3>
+        <p>A featherweight wearable that streams what it hears to your phone over Bluetooth.
+          All-day battery. No screen, no buttons, no fuss.</p></div>
+      <div class="card"><div class="n">02 — BRAIN</div>
+        <h3>The app</h3>
+        <p>Transcribes your day — in the cloud or fully on-device — and decides what matters:
+          ignore the small talk, act on the commitments, ask when it's unsure.</p></div>
+      <div class="card"><div class="n">03 — HANDS</div>
+        <h3>The browser agent</h3>
+        <p>A Chrome extension that works inside your logged-in sessions. Gmail, Calendar,
+          reservations, portals — it does the clicking, you give the final yes.</p></div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install the browser agent</h2>
+    <p class="lead">Developer preview — loads straight into Chrome in under a minute. No store, no wait.</p>
+    <div class="steps">
+      <div class="step"><div><h4>Download the extension</h4>
+        <p>Grab <code>anticipy-extension.zip</code> and unzip it anywhere you like —
+          Desktop is fine.</p></div></div>
+      <div class="step"><div><h4>Open Chrome's extension page</h4>
+        <p>Type <code>chrome://extensions</code> in the address bar, then flip on
+          <b>Developer mode</b> (top-right toggle).</p></div></div>
+      <div class="step"><div><h4>Load it</h4>
+        <p>Click <b>Load unpacked</b> and pick the unzipped <code>anticipy</code> folder.
+          The green Anticipy dot appears in your toolbar.</p></div></div>
+      <div class="step"><div><h4>Pair it</h4>
+        <p>Click the Anticipy icon and enter the 6-digit code from your phone app.
+          That's it — your assistant has hands.</p></div></div>
+    </div>
+  </section>
+
+  <section id="pendant">
+    <h2>The pendant</h2>
+    <p class="lead">Machined to disappear — a piece of jewelry that happens to be a microphone.
+      Magnetic charging, all-day listening, and a phone app that treats your audio like a secret:
+      transcribe locally and nothing ever leaves your pocket.</p>
+    <div class="grid">
+      <div class="card"><div class="n">BATTERY</div><h3>All-day listening</h3>
+        <p>Streams your whole workday on one charge, then snaps onto its magnetic charger at night.</p></div>
+      <div class="card"><div class="n">PRIVACY</div><h3>Local mode</h3>
+        <p>Flip one toggle and transcription happens entirely on your iPhone. No cloud, no copies.</p></div>
+      <div class="card"><div class="n">CONTROL</div><h3>Nothing without a yes</h3>
+        <p>Sends, bookings, payments, cancellations — the agent prepares everything and always asks first.</p></div>
+    </div>
+  </section>
+
+  <footer>Anticipy — it already did it. · Developer preview</footer>
+</div>
+</body>
+</html>
