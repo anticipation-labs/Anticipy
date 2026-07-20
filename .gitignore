@@ -1,0 +1,6 @@
+.venv/
+backend/pb_data/
+backend/pocketbase
+backend/pb.zip
+backend/pb.log
+__pycache__/

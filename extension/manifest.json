@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Anticipy",
+  "version": "0.1.0",
+  "description": "Anticipy's hands on your computer: executes tasks in your own logged-in browser.",
+  "permissions": ["storage", "tabs", "scripting", "alarms", "notifications"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Anticipy"
+  }
+}
