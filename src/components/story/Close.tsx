@@ -6,7 +6,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const CAL_LINK = "https://cal.com/omar-anticipy";
+const CAL_LINK = "https://calendar.app.google/FXvw3ePndv8ciUaM6";
 
 type FormState = "idle" | "loading" | "success" | "duplicate" | "error";
 

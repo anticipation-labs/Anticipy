@@ -119,7 +119,7 @@ export function Faq() {
             <p className="mt-3 text-[13px] uppercase tracking-[0.16em] text-[var(--text-on-dark-muted)]">
               Omar &middot; Founder, Anticipy &middot;{" "}
               <a
-                href="https://cal.com/omar-anticipy"
+                href="https://calendar.app.google/FXvw3ePndv8ciUaM6"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline underline-offset-4 decoration-[rgba(200,169,126,0.5)] hover:text-gold transition-colors normal-case tracking-normal"
