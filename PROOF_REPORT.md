@@ -84,6 +84,21 @@ anticipy_app/
   £56.50 — verified correct against the live site. Model: DeepSeek V3.2
   through OpenRouter. **PASS**
 
+### 6d. Full chain: app -> backend -> brain (live) -> extension -> result
+`proof: python proof/test_full_chain.py`
+- Transcript line → **live DeepSeek triage** ("act") → job on the backend →
+  **real Chrome with the unpacked extension** claimed it, logged into a portal,
+  read the outcome, reported "done" → app read the result back. **PASS**
+
+### 6e. Cloud transcription (Deepgram, your key) on REAL pendant audio
+- Your 66s capture transcribed by Deepgram nova-2: word-for-word correct,
+  including "The password is seventeen forty eight." **PASS**
+
+### 6f. Local transcription (offline Whisper) on the SAME audio
+- Fully on-CPU, no network: correct transcript including "The password is
+  1748." The iOS app now has a **Local / Cloud toggle** in Settings (local =
+  Apple on-device recognition; audio never leaves the phone). **PASS**
+
 ## Built, pending final proof
 
 ### 7. Firmware: "Friend" → "Anticipy" + smooth battery % — BUILT
