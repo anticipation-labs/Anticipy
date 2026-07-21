@@ -78,7 +78,7 @@ struct OnboardingView: View {
             Text("Anticipy")
                 .font(Theme.display(44))
                 .foregroundStyle(Theme.ivory)
-            Text("It listens, remembers what matters,\nand quietly does the work.")
+            Text("Meet Annie. She listens, remembers\nwhat matters, and quietly does the work.")
                 .font(.body)
                 .foregroundStyle(Theme.sand)
                 .multilineTextAlignment(.center)
@@ -94,12 +94,12 @@ struct OnboardingView: View {
             Text("How it works")
                 .font(Theme.display(32))
                 .foregroundStyle(Theme.ivory)
-            stepCard(icon: "waveform", title: "It listens",
+            stepCard(icon: "waveform", title: "She listens",
                      text: "Your pendant hears your day and transcribes it — on-device if you prefer.")
-            stepCard(icon: "sparkles", title: "It understands",
-                     text: "Commitments like “I'll send that over” are caught the moment you say them.")
-            stepCard(icon: "cursorarrow.click.2", title: "It acts",
-                     text: "Your browser agent prepares the work — and always asks before anything is sent.")
+            stepCard(icon: "sparkles", title: "She remembers",
+                     text: "Annie catches commitments like “I'll send that over” and keeps them until they're done.")
+            stepCard(icon: "cursorarrow.click.2", title: "She acts",
+                     text: "Annie prepares the work in your browser — and always asks before anything is sent.")
             Spacer()
             Spacer()
         }
