@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Anticipy — you're in</title>
+    <style>
+      :root {
+        --ink: #0c0c0c; --surface: #161616; --card: #1e1e1e; --stroke: #252525;
+        --ivory: #f5f0eb; --sand: #d4cec7; --gray: #8a8a8a; --champagne: #c8a97e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--ink); color: var(--ivory);
+        font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+        display: flex; justify-content: center; padding: 64px 24px;
+      }
+      main { max-width: 560px; width: 100%; }
+      .logo { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+      h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 40px; margin: 0 0 8px; }
+      .sub { color: var(--sand); font-size: 16px; margin: 0 0 36px; line-height: 1.5; }
+      .card {
+        background: var(--card); border: 1px solid var(--stroke); border-radius: 18px;
+        padding: 20px; margin-bottom: 14px; display: flex; gap: 16px; align-items: flex-start;
+      }
+      .num {
+        min-width: 30px; height: 30px; border-radius: 50%; background: var(--surface);
+        color: var(--champagne); display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 14px;
+      }
+      .card h2 { font-size: 16px; margin: 2px 0 6px; font-weight: 600; }
+      .card p { font-size: 14px; color: var(--gray); margin: 0; line-height: 1.5; }
+      .status { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--stroke); }
+      .dot.on { background: var(--champagne); }
+      input {
+        width: 100%; margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+        border: 1px solid var(--stroke); background: var(--surface); color: var(--ivory); font-size: 13px;
+      }
+      button {
+        margin-top: 10px; padding: 10px 20px; border-radius: 999px; border: none;
+        background: var(--champagne); color: var(--ink); font-weight: 600; font-size: 14px; cursor: pointer;
+      }
+      .note { color: var(--gray); font-size: 12px; margin-top: 32px; line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="logo">
+        <svg width="44" height="44" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="#161616"/>
+          <rect x="10.5" y="3" width="11" height="26" rx="5.5" stroke="#F5F0EB" stroke-width="2"/>
+          <circle cx="16" cy="20" r="1.8" fill="#C8A97E"/>
+        </svg>
+        <div>
+          <h1>Anticipy is in your browser.</h1>
+        </div>
+      </div>
+      <p class="sub">This is Anticipy's hands on your computer. When your pendant hears a commitment, the work gets prepared right here — in a quiet background tab group, using your own logged-in accounts, never your passwords. Nothing irreversible happens without your OK.</p>
+
+      <div class="card">
+        <div class="num">1</div>
+        <div style="flex:1">
+          <h2>Link to your Anticipy</h2>
+          <p>The agent connects to the same brain your phone talks to.</p>
+          <div class="status"><span class="dot" id="backendDot"></span><span id="backendText">Checking connection…</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="num">2</div>
+        <div style="flex:1">
+          <h2>Give it a mind</h2>
+          <p>Paste your OpenRouter key so the agent can decide each click itself. It's stored only in this browser.</p>
+          <input id="key" type="password" placeholder="sk-or-…" />
+          <button id="save">Save</button>
+          <div class="status"><span class="dot" id="keyDot"></span><span id="keyText">No key yet</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="num">3</div>
+        <div style="flex:1">
+          <h2>That's it — live your day</h2>
+          <p>You'll see an "Anticipy started debugging this browser" banner when it's working: that's Chrome telling you the agent is acting, the same way Claude in Chrome does. Tasks run in a collapsed <b>Anticipy</b> tab group and always pause for your confirmation before anything is sent, booked, or paid.</p>
+        </div>
+      </div>
+
+      <p class="note">
+        Heads-up for this developer preview: extensions loaded via “Load unpacked” don't auto-update — keep the folder where it is, and after an update press ⟳ on chrome://extensions. The Chrome Web Store version will update itself automatically.
+      </p>
+    </main>
+    <script src="onboarding.js"></script>
+  </body>
+</html>

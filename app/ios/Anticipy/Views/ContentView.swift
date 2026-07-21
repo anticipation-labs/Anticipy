@@ -1,90 +1,230 @@
 import SwiftUI
 
-struct ContentView: View {
+/// Home = the proactive feed: what Anticipy heard, what it's handling,
+/// what needs your OK, and what's done — plus live connection health.
+struct HomeView: View {
     @EnvironmentObject var pendant: PendantManager
     @EnvironmentObject var session: AnticipySession
+
+    private var needsOK: [AgentJob] { session.jobs.filter { $0.status == "awaiting_confirm" } }
+    private var handling: [AgentJob] { session.jobs.filter { $0.status == "queued" || $0.status == "running" } }
+    private var finished: [AgentJob] { session.jobs.filter { $0.status == "done" || $0.status == "failed" } }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(red: 0.05, green: 0.05, blue: 0.07).ignoresSafeArea()
-                VStack(spacing: 0) {
-                    pendantCard
-                    if session.transcript.isEmpty {
-                        emptyState
-                    } else {
-                        transcriptList
+                Theme.ink.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        statusStrip
+                        if needsOK.isEmpty && handling.isEmpty && finished.isEmpty && session.transcript.isEmpty {
+                            emptyState
+                        }
+                        if !needsOK.isEmpty {
+                            sectionHeader("Needs your OK")
+                            ForEach(needsOK) { ConfirmJobCard(job: $0) }
+                        }
+                        if !handling.isEmpty {
+                            sectionHeader("Handling")
+                            ForEach(handling) { HandlingCard(job: $0) }
+                        }
+                        if !session.transcript.isEmpty {
+                            sectionHeader("Heard")
+                            ForEach(session.transcript.suffix(6).reversed()) { TranscriptRow(line: $0) }
+                        }
+                        if !finished.isEmpty {
+                            sectionHeader("Done")
+                            ForEach(finished.prefix(8)) { DoneCard(job: $0) }
+                        }
                     }
-                    ForEach(session.pendingConfirms) { card in
-                        ConfirmCardView(card: card)
-                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 30)
                 }
+                .refreshable { await session.refresh() }
             }
-            .navigationTitle("Anticipy")
             .toolbar {
-                NavigationLink { SettingsView() } label: {
-                    Image(systemName: "slider.horizontal.3")
+                ToolbarItem(placement: .navigationBarLeading) {
+                    HStack(spacing: 10) {
+                        LogoMark(size: 26)
+                        Text("Anticipy")
+                            .font(Theme.display(24))
+                            .foregroundStyle(Theme.ivory)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink { SettingsView() } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundStyle(Theme.sand)
+                    }
                 }
             }
+            .toolbarBackground(Theme.ink, for: .navigationBar)
         }
     }
 
-    private var pendantCard: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(pendant.state == "connected"
-                        ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
-                    .frame(width: 40, height: 40)
-                Image(systemName: "circle.hexagongrid.circle")
-                    .foregroundStyle(pendant.state == "connected" ? .green : .orange)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(pendant.deviceName ?? "Anticipy Pendant")
-                    .font(.subheadline.weight(.semibold))
-                Text(pendant.state == "connected" ? "Listening" : pendant.state.capitalized)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+    // MARK: - Status
+
+    private var statusStrip: some View {
+        HStack(spacing: 10) {
+            statusPill(
+                icon: "dot.radiowaves.left.and.right",
+                label: pendantLabel,
+                active: pendant.state == .connected,
+                detail: pendant.battery.map { "\($0)%" }
+            )
+            statusPill(
+                icon: "macbook",
+                label: session.backendReachable ? "Agent linked" : "Agent offline",
+                active: session.backendReachable,
+                detail: nil
+            )
             Spacer()
-            if let b = pendant.battery {
-                VStack(spacing: 1) {
-                    Image(systemName: b > 60 ? "battery.100" : b > 25 ? "battery.50" : "battery.25")
-                    Text("\(b)%").font(.caption2)
-                }
-                .foregroundStyle(b > 25 ? .secondary : Color.orange)
-            }
         }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 18).fill(.white.opacity(0.05)))
-        .padding([.horizontal, .top])
+        .padding(.top, 6)
+    }
+
+    private var pendantLabel: String {
+        switch pendant.state {
+        case .connected: return "Listening"
+        case .connecting: return "Connecting"
+        case .reconnecting: return "Reconnecting"
+        case .searching: return "Searching"
+        case .unavailable: return "Bluetooth off"
+        case .off: return pendant.hasPairedPendant ? "Pendant away" : "No pendant"
+        }
+    }
+
+    private func statusPill(icon: String, label: String, active: Bool, detail: String?) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(active ? Theme.champagne : Theme.stroke)
+                .frame(width: 7, height: 7)
+            Image(systemName: icon).font(.caption)
+            Text(label).font(.caption.weight(.medium))
+            if let detail { Text(detail).font(.caption2).foregroundStyle(Theme.gray) }
+        }
+        .foregroundStyle(active ? Theme.ivory : Theme.gray)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(Theme.surface))
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.display(21))
+            .foregroundStyle(Theme.ivory)
+            .padding(.top, 4)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Spacer()
-            Image(systemName: "waveform")
-                .font(.system(size: 42))
-                .foregroundStyle(.tertiary)
-            Text("Wear your pendant and live your day.")
-                .font(.headline)
-            Text("Anticipy listens, understands, and handles\nthe follow-through — asking before anything is sent.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        VStack(spacing: 16) {
+            LogoMark(size: 72)
+                .padding(.top, 70)
+            Text("Live your day.")
+                .font(Theme.display(28))
+                .foregroundStyle(Theme.ivory)
+            Text("Anticipy listens, understands, and handles the follow-through — asking before anything is sent.")
+                .font(.callout)
+                .foregroundStyle(Theme.gray)
                 .multilineTextAlignment(.center)
-            Spacer()
+                .padding(.horizontal, 24)
         }
+        .frame(maxWidth: .infinity)
     }
+}
 
-    private var transcriptList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 10) {
-                ForEach(session.transcript) { line in
-                    TranscriptRow(line: line)
+// MARK: - Cards
+
+/// A job the agent prepared and is holding for your explicit go-ahead.
+struct ConfirmJobCard: View {
+    let job: AgentJob
+    @EnvironmentObject var session: AnticipySession
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Ready — say the word", systemImage: "checkmark.seal")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.champagne)
+            Text(job.goal.replacingOccurrences(of: "_", with: " ").capitalized)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Theme.ivory)
+            if let r = job.result, !r.isEmpty {
+                Text(r).font(.footnote).foregroundStyle(Theme.sand)
+            }
+            HStack(spacing: 10) {
+                Button {
+                    Task { await session.confirm(job) }
+                } label: {
+                    Text("Send it")
+                        .font(.callout.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Capsule().fill(Theme.champagne))
+                        .foregroundStyle(Theme.ink)
+                }
+                Button {
+                    Task { await session.decline(job) }
+                } label: {
+                    Text("Not now")
+                        .font(.callout.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Capsule().strokeBorder(Theme.stroke))
+                        .foregroundStyle(Theme.sand)
                 }
             }
-            .padding()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .anticipyCard()
+    }
+}
+
+/// A job the agent is working on right now.
+struct HandlingCard: View {
+    let job: AgentJob
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if job.status == "running" {
+                ProgressView().tint(Theme.champagne)
+            } else {
+                Image(systemName: "hourglass").foregroundStyle(Theme.gray)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(job.status == "running" ? "I'm handling it" : "Queued for your browser")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.champagne)
+                Text(job.goal.replacingOccurrences(of: "_", with: " ").capitalized)
+                    .font(.callout)
+                    .foregroundStyle(Theme.ivory)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .anticipyCard()
+    }
+}
+
+/// A completed (or failed) job with its result.
+struct DoneCard: View {
+    let job: AgentJob
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: job.status == "done" ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .foregroundStyle(job.status == "done" ? Theme.champagne : Theme.gray)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(job.goal.replacingOccurrences(of: "_", with: " ").capitalized)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Theme.ivory)
+                if let r = job.result, !r.isEmpty {
+                    Text(r).font(.footnote).foregroundStyle(Theme.gray).lineLimit(3)
+                }
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .anticipyCard()
     }
 }
 
@@ -95,51 +235,17 @@ struct TranscriptRow: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(line.text)
                 .font(.callout)
+                .foregroundStyle(Theme.ivory)
             if let d = line.decision, d != "ignore" {
                 HStack(spacing: 5) {
                     Image(systemName: d == "act" ? "bolt.fill" : "questionmark.circle")
                     Text(d == "act" ? "On it" : "Quick question for you")
                 }
                 .font(.caption.weight(.medium))
-                .foregroundStyle(d == "act" ? Color.green : Color.orange)
+                .foregroundStyle(Theme.champagne)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.05)))
-    }
-}
-
-struct ConfirmCardView: View {
-    let card: AnticipySession.ConfirmCard
-    @EnvironmentObject var session: AnticipySession
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Ready to go", systemImage: "checkmark.seal")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.green)
-            Text(card.summary)
-                .font(.subheadline)
-            HStack(spacing: 10) {
-                Button {
-                    session.pendingConfirms.removeAll { $0.id == card.id }
-                } label: {
-                    Text("Send it").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-                Button {
-                    session.pendingConfirms.removeAll { $0.id == card.id }
-                } label: {
-                    Text("Not now").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 18).fill(.white.opacity(0.07)))
-        .padding(.horizontal)
-        .padding(.bottom, 8)
+        .anticipyCard()
     }
 }

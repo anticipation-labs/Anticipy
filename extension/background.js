@@ -75,7 +75,15 @@ async function runJob(job) {
     return;
   }
   await updateJob(job.id, { status: "running" });
-  const tab = await chrome.tabs.create({ url: build(params), active: true });
+  // Work quietly: background tab inside a collapsed "Anticipy" tab group,
+  // same as the agent_goal path — never steals the user's focus.
+  const tab = await chrome.tabs.create({ url: build(params), active: false });
+  try {
+    const group = await chrome.tabs.group({ tabIds: tab.id });
+    await chrome.tabGroups.update(group, { title: "Anticipy", color: "yellow", collapsed: true });
+  } catch (e) {
+    // tab groups unavailable (e.g. incognito) — continue in a plain background tab
+  }
 
   if (job.goal === "form_submit_demo") {
     // Demonstrates in-page acting: fill and submit a real form, read the result.
@@ -110,8 +118,12 @@ async function poll() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create("anticipy-poll", { periodInMinutes: POLL_SECONDS / 60 });
+  // First-run welcome: a guided setup page, not a paragraph in a README.
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") });
+  }
 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === "anticipy-poll") poll();
