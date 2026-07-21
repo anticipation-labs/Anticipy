@@ -15,6 +15,7 @@ job queue, outside any model.
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -26,6 +27,22 @@ from .memory import Memory
 from .orchestrator import Brain, Decision, IRREVERSIBLE
 
 NAME = "Anticipy"
+
+# Policy layer OUTSIDE the model: any goal whose text implies something that
+# leaves the owner's world (sending, booking, buying, signing up, calling,
+# posting, deleting) is held for confirmation regardless of what triage said.
+# LLM goal strings are free-form, so exact-match sets are not enough.
+_IRREVERSIBLE_RE = re.compile(
+    r"\b(send|email|book|reserve|buy|purchase|order|pay|sign(\s+\w+)?\s*up|register|"
+    r"subscribe|submit|post|publish|reply|message|text|call|cancel|delete|"
+    r"unsubscribe|transfer|schedule|invite|rsvp)\b",
+    re.IGNORECASE,
+)
+
+
+def is_consequential(goal: str, params: dict | None = None) -> bool:
+    blob = f"{goal} {json.dumps(params or {})}"
+    return bool(_IRREVERSIBLE_RE.search(blob))
 
 BRIEFING_SYSTEM = f"""You are {NAME}, the person's personal assistant who lives
 in their Anticipy pendant. You are warm, brief, and competent — a trusted
@@ -161,7 +178,9 @@ class Anticipy:
             r = requests.post(
                 f"{self.backend_url}/api/collections/jobs/records",
                 json={"goal": goal, "params": json.dumps(params),
-                      "status": "awaiting_confirm" if (hold or goal in IRREVERSIBLE) else "queued",
+                      "status": "awaiting_confirm"
+                      if (hold or goal in IRREVERSIBLE or is_consequential(goal, params))
+                      else "queued",
                       "device_id": "anticipy", "owner": self.owner_id},
                 timeout=10,
             )

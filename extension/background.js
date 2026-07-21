@@ -38,9 +38,16 @@ async function ensureRegistered() {
   return { agentId, recordId: rec.id };
 }
 
+// Jobs this worker is actively running — their claims get refreshed on every
+// heartbeat so the stale-requeue sweep never eats a live job.
+const activeJobs = new Set();
+
 async function heartbeat() {
   const reg = await ensureRegistered();
   if (!reg) return null;
+  for (const id of activeJobs) {
+    await updateJob(id, { claimed_at: new Date().toISOString() });
+  }
   const r = await fetch(`${BASE}/api/collections/agents/records/${reg.recordId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -61,6 +68,7 @@ async function requeueStaleJobs() {
   const { items } = await r.json();
   const now = Date.now();
   for (const j of items || []) {
+    if (activeJobs.has(j.id)) continue; // this worker is running it right now
     const claimed = j.claimed_at ? Date.parse(j.claimed_at) : Date.parse(j.updated);
     if (now - claimed > STALE_JOB_MS) {
       await updateJob(j.id, { status: "queued", claimed_by: "", claimed_at: null });
@@ -114,6 +122,15 @@ async function updateJob(id, fields) {
 
 async function runJob(job) {
   const params = job.params ? JSON.parse(job.params) : {};
+  activeJobs.add(job.id);
+  try {
+    await runJobInner(job, params);
+  } finally {
+    activeJobs.delete(job.id);
+  }
+}
+
+async function runJobInner(job, params) {
 
   if (job.goal === "agent_goal") {
     // Autonomous mode: LLM click-loop via chrome.debugger in a background
