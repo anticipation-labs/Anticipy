@@ -17,7 +17,7 @@ struct HomeView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         statusStrip
-                        annieCard
+                        anticipyCardView
                         if needsOK.isEmpty && handling.isEmpty && finished.isEmpty && session.transcript.isEmpty {
                             emptyState
                         }
@@ -110,13 +110,13 @@ struct HomeView: View {
         .background(Capsule().fill(Theme.surface))
     }
 
-    /// Annie speaks first: a first-person briefing of what she heard and
+    /// Anticipy speaks first: a first-person briefing of what she heard and
     /// what she's handling, rebuilt live from the real job queue.
-    private var annieCard: some View {
+    private var anticipyCardView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 LogoMark(size: 22)
-                Text("Annie")
+                Text("Anticipy")
                     .font(Theme.display(18))
                     .foregroundStyle(Theme.champagne)
             }

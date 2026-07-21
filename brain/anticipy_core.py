@@ -1,6 +1,6 @@
-"""Annie — the one who's responsible for everything.
+"""Anticipy — the one who's responsible for everything.
 
-Annie is Anticipy's orchestrator AND its personality. One mind that:
+Anticipy is the orchestrator AND its personality. One mind that:
 - hears every transcript line and files it into the temporal memory graph,
 - decides what matters (ignore / ask / act) with memory as context,
 - delegates: browser work to the action arm (extension / browser-use via the
@@ -25,7 +25,7 @@ from .llm import LLM
 from .memory import Memory
 from .orchestrator import Brain, Decision, IRREVERSIBLE
 
-NAME = "Annie"
+NAME = "Anticipy"
 
 BRIEFING_SYSTEM = f"""You are {NAME}, the person's personal assistant who lives
 in their Anticipy pendant. You are warm, brief, and competent — a trusted
@@ -38,7 +38,7 @@ aren't in the notes. No emojis, no bullet points."""
 
 @dataclass
 class LoopRecord:
-    """One open loop Annie is personally responsible for closing."""
+    """One open loop Anticipy is personally responsible for closing."""
     commitment_id: int
     what: str
     status: str = "handling"     # handling | awaiting_ok | done | failed
@@ -46,7 +46,7 @@ class LoopRecord:
     opened_ts: float = field(default_factory=time.time)
 
 
-class Annie:
+class Anticipy:
     def __init__(
         self,
         memory: Optional[Memory] = None,
@@ -83,13 +83,19 @@ class Annie:
             )
             self.loops.append(loop)
             handled = self.say_handling(decision.goal, decision.needs_confirmation)
+            # Details first, browser second: before anything irreversible she
+            # texts the owner — a YES releases the held job (SMS webhook or app).
+            if decision.needs_confirmation:
+                self.notify_owner(
+                    f"{handled} Reply YES to send, or tell me what to change.")
         elif decision.decision == "ask":
             handled = f"Quick question — {decision.reason or 'want me to take this on?'}"
+            self.notify_owner(handled)
 
         return {
             "memory": mem,
             "decision": decision,
-            "annie_says": handled,
+            "anticipy_says": handled,
         }
 
     def _decide(self, line: str, mem: dict) -> Decision:
@@ -115,7 +121,7 @@ class Annie:
         return f"On it — I'm handling the {pretty}."
 
     def briefing(self) -> str:
-        """Annie's greeting: what she heard, what she's handling."""
+        """Anticipy's greeting: what she heard, what she's handling."""
         facts = self.memory.briefing_facts(self.session_start)
         if self.llm:
             try:
@@ -154,7 +160,7 @@ class Annie:
                 f"{self.backend_url}/api/collections/jobs/records",
                 json={"goal": goal, "params": json.dumps(params),
                       "status": "awaiting_confirm" if (hold or goal in IRREVERSIBLE) else "queued",
-                      "device_id": "annie"},
+                      "device_id": "anticipy"},
                 timeout=10,
             )
             r.raise_for_status()

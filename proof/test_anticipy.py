@@ -1,12 +1,12 @@
-"""Annie the orchestrator: hearing, loops, briefing, confirmation gate."""
+"""Anticipy the orchestrator: hearing, loops, briefing, confirmation gate."""
 import sys
 sys.path.insert(0, "/home/ubuntu/anticipy_app")
 
-from brain.annie import Annie, NAME
+from brain.anticipy_core import Anticipy, NAME
 
 
-class NoBackend(Annie):
-    """Offline Annie: job queue is stubbed so tests need no PocketBase."""
+class NoBackend(Anticipy):
+    """Offline Anticipy: job queue is stubbed so tests need no PocketBase."""
     def __init__(self, **kw):
         super().__init__(backend_url="http://127.0.0.1:1", **kw)
         self.queued = []
@@ -22,7 +22,7 @@ def test_commitment_becomes_loop_and_waits_for_ok():
     assert out["decision"].decision == "act"
     assert len(a.loops) == 1
     assert a.loops[0].status == "awaiting_ok", "irreversible work must be gated"
-    assert "Nothing goes out until you say so" in out["annie_says"]
+    assert "Nothing goes out until you say so" in out["anticipy_says"]
 
 
 def test_small_talk_is_ignored():
@@ -51,4 +51,4 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
             print(f"PASS {name}")
-    print("annie: all tests passed")
+    print("anticipy: all tests passed")
