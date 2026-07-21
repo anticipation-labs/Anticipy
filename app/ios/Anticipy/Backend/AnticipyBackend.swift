@@ -11,6 +11,17 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     let created: String
 }
 
+/// A registered browser-agent (Chrome extension install). `lastSeen` is its
+/// heartbeat — the app renders it as "last seen Ns ago".
+struct BrowserAgent: Decodable, Equatable {
+    let id: String
+    let agent_id: String
+    let owner: String?
+    let paired: Bool?
+    let last_seen: String?
+    let browser: String?
+}
+
 /// Thin client for the Anticipy PocketBase backend (pairing, events, jobs).
 /// Endpoints proven live in proof/test_backend.py and proof/test_extension.py.
 final class AnticipyBackend {
@@ -39,6 +50,38 @@ final class AnticipyBackend {
         patch.httpBody = try JSONSerialization.data(withJSONObject: ["owner": owner, "paired": true])
         _ = try await URLSession.shared.data(for: patch)
         return true
+    }
+
+    /// Pair this phone to a browser agent using the 6-digit code the
+    /// extension displays. Binds the agent to this owner; from then on it
+    /// only claims this owner's jobs.
+    func pairAgent(code: String, owner: String) async throws -> Bool {
+        let listURL = baseURL.appendingPathComponent("api/collections/agents/records")
+        let filter = "pair_code=\"\(code)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
+        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        comps.percentEncodedQuery = "filter=\(filter)"
+        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = root["items"] as? [[String: Any]],
+              let id = items.first?["id"] as? String else { return false }
+
+        var patch = URLRequest(url: listURL.appendingPathComponent(id))
+        patch.httpMethod = "PATCH"
+        patch.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        patch.httpBody = try JSONSerialization.data(withJSONObject: ["owner": owner, "paired": true])
+        _ = try await URLSession.shared.data(for: patch)
+        return true
+    }
+
+    /// The agent paired to this owner (if any), with its latest heartbeat.
+    func fetchAgent(owner: String) async throws -> BrowserAgent? {
+        let listURL = baseURL.appendingPathComponent("api/collections/agents/records")
+        let filter = "owner=\"\(owner)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
+        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        comps.percentEncodedQuery = "filter=\(filter)&sort=-updated&perPage=1"
+        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        struct Page: Decodable { let items: [BrowserAgent] }
+        return try JSONDecoder().decode(Page.self, from: data).items.first
     }
 
     func pushEvent(kind: String, text: String, decision: String? = nil, goal: String? = nil) async throws {

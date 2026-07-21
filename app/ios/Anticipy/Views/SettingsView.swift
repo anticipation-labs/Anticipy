@@ -7,6 +7,8 @@ struct SettingsView: View {
     @AppStorage("proactivityLevel") private var proactivity = 1.0
     @AppStorage("backendURL") private var backendURL = "http://127.0.0.1:8090"
     @AppStorage("hasOnboarded") private var hasOnboarded = true
+    @State private var pairCode = ""
+    @State private var pairResult: Bool?
 
     var body: some View {
         Form {
@@ -63,10 +65,31 @@ struct SettingsView: View {
 
             Section("Browser agent") {
                 HStack {
-                    Text("Link")
+                    Text("Status")
                     Spacer()
-                    Text(session.backendReachable ? "Connected" : "Offline")
-                        .foregroundStyle(session.backendReachable ? Theme.champagne : Theme.gray)
+                    if let secs = session.agentLastSeenSeconds {
+                        Text(session.agentOnline ? "Live · seen \(secs)s ago" : "Away · seen \(secs)s ago")
+                            .foregroundStyle(session.agentOnline ? Theme.champagne : Theme.gray)
+                    } else {
+                        Text(session.agentPaired ? "Paired" : "Not paired")
+                            .foregroundStyle(Theme.gray)
+                    }
+                }
+                if !session.agentPaired {
+                    HStack {
+                        TextField("6-digit code from the extension", text: $pairCode)
+                            .keyboardType(.numberPad)
+                            .font(.body.monospaced())
+                        Button("Pair") {
+                            Task { pairResult = await session.pairAgent(code: pairCode) }
+                        }
+                        .disabled(pairCode.count != 6)
+                    }
+                    if pairResult == false {
+                        Text("That code didn't match — check the Anticipy extension popup.")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
                 TextField("Backend URL", text: $backendURL)
                     .textInputAutocapitalization(.never)

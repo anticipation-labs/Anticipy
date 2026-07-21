@@ -54,6 +54,7 @@ class Anticipy:
         backend_url: str = "http://127.0.0.1:8090",
         voice=None,
         owner_phone: Optional[str] = None,
+        owner_id: str = "",
     ):
         self.llm = llm
         self.memory = memory or Memory(llm=llm)
@@ -61,6 +62,7 @@ class Anticipy:
         self.backend_url = backend_url.rstrip("/")
         self.voice = voice
         self.owner_phone = owner_phone
+        self.owner_id = owner_id
         self.loops: list[LoopRecord] = []
         self.session_start = time.time()
 
@@ -160,7 +162,7 @@ class Anticipy:
                 f"{self.backend_url}/api/collections/jobs/records",
                 json={"goal": goal, "params": json.dumps(params),
                       "status": "awaiting_confirm" if (hold or goal in IRREVERSIBLE) else "queued",
-                      "device_id": "anticipy"},
+                      "device_id": "anticipy", "owner": self.owner_id},
                 timeout=10,
             )
             r.raise_for_status()

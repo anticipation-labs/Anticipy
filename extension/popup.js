@@ -6,6 +6,15 @@ fetch("http://127.0.0.1:8090/api/health")
   })
   .catch(() => (document.getElementById("status").textContent = "Not connected — open the setup guide below."));
 
+chrome.storage.local.get(["pairCode", "paired"]).then(({ pairCode, paired }) => {
+  if (paired) {
+    document.getElementById("pairedline").style.display = "block";
+  } else if (pairCode) {
+    document.getElementById("paircode").textContent = pairCode;
+    document.getElementById("pairbox").style.display = "block";
+  }
+});
+
 chrome.storage.local.get("openrouterKey").then(({ openrouterKey }) => {
   if (openrouterKey) document.getElementById("saved").textContent = "key set";
 });

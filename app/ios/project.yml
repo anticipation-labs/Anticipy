@@ -6,7 +6,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "4"
+    CURRENT_PROJECT_VERSION: "5"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -24,7 +24,7 @@ targets:
         CFBundleDisplayName: Anticipy
         CFBundleIconName: AppIcon
         CFBundleShortVersionString: "0.2.0"
-        CFBundleVersion: "4"
+        CFBundleVersion: "5"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

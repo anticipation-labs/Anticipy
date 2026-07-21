@@ -8,6 +8,65 @@ import { runAgentGoal } from "./agent_loop.js";
 
 const BASE = "http://127.0.0.1:8090"; // dev; production points at the hosted backend
 const POLL_SECONDS = 5;
+const HEARTBEAT_SECONDS = 10;
+const STALE_JOB_MS = 2 * 60 * 1000; // running w/ no heartbeat -> requeued
+
+// ---------------------------------------------------------------- pairing
+// Each install registers itself once with a 6-digit pair code. The phone app
+// claims the code and writes `owner`; from then on this agent only takes
+// that owner's jobs and reports a heartbeat the app turns into "last seen Ns".
+
+async function ensureRegistered() {
+  let { agentId, recordId } = await chrome.storage.local.get(["agentId", "recordId"]);
+  if (recordId) return { agentId, recordId };
+  agentId = agentId || crypto.randomUUID();
+  const pairCode = String(Math.floor(100000 + Math.random() * 900000));
+  const r = await fetch(`${BASE}/api/collections/agents/records`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      agent_id: agentId,
+      pair_code: pairCode,
+      paired: false,
+      browser: navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || "Chrome",
+      last_seen: new Date().toISOString(),
+    }),
+  });
+  if (!r.ok) return null;
+  const rec = await r.json();
+  await chrome.storage.local.set({ agentId, recordId: rec.id, pairCode });
+  return { agentId, recordId: rec.id };
+}
+
+async function heartbeat() {
+  const reg = await ensureRegistered();
+  if (!reg) return null;
+  const r = await fetch(`${BASE}/api/collections/agents/records/${reg.recordId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ last_seen: new Date().toISOString() }),
+  });
+  if (!r.ok) return null;
+  const rec = await r.json();
+  await chrome.storage.local.set({ owner: rec.owner || "", paired: !!rec.paired });
+  return rec;
+}
+
+// If a previous worker died mid-job, its `running` jobs go stale; requeue them
+// so no task is ever silently lost to a crash or a closed Chrome.
+async function requeueStaleJobs() {
+  const filter = encodeURIComponent('status="running"');
+  const r = await fetch(`${BASE}/api/collections/jobs/records?filter=${filter}&perPage=20`);
+  if (!r.ok) return;
+  const { items } = await r.json();
+  const now = Date.now();
+  for (const j of items || []) {
+    const claimed = j.claimed_at ? Date.parse(j.claimed_at) : Date.parse(j.updated);
+    if (now - claimed > STALE_JOB_MS) {
+      await updateJob(j.id, { status: "queued", claimed_by: "", claimed_at: null });
+    }
+  }
+}
 
 // Browser-only action templates: everything is a real website the user could
 // have opened themselves. Gmail compose and Calendar templates prefill via URL.
@@ -27,12 +86,22 @@ const ACTIONS = {
 };
 
 async function claimJob() {
+  // Owner-scoped: a paired agent takes its owner's jobs (or legacy unowned
+  // ones); an unpaired agent only takes unowned jobs.
+  const { owner, agentId } = await chrome.storage.local.get(["owner", "agentId"]);
+  const cond = owner
+    ? `status="queued" && (owner="${owner}" || owner="")`
+    : 'status="queued" && owner=""';
   const r = await fetch(
-    `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent('status="queued"')}&perPage=1&sort=created`
+    `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`
   );
   if (!r.ok) return null;
   const items = (await r.json()).items;
-  return items && items.length ? items[0] : null;
+  if (!items || !items.length) return null;
+  const job = items[0];
+  // Stamp the claim so a dead worker's jobs can be detected and requeued.
+  await updateJob(job.id, { claimed_by: agentId || "unknown", claimed_at: new Date().toISOString() });
+  return job;
 }
 
 async function updateJob(id, fields) {
@@ -111,6 +180,8 @@ async function runJob(job) {
 
 async function poll() {
   try {
+    await heartbeat();
+    await requeueStaleJobs();
     const job = await claimJob();
     if (job) await runJob(job);
   } catch (e) {
@@ -118,15 +189,44 @@ async function poll() {
   }
 }
 
+// Realtime push: subscribe to job creations over PocketBase SSE so new work
+// starts in ~0s instead of on the next poll. Alarms remain as the safety net
+// (MV3 service workers sleep; the alarm re-fires poll and re-opens the stream).
+let realtimeOpen = false;
+async function openRealtime() {
+  if (realtimeOpen) return;
+  realtimeOpen = true;
+  try {
+    const es = new EventSource(`${BASE}/api/realtime`);
+    let clientId = null;
+    es.addEventListener("PB_CONNECT", async (e) => {
+      clientId = JSON.parse(e.data).clientId;
+      await fetch(`${BASE}/api/realtime`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, subscriptions: ["jobs"] }),
+      });
+    });
+    es.addEventListener("jobs", () => poll());
+    es.onerror = () => { es.close(); realtimeOpen = false; };
+  } catch (e) {
+    realtimeOpen = false;
+  }
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create("anticipy-poll", { periodInMinutes: POLL_SECONDS / 60 });
+  chrome.alarms.create("anticipy-heartbeat", { periodInMinutes: HEARTBEAT_SECONDS / 60 });
+  ensureRegistered();
   // First-run welcome: a guided setup page, not a paragraph in a README.
   if (details.reason === "install") {
     chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") });
   }
 });
 chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === "anticipy-poll") poll();
+  if (a.name === "anticipy-poll") { poll(); openRealtime(); }
+  if (a.name === "anticipy-heartbeat") heartbeat();
 });
 // Also poll immediately on worker wake.
 poll();
+openRealtime();

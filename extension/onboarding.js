@@ -16,6 +16,16 @@ async function refresh() {
     backendText.textContent = "Not reachable yet — is your Anticipy backend running?";
   }
 
+  const { pairCode, paired } = await chrome.storage.local.get(["pairCode", "paired"]);
+  const pairEl = document.getElementById("pairInfo");
+  if (pairEl) {
+    pairEl.innerHTML = paired
+      ? '<span style="color:#c8a97e">Paired with your iPhone ✓</span>'
+      : pairCode
+        ? `Type this code in the Anticipy app on your iPhone: <b style="color:#c8a97e; font-size:20px; letter-spacing:4px;">${pairCode}</b>`
+        : "Connect the backend first — your pair code will appear here.";
+  }
+
   const { openrouterKey } = await chrome.storage.local.get("openrouterKey");
   const keyDot = document.getElementById("keyDot");
   const keyText = document.getElementById("keyText");

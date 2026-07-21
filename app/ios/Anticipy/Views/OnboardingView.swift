@@ -9,6 +9,8 @@ struct OnboardingView: View {
     @AppStorage("hasOnboarded") private var hasOnboarded = false
     @AppStorage("transcriptionEngine") private var engine = "local"
     @State private var step = 0
+    @State private var agentCode = ""
+    @State private var agentPairFailed = false
 
     private let totalSteps = 5
 
@@ -177,16 +179,36 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.sand)
             numbered(1, "On your computer, visit anticipy.ai/agent")
             numbered(2, "Add Anticipy to Chrome")
-            numbered(3, "It links to this phone automatically")
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(session.backendReachable ? Theme.champagne : Theme.stroke)
-                    .frame(width: 8, height: 8)
-                Text(session.backendReachable ? "Agent link ready" : "Waiting for your computer…")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.gray)
+            numbered(3, "Type the 6-digit code it shows you here")
+            if session.agentPaired {
+                HStack(spacing: 8) {
+                    Circle().fill(Theme.champagne).frame(width: 8, height: 8)
+                    Text("Paired — your browser is hers now.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.gray)
+                }
+                .padding(.top, 4)
+            } else {
+                HStack(spacing: 10) {
+                    TextField("6-digit code", text: $agentCode)
+                        .keyboardType(.numberPad)
+                        .font(.title3.monospaced())
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
+                        .foregroundStyle(Theme.ivory)
+                    Button("Pair") {
+                        Task { agentPairFailed = !(await session.pairAgent(code: agentCode)) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(agentCode.count != 6)
+                }
+                .padding(.top, 4)
+                if agentPairFailed {
+                    Text("That code didn't match — it's in the Anticipy extension popup.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
-            .padding(.top, 4)
             Spacer()
             Spacer()
         }

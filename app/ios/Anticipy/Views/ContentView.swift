@@ -75,13 +75,19 @@ struct HomeView: View {
             )
             statusPill(
                 icon: "macbook",
-                label: session.backendReachable ? "Agent linked" : "Agent offline",
-                active: session.backendReachable,
-                detail: nil
+                label: agentLabel,
+                active: session.agentOnline,
+                detail: session.agentLastSeenSeconds.map { "\($0)s" }
             )
             Spacer()
         }
         .padding(.top, 6)
+    }
+
+    private var agentLabel: String {
+        if !session.backendReachable { return "Agent offline" }
+        if !session.agentPaired { return "Agent unpaired" }
+        return session.agentOnline ? "Agent live" : "Agent away"
     }
 
     private var pendantLabel: String {
