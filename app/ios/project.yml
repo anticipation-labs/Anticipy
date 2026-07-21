@@ -1,0 +1,33 @@
+name: Anticipy
+options:
+  bundleIdPrefix: ai.anticipy
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+    CODE_SIGN_STYLE: Automatic
+    GENERATE_INFOPLIST_FILE: NO
+targets:
+  Anticipy:
+    type: application
+    platform: iOS
+    sources:
+      - Anticipy
+    info:
+      path: Anticipy/Info.plist
+      properties:
+        CFBundleDisplayName: Anticipy
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - bluetooth-central
+          - audio
+        NSBluetoothAlwaysUsageDescription: Anticipy connects to your pendant over Bluetooth to hear your day.
+        NSMicrophoneUsageDescription: Anticipy uses the microphone for on-device transcription.
+        NSSpeechRecognitionUsageDescription: Anticipy transcribes speech on-device when Local mode is on.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.pendant
