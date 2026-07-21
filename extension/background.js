@@ -4,6 +4,8 @@
 // no service APIs. Irreversible steps stop at a prefilled page for the user
 // (or the phone app) to confirm.
 
+import { runAgentGoal } from "./agent_loop.js";
+
 const BASE = "http://127.0.0.1:8090"; // dev; production points at the hosted backend
 const POLL_SECONDS = 5;
 
@@ -43,6 +45,30 @@ async function updateJob(id, fields) {
 
 async function runJob(job) {
   const params = job.params ? JSON.parse(job.params) : {};
+
+  if (job.goal === "agent_goal") {
+    // Autonomous mode: LLM click-loop via chrome.debugger in a background
+    // Anticipy tab group (same mechanics as Claude in Chrome / Codex).
+    await updateJob(job.id, { status: "running" });
+    const { openrouterKey } = await chrome.storage.local.get("openrouterKey");
+    if (!openrouterKey) {
+      await updateJob(job.id, { status: "failed", result: "no OpenRouter key in extension storage" });
+      return;
+    }
+    try {
+      const out = await runAgentGoal(params.task, {
+        apiKey: openrouterKey,
+        startUrl: params.start_url || "about:blank",
+      });
+      const status = out.status === "done" ? "done"
+        : out.status === "needs_user" ? "awaiting_confirm" : "failed";
+      await updateJob(job.id, { status, result: out.result });
+    } catch (e) {
+      await updateJob(job.id, { status: "failed", result: String(e) });
+    }
+    return;
+  }
+
   const build = ACTIONS[job.goal];
   if (!build) {
     await updateJob(job.id, { status: "failed", result: `unknown goal ${job.goal}` });
