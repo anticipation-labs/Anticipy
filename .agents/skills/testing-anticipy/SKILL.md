@@ -15,6 +15,8 @@ description: How to run hands-off end-to-end tests of the Anticipy pendant assis
 - If Chrome dies, relaunch: `/opt/.devin/chrome/chrome/linux-137.0.7118.2/chrome-linux64/chrome --user-data-dir=/home/ubuntu/.browser_data_dir --remote-debugging-port=29229 --restore-last-session`.
 - On first registration it POSTs an agents record with a 6-digit `pair_code`; simulate phone pairing by PATCHing `owner` + `paired:true` on that record. Extension picks up owner via heartbeat (~10s) and then claims only owner-scoped/unowned jobs.
 - Autonomous jobs: goal `agent_goal`, params `{"task": ..., "start_url": ...}`. Held jobs sit at `awaiting_confirm`; simulate user YES by PATCHing status to `queued`.
+- PITFALL: when POSTing jobs with curl/raw HTTP, `params` must be a JSON-ENCODED STRING (`"params": "{\"task\": ...}"`), not a nested object — PocketBase silently stores `""` for objects and the agent then runs with start_url=about:blank, burning 20 no-op steps to `failed: max steps reached`. The Python drivers already encode correctly.
+- Hard policies live in extension/agent_loop.js: `BLOCKED_DOMAINS` (banking → `awaiting_confirm` with "refused: <domain> is a protected financial site", pre-LLM) and `looksLikeCaptcha()` (→ "stopped at a CAPTCHA/robot check"). Google may or may not serve reCAPTCHA to this box — CAPTCHA-path tests are opportunistic.
 - Use `curl http://localhost:29229/json` to list agent tab URLs without steering the browser.
 
 ## Pitfalls learned
