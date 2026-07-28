@@ -72,6 +72,7 @@ class Anticipy:
         voice=None,
         owner_phone: Optional[str] = None,
         owner_id: str = "",
+        conversation=None,
     ):
         self.llm = llm
         self.memory = memory or Memory(llm=llm)
@@ -80,6 +81,7 @@ class Anticipy:
         self.voice = voice
         self.owner_phone = owner_phone
         self.owner_id = owner_id
+        self.conversation = conversation
         self.loops: list[LoopRecord] = []
         self.session_start = time.time()
 
@@ -165,6 +167,10 @@ class Anticipy:
     # ----------------------------------------------------------- voice arm
 
     def notify_owner(self, message: str, channel: str = "sms") -> Optional[dict]:
+        # Conversational channel first: she opens a real thread, not a
+        # "reply YES" wall; free-form replies come back via Conversation.on_reply.
+        if self.conversation and self.owner_phone and channel == "sms":
+            return self.conversation.reach_out(self.owner_phone, message)
         if not (self.voice and self.owner_phone):
             return None
         if channel == "call":
