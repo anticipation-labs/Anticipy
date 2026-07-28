@@ -22,6 +22,17 @@ struct BrowserAgent: Decodable, Equatable {
     let browser: String?
 }
 
+/// One brain event: a transcript line, the brain's decision on it, or
+/// something Anticipy said/texted.
+struct BrainEvent: Decodable, Identifiable, Equatable {
+    let id: String
+    let kind: String // transcript | decision | anticipy_says | anticipy_text
+    let text: String?
+    let decision: String?
+    let goal: String?
+    let created: String
+}
+
 /// Thin client for the Anticipy PocketBase backend (pairing, events, jobs).
 /// Endpoints proven live in proof/test_backend.py and proof/test_extension.py.
 final class AnticipyBackend {
@@ -96,6 +107,19 @@ final class AnticipyBackend {
         try await post("api/collections/jobs/records", body: [
             "goal": goal, "params": paramsJSON, "status": "queued", "device_id": deviceID,
         ])
+    }
+
+    /// Latest brain events, newest first — heard lines + what Anticipy said.
+    func fetchEvents(limit: Int = 40) async throws -> [BrainEvent] {
+        let listURL = baseURL.appendingPathComponent("api/collections/events/records")
+        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        comps.queryItems = [
+            URLQueryItem(name: "perPage", value: String(limit)),
+            URLQueryItem(name: "sort", value: "-created"),
+        ]
+        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        struct Page: Decodable { let items: [BrainEvent] }
+        return try JSONDecoder().decode(Page.self, from: data).items
     }
 
     /// Latest jobs, newest first — powers the proactive feed.

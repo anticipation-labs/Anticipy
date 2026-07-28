@@ -102,7 +102,9 @@ async function elementCenter(tabId, index) {
 // Runs one autonomous browser goal inside a background tab in the Anticipy
 // tab group. Returns {status, result}.
 export async function runAgentGoal(goal, opts) {
-  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 20, startUrl = "about:blank" } = opts;
+  // Default to a scriptable search page: about:blank can't be script-injected,
+  // so mapPage would fail every step and the run would die without acting.
+  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 20, startUrl = "https://www.bing.com/" } = opts;
 
   const tab = await chrome.tabs.create({ url: startUrl, active: false });
   try {
@@ -117,7 +119,7 @@ export async function runAgentGoal(goal, opts) {
       await new Promise((r) => setTimeout(r, 1200));
       let state;
       try { state = await mapPage(tab.id); }
-      catch { history.push(`step ${step}: page not scriptable yet`); continue; }
+      catch (e) { history.push(`step ${step}: page not scriptable yet (${String(e).slice(0, 120)})`); continue; }
 
       const banked = blockedDomain(state.url);
       if (banked) {
@@ -153,7 +155,7 @@ export async function runAgentGoal(goal, opts) {
         }
       }
     }
-    return { status: "failed", result: "max steps reached", tabId: tab.id };
+    return { status: "failed", result: `max steps reached; last steps: ${history.slice(-3).join(" | ").slice(0, 400)}`, tabId: tab.id };
   } finally {
     try { await chrome.debugger.detach({ tabId: tab.id }); } catch (e) { /* already closed */ }
   }

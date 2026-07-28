@@ -151,7 +151,7 @@ async function runJobInner(job, params) {
     try {
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
-        startUrl: params.start_url || "about:blank",
+        startUrl: params.start_url || undefined,
       });
       // needs_user (login wall, CAPTCHA, refused site) is NOT the same state
       // as awaiting_confirm (owner go-ahead pending) — conflating them lets a
@@ -167,8 +167,9 @@ async function runJobInner(job, params) {
 
   const build = ACTIONS[job.goal];
   if (!build) {
-    await updateJob(job.id, { status: "failed", result: `unknown goal ${job.goal}` });
-    return;
+    // Free-form goal from the brain: run it autonomously, same as agent_goal.
+    const task = params.source ? `${job.goal} (context: heard "${params.source}")` : job.goal;
+    return runJobInner({ ...job, goal: "agent_goal" }, { ...params, task });
   }
   // Work quietly: background tab inside a collapsed "Anticipy" tab group,
   // same as the agent_goal path — never steals the user's focus.

@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 @main
@@ -28,6 +29,7 @@ struct AnticipyApp: App {
 @MainActor
 final class AnticipySession: ObservableObject {
     @Published var transcript: [TranscriptLine] = []
+    @Published var anticipySays: [BrainEvent] = []
     @Published var jobs: [AgentJob] = []
     @Published var backendReachable = false
     @Published var agentOnline = false
@@ -38,6 +40,8 @@ final class AnticipySession: ObservableObject {
     @AppStorage("ownerID") var ownerID = ""
 
     private var pollTask: Task<Void, Never>?
+    private var bag = Set<AnyCancellable>()
+    let listener = PhoneListener()
 
     var backend: AnticipyBackend {
         AnticipyBackend(
@@ -48,7 +52,22 @@ final class AnticipySession: ObservableObject {
 
     init() {
         if ownerID.isEmpty { ownerID = UUID().uuidString }
+        listener.onLine = { [weak self] line in
+            Task { await self?.heard(line) }
+        }
+        // Re-render views observing the session when the listener changes.
+        listener.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &bag)
         startPolling()
+    }
+
+    /// A line Anticipy heard — phone mic, pendant, or typed. Pushed to the
+    /// backend where the brain worker ingests it (memory + triage + jobs).
+    func heard(_ line: String) async {
+        transcript.append(TranscriptLine(text: line, decision: nil))
+        try? await backend.pushEvent(kind: "transcript", text: line)
     }
 
     func startPolling() {
@@ -70,6 +89,15 @@ final class AnticipySession: ObservableObject {
         }
         if let fetched = try? await b.fetchJobs() {
             jobs = fetched
+        }
+        if let events = try? await b.fetchEvents() {
+            // Server view of the stream: heard lines with the brain's verdict,
+            // plus everything Anticipy said/texted back.
+            transcript = events
+                .filter { $0.kind == "transcript" }
+                .reversed()
+                .map { TranscriptLine(text: $0.text ?? "", decision: ($0.decision?.isEmpty == false) ? $0.decision : nil) }
+            anticipySays = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
         }
         // Connection health from the extension's heartbeat, not guesswork.
         if let agent = try? await b.fetchAgent(owner: ownerID) {

@@ -5,6 +5,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var pendant: PendantManager
     @EnvironmentObject var session: AnticipySession
+    @State private var typedLine = ""
 
     private var needsOK: [AgentJob] { session.jobs.filter { $0.status == "awaiting_confirm" } }
     private var handling: [AgentJob] { session.jobs.filter { $0.status == "queued" || $0.status == "running" } }
@@ -18,6 +19,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         statusStrip
                         anticipyCardView
+                        listenCard
                         if needsOK.isEmpty && handling.isEmpty && finished.isEmpty && session.transcript.isEmpty {
                             emptyState
                         }
@@ -90,6 +92,64 @@ struct HomeView: View {
         return session.agentOnline ? "Agent live" : "Agent away"
     }
 
+    /// Pendant-less listening: phone mic → on-device transcription → brain.
+    private var listenCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Button {
+                    if session.listener.isListening {
+                        session.listener.stop()
+                    } else {
+                        session.listener.start()
+                    }
+                } label: {
+                    Label(
+                        session.listener.isListening ? "Listening with phone" : "Listen with phone",
+                        systemImage: session.listener.isListening ? "mic.fill" : "mic"
+                    )
+                    .font(.callout.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(session.listener.isListening ? Theme.champagne : Theme.surface))
+                    .foregroundStyle(session.listener.isListening ? Theme.ink : Theme.sand)
+                }
+                if session.listener.isListening {
+                    ProgressView().tint(Theme.champagne)
+                }
+                Spacer()
+            }
+            if !session.listener.partial.isEmpty {
+                Text(session.listener.partial)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.gray)
+                    .italic()
+            }
+            HStack(spacing: 8) {
+                TextField("Or tell Anticipy something…", text: $typedLine)
+                    .font(.callout)
+                    .foregroundStyle(Theme.ivory)
+                    .textFieldStyle(.plain)
+                    .onSubmit(submitTyped)
+                Button(action: submitTyped) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(typedLine.isEmpty ? Theme.stroke : Theme.champagne)
+                }
+                .disabled(typedLine.isEmpty)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
+        }
+    }
+
+    private func submitTyped() {
+        let line = typedLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return }
+        typedLine = ""
+        Task { await session.heard(line) }
+    }
+
     private var pendantLabel: String {
         switch pendant.state {
         case .connected: return "Listening"
@@ -129,6 +189,12 @@ struct HomeView: View {
             Text(briefingText)
                 .font(.callout)
                 .foregroundStyle(Theme.ivory)
+            if let says = session.anticipySays.first?.text, !says.isEmpty {
+                Text(says)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.sand)
+                    .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
@@ -136,7 +202,7 @@ struct HomeView: View {
 
     private var briefingText: String {
         var parts: [String] = []
-        if pendant.state == .connected {
+        if pendant.state == .connected || session.listener.isListening {
             parts.append("How goes it today? I'm listening.")
         } else {
             parts.append("How goes it today?")
