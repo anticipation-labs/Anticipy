@@ -107,9 +107,17 @@ async function claimJob() {
   const items = (await r.json()).items;
   if (!items || !items.length) return null;
   const job = items[0];
-  // Stamp the claim so a dead worker's jobs can be detected and requeued.
-  await updateJob(job.id, { claimed_by: agentId || "unknown", claimed_at: new Date().toISOString() });
-  return job;
+  if (activeJobs.has(job.id)) return null;
+  // Stamp the claim, then read it back: whoever's stamp survives owns the job.
+  // This closes the race where concurrent poll() calls (SSE + alarm + worker
+  // wake) would each spawn an agent loop for the same job.
+  const me = agentId || "unknown";
+  await updateJob(job.id, { status: "running", claimed_by: me, claimed_at: new Date().toISOString() });
+  const check = await fetch(`${BASE}/api/collections/jobs/records/${job.id}`);
+  if (!check.ok) return null;
+  const fresh = await check.json();
+  if (fresh.claimed_by !== me || fresh.status !== "running") return null;
+  return fresh;
 }
 
 async function updateJob(id, fields) {
@@ -135,7 +143,6 @@ async function runJobInner(job, params) {
   if (job.goal === "agent_goal") {
     // Autonomous mode: LLM click-loop via chrome.debugger in a background
     // Anticipy tab group (same mechanics as Claude in Chrome / Codex).
-    await updateJob(job.id, { status: "running" });
     const { openrouterKey } = await chrome.storage.local.get("openrouterKey");
     if (!openrouterKey) {
       await updateJob(job.id, { status: "failed", result: "no OpenRouter key in extension storage" });
@@ -160,7 +167,6 @@ async function runJobInner(job, params) {
     await updateJob(job.id, { status: "failed", result: `unknown goal ${job.goal}` });
     return;
   }
-  await updateJob(job.id, { status: "running" });
   // Work quietly: background tab inside a collapsed "Anticipy" tab group,
   // same as the agent_goal path — never steals the user's focus.
   const tab = await chrome.tabs.create({ url: build(params), active: false });
@@ -195,7 +201,12 @@ async function runJobInner(job, params) {
   }
 }
 
+// Only one poll cycle at a time — SSE events, alarms, and worker wake can all
+// fire poll() concurrently, and overlapping cycles double-claim jobs.
+let pollInFlight = false;
 async function poll() {
+  if (pollInFlight) return;
+  pollInFlight = true;
   try {
     await heartbeat();
     await requeueStaleJobs();
@@ -203,6 +214,8 @@ async function poll() {
     if (job) await runJob(job);
   } catch (e) {
     // backend not reachable; try again on next alarm
+  } finally {
+    pollInFlight = false;
   }
 }
 

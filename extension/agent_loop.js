@@ -44,6 +44,27 @@ async function llmStep(apiKey, model, goal, state, history) {
   try { return JSON.parse(m[0]); } catch { return { action: "needs_user", reason: "bad JSON from model" }; }
 }
 
+// Hard policy, outside the model: banking/financial sites are never operated
+// autonomously, and CAPTCHA walls always hand back to the user.
+const BLOCKED_DOMAINS = [
+  "wellsfargo.com", "chase.com", "bankofamerica.com", "citibank.com",
+  "usbank.com", "capitalone.com", "schwab.com", "fidelity.com",
+  "vanguard.com", "td.com", "rbc.com", "bmo.com", "scotiabank.com",
+  "cibc.com", "paypal.com", "venmo.com", "coinbase.com", "binance.com",
+];
+
+function blockedDomain(url) {
+  try {
+    const host = new URL(url).hostname;
+    return BLOCKED_DOMAINS.find((d) => host === d || host.endsWith("." + d)) || null;
+  } catch { return null; }
+}
+
+function looksLikeCaptcha(state) {
+  const blob = `${state.url} ${state.title} ${(state.text || "").slice(0, 2000)}`.toLowerCase();
+  return /recaptcha|captcha|are you a robot|unusual traffic|verify you are human|hcaptcha|cf-challenge/.test(blob);
+}
+
 async function cdp(tabId, method, params) {
   return chrome.debugger.sendCommand({ tabId }, method, params || {});
 }
@@ -98,12 +119,25 @@ export async function runAgentGoal(goal, opts) {
       try { state = await mapPage(tab.id); }
       catch { history.push(`step ${step}: page not scriptable yet`); continue; }
 
+      const banked = blockedDomain(state.url);
+      if (banked) {
+        return { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
+      }
+      if (looksLikeCaptcha(state)) {
+        return { status: "needs_user", result: `stopped at a CAPTCHA/robot check on ${state.url} — needs a human`, tabId: tab.id };
+      }
+
       const decision = await llmStep(apiKey, model, goal, state, history);
       history.push(`step ${step}: ${JSON.stringify(decision).slice(0, 160)}`);
 
       if (decision.action === "done") return { status: "done", result: decision.result, tabId: tab.id };
       if (decision.action === "needs_user") return { status: "needs_user", result: decision.reason, tabId: tab.id };
-      if (decision.action === "navigate") { await chrome.tabs.update(tab.id, { url: decision.url }); continue; }
+      if (decision.action === "navigate") {
+        const nav = blockedDomain(decision.url);
+        if (nav) return { status: "needs_user", result: `refused: ${nav} is a protected financial site`, tabId: tab.id };
+        await chrome.tabs.update(tab.id, { url: decision.url });
+        continue;
+      }
       if (decision.action === "wait") continue;
       if (decision.action === "scroll") {
         await cdp(tab.id, "Input.dispatchMouseEvent", { type: "mouseWheel", x: 400, y: 300, deltaX: 0, deltaY: decision.dy || 600 });
