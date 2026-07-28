@@ -153,8 +153,11 @@ async function runJobInner(job, params) {
         apiKey: openrouterKey,
         startUrl: params.start_url || "about:blank",
       });
+      // needs_user (login wall, CAPTCHA, refused site) is NOT the same state
+      // as awaiting_confirm (owner go-ahead pending) — conflating them lets a
+      // free-form "yes" re-release a stuck job instead of the intended one.
       const status = out.status === "done" ? "done"
-        : out.status === "needs_user" ? "awaiting_confirm" : "failed";
+        : out.status === "needs_user" ? "needs_user" : "failed";
       await updateJob(job.id, { status, result: out.result });
     } catch (e) {
       await updateJob(job.id, { status: "failed", result: String(e) });

@@ -50,7 +50,9 @@ chief-of-staff, never a robot. Given what you overheard today and your open
 to-dos, write a 2-4 sentence spoken-style briefing in the first person, e.g.:
 "How goes it today? I overheard you promised Sarah the pitch deck — I've got a
 draft ready and I'll send it the second you say so." Never invent things that
-aren't in the notes. No emojis, no bullet points."""
+aren't in the notes. Every item carries a status — only say something is done
+if its status is "done"; declined or cancelled items were NOT done; anything
+else is at most "in progress" or "waiting on you". No emojis, no bullets."""
 
 
 @dataclass
@@ -94,21 +96,27 @@ class Anticipy:
         handled = None
 
         if decision.decision == "act" and decision.goal:
-            job_id = self._queue_job(decision.goal, {"source": line},
-                                     hold=decision.needs_confirmation)
+            params = {"source": line}
+            # The EFFECTIVE hold: triage's flag OR the policy layer. The owner
+            # must be told whenever the job is actually held, or held jobs
+            # would sit silently forever.
+            held = (decision.needs_confirmation
+                    or decision.goal in IRREVERSIBLE
+                    or is_consequential(decision.goal, params))
+            job_id = self._queue_job(decision.goal, params, hold=held)
             loop = LoopRecord(
                 commitment_id=mem.get("commitment_id") or -1,
                 what=decision.goal,
-                status="awaiting_ok" if decision.needs_confirmation else "handling",
+                status="awaiting_ok" if held else "handling",
                 job_id=job_id,
             )
             self.loops.append(loop)
-            handled = self.say_handling(decision.goal, decision.needs_confirmation)
+            handled = self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
-            # texts the owner — a YES releases the held job (SMS webhook or app).
-            if decision.needs_confirmation:
+            # texts the owner — their go-ahead releases the held job.
+            if held:
                 self.notify_owner(
-                    f"{handled} Reply YES to send, or tell me what to change.")
+                    f"{handled} Say the word and it goes, or tell me what to change.")
         elif decision.decision == "ask":
             handled = f"Quick question — {decision.reason or 'want me to take this on?'}"
             self.notify_owner(handled)
@@ -144,6 +152,10 @@ class Anticipy:
     def briefing(self) -> str:
         """Anticipy's greeting: what she heard, what she's handling."""
         facts = self.memory.briefing_facts(self.session_start)
+        # Ground the briefing in actual outcomes so she never claims a thing
+        # happened that didn't.
+        facts["task_statuses"] = [{"what": l.what, "status": l.status}
+                                  for l in self.loops]
         if self.llm:
             try:
                 res = self.llm.chat(BRIEFING_SYSTEM, json.dumps(facts))
@@ -213,6 +225,8 @@ class Anticipy:
                         loop.status = "failed"
                     elif status == "awaiting_confirm":
                         loop.status = "awaiting_ok"
+                    elif status == "needs_user":
+                        loop.status = "needs_you"
                 except Exception:
                     pass
             out.append({"what": loop.what, "status": loop.status, "job": loop.job_id})

@@ -55,8 +55,17 @@ intents:
 - "new_request": something new to handle.
 - "chat": everything else — reply warmly, keep it short.
 
-Never claim you already did something you haven't. If nothing is pending and
-they seem to confirm, ask what they mean. Match their energy; be human."""
+Grounding rules (hard):
+- Never claim you already did something. Each pending item includes its
+  status — nothing is sent/booked/done until its status says "done". Your
+  reply after a confirm is "on it" language, never "I sent it".
+- pending_id must be the item the owner is actually talking about — match on
+  topic. If their text could refer to more than one pending item, or refers
+  to something with NO pending item, set pending_id to null AND make your
+  reply a clarifying question ("the newsletter or the pitch deck?") — do not
+  guess.
+- If nothing is pending and they seem to confirm, ask what they mean.
+Match their energy; be human."""
 
 
 class MockTransport:
@@ -133,8 +142,14 @@ class Conversation:
         acted = None
         if intent == "confirm":
             acted = self._release(pending_id, changes)
+            if acted == "ambiguous":
+                parsed["reply"] = self._which_one()
+                acted = None
         elif intent == "decline":
             acted = self._cancel(pending_id)
+            if acted == "ambiguous":
+                parsed["reply"] = self._which_one(cancel=True)
+                acted = None
         elif intent == "modify" and pending_id and changes:
             acted = self._amend(pending_id, changes)
         elif intent in ("new_request", "answer"):
@@ -161,7 +176,8 @@ class Conversation:
                 params={"filter": filt, "perPage": 5, "sort": "-created"},
                 timeout=10,
             )
-            return [{"id": j["id"], "goal": j["goal"], "params": j.get("params", "")}
+            return [{"id": j["id"], "goal": j["goal"], "params": j.get("params", ""),
+                     "status": j.get("status", "")}
                     for j in r.json().get("items", [])]
         except Exception:
             return []
@@ -195,7 +211,17 @@ class Conversation:
         except Exception:
             return {}
 
-    def _job(self, job_id: Optional[str]) -> Optional[dict]:
+    def _which_one(self, cancel: bool = False) -> str:
+        names = [p["goal"].replace("_", " ") for p in self._pending()]
+        verb = "call off" if cancel else "go ahead with"
+        if not names:
+            return "Nothing's waiting on you right now — what do you mean?"
+        return f"Just to be sure — which one should I {verb}: {' or '.join(names)}?"
+
+    def _job(self, job_id: Optional[str]):
+        """Resolve the job the owner means. Falls back to the pending item
+        ONLY when there is exactly one — with several (or none), guessing is
+        how the wrong thing gets sent or cancelled."""
         if job_id:
             try:
                 r = requests.get(
@@ -206,10 +232,14 @@ class Conversation:
             except Exception:
                 return None
         pending = self._pending()
-        return pending[0] if pending else None
+        if len(pending) == 1:
+            return pending[0]
+        return "ambiguous" if pending else None
 
     def _release(self, job_id: Optional[str], changes: Optional[dict]) -> Optional[str]:
         job = self._job(job_id)
+        if job == "ambiguous":
+            return "ambiguous"
         if not job:
             return None
         fields = {"status": "queued"}
@@ -227,6 +257,8 @@ class Conversation:
 
     def _cancel(self, job_id: Optional[str]) -> Optional[str]:
         job = self._job(job_id)
+        if job == "ambiguous":
+            return "ambiguous"
         if not job:
             return None
         requests.patch(
@@ -236,7 +268,7 @@ class Conversation:
 
     def _amend(self, job_id: Optional[str], changes: dict) -> Optional[str]:
         job = self._job(job_id)
-        if not job:
+        if job == "ambiguous" or not job:
             return None
         try:
             params = json.loads(job.get("params") or "{}")
