@@ -52,7 +52,9 @@ intents:
   first", "which restaurant did you pick?" then wait).
 - "answer": they are answering a question you asked; capture the substance
   in changes.
-- "new_request": something new to handle.
+- "new_request": something new to handle. NEVER use this to cancel or call
+  off something — calling anything off is "decline" even when no pending item
+  matches (pending_id null); do not invent a cancellation task.
 - "chat": everything else — reply warmly, keep it short.
 
 Grounding rules (hard):

@@ -227,6 +227,8 @@ class Anticipy:
                         loop.status = "awaiting_ok"
                     elif status == "needs_user":
                         loop.status = "needs_you"
+                    elif status == "cancelled":
+                        loop.status = "declined"
                 except Exception:
                     pass
             out.append({"what": loop.what, "status": loop.status, "job": loop.job_id})
