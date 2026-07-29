@@ -74,6 +74,13 @@
     return { url: location.href, title, elements: lines.join("\n"), text: bodyText };
   };
 
+  window.__anticipyFocus = (idx) => {
+    const el = window.__anticipyMap[idx];
+    if (!el) return false;
+    try { el.focus(); } catch (e) { return false; }
+    return document.activeElement === el;
+  };
+
   window.__anticipyCenter = (idx) => {
     const el = window.__anticipyMap[idx];
     if (!el) return null;
