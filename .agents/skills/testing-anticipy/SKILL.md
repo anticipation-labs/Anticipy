@@ -32,3 +32,7 @@ description: How to run hands-off end-to-end tests of the Anticipy pendant assis
 ## NOT-ME evidence & on-screen driver output
 - `proof/sw_monitor.py` attaches via CDP to the extension service worker and writes a timestamped JSONL of every agent LLM decision + job PATCH (needs `websockets` in the repo venv) — use it as proof the agent, not a human, drove the browser.
 - Run test drivers inside an xterm (`sudo apt-get install -y xterm`, launch with `DISPLAY=:0`) so screen recordings show brain/backend stages alongside the browser.
+
+- After any extension reload, restart proof/sw_monitor.py — monitors attach to a specific service worker and go silently stale on reload.
+- Datacenter IP gets CAPTCHA on Bing AND Brave — research scenarios need a direct-site start_url or residential egress.
+- If jobs sit queued unclaimed or an agent freezes after 1 step, the SW/tab is wedged — reload via proof/reload_ext.py and consider relaunching Chrome with tab-freezing disabled (/tmp/launch_chrome.sh).
