@@ -5,7 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject var session: AnticipySession
     @AppStorage("transcriptionEngine") private var engine = "local"
     @AppStorage("proactivityLevel") private var proactivity = 1.0
-    @AppStorage("backendURL") private var backendURL = "http://127.0.0.1:8090"
+    @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
     @AppStorage("hasOnboarded") private var hasOnboarded = true
     @State private var pairCode = ""
     @State private var pairResult: Bool?

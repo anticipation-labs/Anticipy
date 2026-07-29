@@ -48,6 +48,36 @@ async function llmStep(apiKey, model, goal, state, history) {
   try { return JSON.parse(m[0]); } catch { return { action: "needs_user", reason: "bad JSON from model" }; }
 }
 
+// Second-opinion check on a done claim, against a FRESH page snapshot with no
+// step history to anchor on. Research goals verify by result content; action
+// goals (forms, submissions) verify by what the page actually shows.
+async function verifyDone(apiKey, model, goal, result, tabId) {
+  let state;
+  try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
+  catch { return { verified: true, reason: "page unreadable; claim accepted unverified" }; }
+  const messages = [
+    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, the claimed result must be plausible from the page content. Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
+    { role: "user", content: `GOAL: ${goal}\nCLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
+  ];
+  try {
+    const ctl = new AbortController();
+    const kill = setTimeout(() => ctl.abort(), 45000);
+    const r = await fetch(OPENROUTER_URL, {
+      signal: ctl.signal,
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy" },
+      body: JSON.stringify({ model, messages, temperature: 0 }),
+    }).finally(() => clearTimeout(kill));
+    const data = await r.json();
+    const m = (data.choices?.[0]?.message?.content ?? "").match(/\{[\s\S]*\}/);
+    if (!m) return { verified: true, reason: "unparseable verdict; claim accepted unverified" };
+    const v = JSON.parse(m[0]);
+    return { verified: !!v.verified, reason: v.reason || "" };
+  } catch {
+    return { verified: true, reason: "verifier error; claim accepted unverified" };
+  }
+}
+
 // Hard policy, outside the model: banking/financial sites are never operated
 // autonomously, and CAPTCHA walls always hand back to the user.
 const BLOCKED_DOMAINS = [
@@ -154,7 +184,14 @@ export async function runAgentGoal(goal, opts) {
       catch (e) { history.push(`step ${step}: llm error (${String(e).slice(0, 120)})`); continue; }
       history.push(`step ${step}: ${JSON.stringify(decision).slice(0, 160)}`);
 
-      if (decision.action === "done") return { status: "done", result: decision.result, tabId: tab.id };
+      if (decision.action === "done") {
+        // A done claim is verified against the live page before it's trusted:
+        // a mistyped form or an unsubmitted page must never report success.
+        const verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
+        if (verdict.verified) return { status: "done", result: decision.result, tabId: tab.id };
+        history.push(`step ${step}: done claim rejected (${verdict.reason})`);
+        continue;
+      }
       if (decision.action === "needs_user") return { status: "needs_user", result: decision.reason, tabId: tab.id };
       if (decision.action === "navigate") {
         const nav = blockedDomain(decision.url);

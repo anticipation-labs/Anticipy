@@ -25,6 +25,7 @@ struct HomeView: View {
                         }
                         if !needsOK.isEmpty {
                             sectionHeader("Needs your OK")
+                                .onAppear { Haptics.engage() }
                             ForEach(needsOK) { ConfirmJobCard(job: $0) }
                         }
                         if !handling.isEmpty {
@@ -97,6 +98,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Button {
+                    Haptics.engage()
                     if session.listener.isListening {
                         session.listener.stop()
                     } else {
@@ -146,6 +148,7 @@ struct HomeView: View {
     private func submitTyped() {
         let line = typedLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
+        Haptics.tap()
         typedLine = ""
         Task { await session.heard(line) }
     }
@@ -263,6 +266,7 @@ struct ConfirmJobCard: View {
             }
             HStack(spacing: 10) {
                 Button {
+                    Haptics.success()
                     Task { await session.confirm(job) }
                 } label: {
                     Text("Send it")
@@ -273,6 +277,7 @@ struct ConfirmJobCard: View {
                         .foregroundStyle(Theme.ink)
                 }
                 Button {
+                    Haptics.warning()
                     Task { await session.decline(job) }
                 } label: {
                     Text("Not now")

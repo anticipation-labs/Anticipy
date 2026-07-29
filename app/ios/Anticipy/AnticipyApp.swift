@@ -36,7 +36,7 @@ final class AnticipySession: ObservableObject {
     @Published var agentLastSeenSeconds: Int?   // nil = never seen
     @Published var agentPaired = false
 
-    @AppStorage("backendURL") var backendURLString = "http://127.0.0.1:8090"
+    @AppStorage("backendURL") var backendURLString = "https://backend-production-61e0a.up.railway.app"
     @AppStorage("ownerID") var ownerID = ""
 
     private var pollTask: Task<Void, Never>?
@@ -45,7 +45,7 @@ final class AnticipySession: ObservableObject {
 
     var backend: AnticipyBackend {
         AnticipyBackend(
-            baseURL: URL(string: backendURLString) ?? URL(string: "http://127.0.0.1:8090")!,
+            baseURL: URL(string: backendURLString) ?? URL(string: "https://backend-production-61e0a.up.railway.app")!,
             deviceID: "iphone"
         )
     }

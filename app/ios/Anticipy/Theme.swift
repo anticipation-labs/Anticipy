@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Anticipy brand system, pulled from anticipy.ai:
 /// ink #0C0C0C, surfaces #161616/#1E1E1E, ivory #F5F0EB, champagne #C8A97E.
@@ -68,4 +69,13 @@ struct CardBackground: ViewModifier {
 
 extension View {
     func anticipyCard() -> some View { modifier(CardBackground()) }
+}
+
+/// Haptic vocabulary: light tap for touches, medium for state changes,
+/// notification haptics for outcomes. No-ops gracefully in the simulator.
+enum Haptics {
+    static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+    static func engage() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+    static func warning() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
 }

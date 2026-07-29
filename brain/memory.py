@@ -125,10 +125,22 @@ class Memory:
         rows = self.db.execute("SELECT id, type, name, status FROM nodes").fetchall()
         seeds = [r for r in rows
                  if any(w in r[2].lower() or r[2].lower() in w for w in words)]
-        if not seeds:
+
+        # Episodes whose raw text matches the query are facts in their own
+        # right — a line can matter even when extraction pulled no entities.
+        facts = []
+        for eid, ts, text in self.db.execute(
+            "SELECT id, ts, text FROM episodes ORDER BY ts DESC LIMIT 200"
+        ):
+            hits = sum(1 for w in words if w in text.lower())
+            if hits >= 2 or (hits == 1 and len(words) == 1):
+                facts.append({"fact": f'heard: "{text}"',
+                              "src_type": "episode", "dst_type": "episode",
+                              "ts": ts, "quote": text})
+        if not seeds and not facts:
             return []
 
-        seen, facts = set(), []
+        seen = set()
         frontier = [r[0] for r in seeds]
         for _hop in range(2):  # 2-hop walk keeps recall on-topic
             next_frontier = []

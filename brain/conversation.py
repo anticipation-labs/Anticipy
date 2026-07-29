@@ -143,12 +143,12 @@ class Conversation:
 
         acted = None
         if intent == "confirm":
-            acted = self._release(pending_id, changes)
+            acted = self._release(pending_id, changes, owner_text=text)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one()
                 acted = None
         elif intent == "decline":
-            acted = self._cancel(pending_id)
+            acted = self._cancel(pending_id, owner_text=text)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one(cancel=True)
                 acted = None
@@ -159,6 +159,16 @@ class Conversation:
             self.anticipy.hear(text)
 
         reply = parsed.get("reply") or "Got it."
+        # Ground the reply in the job actually acted on — the model sometimes
+        # drafts its sentence about a different pending item than the one the
+        # queue flip touched.
+        if acted and ":" in acted:
+            verb, job_id_acted = acted.split(":", 1)
+            job = self._fetch(job_id_acted)
+            if job and not self._references(reply, job):
+                goal = job.get("goal", "that").replace("_", " ")
+                reply = (f"Okay — I've scrapped the {goal}."
+                         if verb == "cancelled" else f"On it — {goal} is moving.")
         self.say(phone, reply)
         return {"intent": intent, "pending_id": pending_id,
                 "changes": changes, "acted": acted, "reply": reply}
@@ -220,26 +230,48 @@ class Conversation:
             return "Nothing's waiting on you right now — what do you mean?"
         return f"Just to be sure — which one should I {verb}: {' or '.join(names)}?"
 
-    def _job(self, job_id: Optional[str]):
+    @staticmethod
+    def _references(text: str, job: dict) -> bool:
+        """Whether the owner's text actually names this job's topic. A bare
+        go-ahead ("go ahead", "yes do it") names nothing, so with several
+        items held the model's pick alone is never enough to act on."""
+        import re
+        blob = f"{job.get('goal', '')} {job.get('params', '')}".lower()
+        job_words = set(re.findall(r"[a-z]{4,}", blob))
+        text_words = set(re.findall(r"[a-z]{4,}", text.lower()))
+        return bool(job_words & text_words)
+
+    def _fetch(self, job_id: str) -> Optional[dict]:
+        try:
+            r = requests.get(
+                f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
+                timeout=10)
+            return r.json() if r.ok else None
+        except Exception:
+            return None
+
+    def _job(self, job_id: Optional[str], owner_text: Optional[str] = None):
         """Resolve the job the owner means. Falls back to the pending item
         ONLY when there is exactly one — with several (or none), guessing is
-        how the wrong thing gets sent or cancelled."""
-        if job_id:
-            try:
-                r = requests.get(
-                    f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
-                    timeout=10)
-                if r.ok:
-                    return r.json()
-            except Exception:
-                return None
+        how the wrong thing gets sent or cancelled. Even a model-picked id is
+        only trusted with several pending when the owner's own words point at
+        that job."""
         pending = self._pending()
+        if job_id:
+            job = self._fetch(job_id)
+            if not job:
+                return None
+            if owner_text is not None and len(pending) > 1 \
+                    and not self._references(owner_text, job):
+                return "ambiguous"
+            return job
         if len(pending) == 1:
             return pending[0]
         return "ambiguous" if pending else None
 
-    def _release(self, job_id: Optional[str], changes: Optional[dict]) -> Optional[str]:
-        job = self._job(job_id)
+    def _release(self, job_id: Optional[str], changes: Optional[dict],
+                 owner_text: str = "") -> Optional[str]:
+        job = self._job(job_id, owner_text)
         if job == "ambiguous":
             return "ambiguous"
         if not job:
@@ -257,8 +289,8 @@ class Conversation:
             json=fields, timeout=10)
         return f"released:{job['id']}"
 
-    def _cancel(self, job_id: Optional[str]) -> Optional[str]:
-        job = self._job(job_id)
+    def _cancel(self, job_id: Optional[str], owner_text: str = "") -> Optional[str]:
+        job = self._job(job_id, owner_text)
         if job == "ambiguous":
             return "ambiguous"
         if not job:

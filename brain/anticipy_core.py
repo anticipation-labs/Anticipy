@@ -89,8 +89,31 @@ class Anticipy:
 
     # ------------------------------------------------------------ hearing
 
+    _BRIEFING_RE = re.compile(
+        r"\b(briefing|debrief|catch me up|what('| i)?s (still )?(open|left|outstanding|pending)|"
+        r"status update|where are we|what do you have for me)\b", re.IGNORECASE)
+    _RECALL_RE = re.compile(
+        r"^\s*(what|when|who|where|which|did|do|have|has|remind me)\b.*\?*\s*$",
+        re.IGNORECASE)
+
     def hear(self, line: str) -> dict:
         """One transcript line in; memory, decision, and delegation out."""
+        # Owner questions are answered, not triaged: a briefing request goes
+        # to the briefing engine, and a memory question is answered straight
+        # from the graph. Neither should ever spawn a browser job.
+        if self._BRIEFING_RE.search(line):
+            said = self.status_report() if re.search(
+                r"open|left|outstanding|pending|status|where are we", line, re.I) \
+                else self.briefing()
+            return {"memory": {}, "decision": Decision(
+                decision="answer", goal=None, reason="briefing request"),
+                "anticipy_says": said}
+        if self._RECALL_RE.match(line):
+            answer = self._answer_from_memory(line)
+            if answer:
+                return {"memory": {}, "decision": Decision(
+                    decision="answer", goal=None, reason="memory recall"),
+                    "anticipy_says": answer}
         mem = self.memory.ingest(line)
         decision = self._decide(line, mem)
         handled = None
@@ -148,6 +171,50 @@ class Anticipy:
         if needs_ok:
             return f"I overheard that — I'm preparing the {pretty} now. Nothing goes out until you say so."
         return f"On it — I'm handling the {pretty}."
+
+    def _answer_from_memory(self, question: str) -> Optional[str]:
+        """Answer an owner question straight from the graph. Returns None when
+        memory doesn't hold the answer, so the line falls through to triage."""
+        facts = [f["fact"] + (f' \u2014 original: "{f["quote"]}"'
+                              if f.get("quote") and f["quote"] not in f["fact"] else "")
+                 for f in self.memory.recall(question, limit=6)]
+        if not facts:
+            return None
+        if self.llm:
+            try:
+                res = self.llm.chat(
+                    f"You are {NAME}, answering the owner's question over SMS. "
+                    "Use ONLY the memory notes given. If the notes contain the "
+                    "answer, reply in 1-2 warm, direct sentences quoting the "
+                    "specifics (names, times, things promised). If the notes do "
+                    "NOT contain the answer, reply with exactly NO_ANSWER.",
+                    json.dumps({"question": question, "memory": facts}),
+                )
+                text = res.text.strip()
+                if text and "NO_ANSWER" not in text:
+                    return text
+                return None
+            except Exception:
+                pass
+        return "Here's what I remember: " + "; ".join(facts[:3])
+
+    def status_report(self) -> str:
+        """What's still open — grounded in live queue statuses, never claims."""
+        loops = self.review_loops()
+        open_loops = [l for l in loops if l["status"] in
+                      ("handling", "awaiting_ok", "needs_you")]
+        done = [l for l in loops if l["status"] == "done"]
+        parts = []
+        if open_loops:
+            named = "; ".join(
+                f"{l['what'].replace('_', ' ')} ({'waiting on you' if l['status'] == 'awaiting_ok' else 'needs you' if l['status'] == 'needs_you' else 'in progress'})"
+                for l in open_loops)
+            parts.append(f"Still open: {named}.")
+        else:
+            parts.append("Nothing's open — all loops are closed.")
+        if done:
+            parts.append(f"Done today: {'; '.join(l['what'].replace('_', ' ') for l in done)}.")
+        return " ".join(parts)
 
     def briefing(self) -> str:
         """Anticipy's greeting: what she heard, what she's handling."""
