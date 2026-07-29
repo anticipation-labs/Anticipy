@@ -6,7 +6,17 @@
 
 import { runAgentGoal } from "./agent_loop.js";
 
-const BASE = "http://127.0.0.1:8090"; // dev; production points at the hosted backend
+// Production backend; override via chrome.storage.local `backendUrl` for dev.
+const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
+let BASE = DEFAULT_BASE;
+chrome.storage.local.get("backendUrl").then(({ backendUrl }) => {
+  if (backendUrl) BASE = backendUrl.replace(/\/$/, "");
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.backendUrl) {
+    BASE = (changes.backendUrl.newValue || DEFAULT_BASE).replace(/\/$/, "");
+  }
+});
 const POLL_SECONDS = 5;
 const HEARTBEAT_SECONDS = 10;
 const STALE_JOB_MS = 2 * 60 * 1000; // running w/ no heartbeat -> requeued

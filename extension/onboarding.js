@@ -1,4 +1,4 @@
-const BASE = "http://127.0.0.1:8090";
+const BASE = "https://backend-production-61e0a.up.railway.app";
 
 async function refresh() {
   const backendDot = document.getElementById("backendDot");

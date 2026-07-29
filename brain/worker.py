@@ -17,6 +17,7 @@ import time
 import requests
 
 from .anticipy_core import Anticipy
+from .memory import Memory
 from .conversation import Conversation, MockTransport
 from .llm import LLM
 
@@ -49,7 +50,9 @@ def mark_processed(event_id: str, decision: str) -> None:
 
 def main() -> None:
     llm = LLM()
-    anticipy = Anticipy(llm=llm if llm.live else None, backend_url=PB,
+    mem_db = os.environ.get("ANTICIPY_MEMORY_DB", ":memory:")
+    memory = Memory(path=mem_db, llm=llm if llm.live else None)
+    anticipy = Anticipy(llm=llm if llm.live else None, memory=memory, backend_url=PB,
                         owner_phone=os.environ.get("ANTICIPY_OWNER_PHONE", "owner"))
     convo = Conversation(anticipy, transport=MockTransport())
     anticipy.conversation = convo
