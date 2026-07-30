@@ -153,7 +153,7 @@ async function runJobInner(job, params) {
   if (job.goal === "agent_goal") {
     // Autonomous mode: LLM click-loop via chrome.debugger in a background
     // Anticipy tab group (same mechanics as Claude in Chrome / Codex).
-    const { openrouterKey } = await chrome.storage.local.get("openrouterKey");
+    const { openrouterKey, capsolverKey } = await chrome.storage.local.get(["openrouterKey", "capsolverKey"]);
     if (!openrouterKey) {
       await updateJob(job.id, { status: "failed", result: "no OpenRouter key in extension storage" });
       return;
@@ -161,6 +161,7 @@ async function runJobInner(job, params) {
     try {
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
+        capsolverKey: capsolverKey || null,
         startUrl: params.start_url || undefined,
       });
       // needs_user (login wall, CAPTCHA, refused site) is NOT the same state

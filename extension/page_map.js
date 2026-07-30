@@ -81,6 +81,43 @@
     return document.activeElement === el;
   };
 
+  window.__anticipyClear = (idx) => {
+    const el = window.__anticipyMap[idx];
+    if (!el) return false;
+    try {
+      el.focus();
+      if ("value" in el) {
+        el.value = "";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      } else if (el.isContentEditable) {
+        el.textContent = "";
+      }
+    } catch (e) { return false; }
+    return true;
+  };
+
+  // After typing into an autocomplete field, the suggestion dropdown is a
+  // freshly-rendered listbox. Surface its options so the agent can pick one
+  // instead of re-typing into the same box forever.
+  window.__anticipySuggestions = () => {
+    const opts = [];
+    const nodes = document.querySelectorAll(
+      "[role=option], [role=listbox] li, .pac-item, ul[role=listbox] [role=option], li[role=option]");
+    for (const n of nodes) {
+      const r = n.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      const st = getComputedStyle(n);
+      if (st.visibility === "hidden" || st.display === "none") continue;
+      const idx = counter++;
+      window.__anticipyMap[idx] = n;
+      const t = (n.innerText || n.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80);
+      opts.push(`[${idx}] <option> ${t} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
+      if (opts.length > 12) break;
+    }
+    return opts.join("\n");
+  };
+
   window.__anticipyCenter = (idx) => {
     const el = window.__anticipyMap[idx];
     if (!el) return null;
