@@ -288,6 +288,8 @@ export async function runAgentGoal(goal, opts) {
   await cdp(tab.id, "Emulation.setFocusEmulationEnabled", { enabled: true });
   const history = [];
   const actionCounts = {};
+  const deadIdx = new Set();
+  let lastUrl = "";
   let lastDoneClaim = null;
   try {
     for (let step = 0; step < maxSteps; step++) {
@@ -312,6 +314,18 @@ export async function runAgentGoal(goal, opts) {
           if (solved) { await new Promise((r) => setTimeout(r, 2500)); continue; }
         }
         return { status: "needs_user", result: `stopped at a CAPTCHA/robot check on ${state.url} — needs a human`, tabId: tab.id };
+      }
+
+      // Element indexes only mean anything within one page; on navigation the
+      // dead list and repeat counts start over.
+      if (state.url !== lastUrl) { lastUrl = state.url; deadIdx.clear(); for (const k in actionCounts) delete actionCounts[k]; }
+      if (deadIdx.size) {
+        // Hide elements the model has already worn out — a history warning
+        // alone doesn't stop it re-picking them.
+        state.elements = state.elements
+          .split("\n")
+          .filter((l) => { const m = l.match(/^\[(\d+)\]/); return !(m && deadIdx.has(Number(m[1]))); })
+          .join("\n");
       }
 
       let decision;
@@ -354,9 +368,11 @@ export async function runAgentGoal(goal, opts) {
         if (actionCounts[sig] > 2) {
           if (actionCounts[sig] === 3) {
             // A wedged overlay (date pickers etc.) eats coordinate clicks;
-            // Escape usually dismisses it and unblocks the flow.
+            // Escape usually dismisses it and unblocks the flow. The element
+            // is also removed from future page maps so it can't be re-picked.
+            deadIdx.add(decision.index);
             await pressKey(tab.id, "Escape", "Escape", 27);
-            history.push(`step ${step}: BLOCKED — ${sig} did nothing twice, so the overlay was dismissed with Escape. Element ${decision.index} is DEAD to you; pick a DIFFERENT element or scroll.`);
+            history.push(`step ${step}: BLOCKED — ${sig} did nothing twice; overlay dismissed with Escape and element ${decision.index} removed from the map. If the goal's answer is already visible in the page text, output done NOW with the result.`);
           } else {
             // The model is spiraling on one element. If it had a done claim
             // that was rejected mid-load, the page has long since settled —
