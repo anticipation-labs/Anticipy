@@ -288,6 +288,7 @@ export async function runAgentGoal(goal, opts) {
   await cdp(tab.id, "Emulation.setFocusEmulationEnabled", { enabled: true });
   const history = [];
   const actionCounts = {};
+  let lastDoneClaim = null;
   try {
     for (let step = 0; step < maxSteps; step++) {
       await new Promise((r) => setTimeout(r, 1200));
@@ -321,8 +322,15 @@ export async function runAgentGoal(goal, opts) {
       if (decision.action === "done") {
         // A done claim is verified against the live page before it's trusted:
         // a mistyped form or an unsubmitted page must never report success.
-        const verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
+        let verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
+        if (!verdict.verified && /load|spinner|progress|wait/i.test(verdict.reason || "")) {
+          // The page was mid-load, not wrong — give it a moment and re-check
+          // once before rejecting.
+          await new Promise((r) => setTimeout(r, 5000));
+          verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
+        }
         if (verdict.verified) return { status: "done", result: decision.result, tabId: tab.id };
+        lastDoneClaim = decision.result;
         history.push(`step ${step}: done claim rejected (${verdict.reason})`);
         continue;
       }
@@ -350,6 +358,13 @@ export async function runAgentGoal(goal, opts) {
             await pressKey(tab.id, "Escape", "Escape", 27);
             history.push(`step ${step}: BLOCKED — ${sig} did nothing twice, so the overlay was dismissed with Escape. Element ${decision.index} is DEAD to you; pick a DIFFERENT element or scroll.`);
           } else {
+            // The model is spiraling on one element. If it had a done claim
+            // that was rejected mid-load, the page has long since settled —
+            // re-audit that claim instead of burning the rest of the budget.
+            if (lastDoneClaim) {
+              const verdict = await verifyDone(apiKey, model, goal, lastDoneClaim, tab.id);
+              if (verdict.verified) return { status: "done", result: lastDoneClaim, tabId: tab.id };
+            }
             history.push(`step ${step}: BLOCKED — you already did ${sig}; do something DIFFERENT`);
           }
           continue;
@@ -414,5 +429,11 @@ export async function runAgentGoal(goal, opts) {
     return { status: "failed", result: `max steps reached; last steps: ${history.slice(-3).join(" | ").slice(0, 400)}`, tabId: tab.id };
   } finally {
     try { await chrome.debugger.detach({ tabId: tab.id }); } catch (e) { /* already closed */ }
+    // Late-spawned duplicates (target=_blank links) that the in-loop adoption
+    // missed shouldn't pile up in the owner's window.
+    try {
+      const strays = (await chrome.tabs.query({})).filter((t) => t.openerTabId === tab.id && t.id !== tab.id);
+      for (const t of strays) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
+    } catch (e) { /* best effort */ }
   }
 }
