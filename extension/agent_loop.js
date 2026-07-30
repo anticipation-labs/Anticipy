@@ -276,6 +276,7 @@ export async function runAgentGoal(goal, opts) {
   const { apiKey, capsolverKey = null, model = "deepseek/deepseek-v3.2", maxSteps = 32, startUrl = "https://www.bing.com/" } = opts;
   let captchaAttempts = 0;
 
+  const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
   const tab = await chrome.tabs.create({ url: startUrl, active: false });
   try {
     const group = await chrome.tabs.group({ tabIds: tab.id });
@@ -446,9 +447,12 @@ export async function runAgentGoal(goal, opts) {
   } finally {
     try { await chrome.debugger.detach({ tabId: tab.id }); } catch (e) { /* already closed */ }
     // Late-spawned duplicates (target=_blank links) that the in-loop adoption
-    // missed shouldn't pile up in the owner's window.
+    // missed shouldn't pile up in the owner's window. openerTabId alone misses
+    // some spawns, so anything created during the run that isn't the agent tab
+    // and isn't focused gets closed.
     try {
-      const strays = (await chrome.tabs.query({})).filter((t) => t.openerTabId === tab.id && t.id !== tab.id);
+      const strays = (await chrome.tabs.query({})).filter(
+        (t) => t.id !== tab.id && !preexisting.has(t.id) && !t.active);
       for (const t of strays) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
     } catch (e) { /* best effort */ }
   }
