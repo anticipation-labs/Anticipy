@@ -71,7 +71,7 @@ async function verifyDone(apiKey, model, goal, result, tabId) {
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
   catch { return { verified: true, reason: "page unreadable; claim accepted unverified" }; }
   const messages = [
-    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible); but verify=false if ANY statement in the claimed result is contradicted by the page (e.g. claiming a product is unreleased while the page shows its official price). The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done — verified=false with reason "goal state not reached yet". Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
+    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible); but verify=false if ANY statement in the claimed result is contradicted by the page (e.g. claiming a product is unreleased while the page shows its official price). The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done — verified=false with reason "goal state not reached yet". Likewise a research result that admits the requested information was NOT found ("not directly listed", "one would need to visit...") is NOT done — verified=false with reason "requested info not found". Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
     { role: "user", content: `GOAL: ${goal}\nCLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
   ];
   try {
@@ -111,7 +111,7 @@ function blockedDomain(url) {
 
 function looksLikeCaptcha(state) {
   const blob = `${state.url} ${state.title} ${(state.text || "").slice(0, 2000)}`.toLowerCase();
-  return /recaptcha|captcha|are you a robot|unusual traffic|verify you are human|hcaptcha|cf-challenge|one last step|solve the challenge|challenges\.cloudflare|verify you('| a)?re human|checking your browser/.test(blob);
+  return /recaptcha|captcha|are you a robot|unusual traffic|verify you are human|hcaptcha|cf-challenge|one last step|solve the challenge|challenges\.cloudflare|verify you('| a)?re human|checking your browser|just a moment|performing security verification|verif(y|ies) (that )?you('| a)?re not a (ro)?bot/.test(blob);
 }
 
 // Optional CapSolver assist. Only used on NON-sensitive sites (never banking,
