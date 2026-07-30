@@ -76,6 +76,11 @@ struct SettingsView: View {
                     }
                 }
                 if !session.agentPaired {
+                    if let setup = URL(string: backendURL + "/setup.html") {
+                        Link(destination: setup) {
+                            Label("Set up your browser — step-by-step guide", systemImage: "safari")
+                        }
+                    }
                     HStack {
                         TextField("6-digit code from the extension", text: $pairCode)
                             .keyboardType(.numberPad)

@@ -18,8 +18,9 @@ import requests
 
 from .anticipy_core import Anticipy
 from .memory import Memory
-from .conversation import Conversation, MockTransport
+from .conversation import Conversation, MockTransport, TwilioTransport
 from .llm import LLM
+from .voice_arm import VoiceArm
 
 PB = os.environ.get("ANTICIPY_PB", "http://127.0.0.1:8090")
 POLL_SECONDS = 2
@@ -54,9 +55,16 @@ def main() -> None:
     memory = Memory(path=mem_db, llm=llm if llm.live else None)
     anticipy = Anticipy(llm=llm if llm.live else None, memory=memory, backend_url=PB,
                         owner_phone=os.environ.get("ANTICIPY_OWNER_PHONE", "owner"))
-    convo = Conversation(anticipy, transport=MockTransport())
+    # Live texting when Twilio credentials are present; mock otherwise.
+    live_sms = all(os.environ.get(k) for k in
+                   ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"))
+    voice = VoiceArm() if live_sms else None
+    if voice:
+        anticipy.voice = voice
+    convo = Conversation(anticipy, transport=TwilioTransport(voice) if voice else MockTransport())
     anticipy.conversation = convo
-    print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'} · pb={PB}")
+    print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
+          f" · sms={'live' if live_sms else 'mock'} · pb={PB}")
 
     sent_seen = 0
     while True:
@@ -76,9 +84,11 @@ def main() -> None:
                       f" ({out['decision'].goal or 'no goal'})")
 
             # Surface anything she "texted" (mock transport) into the feed too.
-            for msg in convo.transport.sent[sent_seen:]:
-                post_event("anticipy_text", msg["body"])
-            sent_seen = len(convo.transport.sent)
+            sent = getattr(convo.transport, "sent", None)
+            if sent is not None:
+                for msg in sent[sent_seen:]:
+                    post_event("anticipy_text", msg["body"])
+                sent_seen = len(sent)
 
             anticipy.review_loops()
         except requests.RequestException as e:

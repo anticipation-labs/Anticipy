@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anticipy — Set up your browser</title>
+<style>
+  :root { --ink:#0C0C0C; --surface:#161616; --card:#1E1E1E; --stroke:#252525;
+          --ivory:#F5F0EB; --sand:#D4CEC7; --gray:#8A8A8A; --champagne:#C8A97E; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--ink); color:var(--ivory);
+         font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 48px 20px 80px; }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400;
+       font-size: 34px; margin: 18px 0 8px; }
+  .sub { color: var(--gray); margin-bottom: 36px; }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .pill { width:22px; height:52px; border:3px solid var(--ivory); border-radius:12px;
+          position:relative; }
+  .pill::after { content:""; position:absolute; left:50%; top:60%;
+                 transform:translateX(-50%); width:7px; height:7px;
+                 border-radius:50%; background:var(--champagne); }
+  .step { background:var(--card); border:1px solid var(--stroke);
+          border-radius:18px; padding:20px 22px; margin-bottom:14px; }
+  .step b { color:var(--champagne); font-weight:600; display:block;
+            font-size:13px; letter-spacing:.06em; text-transform:uppercase;
+            margin-bottom:6px; }
+  .btn { display:inline-block; background:var(--champagne); color:var(--ink);
+         font-weight:600; padding:13px 26px; border-radius:999px;
+         text-decoration:none; margin: 6px 0 2px; }
+  code { background:var(--surface); border:1px solid var(--stroke);
+         border-radius:8px; padding:2px 8px; color:var(--sand); font-size:14px; }
+  .note { color:var(--gray); font-size:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo"><div class="pill"></div>
+    <span style="font-family:Georgia,serif;font-size:26px">Anticipy</span></div>
+  <h1>Give Anticipy hands.</h1>
+  <p class="sub">Five minutes, once. After this, Anticipy can do real work in
+    your Chrome — always asking you first.</p>
+
+  <div class="step"><b>Step 1 — Download</b>
+    Download the browser agent and unzip it (double-click the file).<br>
+    <a class="btn" href="/anticipy-extension.zip" download>Download Anticipy for Chrome</a>
+  </div>
+
+  <div class="step"><b>Step 2 — Open Chrome's extensions page</b>
+    In Chrome, type <code>chrome://extensions</code> in the address bar and
+    press Enter.
+  </div>
+
+  <div class="step"><b>Step 3 — Turn on Developer mode</b>
+    Flip the <code>Developer mode</code> switch in the top-right corner of
+    that page.
+  </div>
+
+  <div class="step"><b>Step 4 — Load Anticipy</b>
+    Click <code>Load unpacked</code> (top-left) and choose the unzipped
+    <code>anticipy-extension</code> folder.
+  </div>
+
+  <div class="step"><b>Step 5 — Pair with your phone</b>
+    A welcome tab opens with a <b style="display:inline;text-transform:none">6-digit
+    pair code</b>. In the Anticipy app on your phone, open Settings and type
+    that code. Done — the app will show <code>Agent live</code>.
+  </div>
+
+  <p class="note">Anticipy never touches banking sites, never fills passwords
+    or payment fields, and always stops at logins and CAPTCHAs. Every
+    consequential action waits for your OK first.</p>
+</div>
+</body>
+</html>
