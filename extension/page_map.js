@@ -130,7 +130,9 @@
       // Trip-type / passenger dropdowns also use role=option; they pollute
       // the airport suggestion list and mislead the picker.
       if (/^(round.?trip|one.?way|multi.?city|\d+\s*(adult|child|traveler|passenger))/i.test(t)) { counter--; delete window.__anticipyMap[idx]; continue; }
-      opts.push(`[${idx}] <option> ${t} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
+      const picked = n.getAttribute("aria-selected") === "true" || n.getAttribute("aria-checked") === "true" ||
+        !!n.querySelector('[aria-checked="true"], [aria-selected="true"], input:checked');
+      opts.push(`[${idx}] <option> ${t}${picked ? " (ALREADY SELECTED — do NOT click again)" : ""} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
       if (opts.length > 12) break;
     }
     return opts.join("\n");

@@ -71,7 +71,7 @@ async function verifyDone(apiKey, model, goal, result, tabId) {
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
   catch { return { verified: true, reason: "page unreadable; claim accepted unverified" }; }
   const messages = [
-    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible). Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
+    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible); but verify=false if ANY statement in the claimed result is contradicted by the page (e.g. claiming a product is unreleased while the page shows its official price). Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
     { role: "user", content: `GOAL: ${goal}\nCLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
   ];
   try {
@@ -344,7 +344,14 @@ export async function runAgentGoal(goal, opts) {
         const sig = JSON.stringify([decision.action, decision.index, decision.text || ""]);
         actionCounts[sig] = (actionCounts[sig] || 0) + 1;
         if (actionCounts[sig] > 2) {
-          history.push(`step ${step}: BLOCKED — you already did ${sig} twice with no progress; do something DIFFERENT`);
+          if (actionCounts[sig] === 3) {
+            // A wedged overlay (date pickers etc.) eats coordinate clicks;
+            // Escape usually dismisses it and unblocks the flow.
+            await pressKey(tab.id, "Escape", "Escape", 27);
+            history.push(`step ${step}: BLOCKED — ${sig} did nothing twice, so the overlay was dismissed with Escape. Element ${decision.index} is DEAD to you; pick a DIFFERENT element or scroll.`);
+          } else {
+            history.push(`step ${step}: BLOCKED — you already did ${sig}; do something DIFFERENT`);
+          }
           continue;
         }
         let c;
@@ -352,6 +359,19 @@ export async function runAgentGoal(goal, opts) {
         catch (e) { history.push(`step ${step}: element lookup failed (${String(e).slice(0, 100)})`); continue; }
         if (!c) { history.push(`step ${step}: element ${decision.index} not found`); continue; }
         await trustedClick(tab.id, c.x, c.y);
+        if (decision.action === "click" && actionCounts[sig] === 2) {
+          // Second attempt at the same click: the coordinate click likely
+          // missed (overlay buttons re-render/move). Fire the element's own
+          // click handler as a fallback.
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: (i) => { const el = window.__anticipyMap[i]; if (el) el.click(); return !!el; },
+              args: [decision.index],
+            });
+            history.push(`step ${step}: retried click ${decision.index} via element handler`);
+          } catch (e) { /* best effort */ }
+        }
         if (decision.action === "type") {
           await new Promise((r) => setTimeout(r, 300));
           // CDP clicks don't always land focus (overlays, shadow DOM); focus
