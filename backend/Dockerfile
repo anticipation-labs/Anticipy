@@ -7,6 +7,7 @@ RUN apk add --no-cache ca-certificates unzip wget \
     && rm /tmp/pb.zip
 COPY pb_migrations /app/pb_migrations
 COPY pb_public /app/pb_public
+COPY pb_hooks /app/pb_hooks
 WORKDIR /app
 # Railway injects PORT; pb_data lives on the attached volume.
-CMD ./pocketbase serve --http 0.0.0.0:${PORT:-8090} --dir /pb_data --migrationsDir /app/pb_migrations --publicDir /app/pb_public
+CMD ./pocketbase serve --http 0.0.0.0:${PORT:-8090} --dir /pb_data --migrationsDir /app/pb_migrations --publicDir /app/pb_public --hooksDir /app/pb_hooks

@@ -33,10 +33,10 @@ def post_event(kind: str, text: str, decision: str = "", goal: str = "") -> None
     }, timeout=10)
 
 
-def fetch_unprocessed() -> list[dict]:
+def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
     r = requests.get(
         f"{PB}/api/collections/events/records",
-        params={"filter": 'kind="transcript" && decision=""',
+        params={"filter": f'kind="{kind}" && decision=""',
                 "perPage": 20, "sort": "created"},
         timeout=10,
     )
@@ -82,6 +82,20 @@ def main() -> None:
                                decision=decision, goal=out["decision"].goal or "")
                 print(f"heard: {line!r} -> {decision}"
                       f" ({out['decision'].goal or 'no goal'})")
+
+            # Inbound texts (Twilio webhook -> pb_hooks -> events) flow through
+            # the same conversation the pendant path uses; the reply goes back
+            # out over the live transport.
+            for ev in fetch_unprocessed("sms_reply"):
+                text = ev.get("text", "").strip()
+                phone = ev.get("goal", "").strip() or anticipy.owner_phone
+                if not text:
+                    mark_processed(ev["id"], "ignore")
+                    continue
+                out = convo.on_reply(phone, text)
+                mark_processed(ev["id"], out["intent"])
+                post_event("anticipy_text", out["reply"])
+                print(f"sms in: {text!r} -> {out['intent']}")
 
             # Surface anything she "texted" (mock transport) into the feed too.
             sent = getattr(convo.transport, "sent", None)
