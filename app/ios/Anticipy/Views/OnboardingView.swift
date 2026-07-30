@@ -177,9 +177,16 @@ struct OnboardingView: View {
             Text("The Anticipy browser agent works inside your own Chrome — using your logged-in accounts, never your passwords.")
                 .font(.callout)
                 .foregroundStyle(Theme.sand)
-            numbered(1, "On your computer, visit anticipy.ai/agent")
-            numbered(2, "Add Anticipy to Chrome")
+            numbered(1, "On your computer, open the setup guide below")
+            numbered(2, "Add Anticipy to Chrome (it walks you through it)")
             numbered(3, "Type the 6-digit code it shows you here")
+            if let setup = URL(string: "https://backend-production-61e0a.up.railway.app/setup.html") {
+                ShareLink(item: setup) {
+                    Label("Send the setup guide to your computer", systemImage: "square.and.arrow.up")
+                        .font(.callout.weight(.semibold))
+                }
+                .padding(.top, 2)
+            }
             if session.agentPaired {
                 HStack(spacing: 8) {
                     Circle().fill(Theme.champagne).frame(width: 8, height: 8)

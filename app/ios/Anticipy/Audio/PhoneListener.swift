@@ -69,7 +69,9 @@ final class PhoneListener: NSObject, ObservableObject {
                 if result.isFinal {
                     DispatchQueue.main.async {
                         self.partial = ""
-                        if !text.isEmpty { self.onLine?(text) }
+                        // stop() already flushed the open utterance, so only
+                        // emit finals while actively listening.
+                        if !text.isEmpty, self.isListening { self.onLine?(text) }
                     }
                     if self.isListening { self.startRecognition() }
                 }
@@ -84,7 +86,11 @@ final class PhoneListener: NSObject, ObservableObject {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         request?.endAudio()
-        task?.cancel()
+        // Emit whatever was said in the still-open utterance; cancelling the
+        // task would otherwise drop it before the final result arrives.
+        let pending = partial.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !pending.isEmpty { onLine?(pending) }
+        task?.finish()
         request = nil
         task = nil
         partial = ""
