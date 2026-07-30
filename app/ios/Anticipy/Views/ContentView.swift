@@ -320,9 +320,11 @@ struct HandlingCard: View {
     }
 }
 
-/// A completed (or failed) job with its result.
+/// A completed (or failed) job with its result. Tapping expands the full
+/// result text; failed jobs say so plainly.
 struct DoneCard: View {
     let job: AgentJob
+    @State private var expanded = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -332,14 +334,25 @@ struct DoneCard: View {
                 Text(job.goal.replacingOccurrences(of: "_", with: " ").capitalized)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(Theme.ivory)
+                if job.status != "done" {
+                    Text("Couldn't finish this one")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Theme.gray)
+                }
                 if let r = job.result, !r.isEmpty {
-                    Text(r).font(.footnote).foregroundStyle(Theme.gray).lineLimit(3)
+                    Text(r).font(.footnote).foregroundStyle(Theme.gray)
+                        .lineLimit(expanded ? nil : 3)
                 }
             }
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
+        .contentShape(Rectangle())
+        .onTapGesture {
+            Haptics.tap()
+            withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+        }
     }
 }
 
