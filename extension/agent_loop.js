@@ -71,7 +71,7 @@ async function verifyDone(apiKey, model, goal, result, tabId) {
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
   catch { return { verified: true, reason: "page unreadable; claim accepted unverified" }; }
   const messages = [
-    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, the claimed result must be plausible from the page content. Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
+    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible). Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
     { role: "user", content: `GOAL: ${goal}\nCLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
   ];
   try {
@@ -283,7 +283,11 @@ export async function runAgentGoal(goal, opts) {
   } catch (e) { /* tab groups unavailable (e.g. incognito) */ }
 
   await chrome.debugger.attach({ tabId: tab.id }, "1.3");
+  // The agent tab is a background tab: without focus emulation, dispatched
+  // key events are dropped by the renderer and nothing ever types.
+  await cdp(tab.id, "Emulation.setFocusEmulationEnabled", { enabled: true });
   const history = [];
+  const actionCounts = {};
   try {
     for (let step = 0; step < maxSteps; step++) {
       await new Promise((r) => setTimeout(r, 1200));
@@ -335,6 +339,14 @@ export async function runAgentGoal(goal, opts) {
         continue;
       }
       if (decision.action === "click" || decision.action === "type") {
+        // Mechanical no-repeat: a third identical action never helps (it's how
+        // one link got clicked 25 times, opening 25 duplicate tabs).
+        const sig = JSON.stringify([decision.action, decision.index, decision.text || ""]);
+        actionCounts[sig] = (actionCounts[sig] || 0) + 1;
+        if (actionCounts[sig] > 2) {
+          history.push(`step ${step}: BLOCKED — you already did ${sig} twice with no progress; do something DIFFERENT`);
+          continue;
+        }
         let c;
         try { c = await withTimeout(elementCenter(tab.id, decision.index), 15000, "elementCenter"); }
         catch (e) { history.push(`step ${step}: element lookup failed (${String(e).slice(0, 100)})`); continue; }
@@ -356,6 +368,26 @@ export async function runAgentGoal(goal, opts) {
             await new Promise((r) => setTimeout(r, 200));
             await pressEnter(tab.id);
           }
+        }
+        if (decision.action === "click") {
+          // target=_blank links open tabs the loop never follows; adopt the
+          // new page in the agent tab instead so progress isn't lost.
+          await new Promise((r) => setTimeout(r, 800));
+          try {
+            const spawned = (await chrome.tabs.query({}))
+              .filter((t) => t.openerTabId === tab.id && t.id !== tab.id);
+            if (spawned.length) {
+              const target = spawned[spawned.length - 1];
+              const url = target.pendingUrl || target.url;
+              for (const t of spawned) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
+              if (url && !url.startsWith("chrome")) {
+                const nav = blockedDomain(url);
+                if (nav) return { status: "needs_user", result: `refused: ${nav} is a protected financial site`, tabId: tab.id };
+                await chrome.tabs.update(tab.id, { url });
+                history.push(`step ${step}: link opened a new tab — following ${url.slice(0, 120)} in place`);
+              }
+            }
+          } catch (e) { /* best effort */ }
         }
       }
     }

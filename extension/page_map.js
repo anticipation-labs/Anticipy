@@ -74,7 +74,22 @@
     return { url: location.href, title, elements: lines.join("\n"), text: bodyText };
   };
 
+  function activeEditable() {
+    const a = document.activeElement;
+    if (!a) return null;
+    if (a.isContentEditable) return a;
+    const tag = a.tagName;
+    if (tag === "TEXTAREA") return a;
+    if (tag === "INPUT" && !["submit", "button", "checkbox", "radio", "hidden", "file"].includes((a.type || "").toLowerCase())) return a;
+    return null;
+  }
+
   window.__anticipyFocus = (idx) => {
+    // Dialog pattern (Google Flights et al.): clicking the visible combobox
+    // opens an overlay whose REAL input the page focuses itself. If an
+    // editable input already has focus, keep it — refocusing the mapped
+    // element would send keystrokes to the dead placeholder box.
+    if (activeEditable()) return true;
     const el = window.__anticipyMap[idx];
     if (!el) return false;
     try { el.focus(); } catch (e) { return false; }
@@ -82,7 +97,7 @@
   };
 
   window.__anticipyClear = (idx) => {
-    const el = window.__anticipyMap[idx];
+    const el = activeEditable() || window.__anticipyMap[idx];
     if (!el) return false;
     try {
       el.focus();
@@ -112,6 +127,9 @@
       const idx = counter++;
       window.__anticipyMap[idx] = n;
       const t = (n.innerText || n.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80);
+      // Trip-type / passenger dropdowns also use role=option; they pollute
+      // the airport suggestion list and mislead the picker.
+      if (/^(round.?trip|one.?way|multi.?city|\d+\s*(adult|child|traveler|passenger))/i.test(t)) { counter--; delete window.__anticipyMap[idx]; continue; }
       opts.push(`[${idx}] <option> ${t} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
       if (opts.length > 12) break;
     }
