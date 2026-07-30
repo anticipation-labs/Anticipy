@@ -1,0 +1,140 @@
+{
+  "profiles": [
+    {
+      "id": "maya_founder",
+      "who": "Maya, 34, startup founder in Toronto. Back-to-back meetings, investor pipeline, small team.",
+      "day": [
+        {"t": "07:40", "text": "Morning. Ugh, coffee machine's broken again.", "expect": "ignore"},
+        {"t": "07:52", "text": "Traffic on the Gardiner is brutal today.", "expect": "ignore"},
+        {"t": "08:15", "text": "Okay so standup — Priya's shipping the billing fix today, Dev is still blocked on the Stripe webhook.", "expect": "remember"},
+        {"t": "08:40", "text": "I promised Rachel from Foundry Capital I'd send her our updated metrics deck by Friday.", "expect": "remember_commitment"},
+        {"t": "09:10", "text": "Can you find out what YC's current standard deal terms are? I keep hearing they changed it.", "expect": "act_research"},
+        {"t": "09:30", "text": "Ha, did you see that meme Dev posted? Dying.", "expect": "ignore"},
+        {"t": "10:05", "text": "Note to self: Priya's last day before mat leave is September 18th.", "expect": "remember"},
+        {"t": "10:20", "text": "We need a comparison of Linear versus Jira pricing for a 12 person team — board asked about tooling spend.", "expect": "act_research"},
+        {"t": "11:00", "text": "Lunch with Tom Chen from Shopify partnerships next Tuesday at Terroni on Adelaide, 12:30.", "expect": "remember"},
+        {"t": "11:45", "text": "Whatever, it's fine, let's just circle back later.", "expect": "ignore"},
+        {"t": "12:30", "text": "I should really book a dentist appointment, my crown is bugging me.", "expect": "remember_or_act"},
+        {"t": "13:15", "text": "Rachel said the partner meeting is on the 29th, so the deck needs to be tight.", "expect": "remember"},
+        {"t": "14:00", "text": "Look up the top three Hacker News stories today, I want to know what devs are talking about.", "expect": "act_research"},
+        {"t": "14:40", "text": "Dev unblocked the webhook, billing fix and webhook both going out in tonight's release.", "expect": "remember"},
+        {"t": "15:20", "text": "Honestly I'm so tired of this weather.", "expect": "ignore"},
+        {"t": "16:00", "text": "Sign me up for the Lenny's Newsletter, the free one — everyone keeps quoting it.", "expect": "act_form_hold"},
+        {"t": "17:10", "text": "Mom called, dinner at hers Sunday 6pm, bring wine.", "expect": "remember"},
+        {"t": "18:30", "text": "What did I promise Rachel again?", "expect": "recall"},
+        {"t": "18:32", "text": "When is Priya's last day?", "expect": "recall"},
+        {"t": "18:35", "text": "What's still open?", "expect": "briefing"}
+      ],
+      "recall_checks": [
+        {"q": "What did I promise Rachel again?", "gold": "send the updated metrics deck by Friday"},
+        {"q": "When is Priya's last day?", "gold": "September 18"},
+        {"q": "Where is lunch with Tom Chen?", "gold": "Terroni on Adelaide, Tuesday 12:30"}
+      ]
+    },
+    {
+      "id": "james_nurse",
+      "who": "James, 41, ER nurse, night shifts, two kids, coaches little league.",
+      "day": [
+        {"t": "06:30", "text": "Man, that shift was rough. Three traumas back to back.", "expect": "ignore"},
+        {"t": "06:45", "text": "Remind me: my recert for ACLS expires end of October, I need to rebook the course.", "expect": "remember_commitment"},
+        {"t": "07:20", "text": "Emma's science fair is Thursday the 14th at 6pm in the school gym.", "expect": "remember"},
+        {"t": "07:30", "text": "These eggs are terrible.", "expect": "ignore"},
+        {"t": "08:00", "text": "Can you find what a decent pair of nursing compression socks costs these days? Mine are shot.", "expect": "act_research"},
+        {"t": "09:15", "text": "Told Coach Ramirez I'd cover practice Saturday morning since he's out of town.", "expect": "remember_commitment"},
+        {"t": "10:00", "text": "Yeah yeah, I'll see you later man.", "expect": "ignore"},
+        {"t": "12:10", "text": "Liam needs new cleats, size 4, before the tournament on the 21st.", "expect": "remember_or_act"},
+        {"t": "13:00", "text": "What's the difference between the Pfizer and Moderna updated boosters this fall? Patients keep asking.", "expect": "act_research"},
+        {"t": "14:30", "text": "Sarah wants us to look at the cottage rental for the August long weekend, the one in Muskoka we did two years ago.", "expect": "remember"},
+        {"t": "15:00", "text": "This traffic light takes forever.", "expect": "ignore"},
+        {"t": "16:20", "text": "Pharmacy called, my prescription refill is ready for pickup until Thursday.", "expect": "remember"},
+        {"t": "17:00", "text": "Sign Liam up for the free trial week at that new taekwondo place on Dundas.", "expect": "act_form_hold"},
+        {"t": "19:00", "text": "When does my ACLS expire?", "expect": "recall"},
+        {"t": "19:02", "text": "What time is Emma's science fair?", "expect": "recall"},
+        {"t": "19:05", "text": "Give me my briefing.", "expect": "briefing"}
+      ],
+      "recall_checks": [
+        {"q": "When does my ACLS expire?", "gold": "end of October"},
+        {"q": "What time is Emma's science fair?", "gold": "Thursday the 14th, 6pm, school gym"},
+        {"q": "What did I tell Coach Ramirez?", "gold": "cover practice Saturday morning"}
+      ]
+    },
+    {
+      "id": "priya_student",
+      "who": "Priya, 26, med student on rotations, studying for Step 2, tight budget.",
+      "day": [
+        {"t": "06:00", "text": "Five more minutes... okay fine I'm up.", "expect": "ignore"},
+        {"t": "07:30", "text": "Dr. Okafor said my case presentation on the GI bleed patient is due Monday morning rounds.", "expect": "remember_commitment"},
+        {"t": "08:45", "text": "What's the current price of the UWorld Step 2 question bank, the 90 day one?", "expect": "act_research"},
+        {"t": "09:30", "text": "The attending was in SUCH a mood today.", "expect": "ignore"},
+        {"t": "11:00", "text": "Study group moved to Wednesday 7pm at Robarts library, fourth floor.", "expect": "remember"},
+        {"t": "12:15", "text": "I owe Kevin twenty bucks for the pizza last week, keep forgetting.", "expect": "remember_commitment"},
+        {"t": "13:40", "text": "Look up whether the Step 2 CK registration deadline for a September test date has passed.", "expect": "act_research"},
+        {"t": "14:20", "text": "Hmm, this coffee is actually decent for hospital coffee.", "expect": "ignore"},
+        {"t": "15:30", "text": "My lease renewal is due by August 1st, rent's going up to 1850.", "expect": "remember"},
+        {"t": "16:45", "text": "Find me the top rated free Anki deck people recommend for Step 2 these days.", "expect": "act_research"},
+        {"t": "18:00", "text": "Mom's flight lands Saturday at 3:40pm, Pearson terminal 1, Air India.", "expect": "remember"},
+        {"t": "19:30", "text": "Subscribe me to the free ALiEM newsletter thing the resident mentioned.", "expect": "act_form_hold"},
+        {"t": "21:00", "text": "When is my case presentation due?", "expect": "recall"},
+        {"t": "21:02", "text": "What time does mom land Saturday?", "expect": "recall"},
+        {"t": "21:05", "text": "What do you have for me?", "expect": "briefing"}
+      ],
+      "recall_checks": [
+        {"q": "When is my case presentation due?", "gold": "Monday morning rounds, GI bleed patient, Dr. Okafor"},
+        {"q": "What time does mom land Saturday?", "gold": "3:40pm Pearson terminal 1 Air India"},
+        {"q": "How much do I owe Kevin?", "gold": "twenty bucks for pizza"}
+      ]
+    },
+    {
+      "id": "carlos_realtor",
+      "who": "Carlos, 52, residential realtor, juggling listings, showings, and a kitchen reno.",
+      "day": [
+        {"t": "07:00", "text": "Beautiful morning out there today.", "expect": "ignore"},
+        {"t": "08:20", "text": "The Hendersons want to see the Maple Street listing again Saturday at 2, second visit, they're serious.", "expect": "remember"},
+        {"t": "09:00", "text": "I told the Kowalskis I'd get them comparables for their street by Wednesday.", "expect": "remember_commitment"},
+        {"t": "09:45", "text": "What are current 5-year fixed mortgage rates at the big Canadian banks? Buyers keep asking.", "expect": "act_research"},
+        {"t": "10:30", "text": "This espresso is life.", "expect": "ignore"},
+        {"t": "11:15", "text": "The contractor says the kitchen countertop install slipped to the 25th.", "expect": "remember"},
+        {"t": "12:00", "text": "Find out what a home staging service runs for a 3 bedroom in Toronto, ballpark.", "expect": "act_research"},
+        {"t": "13:30", "text": "Offer deadline on the Birchmount property is Tuesday 5pm, tell anyone who asks.", "expect": "remember"},
+        {"t": "14:15", "text": "Ah whatever, the Leafs will break my heart again anyway.", "expect": "ignore"},
+        {"t": "15:00", "text": "Book me a table for four at Buca on King for Friday 7:30 — closing dinner with the Naderis.", "expect": "act_hold"},
+        {"t": "16:30", "text": "My license renewal with RECO is due before the end of next month, don't let me forget.", "expect": "remember_commitment"},
+        {"t": "17:45", "text": "Look up the top three Hacker News stories, my nephew says I should know what tech people read.", "expect": "act_research"},
+        {"t": "19:00", "text": "When do the Hendersons want to see Maple Street?", "expect": "recall"},
+        {"t": "19:02", "text": "What's the offer deadline on Birchmount?", "expect": "recall"},
+        {"t": "19:05", "text": "Catch me up.", "expect": "briefing"}
+      ],
+      "recall_checks": [
+        {"q": "When do the Hendersons want to see Maple Street?", "gold": "Saturday at 2, second visit"},
+        {"q": "What's the offer deadline on Birchmount?", "gold": "Tuesday 5pm"},
+        {"q": "When did the countertop install slip to?", "gold": "the 25th"}
+      ]
+    },
+    {
+      "id": "aisha_pm",
+      "who": "Aisha, 29, product manager at a bank, planning a wedding, marathon training.",
+      "day": [
+        {"t": "06:15", "text": "Six miles done, legs are jelly.", "expect": "ignore"},
+        {"t": "08:30", "text": "Sprint review moved to Thursday 10am because half the team is at the offsite.", "expect": "remember"},
+        {"t": "09:15", "text": "I promised Fatima I'd review her PRD for the payments dashboard by end of day tomorrow.", "expect": "remember_commitment"},
+        {"t": "10:00", "text": "What's the going rate for wedding photographers in Toronto for an 8 hour day? We need to budget.", "expect": "act_research"},
+        {"t": "10:45", "text": "Okay that meeting could have been an email.", "expect": "ignore"},
+        {"t": "11:30", "text": "The venue needs our final guest count by August 15th, we're at 140 right now.", "expect": "remember"},
+        {"t": "12:20", "text": "Find the date of the Scotiabank Toronto Waterfront Marathon this year and when registration closes.", "expect": "act_research"},
+        {"t": "14:00", "text": "Legal flagged the vendor contract, needs redlines back by Friday.", "expect": "remember"},
+        {"t": "15:10", "text": "I love this song.", "expect": "ignore"},
+        {"t": "16:00", "text": "Compare Notion versus Confluence pricing for a 25 person team, my director wants numbers.", "expect": "act_research"},
+        {"t": "17:30", "text": "Omar's bachelor party is the weekend of September 6th in Montreal, I need to not schedule anything then.", "expect": "remember"},
+        {"t": "18:15", "text": "Sign us up for the free wedding planning checklist on The Knot.", "expect": "act_form_hold"},
+        {"t": "20:00", "text": "Whose PRD am I reviewing and by when?", "expect": "recall"},
+        {"t": "20:02", "text": "What's our guest count and when is it due?", "expect": "recall"},
+        {"t": "20:05", "text": "Where are we on everything?", "expect": "briefing"}
+      ],
+      "recall_checks": [
+        {"q": "Whose PRD am I reviewing and by when?", "gold": "Fatima's payments dashboard PRD by end of day tomorrow"},
+        {"q": "What's our guest count and when is it due?", "gold": "140, final count due August 15"},
+        {"q": "When is Omar's bachelor party?", "gold": "weekend of September 6, Montreal"}
+      ]
+    }
+  ]
+}

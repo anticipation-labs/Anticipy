@@ -36,3 +36,6 @@ description: How to run hands-off end-to-end tests of the Anticipy pendant assis
 - After any extension reload, restart proof/sw_monitor.py — monitors attach to a specific service worker and go silently stale on reload.
 - Datacenter IP gets CAPTCHA on Bing AND Brave — research scenarios need a direct-site start_url or residential egress.
 - If jobs sit queued unclaimed or an agent freezes after 1 step, the SW/tab is wedged — reload via proof/reload_ext.py and consider relaunching Chrome with tab-freezing disabled (/tmp/launch_chrome.sh).
+
+- sw_monitor.py logs only the first 200 chars of each LLM request (the GOAL line). To verify what the agent actually SAW (element map, SUGGESTIONS list, page text), temporarily raise the truncation at proof/sw_monitor.py:47 (e.g. [:12000]), restart the monitor, and revert after — grepping the default log for map content silently proves nothing.
+- Machine restarts can leave an auto-relaunched Chrome 133 on CDP 29229 (tab-freeze bug). Always check /json/version first; if not 137, pkill -9 -f 'chrome.*browser_data_dir' and relaunch Chrome-for-Testing 137 with the freeze-disabled flags. Keep the launch script somewhere persistent — /tmp is wiped.

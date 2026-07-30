@@ -1,5 +1,74 @@
 # ANTICIPY — COMPLETE HANDOFF DOCUMENT
 
+> **⚡ 2026-07-30 UPDATE — READ §0.5 "CURRENT PRODUCTION STATE" FIRST.**
+> Everything below §0.5 is the original 2026-07-21 handoff and much of it has since
+> been superseded: the system now runs IN PRODUCTION on Railway with live Twilio
+> two-way texting, and TestFlight is at v1.0.2 build 17.
+
+---
+
+## 0.5 CURRENT PRODUCTION STATE (as of 2026-07-30)
+
+**Branch with ALL current work: `pendant-system`** (pushed). Latest commit: `63cef367`.
+
+### Production infrastructure (Railway)
+- Railway project `anticipy-production` (id `c0a0f512-6ce0-43aa-b338-781d912e5ae3`), env `production`.
+- Service **backend**: PocketBase, built from `backend/Dockerfile` (deploy with the `backend/`
+  directory as upload root — deploying from repo root fails with "Dockerfile not found").
+  - URL: `https://backend-production-61e0a.up.railway.app`
+  - Health: `/api/health` · Setup guide: `/setup.html` · Extension: `/anticipy-extension.zip`
+  - Serves `pb_migrations/`, `pb_public/`, `pb_hooks/`; data on attached volume `/pb_data`.
+- Service **worker**: `brain/worker.py` (built from `brain/Dockerfile`). Polls `events`
+  (kind `transcript` and `sms_reply`), runs `Anticipy.hear()`, writes decisions back.
+  - Env: `ANTICIPY_PB`, `OPENROUTER_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+    `TWILIO_PHONE_NUMBER`, `ANTICIPY_MEMORY_DB=/data/memory-v2.db`, optionally `ANTICIPY_OWNER_PHONE`.
+  - Startup log to verify: `worker up · llm=live:deepseek/deepseek-v3.2 · sms=live · pb=…`
+
+### Live texting (two-way, PROVEN in production)
+- Outbound: worker texts via Twilio (+1 619 658 4447) — live, no mock.
+- Inbound: Twilio number's SMS webhook →
+  `https://backend-production-61e0a.up.railway.app/sms/inbound?token=<ANTICIPY_SMS_TOKEN>`
+  (PocketBase hook `backend/pb_hooks/sms.pb.js`) → `events` kind `sms_reply` → worker replies.
+- GAP: onboarding never asks the owner's phone number, so proactive texts need
+  `ANTICIPY_OWNER_PHONE` set manually on the worker.
+
+### TestFlight (bundle `ai.anticipy.app`, team `49T86P9XGW`)
+- Uploaded builds: 7 (v0.2.0, superseded), 16 (v1.0.2, installed by Omar), **17 (v1.0.2 —
+  uploaded 2026-07-30, "No errors uploading archive"; verify processing→VALID in App Store Connect)**.
+- Build 17 contains: the Listen fix (stop no longer cancels the recognizer — the open utterance
+  is flushed to the brain: `PhoneListener.swift`) and a real onboarding ShareLink to the
+  production setup guide (replacing the fake `anticipy.ai/agent` text).
+- ALWAYS bump `CURRENT_PROJECT_VERSION` + `CFBundleVersion` in `app/ios/project.yml` past the
+  highest installed build (Apple hides lower-numbered builds — this burned us once: build 7 < 14).
+- Build machine: Omar's MacBook Air (repo at `~/Anticipy-pendant`), Xcode 26.6, cert
+  "iPhone Distribution: Omar Ebrahim (49T86P9XGW)", profile "Anticipy AppStore Devin",
+  `~/ExportOptions.plist`, ASC API key `JM8NMC2CQ4` / issuer `f7537a6f-0219-4b3f-80cf-20c2e7d7d548`.
+
+### Consumer browser-agent flow (live)
+- iOS onboarding/Settings → setup guide → download zip → chrome://extensions → Developer mode →
+  Load unpacked → extension popup shows 6-digit code → typed into app → paired.
+- GAP: extension still asks the user to paste an OpenRouter key locally (should be fetched from
+  backend post-pairing). GAP: no Chrome Web Store listing (no auto-update).
+
+### Validation results (2026-07-30, production brain)
+- 5 full-day profiles, 81 transcript lines: **79/81 correct triage, 15/15 memory recall**,
+  25 sensible proposed jobs, all consequential ones held for confirmation.
+  Harness: `proof/profiles5_ingest.py` + `proof/profiles5.json`; report `~/profiles5-report.md`.
+- Browser execution of 10 real tasks: 5 fully DONE+verified, 2 weak, 2 partial, 1 fail
+  (Cloudflare wall — now detected honestly). Fixes pushed in `a9a0eccd`.
+- Production DB was wiped clean (126 test records) and worker memory reset to
+  `/data/memory-v2.db` so Omar's feed starts empty.
+
+### Top remaining gaps (in priority order)
+1. Verify build 17 on the physical iPhone (Listen → speak → stop → brain processes it).
+2. Phone-number ask in onboarding → set owner phone on the worker automatically.
+3. Extension fetches its LLM key from the backend after pairing (remove the key prompt).
+4. Chrome Web Store distribution; PocketBase collection rules are still wide open (dev-grade).
+5. Rotate previously-exposed keys: CapSolver, OpenRouter, Twilio (Omar accepted reuse for now).
+6. Two-way conversational phone calls (texting is the priority per Omar); physical pendant BLE.
+
+---
+
 **Written by:** Devin (Cognition), session ending 2026-07-21
 **Written for:** the next agent — expected to be Claude (Opus/“Fable 5”) running LOCALLY on Omar's MacBook Air
 **Owner:** Omar Ebrahim — okebrahim@icloud.com — phone +1 604 724 5161 — GitHub `omize10`
