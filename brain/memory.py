@@ -119,9 +119,21 @@ class Memory:
 
     # ------------------------------------------------------------- recall
 
+    _STOP = {
+        "the", "and", "was", "were", "are", "you", "your", "our", "for",
+        "with", "that", "this", "what", "when", "where", "who", "whose",
+        "which", "did", "does", "have", "has", "had", "want", "wants",
+        "see", "get", "got", "how", "why", "can", "will", "would", "they",
+        "them", "his", "her", "she", "him", "out", "not", "but", "about",
+        "again", "still", "just", "there", "here", "into", "onto", "from",
+    }
+
     def recall(self, query: str, limit: int = 8) -> list[dict]:
-        """Time-ordered chain of facts connected to the entities in `query`."""
-        words = {w.strip(".,!?").lower() for w in query.split() if len(w) > 2}
+        """Relevance-then-time ordered chain of facts connected to the
+        entities in `query`. Stopwords never seed matches — otherwise "the"
+        matches every episode and recent noise buries the real answer."""
+        words = {w.strip(".,!?").lower() for w in query.split()
+                 if len(w) > 2 and w.strip(".,!?").lower() not in self._STOP}
         rows = self.db.execute("SELECT id, type, name, status FROM nodes").fetchall()
         seeds = [r for r in rows
                  if any(w in r[2].lower() or r[2].lower() in w for w in words)]
@@ -158,7 +170,11 @@ class Memory:
             frontier = next_frontier
 
         uniq = {(f["fact"], f["ts"]): f for f in facts}
-        return sorted(uniq.values(), key=lambda f: -f["ts"])[:limit]
+
+        def relevance(f):
+            blob = (f["fact"] + " " + (f.get("quote") or "")).lower()
+            return sum(1 for w in words if w in blob)
+        return sorted(uniq.values(), key=lambda f: (-relevance(f), -f["ts"]))[:limit]
 
     def open_loops(self) -> list[dict]:
         """Open commitments, oldest first — the orchestrator's to-do list."""

@@ -175,9 +175,12 @@ class Anticipy:
     def _answer_from_memory(self, question: str) -> Optional[str]:
         """Answer an owner question straight from the graph. Returns None when
         memory doesn't hold the answer, so the line falls through to triage."""
+        q_norm = question.strip().lower()
         facts = [f["fact"] + (f' \u2014 original: "{f["quote"]}"'
                               if f.get("quote") and f["quote"] not in f["fact"] else "")
-                 for f in self.memory.recall(question, limit=6)]
+                 for f in self.memory.recall(question, limit=8)
+                 # An earlier asking of this same question is not evidence.
+                 if (f.get("quote") or "").strip().lower() != q_norm]
         if not facts:
             return None
         if self.llm:
