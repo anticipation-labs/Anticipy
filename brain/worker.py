@@ -92,7 +92,12 @@ def main() -> None:
                 if not text:
                     mark_processed(ev["id"], "ignore")
                     continue
-                out = convo.on_reply(phone, text)
+                try:
+                    out = convo.on_reply(phone, text)
+                except Exception as e:
+                    mark_processed(ev["id"], "error")
+                    print(f"sms in: {text!r} -> error: {e}")
+                    continue
                 mark_processed(ev["id"], out["intent"])
                 post_event("anticipy_text", out["reply"])
                 print(f"sms in: {text!r} -> {out['intent']}")
