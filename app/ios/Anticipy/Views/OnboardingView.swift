@@ -11,8 +11,9 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var agentCode = ""
     @State private var agentPairFailed = false
+    @State private var phone = ""
 
-    private let totalSteps = 5
+    private let totalSteps = 6
 
     var body: some View {
         ZStack {
@@ -22,9 +23,10 @@ struct OnboardingView: View {
                 TabView(selection: $step) {
                     welcome.tag(0)
                     howItWorks.tag(1)
-                    pairPendant.tag(2)
-                    browserAgent.tag(3)
-                    transcription.tag(4)
+                    yourNumber.tag(2)
+                    pairPendant.tag(3)
+                    browserAgent.tag(4)
+                    transcription.tag(5)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut, value: step)
@@ -48,6 +50,11 @@ struct OnboardingView: View {
     private var footer: some View {
         VStack(spacing: 10) {
             Button {
+                // Save the number as we leave its step — skipping is still
+                // allowed, it just means she can't text until Settings.
+                if step == 2, !phone.isEmpty {
+                    Task { _ = await session.saveOwnerPhone(phone) }
+                }
                 if step < totalSteps - 1 {
                     step += 1
                 } else {
@@ -106,6 +113,41 @@ struct OnboardingView: View {
             Spacer()
         }
         .padding(.horizontal, 28)
+    }
+
+    /// The one thing she genuinely cannot work out on her own. Without it she
+    /// can hear and prepare but can never reach you — and before this step
+    /// existed, the number had to be typed into a server by hand.
+    private var yourNumber: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "message")
+                .font(.system(size: 54))
+                .foregroundStyle(Theme.champagne)
+            Text("Where should I reach you?")
+                .font(Theme.display(28))
+                .foregroundStyle(Theme.ivory)
+            Text("When something needs your word, I'll text you here. Nothing else uses it.")
+                .font(.callout)
+                .foregroundStyle(Theme.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 30)
+            TextField("+1 604 555 0123", text: $phone)
+                .keyboardType(.phonePad)
+                .textContentType(.telephoneNumber)
+                .font(.title3.monospacedDigit())
+                .foregroundStyle(Theme.ivory)
+                .multilineTextAlignment(.center)
+                .padding(.vertical, 12)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
+                .padding(.horizontal, 40)
+            if !phone.isEmpty && session.e164(phone) == nil {
+                Text("That doesn't look like a full number yet.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
+            }
+            Spacer()
+        }
     }
 
     private var pairPendant: some View {

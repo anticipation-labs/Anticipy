@@ -37,6 +37,23 @@ CLOCK_QUIET_START, CLOCK_QUIET_END = 22, 8   # never initiate at night
 CLOCK_STATE = os.environ.get("ANTICIPY_CLOCK_STATE", "/data/clock_state.json")
 
 
+def fetch_owner_phone() -> str | None:
+    """The owner's number as THEY entered it in the app. Falls back to the
+    env var so an existing deployment keeps working, but the app is now the
+    source of truth — nobody should have to hand-edit a server variable to
+    make their own assistant able to text them."""
+    try:
+        r = pb.get(f"{PB}/api/collections/owner_profile/records",
+                   params={"sort": "-updated", "perPage": 1}, timeout=10)
+        if not r.ok:
+            return None
+        items = r.json().get("items", [])
+        phone = (items[0].get("phone") or "").strip() if items else ""
+        return phone or None
+    except Exception:
+        return None
+
+
 def same_phone(a: str, b: str) -> bool:
     """E.164 comparison tolerant of formatting. Empty owner phone never
     matches — an unconfigured owner must not authorize the whole world."""
@@ -132,8 +149,17 @@ def main() -> None:
 
     sent_seen = 0
     last_clock = 0.0
+    last_profile = 0.0
     while True:
         try:
+            # Pick up the owner's number from the app (and any change to it)
+            # without a redeploy.
+            if time.time() - last_profile > 60:
+                last_profile = time.time()
+                entered = fetch_owner_phone()
+                if entered and entered != anticipy.owner_phone:
+                    anticipy.owner_phone = entered
+                    print(f"owner phone updated from the app: …{entered[-4:]}")
             # The clock: she reviews her open loops on her own schedule and
             # may initiate — rarely, in daytime, rate-limited, gated.
             now = time.time()

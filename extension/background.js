@@ -172,6 +172,19 @@ async function claimJob() {
   if (!items || !items.length) return null;
   const job = items[0];
   if (activeJobs.has(job.id)) return null;
+  // Nothing executes while Chrome is shut, so a job can sit for days. Opening
+  // the laptop on Monday should NOT silently fire Friday's errand — the world
+  // has moved on. Hand it back and let the owner say whether it still stands.
+  const STALE_HOURS = 12;
+  const queuedAt = Date.parse(job.created || job.updated || "");
+  if (queuedAt && Date.now() - queuedAt > STALE_HOURS * 3600 * 1000) {
+    const hrs = Math.round((Date.now() - queuedAt) / 3600000);
+    await updateJob(job.id, {
+      status: "needs_user",
+      result: `This has been waiting ${hrs} hours — my browser was closed. Still want it?`,
+    });
+    return null;
+  }
   // Stamp the claim, then read it back: whoever's stamp survives owns the job.
   // This closes the race where concurrent poll() calls (SSE + alarm + worker
   // wake) would each spawn an agent loop for the same job.

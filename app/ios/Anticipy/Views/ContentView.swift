@@ -44,7 +44,17 @@ struct HomeView: View {
                             ForEach(needsOK) { ConfirmJobCard(job: $0) }
                         }
                         if !handling.isEmpty {
-                            sectionHeader("Handling")
+                            // Honest about WHY nothing is moving: with Chrome
+                            // shut there are no hands, and saying "Handling"
+                            // over a stalled queue is a small daily lie.
+                            sectionHeader(session.agentOnline ? "Handling" : "Waiting for your browser")
+                            if !session.agentOnline {
+                                Text(session.agentPaired
+                                     ? "Open Chrome and these pick up on their own."
+                                     : "Pair Chrome in Settings and these pick up on their own.")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.gray)
+                            }
                             ForEach(handling) { HandlingCard(job: $0) }
                         }
                         if !session.transcript.isEmpty {

@@ -58,6 +58,33 @@ final class AnticipyBackend {
         return r
     }
 
+    /// Store the owner's number where the brain reads it. Updates the
+    /// existing row for this owner rather than piling up duplicates.
+    func upsertOwnerPhone(ownerID: String, phone: String) async -> Bool {
+        let listURL = baseURL.appendingPathComponent("api/collections/owner_profile/records")
+        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        let filter = "owner_id=\"\(ownerID)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
+        comps.percentEncodedQuery = "filter=\(filter)&perPage=1"
+        var existingID: String?
+        if let url = comps.url,
+           let (data, _) = try? await URLSession.shared.data(from: url),
+           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let items = root["items"] as? [[String: Any]] {
+            existingID = items.first?["id"] as? String
+        }
+        let body: [String: Any] = ["owner_id": ownerID, "phone": phone]
+        var req: URLRequest
+        if let id = existingID {
+            req = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
+        } else {
+            req = writeRequest(listURL, method: "POST")
+        }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse else { return false }
+        return (200..<300).contains(http.statusCode)
+    }
+
     /// The paired agent's key bundle also carries this phone's write token.
     func fetchServiceToken(agentID: String) async -> String? {
         var comps = URLComponents(url: baseURL.appendingPathComponent("agent/key"),

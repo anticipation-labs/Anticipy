@@ -9,6 +9,8 @@ struct SettingsView: View {
     @AppStorage("hasOnboarded") private var hasOnboarded = true
     @State private var pairCode = ""
     @State private var pairResult: Bool?
+    @State private var phoneField = ""
+    @State private var phoneSaved = false
 
     var body: some View {
         Form {
@@ -62,6 +64,27 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             }
+
+            Section("Your number") {
+                HStack {
+                    TextField("+1 604 555 0123", text: $phoneField)
+                        .keyboardType(.phonePad)
+                        .textContentType(.telephoneNumber)
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(Theme.ivory)
+                    Button("Save") {
+                        Task { phoneSaved = await session.saveOwnerPhone(phoneField) }
+                    }
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Theme.champagne)
+                    .disabled(phoneField.isEmpty)
+                }
+                Text(phoneSaved ? "Saved — I'll reach you here."
+                                : "Where I text you when something needs your word.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
+            }
+            .onAppear { if phoneField.isEmpty { phoneField = session.ownerPhone } }
 
             Section("Browser agent") {
                 HStack {

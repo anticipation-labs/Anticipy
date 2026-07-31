@@ -52,6 +52,7 @@ final class AnticipySession: ObservableObject {
     let listener = PhoneListener()
 
     @AppStorage("serviceToken") private var serviceToken = ""
+    @AppStorage("ownerPhone") var ownerPhone = ""
 
     var backend: AnticipyBackend {
         AnticipyBackend(
@@ -201,6 +202,26 @@ final class AnticipySession: ObservableObject {
             agentLastSeenSeconds = nil
             agentOnline = false
         }
+    }
+
+    /// Normalize what a human typed into the E.164 the SMS layer needs.
+    /// Returns nil when it isn't a complete number yet.
+    nonisolated func e164(_ raw: String) -> String? {
+        let digits = raw.filter(\.isNumber)
+        guard digits.count >= 10 else { return nil }
+        if raw.hasPrefix("+") { return "+" + digits }
+        if digits.count == 10 { return "+1" + digits }        // NANP local
+        if digits.count == 11, digits.hasPrefix("1") { return "+" + digits }
+        return "+" + digits
+    }
+
+    /// Save the owner's number where the brain can read it, so texting works
+    /// without anyone hand-editing a server variable.
+    func saveOwnerPhone(_ raw: String) async -> Bool {
+        guard let e = e164(raw) else { return false }
+        let ok = await backend.upsertOwnerPhone(ownerID: ownerID, phone: e)
+        if ok { ownerPhone = e }
+        return ok
     }
 
     func startListening() {
