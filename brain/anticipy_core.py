@@ -115,6 +115,14 @@ class Anticipy:
                     decision="answer", goal=None, reason="memory recall"),
                     "anticipy_says": answer}
         mem = self.memory.ingest(line)
+        # A stray fragment ("Tomorrow", "Okay") carries no intent of its own,
+        # but related memories injected as context can make triage hallucinate
+        # one — live incident: the single word "Tomorrow" plus a stale memory
+        # spawned a full draft-email job. Fragments are remembered, never acted on.
+        if len(line.split()) < 2:
+            return {"memory": mem, "decision": Decision(
+                decision="ignore", goal=None, reason="fragment, no intent"),
+                "anticipy_says": None}
         decision = self._decide(line, mem)
         handled = None
 
