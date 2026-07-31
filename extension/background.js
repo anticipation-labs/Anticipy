@@ -52,6 +52,25 @@ async function ensureRegistered() {
 // heartbeat so the stale-requeue sweep never eats a live job.
 const activeJobs = new Set();
 
+// ------------------------------------------------------------- LLM key
+// Consumers never paste API keys: once paired, the agent fetches its key from
+// the backend. A manually saved key (popup) still wins, so dev overrides work.
+async function ensureLLMKey() {
+  const { openrouterKey, agentId } = await chrome.storage.local.get(["openrouterKey", "agentId"]);
+  if (openrouterKey) return openrouterKey;
+  if (!agentId) return null;
+  try {
+    const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
+    if (!r.ok) return null;
+    const { openrouter_key } = await r.json();
+    if (openrouter_key) {
+      await chrome.storage.local.set({ openrouterKey: openrouter_key });
+      return openrouter_key;
+    }
+  } catch (_) { /* backend unreachable; job path reports honestly */ }
+  return null;
+}
+
 async function heartbeat() {
   const reg = await ensureRegistered();
   if (!reg) return null;
@@ -66,6 +85,9 @@ async function heartbeat() {
   if (!r.ok) return null;
   const rec = await r.json();
   await chrome.storage.local.set({ owner: rec.owner || "", paired: !!rec.paired });
+  // The moment pairing lands, pull the LLM key so the first job never
+  // fails on a missing key.
+  if (rec.paired) ensureLLMKey();
   return rec;
 }
 
@@ -153,9 +175,10 @@ async function runJobInner(job, params) {
   if (job.goal === "agent_goal") {
     // Autonomous mode: LLM click-loop via chrome.debugger in a background
     // Anticipy tab group (same mechanics as Claude in Chrome / Codex).
-    const { openrouterKey, capsolverKey } = await chrome.storage.local.get(["openrouterKey", "capsolverKey"]);
+    const { capsolverKey } = await chrome.storage.local.get(["capsolverKey"]);
+    const openrouterKey = await ensureLLMKey();
     if (!openrouterKey) {
-      await updateJob(job.id, { status: "failed", result: "no OpenRouter key in extension storage" });
+      await updateJob(job.id, { status: "failed", result: "no LLM key: not paired yet, or the backend has none configured" });
       return;
     }
     try {
