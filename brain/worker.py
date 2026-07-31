@@ -74,7 +74,16 @@ def main() -> None:
                 if not line:
                     mark_processed(ev["id"], "ignore")
                     continue
-                out = anticipy.hear(line)
+                # A crash mid-hear must not leave the event unmarked: the poll
+                # would replay it every 2s, minting a duplicate job (and SMS)
+                # per attempt — this happened live on 2026-07-30 (6 jobs from
+                # one line when the owner-notify SMS failed).
+                try:
+                    out = anticipy.hear(line)
+                except Exception as e:
+                    mark_processed(ev["id"], "error")
+                    print(f"heard: {line!r} -> error: {e}")
+                    continue
                 decision = out["decision"].decision
                 mark_processed(ev["id"], decision)
                 if out.get("anticipy_says"):

@@ -249,15 +249,21 @@ class Anticipy:
     # ----------------------------------------------------------- voice arm
 
     def notify_owner(self, message: str, channel: str = "sms") -> Optional[dict]:
-        # Conversational channel first: she opens a real thread, not a
-        # "reply YES" wall; free-form replies come back via Conversation.on_reply.
-        if self.conversation and self.owner_phone and channel == "sms":
-            return self.conversation.reach_out(self.owner_phone, message)
-        if not (self.voice and self.owner_phone):
+        # A failed text must never abort the hearing loop — the job is already
+        # queued and the app still surfaces it under "Needs your OK".
+        try:
+            # Conversational channel first: she opens a real thread, not a
+            # "reply YES" wall; replies come back via Conversation.on_reply.
+            if self.conversation and self.owner_phone and channel == "sms":
+                return self.conversation.reach_out(self.owner_phone, message)
+            if not (self.voice and self.owner_phone):
+                return None
+            if channel == "call":
+                return self.voice.call(self.owner_phone, message)
+            return self.voice.text(self.owner_phone, message)
+        except Exception as e:
+            print(f"notify_owner failed ({channel}): {e}")
             return None
-        if channel == "call":
-            return self.voice.call(self.owner_phone, message)
-        return self.voice.text(self.owner_phone, message)
 
     # ---------------------------------------------------------- action arm
 
