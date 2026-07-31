@@ -34,7 +34,7 @@ struct HomeView: View {
                         }
                         if !session.transcript.isEmpty {
                             sectionHeader("Heard")
-                            ForEach(session.transcript.suffix(6).reversed()) { TranscriptRow(line: $0) }
+                            ForEach(session.transcript.suffix(30).reversed()) { TranscriptRow(line: $0) }
                         }
                         if !finished.isEmpty {
                             sectionHeader("Done")
@@ -364,13 +364,31 @@ struct TranscriptRow: View {
             Text(line.text)
                 .font(.callout)
                 .foregroundStyle(Theme.ivory)
-            if let d = line.decision, d != "ignore" {
+            switch line.decision {
+            case "act":
                 HStack(spacing: 5) {
-                    Image(systemName: d == "act" ? "bolt.fill" : "questionmark.circle")
-                    Text(d == "act" ? "On it" : "Quick question for you")
+                    Image(systemName: "bolt.fill")
+                    Text("On it")
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Theme.champagne)
+            case "ask":
+                HStack(spacing: 5) {
+                    Image(systemName: "questionmark.circle")
+                    Text("Quick question for you")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Theme.champagne)
+            case "ignore":
+                // Silence used to look like the app doing nothing at all;
+                // say plainly that it heard and chose to leave it alone.
+                Text("Noted — nothing needed")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
+            default:
+                Text("Thinking…")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

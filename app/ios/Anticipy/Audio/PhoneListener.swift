@@ -17,6 +17,13 @@ final class PhoneListener: NSObject, ObservableObject {
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    private var silenceFlush: DispatchWorkItem?
+
+    /// Apple's recognizer rarely finalizes on its own mid-stream; left alone,
+    /// one task accumulates sentences until it times out (~1 min) and the
+    /// error path used to drop everything on the floor. Instead, treat a pause
+    /// this long as the end of an utterance and force a final result.
+    private let utteranceGap: TimeInterval = 1.8
 
     func start() {
         SFSpeechRecognizer.requestAuthorization { [weak self] auth in
@@ -65,24 +72,50 @@ final class PhoneListener: NSObject, ObservableObject {
             guard let self else { return }
             if let result {
                 let text = result.bestTranscription.formattedString
-                DispatchQueue.main.async { self.partial = text }
-                if result.isFinal {
-                    DispatchQueue.main.async {
+                DispatchQueue.main.async {
+                    self.partial = text
+                    if result.isFinal {
+                        self.silenceFlush?.cancel()
                         self.partial = ""
                         // stop() already flushed the open utterance, so only
                         // emit finals while actively listening.
                         if !text.isEmpty, self.isListening { self.onLine?(text) }
+                        if self.isListening { self.startRecognition() }
+                    } else {
+                        self.scheduleSilenceFlush()
                     }
+                }
+            } else if error != nil {
+                // Recognizer died (timeout, service hiccup). Whatever was on
+                // screen is still real speech — emit it, never drop it.
+                DispatchQueue.main.async {
+                    self.silenceFlush?.cancel()
+                    let pending = self.partial.trimmingCharacters(in: .whitespacesAndNewlines)
+                    self.partial = ""
+                    if !pending.isEmpty, self.isListening { self.onLine?(pending) }
                     if self.isListening { self.startRecognition() }
                 }
-            } else if error != nil, self.isListening {
-                self.startRecognition()
             }
         }
     }
 
+    /// After a pause in speech, end the current request so the recognizer
+    /// finalizes this utterance; the final-result path emits it and rolls
+    /// straight into a fresh task for the next one.
+    private func scheduleSilenceFlush() {
+        silenceFlush?.cancel()
+        guard !partial.isEmpty else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.isListening else { return }
+            self.request?.endAudio()
+        }
+        silenceFlush = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + utteranceGap, execute: work)
+    }
+
     func stop() {
         isListening = false
+        silenceFlush?.cancel()
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         request?.endAudio()

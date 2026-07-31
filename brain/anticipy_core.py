@@ -35,7 +35,7 @@ NAME = "Anticipy"
 _IRREVERSIBLE_RE = re.compile(
     r"\b(send|email|book|reserve|buy|purchase|order|pay|sign(\s+\w+)?\s*up|register|"
     r"subscribe|submit|post|publish|reply|message|text|call|cancel|delete|"
-    r"unsubscribe|transfer|schedule|invite|rsvp)\b",
+    r"unsubscribe|transfer|schedule|invite|rsvp|calendar|appointment|meeting|remind(er)?)\b",
     re.IGNORECASE,
 )
 
