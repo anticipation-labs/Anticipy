@@ -22,6 +22,7 @@ from . import pb
 
 from .anticipy_core import Anticipy
 from .memory import Memory
+from .segmenter import SegmentStore, place_turn
 from .conversation import Conversation, MockTransport, TwilioTransport
 from .llm import LLM
 from .voice_arm import VoiceArm
@@ -136,6 +137,9 @@ def main() -> None:
         anticipy.voice = voice
     convo = Conversation(anticipy, transport=TwilioTransport(voice) if voice else MockTransport())
     anticipy.conversation = convo
+    # Observation only in step 1; a failure here must never touch hearing.
+    segments = SegmentStore(PB, owner=anticipy.owner_id) \
+        if os.environ.get("ANTICIPY_SEGMENTS", "1") == "1" else None
     print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
           f" · sms={'live' if live_sms else 'mock'} · pb={PB}")
     if not anticipy.owner_id:
@@ -199,6 +203,18 @@ def main() -> None:
                     continue
                 decision = out["decision"].decision
                 mark_processed(ev["id"], decision)
+                # STEP 1 of the capture architecture: record which
+                # conversation this turn belongs to. NOTHING reads it yet —
+                # triage above is untouched — so this is observation only,
+                # here to prove the boundaries land where real conversations
+                # actually start and stop before anything depends on them.
+                if segments is not None:
+                    try:
+                        placed = place_turn(segments, ev)
+                        print(f"segment: {placed.get('decision')} "
+                              f"({placed.get('why')}) seg={placed.get('segment','-')}")
+                    except Exception as e:
+                        print(f"segment: skipped ({e})")
                 if out.get("anticipy_says"):
                     post_event("anticipy_says", out["anticipy_says"],
                                decision=decision, goal=out["decision"].goal or "")
