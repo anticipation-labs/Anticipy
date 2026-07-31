@@ -57,6 +57,20 @@ starting something consequential, make clear in your own words that nothing
 goes out until they give the word."""
 
 
+CLOCK_SYSTEM = f"""You are {NAME}, reviewing your open loops on your own
+initiative — nobody spoke; the CLOCK woke you. You are a great chief of
+staff, which means you initiate RARELY and only when timing makes it
+genuinely valuable: a plan whose date is approaching with nothing arranged,
+a commitment going stale, a promise whose deadline is near. Mere existence
+of an open loop is NOT a reason to speak — most reviews should conclude
+"stay quiet". Never nag, never repeat an outreach about the same loop.
+Given the local time and your open loops (each with its age), decide whether
+to reach out NOW. If yes, write the text in your own warm human voice —
+short, specific, one question at most.
+Reply ONLY with compact JSON:
+{{"initiate":true|false,"say":"<the text, or null>","goal":"<job goal to prepare, or null>","loop_ids":[<ids you are acting on>],"reason":"<8 words>"}}"""
+
+
 BRIEFING_SYSTEM = f"""You are {NAME}, the person's personal assistant who lives
 in their Anticipy pendant. You are warm, brief, and competent — a trusted
 chief-of-staff, never a robot. Given what you heard today and your open
@@ -354,6 +368,53 @@ class Anticipy:
             return r.json().get("id")
         except Exception:
             return None
+
+    # ------------------------------------------------------------ the clock
+
+    def clock_tick(self, now: Optional[float] = None,
+                   already_reached_out: set | None = None) -> Optional[dict]:
+        """Layer-2 proactivity: fired by TIME, not speech. Reviews open loops
+        and decides — same reasoning doctrine, zero hardcoded triggers —
+        whether a great assistant would initiate right now. Guardrails live
+        OUTSIDE the model: the caller enforces quiet hours and outreach
+        rate limits; this method only reasons and speaks."""
+        if not self.llm:
+            return None
+        loops = self.memory.open_loops()
+        if not loops:
+            return None
+        ts = now or time.time()
+        reached = already_reached_out or set()
+        fresh = [l for l in loops if l["id"] not in reached]
+        if not fresh:
+            return None
+        payload = {
+            "local_time": time.strftime("%A %H:%M", time.localtime(ts)),
+            "open_loops": [
+                {"id": l["id"], "what": l["what"],
+                 "age_hours": round((ts - l["ts"]) / 3600, 1)}
+                for l in fresh[:10]
+            ],
+        }
+        try:
+            res = self.llm.chat(CLOCK_SYSTEM, json.dumps(payload), temperature=0.3)
+            raw = json.loads(res.text[res.text.find("{"): res.text.rfind("}") + 1])
+        except Exception:
+            return None
+        if not raw.get("initiate") or not raw.get("say"):
+            return None
+        say = str(raw["say"]).strip()
+        goal = raw.get("goal")
+        if goal in ("", "null"):
+            goal = None
+        if goal:
+            # Anything she prepares unprompted goes through the same gate as
+            # everything else — held if consequential, never auto-sent.
+            self._queue_job(goal, {"source": "clock initiative", "say": say},
+                            hold=is_consequential(goal))
+        self.notify_owner(say)
+        return {"say": say, "goal": goal,
+                "loop_ids": [int(i) for i in raw.get("loop_ids", []) if str(i).isdigit()]}
 
     def review_loops(self) -> list[dict]:
         """Poll the job queue and close loops whose jobs finished."""

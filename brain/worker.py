@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 import os
 import time
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
 import requests
 
@@ -24,6 +26,34 @@ from .voice_arm import VoiceArm
 
 PB = os.environ.get("ANTICIPY_PB", "http://127.0.0.1:8090")
 POLL_SECONDS = 2
+
+# ---- the clock: time-fired proactivity, with guardrails OUTSIDE the model
+CLOCK_EVERY_SECONDS = 30 * 60
+CLOCK_MIN_GAP_SECONDS = 4 * 3600      # at most one unprompted outreach per 4h
+CLOCK_TZ = ZoneInfo(os.environ.get("ANTICIPY_TZ", "America/Vancouver"))
+CLOCK_QUIET_START, CLOCK_QUIET_END = 22, 8   # never initiate at night
+CLOCK_STATE = os.environ.get("ANTICIPY_CLOCK_STATE", "/data/clock_state.json")
+
+
+def _clock_state() -> dict:
+    try:
+        return json.load(open(CLOCK_STATE))
+    except Exception:
+        return {"last_outreach_ts": 0, "reached_loop_ids": []}
+
+
+def _save_clock_state(state: dict) -> None:
+    try:
+        json.dump(state, open(CLOCK_STATE, "w"))
+    except Exception:
+        pass
+
+
+def clock_should_run(now: float, state: dict) -> bool:
+    hour = datetime.fromtimestamp(now, CLOCK_TZ).hour
+    if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+        return False
+    return now - state.get("last_outreach_ts", 0) >= CLOCK_MIN_GAP_SECONDS
 
 
 def post_event(kind: str, text: str, decision: str = "", goal: str = "") -> None:
@@ -68,8 +98,26 @@ def main() -> None:
           f" · sms={'live' if live_sms else 'mock'} · pb={PB}")
 
     sent_seen = 0
+    last_clock = 0.0
     while True:
         try:
+            # The clock: she reviews her open loops on her own schedule and
+            # may initiate — rarely, in daytime, rate-limited, gated.
+            now = time.time()
+            if now - last_clock >= CLOCK_EVERY_SECONDS:
+                last_clock = now
+                state = _clock_state()
+                if clock_should_run(now, state):
+                    out = anticipy.clock_tick(
+                        now, already_reached_out=set(state.get("reached_loop_ids", [])))
+                    if out:
+                        state["last_outreach_ts"] = now
+                        state["reached_loop_ids"] = list(
+                            set(state.get("reached_loop_ids", [])) | set(out["loop_ids"]))
+                        _save_clock_state(state)
+                        post_event("anticipy_says", out["say"], decision="clock",
+                                   goal=out.get("goal") or "")
+                        print(f"clock: initiated -> {out['say']!r}")
             for ev in fetch_unprocessed():
                 line = ev.get("text", "").strip()
                 if not line:
