@@ -135,8 +135,21 @@ class Memory:
         words = {w.strip(".,!?").lower() for w in query.split()
                  if len(w) > 2 and w.strip(".,!?").lower() not in self._STOP}
         rows = self.db.execute("SELECT id, type, name, status FROM nodes").fetchall()
-        seeds = [r for r in rows
-                 if any(w in r[2].lower() or r[2].lower() in w for w in words)]
+
+        def seeds_match(name: str) -> bool:
+            # Token matching, NOT bidirectional substring: "Ann" used to seed
+            # off "cannot" and "Sam" off "same", dragging unrelated people
+            # into recall (and thence into triage context).
+            tokens = {t.strip(".,!?") for t in name.lower().split()}
+            for w in words:
+                if w in tokens:
+                    return True
+                if len(w) >= 4 and any(t.startswith(w) or w.startswith(t)
+                                       for t in tokens if len(t) >= 4):
+                    return True
+            return False
+
+        seeds = [r for r in rows if seeds_match(r[2])]
 
         # Episodes whose raw text matches the query are facts in their own
         # right — a line can matter even when extraction pulled no entities.
@@ -169,7 +182,12 @@ class Memory:
                     facts.append(self._fact(src, rel, dst, ep, ts))
             frontier = next_frontier
 
-        uniq = {(f["fact"], f["ts"]): f for f in facts}
+        # Dedupe on the FACT itself, keeping the newest occurrence: every
+        # co-mention inserted a fresh identical edge, so one repeated
+        # relationship filled the whole recall window with copies of itself.
+        uniq: dict[str, dict] = {}
+        for f in sorted(facts, key=lambda f: f["ts"]):
+            uniq[f["fact"]] = f
 
         def relevance(f):
             blob = (f["fact"] + " " + (f.get("quote") or "")).lower()
@@ -236,12 +254,29 @@ class Memory:
             try:
                 res = self.llm.chat(EXTRACT_SYSTEM, text)
                 raw = json.loads(_extract_json(res.text))
+
+                def names(key: str) -> list[str]:
+                    # A bare string where a list was promised iterates per
+                    # CHARACTER: "Sarah" became nodes S, a, r, a, h in the
+                    # permanent graph, which then matched everything.
+                    val = raw.get(key)
+                    if isinstance(val, str):
+                        val = [val]
+                    if not isinstance(val, list):
+                        return []
+                    return [v.strip() for v in val
+                            if isinstance(v, str) and len(v.strip()) > 1]
+
+                def one(key: str):
+                    val = raw.get(key)
+                    return val.strip() if isinstance(val, str) and val.strip() else None
+
                 return Extraction(
-                    people=[p for p in raw.get("people", []) if p],
-                    places=[p for p in raw.get("places", []) if p],
-                    topics=[t for t in raw.get("topics", []) if t],
-                    commitment=raw.get("commitment") or None,
-                    commitment_to=raw.get("commitment_to") or None,
+                    people=names("people"),
+                    places=names("places"),
+                    topics=names("topics"),
+                    commitment=one("commitment"),
+                    commitment_to=one("commitment_to"),
                 )
             except Exception:
                 pass

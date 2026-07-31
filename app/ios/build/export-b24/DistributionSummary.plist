@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Anticipy.ipa</key>
+	<array>
+		<dict>
+			<key>architectures</key>
+			<array>
+				<string>arm64</string>
+			</array>
+			<key>buildNumber</key>
+			<string>24</string>
+			<key>certificate</key>
+			<dict>
+				<key>SHA1</key>
+				<string>CD9B570D33E2BB12B0938EAC1AE6F6100A6BDD94</string>
+				<key>dateExpires</key>
+				<string>2027-07-20</string>
+				<key>type</key>
+				<string>iOS Distribution</string>
+			</dict>
+			<key>entitlements</key>
+			<dict>
+				<key>application-identifier</key>
+				<string>49T86P9XGW.ai.anticipy.app</string>
+				<key>beta-reports-active</key>
+				<true/>
+				<key>com.apple.developer.team-identifier</key>
+				<string>49T86P9XGW</string>
+				<key>get-task-allow</key>
+				<false/>
+			</dict>
+			<key>name</key>
+			<string>Anticipy.app</string>
+			<key>profile</key>
+			<dict>
+				<key>UUID</key>
+				<string>290e17dd-fc6b-4caf-9f6e-7ded1895024d</string>
+				<key>dateExpires</key>
+				<string>2027-07-20</string>
+				<key>name</key>
+				<string>Anticipy AppStore Devin</string>
+			</dict>
+			<key>symbols</key>
+			<true/>
+			<key>team</key>
+			<dict>
+				<key>id</key>
+				<string>49T86P9XGW</string>
+				<key>name</key>
+				<string></string>
+			</dict>
+			<key>versionNumber</key>
+			<string>1.0.2</string>
+		</dict>
+	</array>
+</dict>
+</plist>

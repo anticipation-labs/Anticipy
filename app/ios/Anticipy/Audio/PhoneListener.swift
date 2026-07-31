@@ -242,7 +242,13 @@ final class PhoneListener: NSObject, ObservableObject {
                     // to "Of August"). A reset is a rewrite that shares no
                     // opening with what we had — emit the pre-reset words as
                     // their own line first. Words move down, never disappear.
-                    if !result.isFinal, self.partial.count >= 10, !text.isEmpty {
+                    // A true reset COLLAPSES a long partial to a short tail
+                    // ("Of August"). Apple also rewrites leading tokens as it
+                    // normalizes ("seven PM" -> "7 PM"), which shares no
+                    // prefix but keeps the length — requiring a big shrink
+                    // stops those revisions being emitted as phantom lines.
+                    if !result.isFinal, self.partial.count >= 10, !text.isEmpty,
+                       text.count + 10 < self.partial.count {
                         let common = zip(self.partial.lowercased(), text.lowercased())
                             .prefix { $0 == $1 }.count
                         if common < 3 {

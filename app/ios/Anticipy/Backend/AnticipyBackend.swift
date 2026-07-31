@@ -156,11 +156,18 @@ final class AnticipyBackend {
         return http.statusCode == 200
     }
 
+    struct BackendError: Error { let status: Int }
+
     private func post(_ path: String, body: [String: Any]) async throws {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        _ = try await URLSession.shared.data(for: request)
+        let (_, resp) = try await URLSession.shared.data(for: request)
+        // A rejected write is a FAILED write: without this the caller's
+        // do/catch never fires and a line the backend refused looks sent.
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw BackendError(status: http.statusCode)
+        }
     }
 }

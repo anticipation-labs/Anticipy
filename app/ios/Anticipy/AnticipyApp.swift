@@ -48,6 +48,7 @@ final class AnticipySession: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var bag = Set<AnyCancellable>()
     private var seenDoneJobIDs = Set<String>()
+    private var unsent: [String] = []
     let listener = PhoneListener()
 
     var backend: AnticipyBackend {
@@ -83,7 +84,25 @@ final class AnticipySession: ObservableObject {
         if !listener.isListening { Haptics.tap() }
         sessionLines.append(SessionLine(text: line))
         transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line, decision: nil))
-        try? await backend.pushEvent(kind: "transcript", text: line)
+        do {
+            try await backend.pushEvent(kind: "transcript", text: line)
+        } catch {
+            // A dropped push used to vanish into try? — the line then sat at
+            // the top of the feed saying "Thinking…" forever while the brain
+            // had never seen it. Queue it and keep trying.
+            unsent.append(line)
+        }
+    }
+
+    /// Re-push anything the network ate, oldest first.
+    private func flushUnsent() async {
+        guard backendReachable, !unsent.isEmpty else { return }
+        let queue = unsent
+        unsent = []
+        for line in queue {
+            do { try await backend.pushEvent(kind: "transcript", text: line) }
+            catch { unsent.append(line) }
+        }
     }
 
     /// Anticipy's latest spoken line, only while it's actually fresh — a
@@ -115,6 +134,7 @@ final class AnticipySession: ObservableObject {
             agentOnline = false
             return
         }
+        await flushUnsent()
         if let fetched = try? await b.fetchJobs() {
             jobs = fetched
         }
@@ -125,23 +145,28 @@ final class AnticipySession: ObservableObject {
                 .filter { $0.kind == "transcript" }
                 .reversed()
                 .map { TranscriptLine(id: $0.id, text: $0.text ?? "", decision: ($0.decision?.isEmpty == false) ? $0.decision : nil) }
-            let serverTexts = Set(serverLines.map(\.text))
-            // Reconcile the local session view: mark lines the server has
-            // received, carry the brain's verdict back, and buzz once when a
-            // decision lands as "act" so being heard is something you FEEL.
+            // Reconcile one-to-one by CONSUMING matches: saying the same
+            // sentence twice used to mark both local copies received off a
+            // single server row, and inherit the older row's verdict.
+            // Oldest-first so the first utterance claims the first row.
+            var unclaimed = serverLines
             for i in sessionLines.indices {
-                if serverTexts.contains(sessionLines[i].text) {
-                    sessionLines[i].received = true
-                    let decision = serverLines.last { $0.text == sessionLines[i].text }?.decision
-                    if decision != nil, sessionLines[i].decision == nil {
-                        sessionLines[i].decision = decision
-                        if decision == "act" { Haptics.engage() }
-                    }
+                guard let hit = unclaimed.firstIndex(where: { $0.text == sessionLines[i].text })
+                else { continue }
+                let match = unclaimed.remove(at: hit)
+                sessionLines[i].received = true
+                if let decision = match.decision, sessionLines[i].decision == nil {
+                    sessionLines[i].decision = decision
+                    // Being acted on is the one verdict worth feeling.
+                    if decision == "act" { Haptics.engage() }
                 }
             }
-            // Never let a just-spoken line vanish: anything local the server
-            // hasn't echoed yet stays at the end of the feed.
-            serverLines.append(contentsOf: transcript.filter { $0.decision == nil && !serverTexts.contains($0.text) })
+            // Never let a just-spoken line vanish: local lines the server
+            // hasn't echoed yet stay in the feed, marked as still in flight.
+            let serverTexts = Set(serverLines.map(\.text))
+            serverLines.append(contentsOf: transcript.filter {
+                $0.id.hasPrefix("local-") && !serverTexts.contains($0.text)
+            })
             transcript = serverLines
             anticipySays = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
         }

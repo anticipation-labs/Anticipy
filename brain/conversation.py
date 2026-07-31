@@ -24,11 +24,14 @@ aren't deployed).
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 import requests
+
+from . import pb
 
 from .llm import LLM
 
@@ -152,9 +155,29 @@ class Conversation:
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one(cancel=True)
                 acted = None
-        elif intent == "modify" and pending_id and changes:
+        elif intent == "modify" and changes:
+            # No pending_id is normal (the model is told to null it when
+            # unsure); _amend's single-pending fallback resolves it.
             acted = self._amend(pending_id, changes)
-        elif intent in ("new_request", "answer"):
+            if acted == "ambiguous":
+                parsed["reply"] = self._which_one()
+                acted = None
+        elif intent == "answer":
+            # The owner is ANSWERING her question — that answer belongs on the
+            # job she asked about. Feeding it to hear() instead (the old path)
+            # dropped one-word answers entirely via the fragment guard, and
+            # re-triaged longer ones into DUPLICATE jobs, while the reply
+            # cheerfully said "Sunday it is".
+            asked_back = False
+            if changes:
+                acted = self._amend(pending_id, changes)
+                if acted == "ambiguous":
+                    parsed["reply"] = self._which_one()
+                    acted, asked_back = None, True
+            if not acted and not asked_back:
+                # Nothing absorbed it — treat it as a fresh thought.
+                self.anticipy.hear(text)
+        elif intent == "new_request":
             # Feed it back through the one brain — same path as the pendant.
             self.anticipy.hear(text)
 
@@ -164,11 +187,22 @@ class Conversation:
         # queue flip touched.
         if acted and ":" in acted:
             verb, job_id_acted = acted.split(":", 1)
-            job = self._fetch(job_id_acted)
-            if job and not self._references(reply, job):
-                goal = job.get("goal", "that").replace("_", " ")
-                reply = (f"Okay — I've scrapped the {goal}."
-                         if verb == "cancelled" else f"On it — {goal} is moving.")
+            if verb == "failed":
+                # The queue flip did not land. Never claim it did.
+                reply = "Hit a snag updating that on my end — say it again in a minute?"
+            else:
+                job = self._fetch(job_id_acted)
+                if job and not self._references(reply, job):
+                    goal = job.get("goal", "that").replace("_", " ")
+                    if verb == "cancelled":
+                        reply = f"Okay — I've scrapped the {goal}."
+                    elif verb == "amended":
+                        # An amendment is NOT a release: saying "it's moving"
+                        # about a still-held job makes the owner stop replying
+                        # and the job waits forever.
+                        reply = f"Updated — {goal} is still waiting on your go-ahead."
+                    else:
+                        reply = f"On it — {goal} is moving."
         self.say(phone, reply)
         return {"intent": intent, "pending_id": pending_id,
                 "changes": changes, "acted": acted, "reply": reply}
@@ -183,7 +217,7 @@ class Conversation:
             filt = 'status="awaiting_confirm"'
             if self.anticipy.owner_id:
                 filt += f' && owner="{self.anticipy.owner_id}"'
-            r = requests.get(
+            r = pb.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records",
                 params={"filter": filt, "perPage": 5, "sort": "-created"},
                 timeout=10,
@@ -201,14 +235,30 @@ class Conversation:
                               "memory": memory, "owner_text": text})
         if self.llm and self.llm.live:
             try:
-                return self._parse(self.llm.chat(REPLY_SYSTEM, payload).text)
+                # _parse returns {} on malformed output WITHOUT raising, so the
+                # except below never fired: an explicit "yes send it" became
+                # intent "chat" with a reassuring "Got it." while the held job
+                # stayed put. Only trust a parse that produced an intent.
+                parsed = self._parse(self.llm.chat(REPLY_SYSTEM, payload).text)
+                if parsed.get("intent"):
+                    return parsed
             except Exception:
                 pass
-        # Offline fallback keeps the old keyword behavior so tests run keyless.
+        # Offline/parse-failure fallback. Word boundaries, not substrings:
+        # "yes" lived inside "yesterday" (released a held job) and "no" inside
+        # "know"/"now"/"nothing" (cancelled one).
         low = text.lower().strip()
-        if any(w in low for w in ("yes", "go ahead", "send it", "do it", "confirm")):
+        short = len(low.split()) <= 6
+        has_pending = bool(self._pending())
+        if short and re.search(r"\b(yes|yep|yeah|go ahead|send it|do it|confirm|approved)\b", low):
+            if not has_pending:
+                return {"intent": "chat", "pending_id": None,
+                        "reply": "Nothing's queued up on my end right now — what did you mean?"}
             return {"intent": "confirm", "pending_id": None, "reply": "On it."}
-        if any(w in low for w in ("no", "don't", "forget it", "cancel", "stop")):
+        if short and re.search(r"\b(no|nope|don'?t|forget it|cancel|stop|scrap it)\b", low):
+            if not has_pending:
+                return {"intent": "chat", "pending_id": None,
+                        "reply": "Nothing's queued up on my end right now — what did you mean?"}
             return {"intent": "decline", "pending_id": None, "reply": "Okay, scrapped."}
         return {"intent": "chat", "pending_id": None, "reply": "Got it."}
 
@@ -243,7 +293,7 @@ class Conversation:
 
     def _fetch(self, job_id: str) -> Optional[dict]:
         try:
-            r = requests.get(
+            r = pb.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
                 timeout=10)
             return r.json() if r.ok else None
@@ -289,10 +339,7 @@ class Conversation:
                 params = {}
             params.update(changes)
             fields["params"] = json.dumps(params)
-        requests.patch(
-            f"{self.anticipy.backend_url}/api/collections/jobs/records/{job['id']}",
-            json=fields, timeout=10)
-        return f"released:{job['id']}"
+        return self._flip(job["id"], fields, "released")
 
     def _cancel(self, job_id: Optional[str], owner_text: str = "") -> Optional[str]:
         job = self._job(job_id, owner_text)
@@ -300,21 +347,32 @@ class Conversation:
             return "ambiguous"
         if not job:
             return None
-        requests.patch(
-            f"{self.anticipy.backend_url}/api/collections/jobs/records/{job['id']}",
-            json={"status": "cancelled"}, timeout=10)
-        return f"cancelled:{job['id']}"
+        return self._flip(job["id"], {"status": "cancelled"}, "cancelled")
 
     def _amend(self, job_id: Optional[str], changes: dict) -> Optional[str]:
         job = self._job(job_id)
-        if job == "ambiguous" or not job:
+        if job == "ambiguous":
+            return "ambiguous"
+        if not job:
             return None
         try:
             params = json.loads(job.get("params") or "{}")
         except Exception:
             params = {}
         params.update(changes)
-        requests.patch(
-            f"{self.anticipy.backend_url}/api/collections/jobs/records/{job['id']}",
-            json={"params": json.dumps(params)}, timeout=10)
-        return f"amended:{job['id']}"
+        return self._flip(job["id"], {"params": json.dumps(params)}, "amended")
+
+    def _flip(self, job_id: str, fields: dict, verb: str) -> str:
+        """Every queue change goes through here so a failed PATCH can never be
+        reported to the owner as success — the silent-lie class: he texts
+        'yes', the write 4xx's, and Anticipy says 'On it' about a job that
+        never moved."""
+        try:
+            r = pb.patch(
+                f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
+                json=fields, timeout=10)
+            if not getattr(r, "ok", False):
+                return f"failed:{job_id}"
+        except Exception:
+            return f"failed:{job_id}"
+        return f"{verb}:{job_id}"

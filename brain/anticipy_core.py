@@ -23,7 +23,9 @@ from typing import Optional
 
 import requests
 
-from .llm import LLM
+from . import pb
+
+from .llm import LLM, now_line
 from .memory import Memory
 from .orchestrator import Brain, Decision, IRREVERSIBLE
 
@@ -34,16 +36,31 @@ NAME = "Anticipy"
 # posting, deleting) is held for confirmation regardless of what triage said.
 # LLM goal strings are free-form, so exact-match sets are not enough.
 _IRREVERSIBLE_RE = re.compile(
-    r"\b(send|email|book|reserve|buy|purchase|order|pay|sign(\s+\w+)?\s*up|register|"
-    r"subscribe|submit|post|publish|reply|message|text|call|cancel|delete|"
-    r"unsubscribe|transfer|schedule|invite|rsvp|calendar|appointment|meeting|remind(er)?)\b",
+    r"\b(send\w*|email\w*|book\w*|reserv\w*|buy\w*|purchas\w*|order\w*|pay\w*|"
+    r"sign(\s+\w+)?\s*up|sign\w*|register\w*|subscrib\w*|submit\w*|post\w*|publish\w*|"
+    r"repl(y|ies|ying)|messag\w*|text\w*|call\w*|cancel\w*|delet\w*|"
+    r"unsubscrib\w*|transfer\w*|schedul\w*|invit\w*|rsvp|calendar|appointment|"
+    r"meeting|remind(er)?|shar\w*|forward\w*|respond\w*|confirm\w*|appl(y|ies|ying)|"
+    r"wire|venmo|e-?transfer|donat\w*|checkout|check\s*out|upload\w*|deposit\w*)\b",
+    re.IGNORECASE,
+)
+
+# Goals that only READ the world. Anything not clearly read-only is held —
+# the safe default, because a missed verb means something leaves the owner's
+# world without their word, while an over-hold costs one tap.
+_READ_ONLY_RE = re.compile(
+    r"^\s*(research|compar\w*|look\s*up|find|check(?!\s*out)\w*|search\w*|read\w*|"
+    r"summar\w*|gather\w*|browse|price|monitor|watch|list)\b",
     re.IGNORECASE,
 )
 
 
 def is_consequential(goal: str, params: dict | None = None) -> bool:
     blob = f"{goal} {json.dumps(params or {})}"
-    return bool(_IRREVERSIBLE_RE.search(blob))
+    if _IRREVERSIBLE_RE.search(blob):
+        return True
+    # Default to holding: only an explicitly read-only goal runs unattended.
+    return not _READ_ONLY_RE.search((goal or "").strip())
 
 VOICE_SYSTEM = f"""You are {NAME}, texting the person whose day you share. You
 are their sharp, warm chief of staff — a real human voice, never a template.
@@ -119,12 +136,20 @@ class Anticipy:
 
     # ------------------------------------------------------------ hearing
 
+    # Deliberately narrow. These used to fire on ambient speech — "where are
+    # we going for dinner with the Hendersons?" was answered with a status
+    # report, and the line never reached memory at all.
     _BRIEFING_RE = re.compile(
-        r"\b(briefing|debrief|catch me up|what('| i)?s (still )?(open|left|outstanding|pending)|"
-        r"status update|where are we|what do you have for me)\b", re.IGNORECASE)
-    _RECALL_RE = re.compile(
-        r"^\s*(what|when|who|where|which|did|do|have|has|remind me)\b.*\?*\s*$",
+        r"(give me (a|my|the) (briefing|debrief|rundown)|catch me up|"
+        r"what('?s| is) (still )?(open|left|outstanding|pending)\b|"
+        r"where do (we|things) stand|status update|what do you have for me)",
         re.IGNORECASE)
+    # A real question ENDS in a question mark; imperatives never do. "Remind
+    # me to call the dentist" is a task, not a memory lookup.
+    _RECALL_RE = re.compile(
+        r"^\s*(what|when|who|where|which|did|do|have|has)\b.*\?\s*$",
+        re.IGNORECASE)
+    _IMPERATIVE_RE = re.compile(r"^\s*(remind me to|remember to|make sure)\b", re.IGNORECASE)
 
     def hear(self, line: str) -> dict:
         """One transcript line in; memory, decision, and delegation out."""
@@ -132,16 +157,20 @@ class Anticipy:
         # to the briefing engine, and a memory question is answered straight
         # from the graph. Neither should ever spawn a browser job.
         if self._BRIEFING_RE.search(line):
+            # Remember it either way — the early return used to skip ingest,
+            # so anything phrased like a briefing request left no trace.
+            mem = self.memory.ingest(line)
             said = self.status_report() if re.search(
-                r"open|left|outstanding|pending|status|where are we", line, re.I) \
+                r"open|left|outstanding|pending|status|stand", line, re.I) \
                 else self.briefing()
-            return {"memory": {}, "decision": Decision(
+            return {"memory": mem, "decision": Decision(
                 decision="answer", goal=None, reason="briefing request"),
                 "anticipy_says": said}
-        if self._RECALL_RE.match(line):
+        if self._RECALL_RE.match(line) and not self._IMPERATIVE_RE.match(line):
             answer = self._answer_from_memory(line)
             if answer:
-                return {"memory": {}, "decision": Decision(
+                mem = self.memory.ingest(line)
+                return {"memory": mem, "decision": Decision(
                     decision="answer", goal=None, reason="memory recall"),
                     "anticipy_says": answer}
         mem = self.memory.ingest(line)
@@ -172,7 +201,9 @@ class Anticipy:
                 missing=decision.missing, assumption=decision.assumption)
 
         if decision.decision == "act" and decision.goal:
-            params = {"source": line}
+            # The executor needs temporal ground truth: a job run today with
+            # no "now" produced an OpenTable result dated a YEAR in the past.
+            params = {"source": line, "now": now_line()}
             if decision.assumption:
                 params["assumption"] = decision.assumption
             # The EFFECTIVE hold: triage's flag OR the policy layer. The owner
@@ -355,7 +386,7 @@ class Anticipy:
 
     def _queue_job(self, goal: str, params: dict, hold: bool = False) -> Optional[str]:
         try:
-            r = requests.post(
+            r = pb.post(
                 f"{self.backend_url}/api/collections/jobs/records",
                 json={"goal": goal, "params": json.dumps(params),
                       "status": "awaiting_confirm"
@@ -414,8 +445,20 @@ class Anticipy:
         if goal:
             # Anything she prepares unprompted goes through the same gate as
             # everything else — held if consequential, never auto-sent.
-            self._queue_job(goal, {"source": "clock initiative", "say": say},
-                            hold=is_consequential(goal))
+            held = is_consequential(goal)
+            job_id = self._queue_job(
+                goal, {"source": "clock initiative", "say": say,
+                       "now": now_line()}, hold=held)
+            # Without a LoopRecord the job is invisible to status_report() and
+            # briefing(): she'd text about a booking, then answer "what's
+            # open?" with "nothing".
+            loop_ids = [int(i) for i in raw.get("loop_ids", []) if str(i).isdigit()]
+            self.loops.append(LoopRecord(
+                commitment_id=loop_ids[0] if loop_ids else -1,
+                what=goal,
+                status="awaiting_ok" if held else "handling",
+                job_id=job_id,
+            ))
         self.notify_owner(say)
         return {"say": say, "goal": goal,
                 "loop_ids": [int(i) for i in raw.get("loop_ids", []) if str(i).isdigit()]}
@@ -426,7 +469,7 @@ class Anticipy:
         for loop in self.loops:
             if loop.job_id and loop.status in ("handling", "awaiting_ok"):
                 try:
-                    r = requests.get(
+                    r = pb.get(
                         f"{self.backend_url}/api/collections/jobs/records/{loop.job_id}",
                         timeout=10)
                     status = r.json().get("status")

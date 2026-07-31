@@ -19,7 +19,10 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var typedLine = ""
 
-    private var needsOK: [AgentJob] { session.jobs.filter { $0.status == "awaiting_confirm" } }
+    // needs_user (login wall, CAPTCHA, refused site) used to render in NO
+    // section at all — the job silently disappeared while the card said
+    // "Nothing needs you right now". It belongs in the attention section.
+    private var needsOK: [AgentJob] { session.jobs.filter { $0.status == "awaiting_confirm" || $0.status == "needs_user" } }
     private var handling: [AgentJob] { session.jobs.filter { $0.status == "queued" || $0.status == "running" } }
     private var finished: [AgentJob] { session.jobs.filter { $0.status == "done" || $0.status == "failed" } }
 
@@ -339,9 +342,12 @@ struct ConfirmJobCard: View {
     let job: AgentJob
     @EnvironmentObject var session: AnticipySession
 
+    private var stuck: Bool { job.status == "needs_user" }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Ready — say the word", systemImage: "checkmark.seal")
+            Label(stuck ? "Stuck — I need you" : "Ready — say the word",
+                  systemImage: stuck ? "hand.raised" : "checkmark.seal")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.champagne)
             Text(job.humanGoal)
@@ -355,7 +361,7 @@ struct ConfirmJobCard: View {
                     Haptics.success()
                     Task { await session.confirm(job) }
                 } label: {
-                    Text("Send it")
+                    Text(stuck ? "Try again" : "Send it")
                         .font(.callout.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -472,7 +478,10 @@ struct TranscriptRow: View {
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             default:
-                Text("Thinking…")
+                // A line still on this phone hasn't reached the brain yet —
+                // saying "Thinking…" about it would be a lie the moment the
+                // network dropped it.
+                Text(line.id.hasPrefix("local-") ? "Sending…" : "Thinking…")
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             }

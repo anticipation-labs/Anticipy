@@ -11,7 +11,13 @@ routerAdd("POST", "/sms/inbound", (e) => {
   const info = e.requestInfo();
   const from = (info.body["From"] || "").toString();
   const body = (info.body["Body"] || "").toString().trim();
-  if (from && body) {
+  // Defense in depth with the worker's own check: the token proves the caller
+  // is Twilio, never who texted. Anyone who knows the number could otherwise
+  // steer the owner's job queue by texting "yes".
+  const owner = ($os.getenv("ANTICIPY_OWNER_PHONE") || "").replace(/\D/g, "");
+  const sender = from.replace(/\D/g, "");
+  const ownerOnly = owner.length >= 7 && sender.slice(-10) === owner.slice(-10);
+  if (from && body && ownerOnly) {
     const collection = e.app.findCollectionByNameOrId("events");
     const record = new Record(collection);
     record.set("device_id", "sms");

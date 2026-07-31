@@ -18,6 +18,8 @@ from datetime import datetime
 
 import requests
 
+from . import pb
+
 from .anticipy_core import Anticipy
 from .memory import Memory
 from .conversation import Conversation, MockTransport, TwilioTransport
@@ -33,6 +35,16 @@ CLOCK_MIN_GAP_SECONDS = 4 * 3600      # at most one unprompted outreach per 4h
 CLOCK_TZ = ZoneInfo(os.environ.get("ANTICIPY_TZ", "America/Vancouver"))
 CLOCK_QUIET_START, CLOCK_QUIET_END = 22, 8   # never initiate at night
 CLOCK_STATE = os.environ.get("ANTICIPY_CLOCK_STATE", "/data/clock_state.json")
+
+
+def same_phone(a: str, b: str) -> bool:
+    """E.164 comparison tolerant of formatting. Empty owner phone never
+    matches — an unconfigured owner must not authorize the whole world."""
+    digits = lambda s: "".join(ch for ch in str(s or "") if ch.isdigit())
+    da, db = digits(a), digits(b)
+    if not da or not db or len(db) < 7:
+        return False
+    return da[-10:] == db[-10:]
 
 
 def _clock_state() -> dict:
@@ -57,14 +69,14 @@ def clock_should_run(now: float, state: dict) -> bool:
 
 
 def post_event(kind: str, text: str, decision: str = "", goal: str = "") -> None:
-    requests.post(f"{PB}/api/collections/events/records", json={
+    pb.post(f"{PB}/api/collections/events/records", json={
         "device_id": "anticipy-brain", "kind": kind, "text": text,
         "decision": decision, "goal": goal or "",
     }, timeout=10)
 
 
 def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
-    r = requests.get(
+    r = pb.get(
         f"{PB}/api/collections/events/records",
         params={"filter": f'kind="{kind}" && decision=""',
                 "perPage": 20, "sort": "created"},
@@ -74,9 +86,22 @@ def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
     return r.json().get("items", [])
 
 
-def mark_processed(event_id: str, decision: str) -> None:
-    requests.patch(f"{PB}/api/collections/events/records/{event_id}",
-                   json={"decision": decision}, timeout=10)
+def mark_processed(event_id: str, decision: str) -> bool:
+    """Returns whether the mark actually landed. A silently-failed PATCH left
+    the event unmarked and the 2s poll replayed it — minting a duplicate job
+    and a duplicate text per cycle."""
+    try:
+        r = pb.patch(f"{PB}/api/collections/events/records/{event_id}",
+                     json={"decision": decision}, timeout=10)
+        return bool(getattr(r, "ok", False))
+    except Exception:
+        return False
+
+
+def claim(event_id: str) -> bool:
+    """Take the event BEFORE doing side effects. If this fails we skip the
+    event this cycle rather than acting twice on it."""
+    return mark_processed(event_id, "processing")
 
 
 def main() -> None:
@@ -127,6 +152,11 @@ def main() -> None:
                 # would replay it every 2s, minting a duplicate job (and SMS)
                 # per attempt — this happened live on 2026-07-30 (6 jobs from
                 # one line when the owner-notify SMS failed).
+                # Claim first: hear() queues jobs and sends texts, so a
+                # post-hoc mark that fails means the whole thing runs again.
+                if not claim(ev["id"]):
+                    print(f"heard: {line!r} -> could not claim, retrying later")
+                    continue
                 try:
                     out = anticipy.hear(line)
                 except Exception as e:
@@ -149,6 +179,18 @@ def main() -> None:
                 phone = ev.get("goal", "").strip() or anticipy.owner_phone
                 if not text:
                     mark_processed(ev["id"], "ignore")
+                    continue
+                # ONLY the owner may steer the queue. Twilio's token proves the
+                # webhook is Twilio, NOT who texted: without this, any stranger
+                # (or a wrong number) texting "yes" releases a held job into
+                # the owner's browser, "no" cancels it, and Anticipy replies
+                # to them with the owner's private pending list.
+                if not same_phone(phone, anticipy.owner_phone):
+                    mark_processed(ev["id"], "ignored_nonowner")
+                    print(f"sms in: from non-owner {phone!r} — ignored")
+                    continue
+                if not claim(ev["id"]):
+                    print("sms in: could not claim, retrying later")
                     continue
                 try:
                     out = convo.on_reply(phone, text)
