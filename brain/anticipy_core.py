@@ -35,13 +35,20 @@ NAME = "Anticipy"
 # leaves the owner's world (sending, booking, buying, signing up, calling,
 # posting, deleting) is held for confirmation regardless of what triage said.
 # LLM goal strings are free-form, so exact-match sets are not enough.
+_VERBS = (
+    r"send\w*|email\w*|book\w*|reserv\w*|buy\w*|purchas\w*|order\w*|pay\w*|"
+    r"sign(?:\s+\w+)?\s*up|sign\w*|register\w*|subscrib\w*|submit\w*|post\w*|publish\w*|"
+    r"repl(?:y|ies|ying)|messag\w*|text\w*|call\w*|cancel\w*|delet\w*|"
+    r"unsubscrib\w*|transfer\w*|schedul\w*|invit\w*|rsvp|book\w*|"
+    r"shar\w*|forward\w*|respond\w*|confirm\w*|appl(?:y|ies|ying)|"
+    r"wire|venmo|e-?transfer|donat\w*|checkout|check\s*out|upload\w*|deposit\w*"
+)
+# Only in ACTION position — the start of the goal, or after and/then/to/&/comma.
+# A verb buried in a noun phrase is not an action: "noise CANCELLING
+# headphones" and "MEETING notes" are not things that leave the owner's world,
+# and holding them taught the owner to tap through prompts without reading.
 _IRREVERSIBLE_RE = re.compile(
-    r"\b(send\w*|email\w*|book\w*|reserv\w*|buy\w*|purchas\w*|order\w*|pay\w*|"
-    r"sign(\s+\w+)?\s*up|sign\w*|register\w*|subscrib\w*|submit\w*|post\w*|publish\w*|"
-    r"repl(y|ies|ying)|messag\w*|text\w*|call\w*|cancel\w*|delet\w*|"
-    r"unsubscrib\w*|transfer\w*|schedul\w*|invit\w*|rsvp|calendar|appointment|"
-    r"meeting|remind(er)?|shar\w*|forward\w*|respond\w*|confirm\w*|appl(y|ies|ying)|"
-    r"wire|venmo|e-?transfer|donat\w*|checkout|check\s*out|upload\w*|deposit\w*)\b",
+    r"(?:^|\b(?:and|then|to|also|please|&)\s+|,\s*)(?:" + _VERBS + r")\b",
     re.IGNORECASE,
 )
 
@@ -56,11 +63,14 @@ _READ_ONLY_RE = re.compile(
 
 
 def is_consequential(goal: str, params: dict | None = None) -> bool:
-    blob = f"{goal} {json.dumps(params or {})}"
-    if _IRREVERSIBLE_RE.search(blob):
+    """Does this goal change the world? Judged on the GOAL only — params carry
+    the raw transcript, whose stray words ("cancel my flight" mentioned in
+    passing) must not decide whether a research task is held."""
+    g = (goal or "").strip()
+    if _IRREVERSIBLE_RE.search(g):
         return True
     # Default to holding: only an explicitly read-only goal runs unattended.
-    return not _READ_ONLY_RE.search((goal or "").strip())
+    return not _READ_ONLY_RE.search(g)
 
 VOICE_SYSTEM = f"""You are {NAME}, texting the person whose day you share. You
 are their sharp, warm chief of staff — a real human voice, never a template.
