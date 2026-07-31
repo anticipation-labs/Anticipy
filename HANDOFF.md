@@ -15,6 +15,10 @@
 - Railway project `anticipy-production` (id `c0a0f512-6ce0-43aa-b338-781d912e5ae3`), env `production`.
 - Service **backend**: PocketBase, built from `backend/Dockerfile` (deploy with the `backend/`
   directory as upload root — deploying from repo root fails with "Dockerfile not found").
+  TRAP (found 2026-07-31): uploads from `backend/` must NOT include `pb_data/` or the
+  `pocketbase` binary — root .gitignore patterns don't apply when backend/ is the upload
+  root, and the stowaway files kill the Railway builder silently at "scheduling build"
+  (6 consecutive FAILED deploys). `backend/.railwayignore` now excludes them; keep it.
   - URL: `https://backend-production-61e0a.up.railway.app`
   - Health: `/api/health` · Setup guide: `/setup.html` · Extension: `/anticipy-extension.zip`
   - Serves `pb_migrations/`, `pb_public/`, `pb_hooks/`; data on attached volume `/pb_data`.
