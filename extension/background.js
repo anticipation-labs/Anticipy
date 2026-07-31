@@ -159,7 +159,11 @@ async function claimJob() {
   // would claim the job and then fail it forever — a second Chrome profile
   // silently killing the owner's work.
   if (!owner) return null;
-  const cond = `status="queued" && owner="${owner}"`;
+  // A PAIRED agent still takes unowned jobs: if the brain ever queues one
+  // without an owner stamp, dropping this clause would leave it queued
+  // forever with nothing reporting a problem. Silent dead-queue is worse
+  // than the narrow case this clause admits.
+  const cond = `status="queued" && (owner="${owner}" || owner="")`;
   const r = await fetch(
     `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`
   );
