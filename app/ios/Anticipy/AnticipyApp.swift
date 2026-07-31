@@ -53,7 +53,9 @@ final class AnticipySession: ObservableObject {
     var backend: AnticipyBackend {
         AnticipyBackend(
             baseURL: URL(string: backendURLString) ?? URL(string: "https://backend-production-61e0a.up.railway.app")!,
-            deviceID: "iphone"
+            // Build-stamped so production events reveal WHICH build spoke —
+            // "are you sure it's updated?" gets answered by the data.
+            deviceID: "iphone-b\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")"
         )
     }
 

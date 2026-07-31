@@ -104,6 +104,12 @@ struct SettingsView: View {
 
             Section {
                 Button("Replay the welcome tour") { hasOnboarded = false }
+            } footer: {
+                // The one question that must never be ambiguous again:
+                // "which build am I actually running?"
+                Text("Anticipy v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
+                    .font(.footnote.monospaced())
+                    .foregroundStyle(Theme.gray)
             }
         }
         .scrollContentBackground(.hidden)
