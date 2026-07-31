@@ -77,7 +77,12 @@
           `"${(o.textContent || o.value).trim().slice(0, 40)}"${o.selected ? "*" : ""}`);
         extra = ` (use select action; options: ${opts.join(", ")}${el.options.length > 12 ? ", …" : ""})`;
       } else if (el.tagName === "INPUT" && ["date", "month", "time", "datetime-local"].includes((el.type || "").toLowerCase())) {
-        extra = ` (${el.type} field — use select action with option "${el.type === "date" ? "YYYY-MM-DD" : el.type === "time" ? "HH:MM" : "value"}"${el.value ? `; currently "${el.value}"` : ""})`;
+        // Name the EXACT format for each type: "value" is not a format, and a
+        // near-miss silently blanks the field rather than failing loudly.
+        const t = (el.type || "").toLowerCase();
+        const fmt = t === "date" ? "YYYY-MM-DD" : t === "month" ? "YYYY-MM"
+          : t === "time" ? "HH:MM" : "YYYY-MM-DDTHH:MM";
+        extra = ` (${t} field — use select action with option in the exact format ${fmt}${el.value ? `; currently "${el.value}"` : ""})`;
       }
       lines.push(`[${idx}] <${role(el)}> ${label(el)}${extra} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
       if (counter > 150) break;

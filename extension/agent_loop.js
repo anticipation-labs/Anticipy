@@ -90,7 +90,11 @@ async function verifyDone(apiKey, model, goal, result, tabId) {
   catch { return { verified: true, reason: "page unreadable; claim accepted unverified" }; }
   const messages = [
     { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible); but verify=false if ANY statement in the claimed result is contradicted by the page (e.g. claiming a product is unreleased while the page shows its official price). The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done — verified=false with reason "goal state not reached yet". Likewise a research result that admits the requested information was NOT found ("not directly listed", "one would need to visit...") is NOT done — verified=false with reason "requested info not found". Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
-    { role: "user", content: `GOAL: ${goal}\nCLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
+    // The auditor is told to demand "correctly-filled fields" as evidence, so
+    // it must actually SEE the fields: page text alone (capped at 1500 chars,
+    // usually nav and menus) made it reject correct completions, the run
+    // ground to maxSteps, and the owner was told a finished task had failed.
+    { role: "user", content: `GOAL: ${goal}\nCLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nFORM STATE:\n${(state.elements || "").slice(0, 3000)}\n\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
   ];
   try {
     const ctl = new AbortController();
@@ -200,7 +204,26 @@ async function solveCaptcha(capsolverKey, tabId, pageUrl, det) {
 }
 
 async function cdp(tabId, method, params) {
-  return chrome.debugger.sendCommand({ tabId }, method, params || {});
+  try {
+    return await chrome.debugger.sendCommand({ tabId }, method, params || {});
+  } catch (e) {
+    // EVERY real detach surfaces here — from a click, a keystroke, a scroll —
+    // NOT from mapPage (which uses chrome.scripting and reports different
+    // errors entirely). The earlier re-attach guard sat on the mapPage path
+    // and was therefore unreachable, which is why "Debugger is not attached
+    // to the tab" still killed live jobs. Take the session back and retry
+    // once, right where the loss actually happens.
+    if (!/not attached|Detached while/i.test(String(e))) throw e;
+    try {
+      await chrome.debugger.attach({ tabId }, "1.3");
+      await chrome.debugger.sendCommand({ tabId }, "Emulation.setFocusEmulationEnabled", { enabled: true });
+    } catch (re) {
+      if (!String(re).includes("already attached")) {
+        throw new Error("automation session cancelled — the 'Anticipy started debugging' bar must stay up while I work");
+      }
+    }
+    return chrome.debugger.sendCommand({ tabId }, method, params || {});
+  }
 }
 
 async function trustedClick(tabId, x, y) {
@@ -326,6 +349,8 @@ export async function runAgentGoal(goal, opts) {
   const deadIdx = new Set();
   let lastUrl = "";
   let lastDoneClaim = null;
+  let llmFailures = 0;
+  let mapFailures = 0;
   try {
     for (let step = 0; step < maxSteps; step++) {
       await new Promise((r) => setTimeout(r, 1200));
@@ -348,10 +373,18 @@ export async function runAgentGoal(goal, opts) {
           }
           return { status: "needs_user", result: "the automation session was cancelled — the 'Anticipy started debugging' bar has to stay up while I work. Send it again and leave the bar alone.", tabId: tab.id };
         }
+        // A closed tab never becomes scriptable — retrying to maxSteps just
+        // burns the budget and reports "max steps reached" for what is
+        // actually a gone window.
+        mapFailures += 1;
+        if (mapFailures >= 3 || /No tab with id/i.test(msg)) {
+          return { status: "needs_user", result: "the working tab went away before I finished — send it again and I'll restart", tabId: tab.id };
+        }
         history.push(`step ${step}: page not scriptable yet (${msg.slice(0, 120)})`);
         continue;
       }
 
+      mapFailures = 0;
       const banked = blockedDomain(state.url);
       if (banked) {
         return { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
@@ -384,7 +417,19 @@ export async function runAgentGoal(goal, opts) {
 
       let decision;
       try { decision = await withTimeout(llmStep(apiKey, model, goal, state, history), 70000, "llmStep"); }
-      catch (e) { history.push(`step ${step}: llm error (${String(e).slice(0, 120)})`); continue; }
+      catch (e) {
+        // A dead/rotated/out-of-credit key or a rate limit used to be retried
+        // for all 32 steps in ~90 seconds and then reported as a browsing
+        // failure. Two strikes and we hand back naming the real cause.
+        llmFailures += 1;
+        const msg = String(e).slice(0, 200);
+        if (llmFailures >= 2 || /key was rejected|model unavailable \(4\d\d/.test(msg)) {
+          return { status: "needs_user", result: msg.replace(/^Error:\s*/, ""), tabId: tab.id };
+        }
+        history.push(`step ${step}: llm error (${msg.slice(0, 120)})`);
+        await new Promise((r) => setTimeout(r, 2000 * llmFailures));
+        continue;
+      }
       history.push(`step ${step}: ${JSON.stringify(decision).slice(0, 160)}`);
 
       if (decision.action === "done") {
@@ -443,10 +488,45 @@ export async function runAgentGoal(goal, opts) {
                 return `selected "${(opt.textContent || opt.value).trim()}"`;
               }
               if (el.tagName === "INPUT") {
+                const type = (el.type || "text").toLowerCase();
+                const v = String(want).trim();
+                // Date/time inputs SILENTLY BLANK themselves when handed a
+                // non-conforming string — so a near-miss format didn't just
+                // fail, it wiped a field that may already have been right.
+                const shapes = {
+                  date: /^\d{4}-\d{2}-\d{2}$/,
+                  month: /^\d{4}-\d{2}$/,
+                  time: /^\d{2}:\d{2}$/,
+                  "datetime-local": /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/,
+                };
+                if (shapes[type] && !shapes[type].test(v)) {
+                  return `refused: ${type} needs the exact format ` +
+                    (type === "date" ? "YYYY-MM-DD" : type === "month" ? "YYYY-MM"
+                      : type === "time" ? "HH:MM" : "YYYY-MM-DDTHH:MM") +
+                    ` — got "${v}". Nothing was changed.`;
+                }
+                if (type === "checkbox" || type === "radio") {
+                  el.checked = !/^(false|no|off|0|uncheck\w*)$/i.test(v);
+                  fire();
+                  return `${el.checked ? "checked" : "unchecked"} the box`;
+                }
+                if (type === "file" || type === "range") {
+                  return `refused: I don't operate ${type} inputs`;
+                }
                 el.focus();
-                el.value = String(want).trim();
+                // React/Vue track the value on the node and swallow a plain
+                // assignment's input event, reverting the field while the
+                // handler reports success. The native setter is what the
+                // framework's own listener is watching.
+                const setter = Object.getOwnPropertyDescriptor(
+                  window.HTMLInputElement.prototype, "value").set;
+                setter.call(el, v);
                 fire();
-                return `set ${el.type || "input"} to "${el.value}"`;
+                // Read it back: only the DOM decides whether it took.
+                if (el.value !== v) {
+                  return `tried to set ${type} to "${v}" but the field now reads "${el.value}" — it did not take`;
+                }
+                return `set ${type} to "${el.value}"`;
               }
               return `element is <${el.tagName.toLowerCase()}>, not a dropdown or input`;
             },
