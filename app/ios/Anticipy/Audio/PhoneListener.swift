@@ -7,13 +7,28 @@ import Speech
 /// This is the same transcript stream the pendant produces, so everything
 /// downstream — brain, memory, jobs — is identical.
 ///
-/// Listening is SELF-HEALING: iOS kills mic capture constantly (Siri, calls,
-/// notification sounds, AirPods connecting, media-services resets) and every
-/// one of those used to stop transcription silently while the UI still said
-/// "Listening" — the user experiences that as "it forgets after a few
-/// sentences". Interruption/route observers plus a watchdog now bring the
-/// whole chain back, and `suspended` tells the UI honestly when the mic is
-/// down instead of pretending.
+/// DESIGN, rewritten 2026-07-31 after a real conversation produced exactly ONE
+/// line in production:
+///
+/// The old design ended the recognition request at every pause to force a
+/// final result. But the microphone tap keeps delivering audio into a request
+/// that has already been ended — those buffers are discarded — and the
+/// replacement request only exists once the final callback arrives, hundreds
+/// of milliseconds later. In continuous speech that gap swallowed most of what
+/// was said, which is exactly what happened: a whole conversation arrived as
+/// "What time is it on Monday".
+///
+/// Now the request is NEVER ended while someone is talking. One long-lived
+/// recognition task streams partial results; we watch the running text and
+/// emit a line when it stops changing (a natural pause). Everything after that
+/// keeps accumulating in the SAME request, so no audio is ever orphaned. Any
+/// unavoidable swap (error, interruption, rotation) buffers the microphone
+/// audio and replays it into the new request.
+///
+/// Listening is also SELF-HEALING: iOS kills mic capture constantly (Siri,
+/// calls, notification sounds, AirPods, media-services resets); observers plus
+/// a watchdog bring the chain back, and `suspended` says so honestly instead
+/// of glowing "Listening" over a dead microphone.
 final class PhoneListener: NSObject, ObservableObject {
     @Published var isListening = false
     @Published var partial = ""
@@ -24,9 +39,6 @@ final class PhoneListener: NSObject, ObservableObject {
 
     var onLine: ((String) -> Void)?
 
-    // var, not let: after a media-services reset Apple's contract (QA1749)
-    // is that every audio object must be DESTROYED and recreated — an
-    // orphaned engine can never start again, and touching it can crash.
     private var engine = AVAudioEngine()
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -34,21 +46,25 @@ final class PhoneListener: NSObject, ObservableObject {
     private var silenceFlush: DispatchWorkItem?
     private var watchdog: Timer?
     private var observersInstalled = false
-    // Liveness: the recognizer can stall SILENTLY — task alive, engine
-    // running, zero callbacks ever again ("goes deaf ~5s in"). Track when
-    // audio last flowed and when results last arrived so the watchdog can
-    // tell a healthy quiet room from a dead recognizer.
+
+    /// The part of the CURRENT recognition task's text already emitted as
+    /// lines. Everything after it is the not-yet-emitted tail.
+    private var emitted = ""
+    /// Audio captured while no request is accepting it, replayed into the next
+    /// one so a swap can never lose speech.
+    private var orphanBuffers: [AVAudioPCMBuffer] = []
+    private let orphanLock = NSLock()
+    private var acceptingAudio = false
+
     private var lastBufferAt = Date()
     private var lastResultAt = Date()
     private var requestBornAt = Date()
     private var bufferTick = 0
 
-    /// Apple's recognizer rarely finalizes on its own mid-stream; left alone,
-    /// one task accumulates sentences until it times out (~1 min) and the
-    /// error path used to drop everything on the floor. Instead, treat a pause
-    /// this long as the end of an utterance and force a final result.
-    /// 2.6s, not shorter: people pause mid-thought ("I'll send the invoice…
-    /// tomorrow"), and chopping there splits one intent into fragments.
+    /// A pause this long ends an utterance. 2.6s, not shorter: people pause
+    /// mid-thought ("I'll send the invoice… tomorrow"), and chopping there
+    /// splits one intent into fragments. Nothing is closed to achieve this —
+    /// the line is simply cut from the running text.
     private let utteranceGap: TimeInterval = 2.6
 
     func start() {
@@ -71,8 +87,8 @@ final class PhoneListener: NSObject, ObservableObject {
         // Re-entrancy guard: onAppear + scenePhase both fire at launch, and
         // isListening can't be checked by callers because start() runs through
         // two async permission callbacks. Two begin()s = two recognition
-        // chains = duplicated lines pushed to the brain. begin() only ever
-        // arrives via DispatchQueue.main.async, so this guard is race-free.
+        // chains = duplicated lines. begin() only ever arrives via
+        // DispatchQueue.main.async, so this guard is race-free.
         guard !isListening else { return }
         installObserversOnce()
         isListening = true
@@ -102,8 +118,16 @@ final class PhoneListener: NSObject, ObservableObject {
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
-            self.request?.append(buffer)
-            // Cheap liveness beacon (~3x/sec, not per-buffer) off the audio thread.
+            self.orphanLock.lock()
+            if self.acceptingAudio, let req = self.request {
+                req.append(buffer)
+            } else if self.isListening {
+                // No request is taking audio right now (swap in flight).
+                // Hold it — do NOT drop it — and replay into the next one.
+                if self.orphanBuffers.count < 600 { self.orphanBuffers.append(buffer) }
+            }
+            self.orphanLock.unlock()
+            // Cheap liveness beacon (~3x/sec), off the audio thread.
             self.bufferTick &+= 1
             if self.bufferTick % 32 == 0 {
                 DispatchQueue.main.async { self.lastBufferAt = Date() }
@@ -132,10 +156,9 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         nc.addObserver(forName: AVAudioSession.routeChangeNotification,
                        object: nil, queue: .main) { [weak self] note in
-            // AirPods in, cable out, speakerphone — the input (and its
-            // format) may have changed under the tap. Rebuild. But ignore
-            // .categoryChange: our own setCategory posts one, and reacting
-            // to it rebuilds gratuitously right after every start.
+            // AirPods in, cable out, speakerphone — the input (and its format)
+            // may have changed under the tap. Ignore .categoryChange: our own
+            // setCategory posts one, and reacting rebuilds gratuitously.
             guard let self, self.isListening else { return }
             let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
             if raw.flatMap(AVAudioSession.RouteChangeReason.init) == .categoryChange { return }
@@ -154,54 +177,33 @@ final class PhoneListener: NSObject, ObservableObject {
         guard isListening else { return }
         engine.stop()
         configureAndStartEngine()
-        if task == nil {
-            startRecognition()
-        } else {
-            // A live request's format was fixed by its first buffer; feeding
-            // it the NEW route's format garbles recognition. Finalize it —
-            // its words are emitted, not lost — and the isFinal path rolls
-            // into a fresh task that accepts the new format.
-            request?.endAudio()
-        }
+        // A live request's format was fixed by its first buffer; the new route
+        // may differ, so start fresh — flushing whatever was pending first.
+        swapRecognition(flushPending: true)
     }
 
-    /// Last line of defense: whatever stalled without a notification —
-    /// engine dead, audio not flowing, recognition task gone or gone DEAF —
-    /// comes back within seconds. Listening ends when the user ends it,
-    /// never when a component quietly dies.
+    /// Last line of defense: whatever stalled without a notification — engine
+    /// dead, audio not flowing, recognizer gone DEAF — comes back within
+    /// seconds. Listening ends when the user ends it, never when a component
+    /// quietly dies.
     private func startWatchdog() {
         watchdog?.invalidate()
         let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in
             guard let self, self.isListening else { return }
             if !self.engine.isRunning { self.recoverAudio(); return }
-            if self.task == nil {
-                if self.recognizer?.isAvailable != false { self.startRecognition() }
-                return
-            }
+            if self.task == nil { self.startRecognition(); return }
             let now = Date()
-            // Engine claims to run but no audio has flowed: rebuild the chain.
             if now.timeIntervalSince(self.lastBufferAt) > 6 { self.recoverAudio(); return }
-            // Mid-utterance stall: words on screen, recognizer silent for 8s
-            // (a healthy one streams partials continuously). Salvage the
-            // words ourselves and hand the audio to a fresh recognizer.
-            if !self.partial.isEmpty, now.timeIntervalSince(self.lastResultAt) > 8 {
-                self.silenceFlush?.cancel()
-                let pending = self.partial.trimmingCharacters(in: .whitespacesAndNewlines)
-                self.partial = ""
-                if !pending.isEmpty { self.onLine?(pending) }
-                self.task?.cancel()
-                self.task = nil
-                self.request = nil
-                self.startRecognition()
+            // Recognizer went silent mid-utterance: words on screen, nothing
+            // arriving for 8s (a healthy one streams continuously).
+            if !self.pendingTail.isEmpty, now.timeIntervalSince(self.lastResultAt) > 8 {
+                self.swapRecognition(flushPending: true)
                 return
             }
-            // Quiet-room rotation: never let one recognition task grow old
-            // enough to hit internal limits — swap it out during silence.
-            if self.partial.isEmpty, now.timeIntervalSince(self.requestBornAt) > 60 {
-                self.task?.cancel()
-                self.task = nil
-                self.request = nil
-                self.startRecognition()
+            // Rotate only in true silence — nothing pending, nothing to lose.
+            if self.pendingTail.isEmpty, self.partial.isEmpty,
+               now.timeIntervalSince(self.requestBornAt) > 120 {
+                self.swapRecognition(flushPending: false)
                 return
             }
             self.suspended = !self.engine.isRunning
@@ -214,8 +216,13 @@ final class PhoneListener: NSObject, ObservableObject {
 
     // --------------------------------------------------------- recognition
 
-    /// One recognition task per utterance: when the recognizer finalizes
-    /// (pause in speech), emit the line and roll straight into the next task.
+    /// Text heard on the current task that hasn't been emitted as a line yet.
+    private var pendingTail: String {
+        guard partial.count > emitted.count,
+              partial.hasPrefix(emitted) else { return partial }
+        return String(partial.dropFirst(emitted.count))
+    }
+
     private func startRecognition() {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
@@ -224,82 +231,89 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         requestBornAt = Date()
         lastResultAt = Date()
+        emitted = ""
+        partial = ""
+
+        orphanLock.lock()
         request = req
+        acceptingAudio = true
+        // Replay anything the microphone captured during the swap so a
+        // sentence spoken across the seam is not lost.
+        let held = orphanBuffers
+        orphanBuffers.removeAll()
+        orphanLock.unlock()
+        for b in held { req.append(b) }
+
         task = recognizer?.recognitionTask(with: req) { [weak self] result, error in
             guard let self else { return }
-            if let result {
-                let text = result.bestTranscription.formattedString
-                DispatchQueue.main.async {
-                    // Stale-callback guard: only the CURRENT chain may touch
-                    // shared state — a finalized/superseded task's late
-                    // callbacks must never clobber or double-emit.
-                    guard self.request === req else { return }
-                    self.lastResultAt = Date()
-                    // On-device recognition sometimes RESETS its window mid-
-                    // utterance: the running text suddenly holds only the
-                    // words after the reset, and everything before it would
-                    // silently vanish (live incident: a 12s sentence reduced
-                    // to "Of August"). A reset is a rewrite that shares no
-                    // opening with what we had — emit the pre-reset words as
-                    // their own line first. Words move down, never disappear.
-                    // A true reset COLLAPSES a long partial to a short tail
-                    // ("Of August"). Apple also rewrites leading tokens as it
-                    // normalizes ("seven PM" -> "7 PM"), which shares no
-                    // prefix but keeps the length — requiring a big shrink
-                    // stops those revisions being emitted as phantom lines.
-                    if !result.isFinal, self.partial.count >= 10, !text.isEmpty,
-                       text.count + 10 < self.partial.count {
-                        let common = zip(self.partial.lowercased(), text.lowercased())
-                            .prefix { $0 == $1 }.count
-                        if common < 3 {
-                            let stable = self.partial.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !stable.isEmpty, self.isListening { self.onLine?(stable) }
-                        }
+            DispatchQueue.main.async {
+                // Only the CURRENT chain may touch shared state — a superseded
+                // task's late callbacks must never clobber or double-emit.
+                guard self.request === req else { return }
+                self.lastResultAt = Date()
+
+                if let result {
+                    let text = result.bestTranscription.formattedString
+                    // A window reset replaces the text instead of extending it
+                    // (a 12s sentence collapsing to "Of August"). Bank what we
+                    // had before accepting the new, shorter reality.
+                    if !text.hasPrefix(self.emitted), self.partial.count > text.count + 10 {
+                        self.flushTail()
+                        self.emitted = ""
                     }
                     self.partial = text
                     if result.isFinal {
-                        self.silenceFlush?.cancel()
-                        self.partial = ""
-                        self.task = nil
-                        self.request = nil
-                        // stop() already flushed the open utterance, so only
-                        // emit finals while actively listening.
-                        if !text.isEmpty, self.isListening { self.onLine?(text) }
-                        if self.isListening { self.startRecognition() }
+                        self.flushTail()
+                        self.swapRecognition(flushPending: false)
                     } else {
                         self.scheduleSilenceFlush()
                     }
-                }
-            } else if error != nil {
-                // Recognizer died (timeout, service hiccup). Whatever was on
-                // screen is still real speech — emit it, never drop it.
-                DispatchQueue.main.async {
-                    guard self.request === req else { return }
-                    self.lastResultAt = Date()
-                    self.silenceFlush?.cancel()
-                    let pending = self.partial.trimmingCharacters(in: .whitespacesAndNewlines)
-                    self.partial = ""
-                    self.task = nil
-                    self.request = nil
-                    if !pending.isEmpty, self.isListening { self.onLine?(pending) }
-                    if self.isListening { self.startRecognition() }
+                } else if error != nil {
+                    // The recognizer died. Whatever was heard is real speech —
+                    // emit it, then take a fresh one; buffered audio carries
+                    // across the seam.
+                    self.swapRecognition(flushPending: true)
                 }
             }
         }
     }
 
-    /// After a pause in speech, end the current request so the recognizer
-    /// finalizes this utterance; the final-result path emits it and rolls
-    /// straight into a fresh task for the next one.
+    /// Emit everything heard but not yet sent, as one line.
+    private func flushTail() {
+        silenceFlush?.cancel()
+        let tail = pendingTail.trimmingCharacters(in: .whitespacesAndNewlines)
+        emitted = partial
+        guard !tail.isEmpty else { return }
+        onLine?(tail)
+    }
+
+    /// After a pause, cut a line from the running text — WITHOUT ending the
+    /// request, so speech that follows keeps flowing into the same recognizer
+    /// and nothing is orphaned.
     private func scheduleSilenceFlush() {
         silenceFlush?.cancel()
-        guard !partial.isEmpty else { return }
+        guard !pendingTail.isEmpty else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.isListening else { return }
-            self.request?.endAudio()
+            self.flushTail()
         }
         silenceFlush = work
         DispatchQueue.main.asyncAfter(deadline: .now() + utteranceGap, execute: work)
+    }
+
+    /// Retire the current recognition task and start a clean one. Audio keeps
+    /// being captured into the orphan buffer throughout and is replayed.
+    private func swapRecognition(flushPending: Bool) {
+        silenceFlush?.cancel()
+        if flushPending { flushTail() }
+        orphanLock.lock()
+        acceptingAudio = false
+        orphanLock.unlock()
+        task?.cancel()
+        task = nil
+        request = nil
+        guard isListening else { return }
+        startRecognition()
     }
 
     func stop() {
@@ -310,14 +324,18 @@ final class PhoneListener: NSObject, ObservableObject {
         silenceFlush?.cancel()
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        request?.endAudio()
-        // Emit whatever was said in the still-open utterance; cancelling the
-        // task would otherwise drop it before the final result arrives.
-        let pending = partial.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !pending.isEmpty { onLine?(pending) }
+        orphanLock.lock()
+        acceptingAudio = false
+        orphanBuffers.removeAll()
+        orphanLock.unlock()
+        // Emit whatever was still in flight — pressing Stop must never be the
+        // thing that deletes what you just said.
+        let tail = pendingTail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty { onLine?(tail) }
         task?.finish()
         request = nil
         task = nil
         partial = ""
+        emitted = ""
     }
 }

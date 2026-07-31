@@ -30,6 +30,12 @@ committing, exactly as much as a full sentence would be.
   researching options, laying booking groundwork. A vague desire with a real
   anchor (a time, a place, a person) deserves a quiet start on options, not
   silence. Give a short machine goal string.
+  This INCLUDES a factual question the owner says out loud that you could
+  answer by looking it up — "what time is the demo day on Monday", "how late
+  is that place open", "what did that cost". Looking something up is
+  read-only and costs them nothing, so a question with a findable answer is
+  work worth doing, not chatter. Make the goal a research goal naming the
+  specific thing, and carry every detail they gave (the event, the day).
 - "ask": help is clearly wanted but one missing detail blocks starting — the
   single question you'd lean over and ask.
 - "ignore": a great assistant stays quiet: chatter, venting, jokes, questions
