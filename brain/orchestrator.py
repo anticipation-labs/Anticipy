@@ -21,7 +21,10 @@ For each transcript line, reason the way a great human assistant standing in
 the room would: what just happened, and does the OWNER now have an intention,
 need, plan, or commitment that competent help could advance? Judge by MEANING
 only — there is no magic phrasing, no keyword, no required verb. People speak
-sideways: a plan can arrive as a mumble, an agreement, a half-thought.
+sideways: a plan can arrive as a mumble, an agreement, a half-thought — and a
+plan can be SEALED in three words: a terse confirmation of something already
+discussed ("seven works", a "see you Tuesday" in any language) is the owner
+committing, exactly as much as a full sentence would be.
 
 - "act": you can see concrete work worth starting now — preparing, drafting,
   researching options, laying booking groundwork. A vague desire with a real
