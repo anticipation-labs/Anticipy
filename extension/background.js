@@ -66,11 +66,16 @@ const activeJobs = new Set();
 // Consumers never paste API keys: once paired, the agent fetches its key from
 // the backend. A manually saved key (popup) still wins, so dev overrides work.
 async function ensureLLMKey() {
-  const { openrouterKey, agentModel, agentId } = await chrome.storage.local.get(["openrouterKey", "agentModel", "agentId"]);
-  // agentModel === undefined means we've never asked the backend which brain
-  // to use (installs that fetched only a key) — refresh even if keyed.
-  if (openrouterKey && agentModel !== undefined) return openrouterKey;
-  if (!agentId) return null;
+  const { openrouterKey, agentModel, serviceToken, keyFetchedAt, agentId } =
+    await chrome.storage.local.get(["openrouterKey", "agentModel", "serviceToken", "keyFetchedAt", "agentId"]);
+  // Refresh when ANY piece is missing or the bundle is stale — not just the
+  // key. An install that cached only a key would otherwise never learn the
+  // service token, and switching backend enforcement on would permanently
+  // brick it with no way back except a manual reinstall.
+  const complete = openrouterKey && agentModel !== undefined && serviceToken !== undefined;
+  const fresh = Date.now() - (keyFetchedAt || 0) < 6 * 3600 * 1000;
+  if (complete && fresh) return openrouterKey;
+  if (!agentId) return openrouterKey || null;
   try {
     const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
     if (!r.ok) return null;
@@ -80,11 +85,12 @@ async function ensureLLMKey() {
         openrouterKey: openrouter_key,
         agentModel: model || "",
         serviceToken: service_token || "",
+        keyFetchedAt: Date.now(),
       });
       return openrouter_key;
     }
-  } catch (_) { /* backend unreachable; job path reports honestly */ }
-  return null;
+  } catch (_) { /* backend unreachable; keep whatever we already had */ }
+  return openrouterKey || null;
 }
 
 async function heartbeat() {
@@ -110,8 +116,12 @@ async function heartbeat() {
 // If a previous worker died mid-job, its `running` jobs go stale; requeue them
 // so no task is ever silently lost to a crash or a closed Chrome.
 async function requeueStaleJobs() {
-  const filter = encodeURIComponent('status="running"');
-  const r = await fetch(`${BASE}/api/collections/jobs/records?filter=${filter}&perPage=20`);
+  // Owner-scoped: an unrelated install (a second Chrome profile, someone
+  // else entirely) must never rewrite this owner's job rows.
+  const { owner } = await chrome.storage.local.get(["owner"]);
+  if (!owner) return;
+  const filter = encodeURIComponent(`status="running" && owner="${owner}"`);
+  const r = await fetch(`${BASE}/api/collections/jobs/records?filter=${filter}&perPage=20&sort=claimed_at`);
   if (!r.ok) return;
   const { items } = await r.json();
   const now = Date.now();
@@ -145,9 +155,11 @@ async function claimJob() {
   // Owner-scoped: a paired agent takes its owner's jobs (or legacy unowned
   // ones); an unpaired agent only takes unowned jobs.
   const { owner, agentId } = await chrome.storage.local.get(["owner", "agentId"]);
-  const cond = owner
-    ? `status="queued" && (owner="${owner}" || owner="")`
-    : 'status="queued" && owner=""';
+  // An UNPAIRED agent must not claim anything: it cannot fetch a key, so it
+  // would claim the job and then fail it forever — a second Chrome profile
+  // silently killing the owner's work.
+  if (!owner) return null;
+  const cond = `status="queued" && owner="${owner}"`;
   const r = await fetch(
     `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`
   );
@@ -169,11 +181,33 @@ async function claimJob() {
 }
 
 async function updateJob(id, fields) {
-  await fetch(`${BASE}/api/collections/jobs/records/${id}`, {
+  const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`, {
     method: "PATCH",
     headers: await writeHeaders(),
     body: JSON.stringify(fields),
   });
+  // A silently-swallowed write meant a job deleted server-side ran to
+  // completion while every status update vanished into the void.
+  if (!r.ok) {
+    if (r.status === 404) { activeJobs.delete(id); throw new Error("job gone"); }
+    console.warn(`Anticipy: job ${id} update failed (${r.status})`);
+  }
+  return r;
+}
+
+/// Is this job still ours to run? The owner can cancel from the app or by
+/// text while the loop is mid-flight; without this the run continued and
+/// then RESURRECTED the cancelled job as done/failed.
+async function jobStillLive(id) {
+  try {
+    const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`);
+    if (r.status === 404) return false;
+    if (!r.ok) return true;   // transient: don't abandon real work
+    const j = await r.json();
+    return j.status === "running" || j.status === "queued";
+  } catch (_) {
+    return true;
+  }
 }
 
 async function runJob(job) {
@@ -181,6 +215,12 @@ async function runJob(job) {
   activeJobs.add(job.id);
   try {
     await runJobInner(job, params);
+  } catch (e) {
+    if (String(e).includes("job gone")) {
+      console.warn(`Anticipy: job ${job.id} was deleted — stopping.`);
+    } else {
+      throw e;
+    }
   } finally {
     activeJobs.delete(job.id);
   }
@@ -203,8 +243,12 @@ async function runJobInner(job, params) {
         apiKey: openrouterKey,
         capsolverKey: capsolverKey || null,
         startUrl: params.start_url || undefined,
+        stillLive: () => jobStillLive(job.id),
         ...(agentModel ? { model: agentModel } : {}),
       });
+      // A job the owner called off mid-run keeps their decision — writing
+      // done/failed over a cancellation resurrects work they stopped.
+      if (out.status === "cancelled") return;
       // needs_user (login wall, CAPTCHA, refused site) is NOT the same state
       // as awaiting_confirm (owner go-ahead pending) — conflating them lets a
       // free-form "yes" re-release a stuck job instead of the intended one.
@@ -212,6 +256,7 @@ async function runJobInner(job, params) {
         : out.status === "needs_user" ? "needs_user" : "failed";
       await updateJob(job.id, { status, result: out.result });
     } catch (e) {
+      if (String(e).includes("job gone")) throw e;
       await updateJob(job.id, { status: "failed", result: String(e) });
     }
     return;

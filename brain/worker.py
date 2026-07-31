@@ -121,6 +121,14 @@ def main() -> None:
     anticipy.conversation = convo
     print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
           f" · sms={'live' if live_sms else 'mock'} · pb={PB}")
+    if not anticipy.owner_id:
+        # Paired extensions only claim their owner's jobs, so unstamped jobs
+        # would sit queued forever with nothing reporting a problem.
+        print("WARNING: ANTICIPY_OWNER_ID is unset — queued jobs will carry no "
+              "owner and NO browser agent will ever claim them.")
+    if not same_phone(anticipy.owner_phone, anticipy.owner_phone):
+        print("WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — "
+              "every inbound text will be ignored as non-owner.")
 
     sent_seen = 0
     last_clock = 0.0

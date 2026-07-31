@@ -49,6 +49,17 @@ async function llmStep(apiKey, model, goal, state, history, _retries) {
     },
     body: JSON.stringify({ model, messages, temperature: 0 }),
   }).finally(() => clearTimeout(kill));
+  // Name the real cause. An expired/rotated/out-of-credit key used to surface
+  // as "unparseable model output" — the owner would go hunting the page.
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    if (r.status === 401 || r.status === 403) {
+      // Force a fresh bundle from the backend on the next job.
+      await chrome.storage.local.remove(["openrouterKey", "keyFetchedAt"]);
+      throw new Error(`my model key was rejected (${r.status}) — I refreshed it, try again`);
+    }
+    throw new Error(`model unavailable (${r.status}): ${body.slice(0, 160)}`);
+  }
   const data = await r.json();
   const text = data.choices?.[0]?.message?.content ?? "";
   const m = text.match(/\{[\s\S]*\}/);
@@ -280,7 +291,7 @@ async function elementCenter(tabId, index) {
 export async function runAgentGoal(goal, opts) {
   // Default to a scriptable search page: about:blank can't be script-injected,
   // so mapPage would fail every step and the run would die without acting.
-  const { apiKey, capsolverKey = null, model = "deepseek/deepseek-v3.2", maxSteps = 32, startUrl = "https://www.bing.com/" } = opts;
+  const { apiKey, capsolverKey = null, model = "deepseek/deepseek-v3.2", maxSteps = 32, startUrl = "https://www.bing.com/", stillLive = null } = opts;
   let captchaAttempts = 0;
 
   const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
@@ -318,6 +329,11 @@ export async function runAgentGoal(goal, opts) {
   try {
     for (let step = 0; step < maxSteps; step++) {
       await new Promise((r) => setTimeout(r, 1200));
+      // The owner can call this off mid-run (app button or a text). Stop
+      // where we are instead of finishing and overwriting their decision.
+      if (stillLive && !(await stillLive())) {
+        return { status: "cancelled", result: "you called this off — stopped where I was", tabId: tab.id };
+      }
       let state;
       try { state = await withTimeout(mapPage(tab.id), 20000, "mapPage"); }
       catch (e) {

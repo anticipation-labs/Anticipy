@@ -67,10 +67,12 @@
       window.__anticipyMap[idx] = el;
       const r = el.getBoundingClientRect();
       let extra = "";
-      // Native <select> menus render OUTSIDE the page — no synthetic click can
-      // open them. Surface their options here so the model uses the `select`
-      // action instead of clicking a menu it can never see.
-      if (el.tagName === "SELECT") {
+      // Sensitivity FIRST: label() redacts these, and dumping their options
+      // or current value here would leak exactly what it protects — a saved
+      // card expiry or date of birth would reach the model on the same line.
+      if (isSensitive(el)) {
+        extra = " (sensitive field — never fill)";
+      } else if (el.tagName === "SELECT") {
         const opts = [...el.options].slice(0, 12).map((o) =>
           `"${(o.textContent || o.value).trim().slice(0, 40)}"${o.selected ? "*" : ""}`);
         extra = ` (use select action; options: ${opts.join(", ")}${el.options.length > 12 ? ", …" : ""})`;
