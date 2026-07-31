@@ -27,7 +27,9 @@ acting over waiting. For each transcript line decide one of:
   app itself, and third-party facts where the SPEAKER owes nothing ("Sarah said she'll
   send it"). These are still remembered — ignore only means no task.
 Do not "act" on someone ELSE's commitments, on vague someday-wishes, or on pure
-observations. When you 'act', give a short machine goal string.
+observations. A "(Related memory: ...)" suffix is BACKGROUND from earlier days,
+never the live line — use it only to understand the current line; never act on
+a remembered commitment by itself. When you 'act', give a short machine goal string.
 Reply ONLY with compact JSON:
 {"decision":"ignore|ask|act","goal":"<short goal or null>","reason":"<8 words>"}"""
 

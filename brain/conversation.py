@@ -276,6 +276,11 @@ class Conversation:
             return "ambiguous"
         if not job:
             return None
+        # Only a job still waiting on the owner may be released. Without this,
+        # a model-supplied id could re-queue a cancelled/failed/done job — the
+        # resurrection class the 2026-07-31 audit flagged.
+        if job.get("status") != "awaiting_confirm":
+            return None
         fields = {"status": "queued"}
         if changes:
             try:

@@ -29,6 +29,7 @@ struct AnticipyApp: App {
 @MainActor
 final class AnticipySession: ObservableObject {
     @Published var transcript: [TranscriptLine] = []
+    @Published var sessionLines: [SessionLine] = []
     @Published var anticipySays: [BrainEvent] = []
     @Published var jobs: [AgentJob] = []
     @Published var backendReachable = false
@@ -41,6 +42,7 @@ final class AnticipySession: ObservableObject {
 
     private var pollTask: Task<Void, Never>?
     private var bag = Set<AnyCancellable>()
+    private var seenDoneJobIDs = Set<String>()
     let listener = PhoneListener()
 
     var backend: AnticipyBackend {
@@ -65,7 +67,10 @@ final class AnticipySession: ObservableObject {
 
     /// A line Anticipy heard — phone mic, pendant, or typed. Pushed to the
     /// backend where the brain worker ingests it (memory + triage + jobs).
+    /// The line is ALSO kept locally until the server view contains it, so
+    /// spoken words never visually disappear, even if a push fails or lags.
     func heard(_ line: String) async {
+        sessionLines.append(SessionLine(text: line))
         transcript.append(TranscriptLine(text: line, decision: nil))
         try? await backend.pushEvent(kind: "transcript", text: line)
     }
@@ -93,12 +98,36 @@ final class AnticipySession: ObservableObject {
         if let events = try? await b.fetchEvents() {
             // Server view of the stream: heard lines with the brain's verdict,
             // plus everything Anticipy said/texted back.
-            transcript = events
+            var serverLines = events
                 .filter { $0.kind == "transcript" }
                 .reversed()
                 .map { TranscriptLine(text: $0.text ?? "", decision: ($0.decision?.isEmpty == false) ? $0.decision : nil) }
+            let serverTexts = Set(serverLines.map(\.text))
+            // Reconcile the local session view: mark lines the server has
+            // received, carry the brain's verdict back, and buzz once when a
+            // decision lands as "act" so being heard is something you FEEL.
+            for i in sessionLines.indices {
+                if serverTexts.contains(sessionLines[i].text) {
+                    sessionLines[i].received = true
+                    let decision = serverLines.last { $0.text == sessionLines[i].text }?.decision
+                    if decision != nil, sessionLines[i].decision == nil {
+                        sessionLines[i].decision = decision
+                        if decision == "act" { Haptics.engage() }
+                    }
+                }
+            }
+            // Never let a just-spoken line vanish: anything local the server
+            // hasn't echoed yet stays at the end of the feed.
+            serverLines.append(contentsOf: transcript.filter { $0.decision == nil && !serverTexts.contains($0.text) })
+            transcript = serverLines
             anticipySays = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
         }
+        // A quiet buzz the moment finished work lands.
+        let doneIDs = Set(jobs.filter { $0.status == "done" }.map(\.id))
+        if !seenDoneJobIDs.isEmpty, !doneIDs.subtracting(seenDoneJobIDs).isEmpty {
+            Haptics.success()
+        }
+        seenDoneJobIDs = doneIDs
         // Connection health from the extension's heartbeat, not guesswork.
         if let agent = try? await b.fetchAgent(owner: ownerID) {
             agentPaired = agent.paired ?? false
@@ -151,5 +180,14 @@ final class AnticipySession: ObservableObject {
         let text: String
         let decision: String? // ignore | act | ask
         let date = Date()
+    }
+
+    /// One line spoken in the current Listen session, tracked locally from
+    /// the instant it leaves the recognizer until the server confirms it.
+    struct SessionLine: Identifiable {
+        let id = UUID()
+        let text: String
+        var received = false
+        var decision: String?
     }
 }

@@ -120,6 +120,33 @@ struct HomeView: View {
                 }
                 Spacer()
             }
+            // The current session's spoken lines stay visible right here —
+            // words move DOWN into this list when you pause, they are never
+            // deleted. ✓ means Anticipy's brain has them.
+            if session.listener.isListening && !session.sessionLines.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(session.sessionLines.suffix(4)) { line in
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: line.received ? "checkmark.circle.fill" : "circle.dotted")
+                                .font(.caption)
+                                .foregroundStyle(line.received ? Theme.champagne : Theme.gray)
+                                .padding(.top, 2)
+                            Text(line.text)
+                                .font(.footnote)
+                                .foregroundStyle(Theme.sand)
+                            if line.decision == "act" {
+                                Image(systemName: "bolt.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(Theme.champagne)
+                                    .padding(.top, 2)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface.opacity(0.6)))
+            }
             if !session.listener.partial.isEmpty {
                 Text(session.listener.partial)
                     .font(.footnote)

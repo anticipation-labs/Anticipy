@@ -54,7 +54,8 @@ def main() -> None:
     mem_db = os.environ.get("ANTICIPY_MEMORY_DB", ":memory:")
     memory = Memory(path=mem_db, llm=llm if llm.live else None)
     anticipy = Anticipy(llm=llm if llm.live else None, memory=memory, backend_url=PB,
-                        owner_phone=os.environ.get("ANTICIPY_OWNER_PHONE", "owner"))
+                        owner_phone=os.environ.get("ANTICIPY_OWNER_PHONE", "owner"),
+                        owner_id=os.environ.get("ANTICIPY_OWNER_ID", ""))
     # Live texting when Twilio credentials are present; mock otherwise.
     live_sms = all(os.environ.get(k) for k in
                    ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"))
