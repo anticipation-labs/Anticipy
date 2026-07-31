@@ -17,5 +17,10 @@ routerAdd("GET", "/agent/key", (e) => {
   if (!rec) return e.json(403, { error: "not a paired agent" });
   const key = $os.getenv("OPENROUTER_API_KEY");
   if (!key) return e.json(503, { error: "backend has no key configured" });
-  return e.json(200, { openrouter_key: key });
+  // The browser click-loop's brain is server-controlled: raising quality for
+  // every paired agent is one env change, no extension update. Sonnet-class
+  // by default — the cheap tier navigates fine but fumbles last-mile
+  // precision (dropdowns, date pickers), proven live 2026-07-31.
+  const model = $os.getenv("ANTICIPY_BROWSER_MODEL") || "anthropic/claude-sonnet-4.6";
+  return e.json(200, { openrouter_key: key, model: model });
 });

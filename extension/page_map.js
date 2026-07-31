@@ -66,7 +66,18 @@
       const idx = counter++;
       window.__anticipyMap[idx] = el;
       const r = el.getBoundingClientRect();
-      lines.push(`[${idx}] <${role(el)}> ${label(el)} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
+      let extra = "";
+      // Native <select> menus render OUTSIDE the page — no synthetic click can
+      // open them. Surface their options here so the model uses the `select`
+      // action instead of clicking a menu it can never see.
+      if (el.tagName === "SELECT") {
+        const opts = [...el.options].slice(0, 12).map((o) =>
+          `"${(o.textContent || o.value).trim().slice(0, 40)}"${o.selected ? "*" : ""}`);
+        extra = ` (use select action; options: ${opts.join(", ")}${el.options.length > 12 ? ", …" : ""})`;
+      } else if (el.tagName === "INPUT" && ["date", "month", "time", "datetime-local"].includes((el.type || "").toLowerCase())) {
+        extra = ` (${el.type} field — use select action with option "${el.type === "date" ? "YYYY-MM-DD" : el.type === "time" ? "HH:MM" : "value"}"${el.value ? `; currently "${el.value}"` : ""})`;
+      }
+      lines.push(`[${idx}] <${role(el)}> ${label(el)}${extra} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
       if (counter > 150) break;
     }
     const title = document.title;

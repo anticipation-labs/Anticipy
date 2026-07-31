@@ -56,15 +56,17 @@ const activeJobs = new Set();
 // Consumers never paste API keys: once paired, the agent fetches its key from
 // the backend. A manually saved key (popup) still wins, so dev overrides work.
 async function ensureLLMKey() {
-  const { openrouterKey, agentId } = await chrome.storage.local.get(["openrouterKey", "agentId"]);
-  if (openrouterKey) return openrouterKey;
+  const { openrouterKey, agentModel, agentId } = await chrome.storage.local.get(["openrouterKey", "agentModel", "agentId"]);
+  // agentModel === undefined means we've never asked the backend which brain
+  // to use (installs that fetched only a key) — refresh even if keyed.
+  if (openrouterKey && agentModel !== undefined) return openrouterKey;
   if (!agentId) return null;
   try {
     const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
     if (!r.ok) return null;
-    const { openrouter_key } = await r.json();
+    const { openrouter_key, model } = await r.json();
     if (openrouter_key) {
-      await chrome.storage.local.set({ openrouterKey: openrouter_key });
+      await chrome.storage.local.set({ openrouterKey: openrouter_key, agentModel: model || "" });
       return openrouter_key;
     }
   } catch (_) { /* backend unreachable; job path reports honestly */ }
@@ -182,10 +184,12 @@ async function runJobInner(job, params) {
       return;
     }
     try {
+      const { agentModel } = await chrome.storage.local.get(["agentModel"]);
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
         capsolverKey: capsolverKey || null,
         startUrl: params.start_url || undefined,
+        ...(agentModel ? { model: agentModel } : {}),
       });
       // needs_user (login wall, CAPTCHA, refused site) is NOT the same state
       // as awaiting_confirm (owner go-ahead pending) — conflating them lets a

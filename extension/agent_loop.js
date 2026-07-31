@@ -12,6 +12,7 @@ Each step you receive the page URL, title, an indexed list of interactive elemen
 Reply with EXACTLY one JSON object, nothing else:
 {"action":"click","index":N} - click element N
 {"action":"type","index":N,"text":"...","enter":true} - click element N, type text char-by-char, then press Enter (set enter:false to leave it unsubmitted, e.g. an autocomplete box where you must pick a suggestion)
+{"action":"select","index":N,"option":"..."} - set a native dropdown (<combobox> with an options list) to the option whose text or value matches, or set a date/time field (option "YYYY-MM-DD" for dates, "HH:MM" for times). Clicking can NEVER open a native dropdown — its menu lives outside the page. Always use select for them.
 {"action":"navigate","url":"https://..."} - go to a URL
 {"action":"scroll","dy":600} - scroll down (negative = up)
 {"action":"wait"} - page still loading
@@ -391,6 +392,52 @@ export async function runAgentGoal(goal, opts) {
         await cdp(tab.id, "Input.dispatchMouseEvent", { type: "mouseWheel", x: 400, y: 300, deltaX: 0, deltaY: decision.dy || 600 });
         continue;
       }
+      if (decision.action === "select") {
+        // Native <select> menus and date/time inputs are unreachable by
+        // synthetic clicks (their UI renders outside the page) — the exact
+        // "navigated everything fine but couldn't pick from the dropdown /
+        // change the date" failure. Set the value directly and fire the
+        // events frameworks listen for.
+        let out;
+        try {
+          const res = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (i, want) => {
+              const el = window.__anticipyMap[i];
+              if (!el) return "element not found";
+              const fire = () => {
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+                el.dispatchEvent(new Event("change", { bubbles: true }));
+              };
+              if (el.tagName === "SELECT") {
+                const w = String(want).trim().toLowerCase();
+                const opt = [...el.options].find((o) => o.value.toLowerCase() === w)
+                  || [...el.options].find((o) => (o.textContent || "").trim().toLowerCase() === w)
+                  || [...el.options].find((o) => (o.textContent || "").toLowerCase().includes(w));
+                if (!opt) return `no option matching "${want}" — options are: ` +
+                  [...el.options].slice(0, 12).map((o) => (o.textContent || o.value).trim()).join(" | ");
+                el.value = opt.value;
+                fire();
+                return `selected "${(opt.textContent || opt.value).trim()}"`;
+              }
+              if (el.tagName === "INPUT") {
+                el.focus();
+                el.value = String(want).trim();
+                fire();
+                return `set ${el.type || "input"} to "${el.value}"`;
+              }
+              return `element is <${el.tagName.toLowerCase()}>, not a dropdown or input`;
+            },
+            args: [decision.index, decision.option || ""],
+          });
+          out = res?.[0]?.result || "no result";
+        } catch (e) {
+          out = `select failed: ${String(e).slice(0, 100)}`;
+        }
+        history.push(`step ${step}: select ${decision.index} "${decision.option}" -> ${out}`);
+        continue;
+      }
+
       if (decision.action === "click" || decision.action === "type") {
         // Mechanical no-repeat: a third identical action never helps (it's how
         // one link got clicked 25 times, opening 25 duplicate tabs).
