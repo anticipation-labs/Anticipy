@@ -16,6 +16,7 @@ extension AgentJob {
 struct HomeView: View {
     @EnvironmentObject var pendant: PendantManager
     @EnvironmentObject var session: AnticipySession
+    @Environment(\.scenePhase) private var scenePhase
     @State private var typedLine = ""
 
     private var needsOK: [AgentJob] { session.jobs.filter { $0.status == "awaiting_confirm" } }
@@ -78,6 +79,12 @@ struct HomeView: View {
                 }
             }
             .toolbarBackground(Theme.ink, for: .navigationBar)
+            // If listening was on when the app closed or backgrounded, she
+            // picks it back up herself — no button-press chore per open.
+            .onAppear { session.resumeListeningIfWanted() }
+            .onChange(of: scenePhase) { phase in
+                if phase == .active { session.resumeListeningIfWanted() }
+            }
         }
     }
 
@@ -115,9 +122,9 @@ struct HomeView: View {
                 Button {
                     Haptics.engage()
                     if session.listener.isListening {
-                        session.listener.stop()
+                        session.stopListening()
                     } else {
-                        session.listener.start()
+                        session.startListening()
                     }
                 } label: {
                     Label(
@@ -130,10 +137,25 @@ struct HomeView: View {
                     .background(Capsule().fill(session.listener.isListening ? Theme.champagne : Theme.surface))
                     .foregroundStyle(session.listener.isListening ? Theme.ink : Theme.sand)
                 }
-                if session.listener.isListening {
+                if session.listener.isListening && !session.listener.suspended {
                     ProgressView().tint(Theme.champagne)
                 }
                 Spacer()
+            }
+            // Honesty over pretense: when iOS takes the mic (call, Siri,
+            // route change), say so while recovery runs — never glow
+            // "Listening" over a dead microphone.
+            if session.listener.suspended {
+                Label("Mic interrupted — taking it back…", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
+            }
+            // Revoked permission previously no-opped in total silence — the
+            // one state she genuinely cannot fix herself, so she says so.
+            if !session.listener.authorized {
+                Label("I need microphone & speech access — Settings › Anticipy", systemImage: "mic.slash")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
             }
             // The current session's spoken lines stay visible right here —
             // words move DOWN into this list when you pause, they are never

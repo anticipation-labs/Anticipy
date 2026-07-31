@@ -39,6 +39,11 @@ final class AnticipySession: ObservableObject {
 
     @AppStorage("backendURL") var backendURLString = "https://backend-production-61e0a.up.railway.app"
     @AppStorage("ownerID") var ownerID = ""
+    /// Listening is a STANDING state, not a per-open chore: once you turn it
+    /// on, she keeps it on — across backgrounds and relaunches — until you
+    /// turn it off. This is "knowing when to start" without ever surprising
+    /// you: the only hand on the switch is yours.
+    @AppStorage("keepListening") var keepListening = false
 
     private var pollTask: Task<Void, Never>?
     private var bag = Set<AnyCancellable>()
@@ -160,6 +165,22 @@ final class AnticipySession: ObservableObject {
             agentLastSeenSeconds = nil
             agentOnline = false
         }
+    }
+
+    func startListening() {
+        keepListening = true
+        listener.start()
+    }
+
+    func stopListening() {
+        keepListening = false
+        listener.stop()
+    }
+
+    /// Called on launch and on returning to foreground: if listening was on
+    /// when we left, pick it right back up.
+    func resumeListeningIfWanted() {
+        if keepListening, !listener.isListening { listener.start() }
     }
 
     /// Pair with the browser agent using the extension's 6-digit code.
