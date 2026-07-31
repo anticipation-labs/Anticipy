@@ -38,10 +38,37 @@ struct BrainEvent: Decodable, Identifiable, Equatable {
 final class AnticipyBackend {
     var baseURL: URL
     let deviceID: String
+    /// Shared write token, fetched after pairing. Empty until then; the
+    /// backend guard ignores the header until enforcement is switched on.
+    var serviceToken: String
 
-    init(baseURL: URL, deviceID: String) {
+    init(baseURL: URL, deviceID: String, serviceToken: String = "") {
         self.baseURL = baseURL
         self.deviceID = deviceID
+        self.serviceToken = serviceToken
+    }
+
+    private func writeRequest(_ url: URL, method: String) -> URLRequest {
+        var r = URLRequest(url: url)
+        r.httpMethod = method
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !serviceToken.isEmpty {
+            r.setValue(serviceToken, forHTTPHeaderField: "X-Anticipy-Token")
+        }
+        return r
+    }
+
+    /// The paired agent's key bundle also carries this phone's write token.
+    func fetchServiceToken(agentID: String) async -> String? {
+        var comps = URLComponents(url: baseURL.appendingPathComponent("agent/key"),
+                                  resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "agent_id", value: agentID)]
+        guard let url = comps.url,
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        let token = root["service_token"] as? String
+        return (token?.isEmpty == false) ? token : nil
     }
 
     /// Pair this app to a pendant using the short code the pendant registered.
@@ -55,9 +82,7 @@ final class AnticipyBackend {
               let items = root["items"] as? [[String: Any]],
               let id = items.first?["id"] as? String else { return false }
 
-        var patch = URLRequest(url: listURL.appendingPathComponent(id))
-        patch.httpMethod = "PATCH"
-        patch.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
         patch.httpBody = try JSONSerialization.data(withJSONObject: ["owner": owner, "paired": true])
         _ = try await URLSession.shared.data(for: patch)
         return true
@@ -76,9 +101,7 @@ final class AnticipyBackend {
               let items = root["items"] as? [[String: Any]],
               let id = items.first?["id"] as? String else { return false }
 
-        var patch = URLRequest(url: listURL.appendingPathComponent(id))
-        patch.httpMethod = "PATCH"
-        patch.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
         patch.httpBody = try JSONSerialization.data(withJSONObject: ["owner": owner, "paired": true])
         _ = try await URLSession.shared.data(for: patch)
         return true
@@ -140,9 +163,7 @@ final class AnticipyBackend {
         let url = baseURL
             .appendingPathComponent("api/collections/jobs/records")
             .appendingPathComponent(id)
-        var patch = URLRequest(url: url)
-        patch.httpMethod = "PATCH"
-        patch.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var patch = writeRequest(url, method: "PATCH")
         patch.httpBody = try JSONSerialization.data(withJSONObject: ["status": status])
         _ = try await URLSession.shared.data(for: patch)
     }
@@ -159,9 +180,7 @@ final class AnticipyBackend {
     struct BackendError: Error { let status: Int }
 
     private func post(_ path: String, body: [String: Any]) async throws {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var request = writeRequest(baseURL.appendingPathComponent(path), method: "POST")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (_, resp) = try await URLSession.shared.data(for: request)
         // A rejected write is a FAILED write: without this the caller's

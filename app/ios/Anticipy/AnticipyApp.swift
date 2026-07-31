@@ -51,12 +51,15 @@ final class AnticipySession: ObservableObject {
     private var unsent: [String] = []
     let listener = PhoneListener()
 
+    @AppStorage("serviceToken") private var serviceToken = ""
+
     var backend: AnticipyBackend {
         AnticipyBackend(
             baseURL: URL(string: backendURLString) ?? URL(string: "https://backend-production-61e0a.up.railway.app")!,
             // Build-stamped so production events reveal WHICH build spoke —
             // "are you sure it's updated?" gets answered by the data.
-            deviceID: "iphone-b\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")"
+            deviceID: "iphone-b\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")",
+            serviceToken: serviceToken
         )
     }
 
@@ -179,6 +182,12 @@ final class AnticipySession: ObservableObject {
         // Connection health from the extension's heartbeat, not guesswork.
         if let agent = try? await b.fetchAgent(owner: ownerID) {
             agentPaired = agent.paired ?? false
+            // Pick up the shared write token once paired, so this phone keeps
+            // writing when backend enforcement is switched on.
+            if agentPaired, serviceToken.isEmpty,
+               let t = await b.fetchServiceToken(agentID: agent.agent_id) {
+                serviceToken = t
+            }
             if let seen = agent.last_seen, let date = Self.parsePBDate(seen) {
                 let secs = max(0, Int(Date().timeIntervalSince(date)))
                 agentLastSeenSeconds = secs

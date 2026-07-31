@@ -17,6 +17,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
     BASE = (changes.backendUrl.newValue || DEFAULT_BASE).replace(/\/$/, "");
   }
 });
+// Every write carries the service token when the backend has one; the guard
+// hook ignores it until enforcement is switched on, so this is safe to ship
+// ahead of the flip.
+async function writeHeaders() {
+  const { serviceToken } = await chrome.storage.local.get(["serviceToken"]);
+  const h = { "Content-Type": "application/json" };
+  if (serviceToken) h["X-Anticipy-Token"] = serviceToken;
+  return h;
+}
+
 const POLL_SECONDS = 5;
 const HEARTBEAT_SECONDS = 10;
 const STALE_JOB_MS = 2 * 60 * 1000; // running w/ no heartbeat -> requeued
@@ -33,7 +43,7 @@ async function ensureRegistered() {
   const pairCode = String(Math.floor(100000 + Math.random() * 900000));
   const r = await fetch(`${BASE}/api/collections/agents/records`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await writeHeaders(),
     body: JSON.stringify({
       agent_id: agentId,
       pair_code: pairCode,
@@ -64,9 +74,13 @@ async function ensureLLMKey() {
   try {
     const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
     if (!r.ok) return null;
-    const { openrouter_key, model } = await r.json();
+    const { openrouter_key, model, service_token } = await r.json();
     if (openrouter_key) {
-      await chrome.storage.local.set({ openrouterKey: openrouter_key, agentModel: model || "" });
+      await chrome.storage.local.set({
+        openrouterKey: openrouter_key,
+        agentModel: model || "",
+        serviceToken: service_token || "",
+      });
       return openrouter_key;
     }
   } catch (_) { /* backend unreachable; job path reports honestly */ }
@@ -81,7 +95,7 @@ async function heartbeat() {
   }
   const r = await fetch(`${BASE}/api/collections/agents/records/${reg.recordId}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: await writeHeaders(),
     body: JSON.stringify({ last_seen: new Date().toISOString() }),
   });
   if (!r.ok) return null;
@@ -157,7 +171,7 @@ async function claimJob() {
 async function updateJob(id, fields) {
   await fetch(`${BASE}/api/collections/jobs/records/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: await writeHeaders(),
     body: JSON.stringify(fields),
   });
 }
@@ -275,7 +289,7 @@ async function openRealtime() {
       clientId = JSON.parse(e.data).clientId;
       await fetch(`${BASE}/api/realtime`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await writeHeaders(),
         body: JSON.stringify({ clientId, subscriptions: ["jobs"] }),
       });
     });

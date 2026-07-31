@@ -22,5 +22,11 @@ routerAdd("GET", "/agent/key", (e) => {
   // by default — the cheap tier navigates fine but fumbles last-mile
   // precision (dropdowns, date pickers), proven live 2026-07-31.
   const model = $os.getenv("ANTICIPY_BROWSER_MODEL") || "anthropic/claude-sonnet-4.6";
-  return e.json(200, { openrouter_key: key, model: model });
+  // The write token rides along so a paired agent can keep writing once the
+  // guard hook is switched on — no extension update needed at flip time.
+  return e.json(200, {
+    openrouter_key: key,
+    model: model,
+    service_token: $os.getenv("ANTICIPY_SERVICE_TOKEN") || "",
+  });
 });
