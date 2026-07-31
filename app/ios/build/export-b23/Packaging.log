@@ -1,0 +1,143 @@
+2026-07-31 15:33:22 +0000 [MT] Initial pipeline context: <IDEDistributionProcessingPipelineContext: 0xa4476aa00; archive(resolved)="<IDEArchive: 0xa4201bd40>", distributionTask(resolved)="2", distributionDestination(resolved)="1", distributionMethod(resolved)="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team(resolved)="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	Chain (15, self inclusive):
+	<IDEDistributionProcessingPipelineContext: 0xa4476aa00; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionProcessingPipelineContext: 0xa4476a700; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42236800; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42236580; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42236300; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42236080; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42235e00; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42235b80; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42235900; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42234a00; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42234780; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42234500; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="<IDEProvisioningBasicTeam: 0xa422edfc0; teamID='49T86P9XGW', teamName='(null)'>">
+	<IDEDistributionContext: 0xa42234280; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="(null)">
+	<IDEDistributionContext: 0xa42234000; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="<IDEDistributionMethodiOSAppStoreDistribution: 0xa4293b4b0>", team="(null)">
+	<IDEDistributionContext: 0x10386f850; archive = "<IDEArchive: 0xa4201bd40>", distributionMethod="(null)", team="(null)">
+</IDEDistributionProcessingPipelineContext: 0xa4476aa00>
+2026-07-31 15:33:22 +0000 [MT] Processing step: IDEDistributionCreateDestRootStep
+2026-07-31 15:33:22 +0000 [MT] Processing step: IDEDistributionCopyItemStep
+2026-07-31 15:33:22 +0000 [MT] Running /usr/bin/ditto '-V' '/Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app' '/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Root/Payload/Anticipy.app'
+2026-07-31 15:33:22 +0000  >>> Copying /Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app 
+2026-07-31 15:33:22 +0000  copying file ./_CodeSignature/CodeResources ... 
+2026-07-31 15:33:22 +0000  2775 bytes for ./_CodeSignature/CodeResources
+2026-07-31 15:33:22 +0000  copying file ./Anticipy ... 
+2026-07-31 15:33:22 +0000  530688 bytes for ./Anticipy
+2026-07-31 15:33:22 +0000  copying file ./AppIcon60x60@2x.png ... 
+2026-07-31 15:33:22 +0000  2876 bytes for ./AppIcon60x60@2x.png
+2026-07-31 15:33:22 +0000  copying file ./Assets.car ... 
+2026-07-31 15:33:22 +0000  44248 bytes for ./Assets.car
+2026-07-31 15:33:22 +0000  copying file ./AppIcon76x76@2x~ipad.png ... 
+2026-07-31 15:33:22 +0000  3618 bytes for ./AppIcon76x76@2x~ipad.png
+2026-07-31 15:33:22 +0000  copying file ./embedded.mobileprovision ... 
+2026-07-31 15:33:22 +0000  12088 bytes for ./embedded.mobileprovision
+2026-07-31 15:33:22 +0000  copying file ./Info.plist ... 
+2026-07-31 15:33:22 +0000  1736 bytes for ./Info.plist
+2026-07-31 15:33:22 +0000  copying file ./PkgInfo ... 
+2026-07-31 15:33:22 +0000  8 bytes for ./PkgInfo
+2026-07-31 15:33:22 +0000 [MT] /usr/bin/ditto exited with 0
+2026-07-31 15:33:22 +0000 [MT] Processing step: IDEDistributionEmbedProfileStep
+2026-07-31 15:33:22 +0000 [MT] Processing step: IDEDistributionInfoPlistStep
+2026-07-31 15:33:22 +0000 [MT] Skipping setting DTXcodeBuildDistribution because toolsBuildVersionName was nil.
+2026-07-31 15:33:22 +0000 [MT] Processing step: IDEDistributionItemRemovalStep
+2026-07-31 15:33:22 +0000 [MT] Processing step: IDEDistributionAppThinningPlistStep
+2026-07-31 15:33:22 +0000 [MT] Skipping step: IDEDistributionAppThinningPlistStep because it said so
+2026-07-31 15:33:22 +0000 [MT] Processing step: IDEDistributionSymbolsStep
+2026-07-31 15:33:23 +0000 [MT] Writing /var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Symbols/0DF5BE12-891B-3EE6-8FE4-43A49EACBB4D.symbols
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionCopyAppleProvidedContentStep
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionAppThinningStep
+2026-07-31 15:33:23 +0000 [MT] Skipping step: IDEDistributionAppThinningStep because it said so
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionArchThinningStep
+2026-07-31 15:33:23 +0000 [MT] Archs to thin for item /Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app are []
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionODRStep
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionStripXattrsStep
+2026-07-31 15:33:23 +0000 [MT] Skipping stripping extended attributes because the codesign step will strip them.
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionCodesignStep
+2026-07-31 15:33:23 +0000 [MT] Entitlements for <IDEDistributionItem: 0xa448170c0; bundleID='ai.anticipy.app', path='<DVTFilePath:0xa44815740:'/Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0xa44817000; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0xa42b73d80; name='iPhone Distribution: Omar Ebrahim (49T86P9XGW)', hash='CD9B570D33E2BB12B0938EAC1AE6F6100A6BDD94', serialNumber='5DB18151D6DF8E5725CCE97DCFA2318E', certificateKinds='(
+    "1.2.840.113635.100.6.1.4"
+), issueDate='2026-07-21 01:21:16 +0000''>', entitlements='{
+    "application-identifier" = "49T86P9XGW.ai.anticipy.app";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = 49T86P9XGW;
+    "get-task-allow" = 0;
+}', teamID='49T86P9XGW', identifier='ai.anticipy.app', executablePath='<DVTFilePath:0xa44816a60:'/Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app/Anticipy'>', hardenedRuntime='0'>'>: {
+    "application-identifier" = "49T86P9XGW.ai.anticipy.app";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = 49T86P9XGW;
+    "get-task-allow" = 0;
+}
+2026-07-31 15:33:23 +0000 [MT] Associated App Clip Identifiers Filter: Skipping because "com.apple.developer.associated-appclip-app-identifiers" is not present
+2026-07-31 15:33:23 +0000 [MT] Entitlements for <IDEDistributionItem: 0xa448170c0; bundleID='ai.anticipy.app', path='<DVTFilePath:0xa44815740:'/Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0xa44817000; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0xa42230000; name='iPhone Distribution: Omar Ebrahim (49T86P9XGW)', hash='CD9B570D33E2BB12B0938EAC1AE6F6100A6BDD94', serialNumber='5DB18151D6DF8E5725CCE97DCFA2318E', certificateKinds='(
+    "1.2.840.113635.100.6.1.4"
+), issueDate='2026-07-21 01:21:16 +0000''>', entitlements='{
+    "application-identifier" = "49T86P9XGW.ai.anticipy.app";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = 49T86P9XGW;
+    "get-task-allow" = 0;
+}', teamID='49T86P9XGW', identifier='ai.anticipy.app', executablePath='<DVTFilePath:0xa44816a60:'/Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app/Anticipy'>', hardenedRuntime='0'>'> are: {
+    "application-identifier" = "49T86P9XGW.ai.anticipy.app";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = 49T86P9XGW;
+    "get-task-allow" = 0;
+}
+2026-07-31 15:33:23 +0000 [MT] Writing entitlements for <IDEDistributionItem: 0xa448170c0; bundleID='ai.anticipy.app', path='<DVTFilePath:0xa44815740:'/Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app'>', codeSigningInfo='<_DVTCodeSigningInformation_Path: 0xa44817000; isSigned='1', isAdHocSigned='0', signingCertificate='<DVTSigningCertificate: 0xa42230000; name='iPhone Distribution: Omar Ebrahim (49T86P9XGW)', hash='CD9B570D33E2BB12B0938EAC1AE6F6100A6BDD94', serialNumber='5DB18151D6DF8E5725CCE97DCFA2318E', certificateKinds='(
+    "1.2.840.113635.100.6.1.4"
+), issueDate='2026-07-21 01:21:16 +0000''>', entitlements='{
+    "application-identifier" = "49T86P9XGW.ai.anticipy.app";
+    "beta-reports-active" = 1;
+    "com.apple.developer.team-identifier" = 49T86P9XGW;
+    "get-task-allow" = 0;
+}', teamID='49T86P9XGW', identifier='ai.anticipy.app', executablePath='<DVTFilePath:0xa44816a60:'/Users/omarebrahim/Anticipy-pendant/app/ios/build/Anticipy-b23.xcarchive/Products/Applications/Anticipy.app/Anticipy'>', hardenedRuntime='0'>'> to: /var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/entitlements~~~B92TpU
+2026-07-31 15:33:23 +0000 [MT] invoking codesign: <NSConcreteTask: 0xa44c3ef30; launchPath='/usr/bin/codesign', arguments='(
+    "-f",
+    "-s",
+    CD9B570D33E2BB12B0938EAC1AE6F6100A6BDD94,
+    "--entitlements",
+    "/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/entitlements~~~B92TpU",
+    "--preserve-metadata=identifier,flags,runtime,launch-constraints,library-constraints",
+    "--generate-entitlement-der",
+    "--strip-disallowed-xattrs",
+    "-vvv",
+    "/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Root/Payload/Anticipy.app"
+)'>
+2026-07-31 15:33:23 +0000 [MT] codesign output: /var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Root/Payload/Anticipy.app: replacing existing signature
+/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Root/Payload/Anticipy.app: signed app bundle with Mach-O thin (arm64) [ai.anticipy.app]
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionZipODRItemStep
+2026-07-31 15:33:23 +0000 [MT] Skipping step: IDEDistributionZipODRItemStep because it said so
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionCreateIPAStep
+2026-07-31 15:33:23 +0000 [MT] Running /usr/bin/rsync '-8aPhhE' '/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Symbols' '--link-dest' '/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1' '/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Root'
+2026-07-31 15:33:23 +0000  Symbols/
+._Symbols
+            163 170%  714.06KB/s   00:00:00 (xfer#1, to-check=0/4)
+2026-07-31 15:33:23 +0000  Symbols/0DF5BE12-891B-3EE6-8FE4-43A49EACBB4D.symbols
+Symbols/._0DF5BE12-891B-3EE6-8FE4-43A49EACBB4D.symbols
+            163   0%  312.72KB/s   00:00:00 (xfer#2, to-check=2/4)
+2026-07-31 15:33:23 +0000 [MT] /usr/bin/rsync exited with 0
+2026-07-31 15:33:23 +0000 [MT] Running /usr/bin/ditto '-V' '-c' '-k' '--norsrc' '/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Root' '/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Packages/Anticipy.ipa'
+2026-07-31 15:33:23 +0000  >>> Copying /var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Root 
+2026-07-31 15:33:23 +0000  copying file ./Payload/Anticipy.app/_CodeSignature/CodeResources ... 
+2026-07-31 15:33:23 +0000  2775 bytes for ./Payload/Anticipy.app/_CodeSignature/CodeResources
+2026-07-31 15:33:23 +0000  copying file ./Payload/Anticipy.app/Anticipy ... 
+2026-07-31 15:33:23 +0000  530688 bytes for ./Payload/Anticipy.app/Anticipy
+2026-07-31 15:33:23 +0000  copying file ./Payload/Anticipy.app/AppIcon60x60@2x.png ... 
+2026-07-31 15:33:23 +0000  2876 bytes for ./Payload/Anticipy.app/AppIcon60x60@2x.png
+2026-07-31 15:33:23 +0000  copying file ./Payload/Anticipy.app/Assets.car ... 
+2026-07-31 15:33:23 +0000  44248 bytes for ./Payload/Anticipy.app/Assets.car
+2026-07-31 15:33:23 +0000  copying file ./Payload/Anticipy.app/AppIcon76x76@2x~ipad.png ... 
+2026-07-31 15:33:23 +0000  3618 bytes for ./Payload/Anticipy.app/AppIcon76x76@2x~ipad.png
+2026-07-31 15:33:23 +0000  copying file ./Payload/Anticipy.app/embedded.mobileprovision ... 
+2026-07-31 15:33:23 +0000  12088 bytes for ./Payload/Anticipy.app/embedded.mobileprovision
+2026-07-31 15:33:23 +0000  copying file ./Payload/Anticipy.app/Info.plist ... 
+2026-07-31 15:33:23 +0000  1736 bytes for ./Payload/Anticipy.app/Info.plist
+2026-07-31 15:33:23 +0000  copying file ./Payload/Anticipy.app/PkgInfo ... 
+2026-07-31 15:33:23 +0000  8 bytes for ./Payload/Anticipy.app/PkgInfo
+2026-07-31 15:33:23 +0000  copying file ./Symbols/0DF5BE12-891B-3EE6-8FE4-43A49EACBB4D.symbols ... 
+2026-07-31 15:33:23 +0000  1385044 bytes for ./Symbols/0DF5BE12-891B-3EE6-8FE4-43A49EACBB4D.symbols
+2026-07-31 15:33:23 +0000 [MT] /usr/bin/ditto exited with 0
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionAppStoreInformationStep
+2026-07-31 15:33:23 +0000 [MT] Skipping step: IDEDistributionAppStoreInformationStep because it said so
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionGenerateProcessedDistributionItems
+2026-07-31 15:33:23 +0000 [MT] IDEDistributionItem init <DVTFilePath:0xa44abc240:'/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/XcodeDistPipeline.~~~6x00k1/Root/Payload/Anticipy.app'>
+2026-07-31 15:33:23 +0000 [MT] Processing step: IDEDistributionCreateManifestStep
+2026-07-31 15:33:23 +0000 [MT] Skipping step: IDEDistributionCreateManifestStep because it said so

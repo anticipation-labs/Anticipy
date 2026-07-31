@@ -34,6 +34,14 @@ final class PhoneListener: NSObject, ObservableObject {
     private var silenceFlush: DispatchWorkItem?
     private var watchdog: Timer?
     private var observersInstalled = false
+    // Liveness: the recognizer can stall SILENTLY — task alive, engine
+    // running, zero callbacks ever again ("goes deaf ~5s in"). Track when
+    // audio last flowed and when results last arrived so the watchdog can
+    // tell a healthy quiet room from a dead recognizer.
+    private var lastBufferAt = Date()
+    private var lastResultAt = Date()
+    private var requestBornAt = Date()
+    private var bufferTick = 0
 
     /// Apple's recognizer rarely finalizes on its own mid-stream; left alone,
     /// one task accumulates sentences until it times out (~1 min) and the
@@ -68,6 +76,8 @@ final class PhoneListener: NSObject, ObservableObject {
         guard !isListening else { return }
         installObserversOnce()
         isListening = true
+        lastBufferAt = Date()
+        lastResultAt = Date()
         configureAndStartEngine()
         startRecognition()
         startWatchdog()
@@ -91,7 +101,13 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.request?.append(buffer)
+            guard let self else { return }
+            self.request?.append(buffer)
+            // Cheap liveness beacon (~3x/sec, not per-buffer) off the audio thread.
+            self.bufferTick &+= 1
+            if self.bufferTick % 32 == 0 {
+                DispatchQueue.main.async { self.lastBufferAt = Date() }
+            }
         }
         engine.prepare()
         try? engine.start()
@@ -150,13 +166,44 @@ final class PhoneListener: NSObject, ObservableObject {
     }
 
     /// Last line of defense: whatever stalled without a notification —
-    /// engine dead, recognition task gone — comes back within seconds.
+    /// engine dead, audio not flowing, recognition task gone or gone DEAF —
+    /// comes back within seconds. Listening ends when the user ends it,
+    /// never when a component quietly dies.
     private func startWatchdog() {
         watchdog?.invalidate()
         let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in
             guard let self, self.isListening else { return }
             if !self.engine.isRunning { self.recoverAudio(); return }
-            if self.task == nil, self.recognizer?.isAvailable != false { self.startRecognition() }
+            if self.task == nil {
+                if self.recognizer?.isAvailable != false { self.startRecognition() }
+                return
+            }
+            let now = Date()
+            // Engine claims to run but no audio has flowed: rebuild the chain.
+            if now.timeIntervalSince(self.lastBufferAt) > 6 { self.recoverAudio(); return }
+            // Mid-utterance stall: words on screen, recognizer silent for 8s
+            // (a healthy one streams partials continuously). Salvage the
+            // words ourselves and hand the audio to a fresh recognizer.
+            if !self.partial.isEmpty, now.timeIntervalSince(self.lastResultAt) > 8 {
+                self.silenceFlush?.cancel()
+                let pending = self.partial.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.partial = ""
+                if !pending.isEmpty { self.onLine?(pending) }
+                self.task?.cancel()
+                self.task = nil
+                self.request = nil
+                self.startRecognition()
+                return
+            }
+            // Quiet-room rotation: never let one recognition task grow old
+            // enough to hit internal limits — swap it out during silence.
+            if self.partial.isEmpty, now.timeIntervalSince(self.requestBornAt) > 60 {
+                self.task?.cancel()
+                self.task = nil
+                self.request = nil
+                self.startRecognition()
+                return
+            }
             self.suspended = !self.engine.isRunning
         }
         // .common, not .default: a timer in .default never fires while the
@@ -175,6 +222,8 @@ final class PhoneListener: NSObject, ObservableObject {
         if recognizer?.supportsOnDeviceRecognition == true {
             req.requiresOnDeviceRecognition = true
         }
+        requestBornAt = Date()
+        lastResultAt = Date()
         request = req
         task = recognizer?.recognitionTask(with: req) { [weak self] result, error in
             guard let self else { return }
@@ -185,6 +234,7 @@ final class PhoneListener: NSObject, ObservableObject {
                     // shared state — a finalized/superseded task's late
                     // callbacks must never clobber or double-emit.
                     guard self.request === req else { return }
+                    self.lastResultAt = Date()
                     // On-device recognition sometimes RESETS its window mid-
                     // utterance: the running text suddenly holds only the
                     // words after the reset, and everything before it would
@@ -219,6 +269,7 @@ final class PhoneListener: NSObject, ObservableObject {
                 // screen is still real speech — emit it, never drop it.
                 DispatchQueue.main.async {
                     guard self.request === req else { return }
+                    self.lastResultAt = Date()
                     self.silenceFlush?.cancel()
                     let pending = self.partial.trimmingCharacters(in: .whitespacesAndNewlines)
                     self.partial = ""
