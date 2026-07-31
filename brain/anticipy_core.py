@@ -388,8 +388,12 @@ class Anticipy:
         fresh = [l for l in loops if l["id"] not in reached]
         if not fresh:
             return None
+        from .llm import TZ
+        from datetime import datetime as _dt
         payload = {
-            "local_time": time.strftime("%A %H:%M", time.localtime(ts)),
+            # Owner-local, not container-UTC — must agree with the grounded
+            # now-line every prompt already carries.
+            "local_time": _dt.fromtimestamp(ts, TZ).strftime("%A %H:%M"),
             "open_loops": [
                 {"id": l["id"], "what": l["what"],
                  "age_hours": round((ts - l["ts"]) / 3600, 1)}

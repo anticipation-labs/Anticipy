@@ -11,13 +11,26 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import httpx
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Cheap, fast triage model per the product spec (Omar picked these).
 DEFAULT_MODEL = os.environ.get("ANTICIPY_MODEL", "deepseek/deepseek-v3.2")
+
+# The owner's timezone: every prompt is grounded in the current local moment.
+TZ = ZoneInfo(os.environ.get("ANTICIPY_TZ", "America/Vancouver"))
+
+
+def now_line() -> str:
+    """The one sentence that stops date hallucination. A model with no clock
+    guessed 'this coming Sunday, July 28th' — a date in the PAST — in a live
+    scheduling thread. Humans know what day it is; so does every prompt."""
+    return datetime.now(TZ).strftime(
+        "Right now it is %A, %B %-d, %Y, %-I:%M %p %Z.")
 
 
 @dataclass
@@ -37,6 +50,9 @@ class LLM:
         return bool(self.api_key)
 
     def chat(self, system: str, user: str, temperature: float = 0.1) -> LLMResult:
+        # Grounded at the client so EVERY caller — triage, replies, voice,
+        # briefings, the clock — knows the current local date and time.
+        system = f"{now_line()}\n\n{system}"
         if self.live:
             return self._openrouter(system, user, temperature)
         return LLMResult(text=self._heuristic(system, user), used_model="heuristic", mode="heuristic")

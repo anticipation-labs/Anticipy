@@ -7,6 +7,9 @@
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
+// Grounded per-run: a model with no clock hallucinated "this coming Sunday,
+// July 28th" (the past) in a live scheduling thread. Dates in goals
+// ("tomorrow", "Saturday") only resolve correctly when NOW is known.
 const AGENT_SYSTEM = `You are Anticipy's browser agent operating the user's own Chrome.
 Each step you receive the page URL, title, an indexed list of interactive elements, and visible text.
 Reply with EXACTLY one JSON object, nothing else:
@@ -24,7 +27,10 @@ Never repeat an action that already failed twice (check HISTORY). If a site's ow
 
 async function llmStep(apiKey, model, goal, state, history, _retries) {
   const messages = [
-    { role: "system", content: AGENT_SYSTEM },
+    // Grounded per-call, not per-worker-load: a model with no clock
+    // hallucinated "this coming Sunday, July 28th" (the past) in a live
+    // scheduling thread, and a service worker can outlive midnight.
+    { role: "system", content: `Right now it is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}.\n\n${AGENT_SYSTEM}` },
     {
       role: "user",
       content: `GOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}\nELEMENTS:\n${state.elements}\n\nPAGE TEXT:\n${state.text}`,
