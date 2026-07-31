@@ -6,8 +6,9 @@ Anticipy is the orchestrator AND its personality. One mind that:
 - delegates: browser work to the action arm (extension / browser-use via the
   job queue), texts and calls to the voice arm (Twilio),
 - tracks every open loop (commitment) until it's done,
-- speaks in the first person: "How goes it today? I overheard X — I'm
-  handling it. I'll ask before anything goes out."
+- speaks in the first person: "I caught X — I'm handling it. I'll ask
+  before anything goes out." ("caught"/"heard", never "overheard" — she's
+  a partner, not an eavesdropper)
 
 Nothing irreversible executes without confirmation — that gate lives in the
 job queue, outside any model.
@@ -46,13 +47,15 @@ def is_consequential(goal: str, params: dict | None = None) -> bool:
 
 BRIEFING_SYSTEM = f"""You are {NAME}, the person's personal assistant who lives
 in their Anticipy pendant. You are warm, brief, and competent — a trusted
-chief-of-staff, never a robot. Given what you overheard today and your open
+chief-of-staff, never a robot. Given what you heard today and your open
 to-dos, write a 2-4 sentence spoken-style briefing in the first person, e.g.:
-"How goes it today? I overheard you promised Sarah the pitch deck — I've got a
-draft ready and I'll send it the second you say so." Never invent things that
-aren't in the notes. Every item carries a status — only say something is done
-if its status is "done"; declined or cancelled items were NOT done; anything
-else is at most "in progress" or "waiting on you". No emojis, no bullets."""
+"You promised Sarah the pitch deck — I've got a draft ready and I'll send it
+the second you say so." Open naturally and vary it — never a canned greeting,
+never the same opening twice. Say "heard" or "caught", never "overheard" —
+you're their partner, not an eavesdropper. Never invent things that aren't in
+the notes. Every item carries a status — only say something is done if its
+status is "done"; declined or cancelled items were NOT done; anything else is
+at most "in progress" or "waiting on you". No emojis, no bullets."""
 
 
 @dataclass
@@ -86,6 +89,7 @@ class Anticipy:
         self.conversation = conversation
         self.loops: list[LoopRecord] = []
         self.session_start = time.time()
+        self._prev: Optional[tuple[str, float]] = None  # (last ignored line, ts)
 
     # ------------------------------------------------------------ hearing
 
@@ -120,10 +124,17 @@ class Anticipy:
         # one — live incident: the single word "Tomorrow" plus a stale memory
         # spawned a full draft-email job. Fragments are remembered, never acted on.
         if len(line.split()) < 2:
+            self._prev = (line, time.time())
             return {"memory": mem, "decision": Decision(
                 decision="ignore", goal=None, reason="fragment, no intent"),
                 "anticipy_says": None}
-        decision = self._decide(line, mem)
+        # Split-thought context is only the last line, only if it's recent
+        # (people pause seconds, not hours), and only if it wasn't already
+        # acted on — an acted line re-fed as context mints duplicate jobs.
+        prev = self._prev
+        prev_line = prev[0] if prev and time.time() - prev[1] < 120 else None
+        decision = self._decide(line, mem, prev_line=prev_line)
+        self._prev = None if decision.decision in ("act", "ask") else (line, time.time())
         handled = None
 
         if decision.decision == "act" and decision.goal:
@@ -144,10 +155,13 @@ class Anticipy:
             self.loops.append(loop)
             handled = self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
-            # texts the owner — their go-ahead releases the held job.
+            # texts the owner — their go-ahead releases the held job. The SMS
+            # carries ONE approval sentence, not the app card's reassurance
+            # plus another ("Nothing goes out… Say the word…" reads twitchy).
             if held:
+                pretty = decision.goal.replace("_", " ").strip()
                 self.notify_owner(
-                    f"{handled} Say the word and it goes, or tell me what to change.")
+                    f"I caught that — on it: {pretty}. Say the word and it goes, or tell me what to change.")
         elif decision.decision == "ask":
             handled = f"Quick question — {decision.reason or 'want me to take this on?'}"
             self.notify_owner(handled)
@@ -158,13 +172,18 @@ class Anticipy:
             "anticipy_says": handled,
         }
 
-    def _decide(self, line: str, mem: dict) -> Decision:
+    def _decide(self, line: str, mem: dict, prev_line: Optional[str] = None) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
             prompt = line
+            # People think across pauses: "I'll send the Devon invoice" …
+            # "tomorrow morning". The previous line rides along as background
+            # so a split thought still triages as one thought.
+            if prev_line:
+                prompt = f"{prompt}\n(Previous line, background: {prev_line})"
             if context:
                 notes = "; ".join(f["fact"] for f in context)
-                prompt = f"{line}\n(Related memory: {notes})"
+                prompt = f"{prompt}\n(Related memory: {notes})"
             return self.brain.triage(prompt)
         # Deterministic offline path: a fresh commitment means act.
         if mem.get("commitment"):
@@ -175,10 +194,13 @@ class Anticipy:
     # ------------------------------------------------------------ speaking
 
     def say_handling(self, goal: str, needs_ok: bool) -> str:
-        pretty = goal.replace("_", " ")
+        # Goal strings are free-form model output ("prepare Devon invoice
+        # email") — jamming them after "the" reads broken ("preparing the
+        # prepare Devon invoice email"). A colon keeps any goal grammatical.
+        pretty = goal.replace("_", " ").strip()
         if needs_ok:
-            return f"I overheard that — I'm preparing the {pretty} now. Nothing goes out until you say so."
-        return f"On it — I'm handling the {pretty}."
+            return f"I caught that — on it: {pretty}. Nothing goes out until you say so."
+        return f"On it: {pretty}."
 
     def _answer_from_memory(self, question: str) -> Optional[str]:
         """Answer an owner question straight from the graph. Returns None when
@@ -246,7 +268,7 @@ class Anticipy:
         loops = facts["open_loops"]
         parts = [f"How goes it today? I'm {NAME}."]
         if heard:
-            parts.append(f"I overheard {len(heard)} thing{'s' if len(heard) != 1 else ''} worth remembering.")
+            parts.append(f"I caught {len(heard)} thing{'s' if len(heard) != 1 else ''} worth remembering.")
         if loops:
             what = "; ".join(l["what"] for l in loops[:3])
             parts.append(f"I'm handling: {what}. I'll ask before anything goes out.")

@@ -23,7 +23,9 @@ final class PhoneListener: NSObject, ObservableObject {
     /// one task accumulates sentences until it times out (~1 min) and the
     /// error path used to drop everything on the floor. Instead, treat a pause
     /// this long as the end of an utterance and force a final result.
-    private let utteranceGap: TimeInterval = 1.8
+    /// 2.6s, not shorter: people pause mid-thought ("I'll send the invoice…
+    /// tomorrow"), and chopping there splits one intent into fragments.
+    private let utteranceGap: TimeInterval = 2.6
 
     func start() {
         SFSpeechRecognizer.requestAuthorization { [weak self] auth in

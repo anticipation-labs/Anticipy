@@ -70,9 +70,25 @@ final class AnticipySession: ObservableObject {
     /// The line is ALSO kept locally until the server view contains it, so
     /// spoken words never visually disappear, even if a push fails or lags.
     func heard(_ line: String) async {
+        // A typed line deserves an instant felt ack. Ambient listening does
+        // NOT — buzzing on every finalized utterance all day is a phone that
+        // won't stop twitching; the meaningful buzz is the act-verdict one.
+        if !listener.isListening { Haptics.tap() }
         sessionLines.append(SessionLine(text: line))
-        transcript.append(TranscriptLine(text: line, decision: nil))
+        transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line, decision: nil))
         try? await backend.pushEvent(kind: "transcript", text: line)
+    }
+
+    /// Anticipy's latest spoken line, only while it's actually fresh — a
+    /// remark from an hour ago rereading itself forever feels haunted.
+    /// An unparseable date shows the line rather than silently killing the
+    /// feature on a backend format drift; only a parsed-and-stale date hides it.
+    var freshAnticipySays: String? {
+        guard let ev = anticipySays.first,
+              let text = ev.text, !text.isEmpty else { return nil }
+        if let date = Self.parsePBDate(ev.created),
+           Date().timeIntervalSince(date) >= 15 * 60 { return nil }
+        return text
     }
 
     func startPolling() {
@@ -101,7 +117,7 @@ final class AnticipySession: ObservableObject {
             var serverLines = events
                 .filter { $0.kind == "transcript" }
                 .reversed()
-                .map { TranscriptLine(text: $0.text ?? "", decision: ($0.decision?.isEmpty == false) ? $0.decision : nil) }
+                .map { TranscriptLine(id: $0.id, text: $0.text ?? "", decision: ($0.decision?.isEmpty == false) ? $0.decision : nil) }
             let serverTexts = Set(serverLines.map(\.text))
             // Reconcile the local session view: mark lines the server has
             // received, carry the brain's verdict back, and buzz once when a
@@ -175,11 +191,14 @@ final class AnticipySession: ObservableObject {
         await refresh()
     }
 
-    struct TranscriptLine: Identifiable {
-        let id = UUID()
+    /// Identity is the server event id (or a stable local id until the
+    /// server echoes the line) so the 3s poll rebuild compares EQUAL for
+    /// unchanged content — the feed animates only what actually changed
+    /// instead of cross-fading wholesale every refresh.
+    struct TranscriptLine: Identifiable, Equatable {
+        let id: String
         let text: String
         let decision: String? // ignore | act | ask
-        let date = Date()
     }
 
     /// One line spoken in the current Listen session, tracked locally from

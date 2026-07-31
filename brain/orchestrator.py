@@ -29,7 +29,10 @@ acting over waiting. For each transcript line decide one of:
 Do not "act" on someone ELSE's commitments, on vague someday-wishes, or on pure
 observations. A "(Related memory: ...)" suffix is BACKGROUND from earlier days,
 never the live line — use it only to understand the current line; never act on
-a remembered commitment by itself. When you 'act', give a short machine goal string.
+a remembered commitment by itself. A "(Previous line, background: ...)" suffix
+is the immediately preceding utterance — same rule: it helps you interpret the
+current line, and is never itself a reason to act (it was already handled).
+When you 'act', give a short machine goal string.
 Reply ONLY with compact JSON:
 {"decision":"ignore|ask|act","goal":"<short goal or null>","reason":"<8 words>"}"""
 

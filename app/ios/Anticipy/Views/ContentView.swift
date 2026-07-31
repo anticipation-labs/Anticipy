@@ -1,5 +1,16 @@
 import SwiftUI
 
+extension AgentJob {
+    /// Goals are free-form model strings ("prepare Devon invoice email").
+    /// Show them as a sentence — capitalize the first word, leave the rest
+    /// human — instead of Title Casing Every Single Word.
+    var humanGoal: String {
+        let s = goal.replacingOccurrences(of: "_", with: " ")
+        guard let first = s.first else { return s }
+        return first.uppercased() + s.dropFirst()
+    }
+}
+
 /// Home = the proactive feed: what Anticipy heard, what it's handling,
 /// what needs your OK, and what's done — plus live connection health.
 struct HomeView: View {
@@ -43,6 +54,10 @@ struct HomeView: View {
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 30)
+                    // New cards ease in instead of teleporting — the feed
+                    // should feel alive, not like a page reload.
+                    .animation(.easeInOut(duration: 0.25), value: session.jobs)
+                    .animation(.easeInOut(duration: 0.25), value: session.transcript)
                 }
                 .refreshable { await session.refresh() }
             }
@@ -175,7 +190,7 @@ struct HomeView: View {
     private func submitTyped() {
         let line = typedLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
-        Haptics.tap()
+        // heard() owns the haptic — a second tap here reads as a stutter-bug.
         typedLine = ""
         Task { await session.heard(line) }
     }
@@ -219,7 +234,7 @@ struct HomeView: View {
             Text(briefingText)
                 .font(.callout)
                 .foregroundStyle(Theme.ivory)
-            if let says = session.anticipySays.first?.text, !says.isEmpty {
+            if let says = session.freshAnticipySays {
                 Text(says)
                     .font(.footnote)
                     .foregroundStyle(Theme.sand)
@@ -231,11 +246,9 @@ struct HomeView: View {
     }
 
     private var briefingText: String {
-        var parts: [String] = []
+        var parts: [String] = [greeting]
         if pendant.state == .connected || session.listener.isListening {
-            parts.append("How goes it today? I'm listening.")
-        } else {
-            parts.append("How goes it today?")
+            parts.append("I'm listening.")
         }
         if !needsOK.isEmpty {
             parts.append("I've got \(needsOK.count) thing\(needsOK.count == 1 ? "" : "s") ready — just say the word.")
@@ -244,9 +257,33 @@ struct HomeView: View {
             parts.append("I'm handling \(handling.count) task\(handling.count == 1 ? "" : "s") right now.")
         }
         if needsOK.isEmpty && handling.isEmpty {
-            parts.append("Nothing needs you right now — go live your day.")
+            parts.append(idleLine)
         }
         return parts.joined(separator: " ")
+    }
+
+    /// She knows what time it is, and she doesn't say the same sentence
+    /// every single time you look at her. Statements only — a question from
+    /// an always-listening device reads wrong at night.
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12: return "Morning."
+        case 12..<17: return "Afternoon."
+        case 17..<23: return "Evening."
+        default: return "Late one."
+        }
+    }
+
+    /// Time-neutral idle lines — "go live your day" belongs to the
+    /// empty-state brand moment, and reads absurd at 2am.
+    private var idleLine: String {
+        let lines = [
+            "Nothing needs you right now — I've got it covered.",
+            "All quiet on my end. I've got the watch.",
+            "Nothing waiting on you. I'll speak up when something matters.",
+        ]
+        let day = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 0
+        return lines[day % lines.count]
     }
 
     private func sectionHeader(_ text: String) -> some View {
@@ -285,7 +322,7 @@ struct ConfirmJobCard: View {
             Label("Ready — say the word", systemImage: "checkmark.seal")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.champagne)
-            Text(job.goal.replacingOccurrences(of: "_", with: " ").capitalized)
+            Text(job.humanGoal)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Theme.ivory)
             if let r = job.result, !r.isEmpty {
@@ -336,7 +373,7 @@ struct HandlingCard: View {
                 Text(job.status == "running" ? "I'm handling it" : "Queued for your browser")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Theme.champagne)
-                Text(job.goal.replacingOccurrences(of: "_", with: " ").capitalized)
+                Text(job.humanGoal)
                     .font(.callout)
                     .foregroundStyle(Theme.ivory)
             }
@@ -358,7 +395,7 @@ struct DoneCard: View {
             Image(systemName: job.status == "done" ? "checkmark.circle.fill" : "exclamationmark.circle")
                 .foregroundStyle(job.status == "done" ? Theme.champagne : Theme.gray)
             VStack(alignment: .leading, spacing: 3) {
-                Text(job.goal.replacingOccurrences(of: "_", with: " ").capitalized)
+                Text(job.humanGoal)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(Theme.ivory)
                 if job.status != "done" {
