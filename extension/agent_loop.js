@@ -283,7 +283,23 @@ export async function runAgentGoal(goal, opts) {
     await chrome.tabGroups.update(group, { title: "Anticipy", color: "green", collapsed: true });
   } catch (e) { /* tab groups unavailable (e.g. incognito) */ }
 
-  await chrome.debugger.attach({ tabId: tab.id }, "1.3");
+  // Attach can race a just-created tab, and the "started debugging" bar being
+  // dismissed detaches us mid-run — both surfaced live as "Debugger is not
+  // attached to the tab" killing real jobs. Attach with retries, and re-attach
+  // on mid-run drops (see the step loop).
+  async function attachDebugger(tabId) {
+    for (let i = 0; i < 3; i++) {
+      try { await chrome.debugger.attach({ tabId }, "1.3"); return true; }
+      catch (e) {
+        if (String(e).includes("already attached")) return true;
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
+    return false;
+  }
+  if (!(await attachDebugger(tab.id))) {
+    return { status: "failed", result: "could not attach the automation session to the tab", tabId: tab.id };
+  }
   // The agent tab is a background tab: without focus emulation, dispatched
   // key events are dropped by the renderer and nothing ever types.
   await cdp(tab.id, "Emulation.setFocusEmulationEnabled", { enabled: true });
@@ -297,7 +313,21 @@ export async function runAgentGoal(goal, opts) {
       await new Promise((r) => setTimeout(r, 1200));
       let state;
       try { state = await withTimeout(mapPage(tab.id), 20000, "mapPage"); }
-      catch (e) { history.push(`step ${step}: page not scriptable yet (${String(e).slice(0, 120)})`); continue; }
+      catch (e) {
+        const msg = String(e);
+        if (msg.includes("not attached")) {
+          // The debugging bar was cancelled or Chrome dropped the session.
+          // Take it back once; if we can't, say exactly what happened.
+          if (await attachDebugger(tab.id)) {
+            try { await cdp(tab.id, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
+            history.push(`step ${step}: automation session re-attached`);
+            continue;
+          }
+          return { status: "needs_user", result: "the automation session was cancelled — the 'Anticipy started debugging' bar has to stay up while I work. Send it again and leave the bar alone.", tabId: tab.id };
+        }
+        history.push(`step ${step}: page not scriptable yet (${msg.slice(0, 120)})`);
+        continue;
+      }
 
       const banked = blockedDomain(state.url);
       if (banked) {

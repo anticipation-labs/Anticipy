@@ -185,6 +185,21 @@ final class PhoneListener: NSObject, ObservableObject {
                     // shared state — a finalized/superseded task's late
                     // callbacks must never clobber or double-emit.
                     guard self.request === req else { return }
+                    // On-device recognition sometimes RESETS its window mid-
+                    // utterance: the running text suddenly holds only the
+                    // words after the reset, and everything before it would
+                    // silently vanish (live incident: a 12s sentence reduced
+                    // to "Of August"). A reset is a rewrite that shares no
+                    // opening with what we had — emit the pre-reset words as
+                    // their own line first. Words move down, never disappear.
+                    if !result.isFinal, self.partial.count >= 10, !text.isEmpty {
+                        let common = zip(self.partial.lowercased(), text.lowercased())
+                            .prefix { $0 == $1 }.count
+                        if common < 3 {
+                            let stable = self.partial.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !stable.isEmpty, self.isListening { self.onLine?(stable) }
+                        }
+                    }
                     self.partial = text
                     if result.isFinal {
                         self.silenceFlush?.cancel()
