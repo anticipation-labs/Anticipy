@@ -195,8 +195,18 @@ def main() -> None:
                 if not claim(ev["id"]):
                     print(f"heard: {line!r} -> could not claim, retrying later")
                     continue
+                # What was already said in this conversation, so a question
+                # never arrives stripped of what it was about.
+                convo = []
+                if segments is not None:
+                    try:
+                        open_seg = segments.open_segment()
+                        if open_seg:
+                            convo = segments.recent_turns(open_seg["id"])
+                    except Exception:
+                        convo = []
                 try:
-                    out = anticipy.hear(line)
+                    out = anticipy.hear(line, context=convo)
                 except Exception as e:
                     mark_processed(ev["id"], "error")
                     print(f"heard: {line!r} -> error: {e}")

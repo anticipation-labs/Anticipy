@@ -179,6 +179,18 @@ class SegmentStore:
         except Exception:
             return None
 
+    def recent_turns(self, segment_id: str, limit: int = 8) -> list[str]:
+        """What was already said in this conversation — the context a question
+        needs. 'What time is the demo day Monday' means nothing alone."""
+        try:
+            r = pb.get(f"{self.base}/api/collections/events/records",
+                       params={"filter": f'segment="{segment_id}" && kind="transcript"',
+                               "sort": "-created", "perPage": limit})
+            items = r.json().get("items", []) if r.ok else []
+            return [i.get("text", "") for i in reversed(items) if i.get("text")]
+        except Exception:
+            return []
+
     def create(self, started: datetime, parent: Optional[str] = None) -> Optional[dict]:
         try:
             r = pb.post(f"{self.base}/api/collections/segments/records", json={

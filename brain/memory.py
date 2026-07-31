@@ -48,6 +48,22 @@ CREATE TABLE IF NOT EXISTS edges (
 CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src);
 CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst);
 CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name);
+CREATE INDEX IF NOT EXISTS idx_episodes_ts ON episodes(ts);
+"""
+
+# Full-text index so recall searches EVERY episode instead of the newest few.
+# Kept separate because it is optional: if this SQLite build lacks FTS5, the
+# search falls back to LIKE and nothing breaks.
+FTS_SCHEMA = """
+CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(
+    text, content='episodes', content_rowid='id', tokenize='porter unicode61'
+);
+CREATE TRIGGER IF NOT EXISTS episodes_ai AFTER INSERT ON episodes BEGIN
+    INSERT INTO episodes_fts(rowid, text) VALUES (new.id, new.text);
+END;
+CREATE TRIGGER IF NOT EXISTS episodes_ad AFTER DELETE ON episodes BEGIN
+    INSERT INTO episodes_fts(episodes_fts, rowid, text) VALUES ('delete', old.id, old.text);
+END;
 """
 
 
@@ -59,21 +75,50 @@ class Extraction:
     topics: list[str] = field(default_factory=list)
     commitment: Optional[str] = None   # "send the pitch deck to Sarah"
     commitment_to: Optional[str] = None  # "Sarah"
+    completed: Optional[str] = None    # "sent Priya the launch plan"
 
 
 EXTRACT_SYSTEM = """You extract memory from one line someone said during their day.
 Reply ONLY with compact JSON:
 {"people":["..."],"places":["..."],"topics":["..."],
  "commitment":"<what the speaker promised to do, or null>",
- "commitment_to":"<who it was promised to, or null>"}
+ "commitment_to":"<who it was promised to, or null>",
+ "completed":"<what the speaker says they ALREADY DID, or null>"}
 People are proper names only. Topics are 1-3 word noun phrases. A commitment is
-only something the SPEAKER promised to do."""
+only something the SPEAKER promised to do. "completed" is for past-tense
+reports of finishing something ("sent Priya the deck", "already paid it",
+"that's done") — the thing that got done, not the whole sentence."""
+
+# Rule fallback so completion still works with no model available.
+_DONE_RE = re.compile(
+    r"\b(already|just)\s+(sent|paid|booked|called|emailed|texted|finished|did|"
+    r"done|handled|submitted|filed|ordered)\b"
+    r"|\b(sent|paid|booked|called|emailed|texted|finished|handled|submitted|"
+    r"filed|ordered)\s+(it|that|them|him|her)\b"
+    r"|\b(that'?s|it'?s|all)\s+(done|sorted|handled|taken care of)\b"
+    r"|\bi\s+(sent|paid|booked|called|emailed|texted|finished|did|handled)\b",
+    re.IGNORECASE)
 
 
 class Memory:
     def __init__(self, path: str | Path = ":memory:", llm=None):
         self.db = sqlite3.connect(str(path))
         self.db.executescript(SCHEMA)
+        try:
+            self.db.executescript(FTS_SCHEMA)
+            # Backfill an existing database once, so memory recorded before
+            # the index existed is searchable too.
+            missing = self.db.execute(
+                "SELECT COUNT(*) FROM episodes WHERE id NOT IN "
+                "(SELECT rowid FROM episodes_fts)").fetchone()[0]
+            if missing:
+                self.db.execute(
+                    "INSERT INTO episodes_fts(rowid, text) "
+                    "SELECT id, text FROM episodes WHERE id NOT IN "
+                    "(SELECT rowid FROM episodes_fts)")
+                self.db.commit()
+        except sqlite3.Error:
+            pass  # no FTS5 in this build; _search_episodes falls back to LIKE
         self.llm = llm  # optional LLM extractor; falls back to rules
 
     # ------------------------------------------------------------- ingest
@@ -103,6 +148,11 @@ class Memory:
                 if name != ex.commitment_to:
                     self._add_edge(commitment_id, "involves", nid, episode_id, ts)
 
+        # Saying you DID something closes the promise. Without this, an open
+        # loop lived forever and the clock would nag about finished work —
+        # the fastest way to make her look stupid.
+        closed = self.close_from_speech(text, ex.completed)
+
         # Everything mentioned together in one breath is related.
         ids = list(node_ids.values())
         for i, a in enumerate(ids):
@@ -115,7 +165,36 @@ class Memory:
             "entities": list(node_ids),
             "commitment": ex.commitment,
             "commitment_id": commitment_id,
+            "closed": closed,
         }
+
+    def close_from_speech(self, text: str, completed: Optional[str] = None) -> list[str]:
+        """The owner said they finished something — find which open promise
+        that was and mark it done. Matches on word overlap, and only when the
+        overlap is real, so 'I sent it' never closes an unrelated promise."""
+        if not completed and not _DONE_RE.search(text or ""):
+            return []
+        claim = completed or text
+        claim_words = {w for w in re.findall(r"[a-z0-9']+", claim.lower())
+                       if len(w) > 2 and w not in self._STOP}
+        if not claim_words:
+            return []
+        best, best_score, best_id = None, 0.0, None
+        for loop in self.open_loops():
+            words = {w for w in re.findall(r"[a-z0-9']+", loop["what"].lower())
+                     if len(w) > 2 and w not in self._STOP}
+            if not words:
+                continue
+            score = len(words & claim_words) / len(words)
+            if score > best_score:
+                best, best_score, best_id = loop["what"], score, loop["id"]
+        # Half the promise's meaningful words must reappear. A bare "that's
+        # done" with one open loop still closes it; with several it does not
+        # guess, because closing the wrong promise is worse than closing none.
+        if best_id is not None and best_score >= 0.5:
+            self.resolve(best_id)
+            return [best]
+        return []
 
     # ------------------------------------------------------------- recall
 
@@ -153,10 +232,12 @@ class Memory:
 
         # Episodes whose raw text matches the query are facts in their own
         # right — a line can matter even when extraction pulled no entities.
+        # SEARCHED, not scanned: the old code looked at only the newest 200
+        # episodes, so a fact stated this morning became unrecallable by
+        # afternoon ("the gate code is 4417" was provably lost after 240
+        # later lines). A day of ambient listening blows past 200 in an hour.
         facts = []
-        for eid, ts, text in self.db.execute(
-            "SELECT id, ts, text FROM episodes ORDER BY ts DESC LIMIT 200"
-        ):
+        for eid, ts, text in self._search_episodes(words):
             hits = sum(1 for w in words if w in text.lower())
             if hits >= 2 or (hits == 1 and len(words) == 1):
                 facts.append({"fact": f'heard: "{text}"',
@@ -193,6 +274,32 @@ class Memory:
             blob = (f["fact"] + " " + (f.get("quote") or "")).lower()
             return sum(1 for w in words if w in blob)
         return sorted(uniq.values(), key=lambda f: (-relevance(f), -f["ts"]))[:limit]
+
+    def _search_episodes(self, words: set[str], limit: int = 300):
+        """Every episode ever heard is searchable — no recency cliff. Uses
+        the FTS index when it exists, and a LIKE query otherwise, so an old
+        database keeps working without a rebuild."""
+        if not words:
+            return []
+        terms = sorted(words)[:8]
+        try:
+            q = " OR ".join(f'"{t}"' for t in terms)
+            rows = self.db.execute(
+                "SELECT e.id, e.ts, e.text FROM episodes_fts f "
+                "JOIN episodes e ON e.id = f.rowid "
+                "WHERE episodes_fts MATCH ? ORDER BY e.ts DESC LIMIT ?",
+                (q, limit),
+            ).fetchall()
+            if rows:
+                return rows
+        except sqlite3.Error:
+            pass
+        clause = " OR ".join("LOWER(text) LIKE ?" for _ in terms)
+        args = [f"%{t}%" for t in terms] + [limit]
+        return self.db.execute(
+            f"SELECT id, ts, text FROM episodes WHERE {clause} "
+            f"ORDER BY ts DESC LIMIT ?", args,
+        ).fetchall()
 
     def open_loops(self) -> list[dict]:
         """Open commitments, oldest first — the orchestrator's to-do list."""

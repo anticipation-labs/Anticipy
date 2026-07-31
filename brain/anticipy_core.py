@@ -161,7 +161,7 @@ class Anticipy:
         re.IGNORECASE)
     _IMPERATIVE_RE = re.compile(r"^\s*(remind me to|remember to|make sure)\b", re.IGNORECASE)
 
-    def hear(self, line: str) -> dict:
+    def hear(self, line: str, context: Optional[list[str]] = None) -> dict:
         """One transcript line in; memory, decision, and delegation out."""
         # Owner questions are answered, not triaged: a briefing request goes
         # to the briefing engine, and a memory question is answered straight
@@ -198,7 +198,7 @@ class Anticipy:
         # acted on — an acted line re-fed as context mints duplicate jobs.
         prev = self._prev
         prev_line = prev[0] if prev and time.time() - prev[1] < 120 else None
-        decision = self._decide(line, mem, prev_line=prev_line)
+        decision = self._decide(line, mem, prev_line=prev_line, convo=context)
         self._prev = None if decision.decision in ("act", "ask") else (line, time.time())
         handled = None
 
@@ -256,10 +256,18 @@ class Anticipy:
             "anticipy_says": handled,
         }
 
-    def _decide(self, line: str, mem: dict, prev_line: Optional[str] = None) -> Decision:
+    def _decide(self, line: str, mem: dict, prev_line: Optional[str] = None,
+                convo: Optional[list[str]] = None) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
             prompt = line
+            # What was already said in THIS conversation. Without it a
+            # question lands naked — "what time is the demo day Monday" with
+            # no idea which demo day, which is exactly what happened live.
+            if convo:
+                earlier = " | ".join(c for c in convo[-6:] if c and c != line)
+                if earlier:
+                    prompt = f"{prompt}\n(Earlier in this conversation: {earlier})"
             # People think across pauses: "I'll send the Devon invoice" …
             # "tomorrow morning". The previous line rides along as background
             # so a split thought still triages as one thought.

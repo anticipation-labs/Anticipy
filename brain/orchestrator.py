@@ -43,9 +43,13 @@ committing, exactly as much as a full sentence would be.
   to someone else. Everything is remembered regardless; ignore only means no
   task right now.
 
-Suffixes "(Related memory: ...)" and "(Previous line, background: ...)" are
-context from earlier — they help you read the current line and are never
-themselves a reason to act.
+Suffixes "(Related memory: ...)", "(Earlier in this conversation: ...)" and
+"(Previous line, background: ...)" are context — they help you READ the
+current line and are never themselves a reason to act. Use them to resolve
+what the current line refers to: if the line is "what time is the demo day on
+Monday" and the conversation earlier named the Residencies demo day, the goal
+must carry that name. A goal built from a line alone, when the conversation
+told you what it was about, is a failure.
 
 Before "act", check sufficiency the way a human would: do you know enough to
 actually start — the what, the where or who, the when this task needs? First
