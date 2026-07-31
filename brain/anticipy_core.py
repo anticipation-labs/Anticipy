@@ -45,6 +45,18 @@ def is_consequential(goal: str, params: dict | None = None) -> bool:
     blob = f"{goal} {json.dumps(params or {})}"
     return bool(_IRREVERSIBLE_RE.search(blob))
 
+VOICE_SYSTEM = f"""You are {NAME}, texting the person whose day you share. You
+are their sharp, warm chief of staff — a real human voice, never a template.
+Write ONE or two short sentences, specific to this exact moment: name the
+actual thing (the restaurant, the person, the date), not a category. Vary
+your shape and opening every time; plain words; no emojis; no corporate
+filler; no exclamation-point cheer. If you're asking, ask exactly ONE clear
+question — the single thing that unblocks you. If you relied on an assumption
+from earlier context, say it casually so they can correct you. If you're
+starting something consequential, make clear in your own words that nothing
+goes out until they give the word."""
+
+
 BRIEFING_SYSTEM = f"""You are {NAME}, the person's personal assistant who lives
 in their Anticipy pendant. You are warm, brief, and competent — a trusted
 chief-of-staff, never a robot. Given what you heard today and your open
@@ -137,8 +149,18 @@ class Anticipy:
         self._prev = None if decision.decision in ("act", "ask") else (line, time.time())
         handled = None
 
+        # Sufficiency: starting work that is guaranteed to stall on an unknown
+        # is worse than one good question. An "act" with essential unknowns
+        # becomes that question — the generic behavior, never a special case.
+        if decision.decision == "act" and decision.missing:
+            decision = Decision(
+                decision="ask", goal=decision.goal, reason=decision.reason,
+                missing=decision.missing, assumption=decision.assumption)
+
         if decision.decision == "act" and decision.goal:
             params = {"source": line}
+            if decision.assumption:
+                params["assumption"] = decision.assumption
             # The EFFECTIVE hold: triage's flag OR the policy layer. The owner
             # must be told whenever the job is actually held, or held jobs
             # would sit silently forever.
@@ -153,17 +175,24 @@ class Anticipy:
                 job_id=job_id,
             )
             self.loops.append(loop)
-            handled = self.say_handling(decision.goal, held)
+            # Her words are GENERATED for this exact moment — a template can
+            # never sound like a person.
+            handled = self._voice({
+                "situation": "held for approval" if held else "quietly started",
+                "heard": line, "goal": decision.goal,
+                "assumption": decision.assumption,
+            }) or self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
-            # texts the owner — their go-ahead releases the held job. The SMS
-            # carries ONE approval sentence, not the app card's reassurance
-            # plus another ("Nothing goes out… Say the word…" reads twitchy).
+            # texts the owner — their go-ahead releases the held job.
             if held:
-                pretty = decision.goal.replace("_", " ").strip()
-                self.notify_owner(
-                    f"I caught that — on it: {pretty}. Say the word and it goes, or tell me what to change.")
+                self.notify_owner(handled)
         elif decision.decision == "ask":
-            handled = f"Quick question — {decision.reason or 'want me to take this on?'}"
+            handled = self._voice({
+                "situation": "one essential detail is missing before you can start",
+                "heard": line, "goal": decision.goal,
+                "missing": decision.missing or [decision.reason or "what exactly they want"],
+                "assumption": decision.assumption,
+            }) or f"Quick question — {(decision.missing or [decision.reason or 'want me to take this on'])[0]}?"
             self.notify_owner(handled)
 
         return {
@@ -192,6 +221,19 @@ class Anticipy:
         return Decision(decision="ignore", goal=None, reason="nothing to do")
 
     # ------------------------------------------------------------ speaking
+
+    def _voice(self, context: dict) -> Optional[str]:
+        """Generate what Anticipy says for this exact moment. Returns None
+        without a live LLM (callers keep a plain fallback) — but with one,
+        her voice is never assembled from a template."""
+        if not self.llm:
+            return None
+        try:
+            res = self.llm.chat(VOICE_SYSTEM, json.dumps(context), temperature=0.7)
+            text = res.text.strip().strip('"')
+            return text or None
+        except Exception:
+            return None
 
     def say_handling(self, goal: str, needs_ok: bool) -> str:
         # Goal strings are free-form model output ("prepare Devon invoice

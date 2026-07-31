@@ -40,8 +40,19 @@ committing, exactly as much as a full sentence would be.
 Suffixes "(Related memory: ...)" and "(Previous line, background: ...)" are
 context from earlier — they help you read the current line and are never
 themselves a reason to act.
+
+Before "act", check sufficiency the way a human would: do you know enough to
+actually start — the what, the where or who, the when this task needs? First
+try to fill gaps YOURSELF from the line and the context; when the context
+supplies a missing piece, use it and record it in "assumption" so the owner
+can correct you. If something essential is missing and genuinely not
+inferable, the right move is "ask" — put the unknowns in "missing". Never
+ask about what you can safely infer, and never start work that is guaranteed
+to stall on an unknown.
 Reply ONLY with compact JSON:
-{"decision":"ignore|ask|act","goal":"<short goal or null>","reason":"<8 words>"}"""
+{"decision":"ignore|ask|act","goal":"<short goal or null>",
+ "missing":["<essential unknowns; empty if none>"],
+ "assumption":"<context you relied on, or null>","reason":"<8 words>"}"""
 
 # Goals whose final step changes the world -> require explicit user yes.
 IRREVERSIBLE = {
@@ -61,6 +72,12 @@ class Decision:
     goal: Optional[str]
     reason: str
     needs_confirmation: bool = False
+    missing: list = None       # essential unknowns blocking a real start
+    assumption: Optional[str] = None  # context the model relied on to fill a gap
+
+    def __post_init__(self):
+        if self.missing is None:
+            self.missing = []
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))
@@ -80,11 +97,19 @@ class Brain:
         goal = raw.get("goal")
         if goal in ("null", ""):
             goal = None
+        missing = raw.get("missing") or []
+        if not isinstance(missing, list):
+            missing = [str(missing)]
+        assumption = raw.get("assumption")
+        if assumption in ("null", ""):
+            assumption = None
         return Decision(
             decision=decision,
             goal=goal,
             reason=raw.get("reason", ""),
             needs_confirmation=(decision == "act" and goal in IRREVERSIBLE),
+            missing=[str(m) for m in missing],
+            assumption=assumption,
         )
 
 
