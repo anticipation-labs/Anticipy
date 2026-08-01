@@ -42,12 +42,28 @@ async function screenshot(tabId) {
     // render — a capture can come back blank or hang. Both are worse than no
     // picture at all, so this degrades to exactly today's text-only
     // behaviour rather than feeding the model a white rectangle.
+    // HALF SCALE, modest quality. A full-resolution frame on every step is
+    // ~4x the bytes for no extra understanding — the model needs layout and
+    // which things are greyed out, not pixel detail — and uploading that
+    // repeatedly is what made runs slow and then killed one outright on a
+    // failed upload.
     const shot = await withTimeout(
-      cdp(tabId, "Page.captureScreenshot", { format: "jpeg", quality: 60 }),
+      cdp(tabId, "Page.captureScreenshot",
+          { format: "jpeg", quality: 45, captureBeyondViewport: false,
+            clip: undefined, fromSurface: true, optimizeForSpeed: true }),
       8000, "screenshot");
-    const data = shot && shot.data;
+    let data = shot && shot.data;
     // A real page is tens of KB; a blank frame compresses to almost nothing.
     if (!data || data.length < 4000) return null;
+    // Hard ceiling: never let one page push a single request into the range
+    // where flaky uploads start failing.
+    if (data.length > 400000) {
+      const smaller = await withTimeout(
+        cdp(tabId, "Page.captureScreenshot", { format: "jpeg", quality: 25, optimizeForSpeed: true }),
+        8000, "screenshot-retry").catch(() => null);
+      data = (smaller && smaller.data && smaller.data.length > 4000) ? smaller.data : null;
+      if (!data) return null;
+    }
     return `data:image/jpeg;base64,${data}`;
   } catch (_) {
     return null;
@@ -526,13 +542,17 @@ export async function runAgentGoal(goal, opts) {
         // A dead/rotated/out-of-credit key or a rate limit used to be retried
         // for all 32 steps in ~90 seconds and then reported as a browsing
         // failure. Two strikes and we hand back naming the real cause.
-        llmFailures += 1;
         const msg = String(e).slice(0, 200);
+        // A dropped connection is weather, not a verdict. Retry it a few
+        // times with backoff instead of ending the task — one flaky upload
+        // killed a four-minute run that was otherwise going fine.
+        const transient = /Failed to fetch|NetworkError|network|timed out|aborted|ECONN|502|503|504|429/i.test(msg);
+        llmFailures += transient ? 0.34 : 1;
         if (llmFailures >= 2 || /key was rejected|model unavailable \(4\d\d/.test(msg)) {
           return { status: "needs_user", result: msg.replace(/^Error:\s*/, ""), tabId: tab.id };
         }
         history.push(`step ${step}: llm error (${msg.slice(0, 120)})`);
-        await new Promise((r) => setTimeout(r, 2000 * llmFailures));
+        await new Promise((r) => setTimeout(r, Math.round(1500 * (llmFailures + 1))));
         continue;
       }
       history.push(`step ${step}: ${JSON.stringify(decision).slice(0, 160)}`);
