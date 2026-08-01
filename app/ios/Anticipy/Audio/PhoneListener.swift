@@ -47,9 +47,12 @@ final class PhoneListener: NSObject, ObservableObject {
     private var watchdog: Timer?
     private var observersInstalled = false
 
-    /// The part of the CURRENT recognition task's text already emitted as
-    /// lines. Everything after it is the not-yet-emitted tail.
-    private var emitted = ""
+    /// How many WORDS of the current task's text have already been sent as
+    /// lines. Words, not characters: Apple refines earlier words as it hears
+    /// more ("Cineplex" becomes "the Cineplex"), and a character-prefix check
+    /// treats that as a brand-new sentence and sends the whole thing twice —
+    /// which is exactly what happened live.
+    private var emittedWords = 0
     /// Audio captured while no request is accepting it, replayed into the next
     /// one so a swap can never lose speech.
     private var orphanBuffers: [AVAudioPCMBuffer] = []
@@ -216,11 +219,15 @@ final class PhoneListener: NSObject, ObservableObject {
 
     // --------------------------------------------------------- recognition
 
-    /// Text heard on the current task that hasn't been emitted as a line yet.
+    private var currentWords: [String] {
+        partial.split(whereSeparator: { $0 == " " || $0 == "\n" }).map(String.init)
+    }
+
+    /// Words heard on the current task that haven't been sent yet.
     private var pendingTail: String {
-        guard partial.count > emitted.count,
-              partial.hasPrefix(emitted) else { return partial }
-        return String(partial.dropFirst(emitted.count))
+        let words = currentWords
+        guard words.count > emittedWords else { return "" }
+        return words[emittedWords...].joined(separator: " ")
     }
 
     private func startRecognition() {
@@ -231,7 +238,7 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         requestBornAt = Date()
         lastResultAt = Date()
-        emitted = ""
+        emittedWords = 0
         partial = ""
 
         orphanLock.lock()
@@ -257,13 +264,14 @@ final class PhoneListener: NSObject, ObservableObject {
                     // A window reset replaces the text instead of extending it
                     // (a 12s sentence collapsing to "Of August"). Bank what we
                     // had before accepting the new, shorter reality.
-                    if !text.hasPrefix(self.emitted), self.partial.count > text.count + 10 {
+                    if self.partial.count > text.count + 10 {
                         self.flushTail()
-                        self.emitted = ""
+                        self.emittedWords = 0
                     }
                     self.partial = text
                     if result.isFinal {
-                        self.flushTail()
+                        // Only speak up if they actually said more.
+                        self.flushTail(minNewWords: 3)
                         self.swapRecognition(flushPending: false)
                     } else {
                         self.scheduleSilenceFlush()
@@ -278,13 +286,25 @@ final class PhoneListener: NSObject, ObservableObject {
         }
     }
 
-    /// Emit everything heard but not yet sent, as one line.
-    private func flushTail() {
+    /// Send the words heard but not yet sent, as one line.
+    /// `minNewWords` guards the final-result path: when the recognizer
+    /// finalises an utterance it usually just polishes wording, adding a word
+    /// or none. Re-sending on that produced duplicates and stray fragments,
+    /// so a final only speaks up when the person genuinely said more.
+    private func flushTail(minNewWords: Int = 1) {
         silenceFlush?.cancel()
-        let tail = pendingTail.trimmingCharacters(in: .whitespacesAndNewlines)
-        emitted = partial
-        guard !tail.isEmpty else { return }
-        onLine?(tail)
+        let words = currentWords
+        guard words.count > emittedWords else {
+            emittedWords = max(emittedWords, words.count)
+            return
+        }
+        let fresh = Array(words[emittedWords...])
+        emittedWords = words.count
+        guard fresh.count >= minNewWords else { return }
+        let line = fresh.joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return }
+        onLine?(line)
     }
 
     /// After a pause, cut a line from the running text — WITHOUT ending the
@@ -336,6 +356,6 @@ final class PhoneListener: NSObject, ObservableObject {
         request = nil
         task = nil
         partial = ""
-        emitted = ""
+        emittedWords = 0
     }
 }

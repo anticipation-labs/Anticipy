@@ -197,16 +197,16 @@ def main() -> None:
                     continue
                 # What was already said in this conversation, so a question
                 # never arrives stripped of what it was about.
-                convo = []
+                convo_context = []
                 if segments is not None:
                     try:
                         open_seg = segments.open_segment()
                         if open_seg:
-                            convo = segments.recent_turns(open_seg["id"])
+                            convo_context = segments.recent_turns(open_seg["id"])
                     except Exception:
-                        convo = []
+                        convo_context = []
                 try:
-                    out = anticipy.hear(line, context=convo)
+                    out = anticipy.hear(line, context=convo_context)
                 except Exception as e:
                     mark_processed(ev["id"], "error")
                     print(f"heard: {line!r} -> error: {e}")
