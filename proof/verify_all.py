@@ -83,9 +83,15 @@ def check_backend():
 
 
 def check_brain_hears():
-    """A spoken line reaches the brain and gets a verdict."""
+    """A spoken line reaches the brain and gets a verdict.
+
+    Deliberately a line that is worth NOTHING to act on. An earlier version
+    said "I need to send Marcus the quarterly numbers tomorrow", which is a
+    real commitment — so every cycle minted a held job and TEXTED him. Five
+    piled up in his queue. A health check must never look like work to its
+    owner."""
     ev = create("events", {"kind": "transcript", "device_id": "verify",
-                           "text": "I need to send Marcus the quarterly numbers tomorrow"})
+                           "text": "the weather today is completely unremarkable"})
     for _ in range(30):
         time.sleep(4)
         got = api(f"/api/collections/events/records/{ev['id']}")
@@ -138,6 +144,24 @@ def check_text_releases_and_browser_runs(skip_browser=False):
     report("the browser does the work and reports back", False, "no outcome within 200s")
 
 
+def check_no_duplicates():
+    """The same thing must never sit in his queue twice — each copy texts him,
+    and with two pending every confirmation is ambiguous by construction."""
+    items = api("/api/collections/jobs/records?perPage=100").get("items", [])
+    pending = [j for j in items if j["status"] in ("awaiting_confirm", "queued")]
+    seen, dupes = {}, []
+    for j in pending:
+        key = frozenset(w for w in j["goal"].lower().split() if len(w) > 3)
+        for other, oid in seen.items():
+            if key and other and len(key & other) / max(len(key), len(other)) >= 0.7:
+                dupes.append(j["goal"][:50])
+                break
+        else:
+            seen[key] = j["id"]
+    report("nothing is waiting on him twice", not dupes,
+           f"duplicates: {dupes}" if dupes else "")
+
+
 def check_no_runaway():
     """Nothing may be stuck running or piling up."""
     q = urllib.parse.quote('status="running"')
@@ -160,6 +184,7 @@ def main():
         # ambiguous by design.
         check_text_releases_and_browser_runs(skip_browser)
         check_brain_hears()
+        check_no_duplicates()
         check_no_runaway()
     finally:
         cleanup()

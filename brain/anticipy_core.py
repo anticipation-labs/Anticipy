@@ -403,6 +403,13 @@ class Anticipy:
     # ---------------------------------------------------------- action arm
 
     def _queue_job(self, goal: str, params: dict, hold: bool = False) -> Optional[str]:
+        # Mentioning the same thing twice must not produce two identical items
+        # waiting on the owner. Five copies of "Draft email to Marcus" piled up
+        # in production, each one texting him, and every "yes" after that was
+        # ambiguous by construction — so she had to ask which one, forever.
+        existing = self._same_pending(goal)
+        if existing:
+            return existing
         try:
             r = pb.post(
                 f"{self.backend_url}/api/collections/jobs/records",
@@ -480,6 +487,34 @@ class Anticipy:
         self.notify_owner(say)
         return {"say": say, "goal": goal,
                 "loop_ids": [int(i) for i in raw.get("loop_ids", []) if str(i).isdigit()]}
+
+    def _same_pending(self, goal: str) -> Optional[str]:
+        """Is this same thing already waiting on the owner? Compared on
+        meaningful words, because the model phrases the same intent slightly
+        differently each time it hears it."""
+        want = {w for w in re.findall(r"[a-z0-9']+", (goal or "").lower()) if len(w) > 3}
+        if not want:
+            return None
+        try:
+            filt = 'status="awaiting_confirm" || status="queued"'
+            if self.owner_id:
+                filt = f'({filt}) && owner="{self.owner_id}"'
+            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 20, "sort": "-created"},
+                       timeout=10)
+            if not r.ok:
+                return None
+            for j in r.json().get("items", []):
+                have = {w for w in re.findall(r"[a-z0-9']+", (j.get("goal") or "").lower())
+                        if len(w) > 3}
+                if not have:
+                    continue
+                overlap = len(want & have) / max(len(want), len(have))
+                if overlap >= 0.7:
+                    return j["id"]
+        except Exception:
+            pass
+        return None
 
     def review_loops(self) -> list[dict]:
         """Poll the job queue and close loops whose jobs finished."""
