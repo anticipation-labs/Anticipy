@@ -68,13 +68,10 @@ def cleanup():
                         api(f"/api/collections/segments/records/{seg}", method="DELETE")
                     except Exception:
                         pass
-        # Segments whose only content was the check: no turns, or a single one.
-        for sg in api("/api/collections/segments/records?perPage=100").get("items", []):
-            if (sg.get("turn_count") or 0) <= 1 and (sg.get("word_count") or 0) <= 6:
-                try:
-                    api(f"/api/collections/segments/records/{sg['id']}", method="DELETE")
-                except Exception:
-                    pass
+        # NOTHING else is touched. An earlier version deleted any short
+        # single-turn segment, which would have eaten a real conversation the
+        # moment he said something brief. The check may only remove what the
+        # check itself caused — identified by its own event, never by shape.
     except Exception:
         pass
 
