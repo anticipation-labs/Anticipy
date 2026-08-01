@@ -339,6 +339,14 @@ class Conversation:
         except Exception:
             params = {}
         params["authorized"] = True
+        # Record WHAT was agreed, not just that something was: every later
+        # action is measured against this, which is what makes "only stop if
+        # reality differs" a rule rather than a vibe.
+        params["approved_scope"] = (
+            f"Task: {job.get('goal', '')}. "
+            f"They said: \"{(owner_text or 'yes').strip()}\". "
+            f"Heard originally: {params.get('source', '')}"
+        ).strip()
         if changes:
             params.update(changes)
         fields = {"status": "queued", "params": json.dumps(params)}

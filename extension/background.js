@@ -267,6 +267,9 @@ async function runJobInner(job, params) {
         // The owner already said yes in the app or by text; the gate lives
         // in the job queue, so the browser must not ask a second time.
         authorized: params.authorized === true,
+        // Exactly what the owner agreed to, in their own words plus what
+        // she told them — the only thing an action is measured against.
+        scope: params.approved_scope || params.say || params.source || "",
       });
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.
