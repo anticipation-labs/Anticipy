@@ -98,9 +98,14 @@ def check_brain_hears():
 
 def check_text_releases_and_browser_runs(skip_browser=False):
     """His #1 complaint: texting yes must release the job AND the browser must
-    actually do it."""
+    actually do it. Each run opens a real tab in his Chrome, so an unattended
+    loop passes --no-browser: piling tabs into an absent owner's browser is
+    exactly the harm we just spent an evening undoing."""
+    if skip_browser:
+        print("SKIP  the browser lane (--no-browser: not opening tabs in his Chrome)")
+        return
     live, age = agent_alive()
-    if not live and not skip_browser:
+    if not live:
         report("his Chrome is reachable", False, f"last seen {age}s ago — browser lane untestable")
         return
     job = create("jobs", {
