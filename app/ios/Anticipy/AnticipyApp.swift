@@ -53,6 +53,9 @@ final class AnticipySession: ObservableObject {
 
     @AppStorage("serviceToken") private var serviceToken = ""
     @AppStorage("ownerPhone") var ownerPhone = ""
+    @AppStorage("ownerFirstName") var ownerFirstName = ""
+    @AppStorage("ownerLastName") var ownerLastName = ""
+    @AppStorage("ownerEmail") var ownerEmail = ""
 
     var backend: AnticipyBackend {
         AnticipyBackend(
@@ -221,6 +224,20 @@ final class AnticipySession: ObservableObject {
         guard let e = e164(raw) else { return false }
         let ok = await backend.upsertOwnerPhone(ownerID: ownerID, phone: e)
         if ok { ownerPhone = e }
+        return ok
+    }
+
+    /// Her one record of who you are — used to fill the name/email/phone that
+    /// every booking form asks for. Payment details are never stored here.
+    func saveOwnerDetails(first: String, last: String, email: String) async -> Bool {
+        let ok = await backend.upsertOwner(ownerID: ownerID, fields: [
+            "first_name": first.trimmingCharacters(in: .whitespaces),
+            "last_name": last.trimmingCharacters(in: .whitespaces),
+            "email": email.trimmingCharacters(in: .whitespaces),
+        ])
+        if ok {
+            ownerFirstName = first; ownerLastName = last; ownerEmail = email
+        }
         return ok
     }
 

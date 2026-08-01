@@ -61,6 +61,12 @@ final class AnticipyBackend {
     /// Store the owner's number where the brain reads it. Updates the
     /// existing row for this owner rather than piling up duplicates.
     func upsertOwnerPhone(ownerID: String, phone: String) async -> Bool {
+        await upsertOwner(ownerID: ownerID, fields: ["phone": phone])
+    }
+
+    /// Name and email too: every booking and signup form asks for the same
+    /// four things, and without them a run reaches the form and stops.
+    func upsertOwner(ownerID: String, fields: [String: String]) async -> Bool {
         let listURL = baseURL.appendingPathComponent("api/collections/owner_profile/records")
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         let filter = "owner_id=\"\(ownerID)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
@@ -72,7 +78,8 @@ final class AnticipyBackend {
            let items = root["items"] as? [[String: Any]] {
             existingID = items.first?["id"] as? String
         }
-        let body: [String: Any] = ["owner_id": ownerID, "phone": phone]
+        var body: [String: Any] = ["owner_id": ownerID]
+        for (k, v) in fields where !v.isEmpty { body[k] = v }
         var req: URLRequest
         if let id = existingID {
             req = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")

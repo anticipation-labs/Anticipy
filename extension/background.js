@@ -79,13 +79,14 @@ async function ensureLLMKey() {
   try {
     const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
     if (!r.ok) return null;
-    const { openrouter_key, model, vision_model, service_token } = await r.json();
+    const { openrouter_key, model, vision_model, service_token, owner } = await r.json();
     if (openrouter_key) {
       await chrome.storage.local.set({
         openrouterKey: openrouter_key,
         agentModel: model || "",
         visionModel: vision_model || "",
         serviceToken: service_token || "",
+        ownerProfile: owner || null,
         keyFetchedAt: Date.now(),
       });
       return openrouter_key;
@@ -256,7 +257,7 @@ async function runJobInner(job, params) {
       return;
     }
     try {
-      const { agentModel, visionModel } = await chrome.storage.local.get(["agentModel", "visionModel"]);
+      const { agentModel, visionModel, ownerProfile } = await chrome.storage.local.get(["agentModel", "visionModel", "ownerProfile"]);
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
         capsolverKey: capsolverKey || null,
@@ -264,6 +265,7 @@ async function runJobInner(job, params) {
         stillLive: () => jobStillLive(job.id),
         ...(agentModel ? { model: agentModel } : {}),
         ...(visionModel ? { visionModel } : {}),
+        ownerProfile,
         // The owner already said yes in the app or by text; the gate lives
         // in the job queue, so the browser must not ask a second time.
         authorized: params.authorized === true,

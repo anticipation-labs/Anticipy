@@ -11,6 +11,10 @@ struct SettingsView: View {
     @State private var pairResult: Bool?
     @State private var phoneField = ""
     @State private var phoneSaved = false
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var email = ""
+    @State private var detailsSaved = false
 
     var body: some View {
         Form {
@@ -63,6 +67,28 @@ struct SettingsView: View {
                 Text(["Only when I ask", "Balanced", "Act on everything"][Int(proactivity)])
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
+            }
+
+            Section("You") {
+                TextField("First name", text: $firstName).textContentType(.givenName)
+                TextField("Last name", text: $lastName).textContentType(.familyName)
+                TextField("Email", text: $email)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                Button("Save details") {
+                    Task { detailsSaved = await session.saveOwnerDetails(first: firstName, last: lastName, email: email) }
+                }
+                .foregroundStyle(Theme.champagne)
+                Text(detailsSaved ? "Saved — I can fill booking forms myself now."
+                                  : "Booking and signup forms all ask for these. Never payment details.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
+            }
+            .onAppear {
+                if firstName.isEmpty { firstName = session.ownerFirstName }
+                if lastName.isEmpty { lastName = session.ownerLastName }
+                if email.isEmpty { email = session.ownerEmail }
             }
 
             Section("Your number") {

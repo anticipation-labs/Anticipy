@@ -70,7 +70,7 @@ async function screenshot(tabId) {
   }
 }
 
-async function llmStep(apiKey, model, goal, state, history, _retries, image, visionModel, authorized, scope) {
+async function llmStep(apiKey, model, goal, state, history, _retries, image, visionModel, authorized, scope, ownerProfile) {
   const messages = [
     // Grounded per-call, not per-worker-load: a model with no clock
     // hallucinated "this coming Sunday, July 28th" (the past) in a live
@@ -82,7 +82,15 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
         const authLine = authorized
           ? `WHAT THEY AGREED TO (their one answer, already given):\n${scope || goal}\nYou have their authority for all of it, to the end. Only a MATERIAL difference from the above may stop you.`
           : `NOT YET AGREED. They have not answered yet, so do everything that is reversible — fill the form completely — and then reply needs_user saying it is ready and exactly what pressing the final button would commit them to.`;
-        const body = `${authLine}\n\nGOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}` +
+        // Who the owner is. Every booking, reservation and signup form asks
+        // for the same identity; without it a run reaches the form and dies.
+        const who = ownerProfile && (ownerProfile.first_name || ownerProfile.email || ownerProfile.phone)
+          ? `\n\nTHE OWNER (use these to fill name/email/phone fields — never invent them, and never fill payment or password fields):\n`
+            + [["first name", ownerProfile.first_name], ["last name", ownerProfile.last_name],
+               ["email", ownerProfile.email], ["phone", ownerProfile.phone]]
+                .filter(([, v]) => v).map(([k, v]) => `  ${k}: ${v}`).join("\n")
+          : "\n\nTHE OWNER: their name, email and phone are NOT on file. If a form needs them, stop with needs_user and say exactly which details you need.";
+        const body = `${authLine}${who}\n\nGOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}` +
           (state.overlay ? "\nNOTE: a dialog/picker is open — the elements below are ITS contents, which is what the user is looking at." : "") +
           `\nELEMENTS:\n${state.elements}\n\nPAGE TEXT:\n${state.text}`;
         // With an image the content becomes multipart; text-only stays a
@@ -148,7 +156,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
         if (fixed) return fixed;
       }
     } catch (_) { /* fall through to the plain retry */ }
-    return llmStep(apiKey, model, goal, state, history, (_retries || 0) + 1, image, visionModel, authorized, scope);
+    return llmStep(apiKey, model, goal, state, history, (_retries || 0) + 1, image, visionModel, authorized, scope, ownerProfile);
   }
   // Still nothing. This is OUR failure, not something the owner can fix, so
   // report it as a step error (the loop keeps going and bails on repeats)
@@ -426,7 +434,7 @@ async function elementCenter(tabId, index) {
 export async function runAgentGoal(goal, opts) {
   // Default to a scriptable search page: about:blank can't be script-injected,
   // so mapPage would fail every step and the run would die without acting.
-  const { apiKey, capsolverKey = null, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "" } = opts;
+  const { apiKey, capsolverKey = null, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null } = opts;
   let captchaAttempts = 0;
 
   const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
@@ -551,7 +559,7 @@ export async function runAgentGoal(goal, opts) {
       // to describe; a picture generalises to every widget that will ever
       // exist. Per-widget special cases are a treadmill.
       const eyes = await screenshot(tab.id);
-      try { decision = await withTimeout(llmStep(apiKey, model, goal, state, history, 0, eyes, visionModel, authorized, scope), 90000, "llmStep"); }
+      try { decision = await withTimeout(llmStep(apiKey, model, goal, state, history, 0, eyes, visionModel, authorized, scope, ownerProfile), 90000, "llmStep"); }
       catch (e) {
         // A dead/rotated/out-of-credit key or a rate limit used to be retried
         // for all 32 steps in ~90 seconds and then reported as a browsing
