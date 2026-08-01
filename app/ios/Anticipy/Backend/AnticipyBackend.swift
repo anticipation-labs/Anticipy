@@ -186,12 +186,14 @@ final class AnticipyBackend {
     }
 
     /// Release a held job (in-app "Send it") or cancel it ("Not now").
-    func setJobStatus(id: String, status: String) async throws {
+    func setJobStatus(id: String, status: String, params: String? = nil) async throws {
         let url = baseURL
             .appendingPathComponent("api/collections/jobs/records")
             .appendingPathComponent(id)
         var patch = writeRequest(url, method: "PATCH")
-        patch.httpBody = try JSONSerialization.data(withJSONObject: ["status": status])
+        var body: [String: Any] = ["status": status]
+        if let params { body["params"] = params }
+        patch.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await URLSession.shared.data(for: patch)
     }
 

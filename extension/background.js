@@ -264,6 +264,9 @@ async function runJobInner(job, params) {
         stillLive: () => jobStillLive(job.id),
         ...(agentModel ? { model: agentModel } : {}),
         ...(visionModel ? { visionModel } : {}),
+        // The owner already said yes in the app or by text; the gate lives
+        // in the job queue, so the browser must not ask a second time.
+        authorized: params.authorized === true,
       });
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.

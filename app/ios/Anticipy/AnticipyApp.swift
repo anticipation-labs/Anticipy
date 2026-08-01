@@ -260,7 +260,14 @@ final class AnticipySession: ObservableObject {
     }
 
     func confirm(_ job: AgentJob) async {
-        try? await backend.setJobStatus(id: job.id, status: "queued")
+        // Record the yes ON the job: the browser agent reads it and finishes
+        // the task, instead of stopping at the final button to ask again.
+        var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
+            as? [String: Any] ?? [:]
+        params["authorized"] = true
+        let json = (try? JSONSerialization.data(withJSONObject: params))
+            .flatMap { String(data: $0, encoding: .utf8) }
+        try? await backend.setJobStatus(id: job.id, status: "queued", params: json)
         await refresh()
     }
 

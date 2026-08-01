@@ -331,14 +331,17 @@ class Conversation:
         # resurrection class the 2026-07-31 audit flagged.
         if job.get("status") != "awaiting_confirm":
             return None
-        fields = {"status": "queued"}
+        # The owner's yes is recorded ON the job, so the browser agent knows
+        # it may finish the task — including the final Submit. The gate lives
+        # here, once; asking again at the button is the same gate twice.
+        try:
+            params = json.loads(job.get("params") or "{}")
+        except Exception:
+            params = {}
+        params["authorized"] = True
         if changes:
-            try:
-                params = json.loads(job.get("params") or "{}")
-            except Exception:
-                params = {}
             params.update(changes)
-            fields["params"] = json.dumps(params)
+        fields = {"status": "queued", "params": json.dumps(params)}
         return self._flip(job["id"], fields, "released")
 
     def _cancel(self, job_id: Optional[str], owner_text: str = "") -> Optional[str]:
