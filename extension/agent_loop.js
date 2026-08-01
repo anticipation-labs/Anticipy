@@ -32,9 +32,17 @@ Never repeat an action that already failed twice (check HISTORY). If a site's ow
 /// Atlas all send pixels) and the one we were missing.
 async function screenshot(tabId) {
   try {
-    const { data } = await cdp(tabId, "Page.captureScreenshot",
-                              { format: "jpeg", quality: 60 });
-    return data ? `data:image/jpeg;base64,${data}` : null;
+    // The agent works in a hidden background tab, which browsers may not
+    // render — a capture can come back blank or hang. Both are worse than no
+    // picture at all, so this degrades to exactly today's text-only
+    // behaviour rather than feeding the model a white rectangle.
+    const shot = await withTimeout(
+      cdp(tabId, "Page.captureScreenshot", { format: "jpeg", quality: 60 }),
+      8000, "screenshot");
+    const data = shot && shot.data;
+    // A real page is tens of KB; a blank frame compresses to almost nothing.
+    if (!data || data.length < 4000) return null;
+    return `data:image/jpeg;base64,${data}`;
   } catch (_) {
     return null;
   }
