@@ -47,11 +47,36 @@ def create(coll, body):
 
 
 def cleanup():
+    """Remove everything this check caused — including what the BRAIN created
+    in response, which is the part an earlier version missed: five held jobs
+    and a trail of conversations accumulated in his production data because
+    cleanup only knew about records the script itself wrote."""
     for coll, rid in reversed(CREATED):
         try:
             api(f"/api/collections/{coll}/records/{rid}", method="DELETE")
         except Exception:
             pass
+    # Conversations opened by the check's own utterance, and any job the brain
+    # minted from it. Matched narrowly on the check's own marker text.
+    try:
+        for ev in api("/api/collections/events/records?perPage=100").get("items", []):
+            if ev.get("device_id") == "verify" or "completely unremarkable" in (ev.get("text") or ""):
+                seg = ev.get("segment")
+                api(f"/api/collections/events/records/{ev['id']}", method="DELETE")
+                if seg:
+                    try:
+                        api(f"/api/collections/segments/records/{seg}", method="DELETE")
+                    except Exception:
+                        pass
+        # Segments whose only content was the check: no turns, or a single one.
+        for sg in api("/api/collections/segments/records?perPage=100").get("items", []):
+            if (sg.get("turn_count") or 0) <= 1 and (sg.get("word_count") or 0) <= 6:
+                try:
+                    api(f"/api/collections/segments/records/{sg['id']}", method="DELETE")
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 def agent_alive() -> tuple[bool, int]:
