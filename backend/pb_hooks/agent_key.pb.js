@@ -27,6 +27,8 @@ routerAdd("GET", "/agent/key", (e) => {
   return e.json(200, {
     openrouter_key: key,
     model: model,
+    // Used only when the text map is not enough and a screenshot is sent.
+    vision_model: $os.getenv("ANTICIPY_VISION_MODEL") || "google/gemini-2.5-flash",
     service_token: $os.getenv("ANTICIPY_SERVICE_TOKEN") || "",
   });
 });

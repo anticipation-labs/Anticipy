@@ -79,11 +79,12 @@ async function ensureLLMKey() {
   try {
     const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
     if (!r.ok) return null;
-    const { openrouter_key, model, service_token } = await r.json();
+    const { openrouter_key, model, vision_model, service_token } = await r.json();
     if (openrouter_key) {
       await chrome.storage.local.set({
         openrouterKey: openrouter_key,
         agentModel: model || "",
+        visionModel: vision_model || "",
         serviceToken: service_token || "",
         keyFetchedAt: Date.now(),
       });
@@ -255,13 +256,14 @@ async function runJobInner(job, params) {
       return;
     }
     try {
-      const { agentModel } = await chrome.storage.local.get(["agentModel"]);
+      const { agentModel, visionModel } = await chrome.storage.local.get(["agentModel", "visionModel"]);
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
         capsolverKey: capsolverKey || null,
         startUrl: params.start_url || undefined,
         stillLive: () => jobStillLive(job.id),
         ...(agentModel ? { model: agentModel } : {}),
+        ...(visionModel ? { visionModel } : {}),
       });
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.

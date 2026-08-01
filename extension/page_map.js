@@ -56,12 +56,62 @@
     return st.visibility !== "hidden" && st.display !== "none";
   }
 
+  /// When a date picker / dialog is open, that IS the page as far as the
+  /// person is concerned. Mapping the whole document instead spends the
+  /// element budget on the header and nav and can truncate the calendar out
+  /// entirely — which is exactly why party size (a plain dropdown) worked and
+  /// choosing a date did not.
+  function activeOverlay() {
+    const candidates = [...document.querySelectorAll(
+      '[role=dialog],[aria-modal=true],dialog[open],[role=listbox],[role=grid],[role=application]')]
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width < 80 || r.height < 60) return false;
+        const st = getComputedStyle(el);
+        return st.visibility !== "hidden" && st.display !== "none" && st.opacity !== "0";
+      });
+    if (!candidates.length) return null;
+    // The one on top: deepest in the DOM wins ties.
+    return candidates.sort((a, b) => {
+      const za = +getComputedStyle(a).zIndex || 0, zb = +getComputedStyle(b).zIndex || 0;
+      return zb - za || (a.contains(b) ? 1 : -1);
+    })[0];
+  }
+
+  /// State a calendar cell carries but a bare label hides: is this day
+  /// selectable, is it already chosen, what date does it actually mean.
+  function stateOf(el) {
+    const bits = [];
+    const disabled = el.disabled || el.getAttribute("aria-disabled") === "true"
+      || el.getAttribute("data-disabled") === "true"
+      || getComputedStyle(el).pointerEvents === "none";
+    if (disabled) bits.push("UNAVAILABLE");
+    if (el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-checked") === "true"
+        || el.getAttribute("aria-current") === "date") bits.push("selected");
+    for (const attr of ["data-date", "data-day", "data-time", "data-value", "datetime", "value"]) {
+      const v = el.getAttribute && el.getAttribute(attr);
+      if (v && v.length <= 32) { bits.push(`${attr}=${v}`); break; }
+    }
+    return bits.length ? ` [${bits.join(" ")}]` : "";
+  }
+
   window.__anticipyMapPage = () => {
     window.__anticipyMap = {};
     counter = 0;
     const lines = [];
-    const sel = "a[href], button, input, select, textarea, [role=button], [role=link], [onclick], [tabindex]";
-    for (const el of document.querySelectorAll(sel)) {
+    const sel = "a[href], button, input, select, textarea, [role=button], [role=link], " +
+      "[role=option], [role=gridcell], [role=menuitem], [role=tab], [onclick], [tabindex]";
+    // Scope to the open dialog/calendar when there is one, so the budget is
+    // spent on what the person is actually looking at.
+    const overlay = activeOverlay();
+    const root = overlay || document;
+    const found = [...root.querySelectorAll(sel)];
+    // Elements the user can actually see come first, so a truncation can
+    // never hide the thing on screen behind a hundred footer links.
+    const vh = window.innerHeight || 800;
+    const inView = (el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < vh; };
+    found.sort((a, b) => (inView(b) ? 1 : 0) - (inView(a) ? 1 : 0));
+    for (const el of found) {
       if (!visible(el)) continue;
       const idx = counter++;
       window.__anticipyMap[idx] = el;
@@ -84,12 +134,15 @@
           : t === "time" ? "HH:MM" : "YYYY-MM-DDTHH:MM";
         extra = ` (${t} field — use select action with option in the exact format ${fmt}${el.value ? `; currently "${el.value}"` : ""})`;
       }
-      lines.push(`[${idx}] <${role(el)}> ${label(el)}${extra} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
-      if (counter > 150) break;
+      lines.push(`[${idx}] <${role(el)}> ${label(el)}${stateOf(el)}${extra} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
+      // 400, not 150: a booking page spends the first hundred on nav and menu
+      // links, and the calendar was being truncated out of the map entirely.
+      if (counter > 400) break;
     }
     const title = document.title;
-    const bodyText = (document.body.innerText || "").replace(/\s+/g, " ").slice(0, 1500);
-    return { url: location.href, title, elements: lines.join("\n"), text: bodyText };
+    const bodyText = ((overlay || document.body).innerText || "").replace(/\s+/g, " ").slice(0, 1500);
+    return { url: location.href, title, elements: lines.join("\n"), text: bodyText,
+             overlay: !!overlay };
   };
 
   function activeEditable() {
