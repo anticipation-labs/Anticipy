@@ -321,8 +321,16 @@ async function runJobInner(job, params) {
       func: () => (document.querySelector("#flash") || {}).innerText || "no banner",
     });
     await updateJob(job.id, { status: "done", result: `form ${result}; site said: ${banner.trim().split("\n")[0]}` });
+    // Nothing for a human to look at — close it. Leaving working tabs open is
+    // how fifty of them piled up in the owner's window.
+    try { await chrome.tabs.remove(tab.id); } catch (e) { /* gone */ }
   } else {
-    // Prefill flows: page is opened ready for the final human confirm.
+    // Prefill flows: the page IS the thing the owner acts on, so it stays —
+    // but surfaced where they can find it, never hidden in a collapsed group.
+    try {
+      await chrome.tabs.update(tab.id, { active: true });
+      try { await chrome.tabs.ungroup(tab.id); } catch (e) { /* not grouped */ }
+    } catch (e) { /* gone */ }
     await updateJob(job.id, { status: "awaiting_confirm", result: `opened ${job.goal} page in tab ${tab.id}` });
   }
 }

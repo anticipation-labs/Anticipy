@@ -430,7 +430,19 @@ export async function runAgentGoal(goal, opts) {
   let captchaAttempts = 0;
 
   const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
+  // Sweep any working tabs left behind by earlier runs BEFORE opening a new
+  // one. Without this every run leaked its tab forever — the reason fifty of
+  // them piled up. Storage survives service-worker restarts; memory does not.
+  try {
+    const { agentTabs = [] } = await chrome.storage.local.get(["agentTabs"]);
+    for (const id of agentTabs) { try { await chrome.tabs.remove(id); } catch (e) { /* gone */ } }
+    await chrome.storage.local.set({ agentTabs: [] });
+  } catch (e) { /* best effort */ }
   const tab = await chrome.tabs.create({ url: startUrl, active: false });
+  try {
+    const { agentTabs = [] } = await chrome.storage.local.get(["agentTabs"]);
+    await chrome.storage.local.set({ agentTabs: [...agentTabs, tab.id] });
+  } catch (e) { /* best effort */ }
   try {
     const group = await chrome.tabs.group({ tabIds: tab.id });
     await chrome.tabGroups.update(group, { title: "Anticipy", color: "green", collapsed: true });
@@ -461,6 +473,8 @@ export async function runAgentGoal(goal, opts) {
   const deadIdx = new Set();
   let lastUrl = "";
   let lastDoneClaim = null;
+  // Only a human-actionable outcome keeps its tab.
+  let handBack = false;
   let llmFailures = 0;
   let mapFailures = 0;
   // When the text map is not getting us anywhere, look at the page.
@@ -485,14 +499,14 @@ export async function runAgentGoal(goal, opts) {
             history.push(`step ${step}: automation session re-attached`);
             continue;
           }
-          return { status: "needs_user", result: "the automation session was cancelled — the 'Anticipy started debugging' bar has to stay up while I work. Send it again and leave the bar alone.", tabId: tab.id };
+          return (handBack = true) && { status: "needs_user", result: "the automation session was cancelled — the 'Anticipy started debugging' bar has to stay up while I work. Send it again and leave the bar alone.", tabId: tab.id };
         }
         // A closed tab never becomes scriptable — retrying to maxSteps just
         // burns the budget and reports "max steps reached" for what is
         // actually a gone window.
         mapFailures += 1;
         if (mapFailures >= 3 || /No tab with id/i.test(msg)) {
-          return { status: "needs_user", result: "the working tab went away before I finished — send it again and I'll restart", tabId: tab.id };
+          return (handBack = true) && { status: "needs_user", result: "the working tab went away before I finished — send it again and I'll restart", tabId: tab.id };
         }
         history.push(`step ${step}: page not scriptable yet (${msg.slice(0, 120)})`);
         continue;
@@ -502,7 +516,7 @@ export async function runAgentGoal(goal, opts) {
       if (state.url !== lastUrl) stuckStreak = 0;   // real navigation is progress
       const banked = blockedDomain(state.url);
       if (banked) {
-        return { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
+        return (handBack = true) && { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
       }
       if (looksLikeCaptcha(state)) {
         // Try the optional solver first (research sites only — banking is
@@ -515,7 +529,7 @@ export async function runAgentGoal(goal, opts) {
           history.push(`step ${step}: captcha ${solved ? "solved via CapSolver, retrying" : "solve failed"}`);
           if (solved) { await new Promise((r) => setTimeout(r, 2500)); continue; }
         }
-        return { status: "needs_user", result: `stopped at a CAPTCHA/robot check on ${state.url} — needs a human`, tabId: tab.id };
+        return (handBack = true) && { status: "needs_user", result: `stopped at a CAPTCHA/robot check on ${state.url} — needs a human`, tabId: tab.id };
       }
 
       // Element indexes only mean anything within one page; on navigation the
@@ -549,7 +563,7 @@ export async function runAgentGoal(goal, opts) {
         const transient = /Failed to fetch|NetworkError|network|timed out|aborted|ECONN|502|503|504|429/i.test(msg);
         llmFailures += transient ? 0.34 : 1;
         if (llmFailures >= 2 || /key was rejected|model unavailable \(4\d\d/.test(msg)) {
-          return { status: "needs_user", result: msg.replace(/^Error:\s*/, ""), tabId: tab.id };
+          return (handBack = true) && { status: "needs_user", result: msg.replace(/^Error:\s*/, ""), tabId: tab.id };
         }
         history.push(`step ${step}: llm error (${msg.slice(0, 120)})`);
         await new Promise((r) => setTimeout(r, Math.round(1500 * (llmFailures + 1))));
@@ -572,10 +586,10 @@ export async function runAgentGoal(goal, opts) {
         history.push(`step ${step}: done claim rejected (${verdict.reason})`);
         continue;
       }
-      if (decision.action === "needs_user") return { status: "needs_user", result: decision.reason, tabId: tab.id };
+      if (decision.action === "needs_user") return (handBack = true) && { status: "needs_user", result: decision.reason, tabId: tab.id };
       if (decision.action === "navigate") {
         const nav = blockedDomain(decision.url);
-        if (nav) return { status: "needs_user", result: `refused: ${nav} is a protected financial site`, tabId: tab.id };
+        if (nav) return (handBack = true) && { status: "needs_user", result: `refused: ${nav} is a protected financial site`, tabId: tab.id };
         await chrome.tabs.update(tab.id, { url: decision.url });
         continue;
       }
@@ -741,7 +755,7 @@ export async function runAgentGoal(goal, opts) {
               for (const t of spawned) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
               if (url && !url.startsWith("chrome")) {
                 const nav = blockedDomain(url);
-                if (nav) return { status: "needs_user", result: `refused: ${nav} is a protected financial site`, tabId: tab.id };
+                if (nav) return (handBack = true) && { status: "needs_user", result: `refused: ${nav} is a protected financial site`, tabId: tab.id };
                 await chrome.tabs.update(tab.id, { url });
                 history.push(`step ${step}: link opened a new tab — following ${url.slice(0, 120)} in place`);
               }
@@ -753,6 +767,20 @@ export async function runAgentGoal(goal, opts) {
     return { status: "failed", result: `max steps reached; last steps: ${history.slice(-3).join(" | ").slice(0, 400)}`, tabId: tab.id };
   } finally {
     try { await chrome.debugger.detach({ tabId: tab.id }); } catch (e) { /* already closed */ }
+    // Close the working tab. It is only kept when a HUMAN has to look at it
+    // (a login wall, a CAPTCHA, a form waiting on them) — and then it is
+    // surfaced instead of hidden in a collapsed group, because a tab nobody
+    // can find is the same as a leaked one.
+    try {
+      if (handBack) {
+        await chrome.tabs.update(tab.id, { active: true });
+        try { await chrome.tabs.ungroup(tab.id); } catch (e) { /* not grouped */ }
+        const { agentTabs = [] } = await chrome.storage.local.get(["agentTabs"]);
+        await chrome.storage.local.set({ agentTabs: agentTabs.filter((id) => id !== tab.id) });
+      } else {
+        await chrome.tabs.remove(tab.id);
+      }
+    } catch (e) { /* already gone */ }
     // Late-spawned duplicates (target=_blank links) that the in-loop adoption
     // missed shouldn't pile up in the owner's window. openerTabId alone misses
     // some spawns, so anything created during the run that isn't the agent tab
