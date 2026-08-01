@@ -47,7 +47,12 @@ async function llmStep(apiKey, model, goal, state, history, _retries) {
       "HTTP-Referer": "https://anticipy.ai",
       "X-Title": "Anticipy",
     },
-    body: JSON.stringify({ model, messages, temperature: 0 }),
+    // Ask the provider to CONSTRAIN the output to a JSON object. One
+    // malformed reply used to strand the whole task ("unparseable model
+    // output after retry"), which read to the owner as a browser failure
+    // when it was really our parser being brittle.
+    body: JSON.stringify({ model, messages, temperature: 0,
+                           response_format: { type: "json_object" } }),
   }).finally(() => clearTimeout(kill));
   // Name the real cause. An expired/rotated/out-of-credit key used to surface
   // as "unparseable model output" — the owner would go hunting the page.
@@ -62,23 +67,72 @@ async function llmStep(apiKey, model, goal, state, history, _retries) {
   }
   const data = await r.json();
   const text = data.choices?.[0]?.message?.content ?? "";
-  const m = text.match(/\{[\s\S]*\}/);
-  if (m) {
-    try { return JSON.parse(m[0]); } catch { /* fall through to retry/repair */ }
-    // Common model slips: bare/repeated tokens ("index": III), a stray quote
-    // after false/true. Try a light repair before giving up.
+  const parsed = extractAction(text);
+  if (parsed) return parsed;
+
+  // Ask the model to fix its own output before giving up. Showing it what it
+  // actually said recovers far more often than repeating the same request.
+  if ((_retries || 0) < 2) {
+    const nudge = messages.concat([
+      { role: "assistant", content: text.slice(0, 500) },
+      { role: "user", content: "That was not a single JSON object. Reply with ONLY the JSON object for the next action — no prose, no code fence." },
+    ]);
     try {
-      const repaired = m[0]
-        // Quote a bare word value, but never true/false/null.
-        .replace(/:\s*(?!true|false|null)([A-Za-z][A-Za-z]+)(\s*[,}])/g, ': "$1"$2')
-        // Strip a stray quote appended after a boolean/null ({"enter":false"}).
-        .replace(/\b(true|false|null)"/g, "$1");
-      return JSON.parse(repaired);
-    } catch { /* fall through */ }
+      const r2 = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
+                   "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy" },
+        body: JSON.stringify({ model, messages: nudge, temperature: 0,
+                               response_format: { type: "json_object" } }),
+      });
+      if (r2.ok) {
+        const fixed = extractAction((await r2.json()).choices?.[0]?.message?.content ?? "");
+        if (fixed) return fixed;
+      }
+    } catch (_) { /* fall through to the plain retry */ }
+    return llmStep(apiKey, model, goal, state, history, (_retries || 0) + 1);
   }
-  // One retry beats aborting the whole job on a single malformed step.
-  if ((_retries || 0) < 1) return llmStep(apiKey, model, goal, state, history, (_retries || 0) + 1);
-  return { action: "needs_user", reason: "unparseable model output after retry" };
+  // Still nothing. This is OUR failure, not something the owner can fix, so
+  // report it as a step error (the loop keeps going and bails on repeats)
+  // rather than stranding the task with "unparseable model output".
+  throw new Error(`model did not return an action; it said: ${text.slice(0, 160) || "(nothing)"}`);
+}
+
+/// Pull one action object out of whatever the model said. Scans for BALANCED
+/// braces and takes the last complete object — a greedy first-brace-to-last
+/// match breaks the moment there is prose, a code fence, or two objects.
+function extractAction(text) {
+  if (!text) return null;
+  const body = text.replace(/```(?:json)?/gi, "");
+  const candidates = [];
+  let depth = 0, start = -1, inStr = false, esc = false;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === "{") { if (depth === 0) start = i; depth++; }
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0 && start >= 0) { candidates.push(body.slice(start, i + 1)); start = -1; }
+    }
+  }
+  for (const raw of candidates.reverse()) {
+    for (const attempt of [raw,
+      // Common model slips: a bare word value, a stray quote after a boolean.
+      raw.replace(/:\s*(?!true|false|null)([A-Za-z][A-Za-z]+)(\s*[,}])/g, ': "$1"$2')
+         .replace(/\b(true|false|null)"/g, "$1")]) {
+      try {
+        const obj = JSON.parse(attempt);
+        if (obj && typeof obj.action === "string") return obj;
+      } catch (_) { /* try the next candidate */ }
+    }
+  }
+  return null;
 }
 
 // Second-opinion check on a done claim, against a FRESH page snapshot with no
