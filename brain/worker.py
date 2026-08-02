@@ -108,6 +108,35 @@ def _content_words(text: str) -> set:
     return {w for w in words if w not in _STOPWORDS and len(w) > 2}
 
 
+def already_raised(goal: str, text: str = "", within_hours: float = 24.0) -> bool:
+    """Has she already brought THIS up with him?
+
+    Keyed on the task, not the sentence. Her wording is generated fresh every
+    time, so comparing text was never going to hold: on 2026-08-02 the same
+    blocked booking produced "I'm almost done booking Cactus Club… I just need
+    your first name" and then "I'm setting up that Cactus Club reservation
+    now. Can you send over your first name" — plainly the same ask, far enough
+    apart in words to slip a similarity threshold, and he got both.
+
+    Falls back to text comparison only when there is no goal to key on."""
+    goal = (goal or "").strip()
+    if not goal:
+        return already_said(text, within_hours=within_hours)
+    try:
+        since = (datetime.now(timezone.utc)
+                 - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": f'kind="anticipy_says" && created>="{since}"',
+                           "perPage": 100, "sort": "-created"}, timeout=10)
+        if not r.ok:
+            return False
+        return any((ev.get("goal") or "").strip() == goal
+                   for ev in r.json().get("items", []))
+    except Exception as e:
+        print(f"already_raised check failed: {e}")
+        return False
+
+
 def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6) -> bool:
     """Has she already sent essentially this message recently?
 
@@ -208,7 +237,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # ASKED_ABOUT only remembers within one process; a redeploy would
             # make her ask for his name and email all over again. What she
             # actually sent is the durable record.
-            if already_said(said):
+            if already_raised(job.get("goal", ""), said):
                 print(f"stuck job {job['id']}: already asked, staying quiet")
                 continue
             anticipy.notify_owner(said)
@@ -270,7 +299,7 @@ def main() -> None:
                 if clock_should_run(now, state):
                     out = anticipy.clock_tick(
                         now, already_reached_out=set(state.get("reached_loop_ids", [])),
-                        may_say=lambda t: not already_said(t))
+                        may_say=lambda t, g="": not already_raised(g, t))
                     if out:
                         state["last_outreach_ts"] = now
                         state["reached_loop_ids"] = list(

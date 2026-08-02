@@ -478,16 +478,18 @@ class Anticipy:
         if not raw.get("initiate") or not raw.get("say"):
             return None
         say = str(raw["say"]).strip()
-        # The caller owns the durable "have I already said this?" check — it
-        # needs the record of what actually went out, which lives in the
-        # backend, not in this process. Refusing here means nothing is queued
-        # and nothing is marked reached: the loop is simply left alone.
-        if may_say and not may_say(say):
-            print(f"clock: already said this, staying quiet -> {say!r}")
-            return None
         goal = raw.get("goal")
         if goal in ("", "null"):
             goal = None
+        # The caller owns the durable "have I already brought this up?" check —
+        # it needs the record of what actually went out, which lives in the
+        # backend, not in this process. It is given the goal as well as the
+        # words, because she rephrases every time and only the goal is stable.
+        # Refusing here means nothing is queued and nothing is marked reached:
+        # the loop is simply left alone.
+        if may_say and not may_say(say, goal or ""):
+            print(f"clock: already raised this, staying quiet -> {say!r}")
+            return None
         if goal:
             # Anything she prepares unprompted goes through the same gate as
             # everything else — held if consequential, never auto-sent.
