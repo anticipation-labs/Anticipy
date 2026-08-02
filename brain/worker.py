@@ -225,16 +225,24 @@ def report_finished_jobs(anticipy) -> None:
             if already_raised(goal, decision="done"):
                 REPORTED.add(job["id"])
                 continue
-            if not result and not failed:
-                continue
+            # A finished task with nothing written on it is still finished, and
+            # he asked for it. Staying quiet here would mean his table gets
+            # booked and he never learns it — the success case of the exact
+            # task he is waiting on, lost. The browser fills `result` from the
+            # model's own done-claim, and a model that finishes without
+            # articulating one leaves it empty.
             said = anticipy._voice({
                 "situation": ("you tried to do this for them and it did not work "
                               "— say so plainly and briefly" if failed else
                               "you finished what they asked and are giving them "
-                              "the answer"),
+                              "the answer" if result else
+                              "it is done, but nothing was written down about how "
+                              "it went — tell them it is done and do NOT invent "
+                              "any details you were not given"),
                 "task": goal,
-                "what_you_found": result or "no result was recorded",
-            }) or (f"Couldn't get there on {goal}." if failed else result)
+                "what_you_found": result or "(nothing recorded)",
+            }) or (f"Couldn't get there on {goal}." if failed
+                   else result or f"That's done: {goal}.")
             anticipy.notify_owner(said)
             post_event("anticipy_says", said,
                        decision="done", goal=goal)

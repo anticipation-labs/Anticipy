@@ -97,9 +97,17 @@ failed = [{"id": "j2", "goal": "research weather in Montreal",
 sent, _ = run(failed, [], voice="Couldn't get the Montreal weather — want me to retry?")
 check("a failure is told to him rather than swallowed", len(sent) == 1, f"{sent}")
 
-# --- nothing to say, say nothing ------------------------------------------
-sent, _ = run([{"id": "j3", "goal": "x", "status": "done", "result": ""}], [])
-check("a done job with no result stays quiet", not sent, f"{sent}")
+# --- finished with nothing written down ------------------------------------
+# This assertion used to say the opposite: that a done job with no result
+# should stay quiet. That was wrong, and it was the worst possible place to be
+# wrong — the browser fills `result` from the model's own done-claim, so a
+# model that finishes without articulating one leaves it empty. His table
+# would have been booked and he would never have learned it.
+sent, _ = run([{"id": "j3", "goal": "Book dinner at Cactus Club",
+                "status": "done", "result": ""}], [],
+              voice="That's done — the Cactus Club booking went through.")
+check("a task that finishes with nothing written down is still reported",
+      len(sent) == 1, f"{sent}")
 
 # --- in-flight work is not announced ---------------------------------------
 sent, _ = run([], [])
