@@ -169,12 +169,19 @@ class Conversation:
             # re-triaged longer ones into DUPLICATE jobs, while the reply
             # cheerfully said "Sunday it is".
             asked_back = False
+            # Whatever he just told her about HIMSELF is worth keeping — his
+            # birthday, an allergy, a loyalty number. Remembered under
+            # whatever it was about, so the same question is never asked
+            # twice, and so nothing has to be pre-programmed per field.
+            self._remember_about_owner(text)
             if changes:
                 acted = self._amend(pending_id, changes)
                 if acted == "ambiguous":
                     parsed["reply"] = self._which_one()
                     acted, asked_back = None, True
-            if not acted and not asked_back:
+            # A task that stopped because it lacked this can now carry on.
+            resumed = self._resume_stuck()
+            if not acted and not asked_back and not resumed:
                 # Nothing absorbed it — treat it as a fresh thought.
                 self.anticipy.hear(text)
         elif intent == "new_request":
@@ -206,6 +213,75 @@ class Conversation:
         self.say(phone, reply)
         return {"intent": intent, "pending_id": pending_id,
                 "changes": changes, "acted": acted, "reply": reply}
+
+
+    REMEMBER_SYSTEM = """The owner just replied to a question about themselves.
+Pull out any DURABLE fact about them worth keeping — a date of birth, an
+allergy, a preference, a membership or loyalty number, a home airport, a
+dietary restriction. Only facts about the PERSON, never about one task, and
+NEVER card numbers, passwords or security codes even if they offer them.
+Reply ONLY with compact JSON: {"facts": {"<short_snake_case_key>": "<value>"}}
+Use {"facts": {}} when there is nothing durable."""
+
+    def _remember_about_owner(self, text: str) -> dict:
+        """Store what he just told us about himself, keyed by whatever it was
+        about. No column per field, no app release per question."""
+        if not (self.llm and self.llm.live):
+            return {}
+        try:
+            raw = self._parse(self.llm.chat(self.REMEMBER_SYSTEM, text).text)
+            facts = raw.get("facts") or {}
+            if not isinstance(facts, dict) or not facts:
+                return {}
+            base = self.anticipy.backend_url
+            r = pb.get(f"{base}/api/collections/owner_profile/records",
+                       params={"perPage": 1, "sort": "-updated"}, timeout=10)
+            items = r.json().get("items", []) if r.ok else []
+            if not items:
+                return {}
+            rec = items[0]
+            try:
+                known = json.loads(rec.get("facts") or "{}")
+            except Exception:
+                known = {}
+            clean = {str(k)[:40]: str(v)[:200] for k, v in facts.items()
+                     if k and v and not re.search(r"card|cvv|cvc|password|secur", str(k), re.I)}
+            if not clean:
+                return {}
+            known.update(clean)
+            pb.patch(f"{base}/api/collections/owner_profile/records/{rec['id']}",
+                     json={"facts": json.dumps(known)}, timeout=10)
+            return clean
+        except Exception:
+            return {}
+
+    def _resume_stuck(self) -> Optional[str]:
+        """Put a task that stopped for a missing detail back to work. It is
+        re-read at the start of every run, so it picks up what she just
+        learned without anything being passed through by hand."""
+        try:
+            base = self.anticipy.backend_url
+            filt = 'status="needs_user"'
+            if self.anticipy.owner_id:
+                filt += f' && owner="{self.anticipy.owner_id}"'
+            r = pb.get(f"{base}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 2, "sort": "-updated"}, timeout=10)
+            items = r.json().get("items", []) if r.ok else []
+            # Only when there is exactly one — guessing which stuck task he
+            # meant is the same mistake as guessing which job a bare yes is for.
+            if len(items) != 1:
+                return None
+            job = items[0]
+            try:
+                params = json.loads(job.get("params") or "{}")
+            except Exception:
+                params = {}
+            params["authorized"] = True
+            pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+                     json={"status": "queued", "params": json.dumps(params)}, timeout=10)
+            return f"resumed:{job['id']}"
+        except Exception:
+            return None
 
     # ------------------------------------------------------------ internals
 

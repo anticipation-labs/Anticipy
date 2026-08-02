@@ -90,6 +90,16 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
                ["email", ownerProfile.email], ["phone", ownerProfile.phone],
                ["date of birth (YYYY-MM-DD)", ownerProfile.birthday]]
                 .filter(([, v]) => v).map(([k, v]) => `  ${k}: ${v}`).join("\n")
+            + (() => {
+                // Anything she has learned about him since — asked once,
+                // remembered forever, no field pre-programmed.
+                try {
+                  const extra = JSON.parse(ownerProfile.facts || "{}");
+                  const lines = Object.entries(extra).map(([k, v]) => `  ${k.replace(/_/g, " ")}: ${v}`);
+                  return lines.length ? "\n" + lines.join("\n") : "";
+                } catch (_) { return ""; }
+              })()
+            + "\nIf a required field is something you do NOT have here, do not guess and do not give up: stop with needs_user naming EXACTLY what you need (e.g. \"I need your date of birth to finish the reservation\"). She will ask him, remember the answer, and this task will resume by itself."
           : "\n\nTHE OWNER: their name, email and phone are NOT on file. If a form needs them, stop with needs_user and say exactly which details you need.";
         const body = `${authLine}${who}\n\nGOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}` +
           (state.overlay ? "\nNOTE: a dialog/picker is open — the elements below are ITS contents, which is what the user is looking at." : "") +

@@ -37,6 +37,7 @@ routerAdd("GET", "/agent/key", (e) => {
         email: p.getString("email"),
         phone: p.getString("phone"),
         birthday: p.getString("birthday"),
+        facts: p.getString("facts"),
       };
     }
   } catch (_) { owner = null; }

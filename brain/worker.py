@@ -122,6 +122,43 @@ def claim(event_id: str) -> bool:
     return mark_processed(event_id, "processing")
 
 
+ASKED_ABOUT: set[str] = set()
+
+
+def ask_about_stuck_jobs(anticipy, convo) -> None:
+    """Text the owner about anything the browser handed back, once each.
+
+    The agent reports exactly what it needs ("I need your birthday to finish
+    the reservation"); she puts that in her own words and asks. His reply
+    comes back through the normal SMS path, where the answer is remembered
+    and the job resumes — so nothing has to be pre-programmed per field."""
+    try:
+        filt = 'status="needs_user"'
+        if anticipy.owner_id:
+            filt += f' && owner="{anticipy.owner_id}"'
+        r = pb.get(f"{PB}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
+        if not r.ok:
+            return
+        for job in r.json().get("items", []):
+            if job["id"] in ASKED_ABOUT:
+                continue
+            ASKED_ABOUT.add(job["id"])
+            blocker = (job.get("result") or "").strip()
+            if not blocker:
+                continue
+            said = anticipy._voice({
+                "situation": "you got most of the way through a task in their browser "
+                             "and need one thing from them to finish",
+                "task": job.get("goal", ""),
+                "what_you_need": blocker,
+            }) or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
+            anticipy.notify_owner(said)
+            print(f"asked about stuck job {job['id']}: {said[:80]}")
+    except Exception as e:
+        print(f"stuck-job ask failed: {e}")
+
+
 def main() -> None:
     llm = LLM()
     mem_db = os.environ.get("ANTICIPY_MEMORY_DB", ":memory:")
@@ -261,6 +298,14 @@ def main() -> None:
                 mark_processed(ev["id"], out["intent"])
                 post_event("anticipy_text", out["reply"])
                 print(f"sms in: {text!r} -> {out['intent']}")
+
+            # A stuck job must SPEAK. When the browser hands something back —
+            # it needs a detail she doesn't have, hit a login wall, found the
+            # facts changed — she texts him the question. Without this she
+            # goes silent and the task simply dies in a queue he isn't
+            # watching, which is the difference between an assistant and a
+            # form that failed.
+            ask_about_stuck_jobs(anticipy, convo)
 
             # Surface anything she "texted" (mock transport) into the feed too.
             sent = getattr(convo.transport, "sent", None)
