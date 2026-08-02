@@ -293,9 +293,23 @@ Use {"facts": {}} when there is nothing durable."""
                        params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
             if not r.ok:
                 return []
-            return [{"id": j["id"], "goal": j.get("goal", ""),
-                     "needs": (j.get("result") or "")[:300]}
-                    for j in r.json().get("items", [])]
+            out = []
+            for j in r.json().get("items", []):
+                # `result` is the runner's scratch field and it OVERWRITES it:
+                # the extension's staleness bounce replaces the requirement
+                # with its own note, and with the requirement gone nothing can
+                # match an answer to this task ever again. So the requirement
+                # is also kept where the brain owns it, and read back from
+                # there when the field it was borrowed from has been trampled.
+                needs = (j.get("result") or "").strip()
+                try:
+                    kept = (json.loads(j.get("params") or "{}") or {}).get("needed")
+                except Exception:
+                    kept = None
+                out.append({"id": j["id"], "goal": j.get("goal", ""),
+                            "needs": (needs or kept or "")[:300],
+                            "remembered_need": (kept or "")[:300]})
+            return out
         except Exception:
             return []
 
@@ -401,8 +415,18 @@ Use {"facts": {}} when there is nothing durable."""
             items = r.json().get("items", []) if r.ok else []
             if not items:
                 return None
-            matched = [j for j in items
-                       if self._answers_need(learned, j.get("result") or "")]
+            # Match against the runner's current note AND the requirement the
+            # brain kept when it resumed. The newest note wins for DISPLAY —
+            # a task that blocks again on something new is telling the truth —
+            # but for MATCHING both count, because the note may have been
+            # overwritten with something that is not a requirement at all.
+            def _need_text(j):
+                try:
+                    kept = (json.loads(j.get("params") or "{}") or {}).get("needed") or ""
+                except Exception:
+                    kept = ""
+                return f'{j.get("result") or ""} {kept}'.strip()
+            matched = [j for j in items if self._answers_need(learned, _need_text(j))]
             if not matched and len(items) == 1 and learned:
                 # Nothing named, but only one thing is waiting and he did tell
                 # her something — the long-standing behaviour, kept.
@@ -423,6 +447,12 @@ Use {"facts": {}} when there is nothing durable."""
             except Exception:
                 params = {}
             params["authorized"] = True
+            # Keep what it was waiting for. The runner may overwrite `result`
+            # the moment it picks the job up, and that string is the only
+            # thing an answer can be matched against.
+            need = (job.get("result") or "").strip()
+            if need and not params.get("needed"):
+                params["needed"] = need[:300]
             pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                      json={"status": "queued", "params": json.dumps(params)}, timeout=10)
             return job["id"]
