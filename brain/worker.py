@@ -149,7 +149,11 @@ def report_stalled_work(anticipy) -> None:
             return
         since = (datetime.now(timezone.utc) - timedelta(minutes=STALL_MINUTES)
                  ).strftime("%Y-%m-%d %H:%M:%S")
-        filt = f'status="queued" && updated<="{since}"'
+        # `running` counts too. The extension requeues its own stale jobs —
+        # but only while Chrome is open, so a task whose browser died partway
+        # sits at `running` forever and looks like work in progress. That is
+        # worse than a queued one: it reads as "she is on it".
+        filt = f'(status="queued" || status="running") && updated<="{since}"'
         if anticipy.owner_id:
             filt = f'({filt}) && owner="{anticipy.owner_id}"'
         r = pb.get(f"{PB}/api/collections/jobs/records",
@@ -163,12 +167,19 @@ def report_stalled_work(anticipy) -> None:
             # generated fresh and comparing it to itself has failed twice now.
             if already_raised(goal, decision="stalled"):
                 continue
+            midway = job.get("status") == "running"
             said = anticipy._voice({
-                "situation": "you are ready to do this but their browser is not "
-                             "open, so nothing can run — tell them plainly, no "
-                             "alarm, and that it will go as soon as it is",
+                "situation": ("this stopped partway because their browser "
+                              "closed — say so plainly, no alarm, and that you "
+                              "will pick it up when it is open again" if midway
+                              else "you are ready to do this but their browser "
+                              "is not open, so nothing can run — tell them "
+                              "plainly, no alarm, and that it will go as soon "
+                              "as it is"),
                 "task": goal,
-            }) or f"I'm ready to finish {goal} — I just need your Chrome open."
+            }) or (f"{goal} stopped partway — your Chrome closed. I'll pick it "
+                   f"up when it's open." if midway else
+                   f"I'm ready to finish {goal} — I just need your Chrome open.")
             anticipy.notify_owner(said)
             post_event("anticipy_says", said, decision="stalled", goal=goal)
             print(f"stalled (no browser): {job['id']} — told him")

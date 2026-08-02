@@ -68,8 +68,11 @@ def run(agents, jobs, events=None, hour=14):
     W.pb.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
     anticipy = types.SimpleNamespace(
         owner_id="X", notify_owner=lambda m, channel="sms": sent.append(m),
-        _voice=lambda ctx: "I'm ready to finish the Cactus booking — just need "
-                           "your Chrome open and it'll go.")
+        _voice=lambda ctx: ("That Cactus booking stopped partway — your Chrome "
+                            "closed. I'll pick it up when it's open."
+                            if "partway" in ctx.get("situation", "")
+                            else "I'm ready to finish the Cactus booking — just "
+                                 "need your Chrome open and it'll go."))
 
     # Freeze the hour so quiet-hours behaviour is testable rather than
     # dependent on when the suite happens to run.
@@ -130,6 +133,22 @@ check("if she cannot tell, she assumes the browser is fine",
 W.pb.get = lambda url, **kw: Resp(ok=False)
 check("a failed lookup is not treated as an absent browser",
       W.browser_reachable() is True)
+
+# --- a task that died MIDWAY behind a closed browser -----------------------
+# The extension requeues its own stale jobs, but only while Chrome is open. A
+# job left at `running` by a browser that closed looks like work in progress,
+# which is worse than one merely queued: it reads as "she is on it".
+MID = {"id": "j2", "status": "running", "params": "{}",
+       "goal": "Book dinner at Cactus Club Park Royal for 2 people"}
+sent, posted = run(DEAD, [MID])
+check("a task left running by a dead browser is not silently abandoned",
+      len(sent) == 1, f"{sent}")
+check("and she says it stopped partway rather than that it never began",
+      sent and "partway" in sent[0].lower(), f"{sent}")
+
+sent, _ = run(LIVE, [MID])
+check("a long-running task with the browser alive is left alone",
+      not sent, f"{sent}")
 
 print(f"\nsays when it cannot run: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)
