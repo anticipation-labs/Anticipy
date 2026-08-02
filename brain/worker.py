@@ -238,6 +238,18 @@ def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6) ->
     return False
 
 
+# What triage decided is stamped on every outbound event, so a question can be
+# deduped against earlier QUESTIONS and a held job against earlier HELD JOBS,
+# without one silencing the other.
+_KIND_TO_DECISION = {"ask": "ask", "act": "act", "clock": "clock"}
+
+
+def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
+    """May she say this unprompted? Only if she has not already."""
+    return not already_raised(goal, text,
+                              decision=_KIND_TO_DECISION.get(kind))
+
+
 def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
     r = pb.get(
         f"{PB}/api/collections/events/records",
@@ -363,7 +375,7 @@ def main() -> None:
                 if clock_should_run(now, state):
                     out = anticipy.clock_tick(
                         now, already_reached_out=set(state.get("reached_loop_ids", [])),
-                        may_say=lambda t, g="": not already_raised(g, t))
+                        may_say=SPEAK_ONCE)
                     if out:
                         state["last_outreach_ts"] = now
                         state["reached_loop_ids"] = list(
@@ -397,7 +409,8 @@ def main() -> None:
                     except Exception:
                         convo_context = []
                 try:
-                    out = anticipy.hear(line, context=convo_context)
+                    out = anticipy.hear(line, context=convo_context,
+                                        may_say=SPEAK_ONCE)
                 except Exception as e:
                     mark_processed(ev["id"], "error")
                     print(f"heard: {line!r} -> error: {e}")

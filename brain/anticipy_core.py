@@ -161,7 +161,24 @@ class Anticipy:
         re.IGNORECASE)
     _IMPERATIVE_RE = re.compile(r"^\s*(remind me to|remember to|make sure)\b", re.IGNORECASE)
 
-    def hear(self, line: str, context: Optional[list[str]] = None) -> dict:
+    @staticmethod
+    def _may_say(may_say, text: str, goal: Optional[str], kind: str) -> bool:
+        """One rule for every unprompted thing she says: has she already
+        brought this up? The caller owns the check because it needs the record
+        of what actually went out, which lives in the backend rather than in
+        this process — a redeploy must not hand her a clean slate and a reason
+        to repeat herself."""
+        if not may_say:
+            return True
+        try:
+            return bool(may_say(text, goal or "", kind))
+        except Exception as e:
+            # A broken guard must never silence a genuine message.
+            print(f"may_say check failed ({kind}): {e}")
+            return True
+
+    def hear(self, line: str, context: Optional[list[str]] = None,
+             may_say=None) -> dict:
         """One transcript line in; memory, decision, and delegation out."""
         # Owner questions are answered, not triaged: a briefing request goes
         # to the briefing engine, and a memory question is answered straight
@@ -246,7 +263,7 @@ class Anticipy:
             }) or self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
             # texts the owner — their go-ahead releases the held job.
-            if held and not repeat:
+            if held and not repeat and self._may_say(may_say, handled, decision.goal, "act"):
                 self.notify_owner(handled)
             elif held:
                 print(f"already waiting on him for {decision.goal!r} — not asking twice")
@@ -257,7 +274,17 @@ class Anticipy:
                 "missing": decision.missing or [decision.reason or "what exactly they want"],
                 "assumption": decision.assumption,
             }) or f"Quick question — {(decision.missing or [decision.reason or 'want me to take this on'])[0]}?"
-            self.notify_owner(handled)
+            # A question is unprompted speech too, and this branch used to text
+            # him every single time with no guard whatever — the held-job path
+            # at least had the queue's own dedup behind it. On 2026-07-31 that
+            # produced "I need the location for Sharky's Diner before I can
+            # check their hours" twice, seventeen seconds apart, and again
+            # twenty minutes later. Asking is fine; asking the same thing over
+            # and over is what made her exhausting.
+            if self._may_say(may_say, handled, decision.goal, "ask"):
+                self.notify_owner(handled)
+            else:
+                print(f"already asked him about {decision.goal!r} — staying quiet")
 
         return {
             "memory": mem,
@@ -496,7 +523,7 @@ class Anticipy:
         # words, because she rephrases every time and only the goal is stable.
         # Refusing here means nothing is queued and nothing is marked reached:
         # the loop is simply left alone.
-        if may_say and not may_say(say, goal or ""):
+        if not self._may_say(may_say, say, goal, "clock"):
             print(f"clock: already raised this, staying quiet -> {say!r}")
             return None
         if goal:
