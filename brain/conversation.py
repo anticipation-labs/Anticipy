@@ -519,7 +519,9 @@ Use {"facts": {}} when there is nothing durable."""
         back ambiguous and she asked again. Numbering makes the position a
         real name, and the numbered question survives in the thread so it can
         still be resolved after a restart."""
-        pending = self._pending()
+        # Calling something off must be able to name a blocked task too, or
+        # she offers a list that does not contain the thing he wants stopped.
+        pending = self._open_work() if cancel else self._pending()
         verb = "call off" if cancel else "go ahead with"
         if not pending:
             return "Nothing's waiting on you right now — what do you mean?"
@@ -608,13 +610,31 @@ Use {"facts": {}} when there is nothing durable."""
         except Exception:
             return None
 
-    def _job(self, job_id: Optional[str], owner_text: Optional[str] = None):
-        """Resolve the job the owner means. Falls back to the pending item
+    def _open_work(self) -> list[dict]:
+        """Everything still open in his name — waiting on his yes AND stopped
+        for information. Cancelling has to reach both: a task blocked on a
+        detail is the one actually nagging him, and until now saying "forget
+        it" could not touch one. On 2026-08-02 both of his tasks were blocked,
+        so neither could be called off by text while she cheerfully agreed to
+        drop them."""
+        seen, out = set(), []
+        for job in self._pending() + self._blocked():
+            if job["id"] in seen:
+                continue
+            seen.add(job["id"])
+            out.append({"id": job["id"], "goal": job.get("goal", ""),
+                        "params": job.get("params", ""),
+                        "status": job.get("status", "")})
+        return out
+
+    def _job(self, job_id: Optional[str], owner_text: Optional[str] = None,
+             pool: Optional[list[dict]] = None):
+        """Resolve the job the owner means. Falls back to the single candidate
         ONLY when there is exactly one — with several (or none), guessing is
         how the wrong thing gets sent or cancelled. Even a model-picked id is
-        only trusted with several pending when the owner's own words point at
-        that job."""
-        pending = self._pending()
+        only trusted with several candidates when the owner's own words point
+        at that job."""
+        pending = self._pending() if pool is None else pool
         if job_id:
             job = self._fetch(job_id)
             if not job:
@@ -661,7 +681,7 @@ Use {"facts": {}} when there is nothing durable."""
         return self._flip(job["id"], fields, "released")
 
     def _cancel(self, job_id: Optional[str], owner_text: str = "") -> Optional[str]:
-        job = self._job(job_id, owner_text)
+        job = self._job(job_id, owner_text, pool=self._open_work())
         if job == "ambiguous":
             return "ambiguous"
         if not job:
