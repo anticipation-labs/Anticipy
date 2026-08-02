@@ -222,6 +222,13 @@ class Anticipy:
             held = (decision.needs_confirmation
                     or decision.goal in IRREVERSIBLE
                     or is_consequential(decision.goal, params))
+            # Was this already waiting on him before he said it again? The
+            # queue has deduped identical goals since the five-copies incident,
+            # but the TEXT went out every single time regardless — which is why
+            # his history has six messages about one email to Marcus. If it was
+            # already pending she has already asked; saying it again is nagging,
+            # not diligence.
+            repeat = bool(self._same_pending(decision.goal))
             job_id = self._queue_job(decision.goal, params, hold=held)
             loop = LoopRecord(
                 commitment_id=mem.get("commitment_id") or -1,
@@ -239,8 +246,10 @@ class Anticipy:
             }) or self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
             # texts the owner — their go-ahead releases the held job.
-            if held:
+            if held and not repeat:
                 self.notify_owner(handled)
+            elif held:
+                print(f"already waiting on him for {decision.goal!r} — not asking twice")
         elif decision.decision == "ask":
             handled = self._voice({
                 "situation": "one essential detail is missing before you can start",
