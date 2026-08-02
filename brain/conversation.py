@@ -162,30 +162,30 @@ class Conversation:
                 resumed = self._resume_stuck()
 
         acted = None
+        asked_back = False   # her reply is already a clarifying question
         if intent == "confirm":
             acted = self._release(pending_id, changes, owner_text=text)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one()
-                acted = None
+                acted, asked_back = None, True
         elif intent == "decline":
             acted = self._cancel(pending_id, owner_text=text)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one(cancel=True)
-                acted = None
+                acted, asked_back = None, True
         elif intent == "modify" and changes:
             # No pending_id is normal (the model is told to null it when
             # unsure); _amend's single-pending fallback resolves it.
             acted = self._amend(pending_id, changes)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one()
-                acted = None
+                acted, asked_back = None, True
         elif intent == "answer":
             # The owner is ANSWERING her question — that answer belongs on the
             # job she asked about. Feeding it to hear() instead (the old path)
             # dropped one-word answers entirely via the fragment guard, and
             # re-triaged longer ones into DUPLICATE jobs, while the reply
             # cheerfully said "Sunday it is".
-            asked_back = False
             if changes:
                 acted = self._amend(pending_id, changes)
                 if acted == "ambiguous":
@@ -197,6 +197,20 @@ class Conversation:
         elif intent == "new_request":
             # Feed it back through the one brain — same path as the pendant.
             self.anticipy.hear(text)
+
+        # An answer that answers nothing is not an answer. On 2026-08-02 she
+        # asked for his name, email and phone to finish a booking; he replied
+        # "Do it"; she said "Got it, I'll finish up that booking now" — and
+        # then did nothing, because he had supplied nothing. Saying she is
+        # getting on with it while the task is still blocked is the one thing
+        # that makes her useless to trust. Enforced here, in code, rather than
+        # asked for in a prompt: if nothing was learned, resumed or acted on,
+        # she does not get to claim progress.
+        if (intent in ("answer", "confirm", "modify")
+                and not (learned or resumed or acted or asked_back)):
+            still = self._blocked()
+            if still:
+                parsed["reply"] = self._still_need(still)
 
         reply = parsed.get("reply") or "Got it."
         # Ground the reply in the job actually acted on — the model sometimes
@@ -254,6 +268,23 @@ Use {"facts": {}} when there is nothing durable."""
                     for j in r.json().get("items", [])]
         except Exception:
             return []
+
+    def _still_need(self, blocked: list[dict]) -> str:
+        """Name what is actually missing, in her own words rather than a
+        template — he is answering, he just has not answered THIS yet."""
+        said = self.anticipy._voice({
+            "situation": "they just replied but did not include the thing you "
+                         "are still waiting on, so you cannot move yet. Say "
+                         "plainly what is still missing. Do not scold, do not "
+                         "claim you are getting on with it",
+            "waiting_on": [{"task": b.get("goal", ""), "needs": b.get("needs", "")}
+                           for b in blocked[:3]],
+        })
+        if said:
+            return said
+        needs = (blocked[0].get("needs") or "").strip()
+        return (f"Still waiting on this before I can finish: {needs}" if needs
+                else "I still need a bit more from you before I can finish that.")
 
     def _remember_about_owner(self, text: str) -> dict:
         """Store what he just told us about himself, keyed by whatever it was
