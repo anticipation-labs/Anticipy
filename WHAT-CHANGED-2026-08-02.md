@@ -64,6 +64,26 @@ down nothing about how it went was reported as *nothing*. Your table gets
 booked and you never hear. That skip was mine from earlier the same night,
 with a test asserting it was correct.
 
+## The one that would have stopped tonight working
+
+**Your booking would have been refused the moment you answered.** The Chrome
+extension refuses to run any task that has been waiting more than 12 hours —
+sensible, so opening your laptop on Monday does not fire Friday's errand. But
+it measured the wait from when the task was **created**, and your Cactus
+booking was created 21 hours before you would send your details.
+
+So: you reply, she says "I'll finish the booking now", the extension refuses
+it, and writes *"my browser was closed"* — a sentence written **by the running
+browser**. And the refusal **overwrote the note saying what she needed from
+you**, so answering again could never have rescued it either.
+
+Now measured from when it was last queued, which your answer refreshes. It says
+only what it can observe, and keeps the requirement note.
+
+**→ This one is in the Chrome extension, so you must reload it.** Go to
+`chrome://extensions`, find Anticipy, hit the reload arrow. Without that, the
+booking will still be refused.
+
 ## Things I did wrong and corrected
 
 - **I was the PocketBase windows.** My own test gate started a database on
@@ -76,7 +96,13 @@ with a test asserting it was correct.
   message it answers. The audit is now a command
   (`proof/audit_conversation.py`) with that rule baked in, so I cannot get it
   wrong by hand again.
-- **Two of the bugs found were my own earlier fixes that night.**
+- **Two of the bugs found were my own earlier fixes that night.** Later a
+  third: a guard I added to stop her nagging kept a set in memory that
+  silently outranked the durable one, so a task that got stuck a *second*
+  time could never be raised again.
+- **A text the phone network refused was still filed as "she said it"**,
+  which bought 24 hours of silence about that task. Now only a message that
+  actually left the building counts.
 
 ## Still not verified, and I will not claim otherwise
 

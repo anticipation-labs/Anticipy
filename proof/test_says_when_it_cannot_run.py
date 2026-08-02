@@ -67,7 +67,7 @@ def run(agents, jobs, events=None, hour=14):
     W.pb.get = get
     W.pb.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
     anticipy = types.SimpleNamespace(
-        owner_id="X", notify_owner=lambda m, channel="sms": sent.append(m),
+        owner_id="X", notify_owner=lambda m, channel="sms": (sent.append(m), {"sid": "SM1"})[1],
         _voice=lambda ctx: ("That Cactus booking stopped partway — your Chrome "
                             "closed. I'll pick it up when it's open."
                             if "partway" in ctx.get("situation", "")

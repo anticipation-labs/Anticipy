@@ -62,7 +62,7 @@ def run(jobs, events, voice="Montreal's 22 and clear today."):
     W.pb.post = lambda url, **kw: posted.append(kw.get("json") or {}) or Resp()
     anticipy = types.SimpleNamespace(
         owner_id="X",
-        notify_owner=lambda m, channel="sms": sent.append(m),
+        notify_owner=lambda m, channel="sms": (sent.append(m), {"sid": "SM1"})[1],
         _voice=lambda ctx: voice)
     W.report_finished_jobs(anticipy)
     return sent, posted

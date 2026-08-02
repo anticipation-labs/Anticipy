@@ -180,7 +180,9 @@ def report_stalled_work(anticipy) -> None:
             }) or (f"{goal} stopped partway — your Chrome closed. I'll pick it "
                    f"up when it's open." if midway else
                    f"I'm ready to finish {goal} — I just need your Chrome open.")
-            anticipy.notify_owner(said)
+            if not anticipy.notify_owner(said):
+                print(f"stall notice for {job['id']}: send failed, not recording it")
+                continue
             post_event("anticipy_says", said, decision="stalled", goal=goal)
             print(f"stalled (no browser): {job['id']} — told him")
     except Exception as e:
@@ -243,7 +245,9 @@ def report_finished_jobs(anticipy) -> None:
                 "what_you_found": result or "(nothing recorded)",
             }) or (f"Couldn't get there on {goal}." if failed
                    else result or f"That's done: {goal}.")
-            anticipy.notify_owner(said)
+            if not anticipy.notify_owner(said):
+                print(f"result for {job['id']}: send failed, not recording it as said")
+                continue
             post_event("anticipy_says", said,
                        decision="done", goal=goal)
             REPORTED.add(job["id"])
@@ -403,9 +407,6 @@ def claim(event_id: str) -> bool:
     return mark_processed(event_id, "processing")
 
 
-ASKED_ABOUT: set[str] = set()
-
-
 def ask_about_stuck_jobs(anticipy, convo) -> None:
     """Text the owner about anything the browser handed back, once each.
 
@@ -422,9 +423,12 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
         if not r.ok:
             return
         for job in r.json().get("items", []):
-            if job["id"] in ASKED_ABOUT:
-                continue
-            ASKED_ABOUT.add(job["id"])
+            # There used to be an in-RAM ASKED_ABOUT set here, marked before
+            # any other check. It defeated the very guard written to replace
+            # it: need_already_asked() exists so that a task blocking on a
+            # NEW requirement can be raised again, and a set keyed on job id
+            # made that impossible for the life of the process. A guard that
+            # makes her permanently mute is the one thing no guard may do.
             blocker = (job.get("result") or "").strip()
             if not blocker:
                 continue
@@ -434,13 +438,18 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                 "task": job.get("goal", ""),
                 "what_you_need": blocker,
             }) or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
-            # ASKED_ABOUT only remembers within one process; a redeploy would
-            # make her ask for his name and email all over again. What she
-            # actually sent is the durable record.
+            # What she actually sent is the durable record — a set in memory
+            # would forget across a redeploy and re-ask for his name and email.
             if need_already_asked(job.get("goal", ""), blocker):
                 print(f"stuck job {job['id']}: already asked for this, staying quiet")
                 continue
-            anticipy.notify_owner(said)
+            # Only record it if it actually left the building. notify_owner
+            # swallows transport failures and returns None; recording anyway
+            # turned a refused send into 24 hours of silence about that task,
+            # because the dedup guard reads these records as proof she spoke.
+            if not anticipy.notify_owner(said):
+                print(f"stuck job {job['id']}: send failed, not recording it as said")
+                continue
             post_event("anticipy_says", said, decision="needs_user",
                        goal=job.get("goal", ""))
             print(f"asked about stuck job {job['id']}: {said[:80]}")

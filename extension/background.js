@@ -177,13 +177,29 @@ async function claimJob() {
   // Nothing executes while Chrome is shut, so a job can sit for days. Opening
   // the laptop on Monday should NOT silently fire Friday's errand — the world
   // has moved on. Hand it back and let the owner say whether it still stands.
+  //
+  // Measured from when it was last QUEUED, not from when the row was created.
+  // `created` is immutable in PocketBase, so reading it meant a task that had
+  // merely EXISTED for 12 hours was bounced — including one the owner had just
+  // this second unblocked by answering. His Cactus booking was created 21h
+  // before he supplied his details; every resume would have been refused,
+  // forever, while she had already told him "I'll finish the booking now".
+  // `updated` is refreshed by the requeue that sets status back to "queued",
+  // so a fresh resume reads as fresh and a genuinely abandoned errand does not.
   const STALE_HOURS = 12;
-  const queuedAt = Date.parse(job.created || job.updated || "");
+  const queuedAt = Date.parse(job.updated || job.created || "");
   if (queuedAt && Date.now() - queuedAt > STALE_HOURS * 3600 * 1000) {
     const hrs = Math.round((Date.now() - queuedAt) / 3600000);
+    // Say only what is observable. The previous wording asserted "my browser
+    // was closed" — written by the browser, while running, at the moment it
+    // wrote it. And it OVERWROTE `result`, destroying the requirement text
+    // ("I need your first name, last name, email…") that the brain matches an
+    // answer against, so the task could never be resumed by answering again.
+    const had = (job.result || "").trim();
     await updateJob(job.id, {
       status: "needs_user",
-      result: `This has been waiting ${hrs} hours — my browser was closed. Still want it?`,
+      result: (had ? had + "\n\n" : "") +
+        `Still queued after ${hrs} hours without running. Does it still stand?`,
     });
     return null;
   }
