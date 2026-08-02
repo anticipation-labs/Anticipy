@@ -159,7 +159,7 @@ class Conversation:
         if intent != "decline":
             learned = self._remember_about_owner(text)
             if learned:
-                resumed = self._resume_stuck()
+                resumed = self._resume_stuck(learned)
 
         # "2", "the second one", "first" — he is answering the numbered
         # question she asked. Position names the job as surely as saying its
@@ -328,23 +328,76 @@ Use {"facts": {}} when there is nothing durable."""
         except Exception:
             return {}
 
-    def _resume_stuck(self) -> Optional[str]:
-        """Put a task that stopped for a missing detail back to work. It is
-        re-read at the start of every run, so it picks up what she just
-        learned without anything being passed through by hand."""
+    @staticmethod
+    def _answers_need(learned: dict, needs: str) -> bool:
+        """Does what he just told her cover what this task said it needed?
+
+        The task states its own requirement in words ("I need your first name,
+        last name, email address, and phone number"), and the facts she stored
+        are keyed by what they are. Matching the two is what lets several
+        tasks be blocked at once without her having to guess between them."""
+        text = (needs or "").lower()
+        if not text:
+            return False
+        # Words that carry no meaning of their own: a task asking for a
+        # "phone" is asking for phone_number, and one asking for an "email"
+        # is asking for email_address.
+        generic = {"number", "address", "code", "id", "of", "the", "a"}
+        for key in learned:
+            phrase = str(key).replace("_", " ").lower().strip()
+            if not phrase:
+                continue
+            if phrase in text:
+                return True
+            parts = [p for p in phrase.split() if p not in generic and len(p) > 2]
+            if not parts:
+                continue
+            if " ".join(parts) in text:
+                return True
+            # The head noun, as a substring so date_of_birth still answers a
+            # task that said "birthday".
+            if parts[-1] in text:
+                return True
+        return False
+
+    def _resume_stuck(self, learned: Optional[dict] = None) -> Optional[str]:
+        """Put a task that stopped for a missing detail back to work.
+
+        Resumes the task whose stated need his answer actually covers. The
+        rule used to be "only when exactly one thing is blocked", which read
+        as caution but was a trap: on 2026-08-02 he had two blocked tasks at
+        once, so an answer carrying precisely what one of them asked for would
+        have been remembered, resumed nothing, and still been met with "I'll
+        finish the booking now". Matching the answer to the requirement is the
+        honest version of not guessing."""
+        learned = learned or {}
         try:
             base = self.anticipy.backend_url
             filt = 'status="needs_user"'
             if self.anticipy.owner_id:
                 filt += f' && owner="{self.anticipy.owner_id}"'
             r = pb.get(f"{base}/api/collections/jobs/records",
-                       params={"filter": filt, "perPage": 2, "sort": "-updated"}, timeout=10)
+                       params={"filter": filt, "perPage": 10, "sort": "-updated"}, timeout=10)
             items = r.json().get("items", []) if r.ok else []
-            # Only when there is exactly one — guessing which stuck task he
-            # meant is the same mistake as guessing which job a bare yes is for.
-            if len(items) != 1:
+            if not items:
                 return None
-            job = items[0]
+            matched = [j for j in items
+                       if self._answers_need(learned, j.get("result") or "")]
+            if not matched and len(items) == 1 and learned:
+                # Nothing named, but only one thing is waiting and he did tell
+                # her something — the long-standing behaviour, kept.
+                matched = items
+            if not matched:
+                return None
+            resumed = [self._requeue(j) for j in matched]
+            resumed = [rid for rid in resumed if rid]
+            return f"resumed:{resumed[0]}" if resumed else None
+        except Exception:
+            return None
+
+    def _requeue(self, job: dict) -> Optional[str]:
+        try:
+            base = self.anticipy.backend_url
             try:
                 params = json.loads(job.get("params") or "{}")
             except Exception:
@@ -352,7 +405,7 @@ Use {"facts": {}} when there is nothing durable."""
             params["authorized"] = True
             pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                      json={"status": "queued", "params": json.dumps(params)}, timeout=10)
-            return f"resumed:{job['id']}"
+            return job["id"]
         except Exception:
             return None
 

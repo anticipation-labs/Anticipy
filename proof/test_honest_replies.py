@@ -75,7 +75,7 @@ def build(intent: str, learns: dict | None = None, blocked=BLOCKED):
     convo._pending = lambda: []
     convo._blocked = lambda: blocked
     convo._remember_about_owner = lambda t: dict(learns or {})
-    convo._resume_stuck = lambda: ("job1" if learns else None)
+    convo._resume_stuck = lambda learned=None: ("job1" if learns else None)
     return convo
 
 
