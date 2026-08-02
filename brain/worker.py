@@ -168,6 +168,46 @@ def report_finished_jobs(anticipy) -> None:
         print(f"result report failed: {e}")
 
 
+def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
+                       covered: float = 0.5) -> bool:
+    """Has she already told him what THIS task is waiting for?
+
+    Keying on the task alone was wrong in a way that only shows up on the
+    second round. If he answers part of what a form wants, the task resumes,
+    the browser gets further and stops on something else — and a task-keyed
+    guard would keep her quiet about the new thing for the rest of the day.
+    The task would die silently, which is the exact failure the stuck-job ask
+    exists to prevent.
+
+    So compare against the BLOCKER — the browser's own words about what it
+    needs, which are stable — and ask whether a message she already sent
+    about this task covered it. Her own wording is generated fresh every time
+    and is useless for this; the requirement is not."""
+    goal, blocker = (goal or "").strip(), (blocker or "").strip()
+    if not goal or not blocker:
+        return False
+    want = _content_words(blocker)
+    if not want:
+        return False
+    try:
+        since = (datetime.now(timezone.utc)
+                 - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": f'kind="anticipy_says" && created>="{since}"',
+                           "perPage": 100, "sort": "-created"}, timeout=10)
+        if not r.ok:
+            return False
+        for ev in r.json().get("items", []):
+            if (ev.get("goal") or "").strip() != goal:
+                continue
+            said = _content_words(ev.get("text", ""))
+            if said and len(want & said) / len(want) >= covered:
+                return True
+    except Exception as e:
+        print(f"need_already_asked check failed: {e}")
+    return False
+
+
 def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
                    decision: str | None = None) -> bool:
     """Has she already brought THIS up with him?
@@ -313,8 +353,8 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # ASKED_ABOUT only remembers within one process; a redeploy would
             # make her ask for his name and email all over again. What she
             # actually sent is the durable record.
-            if already_raised(job.get("goal", ""), said):
-                print(f"stuck job {job['id']}: already asked, staying quiet")
+            if need_already_asked(job.get("goal", ""), blocker):
+                print(f"stuck job {job['id']}: already asked for this, staying quiet")
                 continue
             anticipy.notify_owner(said)
             post_event("anticipy_says", said, decision="needs_user",
