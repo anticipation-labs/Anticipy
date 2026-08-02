@@ -109,6 +109,71 @@ def _content_words(text: str) -> set:
 
 
 REPORTED: set = set()
+STALL_MINUTES = 10        # queued this long with nothing to run it is stuck
+AGENT_FRESH_SECONDS = 90  # the extension heartbeats far more often than this
+
+
+def browser_reachable() -> bool:
+    """Is his Chrome actually there to do the work?
+
+    Nothing in the brain ever asked. A resumed task goes to `queued` and waits
+    for the extension to claim it — so if he answers from his phone with the
+    laptop shut, she says "I'll finish the booking now" and then nothing
+    happens, forever, with no word to him. Answering by text away from the
+    desk is the normal case, not the edge case."""
+    try:
+        r = pb.get(f"{PB}/api/collections/agents/records",
+                   params={"filter": "paired=true", "sort": "-updated",
+                           "perPage": 1}, timeout=10)
+        if not r.ok:
+            return True          # unknown is not "absent": never invent bad news
+        items = r.json().get("items", [])
+        if not items:
+            return False
+        seen = (items[0].get("last_seen") or items[0].get("updated") or "")
+        t = datetime.fromisoformat(seen.replace(" ", "T").replace("Z", "+00:00"))
+        return (datetime.now(timezone.utc) - t).total_seconds() < AGENT_FRESH_SECONDS
+    except Exception:
+        return True
+
+
+def report_stalled_work(anticipy) -> None:
+    """Say so when work cannot start because his browser is not there."""
+    try:
+        if browser_reachable():
+            return
+        # Nothing here is urgent enough to wake him. Same quiet hours the
+        # clock respects — a stalled task at 3am can wait until morning.
+        hour = datetime.now(CLOCK_TZ).hour
+        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+            return
+        since = (datetime.now(timezone.utc) - timedelta(minutes=STALL_MINUTES)
+                 ).strftime("%Y-%m-%d %H:%M:%S")
+        filt = f'status="queued" && updated<="{since}"'
+        if anticipy.owner_id:
+            filt = f'({filt}) && owner="{anticipy.owner_id}"'
+        r = pb.get(f"{PB}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 5, "sort": "updated"},
+                   timeout=10)
+        if not r.ok:
+            return
+        for job in r.json().get("items", []):
+            goal = (job.get("goal") or "").strip()
+            # Deduped on the KIND of message, not on wording — her phrasing is
+            # generated fresh and comparing it to itself has failed twice now.
+            if already_raised(goal, decision="stalled"):
+                continue
+            said = anticipy._voice({
+                "situation": "you are ready to do this but their browser is not "
+                             "open, so nothing can run — tell them plainly, no "
+                             "alarm, and that it will go as soon as it is",
+                "task": goal,
+            }) or f"I'm ready to finish {goal} — I just need your Chrome open."
+            anticipy.notify_owner(said)
+            post_event("anticipy_says", said, decision="stalled", goal=goal)
+            print(f"stalled (no browser): {job['id']} — told him")
+    except Exception as e:
+        print(f"stalled-work report failed: {e}")
 
 
 def report_finished_jobs(anticipy) -> None:
@@ -534,6 +599,10 @@ def main() -> None:
             # And when it IS finished, he hears the answer. A question that
             # gets no reply is worse than one she refuses.
             report_finished_jobs(anticipy)
+
+            # And when nothing can run at all, say that too rather than
+            # leaving a task queued behind a browser that is not open.
+            report_stalled_work(anticipy)
 
             # Surface anything she "texted" (mock transport) into the feed too.
             sent = getattr(convo.transport, "sent", None)
