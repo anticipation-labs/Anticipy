@@ -108,7 +108,68 @@ def _content_words(text: str) -> set:
     return {w for w in words if w not in _STOPWORDS and len(w) > 2}
 
 
-def already_raised(goal: str, text: str = "", within_hours: float = 24.0) -> bool:
+REPORTED: set = set()
+
+
+def report_finished_jobs(anticipy) -> None:
+    """Tell him the answer.
+
+    Until now nothing in the brain ever did. Questions became research jobs,
+    the browser ran them and wrote the answer onto the job row, and there the
+    answer stayed: review_loops() only updated an in-RAM status, and the five
+    places she texts were all "want me to?", "which one?", "I need X" and the
+    clock. He asked "What's the weather in Mtl" on 2026-07-31 and got nothing,
+    ever — same for the same question on 07-15 and "What's the weather this
+    Sunday" on 07-17. Three questions, three silences.
+
+    Failures are reported too. Silence after a question is the worst answer,
+    but "I couldn't get it" is a real one."""
+    try:
+        filt = '(status="done" || status="failed")'
+        if anticipy.owner_id:
+            filt = f'({filt}) && owner="{anticipy.owner_id}"'
+        # Only recent work: this must never blast a backlog on first deploy.
+        since = (datetime.now(timezone.utc) - timedelta(hours=12)
+                 ).strftime("%Y-%m-%d %H:%M:%S")
+        filt += f' && updated>="{since}"'
+        r = pb.get(f"{PB}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 10, "sort": "-updated"},
+                   timeout=10)
+        if not r.ok:
+            return
+        for job in r.json().get("items", []):
+            if job["id"] in REPORTED:
+                continue
+            goal = (job.get("goal") or "").strip()
+            result = (job.get("result") or "").strip()
+            failed = job.get("status") == "failed"
+            # Durable: has she already delivered THIS result? Keyed on the goal
+            # and on being a result, so her earlier "want me to?" about the same
+            # task does not silence the answer.
+            if already_raised(goal, decision="done"):
+                REPORTED.add(job["id"])
+                continue
+            if not result and not failed:
+                continue
+            said = anticipy._voice({
+                "situation": ("you tried to do this for them and it did not work "
+                              "— say so plainly and briefly" if failed else
+                              "you finished what they asked and are giving them "
+                              "the answer"),
+                "task": goal,
+                "what_you_found": result or "no result was recorded",
+            }) or (f"Couldn't get there on {goal}." if failed else result)
+            anticipy.notify_owner(said)
+            post_event("anticipy_says", said,
+                       decision="done", goal=goal)
+            REPORTED.add(job["id"])
+            print(f"reported {job['status']} job {job['id']}: {said[:80]}")
+    except Exception as e:
+        print(f"result report failed: {e}")
+
+
+def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
+                   decision: str | None = None) -> bool:
     """Has she already brought THIS up with him?
 
     Keyed on the task, not the sentence. Her wording is generated fresh every
@@ -125,9 +186,12 @@ def already_raised(goal: str, text: str = "", within_hours: float = 24.0) -> boo
     try:
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        filt = f'kind="anticipy_says" && created>="{since}"'
+        if decision:
+            filt += f' && decision="{decision}"'
         r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": f'kind="anticipy_says" && created>="{since}"',
-                           "perPage": 100, "sort": "-created"}, timeout=10)
+                   params={"filter": filt, "perPage": 100, "sort": "-created"},
+                   timeout=10)
         if not r.ok:
             return False
         return any((ev.get("goal") or "").strip() == goal
@@ -396,6 +460,10 @@ def main() -> None:
             # watching, which is the difference between an assistant and a
             # form that failed.
             ask_about_stuck_jobs(anticipy, convo)
+
+            # And when it IS finished, he hears the answer. A question that
+            # gets no reply is worse than one she refuses.
+            report_finished_jobs(anticipy)
 
             # Surface anything she "texted" (mock transport) into the feed too.
             sent = getattr(convo.transport, "sent", None)
