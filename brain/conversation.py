@@ -61,7 +61,14 @@ intents:
 - "new_request": something new to handle. NEVER use this to cancel or call
   off something — calling anything off is "decline" even when no pending item
   matches (pending_id null); do not invent a cancellation task.
-- "chat": everything else — reply warmly, keep it short.
+- "chat": ONLY social talk — greetings, thanks, jokes, how-are-you. Anything
+  that asks for information or for something to be done is "new_request",
+  however casually it is phrased. "what's the weather in Vancouver", "what
+  time do they close", "how much is it" are all new_request.
+
+Never say you cannot do something. You have a browser and you can look
+things up; deciding what is possible is not your job here. If you are unsure
+whether something is doable, classify it as new_request and let it be tried.
 
 Grounding rules (hard):
 - Never claim you already did something. Each pending item includes its
@@ -203,10 +210,23 @@ class Conversation:
                     acted, asked_back = None, True
             if not acted and not asked_back and not learned and not resumed:
                 # Nothing absorbed it — treat it as a fresh thought.
-                self.anticipy.hear(text)
-        elif intent == "new_request":
+                spoken = self._think(text)
+                if spoken:
+                    parsed["reply"] = spoken
+        elif intent in ("new_request", "chat"):
             # Feed it back through the one brain — same path as the pendant.
-            self.anticipy.hear(text)
+            #
+            # "chat" is included deliberately. This classifier is not the
+            # authority on what she can do, and left to itself it invents
+            # limits: asked "what's the weather in Vancouver today?" with two
+            # tasks blocked, it called that small talk and answered "I'm not
+            # able to look up the weather right now" — which is false, and the
+            # request never reached her brain at all. Triage decides what is
+            # actionable; a genuinely social line comes back "ignore" and her
+            # warm reply stands.
+            spoken = self._think(text)
+            if spoken:
+                parsed["reply"] = spoken
 
         # An answer that answers nothing is not an answer. On 2026-08-02 she
         # asked for his name, email and phone to finish a booking; he replied
@@ -408,6 +428,29 @@ Use {"facts": {}} when there is nothing durable."""
             return job["id"]
         except Exception:
             return None
+
+    def _think(self, text: str) -> Optional[str]:
+        """Hand it to the one brain and bring back what she decided to say.
+
+        Her message comes back as THIS reply rather than going out as a second
+        text. Without that, a new request produced two: the classifier's "got
+        it, I can look into that" and, moments later, hear()'s own "want me to
+        go ahead?". Same thread, same thought, twice."""
+        try:
+            out = self.anticipy.hear(text, may_say=lambda *a, **k: False) or {}
+        except TypeError:
+            # An Anticipy without the may_say hook (older core, or a test
+            # double): fall back rather than losing the thought entirely.
+            try:
+                out = self.anticipy.hear(text) or {}
+            except Exception:
+                return None
+        except Exception:
+            return None
+        decision = getattr(out.get("decision"), "decision", "")
+        if decision in ("act", "ask"):
+            return out.get("anticipy_says") or None
+        return None
 
     # ------------------------------------------------------------ internals
 

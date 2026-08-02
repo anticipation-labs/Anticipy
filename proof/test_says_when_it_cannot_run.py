@@ -78,7 +78,11 @@ def run(agents, jobs, events=None, hour=14):
         @classmethod
         def now(cls, tz=None):
             base = real_dt.now(tz)
-            return base.replace(hour=hour)
+            # ONLY the owner-local clock is frozen. Freezing every now() also
+            # skewed the browser-liveness age by however far the hour moved,
+            # so this suite passed or failed depending on the time of day it
+            # was run — which is the whole trap it was written to avoid.
+            return base.replace(hour=hour) if tz is W.CLOCK_TZ else base
     W.datetime = FrozenDT
     try:
         W.report_stalled_work(anticipy)
