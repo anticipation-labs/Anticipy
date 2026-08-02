@@ -448,6 +448,23 @@ def main() -> None:
                 except Exception as e:
                     mark_processed(ev["id"], "error")
                     print(f"sms in: {text!r} -> error: {e}")
+                    # He texted and heard nothing back — and because the event
+                    # is marked processed it will never be retried, so the
+                    # silence is permanent. That is exactly what he lived on
+                    # 2026-08-01: "yea grab it pls" and "I want to see the
+                    # Odyssey at Cineplex Park Royal" both hit an exception and
+                    # simply vanished. Whatever broke, he gets an answer.
+                    try:
+                        convo.say(phone, anticipy._voice({
+                            "situation": "your own reasoning just failed on their "
+                                         "message and you have no idea what they "
+                                         "wanted — own it briefly and ask them to "
+                                         "say it again",
+                            "their_message": text,
+                        }) or "Something went wrong on my end just then — "
+                              "can you send that again?")
+                    except Exception as e2:
+                        print(f"sms in: could not even apologise: {e2}")
                     continue
                 mark_processed(ev["id"], out["intent"])
                 post_event("anticipy_text", out["reply"])

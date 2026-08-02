@@ -49,8 +49,17 @@ def start_pocketbase(binary: str, workdir: str):
     shutil.copytree(os.path.join(REPO, "backend", "pb_migrations"),
                     os.path.join(workdir, "pb_migrations"))
     shutil.copy(binary, workdir)
+    exe = os.path.join(workdir, os.path.basename(binary))
+    # Create the superuser BEFORE serving. A data dir with none makes
+    # PocketBase print "Launch the URL below in the browser…" and open one
+    # itself — and every run of this test uses a fresh dir, so every run
+    # popped a PocketBase tab on Omar's machine. He noticed and asked what
+    # it was; this is the thing that was doing it.
+    subprocess.run([exe, "superuser", "upsert", "smoke@local.test", "smoke-password-1234"],
+                   cwd=workdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                   timeout=60)
     proc = subprocess.Popen(
-        [os.path.join(workdir, os.path.basename(binary)), "serve", "--http", f"127.0.0.1:{PORT}"],
+        [exe, "serve", "--http", f"127.0.0.1:{PORT}"],
         cwd=workdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(40):
         time.sleep(0.5)
