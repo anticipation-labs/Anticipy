@@ -88,8 +88,11 @@ for intent, text in [("answer", "Do it"), ("confirm", "go ahead please"),
                      ("modify", "just get on with it")]:
     out = build(intent).on_reply("+1", text)
     r = reply_of(out)
+    # Assert the PROPERTY, not a particular word. An earlier version required
+    # the string "still" and went red when the wording improved — a test that
+    # pins phrasing stops the phrasing from ever being improved.
     check(f"{intent!r} with nothing supplied does not claim progress",
-          LIE not in r and "still" in r.lower(), f"said: {r!r}")
+          LIE not in r and "first name" in r.lower(), f"said: {r!r}")
 
 # --- he actually answers: she must NOT be muzzled ---------------------------
 out = build("answer", learns={"name": "Omar Ebrahim"}).on_reply(

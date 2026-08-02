@@ -50,7 +50,10 @@ intents:
 - "confirm": an explicit go-ahead for a pending item (any phrasing: "yeah
   send it", "looks good, go", "do it but cc Mark" — the latter is confirm
   WITH changes).
-- "decline": calling it off ("actually don't", "forget it", "not yet").
+- "decline": calling it off ("actually don't", "forget it", "not yet") AND
+  rejecting the premise of a task at all — "I never said that", "that's not
+  mine", "I didn't ask for this", "where did that come from". Denying that
+  something is real IS calling it off; it is never an "answer".
 - "modify": changes requested but NOT yet a go-ahead ("make it shorter
   first", "which restaurant did you pick?" then wait).
 - "answer": they are answering a question you asked. If "blocked" is not
@@ -75,10 +78,12 @@ Grounding rules (hard):
   status — nothing is sent/booked/done until its status says "done". Your
   reply after a confirm is "on it" language, never "I sent it".
 - pending_id must be the item the owner is actually talking about — match on
-  topic. If their text could refer to more than one pending item, or refers
-  to something with NO pending item, set pending_id to null AND make your
-  reply a clarifying question ("the newsletter or the pitch deck?") — do not
-  guess.
+  topic. It may name anything in EITHER list: something under "pending", or
+  something under "blocked". Calling a task off applies to both, so a blocked
+  task he is rejecting must be named by its id, not left null. If their text
+  could genuinely refer to more than one item, or refers to something in
+  neither list, set pending_id to null AND make your reply a clarifying
+  question ("the newsletter or the pitch deck?") — do not guess.
 - If nothing is pending and they seem to confirm, ask what they mean.
 - When "blocked" is not empty and their message supplies what a blocked task
   needed, say so plainly and that you are getting on with it ("Perfect — I'll
@@ -326,9 +331,18 @@ Use {"facts": {}} when there is nothing durable."""
         })
         if said:
             return said
+        # Only reached when the model is unavailable. It must still name what
+        # is missing — "I need something from you" is useless — but it must
+        # ATTRIBUTE the blocker rather than speaking it as her own sentence.
+        # Read as hers it was gibberish: "Still waiting on this before I can
+        # finish: Stopped before acting. I raised this on my own…", because
+        # that string is whatever the runner last wrote and is not always a
+        # requirement.
+        task = (blocked[0].get("goal") or "that").strip()
         needs = (blocked[0].get("needs") or "").strip()
-        return (f"Still waiting on this before I can finish: {needs}" if needs
-                else "I still need a bit more from you before I can finish that.")
+        if not needs:
+            return f"I still need something from you before I can finish {task}."
+        return f"I can't finish {task} yet. What's outstanding: {needs}"
 
     def _remember_about_owner(self, text: str) -> dict:
         """Store what he just told us about himself, keyed by whatever it was
