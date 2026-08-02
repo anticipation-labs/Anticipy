@@ -318,7 +318,39 @@ Use {"facts": {}} when there is nothing durable."""
     # ------------------------------------------------------------ internals
 
     def _thread(self, phone: str) -> list[Turn]:
-        return self.threads.setdefault(phone, [])
+        t = self.threads.setdefault(phone, [])
+        if not t:
+            # A redeploy empties this dict, and an assistant who has forgotten
+            # what she just asked will attach his answer to the wrong thing.
+            # That is not hypothetical: on 2026-08-02 she asked for his name
+            # and email to finish a booking, he replied "Do it", and with an
+            # empty thread it read as approval of an unrelated held job, which
+            # then started running in his browser. What she actually said is
+            # durable — rebuild from it rather than trusting process memory.
+            t.extend(self._thread_from_record(phone))
+        return t
+
+    def _thread_from_record(self, phone: str, limit: int = 10) -> list[Turn]:
+        """Recent turns reconstructed from the backend, newest last."""
+        try:
+            r = pb.get(
+                f"{self.anticipy.backend_url}/api/collections/events/records",
+                params={"filter": 'kind="anticipy_says" || kind="sms_reply"',
+                        "perPage": limit, "sort": "-created"},
+                timeout=10,
+            )
+            if not r.ok:
+                return []
+            turns = []
+            for ev in reversed(r.json().get("items", [])):
+                text = (ev.get("text") or "").strip()
+                if not text:
+                    continue
+                role = "anticipy" if ev.get("kind") == "anticipy_says" else "owner"
+                turns.append(Turn(role, text))
+            return turns
+        except Exception:
+            return []
 
     def _pending(self) -> list[dict]:
         try:
