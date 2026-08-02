@@ -161,15 +161,25 @@ class Conversation:
             if learned:
                 resumed = self._resume_stuck()
 
+        # "2", "the second one", "first" — he is answering the numbered
+        # question she asked. Position names the job as surely as saying its
+        # topic would, so it satisfies the guard a bare "yes" cannot, and it
+        # overrides the model's own pick: he counted, she should count too.
+        picked = self._choice_from_position(text)
+        if picked and intent in ("confirm", "decline", "answer"):
+            pending_id, text_for_guard = picked, None
+        else:
+            text_for_guard = text
+
         acted = None
         asked_back = False   # her reply is already a clarifying question
         if intent == "confirm":
-            acted = self._release(pending_id, changes, owner_text=text)
+            acted = self._release(pending_id, changes, owner_text=text_for_guard)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one()
                 acted, asked_back = None, True
         elif intent == "decline":
-            acted = self._cancel(pending_id, owner_text=text)
+            acted = self._cancel(pending_id, owner_text=text_for_guard)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one(cancel=True)
                 acted, asked_back = None, True
@@ -446,11 +456,84 @@ Use {"facts": {}} when there is nothing durable."""
             return {}
 
     def _which_one(self, cancel: bool = False) -> str:
-        names = [p["goal"].replace("_", " ") for p in self._pending()]
+        """Offer the choice NUMBERED.
+
+        She used to list them joined by "or", which gave him no way to pick
+        that she could understand. On 2026-07-13 she asked "Which one did you
+        mean? - Find a well-rated dinner recipe - Check ingredients", he
+        replied "2", and nothing happened: _references demands a shared word
+        between his text and the goal, and "2" has none, so the release came
+        back ambiguous and she asked again. Numbering makes the position a
+        real name, and the numbered question survives in the thread so it can
+        still be resolved after a restart."""
+        pending = self._pending()
         verb = "call off" if cancel else "go ahead with"
-        if not names:
+        if not pending:
             return "Nothing's waiting on you right now — what do you mean?"
-        return f"Just to be sure — which one should I {verb}: {' or '.join(names)}?"
+        self._offered = [p["id"] for p in pending]
+        listed = ", ".join(f"{i}) {p['goal'].replace('_', ' ')}"
+                           for i, p in enumerate(pending, 1))
+        return f"Just to be sure — which one should I {verb}: {listed}?"
+
+    # Words he might use instead of a digit. Ordinals only — this never tries
+    # to interpret meaning, just position in the list she herself offered.
+    _ORDINALS = {"first": 1, "1st": 1, "one": 1, "second": 2, "2nd": 2,
+                 "two": 2, "third": 3, "3rd": 3, "three": 3, "fourth": 4,
+                 "4th": 4, "four": 4, "fifth": 5, "5th": 5, "five": 5}
+
+    def _choice_from_position(self, text: str) -> Optional[str]:
+        """Which job he picked by position, or None if he did not pick one.
+
+        A positional answer IS a naming — relative to the list she offered —
+        so it is allowed to satisfy the guard that a bare "yes" cannot."""
+        low = (text or "").lower().strip()
+        words = re.findall(r"[a-z0-9]+", low)
+        if not words or len(words) > 4:
+            return None          # a sentence names things on its own
+        idx = None
+        for w in words:
+            if w.isdigit() and 1 <= int(w) <= 9:
+                idx = int(w)
+                break
+            if w in self._ORDINALS:
+                idx = self._ORDINALS[w]
+                break
+        if idx is None:
+            return None
+        offered = list(getattr(self, "_offered", []) or [])
+        if not offered:
+            # A redeploy cleared it. Rebuild from the numbered question she
+            # actually sent — her own format, parsed back, then matched to
+            # what is still pending so a stale number cannot release
+            # something that is no longer waiting.
+            offered = self._offered_from_thread()
+        if not offered or idx > len(offered):
+            return None
+        chosen = offered[idx - 1]
+        return chosen if any(p["id"] == chosen for p in self._pending()) else None
+
+    def _offered_from_thread(self) -> list[str]:
+        """Recover the order from her last numbered question."""
+        for turn in reversed(self._thread_from_record("", limit=10)):
+            if turn.role != "anticipy" or "which one" not in turn.text.lower():
+                continue
+            goals = re.findall(r"\d\)\s*([^,?]+)", turn.text)
+            if not goals:
+                continue
+            pending = self._pending()
+            order = []
+            for g in goals:
+                want = {w for w in re.findall(r"[a-z0-9']+", g.lower()) if len(w) > 3}
+                best = None
+                for p in pending:
+                    have = {w for w in re.findall(r"[a-z0-9']+", (p["goal"] or "").lower())
+                            if len(w) > 3}
+                    if have and want and len(want & have) / max(len(want), len(have)) >= 0.6:
+                        best = p["id"]
+                        break
+                order.append(best)
+            return [o for o in order if o] if all(order) else []
+        return []
 
     @staticmethod
     def _references(text: str, job: dict) -> bool:
