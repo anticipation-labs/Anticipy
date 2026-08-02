@@ -51,6 +51,19 @@ def cleanup():
     in response, which is the part an earlier version missed: five held jobs
     and a trail of conversations accumulated in his production data because
     cleanup only knew about records the script itself wrote."""
+    # Read the segment links BEFORE deleting anything. The earlier order —
+    # delete the CREATED ids first, then scan for the check's events to learn
+    # which segment they opened — could never find them: they were already
+    # gone. Every run therefore left one orphan segment in his data, which is
+    # exactly the "leaves no trace" promise this function exists to keep.
+    segs: set[str] = set()
+    try:
+        for ev in api("/api/collections/events/records?perPage=200").get("items", []):
+            if ev.get("device_id") == "verify" or "completely unremarkable" in (ev.get("text") or ""):
+                if ev.get("segment"):
+                    segs.add(ev["segment"])
+    except Exception:
+        pass
     for coll, rid in reversed(CREATED):
         try:
             api(f"/api/collections/{coll}/records/{rid}", method="DELETE")
@@ -59,15 +72,16 @@ def cleanup():
     # Conversations opened by the check's own utterance, and any job the brain
     # minted from it. Matched narrowly on the check's own marker text.
     try:
-        for ev in api("/api/collections/events/records?perPage=100").get("items", []):
+        for ev in api("/api/collections/events/records?perPage=200").get("items", []):
             if ev.get("device_id") == "verify" or "completely unremarkable" in (ev.get("text") or ""):
-                seg = ev.get("segment")
+                if ev.get("segment"):
+                    segs.add(ev["segment"])
                 api(f"/api/collections/events/records/{ev['id']}", method="DELETE")
-                if seg:
-                    try:
-                        api(f"/api/collections/segments/records/{seg}", method="DELETE")
-                    except Exception:
-                        pass
+        for seg in segs:
+            try:
+                api(f"/api/collections/segments/records/{seg}", method="DELETE")
+            except Exception:
+                pass
         # NOTHING else is touched. An earlier version deleted any short
         # single-turn segment, which would have eaten a real conversation the
         # moment he said something brief. The check may only remove what the

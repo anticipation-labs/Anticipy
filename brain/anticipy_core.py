@@ -428,7 +428,8 @@ class Anticipy:
     # ------------------------------------------------------------ the clock
 
     def clock_tick(self, now: Optional[float] = None,
-                   already_reached_out: set | None = None) -> Optional[dict]:
+                   already_reached_out: set | None = None,
+                   may_say=None) -> Optional[dict]:
         """Layer-2 proactivity: fired by TIME, not speech. Reviews open loops
         and decides — same reasoning doctrine, zero hardcoded triggers —
         whether a great assistant would initiate right now. Guardrails live
@@ -441,7 +442,16 @@ class Anticipy:
             return None
         ts = now or time.time()
         reached = already_reached_out or set()
-        fresh = [l for l in loops if l["id"] not in reached]
+        candidates = [l for l in loops if l["id"] not in reached]
+        # Interrupting him is only earned by evidence. A loop she cannot quote
+        # him on is one she invented — on 2026-08-01 that shipped real texts
+        # about "car insurance renewal" and "Vienna plans" he had never once
+        # mentioned, twice each. Unevidenced loops stay in memory and stay
+        # searchable; they simply never justify a text.
+        fresh = [l for l in candidates if (l.get("source") or "").strip()]
+        if len(fresh) < len(candidates):
+            mute = [l["what"] for l in candidates if not (l.get("source") or "").strip()]
+            print(f"clock: not raising {len(mute)} unevidenced loop(s): {mute[:5]}")
         if not fresh:
             return None
         from .llm import TZ
@@ -452,7 +462,11 @@ class Anticipy:
             "local_time": _dt.fromtimestamp(ts, TZ).strftime("%A %H:%M"),
             "open_loops": [
                 {"id": l["id"], "what": l["what"],
-                 "age_hours": round((ts - l["ts"]) / 3600, 1)}
+                 "age_hours": round((ts - l["ts"]) / 3600, 1),
+                 # His own words. Reasoning from the quote rather than from a
+                 # summary is what keeps her from drifting into a topic he
+                 # never raised.
+                 "he_said": l["source"]}
                 for l in fresh[:10]
             ],
         }
@@ -464,6 +478,13 @@ class Anticipy:
         if not raw.get("initiate") or not raw.get("say"):
             return None
         say = str(raw["say"]).strip()
+        # The caller owns the durable "have I already said this?" check — it
+        # needs the record of what actually went out, which lives in the
+        # backend, not in this process. Refusing here means nothing is queued
+        # and nothing is marked reached: the loop is simply left alone.
+        if may_say and not may_say(say):
+            print(f"clock: already said this, staying quiet -> {say!r}")
+            return None
         goal = raw.get("goal")
         if goal in ("", "null"):
             goal = None

@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from zoneinfo import ZoneInfo
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -93,6 +94,57 @@ def post_event(kind: str, text: str, decision: str = "", goal: str = "") -> None
     }, timeout=10)
 
 
+_STOPWORDS = {
+    "the", "a", "an", "and", "or", "but", "if", "to", "of", "in", "on", "at",
+    "for", "with", "is", "are", "was", "were", "be", "been", "it", "this",
+    "that", "you", "your", "i", "im", "ive", "id", "hey", "hi", "just", "got",
+    "get", "have", "has", "do", "did", "does", "can", "will", "would", "about",
+    "any", "some", "there", "here", "up", "out", "so", "we", "me", "my",
+}
+
+
+def _content_words(text: str) -> set:
+    words = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return {w for w in words if w not in _STOPWORDS and len(w) > 2}
+
+
+def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6) -> bool:
+    """Has she already sent essentially this message recently?
+
+    She does not repeat herself. Every unprompted message is checked against
+    what she has ACTUALLY sent — read back from the events collection, not
+    from an in-RAM set that a redeploy wipes. On 2026-08-01 the same
+    "car insurance renewal" text went out twice, hours apart, because the
+    only guard was `reached_loop_ids` and that depended on the model
+    remembering to echo an id back; when it didn't, nothing was recorded and
+    the loop was fair game again on the next tick, forever.
+
+    Replies are deliberately NOT deduped — if he asks the same thing twice he
+    deserves an answer twice. This is only for messages she starts."""
+    mine = _content_words(text)
+    if not mine:
+        return False
+    try:
+        since = (datetime.now(timezone.utc)
+                 - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": f'kind="anticipy_says" && created>="{since}"',
+                           "perPage": 100, "sort": "-created"}, timeout=10)
+        if not r.ok:
+            return False
+        for ev in r.json().get("items", []):
+            prev = _content_words(ev.get("text", ""))
+            if not prev:
+                continue
+            shared = len(mine & prev) / max(1, min(len(mine), len(prev)))
+            if shared >= overlap:
+                return True
+    except Exception as e:
+        # Never let the dedup check itself block a genuine message.
+        print(f"already_said check failed: {e}")
+    return False
+
+
 def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
     r = pb.get(
         f"{PB}/api/collections/events/records",
@@ -153,7 +205,15 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                 "task": job.get("goal", ""),
                 "what_you_need": blocker,
             }) or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
+            # ASKED_ABOUT only remembers within one process; a redeploy would
+            # make her ask for his name and email all over again. What she
+            # actually sent is the durable record.
+            if already_said(said):
+                print(f"stuck job {job['id']}: already asked, staying quiet")
+                continue
             anticipy.notify_owner(said)
+            post_event("anticipy_says", said, decision="needs_user",
+                       goal=job.get("goal", ""))
             print(f"asked about stuck job {job['id']}: {said[:80]}")
     except Exception as e:
         print(f"stuck-job ask failed: {e}")
@@ -209,7 +269,8 @@ def main() -> None:
                 state = _clock_state()
                 if clock_should_run(now, state):
                     out = anticipy.clock_tick(
-                        now, already_reached_out=set(state.get("reached_loop_ids", [])))
+                        now, already_reached_out=set(state.get("reached_loop_ids", [])),
+                        may_say=lambda t: not already_said(t))
                     if out:
                         state["last_outreach_ts"] = now
                         state["reached_loop_ids"] = list(

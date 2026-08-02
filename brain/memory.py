@@ -139,8 +139,15 @@ class Memory:
 
         commitment_id = None
         if ex.commitment:
+            # The episode this promise came out of, kept ON the commitment.
+            # Before this, provenance existed only as edges to people/places —
+            # so a commitment mentioning nobody had no traceable source at all,
+            # and nothing could answer "why do I believe this?". Loops with no
+            # source are exactly the ones she invented; open_loops() surfaces
+            # the quote so the clock can refuse to raise anything unevidenced.
             commitment_id = self._upsert_node(
-                "commitment", ex.commitment, ts, status="open")
+                "commitment", ex.commitment, ts, status="open",
+                attrs={"source_episode": episode_id})
             if ex.commitment_to and ex.commitment_to in node_ids:
                 self._add_edge(commitment_id, "committed_to",
                                node_ids[ex.commitment_to], episode_id, ts)
@@ -302,12 +309,28 @@ class Memory:
         ).fetchall()
 
     def open_loops(self) -> list[dict]:
-        """Open commitments, oldest first — the orchestrator's to-do list."""
+        """Open commitments, oldest first — the orchestrator's to-do list.
+
+        Each carries `source`: the exact thing he said that created it, or None
+        when the promise predates provenance or was never grounded in speech.
+        Callers that are about to INTERRUPT him should require a source."""
         rows = self.db.execute(
-            "SELECT id, name, created_ts FROM nodes "
+            "SELECT id, name, created_ts, attrs FROM nodes "
             "WHERE type='commitment' AND status='open' ORDER BY created_ts"
         ).fetchall()
-        return [{"id": r[0], "what": r[1], "ts": r[2]} for r in rows]
+        out = []
+        for r in rows:
+            try:
+                eid = (json.loads(r[3] or "{}") or {}).get("source_episode")
+            except Exception:
+                eid = None
+            src = None
+            if eid:
+                ep = self.db.execute(
+                    "SELECT text FROM episodes WHERE id=?", (eid,)).fetchone()
+                src = ep[0] if ep else None
+            out.append({"id": r[0], "what": r[1], "ts": r[2], "source": src})
+        return out
 
     def resolve(self, commitment_id: int, status: str = "done"):
         self.db.execute("UPDATE nodes SET status=? WHERE id=?", (status, commitment_id))
@@ -338,15 +361,17 @@ class Memory:
         }
 
     def _upsert_node(self, type_: str, name: str, ts: float,
-                     status: Optional[str] = None) -> int:
+                     status: Optional[str] = None,
+                     attrs: Optional[dict] = None) -> int:
         row = self.db.execute(
             "SELECT id FROM nodes WHERE type=? AND name=?", (type_, name)).fetchone()
         if row:
             self.db.execute("UPDATE nodes SET last_seen_ts=? WHERE id=?", (ts, row[0]))
             return row[0]
         cur = self.db.execute(
-            "INSERT INTO nodes(type, name, status, created_ts, last_seen_ts) "
-            "VALUES (?, ?, ?, ?, ?)", (type_, name, status, ts, ts))
+            "INSERT INTO nodes(type, name, status, created_ts, last_seen_ts, attrs) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (type_, name, status, ts, ts, json.dumps(attrs or {})))
         return cur.lastrowid
 
     def _add_edge(self, src: int, rel: str, dst: int, episode_id: int, ts: float):
