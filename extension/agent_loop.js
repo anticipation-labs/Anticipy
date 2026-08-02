@@ -87,7 +87,8 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
         const who = ownerProfile && (ownerProfile.first_name || ownerProfile.email || ownerProfile.phone)
           ? `\n\nTHE OWNER (use these to fill name/email/phone fields — never invent them, and never fill payment or password fields):\n`
             + [["first name", ownerProfile.first_name], ["last name", ownerProfile.last_name],
-               ["email", ownerProfile.email], ["phone", ownerProfile.phone]]
+               ["email", ownerProfile.email], ["phone", ownerProfile.phone],
+               ["date of birth (YYYY-MM-DD)", ownerProfile.birthday]]
                 .filter(([, v]) => v).map(([k, v]) => `  ${k}: ${v}`).join("\n")
           : "\n\nTHE OWNER: their name, email and phone are NOT on file. If a form needs them, stop with needs_user and say exactly which details you need.";
         const body = `${authLine}${who}\n\nGOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}` +

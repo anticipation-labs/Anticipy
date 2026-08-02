@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var firstName = ""
     @State private var lastName = ""
     @State private var email = ""
+    @State private var birthday = ""
     @State private var detailsSaved = false
 
     var body: some View {
@@ -76,12 +77,16 @@ struct SettingsView: View {
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
+                TextField("Birthday (YYYY-MM-DD)", text: $birthday)
+                    .keyboardType(.numbersAndPunctuation)
+                    .textInputAutocapitalization(.never)
                 Button("Save details") {
-                    Task { detailsSaved = await session.saveOwnerDetails(first: firstName, last: lastName, email: email) }
+                    Task { detailsSaved = await session.saveOwnerDetails(
+                        first: firstName, last: lastName, email: email, birthday: birthday) }
                 }
                 .foregroundStyle(Theme.champagne)
                 Text(detailsSaved ? "Saved — I can fill booking forms myself now."
-                                  : "Booking and signup forms all ask for these. Never payment details.")
+                                  : "Every booking and signup form asks for these. Payment details are never stored or filled.")
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             }
@@ -89,6 +94,7 @@ struct SettingsView: View {
                 if firstName.isEmpty { firstName = session.ownerFirstName }
                 if lastName.isEmpty { lastName = session.ownerLastName }
                 if email.isEmpty { email = session.ownerEmail }
+                if birthday.isEmpty { birthday = session.ownerBirthday }
             }
 
             Section("Your number") {

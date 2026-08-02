@@ -257,7 +257,19 @@ async function runJobInner(job, params) {
       return;
     }
     try {
-      const { agentModel, visionModel, ownerProfile } = await chrome.storage.local.get(["agentModel", "visionModel", "ownerProfile"]);
+      const { agentModel, visionModel, ownerProfile: cachedProfile, agentId: myId } =
+        await chrome.storage.local.get(["agentModel", "visionModel", "ownerProfile", "agentId"]);
+      // Re-read WHO HE IS at the start of every run. The key bundle is
+      // cached for six hours, which is right for a key and wrong for
+      // identity: he can add his name and retry in the same minute.
+      let ownerProfile = cachedProfile;
+      try {
+        const pr = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(myId || "")}`);
+        if (pr.ok) {
+          const fresh = (await pr.json()).owner;
+          if (fresh) { ownerProfile = fresh; await chrome.storage.local.set({ ownerProfile: fresh }); }
+        }
+      } catch (_) { /* keep what we had */ }
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
         capsolverKey: capsolverKey || null,

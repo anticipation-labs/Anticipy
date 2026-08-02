@@ -56,6 +56,7 @@ final class AnticipySession: ObservableObject {
     @AppStorage("ownerFirstName") var ownerFirstName = ""
     @AppStorage("ownerLastName") var ownerLastName = ""
     @AppStorage("ownerEmail") var ownerEmail = ""
+    @AppStorage("ownerBirthday") var ownerBirthday = ""
 
     var backend: AnticipyBackend {
         AnticipyBackend(
@@ -229,14 +230,16 @@ final class AnticipySession: ObservableObject {
 
     /// Her one record of who you are — used to fill the name/email/phone that
     /// every booking form asks for. Payment details are never stored here.
-    func saveOwnerDetails(first: String, last: String, email: String) async -> Bool {
+    func saveOwnerDetails(first: String, last: String, email: String, birthday: String = "") async -> Bool {
         let ok = await backend.upsertOwner(ownerID: ownerID, fields: [
             "first_name": first.trimmingCharacters(in: .whitespaces),
             "last_name": last.trimmingCharacters(in: .whitespaces),
             "email": email.trimmingCharacters(in: .whitespaces),
+            "birthday": birthday.trimmingCharacters(in: .whitespaces),
         ])
         if ok {
             ownerFirstName = first; ownerLastName = last; ownerEmail = email
+            if !birthday.isEmpty { ownerBirthday = birthday }
         }
         return ok
     }
