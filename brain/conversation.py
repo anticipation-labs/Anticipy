@@ -53,8 +53,11 @@ intents:
 - "decline": calling it off ("actually don't", "forget it", "not yet").
 - "modify": changes requested but NOT yet a go-ahead ("make it shorter
   first", "which restaurant did you pick?" then wait).
-- "answer": they are answering a question you asked; capture the substance
-  in changes.
+- "answer": they are answering a question you asked. If "blocked" is not
+  empty, it lists tasks stopped waiting for information and what each needs —
+  a reply that supplies any of it is an "answer", even if you have no memory
+  of asking (your thread does not survive a restart; the blocked list does).
+  Capture the substance in changes.
 - "new_request": something new to handle. NEVER use this to cancel or call
   off something — calling anything off is "decline" even when no pending item
   matches (pending_id null); do not invent a cancellation task.
@@ -70,6 +73,10 @@ Grounding rules (hard):
   reply a clarifying question ("the newsletter or the pitch deck?") — do not
   guess.
 - If nothing is pending and they seem to confirm, ask what they mean.
+- When "blocked" is not empty and their message supplies what a blocked task
+  needed, say so plainly and that you are getting on with it ("Perfect — I'll
+  finish the booking now"). Never ask what the information was for; the
+  blocked list already tells you.
 Match their energy; be human."""
 
 
@@ -144,6 +151,16 @@ class Conversation:
         pending_id = parsed.get("pending_id")
         changes = parsed.get("changes")
 
+        # Whatever he just told her about HIMSELF is worth keeping — a date
+        # of birth, an allergy, a loyalty number — filed under whatever it was
+        # about. Deliberately NOT gated on the "answer" label: classification
+        # is a guess, and a task sitting blocked for information is a fact.
+        learned, resumed = {}, None
+        if intent != "decline":
+            learned = self._remember_about_owner(text)
+            if learned:
+                resumed = self._resume_stuck()
+
         acted = None
         if intent == "confirm":
             acted = self._release(pending_id, changes, owner_text=text)
@@ -169,19 +186,12 @@ class Conversation:
             # re-triaged longer ones into DUPLICATE jobs, while the reply
             # cheerfully said "Sunday it is".
             asked_back = False
-            # Whatever he just told her about HIMSELF is worth keeping — his
-            # birthday, an allergy, a loyalty number. Remembered under
-            # whatever it was about, so the same question is never asked
-            # twice, and so nothing has to be pre-programmed per field.
-            self._remember_about_owner(text)
             if changes:
                 acted = self._amend(pending_id, changes)
                 if acted == "ambiguous":
                     parsed["reply"] = self._which_one()
                     acted, asked_back = None, True
-            # A task that stopped because it lacked this can now carry on.
-            resumed = self._resume_stuck()
-            if not acted and not asked_back and not resumed:
+            if not acted and not asked_back and not learned and not resumed:
                 # Nothing absorbed it — treat it as a fresh thought.
                 self.anticipy.hear(text)
         elif intent == "new_request":
@@ -216,12 +226,34 @@ class Conversation:
 
 
     REMEMBER_SYSTEM = """The owner just replied to a question about themselves.
-Pull out any DURABLE fact about them worth keeping — a date of birth, an
-allergy, a preference, a membership or loyalty number, a home airport, a
-dietary restriction. Only facts about the PERSON, never about one task, and
-NEVER card numbers, passwords or security codes even if they offer them.
+Pull out EVERY durable fact about them in the message — their name, email
+address, phone number, date of birth, an allergy, a preference, a membership
+or loyalty number, a home airport, a dietary restriction. Capture all of them,
+not just the most interesting one: a reply often carries several at once
+("Omar Ebrahim, omar@x.com, 604 555 0123" is three facts). Only facts about
+the PERSON, never about one task, and NEVER card numbers, passwords or
+security codes even if they offer them.
 Reply ONLY with compact JSON: {"facts": {"<short_snake_case_key>": "<value>"}}
 Use {"facts": {}} when there is nothing durable."""
+
+
+    def _blocked(self) -> list[dict]:
+        """Tasks stopped waiting for information, and what each needs. This is
+        how she knows she asked even after a restart — the thread is in memory
+        and dies with the process; this does not."""
+        try:
+            filt = 'status="needs_user"'
+            if self.anticipy.owner_id:
+                filt += f' && owner="{self.anticipy.owner_id}"'
+            r = pb.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
+            if not r.ok:
+                return []
+            return [{"id": j["id"], "goal": j.get("goal", ""),
+                     "needs": (j.get("result") or "")[:300]}
+                    for j in r.json().get("items", [])]
+        except Exception:
+            return []
 
     def _remember_about_owner(self, text: str) -> dict:
         """Store what he just told us about himself, keyed by whatever it was
@@ -308,7 +340,8 @@ Use {"facts": {}} when there is nothing durable."""
         thread = [{"who": t.role, "text": t.text} for t in self._thread(phone)[-10:]]
         memory = [f["fact"] for f in self.anticipy.memory.recall(text, limit=3)]
         payload = json.dumps({"thread": thread, "pending": self._pending(),
-                              "memory": memory, "owner_text": text})
+                              "blocked": self._blocked(), "memory": memory,
+                              "owner_text": text})
         if self.llm and self.llm.live:
             try:
                 # _parse returns {} on malformed output WITHOUT raising, so the
