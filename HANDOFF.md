@@ -1,9 +1,111 @@
 # ANTICIPY — COMPLETE HANDOFF DOCUMENT
 
-> **⚡ 2026-07-30 UPDATE — READ §0.5 "CURRENT PRODUCTION STATE" FIRST.**
+> **⚡ 2026-08-03 UPDATE — READ §0.4 "STATE AS OF 2026-08-03" FIRST, THEN §0.5.**
 > Everything below §0.5 is the original 2026-07-21 handoff and much of it has since
 > been superseded: the system now runs IN PRODUCTION on Railway with live Twilio
-> two-way texting, and TestFlight is at v1.0.2 build 17.
+> two-way texting, LLM-first conversational understanding, and a locked-down data API.
+
+---
+
+## 0.4 STATE AS OF 2026-08-03 (latest handoff — Devin → Claude Code)
+
+**Branch: `pendant-system`, everything pushed. Latest commit at handoff: see `git log -1`.**
+All work happens on this branch; production deploys from it via `railway up`.
+
+### What changed since §0.5 was written (newest first)
+
+1. **SECURITY LOCKDOWN (2026-08-03, DEPLOYED).** The PocketBase data API was fully
+   public — anyone could read the owner's profile/transcripts and forge jobs that drive
+   his paired browser (proven by probe). Now `backend/pb_hooks/guard.pb.js` requires the
+   shared secret header `X-Anticipy-Token: <ANTICIPY_SERVICE_TOKEN>` on EVERY
+   `/api/collections/*` read+write and on `POST /api/realtime`. Verified live: anon
+   read/write → 403; worker 5/5 standing check through the locked API.
+   - Token env `ANTICIPY_SERVICE_TOKEN` is set on BOTH Railway services (backend + worker).
+     Value is only in Railway variables — never commit it.
+   - **How the token flows:** worker reads env (`brain/pb.py` attaches the header to every
+     call — never bypass pb.py with raw requests). The extension and iPhone app receive it
+     from `GET /agent/key?agent_id=…` (only answers for a PAIRED agent; also carries the
+     OpenRouter key + owner profile) and store it (chrome.storage `serviceToken` /
+     AppStorage `serviceToken`), then attach it on all reads and writes.
+   - **Tokenless bootstrap (deliberate, narrow):** agent self-registration (POST agents,
+     never born paired/owned), pair-code lookup (GET agents/pendants with a
+     `pair_code="######"` filter), owner-id lookup (filter `owner="<high-entropy id>"`),
+     and claiming a NOT-yet-paired record (PATCH owner/paired). A paired record can never
+     be re-claimed without the token. Superuser (dashboard) always passes.
+   - Residual risk (accepted for now): 6-digit pair codes are brute-forceable in ~1M
+     guesses — add rate limiting before strangers use the system.
+   - **Client state at handoff:** worker ✅ live with token. Extension code fixed to send
+     the token on reads too, and `/anticipy-extension.zip` rebuilt — but OMAR MUST
+     re-download + reload the extension (his installed copy polls reads tokenless → 403 →
+     browser arm paused until he does). iPhone app: `AnticipyBackend.swift` now attaches
+     the token on reads — **needs build 18** (not yet built; needs the Mac). Until build 18
+     the installed app's feed reads may 403. Texting (SMS) is unaffected either way.
+
+2. **LLM-first texting (DEPLOYED, tested 18/18 + live conversation battery).** Every
+   inbound SMS goes to the LLM with thread + pending/blocked jobs + memory; it returns
+   `{intent, pending_id, pending_ids, changes, reply}`. NO command words — slang/profanity/
+   sarcasm/typos are understood ("fuck it, send it" = confirm; "nah scrap both" = decline
+   both). Keyword/ordinal parsing is offline-fallback only. Deterministic code still owns
+   all queue flips; the model can never claim something is done (status is ground truth).
+   Style: shared `TEXTING_STYLE` block in `brain/anticipy_core.py` (Tomo/Boardy research).
+   Dedup: identical outbound within 10 min is suppressed in code (`Conversation.say`).
+
+3. **Risk-based confirmation (DEPLOYED).** A request the owner explicitly TEXTS is its own
+   go-ahead: read-only/low-stakes goals ("open Wikipedia") run immediately; only goals that
+   leave his world (book/send/buy/post/delete…) still hold for a yes
+   (`is_consequential(goal, explicit=True)` in `anticipy_core.py`). Overheard (mic) requests
+   keep the stricter default-hold. Also: a bare "do it"/"cancel that" within ~3 min of
+   creating exactly one pending item applies to THAT item (`_freshest_pending`) — no more
+   numbered menus after an obvious ask.
+
+4. **Voice calls: NOT BUILT, deliberately deferred** (decision 2026-08-03 with Omar:
+   texting is the product; calls only later as urgency escalation / hands-free, and only
+   when realtime voice can feel human).
+
+### Verified working at handoff (2026-08-03, production)
+- Backend health 200, setup page 200, extension zip 200, anon API 403 (locked).
+- Worker: `worker up · llm=live:google/gemini-2.5-flash · sms=live` — SMS conversation
+  proven live by Omar (screenshots: chat, browser command end-to-end into his Chrome).
+- `proof/verify_all.py --no-browser` → 5/5 through the locked API
+  (run it as `railway run --service worker python3 proof/verify_all.py --no-browser`).
+- Conversation quality battery (live LLM, isolated local PB): profanity-confirm,
+  multi-decline, premise-rejection, gibberish→clarify, insult→deflect, memory recall — all
+  correct. Reproduce with a local PocketBase + `Conversation` + `MockTransport`.
+
+### TestFlight state at handoff
+- **Installed/current: v1.0.2 build 17 — uploaded 2026-08-02 and confirmed VALID by
+  Apple's API.** Contains the Listen fix (stop flushes the open utterance to the brain)
+  and the real setup-guide ShareLink in onboarding.
+- **Build 18 is PENDING (code committed, not built):** token-on-reads in
+  `AnticipyBackend.swift`. Build it from the Mac (`app/ios/build_on_mac.sh`, bump
+  `CURRENT_PROJECT_VERSION` to 18 in `app/ios/project.yml`). Until then the installed
+  app's feed may 403 (texting unaffected).
+
+### Known issues found in preliminary testing (2026-08-03), not yet fixed
+1. **Status blindness:** asked "what are you working on rn?" while two jobs were QUEUED,
+   she said "nothing pending" — `Conversation._pending()` only surfaces `awaiting_confirm`
+   (+ blocked), not queued/running. Small fix in `conversation.py`, big trust win.
+2. Phone-number onboarding still missing (`ANTICIPY_OWNER_PHONE` is hard-set on worker).
+3. Extension install is load-unpacked (no Web Store), though the OpenRouter key now comes
+   from `/agent/key` (no key prompt for paired agents).
+4. Multi-user isolation is single-owner-grade (one token, one owner env).
+5. Pair-code rate limiting (see lockdown notes above).
+6. Physical-device proofs still owed: build 17/18 Listen on the real iPhone; one fully
+   completed real booking through his browser.
+
+### How to move between agents (Devin ↔ Claude Code)
+- The repo (`pendant-system` branch) is the single source of truth — both agents work from
+  it. Claude Code runs locally on Omar's Mac (`~/Anticipy-pendant`; `git pull` first);
+  Devin works from its own clone and can SSH to the Mac only via a Pinggy tunnel Omar
+  starts (`ssh -p 443 -R0:localhost:22 tcp@a.pinggy.io`).
+- Deploys: `railway up --service backend` (upload root = `backend/`) and
+  `railway up --service worker` (repo root). Railway CLI auth is on Devin's box; Claude
+  Code on the Mac may need `railway login` once. Verify worker logs after every deploy.
+- Secrets live in Railway variables and on the Mac keychain — never in the repo. The
+  service token is readable with `railway variables --service worker` when needed.
+- Before handing back, ALWAYS: run the test gates (`proof/test_group_choice.py`,
+  `proof/test_sms_flows.py`, `proof/test_anticipy.py`, `proof/test_says_when_it_cannot_run.py`,
+  `proof/verify_all.py --no-browser`), push every commit, and update THIS section.
 
 ---
 
