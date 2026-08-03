@@ -33,6 +33,7 @@ import requests
 
 from . import pb
 
+from .anticipy_core import TEXTING_STYLE
 from .llm import LLM
 
 REPLY_SYSTEM = """You are Anticipy, a warm, sharp personal assistant who lives
@@ -89,7 +90,12 @@ Grounding rules (hard):
   needed, say so plainly and that you are getting on with it ("Perfect — I'll
   finish the booking now"). Never ask what the information was for; the
   blocked list already tells you.
-Match their energy; be human."""
+Match their energy; be human.
+
+When answering their multi-choice question replies: "both", "all of them",
+"neither", "the second one" are complete answers — classify by what they do
+(confirm/decline) and never re-ask a question they have already answered.
+""" + TEXTING_STYLE
 
 
 class MockTransport:
@@ -131,7 +137,18 @@ class Conversation:
     # ------------------------------------------------------------ outbound
 
     def say(self, phone: str, body: str) -> dict:
-        self._thread(phone).append(Turn("anticipy", body))
+        # The same sentence never goes out twice in a row within minutes — on
+        # 2026-08-02 one "which one should I call off" question was sent three
+        # times inside 30 seconds. Saying it once is the human behavior.
+        thread = self._thread(phone)
+        now = time.time()
+        for turn in reversed(thread[-8:]):
+            if turn.role != "anticipy":
+                continue
+            if turn.text == body and now - turn.ts < 600:
+                return {"to": phone, "body": body, "deduped": True}
+            break
+        thread.append(Turn("anticipy", body))
         return self.transport.send(phone, body)
 
     def reach_out(self, phone: str, about: str) -> dict:
@@ -185,6 +202,44 @@ class Conversation:
 
         acted = None
         asked_back = False   # her reply is already a clarifying question
+
+        # "Both" / "all of them" / "neither" answer her numbered question just
+        # as completely as "2" does. On 2026-08-03 he said "Both" and she asked
+        # the identical question three times — an answer she offered no way to
+        # give. Which verb applies comes from the question SHE asked (call off
+        # vs go ahead), not from re-guessing his one-word reply.
+        group = self._group_choice(text)
+        if group and intent in ("confirm", "decline", "answer", "chat"):
+            offered = list(getattr(self, "_offered", []) or []) or self._offered_from_thread()
+            asked_cancel = self._asked_to_cancel()
+            # A cancel offer listed blocked work too, so validate against the
+            # same pool the offer was built from.
+            pool = self._open_work() if asked_cancel else self._pending()
+            offered = [o for o in offered if any(p["id"] == o for p in pool)]
+            if offered:
+                if group == "none" and asked_cancel:
+                    parsed["reply"] = "Okay — keeping them all."
+                    self.say(phone, parsed["reply"])
+                    return {"intent": "chat", "pending_id": None,
+                            "changes": None, "acted": None, "reply": parsed["reply"]}
+                do_cancel = asked_cancel or group == "none" or intent == "decline"
+                done_goals = []
+                for jid in offered:
+                    res = (self._cancel(jid, owner_text=None) if do_cancel
+                           else self._release(jid, changes, owner_text=None))
+                    if res and not str(res).startswith("failed"):
+                        job = self._fetch(jid)
+                        done_goals.append((job or {}).get("goal", "that").replace("_", " "))
+                if done_goals:
+                    names = " and ".join(done_goals)
+                    reply = (f"Done — scrapped {names}." if do_cancel
+                             else f"On it — {names}, both moving." if len(done_goals) > 1
+                             else f"On it — {names} is moving.")
+                    self.say(phone, reply)
+                    return {"intent": "decline" if do_cancel else "confirm",
+                            "pending_id": None, "changes": changes,
+                            "acted": "multi", "reply": reply}
+
         if intent == "confirm":
             acted = self._release(pending_id, changes, owner_text=text_for_guard)
             if acted == "ambiguous":
@@ -617,6 +672,7 @@ Use {"facts": {}} when there is nothing durable."""
         if not pending:
             return "Nothing's waiting on you right now — what do you mean?"
         self._offered = [p["id"] for p in pending]
+        self._offered_cancel = cancel
         listed = ", ".join(f"{i}) {p['goal'].replace('_', ' ')}"
                            for i, p in enumerate(pending, 1))
         return f"Just to be sure — which one should I {verb}: {listed}?"
@@ -626,6 +682,31 @@ Use {"facts": {}} when there is nothing durable."""
     _ORDINALS = {"first": 1, "1st": 1, "one": 1, "second": 2, "2nd": 2,
                  "two": 2, "third": 3, "3rd": 3, "three": 3, "fourth": 4,
                  "4th": 4, "four": 4, "fifth": 5, "5th": 5, "five": 5}
+
+    # Whole-list answers to her numbered question. "none"/"neither" mean the
+    # opposite of whatever verb she offered.
+    _GROUP_ALL = {"both", "all", "everything"}
+    _GROUP_NONE = {"neither", "none", "nothing"}
+
+    def _group_choice(self, text: str) -> Optional[str]:
+        """'all', 'none', or None — a pick covering the whole offered list."""
+        words = re.findall(r"[a-z]+", (text or "").lower())
+        if not words or len(words) > 5:
+            return None
+        if self._GROUP_ALL & set(words):
+            return "all"
+        if self._GROUP_NONE & set(words):
+            return "none"
+        return None
+
+    def _asked_to_cancel(self) -> bool:
+        """Whether her last numbered question offered to CALL THINGS OFF."""
+        if getattr(self, "_offered_cancel", None) is not None and getattr(self, "_offered", None):
+            return bool(self._offered_cancel)
+        for turn in reversed(self._thread_from_record("", limit=10)):
+            if turn.role == "anticipy" and "which one" in turn.text.lower():
+                return "call off" in turn.text.lower()
+        return False
 
     def _choice_from_position(self, text: str) -> Optional[str]:
         """Which job he picked by position, or None if he did not pick one.
