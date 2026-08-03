@@ -63,6 +63,9 @@ final class AnticipySession: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var bag = Set<AnyCancellable>()
     private var seenDoneJobIDs = Set<String>()
+    /// When we last threw away a refused key, so recovery retries at a sane
+    /// pace rather than on every 3-second poll.
+    private var lastTokenRecovery = Date.distantPast
     let listener = PhoneListener()
 
     /// Words spoken with no network used to live in a plain in-memory array.
@@ -188,6 +191,18 @@ final class AnticipySession: ObservableObject {
             connection = .ready
         } catch let e as AnticipyBackend.BackendError {
             connection = .refused(e.status)
+            // Being turned away is RECOVERABLE, and the app used to have no way
+            // to recover: the key was fetched only `if serviceToken.isEmpty`, so
+            // a key that was stale, rotated on the server, or saved wrong could
+            // never be replaced. Every read 403'd forever and the only fix was
+            // deleting the app. Throw the bad key away so the fetch below can
+            // get a fresh one — rate-limited, so a genuinely rejected key
+            // retries occasionally instead of hammering every 3 seconds.
+            if e.status == 401 || e.status == 403,
+               Date().timeIntervalSince(lastTokenRecovery) > 60 {
+                lastTokenRecovery = Date()
+                serviceToken = ""
+            }
         } catch {
             connection = .offline
         }
