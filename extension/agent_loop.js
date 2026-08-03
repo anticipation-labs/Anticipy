@@ -267,72 +267,12 @@ function looksLikeCaptcha(state) {
   return /recaptcha|captcha|are you a robot|unusual traffic|verify you are human|hcaptcha|cf-challenge|one last step|solve the challenge|challenges\.cloudflare|verify you('| a)?re human|checking your browser|just a moment|performing security verification|verif(y|ies) (that )?you('| a)?re not a (ro)?bot/.test(blob);
 }
 
-// Optional CapSolver assist. Only used on NON-sensitive sites (never banking,
-// never a login/OTP page) and only when the owner has provided a key. It reads
-// the challenge's sitekey from the page, asks CapSolver for a token, and injects
-// it. On any failure it returns false and the loop still hands back to the user
-// — the safety default (stop at CAPTCHA) is never removed, only sometimes
-// preempted for plain "prove you're human" walls on research sites.
-async function detectCaptcha(tabId) {
-  try {
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => {
-        const rc = document.querySelector(".g-recaptcha[data-sitekey], [data-sitekey]");
-        if (rc) return { type: "recaptcha", sitekey: rc.getAttribute("data-sitekey") };
-        const ts = document.querySelector(".cf-turnstile[data-sitekey], [data-sitekey].cf-turnstile");
-        if (ts) return { type: "turnstile", sitekey: ts.getAttribute("data-sitekey") };
-        const ifr = [...document.querySelectorAll("iframe")].find((f) => /recaptcha|turnstile|hcaptcha/.test(f.src));
-        if (ifr) {
-          const m = ifr.src.match(/[?&]k=([^&]+)/) || ifr.src.match(/sitekey=([^&]+)/);
-          return { type: /turnstile/.test(ifr.src) ? "turnstile" : /hcaptcha/.test(ifr.src) ? "hcaptcha" : "recaptcha", sitekey: m ? decodeURIComponent(m[1]) : null };
-        }
-        return null;
-      },
-    });
-    return result;
-  } catch (e) { return null; }
-}
-
-async function solveCaptcha(capsolverKey, tabId, pageUrl, det) {
-  if (!capsolverKey || !det || !det.sitekey) return false;
-  const taskType = det.type === "turnstile" ? "AntiTurnstileTaskProxyLess"
-    : det.type === "hcaptcha" ? "HCaptchaTaskProxyLess"
-    : "ReCaptchaV2TaskProxyLess";
-  const body = { clientKey: capsolverKey, task: { type: taskType, websiteURL: pageUrl, websiteKey: det.sitekey } };
-  try {
-    const create = await (await fetch("https://api.capsolver.com/createTask", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    })).json();
-    if (!create.taskId) return false;
-    let token = null;
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const res = await (await fetch("https://api.capsolver.com/getTaskResult", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientKey: capsolverKey, taskId: create.taskId }),
-      })).json();
-      if (res.status === "ready") { token = res.solution?.gRecaptchaResponse || res.solution?.token; break; }
-      if (res.status === "failed" || res.errorId) return false;
-    }
-    if (!token) return false;
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (tok) => {
-        for (const name of ["g-recaptcha-response", "h-captcha-response", "cf-turnstile-response"]) {
-          let ta = document.querySelector(`textarea[name="${name}"], #${name}`);
-          if (!ta) { ta = document.createElement("textarea"); ta.name = name; ta.style.display = "none"; document.body.appendChild(ta); }
-          ta.value = tok;
-        }
-        if (typeof window.___grecaptcha_cfg !== "undefined") {
-          try { for (const k in ___grecaptcha_cfg.clients) { /* trigger callbacks best-effort */ } } catch (e) {}
-        }
-      },
-      args: [token],
-    });
-    return true;
-  } catch (e) { return false; }
-}
+// A CAPTCHA is a site saying "prove a person is here". Anticipy's answer is
+// to go and get the person — never to defeat it. A paid solving service used
+// to sit here (dead in every shipped build: nothing ever wrote a key for it),
+// which contradicted this project's own non-negotiable rule, would have failed
+// Chrome Web Store review, and is not something she should be able to do at
+// all. Stopping and handing back IS the feature.
 
 // Cancelling Chrome's "Anticipy started debugging this browser" bar is a
 // DECISION, not a glitch — and Chrome is the one that tells them apart:
@@ -465,8 +405,7 @@ async function elementCenter(tabId, index) {
 export async function runAgentGoal(goal, opts) {
   // Default to a scriptable search page: about:blank can't be script-injected,
   // so mapPage would fail every step and the run would die without acting.
-  const { apiKey, capsolverKey = null, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null } = opts;
-  let captchaAttempts = 0;
+  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null } = opts;
 
   const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
   // Sweep any working tabs left behind by earlier runs BEFORE opening a new
@@ -568,16 +507,6 @@ export async function runAgentGoal(goal, opts) {
         return (handBack = true) && { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
       }
       if (looksLikeCaptcha(state)) {
-        // Try the optional solver first (research sites only — banking is
-        // already blocked above, and we never touch login/OTP pages). Cap the
-        // attempts so a stubborn wall can't loop forever; then hand back.
-        if (capsolverKey && captchaAttempts < 2) {
-          captchaAttempts++;
-          const det = await detectCaptcha(tab.id);
-          const solved = await solveCaptcha(capsolverKey, tab.id, state.url, det);
-          history.push(`step ${step}: captcha ${solved ? "solved via CapSolver, retrying" : "solve failed"}`);
-          if (solved) { await new Promise((r) => setTimeout(r, 2500)); continue; }
-        }
         return (handBack = true) && { status: "needs_user", result: `stopped at a CAPTCHA/robot check on ${state.url} — needs a human`, tabId: tab.id };
       }
 

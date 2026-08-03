@@ -1,205 +1,239 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anticipy — the assistant that already did it</title>
+<meta name="description" content="Anticipy listens to your day, remembers what matters, and does the follow-through in your own browser — after you say yes.">
 <style>
-  :root {
-    --bg: #07080a;
-    --panel: #0e1013;
-    --line: rgba(255,255,255,.08);
-    --text: #eef1f4;
-    --muted: #9aa3ad;
-    --accent: #3ddc84;
-    --accent-dim: rgba(61,220,132,.12);
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-    line-height: 1.6; overflow-x: hidden;
-  }
-  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+  /* The one Anticipy palette. Same values as app/ios/Anticipy/Theme.swift and
+     the hosted setup page, so the product looks like one thing everywhere. */
+  :root { --ink:#0C0C0C; --surface:#161616; --card:#1E1E1E; --stroke:#252525;
+          --ivory:#F5F0EB; --sand:#D4CEC7; --gray:#8A8A8A; --champagne:#C8A97E;
+          --serif: Georgia, "Times New Roman", serif;
+          --sans: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--ink); color:var(--ivory);
+         font:16px/1.6 var(--sans); overflow-x:hidden; }
+  .wrap { max-width:760px; margin:0 auto; padding:0 20px; }
 
-  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
-  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .3px; }
-  .logo .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
-    box-shadow: 0 0 18px var(--accent); animation: pulse 2.6s infinite; }
-  @keyframes pulse { 0%,100% { box-shadow: 0 0 8px var(--accent); } 50% { box-shadow: 0 0 26px var(--accent); } }
-  nav a { color: var(--muted); text-decoration: none; margin-left: 26px; font-size: 14px; }
-  nav a:hover { color: var(--text); }
+  a { color:var(--champagne); }
+  :focus-visible { outline:2px solid var(--ivory); outline-offset:3px;
+                   border-radius:4px; }
 
-  .hero { padding: 96px 0 60px; text-align: center; }
-  .hero h1 {
-    font-size: clamp(38px, 6vw, 68px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.08;
-    animation: rise .8s ease both;
-  }
-  .hero h1 em { font-style: normal; color: var(--accent); }
-  .hero p.sub {
-    margin: 22px auto 0; max-width: 620px; color: var(--muted); font-size: 19px;
-    animation: rise .8s .15s ease both;
-  }
-  @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
-  .cta { margin-top: 36px; animation: rise .8s .3s ease both; }
-  .btn {
-    display: inline-block; padding: 14px 28px; border-radius: 12px; font-weight: 600;
-    text-decoration: none; font-size: 16px; transition: transform .15s ease, box-shadow .15s ease;
-  }
-  .btn.primary { background: var(--accent); color: #04220f; }
-  .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(61,220,132,.35); }
-  .btn.ghost { color: var(--text); border: 1px solid var(--line); margin-left: 12px; }
-  .btn.ghost:hover { border-color: var(--accent); }
+  /* ---- the mark: an ivory pill with a champagne dot, same as everywhere ---- */
+  nav { display:flex; align-items:center; justify-content:space-between;
+        gap:16px; flex-wrap:wrap; padding:26px 0; }
+  .logo { display:flex; align-items:center; gap:11px; }
+  .pill { width:15px; height:36px; border:2px solid var(--ivory);
+          border-radius:8px; position:relative; flex:none; }
+  .pill::after { content:""; position:absolute; left:50%; top:60%;
+                 transform:translateX(-50%); width:5px; height:5px;
+                 border-radius:50%; background:var(--champagne); }
+  .wordmark { font-family:var(--serif); font-size:23px; }
+  nav .links a { color:var(--gray); text-decoration:none; margin-left:22px;
+                 font-size:14px; }
+  nav .links a:hover { color:var(--ivory); }
 
-  /* live demo strip */
-  .demo {
-    margin: 70px auto 0; max-width: 760px; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 18px; padding: 26px 30px; text-align: left; position: relative; overflow: hidden;
-  }
-  .demo::before {
-    content: ""; position: absolute; inset: 0;
-    background: linear-gradient(120deg, transparent 30%, rgba(61,220,132,.06) 50%, transparent 70%);
-    animation: sheen 5s infinite;
-  }
-  @keyframes sheen { 0% { transform: translateX(-100%);} 100% { transform: translateX(100%);} }
-  .demo .line { display: flex; gap: 12px; margin: 14px 0; opacity: 0; animation: rise .6s ease forwards; }
-  .demo .line:nth-child(2) { animation-delay: .6s; }
-  .demo .line:nth-child(3) { animation-delay: 1.6s; }
-  .demo .line:nth-child(4) { animation-delay: 2.8s; }
-  .tag { flex-shrink: 0; font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
-    padding: 3px 9px; border-radius: 20px; height: fit-content; margin-top: 2px; }
-  .tag.heard { background: rgba(255,255,255,.07); color: var(--muted); }
-  .tag.brain { background: var(--accent-dim); color: var(--accent); }
-  .demo .txt { font-size: 15px; color: var(--text); }
-  .demo .txt small { display: block; color: var(--muted); margin-top: 3px; }
+  /* ---- type ---- */
+  h1 { font-family:var(--serif); font-weight:400; letter-spacing:0;
+       font-size:clamp(34px, 6vw, 54px); line-height:1.12; }
+  h1 em { font-style:normal; color:var(--champagne); }
+  h2 { font-family:var(--serif); font-weight:400; font-size:28px;
+       margin-bottom:8px; }
+  h3 { font-family:var(--serif); font-weight:400; font-size:19px;
+       margin:8px 0 6px; }
+  .sub { color:var(--gray); font-size:18px; max-width:52ch; }
+  .lead { color:var(--gray); max-width:56ch; }
+  .note { color:var(--gray); font-size:14px; }
 
-  section { padding: 90px 0 0; }
-  h2 { font-size: 32px; letter-spacing: -.5px; margin-bottom: 10px; }
-  .lead { color: var(--muted); max-width: 560px; }
+  .hero { padding:70px 0 44px; }
+  .hero .sub { margin-top:18px; }
+  .cta { margin-top:30px; display:flex; gap:12px; flex-wrap:wrap; }
+  .btn { display:inline-block; font:inherit; font-weight:600;
+         padding:13px 26px; border-radius:999px; text-decoration:none;
+         background:var(--champagne); color:var(--ink); border:0;
+         cursor:pointer; }
+  .btn.ghost { background:transparent; color:var(--ivory);
+               border:1px solid var(--stroke); }
+  .btn.ghost:hover { border-color:var(--champagne); }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 40px; }
-  .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px;
-    transition: transform .2s ease, border-color .2s ease;
-  }
-  .card:hover { transform: translateY(-4px); border-color: rgba(61,220,132,.4); }
-  .card .n { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
-  .card h3 { margin: 8px 0 8px; font-size: 18px; }
-  .card p { color: var(--muted); font-size: 14.5px; }
+  /* ---- the conversation strip ---- */
+  .demo { margin-top:44px; background:var(--card); border:1px solid var(--stroke);
+          border-radius:18px; padding:22px 24px; }
+  .demo dl { display:grid; grid-template-columns:auto 1fr; gap:14px 14px; }
+  .demo dt { font-size:11px; font-weight:700; letter-spacing:.08em;
+             text-transform:uppercase; padding:4px 10px; border-radius:999px;
+             height:fit-content; margin-top:2px; white-space:nowrap;
+             background:var(--surface); color:var(--gray);
+             border:1px solid var(--stroke); }
+  .demo dt.her { color:var(--champagne); border-color:rgba(200,169,126,.35); }
+  .demo dd { font-size:15px; }
+  .demo dd small { display:block; color:var(--gray); margin-top:3px; }
 
-  /* install walkthrough */
-  .steps { counter-reset: step; margin-top: 44px; display: grid; gap: 16px; }
-  .step {
-    display: flex; gap: 20px; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 16px; padding: 24px 26px; align-items: flex-start;
-  }
-  .step::before {
-    counter-increment: step; content: counter(step);
-    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
-    background: var(--accent-dim); color: var(--accent); font-weight: 700;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .step h4 { font-size: 16px; margin-bottom: 4px; }
-  .step p { color: var(--muted); font-size: 14.5px; }
-  .step code {
-    background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 6px;
-    padding: 1px 7px; font-size: 13px; color: var(--accent);
-  }
+  section { padding:76px 0 0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+          gap:14px; margin-top:32px; list-style:none; }
+  .card { background:var(--card); border:1px solid var(--stroke);
+          border-radius:18px; padding:22px 24px; transition:border-color .25s; }
+  .card:hover { border-color:rgba(200,169,126,.4); }
+  .card .n { font-family:var(--sans); font-size:13px; font-weight:600;
+             letter-spacing:.06em; text-transform:uppercase;
+             color:var(--champagne); }
+  .card p { color:var(--sand); font-size:14.5px; }
 
-  footer { margin-top: 110px; padding: 34px 0 44px; border-top: 1px solid var(--line);
-    color: var(--muted); font-size: 13.5px; text-align: center; }
+  .install { background:var(--card); border:1px solid var(--stroke);
+             border-radius:18px; padding:24px 26px; margin-top:32px; }
+  .install ul { margin:0 0 18px; padding-left:20px; color:var(--sand); }
+  .install li { margin-bottom:8px; }
+  .install li:last-child { margin-bottom:0; }
+  code { background:var(--surface); border:1px solid var(--stroke);
+         border-radius:8px; padding:2px 8px; color:var(--sand);
+         font-size:14px; }
+
+  footer { margin-top:96px; padding:30px 0 44px; border-top:1px solid var(--stroke);
+           color:var(--gray); font-size:13.5px; }
+
+  /* ---- motion, kept quiet and optional ---- */
+  .rise { opacity:0; transform:translateY(14px);
+          animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards; }
+  .d1 { animation-delay:.06s } .d2 { animation-delay:.14s }
+  .d3 { animation-delay:.22s } .d4 { animation-delay:.30s }
+  @keyframes rise { to { opacity:1; transform:none } }
+  .pill::after { animation:breathe 3s ease-in-out infinite; }
+  @keyframes breathe { 50% { transform:translateX(-50%) scale(1.35); opacity:.75 } }
+  .btn { transition:transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s; }
+  .btn:hover { transform:translateY(-2px);
+               box-shadow:0 8px 24px rgba(200,169,126,.25); }
+  /* Nothing here is contingent on an animation finishing. */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior:auto; }
+    .rise { opacity:1; transform:none; animation:none; }
+    .pill::after { animation:none; }
+    .btn { transition:none; }
+    .btn:hover { transform:none; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+
   <nav>
-    <div class="logo"><span class="dot"></span>Anticipy</div>
-    <div>
+    <div class="logo">
+      <div class="pill" aria-hidden="true"></div>
+      <span class="wordmark">Anticipy</span>
+    </div>
+    <div class="links">
       <a href="#how">How it works</a>
       <a href="#install">Install</a>
-      <a href="#pendant">Pendant</a>
+      <a href="#pendant">The pendant</a>
     </div>
   </nav>
 
-  <div class="hero">
-    <h1>You mention it.<br /><em>It's already done.</em></h1>
-    <p class="sub">Anticipy is a pendant that hears your day and an agent that acts on it —
-      drafting the email, finding the reservation, chasing the follow-up — then asks
-      one question: <b>“good to send?”</b></p>
-    <div class="cta">
-      <a class="btn primary" href="#install">Install the browser agent</a>
-      <a class="btn ghost" href="#how">See it work</a>
+  <header class="hero">
+    <h1 class="rise">You mention it.<br><em>It's already done.</em></h1>
+    <p class="sub rise d1">I listen to your day, keep hold of the thing you said
+      you'd do, and get it ready. Then I ask you once — and do it in your own
+      browser, with your own accounts.</p>
+    <div class="cta rise d2">
+      <a class="btn" href="#install">Install the browser agent</a>
+      <a class="btn ghost" href="#how">See how it works</a>
     </div>
 
-    <div class="demo">
-      <div class="line"><span class="tag heard">Heard</span>
-        <div class="txt">“I'll send you the pitch deck right after this call.”</div></div>
-      <div class="line"><span class="tag brain">Anticipy</span>
-        <div class="txt">Found the investor in your inbox. Draft written, deck attached, DocSend link included.
-          <small>Sitting in your Gmail drafts — nothing sent yet.</small></div></div>
-      <div class="line"><span class="tag brain">Anticipy</span>
-        <div class="txt">Good to send it on your behalf?</div></div>
-      <div class="line"><span class="tag heard">You</span>
-        <div class="txt">Yes.</div></div>
+    <div class="demo rise d3">
+      <dl>
+        <dt>Heard</dt>
+        <dd>“We should do dinner with Priya on Thursday.”</dd>
+        <dt class="her">Anticipy</dt>
+        <dd>Cactus has 7:30 for two on Thursday. Book it?
+          <small>Nothing is booked yet.</small></dd>
+        <dt>You</dt>
+        <dd>Yes.</dd>
+        <dt class="her">Anticipy</dt>
+        <dd>Booked. The confirmation is in your email.</dd>
+      </dl>
     </div>
-  </div>
+  </header>
 
-  <section id="how">
-    <h2>Three pieces. One assistant.</h2>
-    <p class="lead">Everything runs on your accounts, in your browser, with your confirmation
-      before anything irreversible.</p>
-    <div class="grid">
-      <div class="card"><div class="n">01 — EARS</div>
-        <h3>The pendant</h3>
-        <p>A featherweight wearable that streams what it hears to your phone over Bluetooth.
-          All-day battery. No screen, no buttons, no fuss.</p></div>
-      <div class="card"><div class="n">02 — BRAIN</div>
-        <h3>The app</h3>
-        <p>Transcribes your day — in the cloud or fully on-device — and decides what matters:
-          ignore the small talk, act on the commitments, ask when it's unsure.</p></div>
-      <div class="card"><div class="n">03 — HANDS</div>
-        <h3>The browser agent</h3>
-        <p>A Chrome extension that works inside your logged-in sessions. Gmail, Calendar,
-          reservations, portals — it does the clicking, you give the final yes.</p></div>
-    </div>
-  </section>
+  <main>
+    <section id="how">
+      <h2>Three pieces. One assistant.</h2>
+      <p class="lead">Everything runs on your accounts, in your browser, and
+        nothing consequential happens before you've said yes.</p>
+      <ul class="grid">
+        <li class="card"><span class="n">01 — Ears</span>
+          <h3>Your phone</h3>
+          <p>The phone in your pocket is the microphone. It turns what it hears
+            into text, and that text is what I work from.</p></li>
+        <li class="card"><span class="n">02 — Judgement</span>
+          <h3>The app</h3>
+          <p>Most of what you say is small talk and I let it go. When something
+            is a commitment, I get it ready and bring it to you — in the app,
+            or by text.</p></li>
+        <li class="card"><span class="n">03 — Hands</span>
+          <h3>The browser agent</h3>
+          <p>A Chrome extension that works inside your logged-in sessions.
+            Gmail, Calendar, reservations, portals. I do the clicking; you gave
+            the yes.</p></li>
+      </ul>
+    </section>
 
-  <section id="install">
-    <h2>Install the browser agent</h2>
-    <p class="lead">Developer preview — loads straight into Chrome in under a minute. No store, no wait.</p>
-    <div class="steps">
-      <div class="step"><div><h4>Download the extension</h4>
-        <p>Grab <code>anticipy-extension.zip</code> and unzip it anywhere you like —
-          Desktop is fine.</p></div></div>
-      <div class="step"><div><h4>Open Chrome's extension page</h4>
-        <p>Type <code>chrome://extensions</code> in the address bar, then flip on
-          <b>Developer mode</b> (top-right toggle).</p></div></div>
-      <div class="step"><div><h4>Load it</h4>
-        <p>Click <b>Load unpacked</b> and pick the unzipped <code>anticipy</code> folder.
-          The green Anticipy dot appears in your toolbar.</p></div></div>
-      <div class="step"><div><h4>Pair it</h4>
-        <p>Click the Anticipy icon and enter the 6-digit code from your phone app.
-          That's it — your assistant has hands.</p></div></div>
-    </div>
-  </section>
+    <section id="install">
+      <h2>Install the browser agent</h2>
+      <p class="lead">It's a developer install for now, and I'd rather you knew
+        that before you start than after.</p>
 
-  <section id="pendant">
-    <h2>The pendant</h2>
-    <p class="lead">Machined to disappear — a piece of jewelry that happens to be a microphone.
-      Magnetic charging, all-day listening, and a phone app that treats your audio like a secret:
-      transcribe locally and nothing ever leaves your pocket.</p>
-    <div class="grid">
-      <div class="card"><div class="n">BATTERY</div><h3>All-day listening</h3>
-        <p>Streams your whole workday on one charge, then snaps onto its magnetic charger at night.</p></div>
-      <div class="card"><div class="n">PRIVACY</div><h3>Local mode</h3>
-        <p>Flip one toggle and transcription happens entirely on your iPhone. No cloud, no copies.</p></div>
-      <div class="card"><div class="n">CONTROL</div><h3>Nothing without a yes</h3>
-        <p>Sends, bookings, payments, cancellations — the agent prepares everything and always asks first.</p></div>
-    </div>
-  </section>
+      <div class="install">
+        <ul>
+          <li>About five minutes, on a Mac or PC, in Chrome. It can't be done
+            from a phone.</li>
+          <li>You download a folder and keep it. Chrome reads it from where it
+            sits, so moving or deleting it stops me working.</li>
+          <li>It won't update itself. When there's a new version I'll tell you.</li>
+          <li>While I'm working, Chrome puts a yellow strip across your tabs
+            saying <em>“Anticipy started debugging this browser.”</em> That's
+            Chrome being honest that something other than you is clicking. It
+            goes when the task is done.</li>
+        </ul>
+        <a class="btn" href="https://backend-production-61e0a.up.railway.app/setup.html">Open the setup guide</a>
+        <p class="note" style="margin-top:14px">The five steps live on that one
+          page, with the download on it. I keep them in a single place on
+          purpose — two copies of an instruction is how one of them ends up
+          wrong.</p>
+      </div>
+    </section>
 
-  <footer>Anticipy — it already did it. · Developer preview</footer>
+    <section id="pendant">
+      <h2>The pendant</h2>
+      <p class="lead">A piece of jewellery that happens to be a microphone, so
+        your day is heard without your phone being out.</p>
+      <p class="note" style="margin-top:16px; max-width:56ch">Straight answer on
+        where it is: the hardware exists and connects over Bluetooth, but what
+        it hears doesn't reach me yet — that path isn't finished. Until it is,
+        your phone is the microphone, and everything on this page works without
+        a pendant.</p>
+      <ul class="grid">
+        <li class="card"><span class="n">Wearing it</span>
+          <h3>Worn, not operated</h3>
+          <p>Nothing to read, nothing to press. You put it on and forget it —
+            that's the whole point of it not being a phone.</p></li>
+        <li class="card"><span class="n">What I keep</span>
+          <h3>Words, not recordings</h3>
+          <p>What you say becomes text, and the text is what comes to me so I
+            can act on it.</p></li>
+        <li class="card"><span class="n">Control</span>
+          <h3>Nothing without a yes</h3>
+          <p>Sends, bookings, cancellations — I prepare the whole thing and ask
+            before any of it is real.</p></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    Anticipy — it already did it. Developer preview.
+  </footer>
+
 </div>
 </body>
 </html>

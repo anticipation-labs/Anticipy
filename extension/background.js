@@ -289,7 +289,6 @@ async function runJobInner(job, params) {
   if (job.goal === "agent_goal") {
     // Autonomous mode: LLM click-loop via chrome.debugger in a background
     // Anticipy tab group (same mechanics as Claude in Chrome / Codex).
-    const { capsolverKey } = await chrome.storage.local.get(["capsolverKey"]);
     const openrouterKey = await ensureLLMKey();
     if (!openrouterKey) {
       await updateJob(job.id, { status: "failed", result: "no LLM key: not paired yet, or the backend has none configured" });
@@ -312,7 +311,6 @@ async function runJobInner(job, params) {
       } catch (_) { /* keep what we had */ }
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
-        capsolverKey: capsolverKey || null,
         startUrl: params.start_url || undefined,
         stillLive: () => jobStillLive(job.id),
         ...(agentModel ? { model: agentModel } : {}),
