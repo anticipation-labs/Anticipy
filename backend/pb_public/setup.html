@@ -4,91 +4,330 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anticipy — Set up your browser</title>
+<meta name="description" content="Install the Anticipy browser agent in Chrome. About five minutes, on a Mac or PC.">
 <style>
   :root { --ink:#0C0C0C; --surface:#161616; --card:#1E1E1E; --stroke:#252525;
           --ivory:#F5F0EB; --sand:#D4CEC7; --gray:#8A8A8A; --champagne:#C8A97E; }
   * { box-sizing: border-box; }
+  /* Insurance: nothing here should ever be wider than the screen, and a
+     sideways scrollbar on a setup page reads as broken. */
   body { margin:0; background:var(--ink); color:var(--ivory);
-         font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
+         font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif;
+         overflow-x: hidden; overflow-x: clip; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 48px 20px 80px; }
   h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400;
        font-size: 34px; margin: 18px 0 8px; }
-  .sub { color: var(--gray); margin-bottom: 36px; }
+  .sub { color: var(--gray); margin: 0 0 32px; }
   .logo { display:flex; align-items:center; gap:12px; }
+  .wordmark { font-family: Georgia, "Times New Roman", serif; font-size:26px; }
   .pill { width:22px; height:52px; border:3px solid var(--ivory); border-radius:12px;
-          position:relative; }
+          position:relative; flex: none; }
   .pill::after { content:""; position:absolute; left:50%; top:60%;
                  transform:translateX(-50%); width:7px; height:7px;
                  border-radius:50%; background:var(--champagne); }
-  .step { background:var(--card); border:1px solid var(--stroke);
+
+  /* Cards: the honesty panel, and each numbered step. */
+  .card, .steps > li { background:var(--card); border:1px solid var(--stroke);
           border-radius:18px; padding:20px 22px; margin-bottom:14px; }
-  .step b { color:var(--champagne); font-weight:600; display:block;
-            font-size:13px; letter-spacing:.06em; text-transform:uppercase;
-            margin-bottom:6px; }
+  .steps { list-style:none; margin:0 0 8px; padding:0; }
+  .steps > li > h2, .card > h2 { font-family: Georgia, "Times New Roman", serif;
+          font-weight:400; font-size:20px; margin:0 0 10px; color:var(--ivory); }
+  .num { display:block; color:var(--champagne); font-weight:600;
+         font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+         font-size:13px; letter-spacing:.06em; text-transform:uppercase;
+         margin-bottom:6px; }
+  .steps > li p, .card p { margin: 0 0 10px; }
+  .steps > li > p:last-child, .card > p:last-child { margin-bottom:0; }
+  .card ul, .os, .branch { margin: 0; padding-left: 20px; }
+  .card li, .os li, .branch li { margin-bottom: 8px; }
+  .card li:last-child, .os li:last-child, .branch li:last-child { margin-bottom: 0; }
+  .os, .branch { margin: 0 0 10px; }
+
   .btn { display:inline-block; background:var(--champagne); color:var(--ink);
-         font-weight:600; padding:13px 26px; border-radius:999px;
-         text-decoration:none; margin: 6px 0 2px; }
+         font: inherit; font-weight:600; padding:13px 26px; border-radius:999px;
+         border:0; text-decoration:none; margin: 6px 0 2px; cursor:pointer; }
+  .btn.small { padding:9px 18px; font-size:14px; }
+  .linkish { background:none; border:0; padding:0; font: inherit;
+             color:var(--champagne); text-decoration:underline;
+             text-underline-offset:3px; cursor:pointer; }
   code { background:var(--surface); border:1px solid var(--stroke);
-         border-radius:8px; padding:2px 8px; color:var(--sand); font-size:14px; }
-  .note { color:var(--gray); font-size:14px; }
-  /* the page breathes: soft champagne glow behind the header, steps cascade in */
+         border-radius:8px; padding:2px 8px; color:var(--sand); font-size:14px;
+         overflow-wrap:anywhere; }
+  em { font-style:normal; color:var(--sand); }
+  .copyrow { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+             margin: 4px 0 10px; }
+  .copyrow code { padding:10px 12px; }
+  .note { color: var(--gray); font-size:14px; }
+  .note h2 { font-family: Georgia, "Times New Roman", serif; font-weight:400;
+             font-size:17px; color:var(--sand); margin: 24px 0 8px; }
+  .meta { color: var(--gray); font-size:14px; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+             overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+  /* Focus is authored, not inherited from the browser: the champagne button
+     needs an outline that reads against champagne, so it's ivory. */
+  .btn:focus, .linkish:focus, a:focus { outline:2px solid var(--ivory);
+                                        outline-offset:3px; }
+  .btn:focus:not(:focus-visible), .linkish:focus:not(:focus-visible),
+  a:focus:not(:focus-visible) { outline:none; }
+  .btn:focus-visible, .linkish:focus-visible, a:focus-visible {
+    outline:2px solid var(--ivory); outline-offset:3px;
+    box-shadow: 0 0 0 7px rgba(200,169,126,.18); }
+
+  /* The page breathes: a soft champagne glow behind the header. */
   .hero { position:relative; }
-  .hero::before { content:""; position:absolute; inset:-60px -40px auto;
+  /* Inset horizontally to 0: a negative side inset gives a narrow screen a
+     sideways scrollbar, and the gradient has faded out long before the edge. */
+  .hero::before { content:""; position:absolute; inset:-60px 0 auto;
                   height:220px; background:radial-gradient(ellipse at 30% 20%,
-                  rgba(200,169,126,.14), transparent 65%); pointer-events:none; }
-  .pill::after { animation: breathe 3s ease-in-out infinite; }
-  @keyframes breathe { 50% { transform:translateX(-50%) scale(1.35); opacity:.75 } }
-  .step, h1, .sub, .note { opacity:0; transform:translateY(14px);
-    animation: rise .5s cubic-bezier(.2,.7,.3,1) forwards; }
-  h1 { animation-delay:.05s } .sub { animation-delay:.15s }
-  .step:nth-of-type(1){animation-delay:.25s} .step:nth-of-type(2){animation-delay:.33s}
-  .step:nth-of-type(3){animation-delay:.41s} .step:nth-of-type(4){animation-delay:.49s}
-  .step:nth-of-type(5){animation-delay:.57s} .note{animation-delay:.7s}
-  @keyframes rise { to { opacity:1; transform:none } }
-  .btn { transition: transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s; }
-  .btn:hover { transform: translateY(-2px);
-               box-shadow: 0 8px 24px rgba(200,169,126,.25); }
-  .step { transition: border-color .25s; }
-  .step:hover { border-color: rgba(200,169,126,.4); }
+                  rgba(200,169,126,.16), transparent 70%); pointer-events:none; }
+  .steps > li { transition: border-color .25s; }
+  .steps > li:hover { border-color: rgba(200,169,126,.4); }
+  .btn { transition: box-shadow .2s; }
+  .btn:hover { box-shadow: 0 8px 24px rgba(200,169,126,.25); }
+
+  /* Motion is opt-in. Nothing starts at opacity:0 unless an animation is
+     actually going to run, so the page never depends on one finishing. */
+  @media (prefers-reduced-motion: no-preference) {
+    .rise, .steps > li { opacity:0; transform:translateY(14px);
+            animation: rise .5s cubic-bezier(.2,.7,.3,1) forwards; }
+    h1.rise { animation-delay:.05s }
+    .sub.rise { animation-delay:.15s }
+    .copyrow.rise { animation-delay:.22s }
+    .truth.rise { animation-delay:.25s }
+    .on-phone .note.rise { animation-delay:.3s }
+    /* Delays hang off :nth-child of the <ol>, whose only children are the
+       five steps — so they cascade in the order a person reads them. */
+    .steps > li:nth-child(1) { animation-delay:.35s }
+    .steps > li:nth-child(2) { animation-delay:.43s }
+    .steps > li:nth-child(3) { animation-delay:.51s }
+    .steps > li:nth-child(4) { animation-delay:.59s }
+    .steps > li:nth-child(5) { animation-delay:.67s }
+    .closing.rise { animation-delay:.8s }
+    @keyframes rise { to { opacity:1; transform:none } }
+    .pill::after { animation: breathe 3s ease-in-out infinite; }
+    @keyframes breathe { 50% { transform:translateX(-50%) scale(1.35); opacity:.75 } }
+    .btn { transition: transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s; }
+    .btn:hover { transform: translateY(-2px); }
+  }
+
+  /* Device-aware: none of this is possible on a touch-only device — there is
+     no Chrome extensions page and nowhere to unzip to. So on a phone or
+     tablet the hero becomes "send this to your computer" and the download
+     disappears. The escape hatch below covers a false positive. */
+  .on-phone { display:none; }
+  @media (max-width: 900px) and (pointer: coarse) and (hover: none) {
+    html:not(.force-desktop) .on-phone { display:block; }
+    html:not(.force-desktop) .on-computer { display:none; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap hero">
-  <div class="logo"><div class="pill"></div>
-    <span style="font-family:Georgia,serif;font-size:26px">Anticipy</span></div>
-  <h1>Give Anticipy hands.</h1>
-  <p class="sub">Five minutes, once. After this, Anticipy can do real work in
-    your Chrome — always asking you first.</p>
-
-  <div class="step"><b>Step 1 — Download</b>
-    Download the browser agent and unzip it (double-click the file).<br>
-    <a class="btn" href="/anticipy-extension.zip" download>Download Anticipy for Chrome</a>
+<main class="wrap hero">
+  <div class="logo">
+    <div class="pill" aria-hidden="true"></div>
+    <span class="wordmark">Anticipy</span>
   </div>
 
-  <div class="step"><b>Step 2 — Open Chrome's extensions page</b>
-    In Chrome, type <code>chrome://extensions</code> in the address bar and
-    press Enter.
+  <!-- Touch device -->
+  <section class="on-phone">
+    <h1 class="rise">You're on your phone.</h1>
+    <p class="sub rise">This part has to happen on a Mac or PC, in Chrome — there's
+      a folder to download and one Chrome switch to flip, and neither exists on a
+      phone. Send yourself the link and pick it up over there.</p>
+    <div class="copyrow rise">
+      <code id="pageLink">https://backend-production-61e0a.up.railway.app/setup.html</code>
+      <button type="button" class="btn small" data-copy="page-url">Copy link</button>
+    </div>
+    <p class="note rise">The whole thing is below, so you know what you're walking
+      into. It takes about five minutes.<br>
+      <button type="button" class="linkish" id="showFull">I'm on a computer — show me the full guide</button></p>
+  </section>
+
+  <!-- Anything that can actually do this -->
+  <div class="on-computer" id="computerTop" tabindex="-1">
+    <h1 class="rise">Give Anticipy hands.</h1>
+    <p class="sub rise">About five minutes on this computer, once. After it, I can
+      do real work in your own Chrome — with your logged-in accounts, never your
+      passwords.</p>
   </div>
 
-  <div class="step"><b>Step 3 — Turn on Developer mode</b>
-    Flip the <code>Developer mode</code> switch in the top-right corner of
-    that page.
-  </div>
+  <section class="card truth rise" aria-labelledby="truth-h">
+    <h2 id="truth-h">Three honest things first</h2>
+    <ul>
+      <li><strong>This is a developer install.</strong> Chrome calls it
+        <code>Load unpacked</code> — you download a folder and you keep it, and
+        Chrome reads it from wherever it sits. Move it or delete it and I stop
+        working.</li>
+      <li><strong>It won't update itself.</strong> When there's a new version I'll
+        tell you, and you'll download it again and press the refresh arrow on
+        Chrome's extensions page. The Chrome Web Store version, when it's ready,
+        will update on its own.</li>
+      <li><strong>You'll see a yellow bar.</strong> While I'm working, Chrome puts
+        a strip across the top of your tabs saying
+        <em>“Anticipy started debugging this browser.”</em> That's Chrome being
+        honest that something other than you is clicking. It goes when the task
+        is done.</li>
+    </ul>
+  </section>
 
-  <div class="step"><b>Step 4 — Load Anticipy</b>
-    Click <code>Load unpacked</code> (top-left) and choose the unzipped
-    <code>anticipy-extension</code> folder.
-  </div>
+  <ol class="steps" role="list">
+    <li class="step">
+      <h2><span class="num">Step 1</span> Download the folder</h2>
+      <div class="on-computer">
+        <a class="btn" href="/anticipy-extension.zip" download>Download Anticipy for Chrome</a>
+        <p class="meta">anticipy-extension.zip — version 0.2.0, 37 KB. It comes
+          from Anticipy's own server, the same one your phone talks to.</p>
+      </div>
+      <p class="on-phone">The download button is right here when you open this page
+        on your computer.</p>
+      <p>Then unzip it. This bit differs by machine:</p>
+      <ul class="os">
+        <li><strong>Mac</strong> — double-click the file. You get a folder called
+          <code>anticipy-extension</code> next to it.</li>
+        <li><strong>Windows</strong> — right-click the file, choose
+          <code>Extract All</code>, then <code>Extract</code>. Don't just
+          double-click it: that opens a read-only peek inside the zip, and Chrome
+          can't load from there.</li>
+      </ul>
+      <p class="meta">Put the folder somewhere you won't tidy away later — your
+        Documents, not your Downloads.</p>
+    </li>
 
-  <div class="step"><b>Step 5 — Pair with your phone</b>
-    A welcome tab opens with a <b style="display:inline;text-transform:none">6-digit
-    pair code</b>. In the Anticipy app on your phone, open Settings and type
-    that code. Done — the app will show <code>Agent live</code>.
-  </div>
+    <li class="step">
+      <h2><span class="num">Step 2</span> Open Chrome's extensions page</h2>
+      <p>Chrome won't let a web page link to its own settings, so this one is copy
+        and paste. Put this in Chrome's address bar and press Enter.</p>
+      <div class="copyrow">
+        <code>chrome://extensions</code>
+        <button type="button" class="btn small" data-copy="chrome://extensions">Copy</button>
+      </div>
+    </li>
 
-  <p class="note">Anticipy never touches banking sites, never fills passwords
-    or payment fields, and always stops at logins and CAPTCHAs. Every
-    consequential action waits for your OK first.</p>
-</div>
+    <li class="step">
+      <h2><span class="num">Step 3</span> Turn on Developer mode</h2>
+      <p>Top-right corner of that page, a switch marked <code>Developer mode</code>.
+        It's the only way Chrome will accept a folder instead of a store listing.
+        You can leave it on.</p>
+    </li>
+
+    <li class="step">
+      <h2><span class="num">Step 4</span> Load the folder</h2>
+      <p>Three buttons appear at the top-left. Click <code>Load unpacked</code> and
+        choose the <code>anticipy-extension</code> folder itself — select the
+        folder, don't open it and pick a file inside.</p>
+    </li>
+
+    <li class="step">
+      <h2><span class="num">Step 5</span> Pair it with your phone</h2>
+      <p>A welcome tab opens on its own with a <strong>6-digit code</strong>. If you
+        closed it, click the Anticipy icon in Chrome's toolbar — you may have to
+        click the puzzle-piece icon first — and the code is in there too.</p>
+      <p>Where you type it depends on where you've got to in the app:</p>
+      <ul class="branch">
+        <li><strong>Still setting the app up?</strong> You're already on the right
+          screen — the one headed <em>“Your hands on the computer.”</em> Type the
+          code into the box marked <code>6-digit code</code> and tap
+          <code>Pair</code>. It answers
+          <em>“Paired — your browser is mine now.”</em></li>
+        <li><strong>Already finished setup?</strong> Open Settings — the three
+          sliders at the top right of the home screen — and find
+          <em>Browser agent</em>. Type the code into the box marked
+          <code>6-digit code from the extension</code> and tap <code>Pair</code>.
+          The <em>Status</em> line goes from <em>Not paired</em> to
+          <em>Paired</em>, and once Chrome checks in it reads
+          <em>Live · seen 3s ago</em>.</li>
+      </ul>
+      <p class="meta">Within a few seconds the small pill on the home screen reads
+        <em>Agent live</em>. That's everything — you can close the extensions
+        page.</p>
+    </li>
+  </ol>
+
+  <section class="note closing rise" aria-labelledby="limits-h">
+    <h2 id="limits-h">What I will and won't do in there</h2>
+    <p>You say yes once, in the app or by text, before I start. Then I carry out
+      that exact thing in Chrome without asking again for every step of it — but if
+      what I find doesn't match what you agreed to, I stop and come back to you: a
+      different price, a different date, a fee nobody mentioned.</p>
+    <p>I never type a password or a card number. Banking, brokerage and payment
+      sites are on a blocklist that stops me in code — not something I decide in
+      the moment. A login screen, or a check asking you to prove you're human,
+      ends the task and hands it back to you.</p>
+  </section>
+
+  <p id="copyStatus" class="sr-only" role="status" aria-live="polite"></p>
+</main>
+
+<script>
+(function () {
+  var live = document.getElementById("copyStatus");
+
+  function flash(button, label, spoken) {
+    button.textContent = label;
+    if (live) { live.textContent = spoken; }
+    window.setTimeout(function () {
+      button.textContent = button.getAttribute("data-label");
+      if (live) { live.textContent = ""; }
+    }, 2600);
+  }
+
+  // Fallback for anything without the async clipboard API, or a page served
+  // over plain http (no secure context, so writeText refuses).
+  function legacyCopy(text) {
+    var box = document.createElement("textarea");
+    box.value = text;
+    box.setAttribute("readonly", "readonly");
+    box.style.position = "fixed";
+    box.style.top = "-1000px";
+    document.body.appendChild(box);
+    box.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(box);
+    return ok;
+  }
+
+  function copied(button) { flash(button, "Copied", "Copied to your clipboard."); }
+  function failed(button) { flash(button, "Copy it by hand", "I couldn't copy it — select the text and copy it yourself."); }
+
+  function copy(text, button) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () {
+        copied(button);
+      }, function () {
+        if (legacyCopy(text)) { copied(button); } else { failed(button); }
+      });
+      return;
+    }
+    if (legacyCopy(text)) { copied(button); } else { failed(button); }
+  }
+
+  var buttons = document.querySelectorAll("[data-copy]");
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].setAttribute("data-label", buttons[i].textContent);
+    buttons[i].addEventListener("click", function (event) {
+      var button = event.currentTarget;
+      var value = button.getAttribute("data-copy");
+      copy(value === "page-url" ? window.location.href : value, button);
+    });
+  }
+
+  // Show the real address of wherever this page is actually served from.
+  var link = document.getElementById("pageLink");
+  if (link) { link.textContent = window.location.href; }
+
+  // Escape hatch: a touch-screen laptop, or a narrow window, can say it's a
+  // phone. One tap puts the full guide back.
+  var showFull = document.getElementById("showFull");
+  if (showFull) {
+    showFull.addEventListener("click", function () {
+      document.documentElement.classList.add("force-desktop");
+      var top = document.getElementById("computerTop");
+      if (top) { top.focus(); }
+    });
+  }
+})();
+</script>
 </body>
 </html>
