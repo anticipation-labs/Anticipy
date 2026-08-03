@@ -50,12 +50,32 @@ final class AnticipyBackend {
 
     /// Reads carry the token too — the guard hook protects the whole data
     /// API, not just writes.
+    ///
+    /// A non-2xx read THROWS. It used to hand the body of a 403 back as if it
+    /// were data; every caller then swallowed the decode failure with `try?`,
+    /// so a refused read was indistinguishable from "you have nothing yet" and
+    /// the app confidently painted an empty screen.
     private func readData(from url: URL) async throws -> Data {
         var r = URLRequest(url: url)
         if !serviceToken.isEmpty {
             r.setValue(serviceToken, forHTTPHeaderField: "X-Anticipy-Token")
         }
-        let (data, _) = try await URLSession.shared.data(for: r)
+        let (data, resp) = try await URLSession.shared.data(for: r)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw BackendError(status: http.statusCode)
+        }
+        return data
+    }
+
+    /// Every write goes through here, so none of them can report success for a
+    /// request the server refused. Four call sites used to do
+    /// `_ = try await URLSession.shared.data(for:)` and then `return true`.
+    @discardableResult
+    private func send(_ request: URLRequest) async throws -> Data {
+        let (data, resp) = try await URLSession.shared.data(for: request)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw BackendError(status: http.statusCode)
+        }
         return data
     }
 
@@ -129,13 +149,18 @@ final class AnticipyBackend {
 
         var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
         patch.httpBody = try JSONSerialization.data(withJSONObject: ["owner": owner, "paired": true])
-        _ = try await URLSession.shared.data(for: patch)
+        try await send(patch)
         return true
     }
 
     /// Pair this phone to a browser agent using the 6-digit code the
     /// extension displays. Binds the agent to this owner; from then on it
     /// only claims this owner's jobs.
+    ///
+    /// Returns false ONLY when the code genuinely matched nothing. Anything
+    /// else — no network, a refused write — throws, so the UI can tell "that
+    /// code is wrong" apart from "I can't reach Anticipy right now". Telling
+    /// someone their correct code is wrong is how they give up.
     func pairAgent(code: String, owner: String) async throws -> Bool {
         let listURL = baseURL.appendingPathComponent("api/collections/agents/records")
         let filter = "pair_code=\"\(code)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
@@ -148,7 +173,7 @@ final class AnticipyBackend {
 
         var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
         patch.httpBody = try JSONSerialization.data(withJSONObject: ["owner": owner, "paired": true])
-        _ = try await URLSession.shared.data(for: patch)
+        try await send(patch)
         return true
     }
 
@@ -190,14 +215,22 @@ final class AnticipyBackend {
         return try JSONDecoder().decode(Page.self, from: data).items
     }
 
-    /// Latest jobs, newest first — powers the proactive feed.
-    func fetchJobs(limit: Int = 30) async throws -> [AgentJob] {
+    /// Latest jobs for THIS owner, newest first — powers the proactive feed.
+    ///
+    /// The owner filter is not cosmetic: unscoped, the second person to install
+    /// Anticipy opened it to the first person's errands, with "Send it" next to
+    /// them. `jobs` already carries `owner` (the brain stamps it), so this is a
+    /// client-side change only. Note it is a courtesy, not a security boundary —
+    /// the backend still gates every read on one shared token.
+    func fetchJobs(owner: String, limit: Int = 30) async throws -> [AgentJob] {
         let listURL = baseURL.appendingPathComponent("api/collections/jobs/records")
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
-        comps.queryItems = [
-            URLQueryItem(name: "perPage", value: String(limit)),
-            URLQueryItem(name: "sort", value: "-created"),
-        ]
+        var items = [URLQueryItem(name: "perPage", value: String(limit)),
+                     URLQueryItem(name: "sort", value: "-created")]
+        if !owner.isEmpty {
+            items.append(URLQueryItem(name: "filter", value: "owner=\"\(owner)\""))
+        }
+        comps.queryItems = items
         let data = try await readData(from: comps.url!)
         struct Page: Decodable { let items: [AgentJob] }
         return try JSONDecoder().decode(Page.self, from: data).items
@@ -212,7 +245,10 @@ final class AnticipyBackend {
         var body: [String: Any] = ["status": status]
         if let params { body["params"] = params }
         patch.httpBody = try JSONSerialization.data(withJSONObject: body)
-        _ = try await URLSession.shared.data(for: patch)
+        // "Send it" and "Not now" land here. This used to discard the response,
+        // so a 403 buzzed success and left the card sitting there — which reads
+        // as a UI glitch, so people tap it again.
+        try await send(patch)
     }
 
     /// Quick reachability probe for the connection health UI.

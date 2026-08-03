@@ -36,12 +36,18 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - audio
-        NSBluetoothAlwaysUsageDescription: Anticipy connects to your pendant over Bluetooth to hear your day.
-        NSMicrophoneUsageDescription: Anticipy uses the microphone for on-device transcription.
-        NSSpeechRecognitionUsageDescription: Anticipy transcribes speech on-device when Local mode is on.
+        NSBluetoothAlwaysUsageDescription: Anticipy connects to your Anticipy pendant over Bluetooth. Only needed if you have one.
+        # These describe what actually happens: capture continues in the
+        # background, and the resulting TEXT is sent to Anticipy's server so she
+        # can act on it. The old strings promised "on-device transcription" and
+        # referenced a "Local mode" that gated nothing and appeared nowhere.
+        NSMicrophoneUsageDescription: Anticipy listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy so she can act on them. You control when she is listening.
+        NSSpeechRecognitionUsageDescription: Anticipy turns what she hears into text on your phone, then sends that text to Anticipy so she can remember it and act on it.
         ITSAppUsesNonExemptEncryption: false
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+          # Arbitrary loads is gone: everything the app talks to is HTTPS. Local
+          # networking stays permitted for a developer pointing at a LAN backend.
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.pendant

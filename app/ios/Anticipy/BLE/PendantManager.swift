@@ -37,7 +37,7 @@ final class PendantManager: NSObject, ObservableObject {
     /// Reassembled Opus frames are handed to the audio pipeline.
     var onOpusFrame: ((Data) -> Void)?
 
-    private var central: CBCentralManager!
+    private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
     private var frameBuffer = Data()
     private var manuallyDisconnected = false
@@ -45,6 +45,20 @@ final class PendantManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        // Only build the Bluetooth stack for someone who actually HAS a
+        // pendant. Constructing it unconditionally made a system Bluetooth
+        // permission alert the literal first thing a new person saw — asking
+        // for a radio so hardware they don't own could "hear your day", on top
+        // of the welcome screen. State restoration still works for owners,
+        // because they take this branch on every launch.
+        if hasPairedPendant { ensureCentral() }
+    }
+
+    /// Build the central on first real need. Restoration requires it to exist
+    /// early in the launch, so this is a GATE (owners construct in init), not
+    /// a deferral for people who have a pendant.
+    private func ensureCentral() {
+        guard central == nil else { return }
         central = CBCentralManager(delegate: self, queue: nil, options: [
             CBCentralManagerOptionRestoreIdentifierKey: "anticipy.pendant",
             CBCentralManagerOptionShowPowerAlertKey: true,
@@ -54,16 +68,18 @@ final class PendantManager: NSObject, ObservableObject {
     // MARK: - Public API
 
     func startScan() {
-        guard central.state == .poweredOn else { return }
+        // The user asked for this, so NOW the Bluetooth prompt is expected.
+        ensureCentral()
+        guard central?.state == .poweredOn else { return }
         manuallyDisconnected = false
         state = .searching
-        central.scanForPeripherals(withServices: [Self.serviceUUID])
+        central?.scanForPeripherals(withServices: [Self.serviceUUID])
     }
 
     func disconnect() {
         manuallyDisconnected = true
         stopRssiKeepAlive()
-        if let p = peripheral { central.cancelPeripheralConnection(p) }
+        if let p = peripheral { central?.cancelPeripheralConnection(p) }
         state = .off
     }
 
@@ -83,7 +99,7 @@ final class PendantManager: NSObject, ObservableObject {
     private func connectToSavedPendant() {
         guard let saved = UserDefaults.standard.string(forKey: Self.savedUUIDKey),
               let uuid = UUID(uuidString: saved),
-              let p = central.retrievePeripherals(withIdentifiers: [uuid]).first
+              let p = central?.retrievePeripherals(withIdentifiers: [uuid]).first
         else {
             startScan()
             return
@@ -92,7 +108,7 @@ final class PendantManager: NSObject, ObservableObject {
         p.delegate = self
         deviceName = p.name
         state = .connecting
-        central.connect(p)
+        central?.connect(p)
     }
 
     private func rememberPendant(_ p: CBPeripheral) {
@@ -165,7 +181,7 @@ extension PendantManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         guard !manuallyDisconnected else { return }
         state = .reconnecting
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) { [weak self] in
-            self?.central.connect(p)
+            self?.central?.connect(p)
         }
     }
 
@@ -176,7 +192,7 @@ extension PendantManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         // Re-issue immediately: iOS holds the request at the chipset level and
         // completes it the moment the pendant is back in range.
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) { [weak self] in
-            self?.central.connect(p)
+            self?.central?.connect(p)
         }
     }
 

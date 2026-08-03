@@ -334,6 +334,24 @@ async function solveCaptcha(capsolverKey, tabId, pageUrl, det) {
   } catch (e) { return false; }
 }
 
+// Cancelling Chrome's "Anticipy started debugging this browser" bar is a
+// DECISION, not a glitch — and Chrome is the one that tells them apart:
+// onDetach reports `canceled_by_user` for the bar's Cancel button, and other
+// reasons (or nothing at all) for the transient drops the retry logic below
+// legitimately exists for. Re-attaching after a cancel just re-raises the bar
+// the person deliberately dismissed, over and over, for the rest of the run.
+const STOPPED_IN_CHROME = "you stopped me in Chrome";
+const STOPPED_IN_CHROME_LINE =
+  "you cancelled the debugging bar in Chrome, so I stopped right where I was — nothing further was done";
+const userCancelledTabs = new Set();
+try {
+  chrome.debugger.onDetach.addListener((source, reason) => {
+    if (source && source.tabId != null && /cancel+ed_by_user/i.test(String(reason))) {
+      userCancelledTabs.add(source.tabId);
+    }
+  });
+} catch (e) { /* no onDetach on this Chrome — behaves exactly as before */ }
+
 async function cdp(tabId, method, params) {
   try {
     return await chrome.debugger.sendCommand({ tabId }, method, params || {});
@@ -345,6 +363,8 @@ async function cdp(tabId, method, params) {
     // to the tab" still killed live jobs. Take the session back and retry
     // once, right where the loss actually happens.
     if (!/not attached|Detached while/i.test(String(e))) throw e;
+    // They pressed Cancel. Taking the session back would be arguing with them.
+    if (userCancelledTabs.has(tabId)) throw new Error(STOPPED_IN_CHROME);
     try {
       await chrome.debugger.attach({ tabId }, "1.3");
       await chrome.debugger.sendCommand({ tabId }, "Emulation.setFocusEmulationEnabled", { enabled: true });
@@ -458,13 +478,17 @@ export async function runAgentGoal(goal, opts) {
     await chrome.storage.local.set({ agentTabs: [] });
   } catch (e) { /* best effort */ }
   const tab = await chrome.tabs.create({ url: startUrl, active: false });
+  userCancelledTabs.delete(tab.id);
   try {
     const { agentTabs = [] } = await chrome.storage.local.get(["agentTabs"]);
     await chrome.storage.local.set({ agentTabs: [...agentTabs, tab.id] });
   } catch (e) { /* best effort */ }
   try {
     const group = await chrome.tabs.group({ tabIds: tab.id });
-    await chrome.tabGroups.update(group, { title: "Anticipy", color: "green", collapsed: true });
+    // One colour for one name: two differently-coloured groups both called
+    // "Anticipy" (this one and the prefill path in background.js) read as two
+    // different things in the exact surface meant to make her legible.
+    await chrome.tabGroups.update(group, { title: "Anticipy", color: "yellow", collapsed: true });
   } catch (e) { /* tab groups unavailable (e.g. incognito) */ }
 
   // Attach can race a just-created tab, and the "started debugging" bar being
@@ -473,6 +497,7 @@ export async function runAgentGoal(goal, opts) {
   // on mid-run drops (see the step loop).
   async function attachDebugger(tabId) {
     for (let i = 0; i < 3; i++) {
+      if (userCancelledTabs.has(tabId)) return false;   // they said no; don't ask three more times
       try { await chrome.debugger.attach({ tabId }, "1.3"); return true; }
       catch (e) {
         if (String(e).includes("already attached")) return true;
@@ -511,8 +536,13 @@ export async function runAgentGoal(goal, opts) {
       catch (e) {
         const msg = String(e);
         if (msg.includes("not attached")) {
-          // The debugging bar was cancelled or Chrome dropped the session.
-          // Take it back once; if we can't, say exactly what happened.
+          // Cancelled by the person watching: that is an instruction, not a
+          // fault. End here rather than re-raising the bar they just dismissed.
+          if (userCancelledTabs.has(tab.id)) {
+            return (handBack = true) && { status: "needs_user", stoppedInChrome: true, result: STOPPED_IN_CHROME_LINE, tabId: tab.id };
+          }
+          // Chrome dropped the session on its own (a crash, a race with a
+          // just-created tab). Take it back once; if we can't, say what happened.
           if (await attachDebugger(tab.id)) {
             try { await cdp(tab.id, "Emulation.setFocusEmulationEnabled", { enabled: true }); } catch (_) {}
             history.push(`step ${step}: automation session re-attached`);
@@ -784,7 +814,16 @@ export async function runAgentGoal(goal, opts) {
       }
     }
     return { status: "failed", result: `max steps reached; last steps: ${history.slice(-3).join(" | ").slice(0, 400)}`, tabId: tab.id };
+  } catch (e) {
+    // A cancelled bar can surface mid-step (a click, a keystroke), not only
+    // on the next page map. It is the one error here that is a decision, so
+    // it ends the run cleanly; everything else keeps its old path exactly.
+    if (String(e).includes(STOPPED_IN_CHROME)) {
+      return (handBack = true) && { status: "needs_user", stoppedInChrome: true, result: STOPPED_IN_CHROME_LINE, tabId: tab.id };
+    }
+    throw e;
   } finally {
+    userCancelledTabs.delete(tab.id);
     try { await chrome.debugger.detach({ tabId: tab.id }); } catch (e) { /* already closed */ }
     // Close the working tab. It is only kept when a HUMAN has to look at it
     // (a login wall, a CAPTCHA, a form waiting on them) — and then it is

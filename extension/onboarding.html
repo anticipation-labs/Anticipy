@@ -1,8 +1,8 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Anticipy — you're in</title>
+    <title>Anticipy — one step left</title>
     <style>
       :root {
         --ink: #0c0c0c; --surface: #161616; --card: #1e1e1e; --stroke: #252525;
@@ -15,79 +15,116 @@
         display: flex; justify-content: center; padding: 64px 24px;
       }
       main { max-width: 560px; width: 100%; }
-      .logo { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
-      h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 40px; margin: 0 0 8px; }
-      .sub { color: var(--sand); font-size: 16px; margin: 0 0 36px; line-height: 1.5; }
+      [hidden] { display: none !important; }
+      .logo { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+      h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 26px; margin: 0; }
+      .sub { color: var(--sand); font-size: 15px; margin: 0 0 32px; line-height: 1.6; }
       .card {
         background: var(--card); border: 1px solid var(--stroke); border-radius: 18px;
         padding: 20px; margin-bottom: 14px; display: flex; gap: 16px; align-items: flex-start;
       }
+      .card.hero { border-color: var(--champagne); }
       .num {
         min-width: 30px; height: 30px; border-radius: 50%; background: var(--surface);
         color: var(--champagne); display: flex; align-items: center; justify-content: center;
         font-weight: 700; font-size: 14px;
       }
       .card h2 { font-size: 16px; margin: 2px 0 6px; font-weight: 600; }
-      .card p { font-size: 14px; color: var(--gray); margin: 0; line-height: 1.5; }
-      .status { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; }
-      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--stroke); }
+      .card p { font-size: 14px; color: var(--gray); margin: 0; line-height: 1.6; }
+      .status { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--gray); }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--stroke); flex: none; margin-top: 5px; }
       .dot.on { background: var(--champagne); }
-      input {
-        width: 100%; margin-top: 10px; padding: 10px 12px; border-radius: 10px;
-        border: 1px solid var(--stroke); background: var(--surface); color: var(--ivory); font-size: 13px;
+      /* The code is the one thing on this page the user has to act on, so it
+         is the largest thing on the page. */
+      .code {
+        display: block; width: 100%; margin: 14px 0 6px; padding: 14px 0;
+        font-family: Georgia, "Times New Roman", serif; font-size: 52px; line-height: 1.1;
+        letter-spacing: 14px; text-indent: 14px; text-align: center;
+        color: var(--champagne); background: var(--surface);
+        border: 1px solid var(--stroke); border-radius: 14px; cursor: pointer;
       }
-      button {
-        margin-top: 10px; padding: 10px 20px; border-radius: 999px; border: none;
-        background: var(--champagne); color: var(--ink); font-weight: 600; font-size: 14px; cursor: pointer;
+      .code:hover { border-color: var(--champagne); }
+      .code[disabled] { cursor: default; color: var(--gray); letter-spacing: 10px; font-size: 34px; }
+      .code.done[disabled] { color: var(--champagne); border-color: var(--champagne); }
+      .hint { font-size: 12px !important; }
+      .plain {
+        margin-top: 14px; padding: 0; border: none; background: none;
+        color: var(--champagne); font-size: 13px; cursor: pointer; text-decoration: underline;
       }
-      .note { color: var(--gray); font-size: 12px; margin-top: 32px; line-height: 1.6; }
+      a { color: var(--champagne); }
+      a:focus-visible, button:focus-visible, summary:focus-visible {
+        outline: 2px solid var(--champagne); outline-offset: 3px; border-radius: 6px;
+      }
+      details { margin-top: 14px; }
+      summary { color: var(--champagne); font-size: 13px; cursor: pointer; }
+      details p { margin-top: 8px !important; }
+      .note { color: var(--gray); font-size: 12px; margin-top: 32px; line-height: 1.7; }
     </style>
   </head>
   <body>
     <main>
       <div class="logo">
-        <svg width="44" height="44" viewBox="0 0 32 32" fill="none">
+        <svg width="44" height="44" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
           <rect width="32" height="32" rx="6" fill="#161616"/>
           <rect x="10.5" y="3" width="11" height="26" rx="5.5" stroke="#F5F0EB" stroke-width="2"/>
           <circle cx="16" cy="20" r="1.8" fill="#C8A97E"/>
         </svg>
-        <div>
-          <h1>Anticipy is in your browser.</h1>
-        </div>
+        <h1>Anticipy is in your browser.</h1>
       </div>
-      <p class="sub">This is Anticipy's hands on your computer. When your pendant hears a commitment, the work gets prepared right here — in a quiet background tab group, using your own logged-in accounts, never your passwords. Nothing irreversible happens without your OK.</p>
+      <p class="sub">This is Anticipy's hands on your computer. She lives on your
+      iPhone — she hears your day there, and you tell her yes or no there. When
+      something needs doing on the web, it gets done right here, in a quiet
+      background tab group, using accounts you're already signed into. Never
+      your passwords.</p>
 
-      <div class="card">
+      <div class="card hero" id="codeCard">
         <div class="num">1</div>
         <div style="flex:1">
-          <h2>Link to your Anticipy</h2>
-          <p>The agent connects to the same brain your phone talks to.</p>
-          <div class="status"><span class="dot" id="backendDot"></span><span id="backendText">Checking connection…</span></div>
-          <p id="pairInfo" style="margin-top:8px;"></p>
+          <h2 id="codeHead">Type this code into the Anticipy app on your iPhone</h2>
+          <p id="codeBody">It's in the app's setup screen, or in Settings if
+          you've already been through setup. This links your phone to this
+          browser.</p>
+          <button class="code" id="paircode" type="button" aria-describedby="codeHint">······</button>
+          <p class="hint" id="codeHint" role="status" aria-live="polite">Getting your code…</p>
+          <div class="status"><span class="dot" id="backendDot" aria-hidden="true"></span><span id="backendText" role="status" aria-live="polite">Checking the connection…</span></div>
+          <button class="plain" id="newcode" type="button" hidden>Show me a new code</button>
+          <details id="noapp">
+            <summary>I don't have the iPhone app yet</summary>
+            <p>Then there's nothing for this to pair with yet — the browser side
+            can't do anything on its own. Anticipy is in private testing through
+            TestFlight, so the app comes as an invitation from whoever set this
+            up for you. Ask them for it, and leave this page be: your code will
+            still be here when you get back.</p>
+          </details>
         </div>
       </div>
 
       <div class="card">
         <div class="num">2</div>
         <div style="flex:1">
-          <h2>Give it a mind</h2>
-          <p>Paste your OpenRouter key so the agent can decide each click itself. It's stored only in this browser.</p>
-          <input id="key" type="password" placeholder="sk-or-…" />
-          <button id="save">Save</button>
-          <div class="status"><span class="dot" id="keyDot"></span><span id="keyText">No key yet</span></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="num">3</div>
-        <div style="flex:1">
-          <h2>That's it — live your day</h2>
-          <p>You'll see an "Anticipy started debugging this browser" banner when it's working: that's Chrome telling you the agent is acting, the same way Claude in Chrome does. Tasks run in a collapsed <b>Anticipy</b> tab group and always pause for your confirmation before anything is sent, booked, or paid.</p>
+          <h2 id="liveHead">Waiting for your phone…</h2>
+          <p id="liveBody">The moment you type the code in, this page will say
+          so, and I'm live. Nothing runs here until then.</p>
+          <p style="margin-top:10px">Once I'm working you'll see Chrome say
+          <b>“Anticipy started debugging this browser”</b>. That bar is Chrome
+          telling you honestly that I'm the one clicking — the same bar Claude in
+          Chrome raises. Leave it up while I work; cancelling it stops me where I
+          am, and I'll say so. Tasks run in a collapsed <b>Anticipy</b> tab group
+          you can open and watch any time.</p>
+          <p style="margin-top:10px">You give me your OK once, on your phone or by
+          text, before I start. I don't ask again halfway through — I carry out
+          exactly what you agreed to. If what I find is different from that — a
+          different price, a different date, a cost nobody mentioned — I stop and
+          come back to you.</p>
         </div>
       </div>
 
       <p class="note">
-        Heads-up for this developer preview: extensions loaded via “Load unpacked” don't auto-update — keep the folder where it is, and after an update press ⟳ on chrome://extensions. The Chrome Web Store version will update itself automatically.
+        One honest thing about this build: you installed it by hand rather than
+        from the Chrome Web Store, so it can't update itself. Keep the folder
+        where it is. When there's a new version I'll tell you what to do — it's
+        one click on Chrome's extensions page. The store version, when it's
+        there, will update on its own.
       </p>
     </main>
     <script src="onboarding.js"></script>

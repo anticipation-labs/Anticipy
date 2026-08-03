@@ -218,6 +218,23 @@ async function claimJob() {
   return fresh;
 }
 
+// What the popup shows. The job row on the server stays the source of truth;
+// this is a small local mirror so the machine the work is happening on can
+// say what it is doing without a round trip. Best-effort by design — the
+// mirror must never be able to break a run.
+async function setCurrentJob(patch) {
+  try {
+    const { currentJob = {} } = await chrome.storage.local.get(["currentJob"]);
+    await chrome.storage.local.set({ currentJob: { ...currentJob, ...patch, at: Date.now() } });
+  } catch (e) { /* best effort */ }
+}
+
+// One line a person would recognise as their own errand.
+function jobLine(job, params) {
+  const t = (params && (params.task || params.query || params.subject)) || job.goal || "a task";
+  return String(t).replace(/\s+/g, " ").trim().slice(0, 140);
+}
+
 async function updateJob(id, fields) {
   const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`, {
     method: "PATCH",
@@ -252,10 +269,12 @@ async function jobStillLive(id) {
 async function runJob(job) {
   const params = job.params ? JSON.parse(job.params) : {};
   activeJobs.add(job.id);
+  await setCurrentJob({ id: job.id, status: "running", doing: jobLine(job, params), result: "" });
   try {
     await runJobInner(job, params);
   } catch (e) {
     if (String(e).includes("job gone")) {
+      await setCurrentJob({ status: "removed", result: "" });
       console.warn(`Anticipy: job ${job.id} was deleted — stopping.`);
     } else {
       throw e;
@@ -274,6 +293,7 @@ async function runJobInner(job, params) {
     const openrouterKey = await ensureLLMKey();
     if (!openrouterKey) {
       await updateJob(job.id, { status: "failed", result: "no LLM key: not paired yet, or the backend has none configured" });
+      await setCurrentJob({ status: "failed", result: "I couldn't start: this browser isn't paired to your phone yet." });
       return;
     }
     try {
@@ -307,16 +327,24 @@ async function runJobInner(job, params) {
       });
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.
-      if (out.status === "cancelled") return;
+      if (out.status === "cancelled") {
+        await setCurrentJob({ status: "stopped", result: out.result || "you called this off — I stopped where I was." });
+        return;
+      }
       // needs_user (login wall, CAPTCHA, refused site) is NOT the same state
       // as awaiting_confirm (owner go-ahead pending) — conflating them lets a
       // free-form "yes" re-release a stuck job instead of the intended one.
       const status = out.status === "done" ? "done"
         : out.status === "needs_user" ? "needs_user" : "failed";
       await updateJob(job.id, { status, result: out.result });
+      // The job row keeps needs_user (the phone offers Try again on it), but
+      // in Chrome the honest word for "you cancelled the debugging bar" is
+      // stopped, not "I need you".
+      await setCurrentJob({ status: out.stoppedInChrome ? "stopped" : status, result: out.result || "" });
     } catch (e) {
       if (String(e).includes("job gone")) throw e;
       await updateJob(job.id, { status: "failed", result: String(e) });
+      await setCurrentJob({ status: "failed", result: "Something went wrong partway through. Nothing was sent." });
     }
     return;
   }
@@ -355,6 +383,7 @@ async function runJobInner(job, params) {
       func: () => (document.querySelector("#flash") || {}).innerText || "no banner",
     });
     await updateJob(job.id, { status: "done", result: `form ${result}; site said: ${banner.trim().split("\n")[0]}` });
+    await setCurrentJob({ status: "done", result: `The site said: ${banner.trim().split("\n")[0]}` });
     // Nothing for a human to look at — close it. Leaving working tabs open is
     // how fifty of them piled up in the owner's window.
     try { await chrome.tabs.remove(tab.id); } catch (e) { /* gone */ }
@@ -366,6 +395,7 @@ async function runJobInner(job, params) {
       try { await chrome.tabs.ungroup(tab.id); } catch (e) { /* not grouped */ }
     } catch (e) { /* gone */ }
     await updateJob(job.id, { status: "awaiting_confirm", result: `opened ${job.goal} page in tab ${tab.id}` });
+    await setCurrentJob({ status: "awaiting_confirm", result: "It's filled in and open in a tab here, waiting on your OK." });
   }
 }
 
@@ -411,6 +441,37 @@ async function openRealtime() {
     realtimeOpen = false;
   }
 }
+
+// The popup's two controls. Both go through updateJob — the same write path
+// every other status change uses — so nothing here is a second source of
+// truth: a stop lands on the job row, and the running loop's own jobStillLive
+// check picks it up within a poll and stops where it is.
+chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
+  if (!msg || !msg.type) return;
+  if (msg.type === "anticipy-stop" && msg.id) {
+    updateJob(msg.id, { status: "cancelled", result: "you stopped this from Chrome" })
+      .then(() => setCurrentJob({ status: "stopped", result: "You stopped this. Nothing more was done." }))
+      .catch(() => {})
+      .finally(() => respond({ ok: true }));
+    return true;
+  }
+  if (msg.type === "anticipy-again" && msg.id) {
+    updateJob(msg.id, { status: "queued", claimed_by: "", claimed_at: null })
+      .then(() => setCurrentJob({ status: "queued", result: "" }))
+      .catch(() => {})
+      .finally(() => respond({ ok: true }));
+    return true;
+  }
+  // A pair code that can never be replaced is a dead end. Drop this install's
+  // identity and run the same registration POST first install runs.
+  if (msg.type === "anticipy-newcode") {
+    chrome.storage.local.remove(["recordId", "pairCode", "agentId"])
+      .then(() => ensureRegistered())
+      .then((reg) => respond({ ok: !!reg }))
+      .catch(() => respond({ ok: false }));
+    return true;
+  }
+});
 
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create("anticipy-poll", { periodInMinutes: POLL_SECONDS / 60 });

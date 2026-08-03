@@ -1,18 +1,26 @@
 import SwiftUI
+import Speech
 
 struct SettingsView: View {
     @EnvironmentObject var pendant: PendantManager
     @EnvironmentObject var session: AnticipySession
+    #if DEBUG
     // Observed, so the readout below refreshes the moment the engine starts,
     // stops, or reports why — otherwise it goes stale exactly while he is
     // standing on this screen testing it.
     @ObservedObject private var haptics = HapticEngine.shared
-    @AppStorage("transcriptionEngine") private var engine = "local"
-    @AppStorage("proactivityLevel") private var proactivity = 1.0
+    #endif
     @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
     @AppStorage("hasOnboarded") private var hasOnboarded = true
+    /// When a timed pause is due to end, as seconds since the reference date;
+    /// 0 means "not paused". On disk rather than in @State so the deadline
+    /// survives walking away from this screen — the promise on the label has
+    /// to outlive the view that made it.
+    @AppStorage("listeningPauseUntil") private var pauseUntil: Double = 0
+
     @State private var pairCode = ""
-    @State private var pairResult: Bool?
+    @State private var pairOutcome: AnticipySession.PairOutcome?
+    @State private var pairing = false
     @State private var phoneField = ""
     @State private var phoneSaved = false
     @State private var firstName = ""
@@ -20,9 +28,58 @@ struct SettingsView: View {
     @State private var email = ""
     @State private var birthday = ""
     @State private var detailsSaved = false
+    /// The live timer behind a timed pause. Held here so a second visit to
+    /// this screen can re-arm it rather than leaving a promise unattended.
+    @State private var resumeTask: Task<Void, Never>?
+    @State private var confirmForget = false
+    @State private var confirmReplay = false
+    @State private var forgotten = false
 
     var body: some View {
         Form {
+            // Listening is a standing state that survives relaunches, so the
+            // one screen people open when they want it to STOP has to be able
+            // to stop it. It sits first because that is the reason they came.
+            Section("Listening") {
+                Text(listeningState)
+                    .font(.callout)
+                    .foregroundStyle(Theme.ivory)
+
+                if session.micBlocked {
+                    Text("iPhone has microphone access switched off for me. It won't ask again — only you can turn it back on.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
+                    Button("Open iPhone Settings") { session.openSystemSettings() }
+                        .foregroundStyle(Theme.champagne)
+                } else if session.listener.isListening {
+                    Button("Stop listening") { stopNow() }
+                        .foregroundStyle(Theme.champagne)
+                    Menu("Pause for a while") {
+                        Button("15 minutes") { pause(minutes: 15) }
+                        Button("1 hour") { pause(minutes: 60) }
+                        Button("Until I turn it back on") { stopNow() }
+                    }
+                    .foregroundStyle(Theme.champagne)
+                    Text("Everything said near you is turned into text while this is on.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
+                } else if let ends = pauseEnds {
+                    Button("Start listening now") { startNow() }
+                        .foregroundStyle(Theme.champagne)
+                    Button("Keep it off — cancel the timer") { stopNow() }
+                    Text("If iPhone closes the app before \(clock(ends)), I'll stay off until you start me again. I'd rather be quiet than come back when you didn't expect me.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
+                } else {
+                    Button("Start listening") { startNow() }
+                        .foregroundStyle(Theme.champagne)
+                    Text("Nothing is being heard, and nothing is being written down.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
+                }
+            }
+            .onAppear(perform: syncPause)
+
             Section("Pendant") {
                 HStack {
                     Text("Status")
@@ -52,26 +109,6 @@ struct SettingsView: View {
                 } else {
                     Button("Pair a pendant") { pendant.startScan() }
                 }
-            }
-
-            Section("Transcription") {
-                Picker("Engine", selection: $engine) {
-                    Label("On this iPhone — private, offline", systemImage: "iphone").tag("local")
-                    Label("Cloud — fastest, most accurate", systemImage: "cloud").tag("cloud")
-                }
-                .pickerStyle(.inline)
-                Text(engine == "local"
-                    ? "Audio never leaves your phone."
-                    : "Audio is streamed securely and not stored.")
-                    .font(.caption)
-                    .foregroundStyle(Theme.gray)
-            }
-
-            Section("Proactivity") {
-                Slider(value: $proactivity, in: 0 ... 2, step: 1)
-                Text(["Only when I ask", "Balanced", "Act on everything"][Int(proactivity)])
-                    .font(.caption)
-                    .foregroundStyle(Theme.gray)
             }
 
             Section("You") {
@@ -144,23 +181,107 @@ struct SettingsView: View {
                         TextField("6-digit code from the extension", text: $pairCode)
                             .keyboardType(.numberPad)
                             .font(.body.monospaced())
-                        Button("Pair") {
-                            Task { pairResult = await session.pairAgent(code: pairCode) }
-                        }
-                        .disabled(pairCode.count != 6)
+                        Button(pairing ? "Pairing…" : "Pair") { pair() }
+                            .disabled(pairCode.count != 6 || pairing)
                     }
-                    if pairResult == false {
-                        Text("That code didn't match — check the Anticipy extension popup.")
+                    // A code that was right and a network that was down used to
+                    // read as the same sentence, so people retyped a correct
+                    // code for ten minutes. These are now two different truths.
+                    switch pairOutcome {
+                    case .noMatch:
+                        Text("That code didn't match — check the Anticipy extension popup for the current one.")
                             .font(.caption)
                             .foregroundStyle(.red)
+                    case .unreachable:
+                        Text("I can't reach Anticipy right now — that's my end, not your code.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Button("Try again") { pair() }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.champagne)
+                            .disabled(pairing)
+                    case .paired, .none:
+                        EmptyView()
                     }
                 }
+                #if DEBUG
+                // Bound straight to the key every request is built from, and
+                // SwiftUI commits it per keystroke — one character points the
+                // app at a dead server with no way back. Developers only.
                 TextField("Backend URL", text: $backendURL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.footnote.monospaced())
+                #endif
+            }
+            // Clear the red line the moment they start retyping, rather than
+            // leaving a verdict about the last code sitting over the new one.
+            .onChange(of: pairCode) { _ in pairOutcome = nil }
+
+            Section("Privacy & your data") {
+                Text(voicePath)
+                    .font(.callout)
+                    .foregroundStyle(Theme.sand)
+                Text("The words — the text, not the sound — go to my server. That's how I know what you need.")
+                    .font(.callout)
+                    .foregroundStyle(Theme.sand)
+                Text("Anyone near you is heard too, and they haven't agreed to any of this. Please tell them, or stop me while they're around.")
+                    .font(.callout)
+                    .foregroundStyle(Theme.sand)
+                Text("I text you at your number when something needs your word.")
+                    .font(.callout)
+                    .foregroundStyle(Theme.sand)
+                Text("When you say yes to a task, I open Chrome on your computer and do that one thing. Never before you've said yes.")
+                    .font(.callout)
+                    .foregroundStyle(Theme.sand)
+
+                if let mail = supportMail {
+                    Link(destination: mail) {
+                        Label("Ask me anything — hello@anticipationlabs.com", systemImage: "envelope")
+                    }
+                    .foregroundStyle(Theme.champagne)
+                }
+
+                if session.pendingCount > 0 {
+                    Button("Delete the \(pendingWords) still waiting to send", role: .destructive) {
+                        clearPending()
+                    }
+                    Text("These never left your phone. Deleting them here means they never will.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
+                }
+
+                Button("Forget me on this phone", role: .destructive) { confirmForget = true }
+                    .alert("Forget you on this phone?", isPresented: $confirmForget) {
+                        Button("Forget me", role: .destructive) { forgetMeOnThisPhone() }
+                        Button("Cancel", role: .cancel) { }
+                    } message: {
+                        Text("I'll stop listening, delete anything still waiting to send, clear your name, email, birthday and number from this phone, and give this phone a brand-new identity so nothing new is tied to the old one. Your browser will need pairing again. What I've already sent to my server stays there until I delete it by hand.")
+                    }
+
+                if forgotten {
+                    Text("Done. This phone doesn't know you any more.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.champagne)
+                }
+
+                // The honest gap, said out loud rather than papered over with a
+                // button that would do nothing.
+                Text("I can't yet delete what's already on my server from in here — I'm building that. Until it exists, ask me and I'll do it myself and write back when it's done.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
+                if let mail = deleteMail {
+                    Link(destination: mail) {
+                        Label("Ask me to delete everything on my server", systemImage: "trash")
+                    }
+                    .foregroundStyle(Theme.champagne)
+                }
+                Text("There's no separate privacy page yet. This section is it, and it's the whole truth.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.gray)
             }
 
+            #if DEBUG
             Section("Haptics — find out what's wrong") {
                 let r = haptics.report(listening: session.listener.isListening)
 
@@ -208,13 +329,20 @@ struct SettingsView: View {
                     Text(err).font(.caption2.monospaced()).foregroundStyle(.red)
                 }
             }
+            #endif
 
             Section {
-                Button("Replay the welcome tour") { hasOnboarded = false }
+                Button("Replay the welcome tour") { confirmReplay = true }
+                    .alert("Replay the welcome tour?", isPresented: $confirmReplay) {
+                        Button("Replay it") { hasOnboarded = false }
+                        Button("Not now", role: .cancel) { }
+                    } message: {
+                        Text("It's the few screens you saw when you first opened me. Nothing you've set up changes — your number, your details and your pendant all stay exactly as they are.")
+                    }
             } footer: {
                 // The one question that must never be ambiguous again:
                 // "which build am I actually running?"
-                Text("Anticipy v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
+                Text("Anticipy \(versionString)")
                     .font(.footnote.monospaced())
                     .foregroundStyle(Theme.gray)
             }
@@ -222,5 +350,169 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ink)
         .navigationTitle("Settings")
+    }
+
+    // MARK: - Listening
+
+    /// The end of a live timed pause, or nil if there isn't one.
+    private var pauseEnds: Date? {
+        guard pauseUntil > 0 else { return nil }
+        let d = Date(timeIntervalSinceReferenceDate: pauseUntil)
+        return d > Date() ? d : nil
+    }
+
+    private var listeningState: String {
+        if session.micBlocked { return "I can't hear anything right now." }
+        if session.listener.isListening { return "I'm listening on this phone." }
+        if let ends = pauseEnds { return "Paused. I'll start listening again at \(clock(ends))." }
+        return "I'm not listening."
+    }
+
+    private func clock(_ d: Date) -> String {
+        d.formatted(date: .omitted, time: .shortened)
+    }
+
+    private func startNow() {
+        endPause()
+        session.startListening()
+    }
+
+    private func stopNow() {
+        endPause()
+        session.stopListening()
+    }
+
+    private func pause(minutes: Int) {
+        let deadline = Date().addingTimeInterval(Double(minutes) * 60)
+        session.stopListening()
+        pauseUntil = deadline.timeIntervalSinceReferenceDate
+        armResume(at: deadline)
+    }
+
+    private func endPause() {
+        resumeTask?.cancel()
+        resumeTask = nil
+        pauseUntil = 0
+    }
+
+    /// Re-arm (or clear) the timer when this screen appears — the pause can
+    /// outlive the view that started it, and a second visit shouldn't leave
+    /// the promise unattended. A deadline that expired while the app was gone
+    /// is simply dropped: she stays off until asked, which is the safe way for
+    /// this to fail.
+    private func syncPause() {
+        if let ends = pauseEnds {
+            armResume(at: ends)
+        } else if pauseUntil != 0 {
+            pauseUntil = 0
+        }
+    }
+
+    private func armResume(at deadline: Date) {
+        resumeTask?.cancel()
+        let stamp = deadline.timeIntervalSinceReferenceDate
+        resumeTask = Task { @MainActor in
+            let seconds = deadline.timeIntervalSinceNow
+            if seconds > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            }
+            // Only the timer that still owns this deadline gets to act, so a
+            // re-armed duplicate can never restart her behind a cancel.
+            guard !Task.isCancelled, pauseUntil == stamp else { return }
+            pauseUntil = 0
+            session.startListening()
+        }
+    }
+
+    // MARK: - Pairing
+
+    private func pair() {
+        guard !pairing else { return }
+        pairing = true
+        Task {
+            pairOutcome = await session.pairAgent(code: pairCode)
+            pairing = false
+        }
+    }
+
+    // MARK: - Privacy
+
+    /// The same check the listener makes before it demands on-device speech.
+    /// Where it's false, iOS sends the audio to Apple to be written down — so
+    /// the screen must not promise otherwise on that phone.
+    private static let onDevice: Bool =
+        SFSpeechRecognizer(locale: Locale(identifier: "en_US"))?.supportsOnDeviceRecognition ?? false
+
+    private var voicePath: String {
+        Self.onDevice
+            ? "Your voice stays on this iPhone. The sound is turned into words right here and then it's gone."
+            : "This iPhone can't turn speech into words on its own, so while I'm listening the sound goes to Apple's speech service to be written down."
+    }
+
+    private var pendingWords: String {
+        session.pendingCount == 1 ? "1 line" : "\(session.pendingCount) lines"
+    }
+
+    private var versionString: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "v\(v) (build \(b))"
+    }
+
+    private func mailto(subject: String, body: String) -> URL? {
+        var c = URLComponents()
+        c.scheme = "mailto"
+        c.path = "hello@anticipationlabs.com"
+        c.queryItems = [
+            URLQueryItem(name: "subject", value: subject),
+            URLQueryItem(name: "body", value: body),
+        ]
+        return c.url
+    }
+
+    private var supportMail: URL? {
+        mailto(subject: "Anticipy — I need a hand",
+               body: "\n\n—\nMy Anticipy ID: \(session.ownerID)\nApp \(versionString)")
+    }
+
+    private var deleteMail: URL? {
+        mailto(subject: "Anticipy — please delete my data",
+               body: "Please delete everything Anticipy has heard for me.\n\nMy Anticipy ID: \(session.ownerID)\nApp \(versionString)")
+    }
+
+    /// Lines that never made it off the phone. Deleting these is a real,
+    /// complete delete — nothing else in the app can say that yet.
+    private func clearPending() {
+        // Goes through the session rather than copying its storage key: a
+        // rename there would otherwise leave this button deleting nothing
+        // while still reporting success.
+        session.clearPendingLines()
+    }
+
+    /// Everything a delete can honestly reach from here: the queue, the saved
+    /// details, and this device's identity. Deliberately does NOT clear the
+    /// feed — those rows are rebuilt from the server on the next poll, so
+    /// wiping them on screen would be theatre.
+    private func forgetMeOnThisPhone() {
+        stopNow()
+        clearPending()
+        session.ownerFirstName = ""
+        session.ownerLastName = ""
+        session.ownerEmail = ""
+        session.ownerBirthday = ""
+        session.ownerPhone = ""
+        firstName = ""; lastName = ""; email = ""; birthday = ""; phoneField = ""
+        detailsSaved = false
+        phoneSaved = false
+        if pendant.hasPairedPendant { pendant.forgetPendant() }
+        // A fresh identity: nothing said from here on is tied to the old one,
+        // and the jobs list (which IS scoped by owner) genuinely empties.
+        session.ownerID = UUID().uuidString
+        session.jobs = []
+        session.sessionLines = []
+        session.agentPaired = false
+        session.agentOnline = false
+        session.agentLastSeenSeconds = nil
+        forgotten = true
     }
 }

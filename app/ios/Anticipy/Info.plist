@@ -26,15 +26,15 @@
 	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Anticipy connects to your pendant over Bluetooth to hear your day.</string>
+	<string>Anticipy connects to your Anticipy pendant over Bluetooth. Only needed if you have one.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Anticipy uses the microphone for on-device transcription.</string>
+	<string>Anticipy listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy so she can act on them. You control when she is listening.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Anticipy transcribes speech on-device when Local mode is on.</string>
+	<string>Anticipy turns what she hears into text on your phone, then sends that text to Anticipy so she can remember it and act on it.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

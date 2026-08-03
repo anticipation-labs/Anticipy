@@ -37,6 +37,21 @@ final class AnticipySession: ObservableObject {
     @Published var agentLastSeenSeconds: Int?   // nil = never seen
     @Published var agentPaired = false
 
+    /// What the screen is allowed to claim. Before this, "still loading",
+    /// "you're offline", "the server refused me" and "you genuinely have
+    /// nothing yet" all rendered as the same confident empty state — so a
+    /// stranger in airplane mode was told "Live your day. I've got the watch"
+    /// by an app that had never reached its own server.
+    enum Connection: Equatable {
+        case loading          // first probe hasn't answered yet
+        case ready            // a read actually succeeded
+        case offline          // the server is unreachable
+        case refused(Int)     // reached it; it said no (403, 500…)
+    }
+    @Published var connection: Connection = .loading
+    /// How many spoken lines are still waiting for a network.
+    @Published var pendingCount = 0
+
     @AppStorage("backendURL") var backendURLString = "https://backend-production-61e0a.up.railway.app"
     @AppStorage("ownerID") var ownerID = ""
     /// Listening is a STANDING state, not a per-open chore: once you turn it
@@ -48,8 +63,20 @@ final class AnticipySession: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var bag = Set<AnyCancellable>()
     private var seenDoneJobIDs = Set<String>()
-    private var unsent: [String] = []
     let listener = PhoneListener()
+
+    /// Words spoken with no network used to live in a plain in-memory array.
+    /// If iOS reclaimed the app before it reconnected, they were gone — from a
+    /// product whose whole promise is remembering. Now they survive a relaunch.
+    @AppStorage("unsentLines") private var unsentStore = ""
+    private var unsent: [String] {
+        get { unsentStore.isEmpty ? [] : (try? JSONDecoder().decode([String].self, from: Data(unsentStore.utf8))) ?? [] }
+        set {
+            unsentStore = (try? JSONEncoder().encode(newValue))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? ""
+            pendingCount = newValue.count
+        }
+    }
 
     @AppStorage("serviceToken") private var serviceToken = ""
     @AppStorage("ownerPhone") var ownerPhone = ""
@@ -70,6 +97,11 @@ final class AnticipySession: ObservableObject {
 
     init() {
         if ownerID.isEmpty { ownerID = UUID().uuidString }
+        // Seed from disk. The count is otherwise only written by the `unsent`
+        // setter, so a relaunch with lines still queued reported "0 waiting"
+        // until the next failed push — and the screens that reassure you your
+        // words survived read exactly this number.
+        pendingCount = unsent.count
         listener.onLine = { [weak self] line in
             Task { await self?.heard(line) }
         }
@@ -97,20 +129,23 @@ final class AnticipySession: ObservableObject {
         } catch {
             // A dropped push used to vanish into try? — the line then sat at
             // the top of the feed saying "Thinking…" forever while the brain
-            // had never seen it. Queue it and keep trying.
-            unsent.append(line)
+            // had never seen it. Queue it (on disk) and keep trying.
+            unsent = unsent + [line]
         }
     }
 
-    /// Re-push anything the network ate, oldest first.
+    /// Re-push anything the network ate, oldest first. Whatever still fails
+    /// goes straight back to disk rather than evaporating.
     private func flushUnsent() async {
         guard backendReachable, !unsent.isEmpty else { return }
         let queue = unsent
         unsent = []
+        var failed: [String] = []
         for line in queue {
             do { try await backend.pushEvent(kind: "transcript", text: line) }
-            catch { unsent.append(line) }
+            catch { failed.append(line) }
         }
+        if !failed.isEmpty { unsent = failed + unsent }
     }
 
     /// Anticipy's latest spoken line, only while it's actually fresh — a
@@ -140,11 +175,21 @@ final class AnticipySession: ObservableObject {
         backendReachable = await b.isReachable()
         guard backendReachable else {
             agentOnline = false
+            connection = .offline
             return
         }
         await flushUnsent()
-        if let fetched = try? await b.fetchJobs() {
-            jobs = fetched
+        // /api/health is NOT behind the guard hook, so "reachable" says nothing
+        // about whether our reads are allowed. Only a real read can promote us
+        // to .ready — otherwise the app reports itself perfectly healthy while
+        // every read is being refused.
+        do {
+            jobs = try await b.fetchJobs(owner: ownerID)
+            connection = .ready
+        } catch let e as AnticipyBackend.BackendError {
+            connection = .refused(e.status)
+        } catch {
+            connection = .offline
         }
         if let events = try? await b.fetchEvents() {
             // Server view of the stream: heard lines with the brain's verdict,
@@ -245,8 +290,29 @@ final class AnticipySession: ObservableObject {
     }
 
     func startListening() {
-        keepListening = true
+        // keepListening is only armed once the mic is actually ours. Setting it
+        // first meant a refused permission was remembered as "she should be
+        // listening", so every foreground re-fired a start iOS instantly denies.
         listener.start()
+        keepListening = true
+    }
+
+    /// True when iOS has already been told no and will not ask again — the app
+    /// must send them to Settings rather than pretending another tap will work.
+    var micBlocked: Bool { listener.permissionDenied }
+
+    /// Throw away the words still waiting for a network. Owned here because the
+    /// queue's storage key is private: Settings was reaching into UserDefaults
+    /// with a copy of the key string, so renaming it would have left a delete
+    /// button that silently deleted nothing.
+    func clearPendingLines() {
+        unsent = []
+    }
+
+    /// Open this app's page in iOS Settings. The whole app had no route there.
+    func openSystemSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     func stopListening() {
@@ -260,11 +326,24 @@ final class AnticipySession: ObservableObject {
         if keepListening, !listener.isListening { listener.start() }
     }
 
+    /// Why a pairing attempt didn't work — so the UI never blames someone for
+    /// a code that was right. This used to collapse every thrown error into
+    /// `false`, i.e. "wrong code", including no network.
+    enum PairOutcome: Equatable {
+        case paired
+        case noMatch          // the six digits genuinely matched nothing
+        case unreachable      // couldn't reach Anticipy at all
+    }
+
     /// Pair with the browser agent using the extension's 6-digit code.
-    func pairAgent(code: String) async -> Bool {
-        let ok = (try? await backend.pairAgent(code: code, owner: ownerID)) ?? false
-        if ok { await refresh() }
-        return ok
+    func pairAgent(code: String) async -> PairOutcome {
+        do {
+            let matched = try await backend.pairAgent(code: code, owner: ownerID)
+            if matched { await refresh() }
+            return matched ? .paired : .noMatch
+        } catch {
+            return .unreachable
+        }
     }
 
     static func parsePBDate(_ s: String) -> Date? {
@@ -279,7 +358,15 @@ final class AnticipySession: ObservableObject {
         return ISO8601DateFormatter().date(from: s)
     }
 
-    func confirm(_ job: AgentJob) async {
+    /// Jobs whose last write failed, so the card can say so and offer Retry
+    /// instead of buzzing success and leaving the card sitting there.
+    @Published var failedWrites: Set<String> = []
+    /// Jobs with a write in flight — the card disables itself, so a tap that
+    /// looks like it did nothing can't be tapped again into a double send.
+    @Published var inFlight: Set<String> = []
+
+    @discardableResult
+    func confirm(_ job: AgentJob) async -> Bool {
         // Record the yes ON the job: the browser agent reads it and finishes
         // the task, instead of stopping at the final button to ask again.
         var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
@@ -287,13 +374,35 @@ final class AnticipySession: ObservableObject {
         params["authorized"] = true
         let json = (try? JSONSerialization.data(withJSONObject: params))
             .flatMap { String(data: $0, encoding: .utf8) }
-        try? await backend.setJobStatus(id: job.id, status: "queued", params: json)
-        await refresh()
+        return await write(job) {
+            try await self.backend.setJobStatus(id: job.id, status: "queued", params: json)
+        }
     }
 
-    func decline(_ job: AgentJob) async {
-        try? await backend.setJobStatus(id: job.id, status: "cancelled")
-        await refresh()
+    @discardableResult
+    func decline(_ job: AgentJob) async -> Bool {
+        await write(job) {
+            try await self.backend.setJobStatus(id: job.id, status: "cancelled")
+        }
+    }
+
+    /// One place every job write goes, so success is only ever claimed for a
+    /// write the server actually accepted — and the haptic fires after that,
+    /// not before the request leaves.
+    private func write(_ job: AgentJob, _ body: @escaping () async throws -> Void) async -> Bool {
+        inFlight.insert(job.id)
+        failedWrites.remove(job.id)
+        defer { inFlight.remove(job.id) }
+        do {
+            try await body()
+            Haptics.success()
+            await refresh()
+            return true
+        } catch {
+            failedWrites.insert(job.id)
+            Haptics.warning()
+            return false
+        }
     }
 
     /// Identity is the server event id (or a stable local id until the

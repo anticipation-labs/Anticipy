@@ -80,10 +80,25 @@ final class PhoneListener: NSObject, ObservableObject {
             AVAudioSession.sharedInstance().requestRecordPermission { ok in
                 DispatchQueue.main.async {
                     guard ok else { self.authorized = false; return }
+                    // Set it back to TRUE on the way through. Nothing anywhere
+                    // used to do this, so one "Don't Allow" branded the app
+                    // permanently broken: even after granting access in iOS
+                    // Settings, the refusal message stayed on screen forever
+                    // and the only way out was deleting the app.
+                    self.authorized = true
                     self.begin()
                 }
             }
         }
+    }
+
+    /// Has the user already refused, so we know not to pretend a tap will work?
+    /// iOS only ever shows its alert once — after that, `start()` is a silent
+    /// no-op and only the Settings app can change the answer.
+    var permissionDenied: Bool {
+        SFSpeechRecognizer.authorizationStatus() == .denied
+            || SFSpeechRecognizer.authorizationStatus() == .restricted
+            || AVAudioSession.sharedInstance().recordPermission == .denied
     }
 
     private func begin() {

@@ -14,8 +14,16 @@ enum Theme {
     static let gray = Color(hex: 0x8A8A8A)
     static let champagne = Color(hex: 0xC8A97E)
 
+    /// Serif display type that SCALES with the reader's text size.
+    ///
+    /// This used to return an absolute point size, so every headline in the app
+    /// stayed frozen while the body copy beneath it grew — at large
+    /// accessibility sizes the hierarchy inverted and the "heading" became the
+    /// smallest text on screen. `relativeTo:` keeps the serif face and the
+    /// intended proportions while honouring Dynamic Type.
     static func display(_ size: CGFloat) -> Font {
-        .system(size: size, weight: .regular, design: .serif)
+        .custom("New York", size: size, relativeTo: .largeTitle)
+            .weight(.regular)
     }
 
     /// The one motion signature the whole app shares. A response of 0.35 with
@@ -181,18 +189,31 @@ struct TypewriterText: View {
 
     @State private var shown = ""
     @State private var typing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         (Text(shown) + Text(typing ? "▍" : "").foregroundColor(Theme.champagne))
             .font(font)
             .foregroundStyle(color)
             .contentShape(Rectangle())
+            // VoiceOver was handed an element that mutated ~36 times a second,
+            // one character at a time, with a cursor glyph composed into the
+            // string. Announce the finished sentence, once.
+            .accessibilityLabel(text)
             .onTapGesture {
                 shown = text
                 typing = false
                 onDone?()
             }
             .task(id: text) {
+                // Reduce Motion means "don't animate at me" — typing IS an
+                // animation, so the whole sentence simply appears.
+                if reduceMotion {
+                    shown = text
+                    typing = false
+                    onDone?()
+                    return
+                }
                 shown = ""
                 typing = true
                 Haptics.herMessage()
@@ -213,17 +234,24 @@ struct BreathingDot: View {
     var size: CGFloat = 10
     var active: Bool = true
     @State private var up = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// A forever-repeating pulse is exactly what Reduce Motion exists to stop,
+    /// and this one sits on the home screen the whole time she is listening.
+    private var animates: Bool { active && !reduceMotion }
 
     var body: some View {
         Circle()
             .fill(Theme.champagne)
             .frame(width: size, height: size)
-            .scaleEffect(active && up ? 1.25 : 1.0)
-            .opacity(active ? (up ? 1.0 : 0.7) : 0.5)
+            .scaleEffect(animates && up ? 1.25 : 1.0)
+            .opacity(active ? (animates && up ? 1.0 : 0.85) : 0.5)
             .animation(
-                active ? .easeInOut(duration: 1.5).repeatForever(autoreverses: true) : .default,
+                animates ? .easeInOut(duration: 1.5).repeatForever(autoreverses: true) : .default,
                 value: up
             )
-            .onAppear { up = true }
+            .onAppear { if animates { up = true } }
+            // Decoration: it says nothing a label elsewhere doesn't already say.
+            .accessibilityHidden(true)
     }
 }
