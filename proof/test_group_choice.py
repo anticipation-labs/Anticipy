@@ -133,4 +133,37 @@ out = convo.on_reply("+15550001111", "yeah do that")
 check("model's pick after her question releases without re-asking",
       state["j2"]["status"] == "queued" and "which one" not in out["reply"].lower())
 
+# 9. Explicit texted requests: read-only things run without a confirm gate;
+# consequential things are still held.
+from brain.anticipy_core import is_consequential  # noqa: E402
+
+check("'Open Wikipedia in browser' (explicit) runs without a hold",
+      not is_consequential("Open Wikipedia in browser", explicit=True))
+check("'Open Wikipedia in browser' (overheard) also read-only now",
+      not is_consequential("Open Wikipedia in browser"))
+check("'book Cactus Club for 7:30' still held even when explicit",
+      is_consequential("book Cactus Club for 7:30", explicit=True))
+check("'send the email to Marcus' still held even when explicit",
+      is_consequential("send the email to Marcus", explicit=True))
+check("explicit non-read-only, non-consequential runs ('organize my tabs')",
+      not is_consequential("organize my tabs", explicit=True))
+check("overheard non-read-only still held by default",
+      is_consequential("organize my tabs"))
+
+# 10. "Do it" seconds after asking: the freshest pending item is released
+# instead of a numbered menu.
+convo, state = make([dict(j) for j in JOBS])
+now_iso = __import__("datetime").datetime.now(
+    __import__("datetime").timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+state["j1"]["created"] = "2026-07-20 01:00:00"          # old
+state["j2"]["created"] = now_iso                        # just asked for
+convo._classify = lambda phone, text: {
+    "intent": "confirm", "pending_id": None, "pending_ids": [],
+    "changes": None, "reply": None}
+out = convo.on_reply("+15550001111", "Do it")
+check("'Do it' releases the just-created item, no menu",
+      state["j2"]["status"] == "queued"
+      and state["j1"]["status"] == "awaiting_confirm"
+      and "which one" not in (out["reply"] or "").lower())
+
 print(f"\n{passed}/{passed} passing")

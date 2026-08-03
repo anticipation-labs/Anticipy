@@ -11,7 +11,7 @@ class NoBackend(Anticipy):
         super().__init__(backend_url="http://127.0.0.1:1", **kw)
         self.queued = []
 
-    def _queue_job(self, goal, params, hold=False):
+    def _queue_job(self, goal, params, hold=False, explicit=False):
         self.queued.append((goal, params))
         return f"job{len(self.queued)}"
 

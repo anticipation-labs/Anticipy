@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -268,10 +269,20 @@ class Conversation:
         if intent == "confirm":
             acted = self._release(pending_id, changes, owner_text=text_for_guard)
             if acted == "ambiguous":
+                # "Do it" seconds after he asked for something is about THAT
+                # thing — a numbered menu here reads as her not listening.
+                fresh = self._freshest_pending()
+                if fresh:
+                    acted = self._release(fresh, changes, owner_text=None)
+            if acted == "ambiguous":
                 parsed["reply"] = self._which_one()
                 acted, asked_back = None, True
         elif intent == "decline":
             acted = self._cancel(pending_id, owner_text=text_for_guard)
+            if acted == "ambiguous":
+                fresh = self._freshest_pending()
+                if fresh:
+                    acted = self._cancel(fresh, owner_text=None)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one(cancel=True)
                 acted, asked_back = None, True
@@ -565,7 +576,11 @@ Use {"facts": {}} when there is nothing durable."""
         it, I can look into that" and, moments later, hear()'s own "want me to
         go ahead?". Same thread, same thought, twice."""
         try:
-            out = self.anticipy.hear(text, may_say=lambda *a, **k: False) or {}
+            # explicit: he TEXTED this himself — an ask in so many words is its
+            # own go-ahead for anything that doesn't leave his world, so
+            # "open wikipedia" runs instead of demanding a confirmation.
+            out = self.anticipy.hear(text, may_say=lambda *a, **k: False,
+                                     explicit=True) or {}
         except TypeError:
             # An Anticipy without the may_say hook (older core, or a test
             # double): fall back rather than losing the thought entirely.
@@ -723,6 +738,28 @@ Use {"facts": {}} when there is nothing durable."""
         if self._GROUP_NONE & set(words):
             return "none"
         return None
+
+    def _freshest_pending(self) -> Optional[str]:
+        """The pending item he created moments ago, if there is exactly one
+        that fresh. A bare "do it"/"cancel that" right after asking for
+        something names it as surely as repeating himself would."""
+        try:
+            now = datetime.now(timezone.utc)
+            fresh = []
+            for p in self._pending():
+                created = (p.get("created") or "").replace(" ", "T").replace("Z", "+00:00")
+                try:
+                    ts = datetime.fromisoformat(created)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    age = (now - ts).total_seconds()
+                except Exception:
+                    continue
+                if age < 180:
+                    fresh.append(p["id"])
+            return fresh[0] if len(fresh) == 1 else None
+        except Exception:
+            return None
 
     def _just_asked(self, phone: str) -> bool:
         """Whether her last message in this thread was a question."""

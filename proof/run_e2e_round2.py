@@ -33,7 +33,7 @@ def load_env():
 
 
 class AnticipyE2E(Anticipy):
-    def _queue_job(self, goal, params, hold=False):
+    def _queue_job(self, goal, params, hold=False, explicit=False):
         task = params.get("source", goal)
         p = {"task": task, "start_url": START_URL,
              "source": params.get("source"), "triaged_goal": goal}

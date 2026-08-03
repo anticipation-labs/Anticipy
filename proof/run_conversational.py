@@ -45,7 +45,7 @@ class AnticipyConv(Anticipy):
     jobs with a per-scenario reachable start_url (same harness pattern as
     round 2). The confirm gate is the REAL one from anticipy_core."""
 
-    def _queue_job(self, goal, params, hold=False):
+    def _queue_job(self, goal, params, hold=False, explicit=False):
         task = params.get("source", goal)
         p = {"task": task, "start_url": CURRENT_START_URL,
              "source": params.get("source"), "triaged_goal": goal}

@@ -46,7 +46,7 @@ class AnticipyE2E(Anticipy):
     """Same brain/memory/gates; jobs are queued in the shape the extension's
     autonomous loop executes (goal=agent_goal, task = the raw line)."""
 
-    def _queue_job(self, goal, params, hold=False):
+    def _queue_job(self, goal, params, hold=False, explicit=False):
         task = params.get("source", goal)
         status = "awaiting_confirm" if (hold or goal in IRREVERSIBLE) else "queued"
         r = requests.post(

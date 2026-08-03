@@ -57,19 +57,30 @@ _IRREVERSIBLE_RE = re.compile(
 # world without their word, while an over-hold costs one tap.
 _READ_ONLY_RE = re.compile(
     r"^\s*(research|compar\w*|look\s*up|find|check(?!\s*out)\w*|search\w*|read\w*|"
-    r"summar\w*|gather\w*|browse|price|monitor|watch|list)\b",
+    r"summar\w*|gather\w*|browse|price|monitor|watch|list|"
+    r"open(?!\s+(?:an?\s+)?account)|go\s+to|visit|navigat\w*|show|load|"
+    r"pull\s+up|view|display|tell)\b",
     re.IGNORECASE,
 )
 
 
-def is_consequential(goal: str, params: dict | None = None) -> bool:
+def is_consequential(goal: str, params: dict | None = None,
+                     explicit: bool = False) -> bool:
     """Does this goal change the world? Judged on the GOAL only — params carry
     the raw transcript, whose stray words ("cancel my flight" mentioned in
-    passing) must not decide whether a research task is held."""
+    passing) must not decide whether a research task is held.
+
+    explicit=True means the owner ASKED for this in so many words (a direct
+    text/command, not something overheard). Their ask is the go-ahead, so only
+    goals that actually leave their world (send/book/buy…) are still held —
+    making them confirm "open wikipedia" teaches them to tap through prompts
+    without reading."""
     g = (goal or "").strip()
     if _IRREVERSIBLE_RE.search(g):
         return True
-    # Default to holding: only an explicitly read-only goal runs unattended.
+    if explicit:
+        return False
+    # Overheard: default to holding — only explicitly read-only runs unattended.
     return not _READ_ONLY_RE.search(g)
 
 # How the best text-native agents actually sound (studied: Tomo — the
@@ -200,7 +211,7 @@ class Anticipy:
             return True
 
     def hear(self, line: str, context: Optional[list[str]] = None,
-             may_say=None) -> dict:
+             may_say=None, explicit: bool = False) -> dict:
         """One transcript line in; memory, decision, and delegation out."""
         # Owner questions are answered, not triaged: a briefing request goes
         # to the briefing engine, and a memory question is answered straight
@@ -260,7 +271,7 @@ class Anticipy:
             # would sit silently forever.
             held = (decision.needs_confirmation
                     or decision.goal in IRREVERSIBLE
-                    or is_consequential(decision.goal, params))
+                    or is_consequential(decision.goal, params, explicit=explicit))
             # Was this already waiting on him before he said it again? The
             # queue has deduped identical goals since the five-copies incident,
             # but the TEXT went out every single time regardless — which is why
@@ -268,7 +279,8 @@ class Anticipy:
             # already pending she has already asked; saying it again is nagging,
             # not diligence.
             repeat = bool(self._same_pending(decision.goal))
-            job_id = self._queue_job(decision.goal, params, hold=held)
+            job_id = self._queue_job(decision.goal, params, hold=held,
+                                     explicit=explicit)
             loop = LoopRecord(
                 commitment_id=mem.get("commitment_id") or -1,
                 what=decision.goal,
@@ -460,7 +472,8 @@ class Anticipy:
 
     # ---------------------------------------------------------- action arm
 
-    def _queue_job(self, goal: str, params: dict, hold: bool = False) -> Optional[str]:
+    def _queue_job(self, goal: str, params: dict, hold: bool = False,
+                   explicit: bool = False) -> Optional[str]:
         # Mentioning the same thing twice must not produce two identical items
         # waiting on the owner. Five copies of "Draft email to Marcus" piled up
         # in production, each one texting him, and every "yes" after that was
@@ -473,7 +486,8 @@ class Anticipy:
                 f"{self.backend_url}/api/collections/jobs/records",
                 json={"goal": goal, "params": json.dumps(params),
                       "status": "awaiting_confirm"
-                      if (hold or goal in IRREVERSIBLE or is_consequential(goal, params))
+                      if (hold or goal in IRREVERSIBLE
+                          or is_consequential(goal, params, explicit=explicit))
                       else "queued",
                       "device_id": "anticipy", "owner": self.owner_id},
                 timeout=10,
