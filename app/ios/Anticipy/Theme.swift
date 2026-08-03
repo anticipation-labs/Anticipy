@@ -93,6 +93,11 @@ enum Haptics {
     /// Wake the engine so the NEXT touch is instant. Cheap; call it when the
     /// app becomes active. Each fire below also re-prepares for the same reason.
     static func warmUp() {
+        // The CoreHaptics engine is warmed so the DIAGNOSTIC can use it. The
+        // app's own feedback below stays on UIFeedbackGenerator — the
+        // documented API for UI feedback — until the diagnostic proves
+        // something better. Build 33 shipped one theory; it did not work.
+        HapticEngine.shared.start()
         lightGen.prepare(); mediumGen.prepare(); softGen.prepare()
         rigidGen.prepare(); noticeGen.prepare()
     }

@@ -3,6 +3,10 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var pendant: PendantManager
     @EnvironmentObject var session: AnticipySession
+    // Observed, so the readout below refreshes the moment the engine starts,
+    // stops, or reports why — otherwise it goes stale exactly while he is
+    // standing on this screen testing it.
+    @ObservedObject private var haptics = HapticEngine.shared
     @AppStorage("transcriptionEngine") private var engine = "local"
     @AppStorage("proactivityLevel") private var proactivity = 1.0
     @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
@@ -155,6 +159,54 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.footnote.monospaced())
+            }
+
+            Section("Haptics — find out what's wrong") {
+                let r = haptics.report(listening: session.listener.isListening)
+
+                // Two buttons, because the whole question is WHICH path works.
+                // Neither uses .pressable: that style buzzes on press-down, so
+                // a test button wearing it would fire both paths at once and
+                // tell us nothing.
+                Button("1 · Buzz the normal way") { Haptics.engage() }
+                Button("2 · Buzz the other way") {
+                    haptics.start()
+                    haptics.playTest(double: true)
+                }
+
+                Text("Turn Listening OFF, try both. Then turn it ON and try both again. If they buzz only with Listening off, the microphone is what's muting them — that tells me exactly what to fix.")
+                    .font(.footnote).foregroundStyle(Theme.gray)
+
+                if !r.hardware {
+                    Text("This iPhone reports no Taptic Engine — nothing can buzz.")
+                        .font(.footnote).foregroundStyle(.red)
+                }
+                if r.lowPowerMode {
+                    // The one blocker that IS readable. Stated plainly.
+                    Text("Low Power Mode is ON. iPhone switches haptics off while it is — turn it off in Settings › Battery.")
+                        .font(.footnote).foregroundStyle(.orange)
+                }
+                if r.listening && !r.allowsHapticsWhileRecording {
+                    // The smoking gun, if it ever shows up: build 33 asked for
+                    // this and the request was made with try? — so a refusal
+                    // was invisible until now.
+                    Text("Found it: the microphone is refusing to let haptics play. That's mine to fix — tell me you saw this.")
+                        .font(.footnote).foregroundStyle(.red)
+                }
+                if r.hardware && !r.lowPowerMode {
+                    Text("If nothing buzzes either way: iPhone Settings › Sounds & Haptics › System Haptics must be ON. No app is allowed to read or change that switch — only you can.")
+                        .font(.footnote).foregroundStyle(Theme.gray)
+                }
+
+                Text("""
+                     mic-allows-haptics \(r.allowsHapticsWhileRecording ? "YES" : "NO")
+                     engine \(r.engineRunning ? "running" : "idle")\(r.stoppedReason.map { " · stopped: \($0)" } ?? "")
+                     audio \(r.sessionCategory)/\(r.sessionMode) · \(r.listening ? "listening" : "not listening")
+                     """)
+                    .font(.caption2.monospaced()).foregroundStyle(Theme.gray)
+                if let err = r.error {
+                    Text(err).font(.caption2.monospaced()).foregroundStyle(.red)
+                }
             }
 
             Section {

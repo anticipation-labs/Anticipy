@@ -106,6 +106,11 @@ final class PhoneListener: NSObject, ObservableObject {
     /// route's format — it changes when the mic changes), engine.
     private func configureAndStartEngine() {
         let session = AVAudioSession.sharedInstance()
+        // .measurement is deliberate and matches Apple's own SFSpeechRecognizer
+        // sample: minimal input processing, and the primary mic pinned on
+        // multi-mic devices. A haptics build must NOT quietly change the
+        // transcription pipeline on a hunch — if the diagnostic proves the mode
+        // is what mutes the Taptic Engine, that becomes its own change.
         try? session.setCategory(.record, mode: .measurement, options: .duckOthers)
         // iOS MUTES the Taptic Engine for the whole app while a .record session
         // is active, so the buzz can't bleed into the mic. She starts listening
