@@ -14,6 +14,23 @@ All work happens on this branch; production deploys from it via `railway up`.
 
 ### What changed since §0.5 was written (newest first)
 
+0a. **BUILD 32 SHIPPED (2026-08-03).** iOS build 32 (security token-on-reads +
+   premium stage 1 below) archived/exported on Omar's Mac, uploaded via altool,
+   confirmed `VALID` on App Store Connect. Signing note: codesign only works from
+   Omar's GUI terminal session — over SSH the keychain reports "User interaction
+   is not allowed" even after he unlocks it. He runs the build one-liner
+   (HANDOFF §6 has the exact archive/export/upload commands; ASC API check
+   script pattern is at /tmp/asc_check.py on the Mac).
+   - **OPEN BUG REPORT (unverified):** Omar says he feels NO haptics in the app.
+     Debug on-device: confirm he's on build 32; confirm iPhone Settings › Sounds
+     & Haptics › System Haptics is ON; if both true, suspect `Pressable`'s
+     `onChange(of: configuration.isPressed)` not firing inside a ButtonStyle —
+     fall back to calling `Haptics.tap()` in each button action, or use a
+     `_onButtonGesture`/pressed-state binding. The explicit `Haptics.engage()`
+     calls in button actions should work regardless — test the Listen button.
+   - Next-session request from Omar: replace the expiring Pinggy SSH tunnel with
+     permanent free Mac access (e.g. Tailscale) BEFORE other priority work.
+
 0. **PREMIUM FEEL, STAGE 1 (2026-08-03).** Read `design/PREMIUM-FEEL.md` — it is the
    research + full plan (psychology, haptic/motion system, onboarding rework, browser
    pairing rethink, life-scrape design, Web Store package). Implemented so far:
