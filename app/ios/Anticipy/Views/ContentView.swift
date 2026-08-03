@@ -94,9 +94,15 @@ struct HomeView: View {
             .toolbarBackground(Theme.ink, for: .navigationBar)
             // If listening was on when the app closed or backgrounded, she
             // picks it back up herself — no button-press chore per open.
-            .onAppear { session.resumeListeningIfWanted() }
+            .onAppear {
+                Haptics.warmUp()
+                session.resumeListeningIfWanted()
+            }
             .onChange(of: scenePhase) { phase in
-                if phase == .active { session.resumeListeningIfWanted() }
+                if phase == .active {
+                    Haptics.warmUp()
+                    session.resumeListeningIfWanted()
+                }
             }
         }
     }

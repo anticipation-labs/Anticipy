@@ -107,6 +107,13 @@ final class PhoneListener: NSObject, ObservableObject {
     private func configureAndStartEngine() {
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.record, mode: .measurement, options: .duckOthers)
+        // iOS MUTES the Taptic Engine for the whole app while a .record session
+        // is active, so the buzz can't bleed into the mic. She starts listening
+        // milliseconds after launch (keepListening is a standing state), so
+        // without this every haptic in the app died before a finger touched
+        // anything — the "I feel no haptics anywhere" report on build 32.
+        // Nothing surfaces the suppression: no error, no log.
+        try? session.setAllowHapticsAndSystemSoundsDuringRecording(true)
         try? session.setActive(true, options: .notifyOthersOnDeactivation)
 
         let input = engine.inputNode
@@ -357,5 +364,10 @@ final class PhoneListener: NSObject, ObservableObject {
         task = nil
         partial = ""
         emittedWords = 0
+        // Hand the audio session back. Leaving it active kept the recording
+        // mode — and everything it suppresses — in force for the rest of the
+        // process, so turning Listen OFF never restored normal behavior.
+        try? AVAudioSession.sharedInstance()
+            .setActive(false, options: .notifyOthersOnDeactivation)
     }
 }

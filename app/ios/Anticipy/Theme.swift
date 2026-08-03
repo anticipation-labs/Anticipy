@@ -81,33 +81,51 @@ extension View {
 /// notification haptics for outcomes, and signature patterns for the moments
 /// worth remembering. No-ops gracefully in the simulator.
 enum Haptics {
-    static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-    static func engage() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
-    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
-    static func warning() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+    // Retained, not built per call. A generator created and released inside one
+    // statement never gets to warm the Taptic Engine, and a cold engine drops
+    // or delays the first tap — which reads exactly like "haptics don't work".
+    private static let lightGen = UIImpactFeedbackGenerator(style: .light)
+    private static let mediumGen = UIImpactFeedbackGenerator(style: .medium)
+    private static let softGen = UIImpactFeedbackGenerator(style: .soft)
+    private static let rigidGen = UIImpactFeedbackGenerator(style: .rigid)
+    private static let noticeGen = UINotificationFeedbackGenerator()
+
+    /// Wake the engine so the NEXT touch is instant. Cheap; call it when the
+    /// app becomes active. Each fire below also re-prepares for the same reason.
+    static func warmUp() {
+        lightGen.prepare(); mediumGen.prepare(); softGen.prepare()
+        rigidGen.prepare(); noticeGen.prepare()
+    }
+
+    static func tap() { lightGen.impactOccurred(); lightGen.prepare() }
+    static func engage() { mediumGen.impactOccurred(); mediumGen.prepare() }
+    static func success() { noticeGen.notificationOccurred(.success); noticeGen.prepare() }
+    static func warning() { noticeGen.notificationOccurred(.warning); noticeGen.prepare() }
 
     /// Two soft rising taps — the feeling of two things finding each other.
     static func pairing() {
-        let soft = UIImpactFeedbackGenerator(style: .soft)
-        let medium = UIImpactFeedbackGenerator(style: .medium)
-        soft.impactOccurred(intensity: 0.6)
+        softGen.impactOccurred(intensity: 0.6)
+        mediumGen.prepare()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            medium.impactOccurred(intensity: 1.0)
+            mediumGen.impactOccurred(intensity: 1.0)
+            mediumGen.prepare()
         }
     }
 
     /// A crisp double-tap: something she promised is now done.
     static func taskDone() {
-        let rigid = UIImpactFeedbackGenerator(style: .rigid)
-        rigid.impactOccurred(intensity: 0.7)
+        rigidGen.impactOccurred(intensity: 0.7)
+        rigidGen.prepare()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            rigid.impactOccurred(intensity: 1.0)
+            rigidGen.impactOccurred(intensity: 1.0)
+            rigidGen.prepare()
         }
     }
 
     /// One barely-there tick as her words start to appear.
     static func herMessage() {
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.45)
+        softGen.impactOccurred(intensity: 0.45)
+        softGen.prepare()
     }
 }
 
@@ -117,13 +135,28 @@ enum Haptics {
 /// the touch is acknowledged instantly.
 struct Pressable: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(Theme.spring, value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { pressed in
-                if pressed { Haptics.tap() }
-            }
+        // The press watcher lives in its OWN view, not on configuration.label.
+        // A ButtonStyle's body is rebuilt with unstable identity, so an
+        // .onChange hung directly off the label can lose the previous value it
+        // compares against and silently stop firing. A real view with @State
+        // gives SwiftUI something stable to hold the press state on.
+        PressBody(configuration: configuration)
+    }
+
+    private struct PressBody: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var wasPressed = false
+
+        var body: some View {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .opacity(configuration.isPressed ? 0.85 : 1)
+                .animation(Theme.spring, value: configuration.isPressed)
+                .onChange(of: configuration.isPressed) { pressed in
+                    if pressed && !wasPressed { Haptics.tap() }
+                    wasPressed = pressed
+                }
+        }
     }
 }
 
