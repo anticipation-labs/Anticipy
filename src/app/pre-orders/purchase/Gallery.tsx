@@ -22,10 +22,6 @@ const IMAGES = [
     src: "/images/flatlay.png",
     alt: "Anticipy pendant, chain, and wireless charging pad in flatlay.",
   },
-  {
-    src: "/images/unbox.png",
-    alt: "Anticipy pendant in a premium jewelry box at unboxing.",
-  },
 ];
 
 export function Gallery() {

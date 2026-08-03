@@ -25,30 +25,47 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.anticipy.ai"),
   title: {
-    default: "Anticipy: AI pendant that listens, remembers, and acts",
+    default: "Anticipy: the AI pendant that turns what you say into what gets done",
     template: "%s | Anticipy",
   },
   description:
-    "Anticipy is a discreet AI pendant that listens for ambient intent, remembers what matters, and quietly does the work on your Mac.",
+    "Anticipy is a titanium AI pendant that hears your spoken commitments, drafts the action, asks for your approval, does it, and keeps a receipt. Pre-order for $149.99.",
+  keywords: [
+    "AI pendant",
+    "AI wearable",
+    "AI necklace",
+    "ambient AI",
+    "voice assistant wearable",
+    "Anticipy",
+  ],
   robots: {
     index: true,
     follow: true,
     googleBot: { index: true, follow: true },
   },
   openGraph: {
-    title: "Anticipy: AI pendant that listens, remembers, and acts",
+    title: "Anticipy: the AI pendant that turns what you say into what gets done",
     description:
-      "A discreet AI pendant that listens for ambient intent, remembers what matters, and quietly does the work on your Mac.",
+      "A titanium AI pendant that hears your spoken commitments, drafts the action, asks for your approval, does it, and keeps a receipt. Pre-order for $149.99.",
     url: "https://www.anticipy.ai/",
     siteName: "Anticipy",
     type: "website",
     locale: "en_US",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Anticipy titanium pendant and chain",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Anticipy: AI pendant that listens, remembers, and acts",
+    title: "Anticipy: the AI pendant that turns what you say into what gets done",
     description:
-      "A discreet AI pendant that listens, remembers what matters, and quietly does the work on your Mac.",
+      "A titanium AI pendant that hears your spoken commitments, drafts the action, asks for approval, does it, and keeps a receipt.",
+    images: ["/og.png"],
   },
   alternates: {
     canonical: "https://www.anticipy.ai/",
@@ -74,22 +91,33 @@ const jsonLdOrganization = {
 
 const jsonLdProduct = {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "Anticipy",
+  "@type": "Product",
+  name: "Anticipy Pendant",
   description:
-    "Public app shell plus private local Mac engine for ambient intent capture, onboarding, memory, and browser actions.",
+    "Brushed titanium AI pendant that hears spoken commitments, drafts the action, asks for approval, executes it, and keeps a receipt. Chain and wireless charging pad included.",
+  image: "https://www.anticipy.ai/og.png",
   brand: {
     "@type": "Brand",
-    name: "Anticipation Labs",
+    name: "Anticipy",
   },
-  applicationCategory: "ProductivityApplication",
-  operatingSystem: "macOS",
   offers: {
     "@type": "Offer",
-    price: "0",
+    price: "149.99",
     priceCurrency: "USD",
-    availability: "https://schema.org/InStock",
-    url: "https://www.anticipy.ai/app",
+    availability: "https://schema.org/PreOrder",
+    url: "https://www.anticipy.ai/pre-orders/purchase",
+    shippingDetails: {
+      "@type": "OfferShippingDetails",
+      shippingRate: {
+        "@type": "MonetaryAmount",
+        value: "0",
+        currency: "USD",
+      },
+      shippingDestination: [
+        { "@type": "DefinedRegion", addressCountry: "US" },
+        { "@type": "DefinedRegion", addressCountry: "CA" },
+      ],
+    },
   },
 };
 
@@ -97,7 +125,7 @@ const jsonLdWebSite = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "Anticipy",
-  url: "https://www.anticipy.ai/app",
+  url: "https://www.anticipy.ai",
 };
 
 export default function RootLayout({
