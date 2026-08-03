@@ -50,14 +50,16 @@ struct OnboardingView: View {
     private var footer: some View {
         VStack(spacing: 10) {
             Button {
+                Haptics.engage()
                 // Save the number as we leave its step — skipping is still
                 // allowed, it just means she can't text until Settings.
                 if step == 2, !phone.isEmpty {
                     Task { _ = await session.saveOwnerPhone(phone) }
                 }
                 if step < totalSteps - 1 {
-                    step += 1
+                    withAnimation(Theme.spring) { step += 1 }
                 } else {
+                    Haptics.success()
                     hasOnboarded = true
                 }
             } label: {
@@ -68,8 +70,10 @@ struct OnboardingView: View {
                     .background(Capsule().fill(Theme.champagne))
                     .foregroundStyle(Theme.ink)
             }
+            .buttonStyle(.pressable)
             if step > 0, step < totalSteps - 1 {
-                Button("Skip for now") { step += 1 }
+                Button("Skip for now") { withAnimation(Theme.spring) { step += 1 } }
+                    .buttonStyle(.pressable)
                     .font(.footnote)
                     .foregroundStyle(Theme.gray)
             }
@@ -80,22 +84,45 @@ struct OnboardingView: View {
 
     // MARK: - Steps
 
+    @State private var welcomeStage = 0
+
     private var welcome: some View {
         VStack(spacing: 22) {
             Spacer()
             LogoMark(size: 120)
+                .scaleEffect(welcomeStage >= 1 ? 1 : 0.6)
+                .opacity(welcomeStage >= 1 ? 1 : 0)
             Text("Anticipy")
                 .font(Theme.display(44))
                 .foregroundStyle(Theme.ivory)
-            Text("Meet Anticipy. She listens, remembers\nwhat matters, and quietly does the work.")
-                .font(.body)
-                .foregroundStyle(Theme.sand)
+                .opacity(welcomeStage >= 2 ? 1 : 0)
+                .offset(y: welcomeStage >= 2 ? 0 : 10)
+            if welcomeStage >= 3 {
+                TypewriterText(
+                    text: "I'm Anticipy. I listen, I remember what matters, and I quietly do the work.",
+                    font: .body
+                )
                 .multilineTextAlignment(.center)
+                .frame(minHeight: 44, alignment: .top)
+            } else {
+                Color.clear.frame(height: 44)
+            }
             Spacer()
             Spacer()
         }
         .padding(.horizontal, 30)
+        .task {
+            guard welcomeStage == 0 else { return }
+            withAnimation(Theme.springSlow) { welcomeStage = 1 }
+            Haptics.herMessage()
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            withAnimation(Theme.spring) { welcomeStage = 2 }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            welcomeStage = 3
+        }
     }
+
+    @State private var cardsShown = 0
 
     private var howItWorks: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -105,14 +132,27 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.ivory)
             stepCard(icon: "waveform", title: "She listens",
                      text: "Your pendant hears your day and transcribes it — on-device if you prefer.")
+                .opacity(cardsShown >= 1 ? 1 : 0)
+                .offset(y: cardsShown >= 1 ? 0 : 14)
             stepCard(icon: "sparkles", title: "She remembers",
                      text: "She catches commitments like “I'll send that over” and keeps them until they're done.")
+                .opacity(cardsShown >= 2 ? 1 : 0)
+                .offset(y: cardsShown >= 2 ? 0 : 14)
             stepCard(icon: "cursorarrow.click.2", title: "She acts",
                      text: "She prepares the work in your browser — and always asks before anything is sent.")
+                .opacity(cardsShown >= 3 ? 1 : 0)
+                .offset(y: cardsShown >= 3 ? 0 : 14)
             Spacer()
             Spacer()
         }
         .padding(.horizontal, 28)
+        .task(id: step) {
+            guard step == 1, cardsShown == 0 else { return }
+            for i in 1...3 {
+                withAnimation(Theme.spring) { cardsShown = i }
+                try? await Task.sleep(nanoseconds: 110_000_000)
+            }
+        }
     }
 
     /// The one thing she genuinely cannot work out on her own. Without it she
@@ -141,13 +181,20 @@ struct OnboardingView: View {
                 .padding(.vertical, 12)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
                 .padding(.horizontal, 40)
-            if !phone.isEmpty && session.e164(phone) == nil {
+            if !phone.isEmpty, session.e164(phone) != nil {
+                Label("That's you", systemImage: "checkmark.circle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.champagne)
+                    .transition(.scale.combined(with: .opacity))
+                    .onAppear { Haptics.tap() }
+            } else if !phone.isEmpty {
                 Text("That doesn't look like a full number yet.")
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             }
             Spacer()
         }
+        .animation(Theme.spring, value: session.e164(phone) != nil)
     }
 
     private var pairPendant: some View {
@@ -159,11 +206,7 @@ struct OnboardingView: View {
                     .frame(width: 130, height: 130)
                 LogoMark(size: 76)
                 if pendant.state == .searching {
-                    Circle()
-                        .stroke(Theme.champagne.opacity(0.5), lineWidth: 2)
-                        .frame(width: 130, height: 130)
-                        .scaleEffect(1.15)
-                        .opacity(0.5)
+                    RadarRipple()
                 }
             }
             Text("Pair your pendant")
@@ -177,8 +220,11 @@ struct OnboardingView: View {
                 Label(pendant.deviceName ?? "Anticipy", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(Theme.champagne)
                     .font(.body.weight(.semibold))
+                    .transition(.scale.combined(with: .opacity))
+                    .onAppear { Haptics.pairing() }
             } else {
                 Button {
+                    Haptics.engage()
                     pendant.startScan()
                 } label: {
                     Label(pendant.state == .searching ? "Searching…" : "Search for my pendant",
@@ -189,6 +235,7 @@ struct OnboardingView: View {
                         .background(Capsule().fill(Theme.surface))
                         .foregroundStyle(Theme.ivory)
                 }
+                .buttonStyle(.pressable)
             }
             Text("No pendant with you? Skip — Anticipy reconnects automatically whenever it's in range.")
                 .font(.footnote)
@@ -231,12 +278,14 @@ struct OnboardingView: View {
             }
             if session.agentPaired {
                 HStack(spacing: 8) {
-                    Circle().fill(Theme.champagne).frame(width: 8, height: 8)
+                    BreathingDot(size: 8)
                     Text("Paired — your browser is hers now.")
                         .font(.footnote)
                         .foregroundStyle(Theme.gray)
                 }
                 .padding(.top, 4)
+                .transition(.scale.combined(with: .opacity))
+                .onAppear { Haptics.pairing() }
             } else {
                 HStack(spacing: 10) {
                     TextField("6-digit code", text: $agentCode)
@@ -246,7 +295,11 @@ struct OnboardingView: View {
                         .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
                         .foregroundStyle(Theme.ivory)
                     Button("Pair") {
-                        Task { agentPairFailed = !(await session.pairAgent(code: agentCode)) }
+                        Haptics.engage()
+                        Task {
+                            let ok = await session.pairAgent(code: agentCode)
+                            withAnimation(Theme.spring) { agentPairFailed = !ok }
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(agentCode.count != 6)
@@ -298,7 +351,8 @@ struct OnboardingView: View {
 
     private func engineOption(_ value: String, icon: String, title: String, text: String) -> some View {
         Button {
-            engine = value
+            Haptics.engage()
+            withAnimation(Theme.spring) { engine = value }
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: icon)
@@ -321,8 +375,12 @@ struct OnboardingView: View {
                         RoundedRectangle(cornerRadius: 18)
                             .strokeBorder(engine == value ? Theme.champagne.opacity(0.6) : Theme.stroke)
                     )
+                    .shadow(color: engine == value ? Theme.champagne.opacity(0.15) : .clear,
+                            radius: 12, y: 4)
             )
+            .scaleEffect(engine == value ? 1.02 : 1)
         }
+        .buttonStyle(.pressable)
     }
 
     private func stepCard(icon: String, title: String, text: String) -> some View {
@@ -338,5 +396,21 @@ struct OnboardingView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
+    }
+}
+
+/// A repeating radar ripple for scanning states — one ring expanding and
+/// fading out from the logo, forever, until the searching state ends.
+struct RadarRipple: View {
+    @State private var expand = false
+
+    var body: some View {
+        Circle()
+            .stroke(Theme.champagne.opacity(0.5), lineWidth: 2)
+            .frame(width: 130, height: 130)
+            .scaleEffect(expand ? 1.45 : 1.0)
+            .opacity(expand ? 0 : 0.8)
+            .animation(.easeOut(duration: 1.6).repeatForever(autoreverses: false), value: expand)
+            .onAppear { expand = true }
     }
 }

@@ -70,8 +70,8 @@ struct HomeView: View {
                     .padding(.bottom, 30)
                     // New cards ease in instead of teleporting — the feed
                     // should feel alive, not like a page reload.
-                    .animation(.easeInOut(duration: 0.25), value: session.jobs)
-                    .animation(.easeInOut(duration: 0.25), value: session.transcript)
+                    .animation(Theme.spring, value: session.jobs)
+                    .animation(Theme.spring, value: session.transcript)
                 }
                 .refreshable { await session.refresh() }
             }
@@ -150,6 +150,7 @@ struct HomeView: View {
                     .background(Capsule().fill(session.listener.isListening ? Theme.champagne : Theme.surface))
                     .foregroundStyle(session.listener.isListening ? Theme.ink : Theme.sand)
                 }
+                .buttonStyle(.pressable)
                 if session.listener.isListening && !session.listener.suspended {
                     ProgressView().tint(Theme.champagne)
                 }
@@ -214,6 +215,7 @@ struct HomeView: View {
                         .font(.title3)
                         .foregroundStyle(typedLine.isEmpty ? Theme.stroke : Theme.champagne)
                 }
+                .buttonStyle(.pressable)
                 .disabled(typedLine.isEmpty)
             }
             .padding(.horizontal, 12)
@@ -265,10 +267,12 @@ struct HomeView: View {
                 Text("Anticipy")
                     .font(Theme.display(18))
                     .foregroundStyle(Theme.champagne)
+                if pendant.state == .connected || session.listener.isListening || !handling.isEmpty {
+                    BreathingDot(size: 7)
+                }
             }
-            Text(briefingText)
-                .font(.callout)
-                .foregroundStyle(Theme.ivory)
+            // Her briefing types itself out — she's talking, not captioned.
+            TypewriterText(text: briefingText, font: .callout, color: Theme.ivory, speed: 45)
             if let says = session.freshAnticipySays {
                 Text(says)
                     .font(.footnote)
@@ -378,6 +382,7 @@ struct ConfirmJobCard: View {
                         .background(Capsule().fill(Theme.champagne))
                         .foregroundStyle(Theme.ink)
                 }
+                .buttonStyle(.pressable)
                 Button {
                     Haptics.warning()
                     Task { await session.decline(job) }
@@ -389,6 +394,7 @@ struct ConfirmJobCard: View {
                         .background(Capsule().strokeBorder(Theme.stroke))
                         .foregroundStyle(Theme.sand)
                 }
+                .buttonStyle(.pressable)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

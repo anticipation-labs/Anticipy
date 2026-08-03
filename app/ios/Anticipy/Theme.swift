@@ -17,6 +17,12 @@ enum Theme {
     static func display(_ size: CGFloat) -> Font {
         .system(size: size, weight: .regular, design: .serif)
     }
+
+    /// The one motion signature the whole app shares. A response of 0.35 with
+    /// 0.8 damping lands inside the 200–350 ms window that reads as premium —
+    /// slower feels sluggish, faster feels jumpy.
+    static let spring = Animation.spring(response: 0.35, dampingFraction: 0.8)
+    static let springSlow = Animation.spring(response: 0.55, dampingFraction: 0.85)
 }
 
 extension Color {
@@ -72,10 +78,114 @@ extension View {
 }
 
 /// Haptic vocabulary: light tap for touches, medium for state changes,
-/// notification haptics for outcomes. No-ops gracefully in the simulator.
+/// notification haptics for outcomes, and signature patterns for the moments
+/// worth remembering. No-ops gracefully in the simulator.
 enum Haptics {
     static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
     static func engage() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
     static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     static func warning() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+
+    /// Two soft rising taps — the feeling of two things finding each other.
+    static func pairing() {
+        let soft = UIImpactFeedbackGenerator(style: .soft)
+        let medium = UIImpactFeedbackGenerator(style: .medium)
+        soft.impactOccurred(intensity: 0.6)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            medium.impactOccurred(intensity: 1.0)
+        }
+    }
+
+    /// A crisp double-tap: something she promised is now done.
+    static func taskDone() {
+        let rigid = UIImpactFeedbackGenerator(style: .rigid)
+        rigid.impactOccurred(intensity: 0.7)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            rigid.impactOccurred(intensity: 1.0)
+        }
+    }
+
+    /// One barely-there tick as her words start to appear.
+    static func herMessage() {
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.45)
+    }
+}
+
+/// Every button in the app responds within a frame: a 0.97 press-scale, a
+/// slight dim, and a light haptic the moment the finger lands. Perceived
+/// responsiveness is the whole game — the work can take seconds as long as
+/// the touch is acknowledged instantly.
+struct Pressable: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(Theme.spring, value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { pressed in
+                if pressed { Haptics.tap() }
+            }
+    }
+}
+
+extension ButtonStyle where Self == Pressable {
+    static var pressable: Pressable { Pressable() }
+}
+
+/// Her words appear the way a person's would: typed, quickly, with a cursor.
+/// People trust what they can watch being made (the labor illusion) — a block
+/// of instant text reads as a machine; typing reads as her. Tap to finish.
+struct TypewriterText: View {
+    let text: String
+    var font: Font = .body
+    var color: Color = Theme.sand
+    var speed: Double = 36 // characters per second
+    var onDone: (() -> Void)? = nil
+
+    @State private var shown = ""
+    @State private var typing = false
+
+    var body: some View {
+        (Text(shown) + Text(typing ? "▍" : "").foregroundColor(Theme.champagne))
+            .font(font)
+            .foregroundStyle(color)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                shown = text
+                typing = false
+                onDone?()
+            }
+            .task(id: text) {
+                shown = ""
+                typing = true
+                Haptics.herMessage()
+                for ch in text {
+                    guard typing else { return }
+                    shown.append(ch)
+                    try? await Task.sleep(nanoseconds: UInt64(1_000_000_000 / speed))
+                }
+                typing = false
+                onDone?()
+            }
+    }
+}
+
+/// The app's heartbeat: the champagne dot breathing slowly whenever she is
+/// listening or working. A still screen reads as dead; a breathing one is her.
+struct BreathingDot: View {
+    var size: CGFloat = 10
+    var active: Bool = true
+    @State private var up = false
+
+    var body: some View {
+        Circle()
+            .fill(Theme.champagne)
+            .frame(width: size, height: size)
+            .scaleEffect(active && up ? 1.25 : 1.0)
+            .opacity(active ? (up ? 1.0 : 0.7) : 0.5)
+            .animation(
+                active ? .easeInOut(duration: 1.5).repeatForever(autoreverses: true) : .default,
+                value: up
+            )
+            .onAppear { up = true }
+    }
 }
