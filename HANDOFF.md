@@ -14,6 +14,25 @@ All work happens on this branch; production deploys from it via `railway up`.
 
 ### What changed since §0.5 was written (newest first)
 
+0. **PREMIUM FEEL, STAGE 1 (2026-08-03).** Read `design/PREMIUM-FEEL.md` — it is the
+   research + full plan (psychology, haptic/motion system, onboarding rework, browser
+   pairing rethink, life-scrape design, Web Store package). Implemented so far:
+   - `Theme.swift`: `Theme.spring`/`springSlow` (the one signature motion), `Pressable`
+     button style (press-scale + haptic on every button), signature haptics
+     (`Haptics.pairing/taskDone/herMessage`), `TypewriterText` (her words type out),
+     `BreathingDot` (her heartbeat when listening/working).
+   - Onboarding: staged welcome (logo scales in → name rises → she types her intro),
+     cascading how-it-works cards, repeating radar ripple while scanning, pairing
+     celebrations, valid-phone "That's you ✓" moment.
+   - Home: briefing types out, breathing dot when live, all buttons pressable.
+   - `setup.html`: cascade-in steps, breathing dot, champagne glow, hover states (DEPLOYED).
+   - Extension: icons added; `extension/store/LISTING.md` = ready Web Store package
+     (NOT submitted; needs Omar's approval + screenshots + privacy.html).
+   - Simulator build verified on the Mac. iOS build 32 = security fix + this stage;
+     Omar uploads it with the one-liner (keychain signing only works in his GUI session).
+   - NOT yet done from the plan: life-scrape implementation, custom glyphs, main-app
+     deep polish, Listen screen redesign, typing effect for feed cards.
+
 1. **SECURITY LOCKDOWN (2026-08-03, DEPLOYED).** The PocketBase data API was fully
    public — anyone could read the owner's profile/transcripts and forge jobs that drive
    his paired browser (proven by probe). Now `backend/pb_hooks/guard.pb.js` requires the
