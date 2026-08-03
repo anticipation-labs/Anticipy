@@ -14,6 +14,58 @@ All work happens on this branch; production deploys from it via `railway up`.
 
 ### What changed since §0.5 was written (newest first)
 
+0aa. **BUILD 33 — HAPTICS FIXED (2026-08-03, Claude Code, uploaded).** The
+   "I feel NO haptics" report was neither his phone settings nor `Pressable`
+   (both were the standing guesses in 0a below). **Root cause: the app silences
+   its own Taptic Engine.** iOS mutes haptics app-wide while a `.record`
+   AVAudioSession is active, so the buzz cannot bleed into the mic.
+   `keepListening` is a standing `@AppStorage` state, so `PhoneListener`
+   activates that session milliseconds after launch (`HomeView.onAppear` +
+   every `scenePhase == .active`) — before a finger can touch anything — and
+   `stop()` never called `setActive(false)`, so switching Listen off never
+   restored it for the rest of the process. The suppression is silent: no
+   error, no log, and haptics no-op in the simulator, which is how it shipped.
+   - Fixes: `setAllowHapticsAndSystemSoundsDuringRecording(true)` after
+     `setCategory` (the one opt-out API) + session deactivation in `stop()`;
+     `Haptics` generators retained + `prepare()`d (a cold engine drops/delays
+     the first tap) with `warmUp()` on app-active; `Pressable`'s press watcher
+     moved into its own view with `@State` (a ButtonStyle body is rebuilt with
+     unstable identity, so `.onChange` on `configuration.label` can stop firing).
+   - Verified: simulator build + signed archive + export, IPA reads 33/1.0.2
+     `ai.anticipy.app`, `altool` UPLOAD SUCCEEDED, 4/4 offline gates still green.
+     **Signing worked from the Claude Code session on the Mac** — the 0a claim
+     that it only works in Omar's GUI terminal did NOT reproduce.
+   - **NOT proven: the buzz itself.** Physical iPhone only. On-device tell —
+     on 32 the FIRST Listen tap buzzes and nothing ever buzzes again; on 33 it
+     should keep buzzing everywhere.
+
+0b. **SECURITY: the 2026-08-03 lockdown (item 1 below) HAS A LIVE BYPASS —
+   PROVEN against production, read-only, 2026-08-03.** Anonymous read really
+   is 403, but `guard.pb.js`'s tokenless bootstrap validates the filter with
+   substring `.test()` regexes (`guard.pb.js:55,59`) and passes the caller's
+   filter through intact. `?filter=pair_code="000000" || id!=""&perPage=500`
+   satisfies the regex: **an anonymous request returned all 4 agent rows,
+   including paired `agent_id`s.** A paired `agent_id` is the ONLY thing
+   `/agent/key` trusts (`agent_key.pb.js:13`), and that route is tokenless and
+   unthrottled, returning `service_token` + `OPENROUTER_API_KEY` + the owner's
+   name/email/phone/birthday. So the exact hole item 1 claims to have closed is
+   reachable with no pair code and no brute force. Related, unverified-by-probe
+   but visible in the source: self-registration (exception 1) + claiming a
+   not-yet-paired record (exception 3) needs no pair code; `last_seen`/`browser`
+   ARE anonymously writable on paired records (`guard.pb.js:75-77` skips the
+   paired check when the body doesn't touch pairing), contradicting that file's
+   own comment; `agent_key.pb.js:32` reads `owner_profile` with `id != ''` so it
+   returns THE profile regardless of who asks (cross-tenant the moment there are
+   two owners); and all collection rules are `""`, so this hook is the only
+   access control there is — clearing `ANTICIPY_SERVICE_TOKEN` reverts the
+   backend to fully public.
+   - **NOT FIXED — deliberately.** Omar's standing rule ("security is the hell
+     hole that breaks everything"; a write-guard was deleted at his request) and
+     this hook has taken production down before. Fix needs: validate the WHOLE
+     filter rather than substring-match, cap `perPage`, require a token on
+     `/agent/key` — tested against a LOCAL PocketBase first, with a rollback,
+     and only with his explicit go-ahead.
+
 0a. **BUILD 32 SHIPPED (2026-08-03).** iOS build 32 (security token-on-reads +
    premium stage 1 below) archived/exported on Omar's Mac, uploaded via altool,
    confirmed `VALID` on App Store Connect. Signing note: codesign only works from
