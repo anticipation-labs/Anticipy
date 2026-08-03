@@ -123,7 +123,8 @@ async function requeueStaleJobs() {
   const { owner } = await chrome.storage.local.get(["owner"]);
   if (!owner) return;
   const filter = encodeURIComponent(`status="running" && owner="${owner}"`);
-  const r = await fetch(`${BASE}/api/collections/jobs/records?filter=${filter}&perPage=20&sort=claimed_at`);
+  const r = await fetch(`${BASE}/api/collections/jobs/records?filter=${filter}&perPage=20&sort=claimed_at`,
+    { headers: await writeHeaders() });
   if (!r.ok) return;
   const { items } = await r.json();
   const now = Date.now();
@@ -167,7 +168,8 @@ async function claimJob() {
   // than the narrow case this clause admits.
   const cond = `status="queued" && (owner="${owner}" || owner="")`;
   const r = await fetch(
-    `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`
+    `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`,
+    { headers: await writeHeaders() }
   );
   if (!r.ok) return null;
   const items = (await r.json()).items;
@@ -208,7 +210,8 @@ async function claimJob() {
   // wake) would each spawn an agent loop for the same job.
   const me = agentId || "unknown";
   await updateJob(job.id, { status: "running", claimed_by: me, claimed_at: new Date().toISOString() });
-  const check = await fetch(`${BASE}/api/collections/jobs/records/${job.id}`);
+  const check = await fetch(`${BASE}/api/collections/jobs/records/${job.id}`,
+    { headers: await writeHeaders() });
   if (!check.ok) return null;
   const fresh = await check.json();
   if (fresh.claimed_by !== me || fresh.status !== "running") return null;
@@ -235,7 +238,8 @@ async function updateJob(id, fields) {
 /// then RESURRECTED the cancelled job as done/failed.
 async function jobStillLive(id) {
   try {
-    const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`);
+    const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`,
+      { headers: await writeHeaders() });
     if (r.status === 404) return false;
     if (!r.ok) return true;   // transient: don't abandon real work
     const j = await r.json();

@@ -34,8 +34,12 @@ def report(name: str, ok: bool, detail: str = ""):
 
 def api(path, body=None, method=None, timeout=20):
     data = json.dumps(body).encode() if body is not None else None
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("ANTICIPY_SERVICE_TOKEN")
+    if token:
+        headers["X-Anticipy-Token"] = token
     req = urllib.request.Request(BASE + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json"})
+                                 headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.load(r) if r.status not in (204,) else {}
 

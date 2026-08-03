@@ -48,6 +48,17 @@ final class AnticipyBackend {
         self.serviceToken = serviceToken
     }
 
+    /// Reads carry the token too — the guard hook protects the whole data
+    /// API, not just writes.
+    private func readData(from url: URL) async throws -> Data {
+        var r = URLRequest(url: url)
+        if !serviceToken.isEmpty {
+            r.setValue(serviceToken, forHTTPHeaderField: "X-Anticipy-Token")
+        }
+        let (data, _) = try await URLSession.shared.data(for: r)
+        return data
+    }
+
     private func writeRequest(_ url: URL, method: String) -> URLRequest {
         var r = URLRequest(url: url)
         r.httpMethod = method
@@ -73,7 +84,7 @@ final class AnticipyBackend {
         comps.percentEncodedQuery = "filter=\(filter)&perPage=1"
         var existingID: String?
         if let url = comps.url,
-           let (data, _) = try? await URLSession.shared.data(from: url),
+           let data = try? await readData(from: url),
            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let items = root["items"] as? [[String: Any]] {
             existingID = items.first?["id"] as? String
@@ -111,7 +122,7 @@ final class AnticipyBackend {
         let listURL = baseURL.appendingPathComponent("api/collections/pendants/records")
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         comps.percentEncodedQuery = "filter=\(filter)"
-        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        let data = try await readData(from: comps.url!)
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let items = root["items"] as? [[String: Any]],
               let id = items.first?["id"] as? String else { return false }
@@ -130,7 +141,7 @@ final class AnticipyBackend {
         let filter = "pair_code=\"\(code)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         comps.percentEncodedQuery = "filter=\(filter)"
-        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        let data = try await readData(from: comps.url!)
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let items = root["items"] as? [[String: Any]],
               let id = items.first?["id"] as? String else { return false }
@@ -147,7 +158,7 @@ final class AnticipyBackend {
         let filter = "owner=\"\(owner)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         comps.percentEncodedQuery = "filter=\(filter)&sort=-updated&perPage=1"
-        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        let data = try await readData(from: comps.url!)
         struct Page: Decodable { let items: [BrowserAgent] }
         return try JSONDecoder().decode(Page.self, from: data).items.first
     }
@@ -174,7 +185,7 @@ final class AnticipyBackend {
             URLQueryItem(name: "perPage", value: String(limit)),
             URLQueryItem(name: "sort", value: "-created"),
         ]
-        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        let data = try await readData(from: comps.url!)
         struct Page: Decodable { let items: [BrainEvent] }
         return try JSONDecoder().decode(Page.self, from: data).items
     }
@@ -187,7 +198,7 @@ final class AnticipyBackend {
             URLQueryItem(name: "perPage", value: String(limit)),
             URLQueryItem(name: "sort", value: "-created"),
         ]
-        let (data, _) = try await URLSession.shared.data(from: comps.url!)
+        let data = try await readData(from: comps.url!)
         struct Page: Decodable { let items: [AgentJob] }
         return try JSONDecoder().decode(Page.self, from: data).items
     }
