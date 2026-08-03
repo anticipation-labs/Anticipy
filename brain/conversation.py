@@ -278,10 +278,14 @@ class Conversation:
 Pull out EVERY durable fact about them in the message — their name, email
 address, phone number, date of birth, an allergy, a preference, a membership
 or loyalty number, a home airport, a dietary restriction. Capture all of them,
-not just the most interesting one: a reply often carries several at once
-("Omar Ebrahim, omar@x.com, 604 555 0123" is three facts). Only facts about
-the PERSON, never about one task, and NEVER card numbers, passwords or
-security codes even if they offer them.
+not just the most interesting one: a reply like "<full name>, <email>,
+<phone>" carries three. Only facts about the PERSON, never about one task,
+and NEVER card numbers, passwords or security codes even if they offer them.
+
+Every value MUST be copied from THEIR message, character for character. Never
+substitute a placeholder, never tidy a value, never invent one, and never
+reuse an example from these instructions. If a fact is not in their message,
+it does not go in the output.
 Reply ONLY with compact JSON: {"facts": {"<short_snake_case_key>": "<value>"}}
 Use {"facts": {}} when there is nothing durable."""
 

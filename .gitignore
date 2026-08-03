@@ -1,8 +1,27 @@
-.venv/
+# Build output — large, regenerated, never reviewed.
+app/ios/build/
+*.xcarchive/
+*.ipa
+
+# Local PocketBase data and binary. The binary is fetched per machine; pb_data
+# holds a real database and must never be committed.
 backend/pb_data/
 backend/pocketbase
 backend/pb.zip
 backend/pb.log
+pb_data/
+
+# Python
 __pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets — never commit. See the handoff for where the real ones live.
 .env
+.env.*
 *.env
+!.env.example
+
+# Editor / OS noise
+.DS_Store
