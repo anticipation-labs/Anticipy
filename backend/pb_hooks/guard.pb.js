@@ -50,19 +50,40 @@ routerUse((e) => {
   // 2. Pair-code lookup: a LIST that names the code it is looking for.
   //    (Without a pair_code filter the list would leak agent ids, and a
   //    paired agent id is what /agent/key trusts.)
+  //
+  //    THE FILTER MUST MATCH WHOLE. This was `.test()` against the raw filter,
+  //    which matches a SUBSTRING — so appending anything to a legal-looking
+  //    filter satisfied it and PocketBase then ran the caller's real query:
+  //      ?filter=pair_code="000000" || id!=""&perPage=500
+  //    That returned every agent row, paired ones included, to an anonymous
+  //    caller — proven live against production on 2026-08-03. A paired
+  //    agent_id is the ONLY thing /agent/key checks, and it answers with the
+  //    service token, the OpenRouter key and the owner's name, email, phone
+  //    and birthday. Anchored, the injection has nowhere to live.
   if (method === "GET" && (path === agentsBase || path === pendantsBase)) {
     const filter = e.request.url.query().get("filter") || "";
-    if (/pair_code\s*=\s*"\d{6}"/.test(filter)) return e.next();
+    // Page size is capped too: these branches exist to look ONE record up, so
+    // a legitimate caller never needs a large page, and a cap means even a
+    // future hole in the filter check cannot become a bulk export.
+    const perPage = parseInt(e.request.url.query().get("perPage") || "30", 10);
+    if (perPage > 50) return e.json(403, { error: "forbidden" });
+    if (/^\s*pair_code\s*=\s*"\d{6}"\s*$/.test(filter)) return e.next();
     // A fresh app install needs its own paired agent back to bootstrap its
     // token; the owner id is a high-entropy device identifier, so naming it
-    // is itself proof of ownership.
-    if (/owner\s*=\s*"[^"]{8,}"/.test(filter)) return e.next();
+    // is itself proof of ownership. Anchored, and restricted to the shape an
+    // id actually has — no quotes, no operators, nothing to append to.
+    if (/^\s*owner\s*=\s*"[A-Za-z0-9._-]{8,64}"\s*$/.test(filter)) return e.next();
     return e.json(403, { error: "forbidden" });
   }
 
   // 3. Claiming: flip owner/paired (agents also heartbeat last_seen/browser)
-  //    on a record that is NOT yet paired. Once paired, only the token
-  //    (or the dashboard) can touch it again.
+  //    on a record that is NOT yet paired. Once paired, OWNERSHIP can never be
+  //    reassigned without the token.
+  //    Honest scope: a paired record's last_seen/browser ARE still writable
+  //    tokenlessly, because `touchesPairing` is false for them. That is a
+  //    heartbeat timestamp and a user-agent string — the worst an anonymous
+  //    caller achieves is making an agent look alive. The earlier comment here
+  //    claimed nothing could touch a paired record at all, which was false.
   if (method === "PATCH" &&
       (path.startsWith(agentsBase + "/") || path.startsWith(pendantsBase + "/"))) {
     const allowed = { owner: 1, paired: 1, last_seen: 1, browser: 1 };
