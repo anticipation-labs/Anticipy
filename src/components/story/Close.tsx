@@ -110,14 +110,14 @@ export function Close() {
             href={CAL_LINK}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[15px] text-[var(--text-on-dark)] underline underline-offset-4 decoration-[rgba(200,169,126,0.5)] hover:text-gold transition-colors"
+            className="text-[15px] text-[var(--text-on-dark)] underline underline-offset-4 decoration-[rgba(245,240,235,0.4)] hover:opacity-80 transition-opacity"
           >
             Book a call with us
           </a>
           <span className="text-[var(--dark-border)]">&middot;</span>
           <a
             href="#join-waitlist"
-            className="text-[15px] text-[var(--text-on-dark)] underline underline-offset-4 decoration-[rgba(200,169,126,0.5)] hover:text-gold transition-colors"
+            className="text-[15px] text-[var(--text-on-dark)] underline underline-offset-4 decoration-[rgba(245,240,235,0.4)] hover:opacity-80 transition-opacity"
           >
             Join the waitlist
           </a>
@@ -125,7 +125,7 @@ export function Close() {
 
         <div id="join-waitlist" className="close-anim mt-14">
           {state === "success" ? (
-            <p className="text-gold text-[16px]">You&apos;re on the list.</p>
+            <p className="text-[var(--text-on-dark)] text-[16px]">You&apos;re on the list.</p>
           ) : state === "duplicate" ? (
             <p className="text-[var(--text-on-dark-muted)] text-[16px]">
               You&apos;re already on the list.
@@ -151,7 +151,7 @@ export function Close() {
               <button
                 type="submit"
                 disabled={state === "loading"}
-                className="px-8 py-3.5 rounded-pill text-[15px] font-medium disabled:opacity-60 transition-colors duration-300 hover:bg-gold"
+                className="px-8 py-3.5 rounded-pill text-[15px] font-medium disabled:opacity-60 transition-opacity duration-300 hover:opacity-85"
                 style={{
                   background: "rgba(245,240,235,0.12)",
                   border: "1px solid var(--dark-border)",

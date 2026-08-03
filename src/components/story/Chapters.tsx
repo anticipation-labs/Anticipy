@@ -115,12 +115,12 @@ export function Chapters() {
   }, []);
 
   return (
-    <section ref={rootRef} id="how-it-works" className="section-dark relative">
+    <section ref={rootRef} id="how-it-works" className="section-cream relative">
       <div className="max-w-container mx-auto px-6 md:px-12 pt-[140px] pb-10 text-center">
-        <p className="text-[12px] uppercase tracking-[0.3em] text-gold mb-5">
+        <p className="text-[12px] uppercase tracking-[0.3em] text-bronze mb-5">
           What it actually does
         </p>
-        <h2 className="font-serif text-[clamp(32px,5vw,60px)] leading-[1.1] text-[var(--text-on-dark)]">
+        <h2 className="font-serif text-[clamp(32px,5vw,60px)] leading-[1.1] text-[var(--text-on-light)]">
           One promise, followed
           <br />
           <span className="italic">all the way to done.</span>
@@ -136,13 +136,13 @@ export function Chapters() {
             }`}
           >
             <div className="md:[direction:ltr]">
-              <span className="chapter-anim block font-serif text-[64px] leading-none text-[var(--dark-border)]">
+              <span className="chapter-anim block font-serif text-[64px] leading-none text-[var(--cream-border)]">
                 {c.k}
               </span>
-              <h3 className="chapter-anim font-serif text-[clamp(26px,3.5vw,40px)] text-[var(--text-on-dark)] mt-4">
+              <h3 className="chapter-anim font-serif text-[clamp(26px,3.5vw,40px)] text-[var(--text-on-light)] mt-4">
                 {c.title}
               </h3>
-              <p className="chapter-anim text-[16px] leading-relaxed text-[var(--text-on-dark-muted)] mt-5 max-w-md">
+              <p className="chapter-anim text-[16px] leading-relaxed text-[var(--text-on-light-muted)] mt-5 max-w-md">
                 {c.body}
               </p>
             </div>
@@ -151,7 +151,7 @@ export function Chapters() {
                 {c.media && (
                   <video
                     className="chapter-anim w-full aspect-video object-cover rounded-2xl mb-[-28px] relative"
-                    style={{ border: "1px solid var(--dark-border)" }}
+                    style={{ border: "1px solid var(--cream-border)" }}
                     src={c.media}
                     autoPlay
                     muted
@@ -165,7 +165,7 @@ export function Chapters() {
                   style={{
                     background: "var(--dark-elevated)",
                     border: "1px solid var(--dark-border)",
-                    boxShadow: "0 30px 60px rgba(0,0,0,0.45)",
+                    boxShadow: "0 24px 48px rgba(23,21,18,0.16)",
                   }}
                 >
                   {c.card}
@@ -177,7 +177,7 @@ export function Chapters() {
       </div>
 
       <div className="chapter-panel max-w-container mx-auto px-6 md:px-12 pb-[130px] text-center">
-        <p className="chapter-anim font-serif italic text-[clamp(22px,3vw,32px)] text-[var(--text-on-dark)]">
+        <p className="chapter-anim font-serif italic text-[clamp(22px,3vw,32px)] text-[var(--text-on-light)]">
           That&apos;s one promise. It does this with all of them.
         </p>
         <div className="chapter-anim mt-8">
@@ -185,14 +185,14 @@ export function Chapters() {
             href="/pre-orders/purchase"
             className="inline-block rounded-pill text-[16px] font-medium transition-all duration-300 hover:scale-[1.02]"
             style={{
-              background: "var(--text-on-dark)",
-              color: "var(--dark)",
+              background: "var(--text-on-light)",
+              color: "var(--cream)",
               padding: "16px 44px",
             }}
           >
             Claim yours &mdash; $149.99
           </a>
-          <p className="text-[12px] uppercase tracking-[0.18em] text-[var(--text-on-dark-muted)] mt-4">
+          <p className="text-[12px] uppercase tracking-[0.18em] text-[var(--text-on-light-muted)] mt-4">
             Ships August 2026 &middot; Full refund anytime before shipping
           </p>
         </div>

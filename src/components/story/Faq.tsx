@@ -60,11 +60,11 @@ export function Faq() {
   }, []);
 
   return (
-    <section ref={rootRef} className="relative section-dark px-6 py-[120px]">
+    <section ref={rootRef} className="relative section-cream px-6 py-[120px]">
       <div className="max-w-2xl mx-auto">
-        <h2 className="faq-anim font-serif text-[clamp(28px,4vw,44px)] leading-[1.1] text-[var(--text-on-dark)] text-center">
+        <h2 className="faq-anim font-serif text-[clamp(28px,4vw,44px)] leading-[1.1] text-[var(--text-on-light)] text-center">
           The questions that
-          <span className="italic text-gold"> matter.</span>
+          <span className="italic"> matter.</span>
         </h2>
 
         <div className="mt-12">
@@ -72,7 +72,7 @@ export function Faq() {
             <div
               key={f.q}
               className="faq-anim border-b"
-              style={{ borderColor: "var(--dark-border)" }}
+              style={{ borderColor: "var(--cream-border)" }}
             >
               <button
                 type="button"
@@ -80,11 +80,11 @@ export function Faq() {
                 className="w-full flex items-center justify-between gap-6 py-6 text-left"
                 aria-expanded={open === i}
               >
-                <span className="text-[17px] text-[var(--text-on-dark)]">
+                <span className="text-[17px] text-[var(--text-on-light)]">
                   {f.q}
                 </span>
                 <span
-                  className="text-gold text-[20px] leading-none transition-transform duration-300"
+                  className="text-bronze text-[20px] leading-none transition-transform duration-300"
                   style={{
                     transform: open === i ? "rotate(45deg)" : "rotate(0deg)",
                   }}
@@ -99,7 +99,7 @@ export function Faq() {
                   opacity: open === i ? 1 : 0,
                 }}
               >
-                <p className="pb-7 text-[15px] leading-relaxed text-[var(--text-on-dark-muted)] max-w-xl">
+                <p className="pb-7 text-[15px] leading-relaxed text-[var(--text-on-light-muted)] max-w-xl">
                   {f.a}
                 </p>
               </div>
@@ -110,12 +110,12 @@ export function Faq() {
         <div
           className="faq-anim mt-16 rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-7"
           style={{
-            background: "var(--dark-elevated)",
-            border: "1px solid var(--dark-border)",
+            background: "#FFFFFF",
+            border: "1px solid var(--cream-border)",
           }}
         >
           <div className="text-center sm:text-left">
-            <p className="text-[15px] leading-relaxed text-[var(--text-on-dark)]">
+            <p className="text-[15px] leading-relaxed text-[var(--text-on-light)]">
               &ldquo;I kept telling people I&apos;d send things &mdash; and kept
               finding those promises dead in my notes app three weeks later. So
               I built the thing I needed: something that hears the promise and
@@ -124,13 +124,13 @@ export function Faq() {
               happened. If Anticipy isn&apos;t everything I&apos;m promising you
               here, email me and I&apos;ll refund you myself.&rdquo;
             </p>
-            <p className="mt-3 text-[13px] uppercase tracking-[0.16em] text-[var(--text-on-dark-muted)]">
+            <p className="mt-3 text-[13px] uppercase tracking-[0.16em] text-[var(--text-on-light-muted)]">
               Omar &middot; Founder, Anticipy &middot;{" "}
               <a
                 href="https://calendar.app.google/FXvw3ePndv8ciUaM6"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline underline-offset-4 decoration-[rgba(200,169,126,0.5)] hover:text-gold transition-colors normal-case tracking-normal"
+                className="underline underline-offset-4 decoration-[rgba(138,107,68,0.45)] hover:text-bronze transition-colors normal-case tracking-normal"
               >
                 Book a call with me
               </a>

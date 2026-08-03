@@ -10,21 +10,22 @@
   --dark-hover: #1E1E1E;
 
   /* Light palette */
-  --cream: #F5F0EB;
-  --cream-muted: #E8E2DB;
-  --cream-border: #D4CEC7;
+  --cream: #FAF8F4;
+  --cream-muted: #F0EDE6;
+  --cream-border: #E4DFD6;
 
   /* Accent */
   --gold: #C8A97E;
   --gold-dim: rgba(200, 169, 126, 0.15);
+  --bronze: #8A6B44;
 
   /* Text on dark — must equal brand cream so the live audit (PRD CHECK 15) sees rgb(245,240,235) */
   --text-on-dark: #F5F0EB;
   --text-on-dark-muted: #8A8A8A;
 
   /* Text on light */
-  --text-on-light: #1A1A1A;
-  --text-on-light-muted: #5A5A5A;
+  --text-on-light: #171512;
+  --text-on-light-muted: #6B665E;
 
   /* Typography */
   --font-serif: 'DM Serif Display', Georgia, serif;
@@ -102,6 +103,10 @@ body {
 
 .text-gold {
   color: var(--gold);
+}
+
+.text-bronze {
+  color: var(--bronze);
 }
 
 .text-muted-dark {

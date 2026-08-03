@@ -51,13 +51,13 @@ export function Honest() {
   }, []);
 
   return (
-    <section ref={rootRef} className="relative section-dark px-6 py-[120px]">
+    <section ref={rootRef} className="relative section-cream px-6 py-[120px]">
       <div className="max-w-2xl mx-auto">
-        <p className="honest-anim text-[12px] uppercase tracking-[0.3em] text-gold text-center mb-4">
+        <p className="honest-anim text-[12px] uppercase tracking-[0.3em] text-bronze text-center mb-4">
           Before you decide
         </p>
-        <h2 className="honest-anim font-serif text-[clamp(28px,4vw,44px)] leading-[1.1] text-[var(--text-on-dark)] text-center">
-          What it <span className="italic text-gold">doesn&apos;t</span> do.
+        <h2 className="honest-anim font-serif text-[clamp(28px,4vw,44px)] leading-[1.1] text-[var(--text-on-light)] text-center">
+          What it <span className="italic">doesn&apos;t</span> do.
         </h2>
 
         <div className="mt-14">
@@ -65,19 +65,19 @@ export function Honest() {
             <div
               key={l.limit}
               className="honest-anim py-7 border-b"
-              style={{ borderColor: "var(--dark-border)" }}
+              style={{ borderColor: "var(--cream-border)" }}
             >
-              <p className="font-serif text-[clamp(18px,2.2vw,24px)] text-[var(--text-on-dark)]">
+              <p className="font-serif text-[clamp(18px,2.2vw,24px)] text-[var(--text-on-light)]">
                 {l.limit}
               </p>
-              <p className="mt-2.5 text-[15px] leading-relaxed text-[var(--text-on-dark-muted)] max-w-xl">
+              <p className="mt-2.5 text-[15px] leading-relaxed text-[var(--text-on-light-muted)] max-w-xl">
                 {l.why}
               </p>
             </div>
           ))}
         </div>
 
-        <p className="honest-anim mt-10 text-[14px] text-center text-[var(--text-on-dark-muted)]">
+        <p className="honest-anim mt-10 text-[14px] text-center text-[var(--text-on-light-muted)]">
           If any of these is a dealbreaker, Anticipy isn&apos;t for you &mdash;
           better to know now than in August.
         </p>

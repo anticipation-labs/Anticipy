@@ -65,37 +65,37 @@ export function Compare() {
   }, []);
 
   return (
-    <section ref={rootRef} className="section-dark px-6 py-[110px]">
+    <section ref={rootRef} className="section-cream px-6 py-[110px]">
       <div className="max-w-3xl mx-auto">
-        <p className="cmp-anim text-[12px] uppercase tracking-[0.3em] text-gold text-center mb-5">
+        <p className="cmp-anim text-[12px] uppercase tracking-[0.3em] text-bronze text-center mb-5">
           Recorders remember. Anticipy finishes.
         </p>
-        <h2 className="cmp-anim font-serif text-[clamp(28px,4vw,44px)] leading-[1.1] text-[var(--text-on-dark)] text-center">
+        <h2 className="cmp-anim font-serif text-[clamp(28px,4vw,44px)] leading-[1.1] text-[var(--text-on-light)] text-center">
           Every other pendant hands the work
-          <span className="italic text-gold"> back to you.</span>
+          <span className="italic"> back to you.</span>
         </h2>
 
         <div
           className="cmp-anim mt-12 rounded-2xl overflow-hidden"
-          style={{ border: "1px solid var(--dark-border)" }}
+          style={{ border: "1px solid var(--cream-border)", background: "#FFFFFF" }}
         >
           <div
             className="grid grid-cols-[1fr_1.2fr_1.2fr] text-[11px] uppercase tracking-[0.15em] px-6 py-4"
-            style={{ background: "var(--dark-elevated)", color: "var(--text-on-dark-muted)" }}
+            style={{ background: "var(--cream-muted)", color: "var(--text-on-light-muted)" }}
           >
             <span />
-            <span className="text-gold">Anticipy</span>
+            <span className="text-bronze">Anticipy</span>
             <span>AI recorders</span>
           </div>
           {ROWS.map((r) => (
             <div
               key={r.feature}
               className="grid grid-cols-[1fr_1.2fr_1.2fr] gap-3 px-6 py-5 text-[14px] border-t"
-              style={{ borderColor: "var(--dark-border)" }}
+              style={{ borderColor: "var(--cream-border)" }}
             >
-              <span className="text-[var(--text-on-dark-muted)]">{r.feature}</span>
-              <span className="text-[var(--text-on-dark)]">{r.anticipy}</span>
-              <span className="text-[var(--text-on-dark-muted)]">{r.others}</span>
+              <span className="text-[var(--text-on-light-muted)]">{r.feature}</span>
+              <span className="text-[var(--text-on-light)]">{r.anticipy}</span>
+              <span className="text-[var(--text-on-light-muted)]">{r.others}</span>
             </div>
           ))}
         </div>
@@ -105,7 +105,7 @@ export function Compare() {
             <a
               key={l.href}
               href={l.href}
-              className="text-[var(--text-on-dark)] underline underline-offset-4 decoration-[rgba(200,169,126,0.5)] hover:text-gold transition-colors"
+              className="text-[var(--text-on-light)] underline underline-offset-4 decoration-[rgba(138,107,68,0.45)] hover:text-bronze transition-colors"
             >
               {l.label}
             </a>

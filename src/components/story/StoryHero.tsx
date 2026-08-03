@@ -78,7 +78,7 @@ export function StoryHero() {
         <h1 className="hero-line font-serif text-[clamp(40px,7vw,88px)] leading-[1.05] tracking-tight text-[var(--text-on-dark)]">
           Say it once.
         </h1>
-        <h1 className="hero-line font-serif italic text-[clamp(40px,7vw,88px)] leading-[1.05] tracking-tight text-gold">
+        <h1 className="hero-line font-serif italic text-[clamp(40px,7vw,88px)] leading-[1.05] tracking-tight text-[var(--text-on-dark)]">
           It&apos;s handled.
         </h1>
 
@@ -107,7 +107,7 @@ export function StoryHero() {
       </div>
 
       <div className="hero-cue absolute bottom-6 left-1/2 -translate-x-1/2 opacity-0">
-        <span className="block w-[1px] h-10 bg-gradient-to-b from-[var(--gold)] to-transparent animate-pulse" />
+        <span className="block w-[1px] h-10 bg-gradient-to-b from-[rgba(245,240,235,0.7)] to-transparent animate-pulse" />
       </div>
     </section>
   );

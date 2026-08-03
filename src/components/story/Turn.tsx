@@ -104,8 +104,8 @@ export function Turn() {
         <span
           className="turn-led block w-2 h-2 rounded-full opacity-0"
           style={{
-            background: "var(--gold)",
-            boxShadow: "0 0 24px 6px rgba(200,169,126,0.55)",
+            background: "var(--text-on-dark)",
+            boxShadow: "0 0 18px 4px rgba(245,240,235,0.35)",
           }}
         />
 
@@ -113,11 +113,11 @@ export function Turn() {
           className="turn-card mt-10 px-7 py-5 rounded-2xl opacity-0 backdrop-blur-md"
           style={{
             background: "rgba(22,22,22,0.82)",
-            border: "1px solid rgba(200,169,126,0.25)",
+            border: "1px solid rgba(245,240,235,0.18)",
           }}
         >
           <div className="flex items-center gap-3">
-            <span className="text-gold text-[18px]">&#10003;</span>
+            <span className="text-[var(--text-on-dark)] text-[18px]">&#10003;</span>
             <span className="text-[16px] text-[var(--text-on-dark)]">
               Handled. Receipt saved.
             </span>
@@ -125,7 +125,7 @@ export function Turn() {
         </div>
 
         <p className="turn-caption mt-12 font-serif text-[clamp(28px,4.5vw,52px)] text-center text-[var(--text-on-dark)] opacity-0">
-          You heard it. <span className="italic text-gold">It&apos;s handled.</span>
+          You heard it. <span className="italic">It&apos;s handled.</span>
         </p>
       </div>
     </section>

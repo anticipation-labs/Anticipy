@@ -89,15 +89,15 @@ export function LiveDemo() {
     <section
       ref={rootRef}
       data-hide-sticky
-      className="section-dark relative overflow-hidden"
+      className="section-cream relative overflow-hidden"
     >
       <div className="min-h-screen flex flex-col items-center justify-center px-6 py-[90px]">
-        <p className="text-[12px] uppercase tracking-[0.3em] text-gold mb-4 text-center">
+        <p className="text-[12px] uppercase tracking-[0.3em] text-bronze mb-4 text-center">
           Watch one promise get kept
         </p>
-        <h2 className="font-serif text-[clamp(26px,3.6vw,40px)] leading-[1.1] text-[var(--text-on-dark)] text-center max-w-2xl">
+        <h2 className="font-serif text-[clamp(26px,3.6vw,40px)] leading-[1.1] text-[var(--text-on-light)] text-center max-w-2xl">
           This is what happens on your phone
-          <span className="italic text-gold"> while you keep talking.</span>
+          <span className="italic"> while you keep talking.</span>
         </h2>
 
         <div className="mt-10 w-full max-w-md md:max-w-lg grid md:grid-cols-[150px_1fr] gap-6 items-start">
@@ -106,9 +106,9 @@ export function LiveDemo() {
             {STAGE_LABELS.map((l, i) => (
               <li
                 key={l}
-                className={`ld-label-${i} text-[12px] uppercase tracking-[0.14em] text-[var(--text-on-dark-muted)] opacity-0 transition-none`}
+                className={`ld-label-${i} text-[12px] uppercase tracking-[0.14em] text-[var(--text-on-light-muted)] opacity-0 transition-none`}
               >
-                <span className="text-gold mr-2">{String(i + 1).padStart(2, "0")}</span>
+                <span className="text-bronze mr-2">{String(i + 1).padStart(2, "0")}</span>
                 {l}
               </li>
             ))}
@@ -120,7 +120,7 @@ export function LiveDemo() {
             style={{
               background: "var(--dark-elevated)",
               border: "1px solid var(--dark-border)",
-              boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
+              boxShadow: "0 30px 70px rgba(23,21,18,0.3)",
             }}
           >
             {/* spoken */}
@@ -233,7 +233,7 @@ export function LiveDemo() {
           </div>
         </div>
 
-        <p className="mt-8 text-[13px] text-[var(--text-on-dark-muted)] text-center max-w-md">
+        <p className="mt-8 text-[13px] text-[var(--text-on-light-muted)] text-center max-w-md">
           You never opened your laptop. You never wrote a reminder. You said it
           once, near your chest, and it happened.
         </p>

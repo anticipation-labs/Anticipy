@@ -71,29 +71,29 @@ export function Wound() {
   return (
     <section
       ref={rootRef}
-      className="relative min-h-screen overflow-hidden section-dark"
+      className="relative min-h-screen overflow-hidden section-cream"
     >
       <div className="relative z-10 min-h-screen flex items-center justify-center px-6">
         <div className="text-center max-w-3xl">
           {PROMISES.map((p, i) => (
             <div key={i} className="absolute inset-0 flex flex-col items-center justify-center px-6">
               <p
-                className={`wound-said-${i} font-serif text-[clamp(28px,4.5vw,54px)] leading-tight text-[var(--text-on-dark)] opacity-0`}
+                className={`wound-said-${i} font-serif text-[clamp(28px,4.5vw,54px)] leading-tight text-[var(--text-on-light)] opacity-0`}
               >
                 {p.said}
               </p>
               <p
-                className={`wound-truth-${i} mt-6 text-[15px] uppercase tracking-[0.3em] text-[var(--text-on-dark-muted)] opacity-0`}
+                className={`wound-truth-${i} mt-6 text-[15px] uppercase tracking-[0.3em] text-[var(--text-on-light-muted)] opacity-0`}
               >
                 {p.truth}
               </p>
             </div>
           ))}
           <div className="absolute inset-0 flex flex-col items-center justify-center px-6">
-            <p className="wound-closer-1 text-[15px] uppercase tracking-[0.3em] text-[var(--text-on-dark-muted)] opacity-0">
+            <p className="wound-closer-1 text-[15px] uppercase tracking-[0.3em] text-[var(--text-on-light-muted)] opacity-0">
               Everything you say you&apos;ll do
             </p>
-            <p className="wound-closer-2 font-serif italic text-[clamp(36px,6vw,72px)] text-[var(--text-on-dark)] mt-4 opacity-0">
+            <p className="wound-closer-2 font-serif italic text-[clamp(36px,6vw,72px)] text-[var(--text-on-light)] mt-4 opacity-0">
               disappears.
             </p>
           </div>

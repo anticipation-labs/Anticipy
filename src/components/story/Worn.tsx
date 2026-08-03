@@ -43,12 +43,12 @@ export function Worn() {
   }, []);
 
   return (
-    <section ref={rootRef} className="section-dark relative overflow-hidden">
+    <section ref={rootRef} className="section-cream relative overflow-hidden">
       <div className="pt-[110px] pb-8 px-6 md:px-12">
-        <p className="text-[12px] uppercase tracking-[0.3em] text-gold mb-4">
+        <p className="text-[12px] uppercase tracking-[0.3em] text-bronze mb-4">
           Worn, not noticed
         </p>
-        <h2 className="font-serif text-[clamp(30px,4.5vw,54px)] text-[var(--text-on-dark)] max-w-2xl">
+        <h2 className="font-serif text-[clamp(30px,4.5vw,54px)] text-[var(--text-on-light)] max-w-2xl">
           Nobody asks about it.
           <br />
           <span className="italic">Everything gets done.</span>
@@ -60,7 +60,7 @@ export function Worn() {
           <figure key={f.src} className="w-[70vw] md:w-[44vw] lg:w-[36vw] shrink-0">
             <div
               className="rounded-2xl overflow-hidden"
-              style={{ border: "1px solid var(--dark-border)" }}
+              style={{ border: "1px solid var(--cream-border)" }}
             >
               {f.type === "video" ? (
                 <video
@@ -81,7 +81,7 @@ export function Worn() {
                 />
               )}
             </div>
-            <figcaption className="mt-3 text-[13px] uppercase tracking-[0.18em] text-[var(--text-on-dark-muted)]">
+            <figcaption className="mt-3 text-[13px] uppercase tracking-[0.18em] text-[var(--text-on-light-muted)]">
               {f.caption}
             </figcaption>
           </figure>
