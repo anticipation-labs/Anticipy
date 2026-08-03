@@ -5,7 +5,6 @@ import { StaggerContainer, staggerChild } from "./ScrollReveal";
 
 const specs = [
   { value: "8g", label: "Weight" },
-  { value: "IP67", label: "Water Resistant" },
   { value: "BLE 5.3", label: "Connectivity" },
   { value: "200mAh", label: "Battery" },
   { value: "nRF5340", label: "Processor" },

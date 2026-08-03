@@ -137,7 +137,7 @@ export async function sendPreorderConfirmation(
 
   <p style="font-size: 16px;">Your Anticipy pendant pre-order is locked in at $${amountDisplay} ${currencyDisplay}. That is $50 off the $199 retail price, plus free shipping to the United States and Canada.</p>
 
-  <p style="font-size: 16px;"><strong>What happens next.</strong> We're targeting shipping for August 2026. When manufacturing finishes, we will email you for any final shipping address confirmation and then ship the pendant, chain, and wireless charging pad to the address you entered at checkout. Your first year of the Anticipy AI service is included.</p>
+  <p style="font-size: 16px;"><strong>What happens next.</strong> We're targeting shipping for August 2026. When manufacturing finishes, we will email you for any final shipping address confirmation and then ship the pendant, chain, and wireless charging pad to the address you entered at checkout.</p>
 
   <p style="font-size: 16px;"><strong>Your receipt.</strong> Stripe sent a separate emailed receipt to this address. Keep it for your records.</p>
 

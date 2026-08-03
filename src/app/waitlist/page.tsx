@@ -157,7 +157,7 @@ export default function WaitlistPage() {
             )}
 
             <p className="text-[13px] text-[var(--text-on-dark-muted)] font-light mt-8">
-              $199 retail, $149.99 pre-order · Brushed titanium · 8 grams · First year of service included · Specifications subject to change
+              $199 retail, $149.99 pre-order · Brushed titanium · 8 grams · Specifications subject to change
             </p>
             <p className="text-[13px] text-[var(--text-on-dark-muted)] font-light mt-3">
               Want it sooner? <Link href="/pre-orders/purchase" className="text-gold hover:underline">Pre-order now and lock in $50 off</Link>.

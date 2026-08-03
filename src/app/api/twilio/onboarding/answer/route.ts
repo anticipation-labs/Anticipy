@@ -7,7 +7,7 @@ import {
 import {
   ONBOARDING_QUESTIONS,
   QUESTION_TOTAL,
-} from "../initial/route";
+} from "@/lib/onboarding-questions";
 
 export const dynamic = "force-dynamic";
 

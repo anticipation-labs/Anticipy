@@ -90,7 +90,8 @@ export async function POST(request: NextRequest) {
     }).catch(console.error);
 
     return NextResponse.json({ success: true }, { status: 201 });
-  } catch {
+  } catch (e) {
+    console.error("Waitlist route exception:", e);
     return NextResponse.json(
       { error: "Something went wrong." },
       { status: 500 }

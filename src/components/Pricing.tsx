@@ -65,10 +65,10 @@ export function Pricing() {
                 </span>
               </h2>
               <span
-                className="text-[24px] md:text-[28px] line-through opacity-50"
+                className="text-[15px] md:text-[17px]"
                 style={{ color: "var(--text-on-light-muted)" }}
               >
-                ${RETAIL_PRICE}
+                ${RETAIL_PRICE} at launch
               </span>
             </div>
           </ScrollReveal>
@@ -79,7 +79,7 @@ export function Pricing() {
             className="text-[17px] font-light mt-4 mb-12"
             style={{ color: "var(--text-on-light-muted)" }}
           >
-            Pendant, chain, charging pad, and your first year of AI service. All included. Free shipping in the US and Canada.
+            Pendant, chain, and charging pad. All included. Free shipping in the US and Canada.
           </p>
         </ScrollReveal>
 
@@ -156,7 +156,7 @@ export function Pricing() {
               $149.99
             </p>
             <p className="text-[15px] font-light mt-2 text-[var(--text-on-dark-muted)]">
-              first year included, then $99/yr
+              $149.99 now, $199 at launch
             </p>
           </motion.div>
         </div>

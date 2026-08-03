@@ -56,7 +56,7 @@ const comparisonSchema = {
 };
 
 const rows = [
-  { feature: "Price", anticipy: "$149.99 pre-order ($199 retail). First year of service included", competitor: "Pricing changed after Amazon acquisition; originally subscription-based" },
+  { feature: "Price", anticipy: "$149.99 pre-order ($199 retail)", competitor: "Pricing changed after Amazon acquisition; originally subscription-based" },
   { feature: "Weight", anticipy: "8 grams", competitor: "Per public listing, compact wearable form factor" },
   { feature: "Material", anticipy: "Brushed titanium", competitor: "Per public listing, lightweight housing" },
   { feature: "Core function", anticipy: "Detects intent, completes tasks autonomously", competitor: "Meeting capture, knowledge timeline, action item extraction" },
