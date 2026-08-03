@@ -190,7 +190,7 @@ export function Chapters() {
               padding: "16px 44px",
             }}
           >
-            Reserve yours &mdash; $149.99
+            Claim yours &mdash; $149.99
           </a>
           <p className="text-[12px] uppercase tracking-[0.18em] text-[var(--text-on-dark-muted)] mt-4">
             Ships August 2026 &middot; Full refund anytime before shipping

@@ -47,8 +47,7 @@ export function StickyBuyBar() {
             Anticipy pendant &middot; $149.99
           </p>
           <p className="text-[11px] text-[var(--text-on-dark-muted)] leading-tight mt-0.5">
-            Pre-order price ends at launch &middot; Full refund before
-            shipping
+            $199 at launch &middot; Full refund before shipping
           </p>
         </div>
         <a
@@ -60,7 +59,7 @@ export function StickyBuyBar() {
             padding: "11px 26px",
           }}
         >
-          Reserve yours
+          Claim yours
         </a>
       </div>
     </div>

@@ -24,6 +24,10 @@ const FAQS: { q: string; a: string }[] = [
     a: "It hears you the way a good assistant does — and follows your rules. Your audio never leaves the device without a rule you set, every action is previewed before it happens, and every result is independently verified. You can see, export, or delete everything.",
   },
   {
+    q: "What do I say when someone asks if it\u2019s recording them?",
+    a: "The truth: Anticipy is there for your own promises, not other people\u2019s conversations. Your audio never leaves the device without a rule you set, nothing is ever posted or shared, and nothing happens without your explicit approval. And when you\u2019d rather it not listen at all, take it off \u2014 it\u2019s a pendant, not an implant.",
+  },
+  {
     q: "What happens right after I pay?",
     a: "Stripe processes the payment, you get a confirmation email with your order number, and you're locked in at $149.99 — $50 under the $199 retail price. Then we get back to building yours.",
   },
@@ -112,9 +116,13 @@ export function Faq() {
         >
           <div className="text-center sm:text-left">
             <p className="text-[15px] leading-relaxed text-[var(--text-on-dark)]">
-              &ldquo;I built Anticipy because I was tired of being the person
-              who meant it and still forgot. If it isn&apos;t everything I&apos;m
-              promising you here, email me and I&apos;ll refund you myself.&rdquo;
+              &ldquo;I kept telling people I&apos;d send things &mdash; and kept
+              finding those promises dead in my notes app three weeks later. So
+              I built the thing I needed: something that hears the promise and
+              walks it to done. A year of prototypes taught me the hard part
+              isn&apos;t hearing you &mdash; it&apos;s proving the thing actually
+              happened. If Anticipy isn&apos;t everything I&apos;m promising you
+              here, email me and I&apos;ll refund you myself.&rdquo;
             </p>
             <p className="mt-3 text-[13px] uppercase tracking-[0.16em] text-[var(--text-on-dark-muted)]">
               Omar &middot; Founder, Anticipy &middot;{" "}

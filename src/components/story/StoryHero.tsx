@@ -97,11 +97,11 @@ export function StoryHero() {
               padding: "16px 44px",
             }}
           >
-            Reserve yours &mdash; $149.99
+            Claim yours &mdash; $149.99
           </a>
           <p className="text-[12px] uppercase tracking-[0.18em] text-[var(--text-on-dark-muted)] mt-4">
-            Pre-order price ends at launch &middot; First year of service
-            included &middot; Full refund anytime before shipping
+            $199 at launch &middot; First year of service included &middot;
+            Ships August 2026 &middot; Full refund anytime before shipping
           </p>
         </div>
       </div>
