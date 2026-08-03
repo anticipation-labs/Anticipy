@@ -7,10 +7,9 @@ const jsonLdProduct = {
   "@type": "Product",
   name: "Anticipy Pendant Pre-Order",
   description:
-    "Pre-order the Anticipy AI wearable pendant. Brushed titanium, 8 grams. Wireless charging pad and chain included. First year of service included.",
+    "Pre-order the Anticipy AI wearable pendant. Brushed titanium, 8 grams. Wireless charging pad and chain included. $149.99 now, $199 at launch.",
   brand: { "@type": "Brand", name: "Anticipy" },
   image: [
-    "https://www.anticipy.ai/images/hero.png",
     "https://www.anticipy.ai/images/colorways.png",
     "https://www.anticipy.ai/images/macro.png",
   ],
@@ -154,7 +153,7 @@ export default function PreOrderPurchasePage({
               className="text-[14px] font-light mb-8"
               style={{ color: "var(--text-on-light-muted)" }}
             >
-              First year of AI service included. After that, $99 per year. Cancel any time.
+              $149.99 now, $199 at launch. Free shipping to the US and Canada.
             </p>
 
             <div
@@ -176,10 +175,6 @@ export default function PreOrderPurchasePage({
                 <li className="flex items-start gap-2">
                   <span style={{ color: "var(--gold)" }}>&bull;</span>
                   <span>Wireless charging pad with 15-foot range.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span style={{ color: "var(--gold)" }}>&bull;</span>
-                  <span>One year of the Anticipy AI service.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span style={{ color: "var(--gold)" }}>&bull;</span>
@@ -226,10 +221,7 @@ export default function PreOrderPurchasePage({
               q="Why is the pre-order price lower?"
               a="The retail price is $199. Pre-order customers help fund manufacturing tooling, supplier deposits, and the first production run. The $50 saving is our way of saying thank you for being early."
             />
-            <FAQ
-              q="What is the first year of service?"
-              a="Anticipy is a hardware pendant plus an AI service that listens, drafts, books, and acts on your behalf. The pendant talks to the cloud over your phone or Mac. The cloud side has running costs. Your first twelve months are included. After that the AI service is $99 per year. Hardware works without the service, just with fewer features."
-            />
+
             <FAQ
               q="What is your refund policy?"
               a={

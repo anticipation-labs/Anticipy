@@ -123,7 +123,7 @@ export default function ForPage() {
               See yourself here?
             </p>
             <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light mb-8">
-              Pre-order for $149.99 ($50 off the $199 retail price) or join the free waitlist. First year of AI service included either way.
+              Pre-order for $149.99 ($50 off the $199 retail price) or join the free waitlist.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link

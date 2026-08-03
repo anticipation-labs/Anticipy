@@ -3,7 +3,7 @@ import { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Join the Anticipy Waitlist",
   description:
-    "Be first to get Anticipy, the AI wearable pendant that turns ambient conversation into completed tasks. $199 retail, $149.99 for pre-order customers. First year of AI service included.",
+    "Be first to get Anticipy, the AI wearable pendant that turns ambient conversation into completed tasks. $199 retail, $149.99 for pre-order customers.",
   openGraph: {
     title: "Join the Anticipy Waitlist",
     description:

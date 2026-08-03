@@ -27,9 +27,9 @@ const ROWS: {
     others: "Trust the notification",
   },
   {
-    feature: "First year of service",
-    anticipy: "Included in $149.99",
-    others: "Subscription on top of hardware",
+    feature: "Price",
+    anticipy: "$149.99 now, $199 at launch",
+    others: "Hardware plus a subscription on top",
   },
 ];
 

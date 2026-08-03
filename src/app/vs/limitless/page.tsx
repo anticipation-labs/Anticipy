@@ -57,7 +57,7 @@ const comparisonSchema = {
 };
 
 const rows = [
-  { feature: "Price", anticipy: "$149.99 pre-order ($199 retail). First year of service included", competitor: "$99 (subscription plans for AI features)" },
+  { feature: "Price", anticipy: "$149.99 pre-order ($199 retail)", competitor: "$99 (subscription plans for AI features)" },
   { feature: "Weight", anticipy: "8 grams", competitor: "Per public listing, approximately 10 grams" },
   { feature: "Material", anticipy: "Brushed titanium", competitor: "Composite materials with multiple finish options" },
   { feature: "Core function", anticipy: "Detects intent, completes tasks autonomously", competitor: "Records, transcribes, and summarizes conversations" },
@@ -262,8 +262,7 @@ export default function VsLimitlessPage() {
             unlimited history, and priority processing.
           </p>
           <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light leading-[1.8] mb-6">
-            Anticipy retails at $199 and offers a $149.99 pre-order price that includes the first year of AI service. After
-            the first year, there is a service fee to cover the ongoing costs of the action engine
+            Anticipy retails at $199 and offers a $149.99 pre-order price. There is a service fee to cover the ongoing costs of the action engine
             (running a browser agent that completes tasks on real websites requires compute resources).
             Anticipy is currently in pre-order, with a waitlist open on the website.
           </p>

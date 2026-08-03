@@ -21,7 +21,7 @@ export function Wound() {
         scrollTrigger: {
           trigger: rootRef.current,
           start: "top top",
-          end: "+=3200",
+          end: "+=2300",
           scrub: 0.6,
           pin: true,
         },

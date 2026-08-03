@@ -17,7 +17,7 @@ export function Turn() {
         scrollTrigger: {
           trigger: rootRef.current,
           start: "top top",
-          end: "+=2800",
+          end: "+=2000",
           scrub: 0.6,
           pin: true,
         },

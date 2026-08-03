@@ -7,10 +7,6 @@ import { ease } from "@/lib/animation";
 
 const IMAGES = [
   {
-    src: "/images/hero.png",
-    alt: "Anticipy pendant. Brushed titanium AI wearable on a chain.",
-  },
-  {
     src: "/images/colorways.png",
     alt: "Anticipy pendant. Silver and gold colorways side by side.",
   },

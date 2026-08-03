@@ -6,8 +6,6 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const CAL_LINK = "https://calendar.app.google/FXvw3ePndv8ciUaM6";
-
 type FormState = "idle" | "loading" | "success" | "duplicate" | "error";
 
 export function Close() {
@@ -100,16 +98,13 @@ export function Close() {
         </div>
 
         <p className="close-anim text-[13px] text-[var(--text-on-dark-muted)] mt-5">
-          $149.99 now, $199 at launch &middot; First year of
-          service included &middot; Free shipping (US &amp; Canada) &middot;
+          $149.99 now, $199 at launch &middot; Free shipping (US &amp; Canada) &middot;
           Ships August 2026 &middot; Change your mind? One email, full refund
         </p>
 
         <div className="close-anim flex items-center justify-center gap-8 mt-10">
           <a
-            href={CAL_LINK}
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/book"
             className="text-[15px] text-[var(--text-on-dark)] underline underline-offset-4 decoration-[rgba(245,240,235,0.4)] hover:opacity-80 transition-opacity"
           >
             Book a call with us

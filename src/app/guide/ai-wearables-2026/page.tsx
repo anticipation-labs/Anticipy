@@ -53,7 +53,7 @@ const faqItems = [
   {
     question: "How much do AI wearables cost in 2026?",
     answer:
-      "Prices range widely. Bee was $49.99 plus subscription before the Amazon acquisition. Plaud NotePin is $169. Anticipy retails at $199. Pre-order now for $149.99 with the first year of AI service included. Friend is $99. Limitless was $99 before being discontinued. Subscription models are common, with most products requiring an ongoing fee for AI features.",
+      "Prices range widely. Bee was $49.99 plus subscription before the Amazon acquisition. Plaud NotePin is $169. Anticipy retails at $199. Pre-order now for $149.99. Friend is $99. Limitless was $99 before being discontinued. Subscription models are common, with most products requiring an ongoing fee for AI features.",
   },
 ];
 
@@ -95,7 +95,7 @@ const players = [
     name: "Anticipy",
     company: "Anticipation Labs",
     category: "Action Agent",
-    price: "$149.99 pre-order ($199 retail). First year incl.",
+    price: "$149.99 pre-order ($199 retail)",
     intentModel: "Ambient intent (no commands)",
     audioHandling: "Process and discard",
     status: "Pre-order",
@@ -408,7 +408,7 @@ export default function GuidePage() {
             Anticipy
           </h3>
           <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light leading-[1.8] mb-4">
-            Anticipy at $149.99 pre-order ($199 retail; first year of service included) takes a different approach than every
+            Anticipy at $149.99 pre-order ($199 retail) takes a different approach than every
             other product in this list. It is the only consumer device built around action
             execution rather than memory or companionship. Audio is processed in real-time for
             actionable intent and discarded. The output is completed tasks: bookings made,

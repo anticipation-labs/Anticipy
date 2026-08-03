@@ -9,7 +9,7 @@ gsap.registerPlugin(ScrollTrigger);
 const FAQS: { q: string; a: string }[] = [
   {
     q: "What exactly do I get for $149.99?",
-    a: "The titanium pendant, the chain, the wireless charging pad, and your first year of AI service. Free shipping in the US and Canada. Nothing else to buy. After the first year, service is $99/yr — less than the subscriptions Anticipy will catch you forgetting to cancel.",
+    a: "The titanium pendant, the chain, and the wireless charging pad. Free shipping in the US and Canada. $199 at launch — $149.99 if you claim it now.",
   },
   {
     q: "When does it ship?",
@@ -127,7 +127,7 @@ export function Faq() {
             <p className="mt-3 text-[13px] uppercase tracking-[0.16em] text-[var(--text-on-light-muted)]">
               Omar &middot; Founder, Anticipy &middot;{" "}
               <a
-                href="https://calendar.app.google/FXvw3ePndv8ciUaM6"
+                href="https://calendar.app.google/QnCVQxa9Aj3x8QKD7"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline underline-offset-4 decoration-[rgba(138,107,68,0.45)] hover:text-bronze transition-colors normal-case tracking-normal"
