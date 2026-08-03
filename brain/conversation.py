@@ -44,8 +44,18 @@ You will get: the recent thread, what you're currently preparing (pending
 items, each with an id), and relevant memory. Classify the owner's latest
 text and draft your reply. Respond with EXACTLY one JSON object:
 
-{"intent": "...", "pending_id": "... or null", "changes": {...} or null,
+{"intent": "...", "pending_id": "... or null",
+ "pending_ids": ["every pending/blocked item their text applies to — one id,
+ several, or all of them; [] when none"], "changes": {...} or null,
  "reply": "your next text, 1-2 sentences, conversational"}
+
+Understand them the way a person would — slang, swearing, sarcasm, typos,
+half-sentences are all normal texting and none of it changes the meaning:
+"fuck it, send it" is a confirm; "nah scrap both of those" is a decline of
+both items; "the first one, and honestly kill the other" confirms one and
+declines the other (use pending_ids for what the main intent applies to).
+There are NO command words. If you genuinely cannot tell what they mean,
+say so like a person ("wait — which one do you mean?") rather than guessing.
 
 intents:
 - "confirm": an explicit go-ahead for a pending item (any phrasing: "yeah
@@ -81,10 +91,12 @@ Grounding rules (hard):
 - pending_id must be the item the owner is actually talking about — match on
   topic. It may name anything in EITHER list: something under "pending", or
   something under "blocked". Calling a task off applies to both, so a blocked
-  task he is rejecting must be named by its id, not left null. If their text
-  could genuinely refer to more than one item, or refers to something in
-  neither list, set pending_id to null AND make your reply a clarifying
-  question ("the newsletter or the pitch deck?") — do not guess.
+  task he is rejecting must be named by its id, not left null. When their text
+  covers several items ("both", "all of it", "everything except the dinner"),
+  list every one in pending_ids. Only if their text could genuinely mean more
+  than one thing AND you cannot tell which, set them null/[] AND make your
+  reply a clarifying question ("the newsletter or the pitch deck?") — do not
+  guess, and never re-ask a question they have already answered.
 - If nothing is pending and they seem to confirm, ask what they mean.
 - When "blocked" is not empty and their message supplies what a blocked task
   needed, say so plainly and that you are getting on with it ("Perfect — I'll
@@ -190,55 +202,68 @@ class Conversation:
             if learned:
                 resumed = self._resume_stuck(learned)
 
-        # "2", "the second one", "first" — he is answering the numbered
-        # question she asked. Position names the job as surely as saying its
-        # topic would, so it satisfies the guard a bare "yes" cannot, and it
-        # overrides the model's own pick: he counted, she should count too.
-        picked = self._choice_from_position(text)
-        if picked and intent in ("confirm", "decline", "answer"):
-            pending_id, text_for_guard = picked, None
-        else:
-            text_for_guard = text
+        # The MODEL is the understander — there are no command words. It may
+        # name several items at once ("scrap both", "do everything except
+        # dinner"). The deterministic parsing below (digits, "both"/"neither")
+        # exists ONLY for when the model is unreachable or named nothing.
+        model_ids = [i for i in (parsed.get("pending_ids") or []) if i]
+        if not model_ids and pending_id:
+            model_ids = [pending_id]
+
+        text_for_guard = text
+        if not model_ids:
+            # Offline fallback: "2", "the second one", "both", "neither"
+            # against the list she herself offered.
+            picked = self._choice_from_position(text)
+            group = self._group_choice(text)
+            if picked and intent in ("confirm", "decline", "answer"):
+                pending_id, text_for_guard = picked, None
+                model_ids = [picked]
+            elif group and intent in ("confirm", "decline", "answer", "chat"):
+                offered = (list(getattr(self, "_offered", []) or [])
+                           or self._offered_from_thread())
+                asked_cancel = self._asked_to_cancel()
+                pool = self._open_work() if asked_cancel else self._pending()
+                offered = [o for o in offered if any(p["id"] == o for p in pool)]
+                if offered:
+                    if group == "none" and asked_cancel:
+                        reply = "Okay — keeping them all."
+                        self.say(phone, reply)
+                        return {"intent": "chat", "pending_id": None,
+                                "changes": None, "acted": None, "reply": reply}
+                    intent = ("decline" if asked_cancel or group == "none"
+                              or intent == "decline" else "confirm")
+                    model_ids, text_for_guard = offered, None
+        elif self._just_asked(phone):
+            # He is answering HER question; the model matched his words to the
+            # item(s). Demanding his text also share a word with the goal is
+            # what forced the re-ask loop — an answer to her question is a
+            # naming in itself.
+            text_for_guard = None
 
         acted = None
         asked_back = False   # her reply is already a clarifying question
 
-        # "Both" / "all of them" / "neither" answer her numbered question just
-        # as completely as "2" does. On 2026-08-03 he said "Both" and she asked
-        # the identical question three times — an answer she offered no way to
-        # give. Which verb applies comes from the question SHE asked (call off
-        # vs go ahead), not from re-guessing his one-word reply.
-        group = self._group_choice(text)
-        if group and intent in ("confirm", "decline", "answer", "chat"):
-            offered = list(getattr(self, "_offered", []) or []) or self._offered_from_thread()
-            asked_cancel = self._asked_to_cancel()
-            # A cancel offer listed blocked work too, so validate against the
-            # same pool the offer was built from.
-            pool = self._open_work() if asked_cancel else self._pending()
-            offered = [o for o in offered if any(p["id"] == o for p in pool)]
-            if offered:
-                if group == "none" and asked_cancel:
-                    parsed["reply"] = "Okay — keeping them all."
-                    self.say(phone, parsed["reply"])
-                    return {"intent": "chat", "pending_id": None,
-                            "changes": None, "acted": None, "reply": parsed["reply"]}
-                do_cancel = asked_cancel or group == "none" or intent == "decline"
-                done_goals = []
-                for jid in offered:
-                    res = (self._cancel(jid, owner_text=None) if do_cancel
-                           else self._release(jid, changes, owner_text=None))
-                    if res and not str(res).startswith("failed"):
-                        job = self._fetch(jid)
-                        done_goals.append((job or {}).get("goal", "that").replace("_", " "))
-                if done_goals:
-                    names = " and ".join(done_goals)
-                    reply = (f"Done — scrapped {names}." if do_cancel
-                             else f"On it — {names}, both moving." if len(done_goals) > 1
-                             else f"On it — {names} is moving.")
-                    self.say(phone, reply)
-                    return {"intent": "decline" if do_cancel else "confirm",
-                            "pending_id": None, "changes": changes,
-                            "acted": "multi", "reply": reply}
+        # Several items at once — act on each; one text back covering all.
+        if len(model_ids) > 1 and intent in ("confirm", "decline"):
+            do_cancel = intent == "decline"
+            done_goals = []
+            for jid in model_ids:
+                res = (self._cancel(jid, owner_text=None) if do_cancel
+                       else self._release(jid, changes, owner_text=None))
+                if res and not str(res).startswith("failed") and res != "ambiguous":
+                    job = self._fetch(jid)
+                    done_goals.append((job or {}).get("goal", "that").replace("_", " "))
+            if done_goals:
+                names = " and ".join(done_goals)
+                reply = (parsed.get("reply")
+                         or (f"Done — scrapped {names}." if do_cancel
+                             else f"On it — {names}."))
+                self.say(phone, reply)
+                return {"intent": intent, "pending_id": None, "changes": changes,
+                        "acted": "multi", "reply": reply}
+        if model_ids:
+            pending_id = model_ids[0]
 
         if intent == "confirm":
             acted = self._release(pending_id, changes, owner_text=text_for_guard)
@@ -698,6 +723,13 @@ Use {"facts": {}} when there is nothing durable."""
         if self._GROUP_NONE & set(words):
             return "none"
         return None
+
+    def _just_asked(self, phone: str) -> bool:
+        """Whether her last message in this thread was a question."""
+        for turn in reversed(self._thread(phone)[-6:]):
+            if turn.role == "anticipy":
+                return turn.text.rstrip().endswith("?")
+        return False
 
     def _asked_to_cancel(self) -> bool:
         """Whether her last numbered question offered to CALL THINGS OFF."""

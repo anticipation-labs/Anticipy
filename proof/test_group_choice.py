@@ -111,4 +111,26 @@ check("an identical repeat within minutes is not sent", len(sent) == 1)
 convo.say("+15550001111", "something different")
 check("...but a different text still goes out", len(convo.transport.sent) == 2)
 
+# 7. LLM-first: the model names several items itself ("nah scrap both of
+# those") — no keywords involved, its pick is acted on directly.
+convo, state = make([dict(j) for j in JOBS])
+convo._classify = lambda phone, text: {
+    "intent": "decline", "pending_id": None, "pending_ids": ["j1", "j2"],
+    "changes": None, "reply": "done — killed them both."}
+out = convo.on_reply("+15550001111", "nah scrap those, screw it")
+check("model-named multi-decline cancels both, no keywords",
+      state["j1"]["status"] == "cancelled" and state["j2"]["status"] == "cancelled")
+check("...and her own drafted reply is kept", out["reply"] == "done — killed them both.")
+
+# 8. Answering her question: the model's single pick is trusted without the
+# shared-word guard when her last text was a question.
+convo, state = make([dict(j) for j in JOBS])
+convo.say("+15550001111", "should I lock in the 7:30 or drop it?")
+convo._classify = lambda phone, text: {
+    "intent": "confirm", "pending_id": "j2", "pending_ids": ["j2"],
+    "changes": None, "reply": "locking it in."}
+out = convo.on_reply("+15550001111", "yeah do that")
+check("model's pick after her question releases without re-asking",
+      state["j2"]["status"] == "queued" and "which one" not in out["reply"].lower())
+
 print(f"\n{passed}/{passed} passing")
