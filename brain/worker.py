@@ -87,6 +87,58 @@ def clock_should_run(now: float, state: dict) -> bool:
     return now - state.get("last_outreach_ts", 0) >= CLOCK_MIN_GAP_SECONDS
 
 
+# ---- the number must keep pointing at US -------------------------------
+# On 2026-08-03 the Twilio number's inbound webhook was pointing at
+# https://anticipy-nick-demo.vercel.app/api/sms/inbound — a Vercel deployment
+# that is NOT on the owner's account. Every text he sent went there instead of
+# here for about a day: he texted "Book it" about a real dinner booking, a
+# stranger's app answered him about an IANA example page, and the held job sat
+# waiting for a yes that was being delivered somewhere else. From his side the
+# product had simply gone mad.
+#
+# Nothing in this repo did that, and it is not something he should have to
+# notice. So the brain checks its own ear: if the number stops pointing here,
+# say so loudly and point it back.
+WEBHOOK_CHECK_EVERY_SECONDS = 10 * 60
+
+
+def ensure_inbound_webhook() -> None:
+    sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    auth = os.environ.get("TWILIO_AUTH_TOKEN")
+    smstok = os.environ.get("ANTICIPY_SMS_TOKEN")
+    number = os.environ.get("TWILIO_PHONE_NUMBER") or os.environ.get("TWILIO_FROM")
+    if not (sid and auth and smstok and number):
+        return          # not our job to guess; stay quiet
+    ours = f"{PB}/sms/inbound?token={smstok}"
+    try:
+        r = requests.get(
+            f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers.json",
+            auth=(sid, auth), timeout=15)
+        if not r.ok:
+            return
+        rows = [n for n in r.json().get("incoming_phone_numbers", [])
+                if n.get("phone_number") == number]
+        if not rows:
+            return
+        n = rows[0]
+        current = n.get("sms_url") or ""
+        # An application SID silently overrides every sms_* URL, so a matching
+        # URL with one set is still not a working inbound binding.
+        shadowed = bool(str(n.get("sms_application_sid") or "").strip())
+        if current.split("?")[0] == ours.split("?")[0] and not shadowed:
+            return
+        print(f"WEBHOOK HIJACK: inbound SMS was pointing at {current.split('?')[0] or '(empty)'}"
+              f"{' (shadowed by an application SID)' if shadowed else ''} — pointing it back at us")
+        u = requests.post(
+            f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers/{n['sid']}.json",
+            auth=(sid, auth), timeout=15,
+            data={"SmsUrl": ours, "SmsMethod": "POST", "SmsApplicationSid": ""})
+        print("webhook repointed" if u.ok else f"could not repoint the webhook: {u.status_code}")
+    except Exception as e:
+        # This must never be able to stop her hearing or texting.
+        print(f"webhook check failed (harmless): {e}")
+
+
 def post_event(kind: str, text: str, decision: str = "", goal: str = "") -> None:
     pb.post(f"{PB}/api/collections/events/records", json={
         "device_id": "anticipy-brain", "kind": kind, "text": text,
@@ -489,6 +541,7 @@ def main() -> None:
     sent_seen = 0
     last_clock = 0.0
     last_profile = 0.0
+    last_webhook = 0.0
     while True:
         try:
             # Pick up the owner's number from the app (and any change to it)
@@ -499,6 +552,11 @@ def main() -> None:
                 if entered and entered != anticipy.owner_phone:
                     anticipy.owner_phone = entered
                     print(f"owner phone updated from the app: …{entered[-4:]}")
+            # Is the number still wired to us? Cheap, and the failure it
+            # catches is invisible from in here — she simply never hears him.
+            if time.time() - last_webhook > WEBHOOK_CHECK_EVERY_SECONDS:
+                last_webhook = time.time()
+                ensure_inbound_webhook()
             # The clock: she reviews her open loops on her own schedule and
             # may initiate — rarely, in daytime, rate-limited, gated.
             now = time.time()
