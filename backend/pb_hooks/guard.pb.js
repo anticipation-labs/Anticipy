@@ -28,6 +28,28 @@ routerUse((e) => {
 
   if (e.request.header.get("X-Anticipy-Token") === token) return e.next();
 
+  // ---- the front door ----
+  // The auth endpoints live UNDER /api/collections/, so the guard was gating
+  // login itself: every attempt to sign in came back as this hook's own
+  // {"error":"forbidden"} before PocketBase ever saw it. Caught on the local
+  // rig, which is exactly what the rig is for — shipped, it would have made
+  // accounts impossible to use while looking like a backend outage.
+  // These endpoints ARE the way an unauthenticated person is supposed to
+  // introduce themselves; PocketBase validates them itself.
+  if (path.indexOf("/api/collections/owners/") === 0 &&
+      /\/(auth-with-password|auth-with-oauth2|auth-with-otp|request-otp|auth-refresh|request-password-reset|confirm-password-reset|request-verification|confirm-verification|auth-methods)$/.test(path)) {
+    return e.next();
+  }
+
+  // ---- anyone who has actually signed in ----
+  // A real account token is a BETTER credential than the shared secret, so it
+  // passes here. This is strictly widening: nothing that worked before stops
+  // working, and it is what lets clients migrate off the shared token one at a
+  // time instead of all at once on a single terrifying afternoon.
+  try {
+    if (e.auth) return e.next();
+  } catch (_) {}
+
   // The dashboard and any properly authenticated superuser session.
   try {
     if (e.hasSuperuserAuth()) return e.next();
