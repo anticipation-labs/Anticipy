@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from . import pb
+from . import research
 
 from .anticipy_core import Anticipy
 from .memory import Memory
@@ -205,7 +206,11 @@ def report_stalled_work(anticipy) -> None:
         # but only while Chrome is open, so a task whose browser died partway
         # sits at `running` forever and looks like work in progress. That is
         # worse than a queued one: it reads as "she is on it".
-        filt = f'(status="queued" || status="running") && updated<="{since}"'
+        # The research lane is excluded: it never needs his Chrome — this
+        # same process runs it — so "I just need your browser open" would be
+        # a false alarm about work she is about to do herself.
+        filt = (f'(status="queued" || status="running") && updated<="{since}"'
+                f' && lane!="research"')
         if anticipy.owner_id:
             filt = f'({filt}) && owner="{anticipy.owner_id}"'
         r = pb.get(f"{PB}/api/collections/jobs/records",
@@ -239,6 +244,81 @@ def report_stalled_work(anticipy) -> None:
             print(f"stalled (no browser): {job['id']} — told him")
     except Exception as e:
         print(f"stalled-work report failed: {e}")
+
+
+RESEARCH_CLAIMANT = "worker-research"
+
+
+def run_research_jobs(anticipy, runner=None) -> None:
+    """Run the research lane HERE, in the worker — never in his Chrome.
+
+    Read-only goals are queued with lane="research" (anticipy_core.job_lane);
+    the extension's claim filter and the backend's research_lane hook keep
+    every browser agent away from them. Claiming follows the extension's own
+    doctrine — stamp, read back, only run if the stamp survived — so two
+    workers can never run the same job. Owner scoping is identical to every
+    other job read this file does."""
+    try:
+        base = anticipy.backend_url
+        filt = 'status="queued" && lane="research"'
+        if anticipy.owner_id:
+            filt = f'({filt}) && owner="{anticipy.owner_id}"'
+        r = pb.get(f"{base}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 5, "sort": "created"},
+                   timeout=10)
+        if not r.ok:
+            return
+        jobs = r.json().get("items", [])
+        if not jobs:
+            return
+        # Read per pass, not at import: no new global state, and a key added
+        # or removed on a redeploy takes effect without a code path changing.
+        api_key = os.environ.get("BRAVE_API_KEY")
+        for job in jobs:
+            if not api_key:
+                # Graceful fallback: no key means no research arm, and a job
+                # queued for an executor that does not exist would sit
+                # forever. Hand it to the browser lane — slower and noisier,
+                # but it runs. Queue-time routing already does this; this
+                # catches rows queued before the key went away.
+                pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+                         json={"lane": ""}, timeout=10)
+                print(f"research: no BRAVE_API_KEY — {job['id']} handed to "
+                      "the browser lane")
+                continue
+            claim = pb.patch(
+                f"{base}/api/collections/jobs/records/{job['id']}",
+                json={"status": "running", "claimed_by": RESEARCH_CLAIMANT,
+                      "claimed_at": datetime.now(timezone.utc)
+                      .strftime("%Y-%m-%d %H:%M:%S")},
+                timeout=10)
+            if not getattr(claim, "ok", False):
+                continue
+            check = pb.get(f"{base}/api/collections/jobs/records/{job['id']}",
+                           timeout=10)
+            if not getattr(check, "ok", False):
+                continue
+            fresh = check.json()
+            if fresh.get("claimed_by") != RESEARCH_CLAIMANT \
+                    or fresh.get("status") != "running":
+                continue
+            try:
+                params = json.loads(job.get("params") or "{}") or {}
+            except Exception:
+                params = {}
+            out = (runner or research.run_research)(
+                job.get("goal", ""), params, llm=anticipy.llm, api_key=api_key)
+            ok = bool(out.get("ok"))
+            pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+                     json={"status": "done" if ok else "failed",
+                           "result": (out.get("result") or "")[:6000]},
+                     timeout=10)
+            # Delivery is report_finished_jobs' job: a desk card by default,
+            # an in-thread text only when the ask came in over SMS.
+            print(f"research: {job['id']} {'done' if ok else 'failed'} — "
+                  f"{job.get('goal', '')[:60]}")
+    except Exception as e:
+        print(f"research pass failed: {e}")
 
 
 def report_finished_jobs(anticipy) -> None:
@@ -278,6 +358,23 @@ def report_finished_jobs(anticipy) -> None:
             # task does not silence the answer.
             if already_raised(goal, decision="done"):
                 REPORTED.add(job["id"])
+                continue
+            # DESK delivery for the research lane (roadmap §3 lane 2): the
+            # answer is written on the job and lands in the feed as a
+            # conversation entry — never an SMS. The one exception is a job
+            # he asked for OVER SMS: that answer belongs in that thread, so
+            # it falls through to the normal notify path below.
+            try:
+                channel = (json.loads(job.get("params") or "{}") or {}) \
+                    .get("channel", "")
+            except Exception:
+                channel = ""
+            if (job.get("lane") or "") == "research" and channel != "sms":
+                said = result or (f"Couldn't get there on {goal}." if failed
+                                  else f"That's done: {goal}.")
+                post_event("anticipy_says", said, decision="done", goal=goal)
+                REPORTED.add(job["id"])
+                print(f"desk: research {job['status']} {job['id']} — {goal[:60]}")
                 continue
             # A finished task with nothing written on it is still finished, and
             # he asked for it. Staying quiet here would mean his table gets
@@ -673,6 +770,10 @@ def main() -> None:
                 mark_processed(ev["id"], out["intent"])
                 post_event("anticipy_text", out["reply"])
                 print(f"sms in: {text!r} -> {out['intent']}")
+
+            # The research lane runs HERE, in this process. Read-only goals
+            # never wait for — or touch — his browser (roadmap §6).
+            run_research_jobs(anticipy)
 
             # A stuck job must SPEAK. When the browser hands something back —
             # it needs a detail she doesn't have, hit a login wall, found the

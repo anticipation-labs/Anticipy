@@ -15,8 +15,16 @@ TIMEOUT = 10
 
 
 def headers() -> dict:
+    # X-Anticipy-Worker names this process as the brain. The backend's
+    # research_lane hook uses it to keep research-lane jobs out of every
+    # browser agent's claim poll — including 0.2.3-and-older extensions in
+    # the wild, whose filters cannot be recalled. It is a ROUTING marker,
+    # not a credential; the service token is what authenticates.
+    h = {"X-Anticipy-Worker": "1"}
     token = os.environ.get("ANTICIPY_SERVICE_TOKEN")
-    return {"X-Anticipy-Token": token} if token else {}
+    if token:
+        h["X-Anticipy-Token"] = token
+    return h
 
 
 def get(url: str, **kw):

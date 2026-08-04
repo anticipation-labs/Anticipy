@@ -16,6 +16,7 @@ job queue, outside any model.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -82,6 +83,19 @@ def is_consequential(goal: str, params: dict | None = None,
         return False
     # Overheard: default to holding — only explicitly read-only runs unattended.
     return not _READ_ONLY_RE.search(g)
+
+
+def job_lane(goal: str) -> str:
+    """Which arm runs this job. Read-only goals (the _READ_ONLY_RE class) run
+    in the WORKER — Brave search + fetch + summarize — so research never
+    touches the owner's browser (roadmap §6, the tab-flood fix). Anything
+    that could leave the owner's world keeps the browser lane ("") and its
+    confirmation gate; when a goal reads both ways ("find a flight and book
+    it"), the consequential reading wins."""
+    g = (goal or "").strip()
+    if _IRREVERSIBLE_RE.search(g):
+        return ""
+    return "research" if _READ_ONLY_RE.search(g) else ""
 
 # How the best text-native agents actually sound (studied: Tomo — the
 # iMessage coach people text 20 days a month because check-ins read like a
@@ -211,8 +225,13 @@ class Anticipy:
             return True
 
     def hear(self, line: str, context: Optional[list[str]] = None,
-             may_say=None, explicit: bool = False) -> dict:
-        """One transcript line in; memory, decision, and delegation out."""
+             may_say=None, explicit: bool = False, channel: str = "") -> dict:
+        """One transcript line in; memory, decision, and delegation out.
+
+        channel names where the line arrived from ("sms" when he texted it).
+        It rides on the job so the answer can go back the way the question
+        came: an SMS ask is replied to in-thread, everything else lands on
+        the desk (the app feed) without buzzing his phone."""
         # Owner questions are answered, not triaged: a briefing request goes
         # to the briefing engine, and a memory question is answered straight
         # from the graph. Neither should ever spawn a browser job.
@@ -264,6 +283,8 @@ class Anticipy:
             # The executor needs temporal ground truth: a job run today with
             # no "now" produced an OpenTable result dated a YEAR in the past.
             params = {"source": line, "now": now_line()}
+            if channel:
+                params["channel"] = channel
             if decision.assumption:
                 params["assumption"] = decision.assumption
             # The EFFECTIVE hold: triage's flag OR the policy layer. The owner
@@ -481,6 +502,11 @@ class Anticipy:
         existing = self._same_pending(goal)
         if existing:
             return existing
+        # Route read-only work to the worker's research arm (roadmap §6).
+        # Without a Brave key the worker has no way to run it, so the job
+        # keeps the browser lane rather than queueing for an executor that
+        # does not exist — graceful fallback, never a dead queue.
+        lane = job_lane(goal) if os.environ.get("BRAVE_API_KEY") else ""
         try:
             r = pb.post(
                 f"{self.backend_url}/api/collections/jobs/records",
@@ -489,7 +515,8 @@ class Anticipy:
                       if (hold or goal in IRREVERSIBLE
                           or is_consequential(goal, params, explicit=explicit))
                       else "queued",
-                      "device_id": "anticipy", "owner": self.owner_id},
+                      "device_id": "anticipy", "owner": self.owner_id,
+                      "lane": lane},
                 timeout=10,
             )
             r.raise_for_status()

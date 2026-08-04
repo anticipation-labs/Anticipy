@@ -177,7 +177,11 @@ async function claimJob() {
   // without an owner stamp, dropping this clause would leave it queued
   // forever with nothing reporting a problem. Silent dead-queue is worse
   // than the narrow case this clause admits.
-  const cond = `status="queued" && (owner="${owner}" || owner="")`;
+  // The research lane is NOT ours: read-only goals run server-side in the
+  // worker (roadmap §6) — his browser is only for work that needs his
+  // logged-in sessions. The backend's research_lane hook enforces the same
+  // exclusion for extensions older than this line.
+  const cond = `status="queued" && (owner="${owner}" || owner="") && lane!="research"`;
   const poll = async () => fetch(
     `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`,
     { headers: await writeHeaders() }

@@ -588,26 +588,32 @@ Use {"facts": {}} when there is nothing durable."""
         text. Without that, a new request produced two: the classifier's "got
         it, I can look into that" and, moments later, hear()'s own "want me to
         go ahead?". Same thread, same thought, twice."""
-        try:
-            # explicit: he TEXTED this himself — an ask in so many words is its
-            # own go-ahead for anything that doesn't leave his world, so
-            # "open wikipedia" runs instead of demanding a confirmation.
-            out = self.anticipy.hear(text, may_say=lambda *a, **k: False,
-                                     explicit=True) or {}
-        except TypeError:
-            # A core without the newer keywords: shed them one at a time.
-            # Dropping may_say along with explicit re-opened the double-text
-            # this method exists to prevent, so it is the LAST thing to go.
+        # explicit: he TEXTED this himself — an ask in so many words is its
+        # own go-ahead for anything that doesn't leave his world, so "open
+        # wikipedia" runs instead of demanding a confirmation.
+        # channel: the answer goes back the way the question came — a
+        # research job born from a text replies in-thread instead of landing
+        # silently on the desk.
+        # A core without the newer keywords sheds them one at a time.
+        # Dropping may_say along with explicit re-opened the double-text this
+        # method exists to prevent, so it is the LAST thing to go.
+        quiet = lambda *a, **k: False
+        attempts = (
+            dict(may_say=quiet, explicit=True, channel="sms"),
+            dict(may_say=quiet, explicit=True),
+            dict(may_say=quiet),
+            dict(),
+        )
+        out = None
+        for kwargs in attempts:
             try:
-                out = self.anticipy.hear(text, may_say=lambda *a, **k: False) or {}
+                out = self.anticipy.hear(text, **kwargs) or {}
+                break
             except TypeError:
-                try:
-                    out = self.anticipy.hear(text) or {}
-                except Exception:
-                    return None
+                continue
             except Exception:
                 return None
-        except Exception:
+        if out is None:
             return None
         decision = getattr(out.get("decision"), "decision", "")
         if decision in ("act", "ask"):
