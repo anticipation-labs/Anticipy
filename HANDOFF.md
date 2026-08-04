@@ -20,20 +20,27 @@ VALID; 39 is current. Gates at handoff: 4/4 offline suites, and
 
 #### THE THREE THINGS OMAR IS OWED, in order
 
-1. **RELOAD THE CHROME EXTENSION.** This is the single reason his browser arm is
-   dead, and it has been owed since the 2026-08-03 lockdown. Download
-   `/anticipy-extension.zip` (now v0.2.1), unzip over the old folder,
-   `chrome://extensions` → reload. Until then no code change reaches his Chrome.
-   The Cactus job is sitting `queued`+`authorized` and should be claimed within
-   seconds of the reload. **After the reload the `agents.browser` field reads
-   e.g. `Chrome/151.0.0.0 ext/0.2.1` — check it before ever debugging this
-   again.**
+1. **RELOAD THE CHROME EXTENSION — but only from v0.2.2 or later.** The v0.2.1
+   zip was FATALLY BROKEN: `claimJob`'s poll closure used `await` inside a
+   non-async arrow, a parse error that stopped the service worker from
+   registering at all ("Service worker registration failed. Status code: 15").
+   Reloading 0.2.1 would have killed the heartbeat too. v0.2.2 fixes the parse
+   error and re-stamps `agents.browser` with `ext/<version>` on EVERY heartbeat
+   (0.2.1 only stamped at first registration, so an already-registered agent
+   would have reported its old build forever). Proven end to end on 2026-08-04:
+   a paired 0.2.2 agent claimed a queued+authorized read-only job and opened
+   the page within seconds. Download `/anticipy-extension.zip` (serves 0.2.2),
+   unzip over the old folder, `chrome://extensions` → reload, then check
+   `agents.browser` reads e.g. `Chrome/151.0.0.0 ext/0.2.2`.
 2. **Rotate the Twilio auth token** (his call — it breaks texting until every
    service is updated, so it was not done while he was away). See the hijack
    note below.
-3. **"She lost context"** — NOT FIXED. He texted "What" after a booking exchange
-   and got "What do you mean?" instead of a reply connected to the booking.
-   Reproduce from his 2026-08-04 ~03:20 thread before touching anything.
+3. **"She lost context" — FIXED 2026-08-04.** A bare "What"/"huh"/"??" right
+   after her message is conversational repair, not a new task: it now restates
+   her last line instead of being triaged into a job while she asked "What do
+   you mean?" back. Deterministic guard in `Conversation._is_repair` + prompt
+   exception under "chat"; regression-tested in `proof/test_sms_flows.py`
+   (17/17). Deployed to the production worker and standing check re-run (5/5).
 
 #### THE BIG ONE: his number was answering to someone else's app
 
