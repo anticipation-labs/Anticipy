@@ -358,8 +358,24 @@ final class AnticipySession: ObservableObject {
         do {
             try await backend.createAccount(email: email, password: password,
                                             phone: e164, legacyUUID: ownerID)
-        } catch let err as AnticipyBackend.BackendError where err.status == 400 {
+        } catch let err as AnticipyBackend.CreateAccountError where err.phoneTaken {
+            return "That phone number is already on an account. Sign in to it instead — or if you forgot the password, tap \"Text me a code\" below and I'll get you back in."
+        } catch let err as AnticipyBackend.CreateAccountError where err.deviceTaken && !err.emailTaken {
+            // This device's pre-accounts identity already belongs to an earlier
+            // account. A second account from the same phone is still legitimate:
+            // give this one a fresh identity and try again.
+            let fresh = UUID().uuidString
+            do {
+                try await backend.createAccount(email: email, password: password,
+                                                phone: e164, legacyUUID: fresh)
+                ownerID = fresh
+            } catch {
+                return "I couldn't set that up just now. Try again in a moment."
+            }
+        } catch let err as AnticipyBackend.CreateAccountError where err.emailTaken {
             return "That email already has an account — sign in instead, or use another address."
+        } catch let err as AnticipyBackend.CreateAccountError where (400..<500).contains(err.status) {
+            return "Something about those details didn't go through. Check the email and try again."
         } catch {
             return "I couldn't reach my side to set that up. Check your connection and try again."
         }

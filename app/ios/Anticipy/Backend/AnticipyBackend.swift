@@ -140,6 +140,15 @@ final class AnticipyBackend {
     /// what actually went wrong instead of a generic apology.
     struct MessageError: Error { let message: String }
 
+    /// Why an account couldn't be created, by field, so the screen can say
+    /// what is actually wrong instead of blaming the email for everything.
+    struct CreateAccountError: Error {
+        let status: Int
+        let emailTaken: Bool
+        let phoneTaken: Bool
+        let deviceTaken: Bool
+    }
+
     /// Create an account. `legacyUUID` is this device's pre-accounts identity,
     /// carried up so the person's existing rows can be claimed rather than
     /// orphaned.
@@ -155,7 +164,15 @@ final class AnticipyBackend {
         ]
         if let phone, !phone.isEmpty { body["phone"] = phone }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        try await send(req)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw BackendError(status: -1) }
+        if (200..<300).contains(http.statusCode) { return }
+        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let fields = (root?["data"] as? [String: Any]) ?? [:]
+        throw CreateAccountError(status: http.statusCode,
+                                 emailTaken: fields["email"] != nil,
+                                 phoneTaken: fields["phone"] != nil,
+                                 deviceTaken: fields["legacy_uuid"] != nil)
     }
 
     /// Sign in. Returns the session token and the account id.
