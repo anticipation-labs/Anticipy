@@ -108,7 +108,14 @@ async function heartbeat() {
   const r = await fetch(`${BASE}/api/collections/agents/records/${reg.recordId}`, {
     method: "PATCH",
     headers: await writeHeaders(),
-    body: JSON.stringify({ last_seen: new Date().toISOString() }),
+    body: JSON.stringify({
+      // Re-stamped on every beat, not just at registration: an agent that
+      // registered long ago would otherwise report its old build forever,
+      // and "which build is he actually running?" is the question this
+      // field exists to answer.
+      browser: `${navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || "Chrome"} ext/${chrome.runtime.getManifest().version}`,
+      last_seen: new Date().toISOString(),
+    }),
   });
   if (!r.ok) return null;
   const rec = await r.json();
@@ -171,7 +178,7 @@ async function claimJob() {
   // forever with nothing reporting a problem. Silent dead-queue is worse
   // than the narrow case this clause admits.
   const cond = `status="queued" && (owner="${owner}" || owner="")`;
-  const poll = () => fetch(
+  const poll = async () => fetch(
     `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`,
     { headers: await writeHeaders() }
   );
