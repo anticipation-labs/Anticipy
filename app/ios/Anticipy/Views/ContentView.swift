@@ -82,15 +82,25 @@ struct HomeView: View {
         NavigationStack {
             ZStack {
                 Theme.ink.ignoresSafeArea()
+                Grain.image
+                    .opacity(0.035)
+                    .blendMode(.plusLighter)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        statusStrip
-                        if micNeedsHelp { micRecoveryCard }
+                    // Rhythm is driven explicitly: space BETWEEN groups is
+                    // 2.5–3x space WITHIN one, which is what makes this read
+                    // as a layout instead of a list.
+                    VStack(alignment: .leading, spacing: 0) {
+                        if micNeedsHelp { micRecoveryCard.padding(.top, Theme.Space.tight) }
                         // Her briefing only appears over a verified read. She
                         // does not get to say "I've got the watch" from an app
-                        // that has never once reached its own server.
-                        if verified { anticipyCardView }
-                        listenCard
+                        // that has never once reached its own server — and on
+                        // day one the empty state carries the whole screen.
+                        if verified && !feedIsEmpty {
+                            anticipyCardView.padding(.top, Theme.Space.snug)
+                        }
+                        listenCard.padding(.top, feedIsEmpty ? Theme.Space.tight : Theme.Space.roomy)
                         if feedIsEmpty {
                             switch session.connection {
                             case .loading:          loadingState
@@ -99,42 +109,83 @@ struct HomeView: View {
                             case .ready:            emptyState
                             }
                         } else {
-                            if !verified { staleNotice }
+                            if !verified { staleNotice.padding(.top, Theme.Space.section) }
                             if !needsOK.isEmpty {
-                                sectionHeader("Needs your OK")
-                                    .onAppear { Haptics.engage() }
-                                ForEach(needsOK) { ConfirmJobCard(job: $0) }
+                                needsOKHeader
+                                    .padding(.top, Theme.Space.section)
+                                    .padding(.bottom, Theme.Space.tight)
+                                VStack(spacing: Theme.Space.snug) {
+                                    ForEach(Array(needsOK.enumerated()), id: \.element.id) { i, job in
+                                        ConfirmJobCard(job: job)
+                                            .transition(.asymmetric(
+                                                insertion: .move(edge: .top).combined(with: .opacity),
+                                                removal: .opacity.combined(with: .scale(scale: 0.96))))
+                                            .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)), value: session.jobs)
+                                    }
+                                }
                             }
                             if !handling.isEmpty {
                                 // Honest about WHY nothing is moving: with Chrome
                                 // shut there are no hands, and saying "Handling"
                                 // over a stalled queue is a small daily lie.
                                 sectionHeader(session.agentOnline ? "Handling" : "Waiting for your browser")
+                                    .padding(.top, Theme.Space.section)
+                                    .padding(.bottom, Theme.Space.tight)
                                 if !session.agentOnline {
                                     Text(session.agentPaired
                                          ? "Open Chrome and these pick up on their own."
                                          : "Link Chrome in Settings and these pick up on their own.")
-                                        .font(.caption)
-                                        .foregroundStyle(Theme.gray)
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.sand)
+                                        .padding(.bottom, Theme.Space.tight)
                                 }
-                                ForEach(handling) { HandlingCard(job: $0) }
+                                VStack(spacing: 0) {
+                                    ForEach(Array(handling.enumerated()), id: \.element.id) { i, job in
+                                        if i > 0 { Rectangle().fill(Theme.stroke).frame(height: 0.5) }
+                                        HandlingCard(job: job)
+                                            .transition(.asymmetric(
+                                                insertion: .move(edge: .top).combined(with: .opacity),
+                                                removal: .opacity.combined(with: .scale(scale: 0.96))))
+                                            .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)), value: session.jobs)
+                                    }
+                                }
                             }
                             if !session.transcript.isEmpty {
                                 sectionHeader("Heard")
-                                ForEach(session.transcript.suffix(30).reversed()) { TranscriptRow(line: $0) }
+                                    .padding(.top, Theme.Space.section)
+                                    .padding(.bottom, Theme.Space.tight)
+                                VStack(spacing: Theme.Space.card) {
+                                    ForEach(Array(session.transcript.suffix(30).reversed().enumerated()), id: \.element.id) { i, line in
+                                        TranscriptRow(line: line)
+                                            .transition(.asymmetric(
+                                                insertion: .move(edge: .top).combined(with: .opacity),
+                                                removal: .opacity))
+                                            .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)), value: session.transcript)
+                                    }
+                                }
                             }
                             if !finished.isEmpty {
                                 sectionHeader("Done")
-                                ForEach(finished.prefix(8)) { DoneCard(job: $0) }
+                                    .padding(.top, Theme.Space.section)
+                                    .padding(.bottom, Theme.Space.tight)
+                                VStack(spacing: 0) {
+                                    ForEach(Array(finished.prefix(8).enumerated()), id: \.element.id) { i, job in
+                                        if i > 0 { Rectangle().fill(Theme.stroke).frame(height: 0.5) }
+                                        DoneCard(job: job)
+                                            .transition(.asymmetric(
+                                                insertion: .move(edge: .top).combined(with: .opacity),
+                                                removal: .opacity))
+                                            .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)), value: session.jobs)
+                                    }
+                                }
                             }
                         }
+                        // Diagnostics belong at the foot, not as the opening
+                        // statement of the whole product.
+                        statusStrip.padding(.top, Theme.Space.wide)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 30)
-                    // New cards ease in instead of teleporting — the feed
-                    // should feel alive, not like a page reload.
-                    .animation(Theme.spring, value: session.jobs)
-                    .animation(Theme.spring, value: session.transcript)
                 }
                 .refreshable { await session.refresh() }
             }
@@ -158,7 +209,10 @@ struct HomeView: View {
                     .accessibilityLabel("Settings")
                 }
             }
-            .toolbarBackground(Theme.ink, for: .navigationBar)
+            // The single clearest "this is a real, current iOS app" signal
+            // available: content blurs as it passes under the header.
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             // If listening was on when the app closed or backgrounded, she
             // picks it back up herself — no button-press chore per open.
             .onAppear {
@@ -326,22 +380,44 @@ struct HomeView: View {
                         session.startListening()
                     }
                 } label: {
-                    Label(listenButtonLabel, systemImage: listenButtonIcon)
-                        .font(.callout.weight(.semibold))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(Capsule().fill(session.listener.isListening ? Theme.champagne : Theme.surface))
-                        .foregroundStyle(listenButtonTint)
+                    // The switch that turns the entire product on is the one
+                    // lit object on this screen — not a dim capsule smaller
+                    // than the button that approves one email.
+                    HStack(spacing: Theme.Space.snug) {
+                        if session.listener.isListening {
+                            BreathingDot(size: 10)
+                        } else {
+                            Image(systemName: listenButtonIcon)
+                                .font(.system(size: 18, weight: .medium))
+                        }
+                        Text(listenButtonLabel)
+                            .font(Theme.display(22))
+                            .tracking(-0.2)
+                    }
+                    .padding(.horizontal, Theme.Space.card)
+                    .frame(height: 60)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                            .fill(session.listener.isListening ? Theme.champagne : Theme.card)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                                    .strokeBorder(session.listener.isListening ? .clear : Theme.champagne.opacity(0.45),
+                                                  lineWidth: 1)
+                            )
+                    )
+                    .foregroundStyle(listenButtonTint)
                 }
                 .buttonStyle(.pressable)
                 // A tap that iOS will instantly refuse is worse than no
                 // button: it reads as the app being broken.
                 .disabled(micNeedsHelp)
                 .accessibilityHint(micNeedsHelp ? "Unavailable until the microphone is switched back on in Settings." : "")
-                if session.listener.isListening && !session.listener.suspended {
-                    ProgressView().tint(Theme.champagne)
-                }
                 Spacer()
+                // A listening app shows a waveform, never a spinner.
+                if session.listener.isListening && !session.listener.suspended {
+                    WaveBars()
+                }
             }
             // Honesty over pretense: when iOS takes the mic (call, Siri,
             // route change), say so while recovery runs — never glow
@@ -370,34 +446,21 @@ struct HomeView: View {
             if session.listener.isListening && !session.sessionLines.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(session.sessionLines.suffix(4)) { line in
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: line.received ? "checkmark.circle.fill" : "circle.dotted")
-                                .font(.caption)
-                                .foregroundStyle(line.received ? Theme.champagne : Theme.gray)
-                                .padding(.top, 2)
-                                .accessibilityHidden(true)
-                            Text(line.text)
-                                .font(.footnote)
-                                .foregroundStyle(Theme.sand)
-                            if line.decision == "act" {
-                                Image(systemName: "bolt.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(Theme.champagne)
-                                    .padding(.top, 2)
-                                    .accessibilityLabel("I'm acting on this")
-                            }
-                            Spacer(minLength: 0)
-                        }
+                        SessionLineRow(line: line)
                     }
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface.opacity(0.6)))
+                .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface.opacity(0.6)))
             }
+            // Your own voice becoming text is the demo — it renders big,
+            // above the settled record, never as fine print below it.
             if !session.listener.partial.isEmpty {
                 Text(session.listener.partial)
-                    .font(.footnote)
-                    .foregroundStyle(Theme.gray)
-                    .italic()
+                    .font(.system(size: 20))
+                    .lineSpacing(3)
+                    .foregroundStyle(Theme.ivory.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
             }
             HStack(spacing: 8) {
                 TextField("Or tell Anticipy something…", text: $typedLine)
@@ -432,7 +495,7 @@ struct HomeView: View {
 
     private var listenButtonTint: Color {
         if micNeedsHelp { return Theme.gray }
-        return session.listener.isListening ? Theme.ink : Theme.sand
+        return session.listener.isListening ? Theme.ink : Theme.ivory
     }
 
     private func submitTyped() {
@@ -446,12 +509,14 @@ struct HomeView: View {
     /// Anticipy speaks first: a first-person briefing of what she heard and
     /// what she's handling, rebuilt live from the real job queue.
     private var anticipyCardView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                LogoMark(size: 22)
-                    .accessibilityHidden(true)
-                Text("Anticipy")
-                    .font(Theme.display(18))
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
+            // She OPENS with "Evening." in serif — the nav bar two inches
+            // above already says Anticipy, so the wordmark row is gone and
+            // the greeting takes the headline slot.
+            HStack(spacing: Theme.Space.tight) {
+                Text(greeting)
+                    .font(Theme.display(30))
+                    .tracking(-0.5)
                     .foregroundStyle(Theme.champagne)
                 // Breathing means "she is doing something right now". A
                 // connected pendant is not that: it captures nothing.
@@ -461,14 +526,19 @@ struct HomeView: View {
             }
             briefingView
             if let says = session.freshAnticipySays {
+                Rectangle()
+                    .fill(Theme.champagne.opacity(0.14))
+                    .frame(height: 1)
+                    .padding(.vertical, Theme.Space.snug)
                 Text(says)
-                    .font(.footnote)
+                    .font(.system(size: 15))
+                    .lineSpacing(2)
                     .foregroundStyle(Theme.sand)
-                    .padding(.top, 2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .anticipyCard()
+        .cardSurface(elevated: true)
+        .background(Theme.bloom(0.10, radius: 300))
     }
 
     /// She types her opening line ONCE.
@@ -482,12 +552,13 @@ struct HomeView: View {
         Group {
             if briefingTyped {
                 Text(briefingText)
-                    .font(.callout)
+                    .font(.system(size: 17))
+                    .lineSpacing(3)
                     .foregroundStyle(Theme.ivory)
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(Theme.spring, value: briefingText)
             } else {
-                TypewriterText(text: briefingShown, font: .callout, color: Theme.ivory, speed: 45) {
+                TypewriterText(text: briefingShown) {
                     briefingTyped = true
                 }
             }
@@ -498,7 +569,7 @@ struct HomeView: View {
     }
 
     private var briefingText: String {
-        var parts: [String] = [greeting]
+        var parts: [String] = []
         // Only the phone mic actually hears anything today.
         if session.listener.isListening {
             parts.append("I'm listening.")
@@ -547,11 +618,31 @@ struct HomeView: View {
             : "I'm not listening yet — tap Listen with phone and I'll start picking things up."
     }
 
+    /// Chronology sections — a tracked uppercase micro-label beside the
+    /// serif is an editorial move: it gives the big type something to be
+    /// big against.
     private func sectionHeader(_ text: String) -> some View {
-        Text(text)
-            .font(Theme.display(21))
-            .foregroundStyle(Theme.ivory)
-            .padding(.top, 4)
+        Text(text.uppercased())
+            .font(.system(size: 12, weight: .semibold))
+            .tracking(1.2)
+            .foregroundStyle(Theme.gray)
+    }
+
+    /// The one section that demands an action gets the display register and
+    /// a count.
+    private var needsOKHeader: some View {
+        HStack(spacing: Theme.Space.tight) {
+            Text("Needs your OK")
+                .font(Theme.display(22))
+                .tracking(-0.2)
+                .foregroundStyle(Theme.ivory)
+            Text("\(needsOK.count)")
+                .font(.system(size: 12, weight: .bold))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Theme.champagne))
+                .foregroundStyle(Theme.ink)
+        }
     }
 
     // MARK: - The four empty screens
@@ -560,20 +651,20 @@ struct HomeView: View {
     /// the window in which the app used to paint the finished empty state.
     private var loadingState: some View {
         VStack(spacing: 14) {
-            ProgressView()
-                .tint(Theme.champagne)
-                .scaleEffect(1.3)
-                .padding(.top, 70)
+            BreathingDot(size: 10)
+                .padding(.top, Theme.Space.hero)
                 .padding(.bottom, 4)
             Text("One moment.")
-                .font(Theme.display(26))
+                .font(Theme.display(30))
+                .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
             Text("I'm catching up on your day. This takes a second.")
-                .font(.callout)
-                .foregroundStyle(Theme.gray)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.sand)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
+                .frame(maxWidth: 300)
             retryButton("Check again")
         }
         .frame(maxWidth: .infinity)
@@ -585,18 +676,20 @@ struct HomeView: View {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 34))
                 .foregroundStyle(Theme.champagne)
-                .padding(.top, 70)
+                .padding(.top, Theme.Space.hero)
                 .accessibilityHidden(true)
             Text("I can't reach my side.")
-                .font(Theme.display(26))
+                .font(Theme.display(30))
+                .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
                 .multilineTextAlignment(.center)
             Text(offlineBody)
-                .font(.callout)
-                .foregroundStyle(Theme.gray)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.sand)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
+                .frame(maxWidth: 300)
             retryButton("Try again")
         }
         .frame(maxWidth: .infinity)
@@ -615,21 +708,23 @@ struct HomeView: View {
             Image(systemName: "lock")
                 .font(.system(size: 34))
                 .foregroundStyle(Theme.champagne)
-                .padding(.top, 70)
+                .padding(.top, Theme.Space.hero)
                 .accessibilityHidden(true)
             Text("Anticipy won't let me in.")
-                .font(Theme.display(26))
+                .font(Theme.display(30))
+                .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
                 .multilineTextAlignment(.center)
             Text("I reached my server and it turned me away. I'm sorting my own key out — this should clear itself in a moment.")
-                .font(.callout)
-                .foregroundStyle(Theme.gray)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.sand)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
+                .frame(maxWidth: 300)
             Text("Error \(status)")
-                .font(.caption2)
-                .foregroundStyle(Theme.stroke)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.gray)
             retryButton("Try again")
         }
         .frame(maxWidth: .infinity)
@@ -637,23 +732,72 @@ struct HomeView: View {
 
     /// The finished, confident screen. It is only ever allowed to appear over
     /// a read that actually succeeded and came back with nothing.
+    /// Day one: the ghost of tomorrow — a living manifest of what she is
+    /// listening for, and the real components showing what a catch will look
+    /// like. No "Check again": this branch is only reachable when the read
+    /// SUCCEEDED, and offering a retry tells a first-timer something broke.
     private var emptyState: some View {
         VStack(spacing: 16) {
-            LogoMark(size: 72)
-                .padding(.top, 70)
-                .accessibilityHidden(true)
-            Text("Live your day.")
-                .font(Theme.display(28))
+            ZStack {
+                Theme.bloom(0.14, radius: 260)
+                LogoMark(size: 96)
+            }
+            .frame(height: 120)
+            .padding(.top, Theme.Space.wide)
+            .accessibilityHidden(true)
+            Text(greeting)
+                .font(Theme.display(40))
+                .tracking(-1.0)
                 .foregroundStyle(Theme.ivory)
-            Text("Anticipy listens, understands, and handles the follow-through — asking before anything is sent.")
-                .font(.callout)
-                .foregroundStyle(Theme.gray)
+            Text("Live your day. I listen, I understand, and I handle the follow-through — asking before anything is sent.")
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.sand)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 24)
-            retryButton("Check again")
+                .frame(maxWidth: 300)
+            // Motion is the only thing that distinguishes WAITING from
+            // BROKEN: three dots pulsing in sequence beside what she's
+            // listening for.
+            VStack(alignment: .leading, spacing: Theme.Space.snug) {
+                manifestRow("things you say you'll do", delay: 0)
+                manifestRow("names and dates you mention", delay: 0.53)
+                manifestRow("anything that needs a reply", delay: 1.07)
+            }
+            .padding(.top, Theme.Space.tight)
+            Rectangle().fill(Theme.stroke).frame(height: 0.5)
+                .padding(.vertical, Theme.Space.snug)
+            Text("WHEN I CATCH SOMETHING, IT LOOKS LIKE THIS")
+                .font(.system(size: 12, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Theme.gray)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            // The REAL components, fed fixtures — using the actual views
+            // guarantees the promise matches the delivery.
+            VStack(spacing: Theme.Space.snug) {
+                TranscriptRow(line: AnticipySession.TranscriptLine(
+                    id: "demo-1",
+                    text: "I'll get that invoice over to you tonight",
+                    decision: "act"))
+                ConfirmJobCard(job: AgentJob(
+                    id: "demo-2", goal: "Draft the invoice email to Devon",
+                    params: "", status: "awaiting_confirm", result: nil, created: ""))
+            }
+            .opacity(0.42)
+            .blur(radius: 0.4)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func manifestRow(_ text: String, delay: Double) -> some View {
+        HStack(spacing: Theme.Space.snug) {
+            PulseDot(delay: delay)
+            Text(text)
+                .font(.system(size: 17))
+                .foregroundStyle(Theme.sand)
+        }
     }
 
     /// Pull-to-refresh has always been here and nobody has ever found it.
@@ -744,7 +888,7 @@ struct ConfirmJobCard: View {
                     Group {
                         if sending {
                             HStack(spacing: 8) {
-                                ProgressView().tint(Theme.ink)
+                                BreathingDot(size: 6)
                                 Text("Sending…")
                             }
                         } else {
@@ -760,6 +904,7 @@ struct ConfirmJobCard: View {
                 .buttonStyle(.pressable)
                 .disabled(sending)
                 Button {
+                    Haptics.tap()
                     Task { await session.decline(job) }
                 } label: {
                     Text("Not now")
@@ -779,14 +924,58 @@ struct ConfirmJobCard: View {
     }
 }
 
-/// A job the agent is working on right now.
+/// One line spoken in the current Listen session. Its own view so the
+/// checkmark can spring and the hand can feel the promise being kept —
+/// the moment "heard on the phone" becomes "held by her brain".
+struct SessionLineRow: View {
+    let line: AnticipySession.SessionLine
+    @State private var celebrated = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: line.received ? "checkmark.circle.fill" : "circle.dotted")
+                .font(.caption)
+                .foregroundStyle(line.received ? Theme.champagne : Theme.gray)
+                .scaleEffect(line.received ? 1.0 : 0.9)
+                .animation(Theme.springJoy, value: line.received)
+                .padding(.top, 2)
+                .accessibilityHidden(true)
+            Text(line.text)
+                .font(.footnote)
+                .foregroundStyle(Theme.sand)
+            if line.decision == "act" {
+                Image(systemName: "bolt.fill")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.champagne)
+                    .padding(.top, 2)
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    .accessibilityLabel("I'm acting on this")
+            }
+            Spacer(minLength: 0)
+        }
+        .animation(Theme.springJoy, value: line.decision)
+        .onChange(of: line.received) { received in
+            if received { Haptics.herMessage() }
+        }
+        .onChange(of: line.decision) { decision in
+            // Guarded so the 3s poll can't re-fire the celebration.
+            if decision == "act", !celebrated {
+                celebrated = true
+                Haptics.taskDone()
+            }
+        }
+    }
+}
+
+/// A job the agent is working on right now. A row on the ink, not a card —
+/// with real data the feed was 30 identical rectangles.
 struct HandlingCard: View {
     let job: AgentJob
 
     var body: some View {
         HStack(spacing: 12) {
             if job.status == "running" {
-                ProgressView().tint(Theme.champagne)
+                BreathingDot(size: 8)
             } else {
                 Image(systemName: "hourglass")
                     .foregroundStyle(Theme.gray)
@@ -794,16 +983,17 @@ struct HandlingCard: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(job.status == "running" ? "I'm handling it" : "Queued for your browser")
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.champagne)
                 Text(job.humanGoal)
-                    .font(.callout)
+                    .font(.system(size: 17))
+                    .lineSpacing(3)
                     .foregroundStyle(Theme.ivory)
             }
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .anticipyCard()
+        .padding(.vertical, Theme.Space.base)
     }
 }
 
@@ -858,7 +1048,7 @@ struct DoneCard: View {
                             Group {
                                 if retrying {
                                     HStack(spacing: 8) {
-                                        ProgressView().tint(Theme.ink)
+                                        BreathingDot(size: 6)
                                         Text("Queueing…")
                                     }
                                 } else {
@@ -907,7 +1097,7 @@ struct DoneCard: View {
                                 .textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .padding(10)
-                                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
+                                .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
                         }
                     }
                 }
@@ -915,7 +1105,7 @@ struct DoneCard: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .anticipyCard()
+        .padding(.vertical, Theme.Space.base)
     }
 }
 
@@ -928,10 +1118,22 @@ struct TranscriptRow: View {
 
     private var local: Bool { line.id.hasPrefix("local-") }
 
+    /// The instant the product becomes real — a line flipping to "act" —
+    /// arrives on the joy spring, once.
+    @State private var celebrated = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        // Speech looks like speech: a champagne rule at the edge, her words
+        // at voice size, no container.
+        HStack(alignment: .top, spacing: 12) {
+            Capsule()
+                .fill(Theme.champagne.opacity(line.decision == "act" && celebrated ? 1.0 : 0.35))
+                .frame(width: 2)
+                .animation(Theme.spring, value: celebrated)
+            VStack(alignment: .leading, spacing: 5) {
             Text(line.text)
-                .font(.callout)
+                .font(.system(size: 17))
+                .lineSpacing(3)
                 .foregroundStyle(Theme.ivory)
             switch line.decision {
             case "act":
@@ -939,8 +1141,9 @@ struct TranscriptRow: View {
                     Image(systemName: "bolt.fill").accessibilityHidden(true)
                     Text("On it")
                 }
-                .font(.caption.weight(.medium))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.champagne)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
             case "ask":
                 HStack(spacing: 5) {
                     Image(systemName: "questionmark.circle").accessibilityHidden(true)
@@ -981,9 +1184,19 @@ struct TranscriptRow: View {
                         .foregroundStyle(Theme.gray)
                 }
             }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .anticipyCard()
+        .animation(Theme.springJoy, value: line.decision)
+        .onChange(of: line.decision) { decision in
+            guard decision == "act", !celebrated else { return }
+            celebrated = true
+            Haptics.taskDone()
+            // The rule flashes to full for a moment, then settles.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                withAnimation(Theme.spring) { celebrated = false }
+            }
+        }
         .task(id: line.id) {
             waitedTooLong = false
             guard line.decision == nil else { return }

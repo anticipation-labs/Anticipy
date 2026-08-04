@@ -43,6 +43,10 @@ struct OnboardingView: View {
         static let count = 5
     }
 
+    /// The last four seconds of the flow — the peak-end moment — used to be a
+    /// Bool flipping. This holds the celebration scene while she says goodbye.
+    @State private var finishing = false
+
     var body: some View {
         ZStack {
             Theme.ink.ignoresSafeArea()
@@ -56,18 +60,54 @@ struct OnboardingView: View {
                     browserAgent.tag(Step.browser)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut, value: step)
+                .animation(Theme.springSlow, value: step)
                 footer
             }
+            if finishing { finale }
         }
+        .grainOverlay()
         // Leaving the number step by ANY route — Continue, Skip, or a swipe —
         // saves it. A swipe used to throw a perfectly good number away on a
         // perfect connection, silently.
         .onChange(of: step) { newStep in
+            Haptics.pageTurn()
             let previous = lastStep
             lastStep = newStep
             guard previous == Step.phone, newStep != Step.phone else { return }
             savePhoneOnLeaving()
+        }
+    }
+
+    /// The ending someone will describe to a friend: the mark, two rings
+    /// collapsing inward, a rising bloom, two haptics, one typed sentence,
+    /// and a dissolve into Home.
+    private var finale: some View {
+        ZStack {
+            Theme.ink.ignoresSafeArea()
+            Theme.bloom(0.24, radius: 300)
+            VStack(spacing: Theme.Space.roomy) {
+                ZStack {
+                    RadarRipple(inward: true)
+                    RadarRipple(inward: true, delay: 0.8)
+                    LogoMark(size: 132)
+                }
+                .frame(height: 190)
+                TypewriterText(text: "Give me a day. You'll see.",
+                               font: Theme.display(30),
+                               color: Theme.ivory) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_400_000_000)
+                        hasOnboarded = true
+                    }
+                }
+                .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 28)
+        }
+        .transition(.opacity)
+        .onAppear {
+            Haptics.pairing()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { Haptics.taskDone() }
         }
     }
 
@@ -80,10 +120,14 @@ struct OnboardingView: View {
                     // endless. Theme.gray is 5.6:1 and quiet.
                     .fill(i <= step ? Theme.champagne : Theme.gray)
                     .frame(width: i == step ? 22 : 8, height: 6)
-                    .animation(.spring(duration: 0.3), value: step)
+                    .animation(Theme.spring, value: step)
             }
         }
         .padding(.top, 18)
+        // Let the product introduce itself before it starts counting — the
+        // dots turned her introduction into step 1 of 5 of a wizard.
+        .opacity(step == Step.welcome ? 0 : 1)
+        .animation(Theme.springSlow, value: step)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(step + 1) of \(Step.count)")
     }
@@ -120,6 +164,9 @@ struct OnboardingView: View {
                 Task { await advance() }
             } label: {
                 Text(primaryLabel)
+                    .id(primaryLabel)
+                    .transition(.opacity)
+                    .animation(Theme.spring, value: primaryLabel)
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 26)
                     .padding(.vertical, 14)
@@ -143,6 +190,11 @@ struct OnboardingView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.pressable)
+            } else {
+                // The one control that must be the same object on every page
+                // was the one thing that moved: reserve the skip row's height
+                // so the primary capsule never jumps 44pt on a page turn.
+                Color.clear.frame(height: 44)
             }
         }
         .padding(.horizontal, 28)
@@ -154,9 +206,12 @@ struct OnboardingView: View {
         Haptics.engage()
 
         // The affirmative tap. iOS is never asked for the microphone until
-        // someone has read what it's for and said yes here.
+        // someone has read what it's for and said yes here — and she gets one
+        // typed line in before the system alerts appear.
         if step == Step.mic, !micAsked, !session.micBlocked, !session.listener.isListening {
             micAsked = true
+            withAnimation(Theme.spring) { micPriming = true }
+            try? await Task.sleep(nanoseconds: 500_000_000)
             session.startListening()
             return
         }
@@ -178,8 +233,7 @@ struct OnboardingView: View {
         if step < Step.count - 1 {
             withAnimation(Theme.spring) { step += 1 }
         } else {
-            Haptics.success()
-            hasOnboarded = true
+            withAnimation(Theme.springSlow) { finishing = true }
         }
     }
 
@@ -229,35 +283,50 @@ struct OnboardingView: View {
 
     @State private var welcomeStage = 0
 
+    private static let welcomeLine =
+        "I'm Anticipy. I listen, I remember what matters, and I quietly do the work."
+
     private var welcome: some View {
         stepBody(spacing: 22) {
-            LogoMark(size: 120)
-                .scaleEffect(welcomeStage >= 1 ? 1 : 0.6)
-                .opacity(welcomeStage >= 1 ? 1 : 0)
-                .accessibilityHidden(true)
+            ZStack {
+                Theme.bloom(0.12, radius: 300)
+                LogoMark(size: 120)
+                    .scaleEffect(welcomeStage >= 1 ? 1 : 0.6)
+                    .opacity(welcomeStage >= 1 ? 1 : 0)
+                    .accessibilityHidden(true)
+            }
+            .frame(height: 130)
             Text("Anticipy")
-                .font(Theme.display(44))
+                .font(Theme.display(40))
+                .tracking(-1.0)
                 .foregroundStyle(Theme.ivory)
                 .opacity(welcomeStage >= 2 ? 1 : 0)
                 .offset(y: welcomeStage >= 2 ? 0 : 10)
-            if welcomeStage >= 3 {
-                TypewriterText(
-                    text: "I'm Anticipy. I listen, I remember what matters, and I quietly do the work.",
-                    font: .body
-                )
+            // The real string, invisible, reserves the full height — so the
+            // logo and wordmark hold perfectly still while she types instead
+            // of creeping upward for the entire first sentence.
+            Text(Self.welcomeLine)
+                .font(.system(size: 17))
+                .lineSpacing(3)
                 .multilineTextAlignment(.center)
-                .frame(minHeight: 44, alignment: .top)
-            } else {
-                Color.clear.frame(height: 44)
-            }
+                .opacity(0)
+                .overlay(alignment: .topLeading) {
+                    if welcomeStage >= 3 {
+                        TypewriterText(text: Self.welcomeLine)
+                            .lineSpacing(3)
+                            .multilineTextAlignment(.center)
+                    }
+                }
         }
         .task {
             guard welcomeStage == 0 else { return }
             withAnimation(Theme.springSlow) { welcomeStage = 1 }
             Haptics.herMessage()
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            // Both beats sit inside the 400ms Doherty window — outside it the
+            // intro reads as the app thinking.
+            try? await Task.sleep(nanoseconds: 320_000_000)
             withAnimation(Theme.spring) { welcomeStage = 2 }
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(nanoseconds: 260_000_000)
             welcomeStage = 3
         }
     }
@@ -269,7 +338,8 @@ struct OnboardingView: View {
     private var howItWorks: some View {
         stepBody(alignment: .leading) {
             Text("How it works")
-                .font(Theme.display(32))
+                .font(Theme.display(30))
+                .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
             // Phone-first. The pendant used to be described as the thing that
             // hears you, in an app whose microphone is the phone's.
@@ -286,15 +356,17 @@ struct OnboardingView: View {
                 .opacity(cardsShown >= 3 ? 1 : 0)
                 .offset(y: cardsShown >= 3 ? 0 : 14)
             Text("If you ever have an Anticipy pendant, you can pair it in Settings. You don't need one — your phone is enough.")
-                .font(.footnote)
-                .foregroundStyle(Theme.gray)
+                .font(.system(size: 15))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.sand)
                 .opacity(cardsShown >= 3 ? 1 : 0)
         }
         .task(id: step) {
             guard step == Step.howItWorks, cardsShown == 0 else { return }
             for i in 1 ... 3 {
                 withAnimation(Theme.spring) { cardsShown = i }
-                try? await Task.sleep(nanoseconds: 110_000_000)
+                // 210ms total: still legible as a cascade, no longer a wait.
+                try? await Task.sleep(nanoseconds: 70_000_000)
             }
         }
     }
@@ -310,25 +382,52 @@ struct OnboardingView: View {
 
     private var keepsAudioOnDevice: Bool { Self.keepsAudioOnDevice }
 
+    /// One typed line before the OS alerts, so the app conducts the
+    /// permission moment instead of being ambushed by iOS mid-sentence.
+    @State private var micPriming = false
+
     private var micPrimer: some View {
         stepBody(alignment: .leading, spacing: 16) {
+            // The thing the page is about, sitting above the promises: the
+            // mark over a bloom, dim until permission lands.
+            ZStack {
+                Theme.bloom(0.14, radius: 260)
+                LogoMark(size: 88)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 110)
+            .opacity(session.listener.isListening ? 1.0 : 0.35)
+            .animation(Theme.springJoy, value: session.listener.isListening)
+
             Text("May I listen?")
-                .font(Theme.display(32))
+                .font(Theme.display(30))
+                .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
             Text("This is the whole product, so here's exactly what happens.")
-                .font(.callout)
-                .foregroundStyle(Theme.sand)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.ivory)
 
-            stepCard(icon: "waveform", title: "What's said near your phone becomes text",
-                     text: "You, and the people talking with you. That's how I catch what you've promised and what you need.")
-            stepCard(icon: "clock", title: "I keep going in the background",
-                     text: "Your phone can be in your pocket or on another app. I stay on until you stop me.")
-            stepCard(icon: "lock", title: keepsAudioOnDevice ? "The audio stays on this iPhone" : "This iPhone needs Apple to do the transcribing",
-                     text: keepsAudioOnDevice
-                        ? "Only the text comes to me, because text is what I can act on."
-                        : "So the audio goes to Apple, not to me. The text comes to me, because text is what I can act on.")
-            stepCard(icon: "hand.raised", title: "You decide when I'm on",
-                     text: "I'm off until you tap. There's a switch on the home screen, and off means off.")
+            // Four promises as a rule list — speech-shaped, not form-shaped.
+            // Four evenly spaced symbol-and-card rows is the most
+            // recognisable AI-built layout there is, and this is where
+            // someone decides whether to hand over their microphone.
+            promiseRule(title: "What's said near your phone becomes text",
+                        text: "You, and the people talking with you. That's how I catch what you've promised and what you need.")
+            promiseRule(title: "I keep going in the background",
+                        text: "Your phone can be in your pocket or on another app. I stay on until you stop me.")
+            promiseRule(title: keepsAudioOnDevice ? "The audio stays on this iPhone" : "This iPhone needs Apple to do the transcribing",
+                        text: keepsAudioOnDevice
+                           ? "Only the text comes to me, because text is what I can act on."
+                           : "So the audio goes to Apple, not to me. The text comes to me, because text is what I can act on.")
+            promiseRule(title: "You decide when I'm on",
+                        text: "I'm off until you tap. There's a switch on the home screen, and off means off.")
+
+            if micPriming {
+                TypewriterText(text: "Two taps from iOS. Both of them are me.",
+                               font: .system(size: 15), color: Theme.sand)
+                    .transition(.opacity)
+            }
 
             if session.listener.isListening {
                 HStack(spacing: 8) {
@@ -356,13 +455,36 @@ struct OnboardingView: View {
                     .buttonStyle(.pressable)
                 }
                 .anticipyCard()
-            } else {
+            } else if !micPriming {
                 Text("When you say yes, iOS asks twice — once for speech, once for the microphone. Both are me.")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.gray)
+                    .font(.system(size: 15))
+                    .lineSpacing(2)
+                    .foregroundStyle(Theme.sand)
             }
         }
         .animation(Theme.spring, value: session.listener.isListening)
+    }
+
+    /// The rule-list register: a champagne edge, a title, her sentence.
+    /// No fill, no border, no icon column.
+    private func promiseRule(title: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Capsule()
+                .fill(Theme.champagne.opacity(0.35))
+                .frame(width: 2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Theme.ivory)
+                Text(text)
+                    .font(.system(size: 17))
+                    .lineSpacing(3)
+                    .foregroundStyle(Theme.sand)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, Theme.Space.hair)
     }
 
     // MARK: - Your number
@@ -371,17 +493,17 @@ struct OnboardingView: View {
     /// can hear and prepare but can never reach you.
     private var yourNumber: some View {
         stepBody(spacing: 18) {
-            Image(systemName: "message")
-                .font(.system(size: 54))
-                .foregroundStyle(Theme.champagne)
+            LogoMark(size: 72)
                 .accessibilityHidden(true)
             Text("Where should I reach you?")
-                .font(Theme.display(28))
+                .font(Theme.display(30))
+                .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
                 .multilineTextAlignment(.center)
             Text("When something needs your word, I'll text you here. Nothing else uses it.")
-                .font(.callout)
-                .foregroundStyle(Theme.gray)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.sand)
                 .multilineTextAlignment(.center)
             TextField("+1 604 555 0123", text: $phone)
                 .keyboardType(.phonePad)
@@ -390,8 +512,16 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.ivory)
                 .multilineTextAlignment(.center)
                 .padding(.vertical, 12)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
                 .padding(.horizontal, 12)
+                .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                        .strokeBorder(session.e164(phone) != nil ? Theme.champagne : Theme.stroke,
+                                      lineWidth: session.e164(phone) != nil ? 1.5 : 1)
+                        .animation(Theme.spring, value: session.e164(phone) != nil)
+                )
+                // Already told us at the door? Confirm, don't re-interrogate.
+                .task { if phone.isEmpty { phone = session.ownerPhone } }
                 .onChange(of: phone) { _ in
                     phoneSaved = false
                     phoneSaveFailed = false
@@ -408,7 +538,7 @@ struct OnboardingView: View {
                     .onAppear { Haptics.tap() }
             } else if !phone.isEmpty {
                 Text("That doesn't look like a full number yet.")
-                    .font(.caption)
+                    .font(.system(size: 15))
                     .foregroundStyle(Theme.gray)
             }
             if phoneSaveFailed {
@@ -440,16 +570,19 @@ struct OnboardingView: View {
     private var browserAgent: some View {
         stepBody(alignment: .leading, spacing: 16) {
             Text("Your hands on\nthe computer")
-                .font(Theme.display(32))
+                .font(Theme.display(30))
+                .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
             Text("I work inside your own Chrome, using the accounts you're already signed in to. I never ask for a password.")
-                .font(.callout)
-                .foregroundStyle(Theme.sand)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.ivory)
             // The truth. This used to say Chrome "walks you through it", which
             // set someone up for a developer sideload with no warning.
             Text("It takes about two minutes, it has to happen on a computer, and there's one Chrome setting to flip. The guide shows you where.")
-                .font(.footnote)
-                .foregroundStyle(Theme.gray)
+                .font(.system(size: 15))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.sand)
 
             numbered(1, "On your computer, open the guide I send you")
             numbered(2, "Follow it — you'll turn on one Chrome setting to add me")
@@ -467,43 +600,51 @@ struct OnboardingView: View {
             }
 
             if session.agentPaired {
-                HStack(spacing: 8) {
-                    BreathingDot(size: 8)
-                    Text("Paired — your browser is mine now.")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.sand)
+                // Two devices finding each other is the one genuinely magical
+                // thing in this flow — it takes over the step instead of
+                // rendering smaller than the instructions above it.
+                VStack(spacing: Theme.Space.base) {
+                    ZStack {
+                        Theme.bloom(0.18, radius: 220)
+                        RadarRipple(inward: true)
+                        RadarRipple(inward: true, delay: 0.8)
+                        LogoMark(size: 104)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 170)
+                    TypewriterText(text: "Your browser is mine now. In a good way.",
+                                   font: .system(size: 17), color: Theme.ivory)
+                        .multilineTextAlignment(.center)
                 }
+                .anticipyCard()
                 .padding(.top, 4)
-                .transition(.scale.combined(with: .opacity))
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
                 .onAppear { Haptics.pairing() }
             } else {
-                HStack(spacing: 10) {
-                    TextField("6-digit code", text: $agentCode)
-                        .keyboardType(.numberPad)
-                        .font(.title3.monospaced())
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
-                        .foregroundStyle(Theme.ivory)
-                        // The red line used to stay on screen while they
-                        // retyped. Clear it the moment the code changes.
-                        .onChange(of: agentCode) { _ in
-                            if pairOutcome != nil {
-                                withAnimation(Theme.spring) { pairOutcome = nil }
-                            }
+                // The six-digit code is a ceremony, not a form: six boxes, a
+                // hidden field, and it pairs itself on the sixth digit.
+                codeBoxes
+                    .padding(.top, 4)
+                    // The red line used to stay on screen while they retyped.
+                    // Clear it the moment the code changes.
+                    .onChange(of: agentCode) { code in
+                        if pairOutcome != nil {
+                            withAnimation(Theme.spring) { pairOutcome = nil }
                         }
-                    Button(pairing ? "…" : "Pair") { pair() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(agentCode.count != 6 || pairing)
-                }
-                .padding(.top, 4)
+                        if code.count > 6 { agentCode = String(code.prefix(6)) }
+                        if agentCode.count == 6 { pair() }
+                        else if !code.isEmpty { Haptics.tap() }
+                    }
 
                 // A blip, a plane or hotel wifi used to be reported as a wrong
                 // code — so people retyped a code that was right all along.
                 switch pairOutcome {
                 case .noMatch:
                     Text("That code didn't match. It's the six digits on the Anticipy page in Chrome.")
-                        .font(.footnote)
-                        .foregroundStyle(.red)
+                        .font(.system(size: 15))
+                        .lineSpacing(2)
+                        .foregroundStyle(Theme.alarm)
+                        .onAppear { Haptics.warning() }
                 case .unreachable:
                     VStack(alignment: .leading, spacing: 10) {
                         Text("I can't reach Anticipy right now, so I couldn't check that code. It's probably the connection, not you.")
@@ -539,6 +680,48 @@ struct OnboardingView: View {
             pairing = false
             withAnimation(Theme.spring) { pairOutcome = outcome }
         }
+    }
+
+    @FocusState private var codeFocused: Bool
+
+    private var codeBoxes: some View {
+        ZStack {
+            // One hidden field holds the string; the boxes are the display.
+            TextField("", text: $agentCode)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .focused($codeFocused)
+                .opacity(0.02)
+                .frame(width: 1, height: 1)
+            HStack(spacing: Theme.Space.tight) {
+                ForEach(0 ..< 6, id: \.self) { i in
+                    let digits = Array(agentCode)
+                    let active = i == min(agentCode.count, 5) && !pairing
+                    Text(i < digits.count ? String(digits[i]) : "")
+                        .font(.system(size: 24, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Theme.ivory)
+                        .frame(width: 44, height: 54)
+                        .background(
+                            RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                                .fill(Theme.surface)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                                .strokeBorder(active ? Theme.champagne : Theme.stroke,
+                                              lineWidth: active ? 1.5 : 1)
+                        )
+                        .scaleEffect(active ? 1.06 : 1)
+                        .animation(Theme.spring, value: agentCode)
+                }
+                if pairing {
+                    BreathingDot(size: 8)
+                        .padding(.leading, Theme.Space.hair)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { codeFocused = true }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func numbered(_ n: Int, _ text: String) -> some View {
@@ -578,6 +761,9 @@ struct OnboardingView: View {
 /// ring is exactly what Reduce Motion exists to stop, so with it on the ring
 /// simply sits there.
 struct RadarRipple: View {
+    /// Scanning expands outward; arrival collapses inward.
+    var inward = false
+    var delay: Double = 0
     @State private var expand = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -585,10 +771,13 @@ struct RadarRipple: View {
         Circle()
             .stroke(Theme.champagne.opacity(0.5), lineWidth: 2)
             .frame(width: 130, height: 130)
-            .scaleEffect(expand ? 1.45 : 1.0)
+            .scaleEffect(expand ? (inward ? 1.0 : 1.45) : (inward ? 1.45 : 1.0))
             .opacity(expand ? 0 : 0.8)
             .animation(
-                reduceMotion ? .default : .easeOut(duration: 1.6).repeatForever(autoreverses: false),
+                reduceMotion ? .default
+                    // 3.2s: twice the app's 1.6s ambient harmonic, so the
+                    // ring and the breathing dot move as one organism.
+                    : .easeOut(duration: 3.2).repeatForever(autoreverses: false).delay(delay),
                 value: expand
             )
             .onAppear { if !reduceMotion { expand = true } }

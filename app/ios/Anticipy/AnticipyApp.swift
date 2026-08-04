@@ -14,12 +14,18 @@ struct AnticipyApp: App {
                     // The door comes first. Everything past it belongs to a
                     // person; nothing before it does.
                     AuthView()
+                        .transition(.opacity)
                 } else if hasOnboarded {
                     HomeView()
+                        .transition(.opacity)
                 } else {
                     OnboardingView()
+                        .transition(.opacity)
                 }
             }
+            // The three biggest state changes in the product used to hard-cut.
+            .animation(Theme.springSlow, value: session.isSignedIn)
+            .animation(Theme.springSlow, value: hasOnboarded)
             .environmentObject(pendant)
             .environmentObject(session)
             .preferredColorScheme(.dark)

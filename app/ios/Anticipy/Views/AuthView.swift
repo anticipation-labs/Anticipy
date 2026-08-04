@@ -27,10 +27,9 @@ struct AuthView: View {
     var body: some View {
         ZStack {
             Theme.ink.ignoresSafeArea()
-            // A single soft champagne bloom behind her name — the one piece of
-            // depth on the screen, so the eye lands in the right place.
-            RadialGradient(colors: [Theme.champagne.opacity(0.16), .clear],
-                           center: .top, startRadius: 4, endRadius: 420)
+            Grain.image
+                .opacity(0.035)
+                .blendMode(.plusLighter)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
@@ -38,12 +37,20 @@ struct AuthView: View {
                 VStack(alignment: .leading, spacing: 26) {
                     header
                     fields
+                    // A failure painted in the success colour reads correct
+                    // at a glance and wrong on reading. Sand, in a card, with
+                    // no SF Symbol — a sentence, not an alert.
                     if let problem {
-                        Label(problem, systemImage: "exclamationmark.circle")
-                            .font(.callout)
-                            .foregroundStyle(Theme.champagne)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(problem)
+                                .font(.system(size: 17))
+                                .lineSpacing(3)
+                                .foregroundStyle(Theme.sand)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .anticipyCard()
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     if let note {
                         Text(note)
@@ -64,23 +71,49 @@ struct AuthView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+        // A failure is felt, not just read.
+        .onChange(of: problem) { p in
+            if p != nil { Haptics.warning() }
+        }
+        .task {
+            // A returning person's email is already known — open the sign-in
+            // door with it filled in, and put the cursor where they'll type.
+            if !session.ownerEmail.isEmpty, email.isEmpty {
+                email = session.ownerEmail
+                mode = .signIn
+            }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            focus = .email
+        }
     }
 
     // MARK: - Pieces
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            LogoMark(size: 34)
-                .accessibilityHidden(true)
+        VStack(alignment: .center, spacing: 14) {
+            // The mark lands at the same size, centred, as the onboarding
+            // welcome that follows — the eye tracks one object across the
+            // boundary. A tight bloom behind one object reads as light
+            // coming OFF the object; a full-screen wash reads as wallpaper.
+            ZStack {
+                Theme.bloom(0.14, radius: 240)
+                LogoMark(size: 72)
+            }
+            .frame(height: 90)
+            .frame(maxWidth: .infinity)
+            .accessibilityHidden(true)
             Text(title)
-                .font(Theme.display(34))
+                .font(Theme.display(30))
+                .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
                 .fixedSize(horizontal: false, vertical: true)
             Text(subtitle)
-                .font(.callout)
-                .foregroundStyle(Theme.gray)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.sand)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var title: String {
@@ -108,9 +141,15 @@ struct AuthView: View {
                 field("Email", text: $email, focus: .email, kind: .email)
                 field("Password", text: $password, focus: .password, kind: .newPassword)
                 field("Your number", text: $phone, focus: .phone, kind: .phone)
+                // Two small rewards before commitment instead of one silent
+                // refusal: the rules turn champagne, with a tick in the hand,
+                // the moment each is satisfied.
+                ruleLine("A real email", satisfied: email.contains("@"))
+                ruleLine("Eight characters or more", satisfied: password.count >= 8)
                 Text("Your number is how I reach you when something needs your word — and how you get back in if you forget your password.")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.gray)
+                    .font(.system(size: 15))
+                    .lineSpacing(2)
+                    .foregroundStyle(Theme.sand)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             case .signIn:
@@ -125,63 +164,117 @@ struct AuthView: View {
         }
     }
 
+    /// A discoverable rule: grey while unmet, champagne with a checkmark and
+    /// a light tap the moment it's satisfied.
+    private func ruleLine(_ text: String, satisfied: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: satisfied ? "checkmark.circle.fill" : "circle")
+                .font(.caption)
+                .accessibilityHidden(true)
+            Text(text).font(.system(size: 15))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(satisfied ? Theme.champagne : Theme.gray)
+        .animation(Theme.spring, value: satisfied)
+        .onChange(of: satisfied) { ok in
+            if ok { Haptics.tap() }
+        }
+    }
+
     private enum Kind { case email, password, newPassword, phone, code }
+
+    /// The prompt carries the label — an 11pt uppercase caps tag over an
+    /// empty grey rectangle is a Stripe-dashboard form, not her asking.
+    private func prompt(for kind: Kind) -> String {
+        switch kind {
+        case .email: return "you@email.com"
+        case .password: return "Your password"
+        case .newPassword: return "At least 8 characters"
+        case .phone: return "+1 604 555 0123"
+        case .code: return "6-digit code"
+        }
+    }
 
     private func field(_ label: String, text: Binding<String>,
                        focus f: Field, kind: Kind) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(label.uppercased())
-                .font(.caption2.weight(.semibold))
-                .tracking(1.1)
-                .foregroundStyle(Theme.gray)
-            Group {
-                if kind == .password || kind == .newPassword {
-                    SecureField("", text: text)
-                        .textContentType(kind == .newPassword ? .newPassword : .password)
-                } else {
-                    TextField("", text: text)
-                        .textContentType(kind == .email ? .emailAddress
-                                         : kind == .phone ? .telephoneNumber : .oneTimeCode)
-                        .keyboardType(kind == .email ? .emailAddress
-                                      : kind == .phone ? .phonePad
-                                      : kind == .code ? .numberPad : .default)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
+        Group {
+            if kind == .password || kind == .newPassword {
+                SecureField("", text: text,
+                            prompt: Text(prompt(for: kind)).foregroundColor(Theme.gray))
+                    .textContentType(kind == .newPassword ? .newPassword : .password)
+            } else {
+                TextField("", text: text,
+                          prompt: Text(prompt(for: kind)).foregroundColor(Theme.gray))
+                    .textContentType(kind == .email ? .emailAddress
+                                     : kind == .phone ? .telephoneNumber : .oneTimeCode)
+                    .keyboardType(kind == .email ? .emailAddress
+                                  : kind == .phone ? .phonePad
+                                  : kind == .code ? .numberPad : .default)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
             }
-            .font(kind == .code ? .title2.monospacedDigit() : .body)
-            .foregroundStyle(Theme.ivory)
-            .focused($focus, equals: f)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Theme.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(focus == f ? Theme.champagne.opacity(0.7) : Theme.stroke,
-                                    lineWidth: focus == f ? 1.5 : 1)
-                    )
-            )
-            .animation(Theme.spring, value: focus)
         }
+        .font(kind == .code ? .title2.monospacedDigit() : .body)
+        .foregroundStyle(Theme.ivory)
+        .focused($focus, equals: f)
+        .submitLabel(kind == .newPassword || kind == .password ? .go : .next)
+        .onSubmit {
+            switch f {
+            case .email: focus = mode == .forgot ? nil : .password
+            case .password: focus = nil; Task { await go() }
+            case .phone, .code: focus = nil
+            }
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                .fill(Theme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                        .stroke(focus == f ? Theme.champagne.opacity(0.7) : Theme.stroke,
+                                lineWidth: focus == f ? 1.5 : 1)
+                )
+        )
+        .animation(Theme.spring, value: focus)
+        .accessibilityLabel(label)
     }
+
+    /// The label never moves; a 2pt ivory sweep under it reads as work,
+    /// where a spinner shoving the label sideways reads as a stall. And the
+    /// not-yet-ready button is PRESENT — the old Theme.stroke fill on ink was
+    /// a 25-value delta, i.e. no visible button until the form validated.
+    @State private var sweep = false
 
     private var primaryButton: some View {
         Button {
             Task { await go() }
         } label: {
-            HStack(spacing: 9) {
-                if busy { ProgressView().tint(Theme.ink) }
-                Text(buttonLabel)
-                    .font(.callout.weight(.semibold))
-            }
-            .frame(maxWidth: .infinity, minHeight: 52)
-            .background(Capsule().fill(canGo ? Theme.champagne : Theme.stroke))
-            .foregroundStyle(canGo ? Theme.ink : Theme.gray)
+            Text(buttonLabel)
+                .font(.callout.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(
+                    Capsule().fill(canGo ? Theme.champagne : Theme.surface)
+                        .overlay(Capsule().strokeBorder(canGo ? Color.clear : Theme.stroke, lineWidth: 1))
+                )
+                .overlay(alignment: .bottom) {
+                    if busy {
+                        Capsule()
+                            .fill(Theme.ivory.opacity(0.35))
+                            .frame(height: 2)
+                            .scaleEffect(x: sweep ? 1 : 0.02, anchor: .leading)
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 8)
+                            .animation(.linear(duration: 1.2).repeatForever(autoreverses: false), value: sweep)
+                            .onAppear { sweep = true }
+                            .onDisappear { sweep = false }
+                    }
+                }
+                .foregroundStyle(canGo ? Theme.ink : Theme.sand)
         }
         .buttonStyle(.pressable)
         .disabled(!canGo || busy)
+        .animation(Theme.spring, value: canGo)
     }
 
     private var buttonLabel: String {

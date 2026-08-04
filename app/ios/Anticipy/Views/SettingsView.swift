@@ -122,8 +122,11 @@ struct SettingsView: View {
                     .keyboardType(.numbersAndPunctuation)
                     .textInputAutocapitalization(.never)
                 Button("Save details") {
-                    Task { detailsSaved = await session.saveOwnerDetails(
-                        first: firstName, last: lastName, email: email, birthday: birthday) }
+                    Task {
+                        detailsSaved = await session.saveOwnerDetails(
+                            first: firstName, last: lastName, email: email, birthday: birthday)
+                        if detailsSaved { Haptics.success() }
+                    }
                 }
                 .foregroundStyle(Theme.champagne)
                 Text(detailsSaved ? "Saved — I can fill booking forms myself now."
@@ -146,7 +149,10 @@ struct SettingsView: View {
                         .font(.callout.monospacedDigit())
                         .foregroundStyle(Theme.ivory)
                     Button("Save") {
-                        Task { phoneSaved = await session.saveOwnerPhone(phoneField) }
+                        Task {
+                            phoneSaved = await session.saveOwnerPhone(phoneField)
+                            if phoneSaved { Haptics.success() }
+                        }
                     }
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(Theme.champagne)
@@ -348,7 +354,17 @@ struct SettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Theme.ink)
+        .background(
+            ZStack {
+                Theme.ink
+                Grain.image
+                    .opacity(0.035)
+                    .blendMode(.plusLighter)
+                    .allowsHitTesting(false)
+            }
+            .ignoresSafeArea()
+        )
+        .tint(Theme.champagne)
         .navigationTitle("Settings")
     }
 

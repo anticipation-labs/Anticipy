@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreImage
 
 /// Anticipy brand system, pulled from anticipy.ai:
 /// ink #0C0C0C, surfaces #161616/#1E1E1E, ivory #F5F0EB, champagne #C8A97E.
@@ -71,6 +72,50 @@ enum Theme {
     /// slower feels sluggish, faster feels jumpy.
     static let spring = Animation.spring(response: 0.35, dampingFraction: 0.8)
     static let springSlow = Animation.spring(response: 0.55, dampingFraction: 0.85)
+    /// The only curve allowed to overshoot, and it is rationed: pairing
+    /// success, onboarding completion, a transcript line flipping to "act",
+    /// and the Settings save confirmation. Damping 0.62 on ordinary UI reads
+    /// as a toy; on a rare peak it reads as joy — the difference is entirely
+    /// how seldom it fires.
+    static let springJoy = Animation.spring(response: 0.30, dampingFraction: 0.62)
+
+    /// The eye-anchor. ONE per screen, always behind the mark. Two is wallpaper.
+    static func bloom(_ opacity: Double = 0.12, radius: CGFloat = 300) -> some View {
+        RadialGradient(colors: [Theme.champagne.opacity(opacity), .clear],
+                       center: .center, startRadius: 8, endRadius: radius)
+            .blur(radius: 30)
+            .allowsHitTesting(false)
+    }
+}
+
+/// The anti-synthetic texture. Flat #0C0C0C is the flattest surface a phone
+/// can render and reads as an absence of pixels; a whisper of grain makes it
+/// a material. Generated at runtime, never bundled — a shipped PNG always
+/// ends up looking like a downloaded stock texture.
+enum Grain {
+    static let image: Image = {
+        let noise = CIFilter(name: "CIRandomGenerator")!.outputImage!
+        let mono = noise.applyingFilter("CIColorControls",
+                     parameters: [kCIInputSaturationKey: 0, kCIInputContrastKey: 1.0])
+        let tile = mono.cropped(to: CGRect(x: 0, y: 0, width: 512, height: 512))
+        let cg = CIContext().createCGImage(tile, from: tile.extent)!
+        return Image(uiImage: UIImage(cgImage: cg)).resizable(resizingMode: .tile)
+    }()
+}
+
+extension View {
+    /// One call per screen root, above Theme.ink. `.plusLighter`, never
+    /// `.overlay`: overlay-blend multiplies toward black on a dark base and
+    /// collapses to nothing at this luminance.
+    func grainOverlay() -> some View {
+        overlay(
+            Grain.image
+                .opacity(0.035)
+                .blendMode(.plusLighter)
+                .allowsHitTesting(false)
+                .ignoresSafeArea()
+        )
+    }
 }
 
 /// The card, with an edge you can actually see and a light source above it.
@@ -178,6 +223,9 @@ enum Haptics {
     }
 
     static func tap() { lightGen.impactOccurred(); lightGen.prepare() }
+    /// A page turn is a selection, and iOS users expect the tick.
+    private static let selectionGen = UISelectionFeedbackGenerator()
+    static func pageTurn() { selectionGen.selectionChanged(); selectionGen.prepare() }
     static func engage() { mediumGen.impactOccurred(); mediumGen.prepare() }
     static func success() { noticeGen.notificationOccurred(.success); noticeGen.prepare() }
     static func warning() { noticeGen.notificationOccurred(.warning); noticeGen.prepare() }
@@ -229,7 +277,11 @@ struct Pressable: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                // 3% scale on a 56pt capsule sits below the perception
+                // threshold; on a dark UI the brightness lift is what the
+                // eye actually registers.
+                .scaleEffect(configuration.isPressed ? 0.96 : 1)
+                .brightness(configuration.isPressed ? 0.04 : 0)
                 .opacity(configuration.isPressed ? 0.85 : 1)
                 .animation(Theme.spring, value: configuration.isPressed)
                 .onChange(of: configuration.isPressed) { pressed in
@@ -249,19 +301,35 @@ extension ButtonStyle where Self == Pressable {
 /// of instant text reads as a machine; typing reads as her. Tap to finish.
 struct TypewriterText: View {
     let text: String
-    var font: Font = .body
-    var color: Color = Theme.sand
-    var speed: Double = 36 // characters per second
+    // She IS this component — it defaults to her voice register, not the
+    // secondary one. One tempo everywhere: two speeds is two voices.
+    var font: Font = .system(size: 17)
+    var color: Color = Theme.ivory
     var onDone: (() -> Void)? = nil
 
     @State private var shown = ""
     @State private var typing = false
+    @State private var caret = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        (Text(shown) + Text(typing ? "▍" : "").foregroundColor(Theme.champagne))
+        Text(shown)
             .font(font)
             .foregroundStyle(color)
+            // The caret blinks on its own clock rather than being composed
+            // into the string, so it does not retrigger text layout.
+            .overlay(alignment: .bottomTrailing) {
+                if typing {
+                    Text("▍")
+                        .font(font)
+                        .foregroundColor(Theme.champagne)
+                        .opacity(caret ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.53).repeatForever(autoreverses: true),
+                                   value: caret)
+                        .onAppear { caret = true }
+                        .alignmentGuide(.trailing) { d in d.width * 2 }
+                }
+            }
             .contentShape(Rectangle())
             // VoiceOver was handed an element that mutated ~36 times a second,
             // one character at a time, with a cursor glyph composed into the
@@ -287,11 +355,66 @@ struct TypewriterText: View {
                 for ch in text {
                     guard typing else { return }
                     shown.append(ch)
-                    try? await Task.sleep(nanoseconds: UInt64(1_000_000_000 / speed))
+                    // She breathes at punctuation — running straight through
+                    // a full stop is what makes typed text read as streaming
+                    // rather than speaking.
+                    let base = 1_000_000_000.0 / 40.0
+                    let mult: Double = ".?!".contains(ch) ? 8
+                                     : ",;:—".contains(ch) ? 4 : 1
+                    try? await Task.sleep(nanoseconds: UInt64(base * mult))
                 }
                 typing = false
                 onDone?()
             }
+    }
+}
+
+/// A listening app shows a waveform, never a spinner. Three champagne
+/// capsules moving on the 0.8s harmonic — half the app's 1.6s breath.
+struct WaveBars: View {
+    @State private var up = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0 ..< 3, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Theme.champagne)
+                    .frame(width: 3, height: 10)
+                    .scaleEffect(y: (up && !reduceMotion) ? 1.0 : 0.4)
+                    .animation(
+                        reduceMotion ? .default
+                            : .easeInOut(duration: 0.8)
+                                .repeatForever(autoreverses: true)
+                                .delay([0, 0.13, 0.27][i]),
+                        value: up
+                    )
+            }
+        }
+        .onAppear { up = true }
+        .accessibilityHidden(true)
+    }
+}
+
+/// One dot of a staggered sequence — the same 1.6s breath as BreathingDot,
+/// offset so a row of them pulses in order.
+struct PulseDot: View {
+    var delay: Double = 0
+    @State private var up = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Circle()
+            .fill(Theme.champagne)
+            .frame(width: 6, height: 6)
+            .opacity((up && !reduceMotion) ? 1.0 : 0.35)
+            .animation(
+                reduceMotion ? .default
+                    : .easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(delay),
+                value: up
+            )
+            .onAppear { up = true }
+            .accessibilityHidden(true)
     }
 }
 
@@ -311,10 +434,13 @@ struct BreathingDot: View {
         Circle()
             .fill(Theme.champagne)
             .frame(width: size, height: size)
-            .scaleEffect(animates && up ? 1.25 : 1.0)
-            .opacity(active ? (animates && up ? 1.0 : 0.85) : 0.5)
+            // 1.16 is a breath; 1.25 was a pulse. 1.6s is the app's one
+            // ambient harmonic — everything that loops forever runs on it or
+            // a clean multiple of it.
+            .scaleEffect(animates && up ? 1.16 : 1.0)
+            .opacity(active ? (animates && up ? 1.0 : 0.7) : 0.5)
             .animation(
-                animates ? .easeInOut(duration: 1.5).repeatForever(autoreverses: true) : .default,
+                animates ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .default,
                 value: up
             )
             .onAppear { if animates { up = true } }
