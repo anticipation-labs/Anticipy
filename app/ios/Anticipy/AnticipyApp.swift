@@ -10,7 +10,11 @@ struct AnticipyApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if hasOnboarded {
+                if !session.isSignedIn {
+                    // The door comes first. Everything past it belongs to a
+                    // person; nothing before it does.
+                    AuthView()
+                } else if hasOnboarded {
                     HomeView()
                 } else {
                     OnboardingView()
@@ -94,7 +98,11 @@ final class AnticipySession: ObservableObject {
             // Build-stamped so production events reveal WHICH build spoke —
             // "are you sure it's updated?" gets answered by the data.
             deviceID: "iphone-b\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")",
-            serviceToken: serviceToken
+            serviceToken: serviceToken,
+            // A real signed-in session outranks the shared secret, and the
+            // guard accepts either — which is what lets the app move onto
+            // accounts without a flag day.
+            authToken: authToken
         )
     }
 
@@ -315,6 +323,68 @@ final class AnticipySession: ObservableObject {
     /// True when iOS has already been told no and will not ask again — the app
     /// must send them to Settings rather than pretending another tap will work.
     var micBlocked: Bool { listener.permissionDenied }
+
+    // ---------------------------------------------------------------- login
+    /// The signed-in account, if any. Empty means this phone is still running
+    /// on the pre-accounts identity.
+    @AppStorage("authToken") private var authToken = ""
+    @AppStorage("accountID") var accountID = ""
+    var isSignedIn: Bool { !accountID.isEmpty && !authToken.isEmpty }
+
+    /// Make an account. The device's existing `ownerID` rides up as
+    /// `legacy_uuid`, so everything already stamped with it — jobs, profile,
+    /// segments — belongs to this account instead of being orphaned the moment
+    /// accounts arrived. Returns nil on success, or a sentence to show.
+    func signUp(email: String, password: String, phone: String) async -> String? {
+        let e164 = self.e164(phone)
+        do {
+            try await backend.createAccount(email: email, password: password,
+                                            phone: e164, legacyUUID: ownerID)
+        } catch let err as AnticipyBackend.BackendError where err.status == 400 {
+            return "That email already has an account — sign in instead, or use another address."
+        } catch {
+            return "I couldn't reach my side to set that up. Check your connection and try again."
+        }
+        if let e164 { ownerPhone = e164 }
+        return await signIn(email: email, password: password)
+    }
+
+    func signIn(email: String, password: String) async -> String? {
+        do {
+            let (token, id) = try await backend.authWithPassword(email: email, password: password)
+            authToken = token
+            accountID = id
+            await refresh()
+            return nil
+        } catch let err as AnticipyBackend.BackendError where err.status == 400 {
+            return "That email and password don't match anything I have."
+        } catch {
+            return "I couldn't reach my side just then. Try again in a moment."
+        }
+    }
+
+    func signOut() {
+        authToken = ""
+        accountID = ""
+    }
+
+    /// Ask for a reset code by text. Deliberately returns nothing to report:
+    /// the server answers identically whether or not the account exists, so
+    /// that this cannot be used to discover who has an account.
+    func requestPasswordReset(email: String) async {
+        try? await backend.requestPasswordReset(email: email)
+    }
+
+    func confirmPasswordReset(email: String, code: String, newPassword: String) async -> String? {
+        do {
+            try await backend.confirmPasswordReset(email: email, code: code, password: newPassword)
+            return nil
+        } catch let err as AnticipyBackend.MessageError {
+            return err.message
+        } catch {
+            return "I couldn't reach my side just then. Try again in a moment."
+        }
+    }
 
     /// Throw away the words still waiting for a network. Owned here because the
     /// queue's storage key is private: Settings was reaching into UserDefaults

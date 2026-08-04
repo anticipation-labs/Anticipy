@@ -41,11 +41,26 @@ final class AnticipyBackend {
     /// Shared write token, fetched after pairing. Empty until then; the
     /// backend guard ignores the header until enforcement is switched on.
     var serviceToken: String
+    /// The signed-in person's session token, when there is one.
+    var authToken: String
 
-    init(baseURL: URL, deviceID: String, serviceToken: String = "") {
+    init(baseURL: URL, deviceID: String, serviceToken: String = "", authToken: String = "") {
         self.baseURL = baseURL
         self.deviceID = deviceID
         self.serviceToken = serviceToken
+        self.authToken = authToken
+    }
+
+    /// Attach whatever credentials we have. Both may be present during the
+    /// move onto accounts; the account token is the one that will outlive the
+    /// shared secret.
+    private func authorize(_ r: inout URLRequest) {
+        if !serviceToken.isEmpty {
+            r.setValue(serviceToken, forHTTPHeaderField: "X-Anticipy-Token")
+        }
+        if !authToken.isEmpty {
+            r.setValue(authToken, forHTTPHeaderField: "Authorization")
+        }
     }
 
     /// Reads carry the token too — the guard hook protects the whole data
@@ -57,9 +72,7 @@ final class AnticipyBackend {
     /// the app confidently painted an empty screen.
     private func readData(from url: URL) async throws -> Data {
         var r = URLRequest(url: url)
-        if !serviceToken.isEmpty {
-            r.setValue(serviceToken, forHTTPHeaderField: "X-Anticipy-Token")
-        }
+        authorize(&r)
         let (data, resp) = try await URLSession.shared.data(for: r)
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw BackendError(status: http.statusCode)
@@ -83,9 +96,7 @@ final class AnticipyBackend {
         var r = URLRequest(url: url)
         r.httpMethod = method
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if !serviceToken.isEmpty {
-            r.setValue(serviceToken, forHTTPHeaderField: "X-Anticipy-Token")
-        }
+        authorize(&r)
         return r
     }
 
@@ -121,6 +132,71 @@ final class AnticipyBackend {
         guard let (_, resp) = try? await URLSession.shared.data(for: req),
               let http = resp as? HTTPURLResponse else { return false }
         return (200..<300).contains(http.statusCode)
+    }
+
+    /// An error that carries the server's own sentence, so the screen can show
+    /// what actually went wrong instead of a generic apology.
+    struct MessageError: Error { let message: String }
+
+    /// Create an account. `legacyUUID` is this device's pre-accounts identity,
+    /// carried up so the person's existing rows can be claimed rather than
+    /// orphaned.
+    func createAccount(email: String, password: String,
+                       phone: String?, legacyUUID: String) async throws {
+        var req = writeRequest(
+            baseURL.appendingPathComponent("api/collections/owners/records"), method: "POST")
+        var body: [String: Any] = [
+            "email": email.trimmingCharacters(in: .whitespaces).lowercased(),
+            "password": password,
+            "passwordConfirm": password,
+            "legacy_uuid": legacyUUID,
+        ]
+        if let phone, !phone.isEmpty { body["phone"] = phone }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        try await send(req)
+    }
+
+    /// Sign in. Returns the session token and the account id.
+    func authWithPassword(email: String, password: String) async throws -> (token: String, id: String) {
+        var req = writeRequest(
+            baseURL.appendingPathComponent("api/collections/owners/auth-with-password"),
+            method: "POST")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "identity": email.trimmingCharacters(in: .whitespaces).lowercased(),
+            "password": password,
+        ])
+        let data = try await send(req)
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let token = root["token"] as? String,
+              let record = root["record"] as? [String: Any],
+              let id = record["id"] as? String
+        else { throw BackendError(status: -1) }
+        return (token, id)
+    }
+
+    /// "I forgot my password" — the code arrives by text, because this backend
+    /// has no way to send mail.
+    func requestPasswordReset(email: String) async throws {
+        var req = writeRequest(baseURL.appendingPathComponent("auth/reset/request"), method: "POST")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "email": email.trimmingCharacters(in: .whitespaces).lowercased()])
+        try await send(req)
+    }
+
+    func confirmPasswordReset(email: String, code: String, password: String) async throws {
+        var req = writeRequest(baseURL.appendingPathComponent("auth/reset/confirm"), method: "POST")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "email": email.trimmingCharacters(in: .whitespaces).lowercased(),
+            "code": code.trimmingCharacters(in: .whitespaces),
+            "password": password,
+        ])
+        do {
+            try await send(req)
+        } catch let e as BackendError {
+            // The reset routes answer with a human sentence; surface it.
+            _ = e
+            throw MessageError(message: "That code isn't right, or it has expired. Ask for a new one.")
+        }
     }
 
     /// The paired agent's key bundle also carries this phone's write token.
