@@ -166,6 +166,21 @@ STALL_MINUTES = 10        # queued this long with nothing to run it is stuck
 AGENT_FRESH_SECONDS = 90  # the extension heartbeats far more often than this
 
 
+def ambient_job(job: dict) -> bool:
+    """Was this job born from speech that was never aimed at her — a
+    dictation run, a conversation with another person? Ambient work is done
+    quietly and delivered quietly: its results land in the feed, never as a
+    text, and it never becomes a reason to buzz his phone (roadmap §7.1).
+    The lane rides in the job's own params so it survives redeploys."""
+    params = job.get("params")
+    if isinstance(params, str):
+        try:
+            params = json.loads(params or "{}")
+        except Exception:
+            return False
+    return isinstance(params, dict) and params.get("lane") == "ambient"
+
+
 def browser_reachable() -> bool:
     """Is his Chrome actually there to do the work?
 
@@ -220,6 +235,10 @@ def report_stalled_work(anticipy) -> None:
             return
         for job in r.json().get("items", []):
             goal = (job.get("goal") or "").strip()
+            # Quiet work stays quiet: an ambient job that cannot run is not
+            # worth his attention — it was never something he asked her for.
+            if ambient_job(job):
+                continue
             # Deduped on the KIND of message, not on wording — her phrasing is
             # generated fresh and comparing it to itself has failed twice now.
             if already_raised(goal, decision="stalled"):
@@ -353,6 +372,15 @@ def report_finished_jobs(anticipy) -> None:
             goal = (job.get("goal") or "").strip()
             result = (job.get("result") or "").strip()
             failed = job.get("status") == "failed"
+            # Ambient work is delivered to the desk, never to his phone: the
+            # result goes into the feed for whenever he looks, and a failure
+            # of work he never asked for is not news at all.
+            if ambient_job(job):
+                if result and not failed and not already_raised(goal, decision="done"):
+                    post_event("anticipy_says", result, decision="done", goal=goal)
+                REPORTED.add(job["id"])
+                print(f"ambient job {job['id']} finished quietly ({job.get('status')})")
+                continue
             # Durable: has she already delivered THIS result? Keyed on the goal
             # and on being a result, so her earlier "want me to?" about the same
             # task does not silence the answer.
@@ -538,13 +566,20 @@ def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
     return r.json().get("items", [])
 
 
-def mark_processed(event_id: str, decision: str) -> bool:
+def mark_processed(event_id: str, decision: str, addressee: str = "") -> bool:
     """Returns whether the mark actually landed. A silently-failed PATCH left
     the event unmarked and the 2s poll replayed it — minting a duplicate job
-    and a duplicate text per cycle."""
+    and a duplicate text per cycle.
+
+    The addressee (who the owner was judged to be talking to) is stamped
+    alongside the decision so a misclassification — a dictated line that
+    fired, a direct ask that went ambient — is auditable from the record."""
     try:
+        body = {"decision": decision}
+        if addressee:
+            body["addressee"] = addressee
         r = pb.patch(f"{PB}/api/collections/events/records/{event_id}",
-                     json={"decision": decision}, timeout=10)
+                     json=body, timeout=10)
         return bool(getattr(r, "ok", False))
     except Exception:
         return False
@@ -580,6 +615,10 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # makes her permanently mute is the one thing no guard may do.
             blocker = (job.get("result") or "").strip()
             if not blocker:
+                continue
+            # An ambient job that hit a wall does not earn a text — he never
+            # asked for it. It stays visible in the app, nothing more.
+            if ambient_job(job):
                 continue
             said = anticipy._voice({
                 "situation": "you got most of the way through a task in their browser "
@@ -704,7 +743,9 @@ def main() -> None:
                     print(f"heard: {line!r} -> error: {e}")
                     continue
                 decision = out["decision"].decision
-                mark_processed(ev["id"], decision)
+                mark_processed(ev["id"], decision,
+                               addressee=getattr(out["decision"], "addressee",
+                                                 "") or "")
                 # STEP 1 of the capture architecture: record which
                 # conversation this turn belongs to. NOTHING reads it yet —
                 # triage above is untouched — so this is observation only,

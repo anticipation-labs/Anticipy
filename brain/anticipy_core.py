@@ -28,7 +28,8 @@ from . import pb
 
 from .llm import LLM, now_line
 from .memory import Memory
-from .orchestrator import Brain, Decision, IRREVERSIBLE
+from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
+                           AMBIENT_ADDRESSEES)
 
 NAME = "Anticipy"
 
@@ -63,6 +64,46 @@ _READ_ONLY_RE = re.compile(
     r"pull\s+up|view|display|tell)\b",
     re.IGNORECASE,
 )
+
+
+# Addressee pre-filter OUTSIDE the model (roadmap §7.1). The obvious case is
+# decided deterministically: a very long, fluent run of instruction-like
+# prose with no interlocutor is the owner dictating to a machine (Wispr Flow
+# into another AI, voice-typing a message) — nobody speaks paragraphs of
+# clean spec at a person. On 2026-08-04 exactly those lines were triaged as
+# work for HER, and the owner got "On it" texts about messages he was
+# dictating to a different assistant. The model also classifies (folded into
+# triage), but for lines this unmistakable her lane must not depend on it.
+DICTATION_MIN_WORDS = 40
+
+# Real speech is disfluent; dictation engines emit clean prose. Any of these
+# marks a line as spoken to the room, not typed by voice.
+_DICTATION_FILLERS_RE = re.compile(
+    r"\b(um+|uh+|erm+|hm+|y'?know|you know|i mean)\b[, ]", re.IGNORECASE)
+
+# Instruction-prose markers: the spec-speak of someone telling a machine (or
+# an absent reader) what to do. Two or more of these in one long fluent run
+# is dictation, not conversation.
+_DICTATION_INSTRUCT_RE = re.compile(
+    r"\b(make sure|please|you should|you need to|i want you to|i need you to|"
+    r"can you|could you|go ahead and|instead of|rather than|"
+    r"it should|that should|this should|so that|"
+    r"(?:add|change|update|fix|remove|create|write|use|rename|delete|keep)\s+"
+    r"(?:a|an|the|that|this|it)\b)", re.IGNORECASE)
+
+
+def looks_like_dictation(line: str) -> bool:
+    """Deterministic pre-filter for the unmistakable case only. Anything it
+    is unsure about returns False and is left to the model's classification —
+    a False here never forces anything, it just declines to override."""
+    text = (line or "").strip()
+    if len(text.split()) < DICTATION_MIN_WORDS:
+        return False
+    if NAME.lower() in text.lower():
+        return False          # she was addressed by name: not dictation
+    if _DICTATION_FILLERS_RE.search(text):
+        return False          # disfluent = spoken to the room
+    return len(_DICTATION_INSTRUCT_RE.findall(text)) >= 2
 
 
 def is_consequential(goal: str, params: dict | None = None,
@@ -190,6 +231,11 @@ class Anticipy:
         self.loops: list[LoopRecord] = []
         self.session_start = time.time()
         self._prev: Optional[tuple[str, float]] = None  # (last ignored line, ts)
+        # Who the owner was talking to on the last classified line. Sticky:
+        # people don't switch addressee mid-breath, so the previous
+        # classification rides along as context and the model needs positive
+        # evidence to switch. Same recency window as the split-thought carry.
+        self._last_addressee: Optional[tuple[str, float]] = None
 
     # ------------------------------------------------------------ hearing
 
@@ -232,6 +278,11 @@ class Anticipy:
         It rides on the job so the answer can go back the way the question
         came: an SMS ask is replied to in-thread, everything else lands on
         the desk (the app feed) without buzzing his phone."""
+        # Unmistakable dictation is known before anything can answer or act:
+        # a line the owner voice-typed at another machine must not be
+        # answered from memory as if he had asked HER. Explicit lines (he
+        # texted/typed them at her) are never dictation by definition.
+        dictated = not explicit and looks_like_dictation(line)
         # Owner questions are answered, not triaged: a briefing request goes
         # to the briefing engine, and a memory question is answered straight
         # from the graph. Neither should ever spawn a browser job.
@@ -245,7 +296,8 @@ class Anticipy:
             return {"memory": mem, "decision": Decision(
                 decision="answer", goal=None, reason="briefing request"),
                 "anticipy_says": said}
-        if self._RECALL_RE.match(line) and not self._IMPERATIVE_RE.match(line):
+        if not dictated and self._RECALL_RE.match(line) \
+                and not self._IMPERATIVE_RE.match(line):
             answer = self._answer_from_memory(line)
             if answer:
                 mem = self.memory.ingest(line)
@@ -267,9 +319,71 @@ class Anticipy:
         # acted on — an acted line re-fed as context mints duplicate jobs.
         prev = self._prev
         prev_line = prev[0] if prev and time.time() - prev[1] < 120 else None
-        decision = self._decide(line, mem, prev_line=prev_line, convo=context)
-        self._prev = None if decision.decision in ("act", "ask") else (line, time.time())
+        # WHO is he talking to? The previous classification rides along
+        # (people don't switch addressee mid-breath) and the deterministic
+        # pre-filter above already marked unmistakable dictation.
+        last_a = self._last_addressee
+        prev_addressee = last_a[0] if last_a and time.time() - last_a[1] < 120 else None
+        decision = self._decide(line, mem, prev_line=prev_line, convo=context,
+                                prev_addressee=prev_addressee, dictated=dictated)
+        # The EFFECTIVE addressee — the one her behaviour actually keys on,
+        # written back so the event record shows what was applied. An
+        # explicit line (he texted/typed it AT her) is assistant by
+        # definition; unmistakable dictation is decided outside the model;
+        # otherwise the model's classification stands. None (field missing
+        # or invalid) fails open to the behaviour she had before this field
+        # existed — a misbehaving model must not change her.
+        if explicit:
+            addressee = "assistant"
+        elif dictated:
+            addressee = "dictation"
+        else:
+            addressee = decision.addressee if decision.addressee in ADDRESSEES else None
+        decision.addressee = addressee
+        if addressee:
+            self._last_addressee = (addressee, time.time())
         handled = None
+
+        # The ambient lane (roadmap §7.1): speech not aimed at her — another
+        # person, a dictation machine — is remembered, and researched quietly
+        # when the work is read-only, but NEVER spawns a text or a
+        # confirmation prompt. This is what was missing on 2026-08-04, when
+        # messages he dictated to another AI came back as "On it" fires.
+        # The outward decision is "ignore" — the one word the feed renders as
+        # "Noted — nothing needed", which is the truth of this lane; the
+        # addressee logged beside it says why, and any quiet job carries
+        # lane=ambient so the whole story is auditable.
+        if addressee in AMBIENT_ADDRESSEES and decision.decision in ("act", "ask"):
+            goal = decision.goal
+            quiet_research = (decision.decision == "act" and goal
+                              and not decision.missing
+                              and not (decision.needs_confirmation
+                                       or goal in IRREVERSIBLE
+                                       or is_consequential(goal)))
+            if quiet_research:
+                # Free to do, lands on her desk — queued unheld, said nowhere.
+                params = {"source": line, "now": now_line(), "lane": "ambient"}
+                if decision.assumption:
+                    params["assumption"] = decision.assumption
+                job_id = self._queue_job(goal, params)
+                self.loops.append(LoopRecord(
+                    commitment_id=mem.get("commitment_id") or -1,
+                    what=goal, status="handling", job_id=job_id))
+                decision = Decision(
+                    decision="ignore", goal=goal,
+                    reason=f"{addressee}-directed: quiet research, saying nothing",
+                    addressee=addressee)
+            else:
+                # Held work or a question would interrupt him about speech
+                # that was never aimed at her. Remembered; nothing queued.
+                decision = Decision(
+                    decision="ignore", goal=goal,
+                    reason=f"{addressee}-directed: stays ambient",
+                    addressee=addressee)
+            self._prev = None if quiet_research else (line, time.time())
+            return {"memory": mem, "decision": decision, "anticipy_says": None}
+
+        self._prev = None if decision.decision in ("act", "ask") else (line, time.time())
 
         # Sufficiency: starting work that is guaranteed to stall on an unknown
         # is worse than one good question. An "act" with essential unknowns
@@ -277,7 +391,8 @@ class Anticipy:
         if decision.decision == "act" and decision.missing:
             decision = Decision(
                 decision="ask", goal=decision.goal, reason=decision.reason,
-                missing=decision.missing, assumption=decision.assumption)
+                missing=decision.missing, assumption=decision.assumption,
+                addressee=decision.addressee)
 
         if decision.decision == "act" and decision.goal:
             # The executor needs temporal ground truth: a job run today with
@@ -348,7 +463,9 @@ class Anticipy:
         }
 
     def _decide(self, line: str, mem: dict, prev_line: Optional[str] = None,
-                convo: Optional[list[str]] = None) -> Decision:
+                convo: Optional[list[str]] = None,
+                prev_addressee: Optional[str] = None,
+                dictated: bool = False) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
             prompt = line
@@ -364,6 +481,13 @@ class Anticipy:
             # so a split thought still triages as one thought.
             if prev_line:
                 prompt = f"{prompt}\n(Previous line, background: {prev_line})"
+            # Sticky addressee: who he was talking to a breath ago is who he
+            # is talking to now, absent positive evidence of a switch.
+            if prev_addressee:
+                prompt = f"{prompt}\n(Addressee of the previous line: {prev_addressee})"
+            if dictated:
+                prompt = (f"{prompt}\n(Pre-check: this line reads as machine "
+                          f"dictation — a long fluent run of instruction-prose.)")
             if context:
                 notes = "; ".join(f["fact"] for f in context)
                 prompt = f"{prompt}\n(Related memory: {notes})"

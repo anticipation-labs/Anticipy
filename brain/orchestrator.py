@@ -43,8 +43,26 @@ committing, exactly as much as a full sentence would be.
   to someone else. Everything is remembered regardless; ignore only means no
   task right now.
 
-Suffixes "(Related memory: ...)", "(Earlier in this conversation: ...)" and
-"(Previous line, background: ...)" are context — they help you READ the
+Separately from the decision, answer WHO the owner is talking to right now
+— "addressee". The pendant hears everything, so a lot of what reaches you
+was never aimed at you:
+- "assistant": talking to YOU — named you, or spoke a request or question
+  the assistant in the room is plainly meant to pick up.
+- "person": talking with another human — conversational turns, someone
+  there to answer back, plans made together.
+- "dictation": dictating to a machine — long fluent runs of instruction-like
+  prose with no interlocutor, e.g. voice-typing a message or instructing
+  another AI. Nobody speaks paragraphs of clean spec at a person.
+- "self": mumbling, thinking aloud, half-thoughts with no audience.
+People do not switch addressee mid-breath: when "(Addressee of the previous
+line: ...)" is given, keep that classification unless THIS line itself gives
+positive evidence of a switch. Classify honestly and still triage the content
+on its merits — a plan heard in a person-to-person conversation can deserve
+quiet research; whether anything may be SAID about it is decided outside you.
+
+Suffixes "(Related memory: ...)", "(Earlier in this conversation: ...)",
+"(Previous line, background: ...)", "(Addressee of the previous line: ...)"
+and "(Pre-check: ...)" are context — they help you READ the
 current line and are never themselves a reason to act. Use them to resolve
 what the current line refers to: if the line is "what time is the demo day on
 Monday" and the conversation earlier named the Residencies demo day, the goal
@@ -61,8 +79,18 @@ ask about what you can safely infer, and never start work that is guaranteed
 to stall on an unknown.
 Reply ONLY with compact JSON:
 {"decision":"ignore|ask|act","goal":"<short goal or null>",
+ "addressee":"assistant|person|dictation|self",
  "missing":["<essential unknowns; empty if none>"],
  "assumption":"<context you relied on, or null>","reason":"<8 words>"}"""
+
+# The only addressee values that mean anything. Anything else the model
+# emits is treated as "no classification" — behaviour falls back to what it
+# was before this field existed, so a misbehaving model cannot regress her.
+ADDRESSEES = ("assistant", "person", "dictation", "self")
+
+# Speech not aimed at her stays in the ambient lane: remembered, researched
+# quietly when read-only, but never a text and never a confirmation prompt.
+AMBIENT_ADDRESSEES = ("person", "dictation")
 
 # Goals whose final step changes the world -> require explicit user yes.
 IRREVERSIBLE = {
@@ -84,6 +112,7 @@ class Decision:
     needs_confirmation: bool = False
     missing: list = None       # essential unknowns blocking a real start
     assumption: Optional[str] = None  # context the model relied on to fill a gap
+    addressee: Optional[str] = None   # who the owner was talking to; None = unknown
 
     def __post_init__(self):
         if self.missing is None:
@@ -113,6 +142,9 @@ class Brain:
         assumption = raw.get("assumption")
         if assumption in ("null", ""):
             assumption = None
+        addressee = raw.get("addressee")
+        if addressee not in ADDRESSEES:
+            addressee = None
         return Decision(
             decision=decision,
             goal=goal,
@@ -120,6 +152,7 @@ class Brain:
             needs_confirmation=(decision == "act" and goal in IRREVERSIBLE),
             missing=[str(m) for m in missing],
             assumption=assumption,
+            addressee=addressee,
         )
 
 
