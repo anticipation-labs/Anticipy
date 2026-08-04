@@ -595,10 +595,16 @@ Use {"facts": {}} when there is nothing durable."""
             out = self.anticipy.hear(text, may_say=lambda *a, **k: False,
                                      explicit=True) or {}
         except TypeError:
-            # An Anticipy without the may_say hook (older core, or a test
-            # double): fall back rather than losing the thought entirely.
+            # A core without the newer keywords: shed them one at a time.
+            # Dropping may_say along with explicit re-opened the double-text
+            # this method exists to prevent, so it is the LAST thing to go.
             try:
-                out = self.anticipy.hear(text) or {}
+                out = self.anticipy.hear(text, may_say=lambda *a, **k: False) or {}
+            except TypeError:
+                try:
+                    out = self.anticipy.hear(text) or {}
+                except Exception:
+                    return None
             except Exception:
                 return None
         except Exception:
