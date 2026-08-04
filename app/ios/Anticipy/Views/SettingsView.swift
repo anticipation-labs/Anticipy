@@ -78,6 +78,7 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.gray)
                 }
             }
+            .listRowBackground(Theme.card)
             .onAppear(perform: syncPause)
 
             Section("Pendant") {
@@ -110,6 +111,7 @@ struct SettingsView: View {
                     Button("Pair a pendant") { pendant.startScan() }
                 }
             }
+            .listRowBackground(Theme.card)
 
             Section("You") {
                 TextField("First name", text: $firstName).textContentType(.givenName)
@@ -134,6 +136,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             }
+            .listRowBackground(Theme.card)
             .onAppear {
                 if firstName.isEmpty { firstName = session.ownerFirstName }
                 if lastName.isEmpty { lastName = session.ownerLastName }
@@ -163,9 +166,10 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             }
+            .listRowBackground(Theme.card)
             .onAppear { if phoneField.isEmpty { phoneField = session.ownerPhone } }
 
-            Section("Browser agent") {
+            Section("Your computer") {
                 HStack {
                     Text("Status")
                     Spacer()
@@ -186,9 +190,11 @@ struct SettingsView: View {
                     HStack {
                         TextField("6-digit code from the extension", text: $pairCode)
                             .keyboardType(.numberPad)
-                            .font(.body.monospaced())
-                        Button(pairing ? "Pairing…" : "Pair") { pair() }
-                            .disabled(pairCode.count != 6 || pairing)
+                            .font(Theme.display(24))
+                            .foregroundStyle(Theme.champagne)
+                        if pairing {
+                            WaveBars()
+                        }
                     }
                     // A code that was right and a network that was down used to
                     // read as the same sentence, so people retyped a correct
@@ -220,11 +226,20 @@ struct SettingsView: View {
                     .font(.footnote.monospaced())
                 #endif
             }
+            .listRowBackground(Theme.card)
             // Clear the red line the moment they start retyping, rather than
             // leaving a verdict about the last code sitting over the new one.
-            .onChange(of: pairCode) { _ in pairOutcome = nil }
+            // At six digits it goes on its own — a Pair button after typing the
+            // code was one press more than the moment deserved.
+            .onChange(of: pairCode) { code in
+                pairOutcome = nil
+                if code.count == 6 { pair() }
+            }
+            .onChange(of: pairOutcome) { outcome in
+                if outcome == .paired { Haptics.pairing() }
+            }
 
-            Section("Privacy & your data") {
+            Section("Between us") {
                 Text(voicePath)
                     .font(.callout)
                     .foregroundStyle(Theme.sand)
@@ -286,6 +301,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             }
+            .listRowBackground(Theme.card)
 
             #if DEBUG
             Section("Haptics — find out what's wrong") {
@@ -352,7 +368,9 @@ struct SettingsView: View {
                     .font(.footnote.monospaced())
                     .foregroundStyle(Theme.gray)
             }
+            .listRowBackground(Theme.card)
         }
+        .headerProminence(.increased)
         .scrollContentBackground(.hidden)
         .background(
             ZStack {
