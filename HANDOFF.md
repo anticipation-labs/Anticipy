@@ -12,6 +12,114 @@
 **Branch: `pendant-system`, everything pushed. Latest commit at handoff: see `git log -1`.**
 All work happens on this branch; production deploys from it via `railway up`.
 
+### 0.3 STATE AS OF 2026-08-04 (Claude Code session — READ THIS FIRST)
+
+**Branch `pendant-system`, everything committed and pushed. iOS builds 33–39 all
+VALID; 39 is current. Gates at handoff: 4/4 offline suites, and
+`railway run --service worker python3 proof/verify_all.py --no-browser` = 5/5.**
+
+#### THE THREE THINGS OMAR IS OWED, in order
+
+1. **RELOAD THE CHROME EXTENSION.** This is the single reason his browser arm is
+   dead, and it has been owed since the 2026-08-03 lockdown. Download
+   `/anticipy-extension.zip` (now v0.2.1), unzip over the old folder,
+   `chrome://extensions` → reload. Until then no code change reaches his Chrome.
+   The Cactus job is sitting `queued`+`authorized` and should be claimed within
+   seconds of the reload. **After the reload the `agents.browser` field reads
+   e.g. `Chrome/151.0.0.0 ext/0.2.1` — check it before ever debugging this
+   again.**
+2. **Rotate the Twilio auth token** (his call — it breaks texting until every
+   service is updated, so it was not done while he was away). See the hijack
+   note below.
+3. **"She lost context"** — NOT FIXED. He texted "What" after a booking exchange
+   and got "What do you mean?" instead of a reply connected to the booking.
+   Reproduce from his 2026-08-04 ~03:20 thread before touching anything.
+
+#### THE BIG ONE: his number was answering to someone else's app
+
+Twilio's inbound webhook for +1 619 658 4447 pointed at
+`https://anticipy-nick-demo.vercel.app/api/sms/inbound` — **a host that is NOT
+on his Vercel account** (`vercel inspect` cannot resolve it in his team). Every
+text he sent went there instead of to this brain from 2026-08-03 02:05Z until
+2026-08-04 02:48Z. Ours could still SEND, so the thread reads as two
+assistants sharing a number: lowercase/no-emoji messages are ours, the IANA
+example-domain and ✅ ones are not. His "Book it" never reached us, which is
+exactly why a released-looking booking did nothing.
+
+- Fixed: the number now posts to `{PB}/sms/inbound?token=$ANTICIPY_SMS_TOKEN`.
+  Verified end to end (a real inbound produced `sms in: … -> chat`; a wrong
+  token is refused 403). Previous values, for rollback: sms_url was the demo
+  above, sms_fallback was `https://www.anticipy.ai/api/twilio/sms-inbound`.
+- `brain/worker.py` now re-checks that binding every 10 minutes and points it
+  back if it moves (`ensure_inbound_webhook`), treating a Twilio application
+  SID as a hijack too since it silently overrides every sms_* URL.
+- **Whoever re-pointed it needed his Twilio credentials.** Two API keys exist on
+  the account: `Anticipy owner runtime 2026-07-22` and
+  `anticipy-broker-production`. `~/Anticipy-browser-mvp/engine/anticipy_engine/
+  channels/inbound_webhook.py` contains code that force-rewrites the Twilio
+  SmsUrl to whatever `ANTICIPY_SMS_INBOUND_WEBHOOK_URL` says — that env var is
+  on none of his Railway services, so the rewriter is running somewhere else.
+- Also muzzled earlier: `TWILIO_MOCK=true` on the `anticipy-engine` project's
+  `engine` and `anticipy-app` services, which were texting him test traffic.
+
+#### LOGIN IS LIVE (email + password, reset by SMS)
+
+Sign-in-with-Apple was built and then **removed** — he asked for plain email and
+password. The App ID capability and the regenerated profile stay, because
+enabling it INVALIDATED both old profiles; `Anticipy AppStore SIWA` is now the
+working one and `~/ExportOptions.plist` points at it (old file backed up as
+`~/ExportOptions.plist.bak-preSIWA`).
+
+- `owners` auth collection; `owner_ref` cascade relation on jobs/events/
+  owner_profile/segments; `POST /auth/claim` adopts pre-accounts rows.
+- Password reset by TEXT: `POST /auth/reset/request` + `/auth/reset/confirm`
+  (`backend/pb_hooks/password_reset.pb.js`). There is NO mail transport in the
+  image, which is why email codes and email verification are off, not missing.
+  Omar explicitly authorised shipping without verification.
+- Proven on a local 0.30.4 rig: login 10/10 (incl. two people seeing only their
+  own rows, and cascade delete), reset 18/18 against a stand-in Twilio.
+
+#### TRAPS THIS SESSION PAID FOR — do not rediscover these
+
+- **`railway up` from `backend/` HANGS at "scheduling build"** (the 32MB
+  binary + pb_data ride along; `.railwayignore` does not save it). Deploy from a
+  clean dir containing only `Dockerfile pb_migrations pb_hooks pb_public`
+  (~140KB). **The failure is SILENT — the old container keeps serving.** Always
+  confirm the change is live rather than trusting the CLI.
+- **A collection created and re-configured in the SAME boot silently drops auth
+  config.** `identityFields` persisted, `enabled` did not, nothing logged. Fix
+  the create-migration for fresh DBs AND add a separate forward migration for
+  the already-live one. Correcting an applied migration helps nobody.
+- **PocketBase rule properties are Go-backed OBJECTS.** `createRule === ""` is
+  false even when the rule IS the empty string. Compare through `String()`. A
+  self-check that got this wrong threw on a migration that had succeeded, and
+  PocketBase refuses to boot when a migration throws.
+- **Hook handlers cannot see anything declared outside their own body** — the
+  file that documents this had its constants outside, so every password reset
+  logged an error, stored nothing, then rejected the correct code *while the
+  text still went out*.
+- **`$security` in the JSVM has no base64 helper** (hashing/JWT/random only).
+- **XcodeGen OVERWRITES the entitlements file** from `project.yml`; writing it
+  by hand does nothing.
+- **An entitlement the profile does not grant is silently DROPPED** — the
+  archive succeeds and the capability is simply absent from the binary.
+- **`Font.custom("New York")` resolves to nil and falls back to SF Pro
+  silently.** Use `design: .serif`. Every headline in the app rendered in the
+  system sans until 2026-08-04.
+- **The extension heartbeat works WITHOUT a token** (guard exception for
+  last_seen/browser), so an agent reports itself alive while every job read is
+  403. `claimJob` used to treat a refusal as "no work". Both fixed.
+
+#### Front end
+
+`design/CONSUMER-READINESS-2026-08-03.md` (79 verified findings) is largely
+implemented — see the commits. `design/CONSUMER-FEEL-DIRECTION-2026-08-03.md`
+is the design direction; the SYSTEM-level parts of it are done (serif fix, type
+registers, spacing/radius scales, real card elevation), the per-screen polish is
+**not**. That is the obvious next block of work.
+
+---
+
 ### What changed since §0.5 was written (newest first)
 
 0aa. **BUILD 33 — HAPTICS FIXED (2026-08-03, Claude Code, uploaded).** The
