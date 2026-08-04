@@ -462,6 +462,11 @@ export async function runAgentGoal(goal, opts) {
   let mapFailures = 0;
   // When the text map is not getting us anywhere, look at the page.
   let stuckStreak = 0;
+  // Steps spent on one page without navigating anywhere. A run that is going
+  // somewhere changes pages; one that clicks the same page twenty times is
+  // wedged, and every further step is another spawned tab and another minute
+  // of someone watching their browser thrash.
+  let stepsOnPage = 0;
   try {
     for (let step = 0; step < maxSteps; step++) {
       await new Promise((r) => setTimeout(r, 1200));
@@ -501,7 +506,18 @@ export async function runAgentGoal(goal, opts) {
       }
 
       mapFailures = 0;
-      if (state.url !== lastUrl) stuckStreak = 0;   // real navigation is progress
+      if (state.url !== lastUrl) { stuckStreak = 0; stepsOnPage = 0; }  // real navigation is progress
+      else if (++stepsOnPage > 18) {
+        return (handBack = true) && { status: "needs_user", result: `I spent ${stepsOnPage} steps on ${state.url} without getting anywhere, so I stopped instead of flailing. The page is open for you — it likely needs a human choice I couldn't make.`, tabId: tab.id };
+      }
+      // Anything the working tab spawned (target=_blank, window.open) gets
+      // swept every step, not only after clicks — during a long run these are
+      // what pile up in front of the person watching.
+      try {
+        const spawnedNow = (await chrome.tabs.query({}))
+          .filter((t) => t.openerTabId === tab.id && t.id !== tab.id && !t.active);
+        for (const t of spawnedNow) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
+      } catch (e) { /* best effort */ }
       const banked = blockedDomain(state.url);
       if (banked) {
         return (handBack = true) && { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
