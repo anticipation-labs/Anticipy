@@ -40,6 +40,15 @@ routerUse((e) => {
       /\/(auth-with-password|auth-with-oauth2|auth-with-otp|request-otp|auth-refresh|request-password-reset|confirm-password-reset|request-verification|confirm-verification|auth-methods)$/.test(path)) {
     return e.next();
   }
+  // Signing UP is the other half of the front door, and it is a plain record
+  // create on the owners collection — so the guard blocked it too, and a new
+  // person could reach the login screen but never get an account. Who may
+  // actually create one is the collection's own createRule, which is where
+  // that decision belongs; this hook only stops the request being refused
+  // before PocketBase ever considers it.
+  if (method === "POST" && path === "/api/collections/owners/records") {
+    return e.next();
+  }
 
   // ---- anyone who has actually signed in ----
   // A real account token is a BETTER credential than the shared secret, so it

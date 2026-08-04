@@ -21,7 +21,7 @@ migrate((app) => {
     fields: [
       // PocketBase auto-injects password/tokenKey/emailVisibility/verified for
       // an auth collection; only the fields that are ours are declared here.
-      { name: "email", type: "email", required: false },
+      { name: "email", type: "email", required: true },
       // E.164. A ROUTING ADDRESS, never a credential: US carriers may reassign
       // a disconnected number after ~45 days, so whoever inherits a recycled
       // number must never thereby inherit the account.
@@ -36,22 +36,20 @@ migrate((app) => {
     indexes: [
       'CREATE UNIQUE INDEX `idx_owners_phone` ON `owners` (`phone`) WHERE `phone` != \'\'',
       'CREATE UNIQUE INDEX `idx_owners_legacy` ON `owners` (`legacy_uuid`) WHERE `legacy_uuid` != \'\'',
+      'CREATE UNIQUE INDEX `idx_owners_email` ON `owners` (`email`)',
     ],
-    // No passwords anywhere in this product. Sign in with Apple is the primary
-    // route (it is also the only one that can CREATE the first account, since
-    // auth-with-oauth2 mints the record); the built-in one-time code is the
-    // second-device and recovery lane, and it needs SMTP configured before it
-    // can be offered — an emailed code cannot arrive from an image with no
-    // mail transport.
-    passwordAuth: { enabled: false },
-    otp: { enabled: true },
+    // Email + password: the thing people already know how to do, and the only
+    // method that works without a mail transport in the image. One-time codes
+    // and password reset both arrive by email, and this image has no way to
+    // send one — so they stay off rather than shipping as dead buttons.
+    passwordAuth: { enabled: true, identityFields: ["email"] },
+    otp: { enabled: false },
     // "" = any record may authenticate. null would mean nobody can.
     authRule: "",
-    // A person can only ever see and edit themselves. Accounts are minted by
-    // the server (or by an OAuth2 sign-in), never by an anonymous POST.
+    // A person can only ever see and edit themselves.
     listRule: "id = @request.auth.id",
     viewRule: "id = @request.auth.id",
-    createRule: null,
+    createRule: "",   // anyone may sign themselves up; they still only see themselves
     updateRule: "id = @request.auth.id",
     deleteRule: null,
   });
