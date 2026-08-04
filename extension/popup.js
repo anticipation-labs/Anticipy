@@ -73,10 +73,23 @@ function renderJob(job) {
   show("again", !!job.id && RETRYABLE.has(job.status));
 }
 
+// A kept-back tab (a login wall, a page waiting on their OK) never surfaces
+// itself — the badge points here, and THIS button is the owner's click that
+// opens it. The worker does the focusing so notification and popup share one
+// path.
+let handBackTab = null;
+function renderHandBacks(handBacks) {
+  const ids = Object.keys(handBacks || {})
+    .sort((a, b) => (handBacks[a].at || 0) - (handBacks[b].at || 0));
+  handBackTab = ids.length ? ids[ids.length - 1] : null;
+  show("openhb", !!handBackTab);
+}
+
 async function refresh() {
-  const { pairCode, paired, currentJob } = await chrome.storage.local.get(["pairCode", "paired", "currentJob"]);
+  const { pairCode, paired, currentJob, handBacks } = await chrome.storage.local.get(["pairCode", "paired", "currentJob", "handBacks"]);
   renderPairing({ pairCode, paired });
   renderJob(currentJob);
+  renderHandBacks(handBacks);
 }
 
 el("paircode").addEventListener("click", async () => {
@@ -107,10 +120,15 @@ el("again").addEventListener("click", () => {
   show("again", false);
   tell("anticipy-again");
 });
+el("openhb").addEventListener("click", async () => {
+  if (!handBackTab) return;
+  try { await chrome.runtime.sendMessage({ type: "anticipy-open-handback", tabId: handBackTab }); } catch (e) { /* worker asleep */ }
+  window.close();
+});
 
 // Keep the panel honest while the popup is open — a job can finish mid-look.
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && (changes.currentJob || changes.paired || changes.pairCode)) refresh();
+  if (area === "local" && (changes.currentJob || changes.paired || changes.pairCode || changes.handBacks)) refresh();
 });
 
 checkConnection();

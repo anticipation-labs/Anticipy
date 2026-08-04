@@ -261,6 +261,93 @@ async function setCurrentJob(patch) {
   } catch (e) { /* best effort */ }
 }
 
+// ---------------------------------------------- never-foreground hand-back
+// §9: nothing she does may steal focus, ever. When a run ends needing the
+// owner — a login wall, a CAPTCHA, a prefilled page awaiting their OK — the
+// tab stays in the background where it is. A badge on the extension icon and
+// a notification are how the owner finds it; focus moves ONLY on their click.
+// Exported for the offline test harness.
+const HANDBACK_NOTIF = "anticipy-handback-";
+
+async function refreshBadge() {
+  try {
+    const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
+    const n = Object.keys(handBacks).length;
+    await chrome.action.setBadgeBackgroundColor({ color: "#c8a97e" });
+    await chrome.action.setBadgeText({ text: n ? String(n) : "" });
+  } catch (e) { /* best effort */ }
+}
+
+export async function surfaceHandBack(tabId, detail, kind) {
+  try {
+    let url = "";
+    try { url = (await chrome.tabs.get(tabId)).url || ""; } catch (e) { /* gone already */ }
+    const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
+    handBacks[String(tabId)] = { url, detail: String(detail || ""), kind: kind || "needs_user", at: Date.now() };
+    await chrome.storage.local.set({ handBacks });
+    await refreshBadge();
+    let site = "the page";
+    try { site = new URL(url).hostname.replace(/^www\./, "") || site; } catch (e) { /* no url yet */ }
+    await chrome.notifications.create(`${HANDBACK_NOTIF}${tabId}`, {
+      type: "basic",
+      iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+      title: "Anticipy",
+      message: kind === "confirm"
+        ? `Ready for your OK on ${site} — click to open.`
+        : `I need you on ${site} — click to open.`,
+      contextMessage: String(detail || "").replace(/\s+/g, " ").slice(0, 120),
+      priority: 2,
+      requireInteraction: true,
+    });
+  } catch (e) {
+    // A hand-back that can't notify still shows in the popup (badge/handBacks
+    // may have landed) — never let the surface break the job result.
+  }
+}
+
+export async function openHandBack(tabId) {
+  const key = String(tabId);
+  const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
+  const hb = handBacks[key];
+  try {
+    const t = await chrome.tabs.get(Number(key));
+    try { await chrome.tabs.ungroup(t.id); } catch (e) { /* not grouped */ }
+    // FOCUS-OK(owner-click): the owner clicked the notification or the popup
+    // button — the one gesture that may bring a working tab forward.
+    await chrome.tabs.update(t.id, { active: true });
+    await chrome.windows.update(t.windowId, { focused: true });
+  } catch (e) {
+    // The tab is gone (swept, or Chrome restarted) — a click that opens
+    // nothing reads as a broken promise, so reopen the page instead.
+    if (hb && hb.url) {
+      // FOCUS-OK(owner-click): same owner gesture, fresh tab.
+      try { await chrome.tabs.create({ url: hb.url, active: true }); } catch (e2) { /* give up quietly */ }
+    }
+  }
+  if (hb) {
+    delete handBacks[key];
+    await chrome.storage.local.set({ handBacks });
+  }
+  await refreshBadge();
+  try { await chrome.notifications.clear(`${HANDBACK_NOTIF}${key}`); } catch (e) { /* gone */ }
+}
+
+chrome.notifications.onClicked.addListener((id) => {
+  if (id.startsWith(HANDBACK_NOTIF)) openHandBack(id.slice(HANDBACK_NOTIF.length));
+});
+
+// A hand-back tab the owner closes by hand is answered — drop its badge.
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  try {
+    const { handBacks = {} } = await chrome.storage.local.get(["handBacks"]);
+    if (!handBacks[String(tabId)]) return;
+    delete handBacks[String(tabId)];
+    await chrome.storage.local.set({ handBacks });
+    await refreshBadge();
+    try { await chrome.notifications.clear(`${HANDBACK_NOTIF}${tabId}`); } catch (e) { /* gone */ }
+  } catch (e) { /* best effort */ }
+});
+
 // One line a person would recognise as their own errand.
 function jobLine(job, params) {
   const t = (params && (params.task || params.query || params.subject)) || job.goal || "a task";
@@ -366,6 +453,12 @@ async function runJobInner(job, params) {
       // free-form "yes" re-release a stuck job instead of the intended one.
       const status = out.status === "done" ? "done"
         : out.status === "needs_user" ? "needs_user" : "failed";
+      // §9: a kept-back tab never surfaces itself — badge + notification, and
+      // the owner's click is what focuses it (openHandBack). Surfaced before
+      // the job write so a deleted job row can't strand a hidden tab.
+      if (status === "needs_user" && out.tabId != null) {
+        await surfaceHandBack(out.tabId, out.result, "needs_user");
+      }
       await updateJob(job.id, { status, result: out.result });
       // The job row keeps needs_user (the phone offers Try again on it), but
       // in Chrome the honest word for "you cancelled the debugging bar" is
@@ -419,13 +512,11 @@ async function runJobInner(job, params) {
     try { await chrome.tabs.remove(tab.id); } catch (e) { /* gone */ }
   } else {
     // Prefill flows: the page IS the thing the owner acts on, so it stays —
-    // but surfaced where they can find it, never hidden in a collapsed group.
-    try {
-      await chrome.tabs.update(tab.id, { active: true });
-      try { await chrome.tabs.ungroup(tab.id); } catch (e) { /* not grouped */ }
-    } catch (e) { /* gone */ }
+    // but in the background (§9), never surfacing itself. The badge and
+    // notification are how they find it; their click is what opens it.
+    await surfaceHandBack(tab.id, jobLine(job, params), "confirm");
     await updateJob(job.id, { status: "awaiting_confirm", result: `opened ${job.goal} page in tab ${tab.id}` });
-    await setCurrentJob({ status: "awaiting_confirm", result: "It's filled in and open in a tab here, waiting on your OK." });
+    await setCurrentJob({ status: "awaiting_confirm", result: "It's filled in and waiting quietly in my tab group — click my notification (or Open below) to see it." });
   }
 }
 
@@ -492,6 +583,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
       .finally(() => respond({ ok: true }));
     return true;
   }
+  // The popup's "Open the page" button: the badge points at the popup, the
+  // popup relays the owner's click here — the same owner-gesture path the
+  // notification click takes.
+  if (msg.type === "anticipy-open-handback" && msg.tabId != null) {
+    openHandBack(msg.tabId).finally(() => respond({ ok: true }));
+    return true;
+  }
   // A pair code that can never be replaced is a dead end. Drop this install's
   // identity and run the same registration POST first install runs.
   if (msg.type === "anticipy-newcode") {
@@ -509,13 +607,17 @@ chrome.runtime.onInstalled.addListener((details) => {
   ensureRegistered();
   // First-run welcome: a guided setup page, not a paragraph in a README.
   if (details.reason === "install") {
-    chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") });
+    // FOCUS-OK(owner-install): installing the extension IS the owner's own
+    // action — the pairing page is the one thing allowed to open focused.
+    chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html"), active: true });
   }
 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === "anticipy-poll") { poll(); openRealtime(); }
   if (a.name === "anticipy-heartbeat") heartbeat();
 });
-// Also poll immediately on worker wake.
+// Also poll immediately on worker wake, and re-assert the badge — it is
+// derived state, and a restarted browser comes up with it blank.
 poll();
 openRealtime();
+refreshBadge();

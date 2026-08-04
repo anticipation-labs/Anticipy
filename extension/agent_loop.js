@@ -408,6 +408,14 @@ export async function runAgentGoal(goal, opts) {
   const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null } = opts;
 
   const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
+  // Never-foreground (§9): remember which tab the owner is looking at BEFORE
+  // anything of ours exists. If a tab this run spawns ever ends up holding the
+  // foreground, focus goes back there — we never keep it.
+  let ownerFocusId = null;
+  try {
+    const [fg] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (fg) ownerFocusId = fg.id;
+  } catch (e) { /* best effort */ }
   // Sweep any working tabs left behind by earlier runs BEFORE opening a new
   // one. Without this every run leaked its tab forever — the reason fifty of
   // them piled up. Storage survives service-worker restarts; memory does not.
@@ -418,6 +426,29 @@ export async function runAgentGoal(goal, opts) {
   } catch (e) { /* best effort */ }
   const tab = await chrome.tabs.create({ url: startUrl, active: false });
   userCancelledTabs.delete(tab.id);
+  // The owner may switch tabs mid-run; keep following where THEY are, so a
+  // restore lands on the tab they were actually using. A tab our working tab
+  // opened is never "theirs".
+  const noteOwnerFocus = async () => {
+    try {
+      const [t] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (t && t.id !== tab.id && t.openerTabId !== tab.id) ownerFocusId = t.id;
+    } catch (e) { /* best effort */ }
+  };
+  const restoreOwnerFocus = async () => {
+    if (ownerFocusId == null) return;
+    // FOCUS-OK(focus-restore): handing focus BACK to the owner's own tab after
+    // one of ours took it — the opposite of stealing it.
+    try { await chrome.tabs.update(ownerFocusId, { active: true }); } catch (e) { /* gone */ }
+  };
+  // Closing an active tab makes Chrome pick a successor — often the opener,
+  // i.e. OUR working tab, which would surface it. Re-assert background state.
+  const assertBackground = async () => {
+    try {
+      const [now] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (now && (now.id === tab.id || now.openerTabId === tab.id)) await restoreOwnerFocus();
+    } catch (e) { /* best effort */ }
+  };
   try {
     const { agentTabs = [] } = await chrome.storage.local.get(["agentTabs"]);
     await chrome.storage.local.set({ agentTabs: [...agentTabs, tab.id] });
@@ -512,7 +543,9 @@ export async function runAgentGoal(goal, opts) {
       }
       // Anything the working tab spawned (target=_blank, window.open) gets
       // swept every step, not only after clicks — during a long run these are
-      // what pile up in front of the person watching.
+      // what pile up in front of the person watching. A spawn that grabbed the
+      // foreground is the worst offender: it is NOT spared, focus goes back to
+      // the owner's tab first, then it closes like the rest (§9).
       try {
         const spawnedNow = (await chrome.tabs.query({}))
           .filter((t) => t.openerTabId === tab.id && t.id !== tab.id && !t.active);
@@ -746,6 +779,9 @@ export async function runAgentGoal(goal, opts) {
             if (spawned.length) {
               const target = spawned[spawned.length - 1];
               const url = target.pendingUrl || target.url;
+              // A trusted click can hand the new tab the foreground; give it
+              // back to the owner before closing anything (§9).
+              if (spawned.some((t) => t.active)) await restoreOwnerFocus();
               for (const t of spawned) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
               if (url && !url.startsWith("chrome")) {
                 const nav = blockedDomain(url);
@@ -753,6 +789,7 @@ export async function runAgentGoal(goal, opts) {
                 await chrome.tabs.update(tab.id, { url });
                 history.push(`step ${step}: link opened a new tab — following ${url.slice(0, 120)} in place`);
               }
+              await assertBackground();
             }
           } catch (e) { /* best effort */ }
         }
@@ -771,13 +808,13 @@ export async function runAgentGoal(goal, opts) {
     userCancelledTabs.delete(tab.id);
     try { await chrome.debugger.detach({ tabId: tab.id }); } catch (e) { /* already closed */ }
     // Close the working tab. It is only kept when a HUMAN has to look at it
-    // (a login wall, a CAPTCHA, a form waiting on them) — and then it is
-    // surfaced instead of hidden in a collapsed group, because a tab nobody
-    // can find is the same as a leaked one.
+    // (a login wall, a CAPTCHA, a form waiting on them) — but even then it
+    // NEVER surfaces itself (§9): it stays put in the collapsed group, the
+    // caller badges the icon and raises a notification, and focus moves only
+    // when the owner clicks. The notification is how they find it — a tab
+    // that announces itself is not a leaked one.
     try {
       if (handBack) {
-        await chrome.tabs.update(tab.id, { active: true });
-        try { await chrome.tabs.ungroup(tab.id); } catch (e) { /* not grouped */ }
         const { agentTabs = [] } = await chrome.storage.local.get(["agentTabs"]);
         await chrome.storage.local.set({ agentTabs: agentTabs.filter((id) => id !== tab.id) });
       } else {
@@ -787,11 +824,16 @@ export async function runAgentGoal(goal, opts) {
     // Late-spawned duplicates (target=_blank links) that the in-loop adoption
     // missed shouldn't pile up in the owner's window. openerTabId alone misses
     // some spawns, so anything created during the run that isn't the agent tab
-    // and isn't focused gets closed.
+    // gets closed. A stray HOLDING FOCUS is closed only when it is provably
+    // ours (opened by the working tab) — a tab the owner opened themselves
+    // mid-run is theirs to keep — and focus goes back to the owner first.
     try {
       const strays = (await chrome.tabs.query({})).filter(
-        (t) => t.id !== tab.id && !preexisting.has(t.id) && !t.active);
+        (t) => t.id !== tab.id && !preexisting.has(t.id)
+          && (!t.active || t.openerTabId === tab.id));
+      if (strays.some((t) => t.active)) await restoreOwnerFocus();
       for (const t of strays) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
+      await assertBackground();
     } catch (e) { /* best effort */ }
   }
 }
