@@ -207,10 +207,21 @@ final class AnticipySession: ObservableObject {
             // deleting the app. Throw the bad key away so the fetch below can
             // get a fresh one — rate-limited, so a genuinely rejected key
             // retries occasionally instead of hammering every 3 seconds.
-            if e.status == 401 || e.status == 403,
-               Date().timeIntervalSince(lastTokenRecovery) > 60 {
-                lastTokenRecovery = Date()
-                serviceToken = ""
+            if e.status == 401 || e.status == 403 {
+                // A signed-in session that is being refused is over — the
+                // account was deleted, or the token expired (PocketBase issues
+                // 7-day tokens). Put them back at the door rather than leaving
+                // them staring at "Anticipy won't let me in" with no way
+                // forward. Seen for real in the simulator: an account removed
+                // server-side left the app in a permanent refused state.
+                if !authToken.isEmpty {
+                    signOut()
+                    return
+                }
+                if Date().timeIntervalSince(lastTokenRecovery) > 60 {
+                    lastTokenRecovery = Date()
+                    serviceToken = ""
+                }
             }
         } catch {
             connection = .offline

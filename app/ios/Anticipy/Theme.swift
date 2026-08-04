@@ -16,14 +16,54 @@ enum Theme {
 
     /// Serif display type that SCALES with the reader's text size.
     ///
-    /// This used to return an absolute point size, so every headline in the app
-    /// stayed frozen while the body copy beneath it grew — at large
-    /// accessibility sizes the hierarchy inverted and the "heading" became the
-    /// smallest text on screen. `relativeTo:` keeps the serif face and the
-    /// intended proportions while honouring Dynamic Type.
-    static func display(_ size: CGFloat) -> Font {
-        .custom("New York", size: size, relativeTo: .largeTitle)
-            .weight(.regular)
+    /// Reached as a font DESIGN, not a lookup by name. `Font.custom("New York")`
+    /// resolves to nil — New York is not a family you can name — and SwiftUI
+    /// falls back to SF Pro SILENTLY. Every headline in this app has therefore
+    /// been rendering in the system sans, which is to say the brand's voice has
+    /// been absent on device the whole time. `design: .serif` is how iOS
+    /// actually exposes it.
+    ///
+    /// UIFontMetrics keeps the Dynamic Type scaling that `relativeTo:` gave us,
+    /// so headlines still grow with the reader's text size.
+    static func display(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        let scaled = UIFontMetrics(forTextStyle: .largeTitle).scaledValue(for: size)
+        return .system(size: scaled, weight: weight, design: .serif)
+    }
+
+    /// Anything she is SAYING. 17pt with real leading, in ivory — not 13pt grey.
+    /// Grey is for counts, timestamps and error codes; it should never carry a
+    /// sentence.
+    static let voice = Font.system(size: 17)
+    /// Supporting explanation sitting under a control.
+    static let aside = Font.system(size: 15)
+    /// Labels, counts, timestamps.
+    static let meta = Font.system(size: 12, weight: .semibold)
+
+    /// Level-2 elevation. The dark ladder is ink -> card -> raised; the third
+    /// rung was missing, so nothing could ever sit visibly on top of anything.
+    static let raised = Color(hex: 0x262626)
+    /// Destructive, in the brand's register. systemRed appears nowhere else in
+    /// this product and reads as borrowed from Apple.
+    static let alarm = Color(hex: 0xC96A5A)
+
+    /// One spacing scale. There were 23 distinct padding values and no ratio
+    /// between them, which is most of why the app read as a list rather than a
+    /// layout: space BETWEEN groups must be ~2.5-3x space WITHIN a group.
+    enum Space {
+        static let hair: CGFloat = 4
+        static let tight: CGFloat = 8
+        static let snug: CGFloat = 12
+        static let base: CGFloat = 16
+        static let card: CGFloat = 20
+        static let roomy: CGFloat = 24
+        static let section: CGFloat = 32
+        static let wide: CGFloat = 40
+        static let hero: CGFloat = 72
+    }
+    enum Radius {
+        static let small: CGFloat = 12
+        static let card: CGFloat = 20
+        static let hero: CGFloat = 28
     }
 
     /// The one motion signature the whole app shares. A response of 0.35 with
@@ -31,6 +71,49 @@ enum Theme {
     /// slower feels sluggish, faster feels jumpy.
     static let spring = Animation.spring(response: 0.35, dampingFraction: 0.8)
     static let springSlow = Animation.spring(response: 0.55, dampingFraction: 0.85)
+}
+
+/// The card, with an edge you can actually see and a light source above it.
+///
+/// The old border was Theme.stroke #252525 on Theme.card #1E1E1E — a contrast
+/// ratio of 1.09:1, i.e. optically absent on all eleven cards. And the app had
+/// no shadows, no materials and no blur anywhere, so nothing ever sat ON
+/// anything; everything was painted flat onto the same black.
+struct CardBackground: ViewModifier {
+    var elevated = false
+    private var r: CGFloat { elevated ? Theme.Radius.hero : Theme.Radius.card }
+
+    func body(content: Content) -> some View {
+        content
+            .padding(elevated ? Theme.Space.roomy : Theme.Space.card)
+            .background(
+                RoundedRectangle(cornerRadius: r, style: .continuous)
+                    .fill(elevated ? Theme.raised : Theme.card)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: r, style: .continuous)
+                            // 9% white at the top fading to 2% at the bottom is
+                            // one light source above, which is what makes a
+                            // dark surface read as a physical object.
+                            .strokeBorder(
+                                LinearGradient(colors: [.white.opacity(0.09), .white.opacity(0.02)],
+                                               startPoint: .top, endPoint: .bottom),
+                                lineWidth: 0.75)
+                    )
+            )
+            // Two soft layers rather than one heavy one: a single big shadow
+            // goes muddy against near-black.
+            .shadow(color: .black.opacity(elevated ? 0.55 : 0.35), radius: 2, y: 1)
+            .shadow(color: .black.opacity(elevated ? 0.45 : 0.25), radius: 14, y: 8)
+    }
+}
+
+extension View {
+    func cardSurface(elevated: Bool = false) -> some View {
+        modifier(CardBackground(elevated: elevated))
+    }
+    /// The name the eleven existing call sites already use — kept so every one
+    /// of them picks up the visible edge and the elevation without being edited.
+    func anticipyCard() -> some View { modifier(CardBackground()) }
 }
 
 extension Color {
@@ -67,22 +150,6 @@ struct LogoMark: View {
         }
         .frame(width: size, height: size)
     }
-}
-
-struct CardBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Theme.card)
-                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.stroke))
-            )
-    }
-}
-
-extension View {
-    func anticipyCard() -> some View { modifier(CardBackground()) }
 }
 
 /// Haptic vocabulary: light tap for touches, medium for state changes,

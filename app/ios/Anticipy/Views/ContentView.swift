@@ -621,9 +621,7 @@ struct HomeView: View {
                 .font(Theme.display(26))
                 .foregroundStyle(Theme.ivory)
                 .multilineTextAlignment(.center)
-            Text(session.agentPaired
-                 ? "I reached my server and it turned me away, so I can't show you your day. My key went stale — I'm getting a new one now. This should clear itself in a moment."
-                 : "I reached my server and it turned me away. My phone gets its key from your linked Chrome, and nothing is linked yet — so I can't read your day until that's done. Settings › Browser agent.")
+            Text("I reached my server and it turned me away. I'm sorting my own key out — this should clear itself in a moment.")
                 .font(.callout)
                 .foregroundStyle(Theme.gray)
                 .multilineTextAlignment(.center)
