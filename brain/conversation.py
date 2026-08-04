@@ -80,6 +80,10 @@ intents:
   that asks for information or for something to be done is "new_request",
   however casually it is phrased. "what's the weather in Vancouver", "what
   time do they close", "how much is it" are all new_request.
+  EXCEPTION — conversational repair: a bare "What", "huh", "wait what",
+  "??", "come again" right after one of YOUR messages is them asking you to
+  say it again, not a new task. That is "chat", and your reply restates your
+  last message more plainly — never "What do you mean?" back at them.
 
 Never say you cannot do something. You have a browser and you can look
 things up; deciding what is possible is not your job here. If you are unsure
@@ -309,6 +313,15 @@ class Conversation:
                 spoken = self._think(text)
                 if spoken:
                     parsed["reply"] = spoken
+        elif self._is_repair(text):
+            # "What" / "huh" / "??" right after her message is the owner
+            # asking her to say it again — not a new task. Routing it into
+            # triage queued literal garbage ("What" became a job) while the
+            # reply asked "What do you mean?" back at him. Restate instead.
+            last = self._last_anticipy_line(phone)
+            if last:
+                parsed["reply"] = f"Sorry — what I meant was: {last}"
+            intent = "chat"
         elif intent in ("new_request", "chat"):
             # Feed it back through the one brain — same path as the pendant.
             #
@@ -596,6 +609,19 @@ Use {"facts": {}} when there is nothing durable."""
         return None
 
     # ------------------------------------------------------------ internals
+
+    REPAIR = re.compile(
+        r"^(wait[\s,]+)?(what|huh|que|come again|say again|say that again"
+        r"|what was that|\?{1,3})[\s?!.]*$", re.IGNORECASE)
+
+    def _is_repair(self, text: str) -> bool:
+        return bool(self.REPAIR.match(text.strip()))
+
+    def _last_anticipy_line(self, phone: str) -> Optional[str]:
+        for turn in reversed(self._thread(phone)):
+            if turn.role == "anticipy":
+                return turn.text
+        return None
 
     def _thread(self, phone: str) -> list[Turn]:
         t = self.threads.setdefault(phone, [])

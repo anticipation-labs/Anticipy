@@ -123,12 +123,33 @@ def test_only_the_owner_can_steer():
     check("empty sender authorizes nobody", not same_phone("", "+16047245161"))
 
 
+def test_bare_what_restates_instead_of_new_task():
+    """LIVE BUG (2026-08-04): 'What' after her booking message was triaged as
+    a brand-new request while the reply asked 'What do you mean?' back."""
+    a, c = convo_with([JOB], [])
+    c._classify = lambda p, t: {"intent": "new_request", "pending_id": None,
+                                "reply": "What do you mean?"}
+    from brain.conversation import Turn
+    c.threads[a.owner_phone] = [
+        Turn("anticipy", "want me to book Cactus Club for 7?"),
+    ]
+    out = c.on_reply(a.owner_phone, "What")
+    check("repair never reaches triage", a.heard == [])
+    check("repair restates her last message",
+          "book Cactus Club for 7" in out["reply"])
+    out2 = c.on_reply(a.owner_phone, "wait what??")
+    check("'wait what??' is also repair", "Sorry" in out2["reply"])
+    check("a real question is NOT repair",
+          not c._is_repair("what time do they close"))
+
+
 for fn in [test_answer_amends_instead_of_dropping,
            test_amend_never_claims_it_is_moving,
            test_failed_write_is_never_reported_as_success,
            test_keyword_fallback_uses_word_boundaries,
            test_fallback_with_nothing_pending_does_not_claim_action,
-           test_only_the_owner_can_steer]:
+           test_only_the_owner_can_steer,
+           test_bare_what_restates_instead_of_new_task]:
     fn()
 
 print(f"\nsms flows: {len(PASS)} passed, {len(FAIL)} failed")
