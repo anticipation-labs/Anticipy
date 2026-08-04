@@ -48,7 +48,11 @@ async function ensureRegistered() {
       agent_id: agentId,
       pair_code: pairCode,
       paired: false,
-      browser: navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || "Chrome",
+      // The extension version rides along in this existing field so nobody has
+      // to guess which build is actually installed. An unpacked extension does
+      // not auto-update, so "did you reload it?" has been unanswerable — and it
+      // is the single most common cause of the browser arm being dead.
+      browser: `${navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || "Chrome"} ext/${chrome.runtime.getManifest().version}`,
       last_seen: new Date().toISOString(),
     }),
   });
@@ -65,7 +69,7 @@ const activeJobs = new Set();
 // ------------------------------------------------------------- LLM key
 // Consumers never paste API keys: once paired, the agent fetches its key from
 // the backend. A manually saved key (popup) still wins, so dev overrides work.
-async function ensureLLMKey() {
+async function ensureLLMKey(force = false) {
   const { openrouterKey, agentModel, serviceToken, keyFetchedAt, agentId } =
     await chrome.storage.local.get(["openrouterKey", "agentModel", "serviceToken", "keyFetchedAt", "agentId"]);
   // Refresh when ANY piece is missing or the bundle is stale — not just the
@@ -74,7 +78,7 @@ async function ensureLLMKey() {
   // brick it with no way back except a manual reinstall.
   const complete = openrouterKey && agentModel !== undefined && serviceToken !== undefined;
   const fresh = Date.now() - (keyFetchedAt || 0) < 6 * 3600 * 1000;
-  if (complete && fresh) return openrouterKey;
+  if (!force && complete && fresh) return openrouterKey;
   if (!agentId) return openrouterKey || null;
   try {
     const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
@@ -167,10 +171,27 @@ async function claimJob() {
   // forever with nothing reporting a problem. Silent dead-queue is worse
   // than the narrow case this clause admits.
   const cond = `status="queued" && (owner="${owner}" || owner="")`;
-  const r = await fetch(
+  const poll = () => fetch(
     `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`,
     { headers: await writeHeaders() }
   );
+  let r = await poll();
+  // A REFUSED read is not "no work". This returned null on any !ok, so once the
+  // stored token went stale the browser arm went permanently, silently deaf:
+  // the 10-second heartbeat kept working — PATCHing last_seen needs no token —
+  // so the phone showed "Chrome ready" while every job poll was being turned
+  // away. Omar watched a released booking sit in the queue with a live-looking
+  // browser and nothing happening. Get a fresh key and try once more.
+  if (r.status === 401 || r.status === 403) {
+    console.warn("Anticipy: job poll refused - refreshing my key and retrying");
+    await ensureLLMKey(true);
+    r = await poll();
+    if (!r.ok) {
+      console.warn("Anticipy: still refused after refresh -", r.status,
+                   "- reload this extension from the setup page if it persists");
+      return null;
+    }
+  }
   if (!r.ok) return null;
   const items = (await r.json()).items;
   if (!items || !items.length) return null;
