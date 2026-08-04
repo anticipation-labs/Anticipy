@@ -173,13 +173,35 @@ Fix, two parts:
   she hears then resolve to people she can spell, and "tomorrow at 7" can
   check against a real calendar.
 
-## 9. Privacy & security
+## 9. Browser jobs must never take the foreground
+
+The agent's working tab is already created `active: false` inside a
+collapsed tab group (`agent_loop.js`), but paths remain that surface tabs:
+the needs_user hand-back calls `tabs.update(active: true)`, spawned
+target=_blank tabs open wherever Chrome pleases, and the pairing/onboarding
+page opens focused. Rule: **nothing she does may steal focus, ever.**
+Hand-backs should badge the extension icon + notify instead of seizing the
+screen; spawned tabs are swept (shipped in 0.2.3); audit every
+`tabs.create`/`tabs.update`/`windows.update` call for focus effects.
+
+## 10. Privacy & security
 
 Named, deliberately last per Omar. Already in place: token-guarded API,
 owner-scoped reads, sealed anonymous access, confirmation gates, financial
 domain blocklist, daily DB backups (added tonight). The remaining work
 (E2E encryption of transcripts at rest, delete-my-day, on-device-only
 mode) is scheduled after the experience work above.
+
+## How this gets built: an agent fleet, gated by evidence
+
+The work above is parallelized across Claude Code agents on the Mac, each
+working an isolated copy of the repo from a written brief (context,
+constraints, definition of done, tests that must pass). The orchestrator
+(Devin) writes the briefs, manages the fleet, and GATES every result: the
+offline suites, integration, and a live production proof — the same
+evidence bar as the 2026-08-04 end-to-end test — before anything merges.
+Perfection defined: never backwards; every merge accelerates an item on
+this list or retires a newly found real problem.
 
 ---
 
@@ -191,8 +213,9 @@ mode) is scheduled after the experience work above.
 4. **§1 memory consolidation + profile layer** — she starts to know him.
 5. **§4 Heard-log redesign + §5 one-conversation sync** (one iOS build).
 6. **§2 segment-fed triage context** — pauses stop shattering thoughts.
-7. **§8 day-zero interview + imports.**
-8. **§7.2 voice profile gate**, then **§9 privacy hardening.**
+7. **§9 never-foreground audit** (small; can ride along with any extension change).
+8. **§8 day-zero interview + imports.**
+9. **§7.2 voice profile gate**, then **§10 privacy hardening.**
 
 Rule for every item: design → build → offline tests → live production proof
 (the kind run tonight for signup/browser) → only then the next item.
