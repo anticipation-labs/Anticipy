@@ -166,8 +166,27 @@ check("and nothing is said", out["anticipy_says"] is None)
 a, out = hear("Let's book the Vienna flights tomorrow.",
               {"decision": "act", "goal": "book flights to Vienna",
                "addressee": "person", "reason": "they agreed"})
-check("consequential person-to-person work is not even queued",
-      a.queued == [] and a.texts == [], f"{a.queued} {a.texts}")
+# This case used to assert the opposite — that the job "is not even queued".
+# That assertion is what killed the product on 2026-08-04: Omar agreed a
+# whole dinner out loud with a friend (Cactus Club, park location, 7pm, two
+# people) and every line of it came back "Noted — nothing needed", because
+# a plan made WITH SOMEONE ELSE could never become work. That is the single
+# strongest signal Anticipy gets — another human is holding him to it — so
+# binning it removed the reason the product exists.
+#
+# The lane was answering the wrong question. "May she SPEAK about this?" and
+# "May she WORK on this?" are separate; wave 1 collapsed them, turning
+# "interrupt almost never" into "do nothing". Silence is still absolute here
+# — what changes is that the work gets prepared and waits on his desk.
+check("a plan agreed with another person becomes real, prepared work",
+      len(a.queued) == 1, f"{a.queued}")
+check("and it is HELD — she prepares it, she does not book it behind his back",
+      a.queued and a.queued[0]["hold"] is True, f"{a.queued}")
+check("the card goes to her desk, not down the ambient hole",
+      a.queued and a.queued[0]["params"].get("lane") == "desk",
+      str(a.queued and a.queued[0]["params"]))
+check("and she still says NOTHING — the app is where he finds it",
+      a.texts == [] and out["anticipy_says"] is None, f"{a.texts}")
 
 a, out = hear("Maybe the trip should be that first week.",
               {"decision": "ask", "goal": "plan the Vienna trip",

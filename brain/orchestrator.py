@@ -88,9 +88,20 @@ Reply ONLY with compact JSON:
 # was before this field existed, so a misbehaving model cannot regress her.
 ADDRESSEES = ("assistant", "person", "dictation", "self")
 
-# Speech not aimed at her stays in the ambient lane: remembered, researched
-# quietly when read-only, but never a text and never a confirmation prompt.
+# Speech not aimed at her stays in the ambient lane: remembered, worked on
+# quietly, but never a text and never an interruption. Silence is about her
+# VOICE, not her hands — what she may do is decided separately, below.
 AMBIENT_ADDRESSEES = ("person", "dictation")
+
+# The one lane where the words are not his own intentions. When he dictates,
+# he is AUTHORING text — voice-typing a message, instructing another AI — so
+# "book us a table" inside it is a sentence he is composing, not a plan he is
+# making, and acting on it is the 2026-08-04 "On it" bug.
+#
+# Everything else he says out loud IS intention. A plan agreed with another
+# human is the strongest signal Anticipy ever gets — someone else is holding
+# him to it — so consequential work there is prepared and held, never binned.
+AUTHORED_ADDRESSEES = ("dictation",)
 
 # Goals whose final step changes the world -> require explicit user yes.
 IRREVERSIBLE = {

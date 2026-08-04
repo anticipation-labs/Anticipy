@@ -29,7 +29,8 @@ from . import pb
 from .llm import LLM, now_line
 from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
-                           AMBIENT_ADDRESSEES)
+                           AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
+                           _extract_json)
 
 NAME = "Anticipy"
 
@@ -124,6 +125,19 @@ def is_consequential(goal: str, params: dict | None = None,
         return False
     # Overheard: default to holding — only explicitly read-only runs unattended.
     return not _READ_ONLY_RE.search(g)
+
+
+# How long a conversation stays "live" — the window the split-thought carry
+# and the addressee stickiness already use. People pause for seconds.
+CONVERSATION_WINDOW = 120
+
+# How long a PLAN under discussion stays open. Deliberately much longer than
+# the sentence-to-sentence window above: a dinner gets talked into shape over
+# whole minutes — greeting, catching up, "seven?", "where?", "the park one" —
+# and the card minted by the first line must still be the card the last line
+# improves. Safe to be generous, because reaching the open plan never merges
+# by itself: _same_plan (words first, then meaning) still has to agree.
+OPEN_PLAN_WINDOW = 600
 
 
 def job_lane(goal: str) -> str:
@@ -236,6 +250,15 @@ class Anticipy:
         # classification rides along as context and the model needs positive
         # evidence to switch. Same recency window as the split-thought carry.
         self._last_addressee: Optional[tuple[str, float]] = None
+        # The one plan this conversation is currently circling: (job id, ts).
+        # A dinner gets agreed over five turns — "we should get dinner", "how
+        # about seven", "Cactus Club", "the park one", "just the two of us" —
+        # and each turn phrases the same intention differently enough that no
+        # word-overlap rule can tie them together ("make a dinner reservation"
+        # and "reserve a table at Cactus Club" share not one word). What ties
+        # them together is that they are the same conversation. One plan under
+        # discussion, one card on his desk, getting better as he talks.
+        self._open_plan: Optional[tuple[str, float]] = None
 
     # ------------------------------------------------------------ hearing
 
@@ -355,11 +378,12 @@ class Anticipy:
         # lane=ambient so the whole story is auditable.
         if addressee in AMBIENT_ADDRESSEES and decision.decision in ("act", "ask"):
             goal = decision.goal
-            quiet_research = (decision.decision == "act" and goal
-                              and not decision.missing
-                              and not (decision.needs_confirmation
-                                       or goal in IRREVERSIBLE
-                                       or is_consequential(goal)))
+            consequential = bool(goal) and (decision.needs_confirmation
+                                            or goal in IRREVERSIBLE
+                                            or is_consequential(goal))
+            startable = (decision.decision == "act" and goal
+                         and not decision.missing)
+            quiet_research = startable and not consequential
             if quiet_research:
                 # Free to do, lands on her desk — queued unheld, said nowhere.
                 params = {"source": line, "now": now_line(), "lane": "ambient"}
@@ -373,14 +397,53 @@ class Anticipy:
                     decision="ignore", goal=goal,
                     reason=f"{addressee}-directed: quiet research, saying nothing",
                     addressee=addressee)
+            elif startable and addressee not in AUTHORED_ADDRESSEES:
+                # A real plan, made out loud with another human, that ends in
+                # something irreversible — the dinner he just agreed to. This
+                # is not chatter to be filed; it is the single thing Anticipy
+                # exists to catch, and on 2026-08-04 it vanished: the whole
+                # Cactus Club plan came back "Noted — nothing needed" because
+                # the ambient lane refused all consequential work.
+                #
+                # The lane was answering the wrong question. "May she SPEAK
+                # about this?" and "May she WORK on this?" are different, and
+                # collapsing them turned "interrupt almost never" into "do
+                # nothing". So: the work is prepared and HELD for his yes, and
+                # that yes is asked for on her DESK — a card in the app — not
+                # as a text. She stays silent; she just isn't idle.
+                params = {"source": line, "now": now_line(), "lane": "desk"}
+                if decision.assumption:
+                    params["assumption"] = decision.assumption
+                # He may have agreed to the same thing three times in one
+                # conversation ("seven works" … "see you at seven"). One plan,
+                # one card.
+                already = self._same_pending(goal)
+                if already:
+                    decision = Decision(
+                        decision="ignore", goal=goal,
+                        reason=f"{addressee}-directed: already on her desk",
+                        addressee=addressee)
+                else:
+                    job_id = self._queue_job(goal, params, hold=True)
+                    self.loops.append(LoopRecord(
+                        commitment_id=mem.get("commitment_id") or -1,
+                        what=goal, status="handling", job_id=job_id))
+                    decision = Decision(
+                        decision="act", goal=goal,
+                        reason=f"{addressee}-directed: prepared, waiting on his OK",
+                        needs_confirmation=True, addressee=addressee)
             else:
-                # Held work or a question would interrupt him about speech
-                # that was never aimed at her. Remembered; nothing queued.
+                # Dictation he is AUTHORING (voice-typing, instructing another
+                # AI) is content, not commitment — a booking inside it is a
+                # sentence, not a plan, and acting on it is the 2026-08-04
+                # "On it" bug. Likewise a question would interrupt him about
+                # speech never aimed at her. Remembered; nothing queued.
                 decision = Decision(
                     decision="ignore", goal=goal,
                     reason=f"{addressee}-directed: stays ambient",
                     addressee=addressee)
-            self._prev = None if quiet_research else (line, time.time())
+            acted = decision.decision == "act" or quiet_research
+            self._prev = None if acted else (line, time.time())
             return {"memory": mem, "decision": decision, "anticipy_says": None}
 
         self._prev = None if decision.decision in ("act", "ask") else (line, time.time())
@@ -623,9 +686,56 @@ class Anticipy:
         # waiting on the owner. Five copies of "Draft email to Marcus" piled up
         # in production, each one texting him, and every "yes" after that was
         # ambiguous by construction — so she had to ask which one, forever.
+        # Is this the plan we are mid-conversation about? Consequential work
+        # only: research is cheap, silent and additive, but a card asking him
+        # to approve something must not breed. Words alone cannot see this —
+        # "make a dinner reservation" and "reserve a table at Cactus Club"
+        # share not one word — only the fact that he is still talking about
+        # it, plus a meaning check that it IS the same plan and not a second
+        # errand raised in the same breath.
+        if is_consequential(goal, params, explicit=explicit):
+            open_plan = self._open_plan
+            if open_plan and time.time() - open_plan[1] < OPEN_PLAN_WINDOW:
+                job_id = open_plan[0]
+                # Only while it is still his to approve. Once he has said yes
+                # and it is running, the next thing he says is a NEW errand.
+                current = next((j for j in self._pending_jobs()
+                                if j.get("id") == job_id), None)
+                if current is None:
+                    self._open_plan = None
+                elif self._same_plan(goal, current.get("goal") or ""):
+                    # The richer wording wins, whichever order they arrived
+                    # in — a card must only ever get better.
+                    if not self._covered_by(goal, current.get("goal") or ""):
+                        try:
+                            pb.patch(
+                                f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+                                json={"goal": goal,
+                                      "params": json.dumps(params)},
+                                timeout=10)
+                        except Exception:
+                            pass
+                    self._open_plan = (job_id, time.time())
+                    return job_id
+
         existing = self._same_pending(goal)
         if existing:
             return existing
+        # A plan is assembled over several turns, not stated once. "Book
+        # dinner tomorrow" becomes "book dinner for 2 at Cactus Club park
+        # location tomorrow at 7 PM" three sentences later — the SAME plan,
+        # better known. Word overlap calls those different jobs (the vague one
+        # is half the length), so his desk filled up with one card per turn of
+        # the conversation. When the new goal contains the pending one, she
+        # has simply learned more: improve that card in place.
+        refined = self._refines_pending(goal)
+        if refined:
+            try:
+                pb.patch(f"{self.backend_url}/api/collections/jobs/records/{refined}",
+                         json={"goal": goal, "params": json.dumps(params)}, timeout=10)
+            except Exception:
+                pass
+            return refined
         # Route read-only work to the worker's research arm (roadmap §6).
         # Without a Brave key the worker has no way to run it, so the job
         # keeps the browser lane rather than queueing for an executor that
@@ -644,7 +754,12 @@ class Anticipy:
                 timeout=10,
             )
             r.raise_for_status()
-            return r.json().get("id")
+            job_id = r.json().get("id")
+            if job_id and r.json().get("status") == "awaiting_confirm":
+                # From here until the conversation goes quiet, anything else
+                # consequential he says is this same plan firming up.
+                self._open_plan = (job_id, time.time())
+            return job_id
         except Exception:
             return None
 
@@ -737,10 +852,84 @@ class Anticipy:
     def _same_pending(self, goal: str) -> Optional[str]:
         """Is this same thing already waiting on the owner? Compared on
         meaningful words, because the model phrases the same intent slightly
-        differently each time it hears it."""
+        differently each time it hears it.
+
+        Only ever within the same consequence class. LOOKING A THING UP IS NOT
+        DOING IT: "research Cactus Club availability for 2 at 7pm tomorrow" and
+        "book Cactus Club for 2 at 7pm tomorrow" share almost every word, so
+        word overlap alone called them the same job — and the booking was
+        silently dropped in favour of the lookup that was already queued. That
+        is how, on 2026-08-04, a whole dinner plan came to nothing: she
+        researched the restaurant, he said "book it", and _queue_job handed
+        back the research job's id and created nothing. A job that changes his
+        world can never be deduped against one that only reads."""
         want = {w for w in re.findall(r"[a-z0-9']+", (goal or "").lower()) if len(w) > 3}
         if not want:
             return None
+        want_consequential = is_consequential(goal)
+        for j in self._pending_jobs():
+            other = j.get("goal") or ""
+            if is_consequential(other) != want_consequential:
+                continue
+            have = {w for w in re.findall(r"[a-z0-9']+", other.lower())
+                    if len(w) > 3}
+            if not have:
+                continue
+            overlap = len(want & have) / max(len(want), len(have))
+            if overlap >= 0.7:
+                return j["id"]
+        return None
+
+    @staticmethod
+    def _covered_by(goal: str, other: str) -> bool:
+        """Does `other` already say everything `goal` says? Then patching
+        would only lose detail."""
+        want = {w for w in re.findall(r"[a-z0-9']+", (goal or "").lower()) if len(w) > 3}
+        have = {w for w in re.findall(r"[a-z0-9']+", (other or "").lower()) if len(w) > 3}
+        return bool(want) and want <= have
+
+    def _same_plan(self, new_goal: str, pending_goal: str) -> bool:
+        """Same plan firming up, or a second errand in the same breath?
+
+        This is a MEANING question — "make a dinner reservation" and "reserve
+        a table for 2 at Cactus Club" are one plan with zero words in common,
+        while "book dinner tomorrow" and "cancel the gym membership" share a
+        conversation and must stay two cards — so the model answers it.
+
+        But words decide FIRST, wherever words are enough, and no second
+        opinion may override them — live runs watched the model call "make a
+        dinner reservation" and "book dinner at Cactus Club at 7 PM" two
+        different errands, and a second card appeared on his desk. Both
+        containment (one goal's words all survive into the other: the
+        definition of a plan gaining detail) and strong overlap of the
+        smaller goal into the larger are deterministic merges. Only when the
+        words genuinely cannot tell — the full rewording, "make a dinner
+        reservation" vs "reserve a table at the park spot" — does the model
+        answer, and with no model those stay two cards: a duplicate card is
+        an annoyance, a swallowed errand is a loss."""
+        want = {w for w in re.findall(r"[a-z0-9']+", (new_goal or "").lower()) if len(w) > 3}
+        have = {w for w in re.findall(r"[a-z0-9']+", (pending_goal or "").lower()) if len(w) > 3}
+        if not want or not have:
+            return False
+        if len(want & have) / min(len(want), len(have)) >= 0.5:
+            return True
+        if self.llm and getattr(self.llm, "live", False):
+            try:
+                res = self.llm.chat(
+                    "Two task descriptions from the SAME conversation, "
+                    "minutes apart. They may be one real-world plan worded "
+                    "differently — the later one usually richer as details "
+                    "(time, place, who) arrive — or two different errands "
+                    "with different real-world outcomes. Reply ONLY with "
+                    'JSON: {"same": true} or {"same": false}.',
+                    f"A: {pending_goal}\nB: {new_goal}")
+                return bool(json.loads(_extract_json(res.text)).get("same"))
+            except Exception:
+                pass
+        return False
+
+    def _pending_jobs(self) -> list[dict]:
+        """Everything still waiting — queued or held for his yes."""
         try:
             filt = 'status="awaiting_confirm" || status="queued"'
             if self.owner_id:
@@ -748,18 +937,35 @@ class Anticipy:
             r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 20, "sort": "-created"},
                        timeout=10)
-            if not r.ok:
-                return None
-            for j in r.json().get("items", []):
-                have = {w for w in re.findall(r"[a-z0-9']+", (j.get("goal") or "").lower())
-                        if len(w) > 3}
-                if not have:
-                    continue
-                overlap = len(want & have) / max(len(want), len(have))
-                if overlap >= 0.7:
-                    return j["id"]
+            return r.json().get("items", []) if r.ok else []
         except Exception:
-            pass
+            return []
+
+    def _refines_pending(self, goal: str) -> Optional[str]:
+        """Is this a better-informed version of something already pending?
+
+        Asymmetric on purpose. _same_pending asks "are these the same size and
+        shape" — the right question for the same thing said twice. This asks
+        "does the new goal CONTAIN the old one", which is what a plan being
+        filled in actually looks like: every word of "book dinner reservation
+        tomorrow" survives into "book dinner reservation for 2 at Cactus Club
+        park location tomorrow at 7 PM", plus the details that make it doable.
+        Only within one consequence class, and only when the newcomer is
+        genuinely richer — otherwise a vague line arriving late would drag a
+        good card backwards."""
+        want = {w for w in re.findall(r"[a-z0-9']+", (goal or "").lower()) if len(w) > 3}
+        if not want:
+            return None
+        want_consequential = is_consequential(goal)
+        for j in self._pending_jobs():
+            other = j.get("goal") or ""
+            if is_consequential(other) != want_consequential:
+                continue
+            have = {w for w in re.findall(r"[a-z0-9']+", other.lower()) if len(w) > 3}
+            if not have or len(want) <= len(have):
+                continue
+            if len(want & have) / len(have) >= 0.8:
+                return j["id"]
         return None
 
     def review_loops(self) -> list[dict]:
