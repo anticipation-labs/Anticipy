@@ -102,7 +102,8 @@ final class AnticipySession: ObservableObject {
             // A real signed-in session outranks the shared secret, and the
             // guard accepts either — which is what lets the app move onto
             // accounts without a flag day.
-            authToken: authToken
+            authToken: authToken,
+            accountID: accountID
         )
     }
 
@@ -354,6 +355,9 @@ final class AnticipySession: ObservableObject {
             let (token, id) = try await backend.authWithPassword(email: email, password: password)
             authToken = token
             accountID = id
+            // Adopt this device's pre-accounts rows onto the account before the
+            // first refresh, so the feed is already theirs when it paints.
+            await backend.claimLegacy(legacyUUID: ownerID)
             await refresh()
             return nil
         } catch let err as AnticipyBackend.BackendError where err.status == 400 {

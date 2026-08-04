@@ -44,11 +44,13 @@ final class AnticipyBackend {
     /// The signed-in person's session token, when there is one.
     var authToken: String
 
-    init(baseURL: URL, deviceID: String, serviceToken: String = "", authToken: String = "") {
+    init(baseURL: URL, deviceID: String, serviceToken: String = "",
+         authToken: String = "", accountID: String = "") {
         self.baseURL = baseURL
         self.deviceID = deviceID
         self.serviceToken = serviceToken
         self.authToken = authToken
+        self.accountID = accountID
     }
 
     /// Attach whatever credentials we have. Both may be present during the
@@ -174,6 +176,15 @@ final class AnticipyBackend {
         return (token, id)
     }
 
+    /// Adopt everything this device made before accounts existed onto the
+    /// account that just signed in, so signing up never looks like losing your
+    /// history.
+    func claimLegacy(legacyUUID: String) async {
+        var req = writeRequest(baseURL.appendingPathComponent("auth/claim"), method: "POST")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["legacy_uuid": legacyUUID])
+        _ = try? await send(req)
+    }
+
     /// "I forgot my password" — the code arrives by text, because this backend
     /// has no way to send mail.
     func requestPasswordReset(email: String) async throws {
@@ -264,11 +275,19 @@ final class AnticipyBackend {
         return try JSONDecoder().decode(Page.self, from: data).items.first
     }
 
+    /// The signed-in account these writes belong to, when there is one.
+    var accountID: String = ""
+
     func pushEvent(kind: String, text: String, decision: String? = nil, goal: String? = nil) async throws {
-        try await post("api/collections/events/records", body: [
+        var body: [String: Any] = [
             "device_id": deviceID, "kind": kind, "text": text,
             "decision": decision ?? "", "goal": goal ?? "",
-        ])
+        ]
+        // Say whose words these are. Until today `events` had no owner column
+        // at all, which is why a brand-new account opened the app to a stranger's
+        // transcripts — seen for real in the simulator against production.
+        if !accountID.isEmpty { body["owner_ref"] = accountID }
+        try await post("api/collections/events/records", body: body)
     }
 
     func queueJob(goal: String, params: [String: String]) async throws {
@@ -282,10 +301,15 @@ final class AnticipyBackend {
     func fetchEvents(limit: Int = 40) async throws -> [BrainEvent] {
         let listURL = baseURL.appendingPathComponent("api/collections/events/records")
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
-        comps.queryItems = [
-            URLQueryItem(name: "perPage", value: String(limit)),
-            URLQueryItem(name: "sort", value: "-created"),
-        ]
+        var items = [URLQueryItem(name: "perPage", value: String(limit)),
+                     URLQueryItem(name: "sort", value: "-created")]
+        // Scoped, always. Unowned legacy rows are deliberately NOT included:
+        // showing them to whoever happens to be signed in is the exact bug this
+        // fixes. They are claimed onto an account by /auth/claim instead.
+        if !accountID.isEmpty {
+            items.append(URLQueryItem(name: "filter", value: "owner_ref=\"\(accountID)\""))
+        }
+        comps.queryItems = items
         let data = try await readData(from: comps.url!)
         struct Page: Decodable { let items: [BrainEvent] }
         return try JSONDecoder().decode(Page.self, from: data).items
