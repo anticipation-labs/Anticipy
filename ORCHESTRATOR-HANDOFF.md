@@ -96,6 +96,23 @@ voice (worker deliver_fyi; overheard FYIs obey quiet hours) and lands on
 the feed. Live in production the same night; first FYI observed in the
 worker log minutes after deploy.
 
+Later 2026-08-05, the "did nothing / lands nowhere" close-out (commit
+d0a0f47): worker stamps the GOAL on heard lines (ignore+goal = quietly
+working); iOS build 42 renders 'Looking into it — I'll text you what I
+find' on those lines and a 'Found for you' section at the very top
+(finished research as expandable FoundCards — the data was already
+fetched every 3s and rendered nowhere). Two brain rules from the proof
+streak: read-only prep always starts even with an unknown detail, and
+self-talk questions are NEVER texted (one 'self'-classified run drew
+three 'what night were you thinking?' texts — thinking aloud gets help,
+not sleeve-tugging; direct asks still question at any hour). Build 42
+uploaded to Apple (Delivery a8543e9c); ship pipeline that WORKS is in
+the b32 history/HANDOFF.md — xcodegen + archive (profile 'Anticipy
+AppStore SIWA', bundle ai.anticipy.app) + exportArchive + altool with
+key JM8NMC2CQ4. build_on_mac.sh is only a simulator smoke script.
+
+Speaker recognition remains half-shipped ON PURPOSE: brain+backend live,
+iOS enrollment+tagging is the fleet's job —
 NEXT WAVE, FIRST: design/briefs/09-local-speaker-recognition.md — Omar's
 explicit order ("we want local everything… solve the speaker recognition
 part"). The approach is already PROVEN on the Mac, zero cloud
