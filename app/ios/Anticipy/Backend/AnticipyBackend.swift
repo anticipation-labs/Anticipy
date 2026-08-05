@@ -301,6 +301,17 @@ final class AnticipyBackend {
             "device_id": deviceID, "kind": kind, "text": text,
             "decision": decision ?? "", "goal": goal ?? "",
         ]
+        // WHEN IT WAS SAID, not when it arrived. The phone buffers: offline,
+        // backgrounded, bad signal, a call holding the mic — and then flushes
+        // a lump. Everything downstream that reasons about order was reading
+        // PocketBase's `created`, which is the moment the network delivered
+        // the row, so a flushed backlog looked like a burst of unrelated
+        // fragments seconds apart. Omi ships this exact bug (their #6551).
+        // Stamped here, at the moment the line is finished, because this is
+        // the last place that knows. The server treats an implausible stamp
+        // as absent, so a device with a wrong clock degrades to today's
+        // behaviour rather than reordering his day.
+        body["spoken_at"] = ISO8601DateFormatter.anticipyUTC.string(from: Date())
         // The ONLY thing the voice check ever sends: one short word about
         // who spoke ("owner", "other:v2", "other:Sarah"). The voiceprint it
         // came from never leaves the phone, and neither does the audio.
@@ -394,4 +405,21 @@ final class AnticipyBackend {
             throw BackendError(status: http.statusCode)
         }
     }
+}
+
+extension ISO8601DateFormatter {
+    /// One shared, explicitly-UTC formatter for the capture stamp.
+    ///
+    /// Explicit about the timezone because the failure it prevents is not
+    /// hypothetical: a build that stamps naive local time hands the server a
+    /// timestamp hours away from the truth, and anything that gates on
+    /// "how old is this line" then either drops today's speech as stale or
+    /// treats yesterday's as fresh. Built once — ISO8601DateFormatter is
+    /// expensive to construct and this runs on every finished line.
+    static let anticipyUTC: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 }

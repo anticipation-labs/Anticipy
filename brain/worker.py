@@ -635,15 +635,75 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
                               decision=_KIND_TO_DECISION.get(kind))
 
 
+BATCH = 20
+# Read a little wider than the slice, because the re-sort below can only
+# reorder rows it can see: if the page is exactly the slice, a line spoken
+# first but delivered last sits on page two and is read out of sequence
+# anyway. ADDITIVE, not a multiplier — a previous attempt at this pattern
+# elsewhere used `limit * 8` and turned a 7-line read into 56 rows.
+PAGE = BATCH + 8
+# A phone whose clock is off by more than this is not telling us the time,
+# it is telling us about its timezone configuration. One naive-local-time
+# build is enough to reorder someone's whole day, so past this we stop
+# believing the stamp instead of acting on it.
+CLOCK_SKEW_MAX_S = 6 * 3600
+
+
+def _ts(value) -> float | None:
+    """PocketBase and the app both hand us ISO-8601; neither is guaranteed."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip().replace(" ", "T")
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def capture_key(ev: dict) -> float:
+    """When it was SAID, falling back to when it arrived.
+
+    The phone buffers — offline, backgrounded, no signal, a call holding the
+    mic — and then flushes a lump. Ordering by PocketBase's `created` orders
+    by the moment the network delivered the row, so a flushed backlog reaches
+    the brain shuffled, and a plan reconstructed from shuffled turns is a
+    different plan. Omi ships this exact bug (their #6551) and fixed it by
+    serialising their writes; our worker is already single-threaded, so for
+    us it was only ever the wrong clock.
+
+    Degrades in both directions on purpose. No stamp (every build before this
+    one) -> arrival time, i.e. exactly today's behaviour. Implausible stamp ->
+    arrival time, so a device with a broken clock cannot reorder his day.
+    """
+    arrived = _ts(ev.get("created"))
+    spoken = _ts(ev.get("spoken_at"))
+    if spoken is None:
+        return arrived if arrived is not None else 0.0
+    if arrived is not None and abs(spoken - arrived) > CLOCK_SKEW_MAX_S:
+        return arrived
+    return spoken
+
+
 def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
     r = pb.get(
         f"{PB}/api/collections/events/records",
         params={"filter": f'kind="{kind}" && decision=""',
-                "perPage": 20, "sort": "created"},
+                "perPage": PAGE, "sort": "created"},
         timeout=10,
     )
     r.raise_for_status()
-    return r.json().get("items", [])
+    items = r.json().get("items", [])
+    # Sorted here rather than by PocketBase: `spoken_at` is absent on rows
+    # from every build before this one, and an empty string sorts to one end
+    # of a server-side sort — which would silently bury exactly the oldest
+    # lines rather than ordering them.
+    items.sort(key=capture_key)
+    return items[:BATCH]
 
 
 def mark_processed(event_id: str, decision: str, addressee: str = "",
