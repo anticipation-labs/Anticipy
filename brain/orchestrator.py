@@ -88,9 +88,39 @@ can correct you. If something essential is missing and genuinely not
 inferable, the right move is "ask" — put the unknowns in "missing". Never
 ask about what you can safely infer, and never start work that is guaranteed
 to stall on an unknown.
+And separately again, the question that decides more than any other:
+WHOSE JOB DID THESE WORDS JUST CREATE? — "owes". Wording is a terrible
+guide here and meaning is everything, because the same sentence lands
+differently depending on who said it and who "you" refers to:
+- "owner": the obligation is HIS. He promised someone something; or
+  someone asked HIM for something he took on; or he asked you directly.
+  This is the only value that can justify doing consequential work.
+- "other": the obligation belongs to somebody else in the room. A friend
+  saying "I'll book it" or "leave that with me" has taken it on
+  THEMSELVES. Remember it — he may want it tracked — but it is not his
+  errand and never becomes one on their say-so.
+- "machine": he is operating a computer BY VOICE right now — voice-typing,
+  dictating a message, reading a list into an app, instructing another
+  assistant. Tells: references to things on a screen rather than in the
+  world (inboxes, lists, items by number, buttons, fields, files, "reply",
+  "include", "remove", "press"), long runs of names/numbers/addresses
+  being read out, or commands that only make sense to software. The
+  machine he is talking to is ALREADY doing it. There is nothing here for
+  you — acting would duplicate work he is doing himself.
+- "nobody": no obligation exists. Chatter, opinions, venting, jokes,
+  half-thoughts, facts in passing, or transcription too mangled to trust.
+
+"you" is the trap. In "can you look into flights" the "you" is YOU only if
+he was addressing you; said to a friend, the friend is "you" and the job is
+theirs. Resolve it from who he was talking to, never from the word itself.
+When the words are garbled or the obligation is genuinely unclear, answer
+"nobody" — silence costs him one missed convenience, a wrong action costs
+him trust.
+
 Reply ONLY with compact JSON:
 {"decision":"ignore|ask|act","goal":"<short goal or null>",
  "addressee":"assistant|person|dictation|self",
+ "owes":"owner|other|machine|nobody",
  "missing":["<essential unknowns; empty if none>"],
  "assumption":"<context you relied on, or null>","reason":"<8 words>"}"""
 
@@ -114,6 +144,16 @@ AMBIENT_ADDRESSEES = ("person", "dictation")
 # him to it — so consequential work there is prepared and held, never binned.
 AUTHORED_ADDRESSEES = ("dictation",)
 
+# Whose obligation the words created. The second key: triage may say "act",
+# but nothing consequential happens unless the job is actually HIS.
+OWES = ("owner", "other", "machine", "nobody")
+
+# The two answers that mean "not his errand". Speech that creates no
+# obligation for him is remembered and nothing more — this is what stops
+# her acting on a list he is reading into his laptop, or on a friend's
+# promise, without needing a single keyword.
+NOT_HIS = ("machine", "nobody")
+
 # Goals whose final step changes the world -> require explicit user yes.
 IRREVERSIBLE = {
     "draft_and_send_document",
@@ -133,6 +173,7 @@ class Decision:
     reason: str
     needs_confirmation: bool = False
     missing: list = None       # essential unknowns blocking a real start
+    owes: Optional[str] = None        # whose job these words created
     assumption: Optional[str] = None  # context the model relied on to fill a gap
     addressee: Optional[str] = None   # who the owner was talking to; None = unknown
 
@@ -167,6 +208,9 @@ class Brain:
         addressee = raw.get("addressee")
         if addressee not in ADDRESSEES:
             addressee = None
+        owes = raw.get("owes")
+        if owes not in OWES:
+            owes = None       # no answer changes nothing: the honesty wall
         return Decision(
             decision=decision,
             goal=goal,
@@ -175,6 +219,7 @@ class Brain:
             missing=[str(m) for m in missing],
             assumption=assumption,
             addressee=addressee,
+            owes=owes,
         )
 
 

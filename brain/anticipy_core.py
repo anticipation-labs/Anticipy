@@ -30,7 +30,7 @@ from .llm import LLM, now_line
 from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
-                           _extract_json)
+                           NOT_HIS, _extract_json)
 
 NAME = "Anticipy"
 
@@ -458,6 +458,43 @@ class Anticipy:
         if addressee:
             self._last_addressee = (addressee, time.time())
         handled = None
+
+        # THE SECOND KEY (2026-08-05). Triage saying "act" is one key; this
+        # is the other, and both must turn. Whose job did these words create?
+        # If nobody's — he was reading a list into his laptop, or venting, or
+        # the transcript is mush — there is nothing to do, whatever the verbs
+        # looked like. On 2026-08-04 one dictation about a newsletter list
+        # became three real jobs ("remove items 491, 492, 493", "update the
+        # KTHAI list", "reply to Toby's email") because the only question
+        # being asked was "does this look actionable", and it did.
+        #
+        # An EXPLICIT line is exempt: if he typed it at her or texted her, he
+        # is the one asking, and no second opinion overrides him.
+        # No verdict at all (older model, unparseable reply) changes nothing:
+        # the honesty wall, same as every other judgement she makes.
+        if (decision.owes in NOT_HIS and not explicit
+                and decision.decision in ("act", "ask")):
+            reason = ("operating a machine by voice — it is already doing it"
+                      if decision.owes == "machine"
+                      else "no obligation to anyone")
+            self._prev = (line, time.time())
+            return {"memory": mem, "decision": Decision(
+                decision="ignore", goal=decision.goal,
+                reason=f"not his to do: {reason}",
+                addressee=addressee, owes=decision.owes),
+                "anticipy_says": None}
+
+        # Someone ELSE took it on. Remember it — he may want it tracked, and
+        # a promise made to him is exactly the sort of loop that goes quiet —
+        # but their word never becomes his errand.
+        if (decision.owes == "other" and not explicit
+                and decision.decision in ("act", "ask")):
+            self._prev = (line, time.time())
+            return {"memory": mem, "decision": Decision(
+                decision="ignore", goal=decision.goal,
+                reason="someone else took this on; remembered, not started",
+                addressee=addressee, owes="other"),
+                "anticipy_says": None}
 
         # The ambient lane (roadmap §7.1): speech not aimed at her — another
         # person, a dictation machine — is remembered, and researched quietly

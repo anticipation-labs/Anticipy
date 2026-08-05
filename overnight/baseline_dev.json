@@ -1,0 +1,98 @@
+{
+ "set": "dev",
+ "lines": 146,
+ "false_fires": 14,
+ "misses": 5,
+ "agreed": 127,
+ "false_fire_rate": 9.6,
+ "miss_rate": 3.4,
+ "false_fire_examples": [
+  {
+   "text": "Oh hi there how are you today oh I'm well thank you let's go out for dinner tomorrow for sure where how's cactus club which one Park Royal OK bet 7 PM OK me and you just the two of us I'll pick you up",
+   "did": "text",
+   "why": "Other person is making plans"
+  },
+  {
+   "text": "Hey we should go to cactus tomorrow yeah wear purple bat royal cactus",
+   "did": "quiet",
+   "why": "Transcription too mangled to act on safely"
+  },
+  {
+   "text": "Anytime there's something actionable it shows up here and then a chat lovers above it and that in the messages pieces are reflecting of each other and are always *NSYNC with each other but you know there's gaps in between when I start speaking I don't like sometimes I'm three seconds of 70 seconds but if I'm going back to packing a meeting with room 25 people and they got three second gap before talking to a new person I don't think it's able to identify recognition I don't think it's all these major major issues that are very incompetent upon ourselves in order to solve them in order to be fully production right I mean there's privacy and security but that's the final issue that we're gonna solve that I don't think I won't even get you to touch on it now so I want you to layout every single one of these issues layout every single one of your solutions take a look at her coat base do some research and figure out what the best solution is and then we're gonna tackle them one at a time but testing always testing it as a whole but designing research researching research is key and understanding imp",
+   "did": "text",
+   "why": "thinking aloud, no clear action"
+  },
+  {
+   "text": "Anytime there's something actionable it shows up here and then a chat lovers above it and that in the messages pieces are reflecting of each each other and are always in sync with each other right but you know there's gaps in between when I start speaking I don't like sometimes I'm three seconds of 70 seconds but if I'm going back to a meeting with room 25 people and they got three second gap before talking to a new person I don't think it's able to identify recognition I don't think it's all these major major issues that are very incompetent upon ourselves in order to solve them in order to be fully production right I mean there's privacy and security but that's the final issue that we're gonna solve and I don't think I won't even get you to touch on it now so I want to layout every single one of these issues layout every single one of your solutions take a look at her co-base do some research and figure out what the best solution is and then we're gonna tackle them one at a time but testing always testing as a hole but designing researching research is key then understanding imp",
+   "did": "text",
+   "why": "thinking aloud, no commitment"
+  },
+  {
+   "text": "With who just the two of us OK for sure see you tomorrow",
+   "did": "text",
+   "why": "chatter"
+  },
+  {
+   "text": "We should go for dinner yeah yeah we really should OK where should we go I don't know how about that cactus club in Park Royal OK but how's tomorrow yeah yeah tomorrow's good with me OK sure I'll see you there I'll do tomorrow at 7 PM OK I'll grab the rest of us",
+   "did": "text",
+   "why": "other person will grab the rest"
+  },
+  {
+   "text": "Scrap at 6 PM",
+   "did": "text",
+   "why": "too mangled to act on safely"
+  },
+  {
+   "text": "Hey hey long time no see yeah yeah it's really been a long time how you been I've been good how are the kids they've been good yeah we should really catch up for sure we should go for dinner tomorrow yeah I would really love that",
+   "did": "text",
+   "why": "Other person's obligation to catch up"
+  },
+  {
+   "text": "House 7 PM for you oh7 PM is great yeah yeah I'll get the reservation reservations for dinner tomorrow 7 PM Miss cactus club good with you in Park Royal yeah cactus Park oil is good but I'm gonna grab the results",
+   "did": "text",
+   "why": "Other person making reservation"
+  },
+  {
+   "text": "Hi let me give you a little demo hey have you been I've been good how have you been that's some good good good great to hear yeah hope the kids win kids have been good family good family good OK we you out for dinner and catch up yeah we definitely should are you free the day after tomorrow yeah I'm good the day after tomorrow what's the day after the sixth yeah OK but so let's get a table at let's do Earl's day after tomorrow OK for sure yeah yeah I'll grab the tables no problem OK see you there",
+   "did": "text",
+   "why": "Other person will grab tables"
+  },
+  {
+   "text": "What should we do I know we should go for dinner yeah somewhere in Vancouver I don't know I'll look into my spots",
+   "did": "quiet",
+   "why": "thinking aloud, no commitment"
+  },
+  {
+   "text": "I mean I think the next piece to bring in a speaker recognition so we know how many speakers are in the room how that works and so forth does that work with an FR 32 or an RF 32 sense processor board",
+   "did": "text",
+   "why": "voice-typing, not a command"
+  }
+ ],
+ "miss_examples": [
+  {
+   "text": "What are you doing",
+   "wanted": "text",
+   "why": "Omar asked assistant directly"
+  },
+  {
+   "text": "White House chief staff",
+   "wanted": "quiet",
+   "why": "Omar wonders about a fact"
+  },
+  {
+   "text": "Hey we should go ahead and make a dinner reservation yeah for sure",
+   "wanted": "desk",
+   "why": "Omar wants a dinner reservation."
+  },
+  {
+   "text": "Let's go out tomorrow",
+   "wanted": "desk",
+   "why": "propose outing for tomorrow"
+  },
+  {
+   "text": "My phone is dead my only one",
+   "wanted": "desk",
+   "why": "charge phone"
+  }
+ ]
+}
