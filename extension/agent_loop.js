@@ -369,7 +369,39 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+// Spawn prevention at the source (runs every step, before any click): a
+// popup we never open is a popup nobody has to sweep. Two mechanisms feed
+// the pile — target=_blank anchors and window.open — and both are turned
+// into same-tab navigation INSIDE the working tab only. The _blank rewrite
+// works from the isolated world (the DOM is shared); the window.open hook
+// must run in the page's own MAIN world or the page never sees it.
+async function neutralizeSpawners(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        for (const a of document.querySelectorAll('a[target="_blank"], a[target="_new"]')) {
+          a.target = "_self";
+        }
+      },
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () => {
+        if (window.__anticipyNoSpawn) return;
+        window.__anticipyNoSpawn = true;
+        window.open = (url) => {
+          if (url) location.assign(url);
+          return null;
+        };
+      },
+    });
+  } catch (e) { /* best effort — the per-step sweep still backstops */ }
+}
+
 async function mapPage(tabId) {
+  await neutralizeSpawners(tabId);
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
     files: ["page_map.js"],
@@ -498,6 +530,14 @@ export async function runAgentGoal(goal, opts) {
   // wedged, and every further step is another spawned tab and another minute
   // of someone watching their browser thrash.
   let stepsOnPage = 0;
+  // Tabs this RUN caused, across every page it visited. The per-page guards
+  // all reset on navigation, and a click→spawn→adopt cycle IS a navigation —
+  // so a site whose booking widget answers every click with a popup
+  // (earls.ca ↔ SevenRooms) could ping-pong forever with every counter
+  // freshly zeroed, ~20 tabs deep. This one never resets: a site that keeps
+  // spawning gets handed to the human while the mess is still small.
+  let spawnedThisRun = 0;
+  const SPAWN_BUDGET = 5;
   try {
     for (let step = 0; step < maxSteps; step++) {
       await new Promise((r) => setTimeout(r, 1200));
@@ -564,9 +604,13 @@ export async function runAgentGoal(goal, opts) {
         for (const t of all) {
           if (t.id === tab.id || !mine.has(t.id)) continue;
           if (t.active) await restoreOwnerFocus();
+          spawnedThisRun++;
           try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ }
         }
       } catch (e) { /* best effort */ }
+      if (spawnedThisRun > SPAWN_BUDGET) {
+        return (handBack = true) && { status: "needs_user", result: `This site answers my clicks by opening new tabs (${spawnedThisRun} so far) — its booking widget needs a human. The page is open for you, tidy, right where I stopped.`, tabId: tab.id };
+      }
       const banked = blockedDomain(state.url);
       if (banked) {
         return (handBack = true) && { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
@@ -792,6 +836,7 @@ export async function runAgentGoal(goal, opts) {
           try {
             const spawned = (await chrome.tabs.query({}))
               .filter((t) => t.openerTabId === tab.id && t.id !== tab.id);
+            spawnedThisRun += spawned.length;
             if (spawned.length) {
               const target = spawned[spawned.length - 1];
               const url = target.pendingUrl || target.url;
