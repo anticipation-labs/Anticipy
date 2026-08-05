@@ -117,10 +117,29 @@ When the words are garbled or the obligation is genuinely unclear, answer
 "nobody" — silence costs him one missed convenience, a wrong action costs
 him trust.
 
+And one last question, only when you are shown numbered earlier lines:
+WHICH ONE DOES THIS CARRY ON FROM? — "continues". Give the number of the
+single earlier line this one continues: the same subject, an answer to it,
+or the next beat of the same thought. Give 0 when it starts something of
+its own.
+
+Judge it the way a person in the room would hear it — one thread, or two.
+NOT by how much time passed, and NOT by how short the line is. "Can you
+book a table" carries on from talk of dinner even after a long silence.
+"Did you ever feed the dog" starts something new even with no pause at
+all. A cold caller's opening line starts something new; everything they
+and he then say back and forth carries on from it, however long the gaps
+while the other person talks. If two topics are genuinely interleaved,
+point at the one THIS line belongs to, not the nearest one.
+
+Omit "continues" entirely if you truly cannot tell — that is different
+from 0, and it is treated as no answer rather than as a new thread.
+
 Reply ONLY with compact JSON:
 {"decision":"ignore|ask|act","goal":"<short goal or null>",
  "addressee":"assistant|person|dictation|self",
  "owes":"owner|other|machine|nobody",
+ "continues":<number of the line this continues, or 0 for a new one>,
  "missing":["<essential unknowns; empty if none>"],
  "assumption":"<context you relied on, or null>","reason":"<8 words>"}"""
 
@@ -176,6 +195,14 @@ class Decision:
     owes: Optional[str] = None        # whose job these words created
     assumption: Optional[str] = None  # context the model relied on to fill a gap
     addressee: Optional[str] = None   # who the owner was talking to; None = unknown
+    # Which numbered earlier line this one carries on from. THREE states, and
+    # the difference between the last two is the honesty wall:
+    #   >=1  continues that line
+    #    0   explicitly starts a new thread
+    #   None no answer — fall back to whatever decided this before links
+    # An out-of-range number is None, not 0: a model naming line 9 of 4 has
+    # told us nothing, and must not be read as confidently starting a thread.
+    continues: Optional[int] = None
 
     def __post_init__(self):
         if self.missing is None:
@@ -189,7 +216,12 @@ class Brain:
     def __init__(self, llm: Optional[LLM] = None):
         self.llm = llm or LLM()
 
-    def triage(self, transcript_line: str) -> Decision:
+    def triage(self, transcript_line: str, candidates: int = 0) -> Decision:
+        """`candidates` is how many numbered earlier lines the caller showed.
+        It is the only thing that makes a "continues" answer meaningful, and
+        it is what an out-of-range number is checked against. Left at 0 — the
+        default, and what every existing caller passes — the field is always
+        discarded, so this parameter cannot change any current behaviour."""
         res = self.llm.chat(TRIAGE_SYSTEM, transcript_line)
         try:
             raw = json.loads(_extract_json(res.text))
@@ -211,6 +243,7 @@ class Brain:
         owes = raw.get("owes")
         if owes not in OWES:
             owes = None       # no answer changes nothing: the honesty wall
+        continues = _continues(raw.get("continues"), candidates)
         return Decision(
             decision=decision,
             goal=goal,
@@ -220,7 +253,42 @@ class Brain:
             assumption=assumption,
             addressee=addressee,
             owes=owes,
+            continues=continues,
         )
+
+
+def _continues(raw, candidates: int) -> Optional[int]:
+    """Read the link answer, refusing everything we cannot act on.
+
+    Returns >=1 (continues that numbered line), 0 (starts a new thread), or
+    None (no usable answer — the caller keeps whatever decided this before).
+
+    Everything below collapses to None rather than to 0, because 0 is a
+    CLAIM ("this is a new thread") and a confused model has not made one.
+    Reading confusion as a claim is how a wall becomes decoration.
+    """
+    if candidates <= 0:
+        return None                       # nothing was shown; nothing to point at
+    if isinstance(raw, bool) or raw is None:
+        return None                       # True is an int in Python. It is not an index.
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw or raw.lower() in ("null", "none", "new"):
+            return None
+        try:
+            raw = int(raw)
+        except ValueError:
+            return None
+    if not isinstance(raw, int):
+        if isinstance(raw, float) and raw.is_integer():
+            raw = int(raw)
+        else:
+            return None
+    if raw == 0:
+        return 0
+    if 1 <= raw <= candidates:
+        return raw
+    return None                           # out of range: told us nothing
 
 
 def _extract_json(text: str) -> str:
