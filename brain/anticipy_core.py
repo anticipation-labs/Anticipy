@@ -353,7 +353,8 @@ class Anticipy:
 
     def hear(self, line: str, context: Optional[list[str]] = None,
              may_say=None, explicit: bool = False, channel: str = "",
-             speaker: Optional[str] = None) -> dict:
+             speaker: Optional[str] = None,
+             link_candidates: Optional[list[str]] = None) -> dict:
         """One transcript line in; memory, decision, and delegation out.
 
         channel names where the line arrived from ("sms" when he texted it).
@@ -367,7 +368,15 @@ class Anticipy:
         app build). It is evidence about WHO SPOKE, which wording alone can
         never supply: "I'll get into it" from his friend's mouth is the
         friend's promise; the identical words in his voice are his own.
-        The honesty wall applies — no verdict changes NOTHING."""
+        The honesty wall applies — no verdict changes NOTHING.
+
+        link_candidates are recent lines, oldest first, shown to the model
+        NUMBERED so it can say which one this line carries on from. The
+        answer comes back on decision.continues as a 1-based index into this
+        exact list (0 = starts something new, None = no usable answer). The
+        caller owns the mapping back to ids, because only the caller knows
+        them. Omitted — the default, and what every caller did before links
+        existed — the question is never asked and no verdict is produced."""
         # The conversation, kept where the plan-matcher can see it: two goals
         # judged as bare strings ("book reservation at Earl's" vs "draft an
         # invitation for Saturday at 1") read as different errands; the same
@@ -440,7 +449,8 @@ class Anticipy:
             speaker = None
         decision = self._decide(line, mem, prev_line=prev_line, convo=context,
                                 prev_addressee=prev_addressee, dictated=dictated,
-                                speaker=speaker, speaker_name=speaker_name)
+                                speaker=speaker, speaker_name=speaker_name,
+                                link_candidates=link_candidates)
         # The EFFECTIVE addressee — the one her behaviour actually keys on,
         # written back so the event record shows what was applied. An
         # explicit line (he texted/typed it AT her) is assistant by
@@ -757,7 +767,8 @@ class Anticipy:
                 prev_addressee: Optional[str] = None,
                 dictated: bool = False,
                 speaker: Optional[str] = None,
-                speaker_name: Optional[str] = None) -> Decision:
+                speaker_name: Optional[str] = None,
+                link_candidates: Optional[list[str]] = None) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
             prompt = line
@@ -803,6 +814,27 @@ class Anticipy:
             if context:
                 notes = "; ".join(f["fact"] for f in context)
                 prompt = f"{prompt}\n(Related memory: {notes})"
+            # The link question. Recent lines numbered so the model can point
+            # at ONE of them, which is how every disentanglement benchmark
+            # since 2019 poses it — an index, never a free-text id, so a
+            # hallucinated answer is out of range and therefore discarded
+            # rather than followed.
+            #
+            # NOTHING IS FILTERED OUT HERE, deliberately. The returned index
+            # is 1-based into the caller's list exactly as given, and the
+            # caller maps it back to a record id. Dropping a blank candidate
+            # at this layer would shift every number after it and silently
+            # link lines to the wrong parent — a bug with no symptom. The
+            # caller owns removing blanks, from the same place it takes ids,
+            # so texts and ids cannot drift apart.
+            numbered = list(link_candidates or [])
+            if numbered:
+                shown = "\n".join(f"[{n}] {(c or '').strip()}"
+                                  for n, c in enumerate(numbered, 1))
+                prompt = (f"{prompt}\n(Recent lines, oldest first — say in "
+                          f"\"continues\" which ONE this line carries on "
+                          f"from, or 0 if it starts something new:\n{shown})")
+                return self.brain.triage(prompt, candidates=len(numbered))
             return self.brain.triage(prompt)
         # Deterministic offline path: a fresh commitment means act.
         if mem.get("commitment"):

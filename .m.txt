@@ -1,25 +1,37 @@
-Write the capture stamp to the column that already existed
+Wire the link answer through to the record
 
-Verifying the migration against the live database showed the events table
-already carries capture_started_at, capture_ended_at, gap_before_ms, segment,
-seq, boot_id, backfill and source. They were provisioned by earlier capture
-work and NO app build has ever written to any of them, which is exactly why
-everything downstream fell back to PocketBase's `created`.
+hear(link_candidates=[...]) shows the model recent lines NUMBERED, triage
+returns which one this line carries on from, and the worker turns that number
+into an event id and writes parent_line. One extra field on a call that
+already happens, so no extra request and no extra latency.
 
-So the column was never the missing piece. The phone was.
+The whole mechanism is POSITIONAL, which is its one real hazard: an
+off-by-one links every line to the wrong parent and produces no symptom at
+all - no crash, no error, no empty screen, just quietly wrong conversations.
+I nearly shipped exactly that. The renderer filtered blank candidates while
+the caller kept an unfiltered list, so every number after a blank pointed one
+row off. Blanks are now dropped in link_candidates(), the one place ids and
+texts leave together, and the renderer is documented as never renumbering.
+resolve_link() was pulled out of the poll loop purely so the mapping could be
+tested at all.
 
-I added a spoken_at of my own before checking the live schema, which
-duplicated capture_started_at. The phone now writes the canonical name
-instead. capture_key reads capture_started_at first and still accepts
-spoken_at, so neither name is silently ignored during a rollout - a dropped
-stamp fails by looking exactly like an old build, which is the worst way for
-this to break.
+A self-link (points at its own id) is how "starts something new" is stored.
+Written down as explicitly as a continuation, because "she decided this was
+new" and "she never answered" have to stay distinguishable in the record or
+the scoring cannot tell a correct new-thread call from a silence.
 
-The redundant spoken_at column stays for now rather than being migrated away
-mid-rollout; it is optional, unread by anything, and removing a column is a
-worse risk than leaving an empty one.
+OFF BY DEFAULT (ANTICIPY_LINKS). Nothing reads parent_line yet, so behaviour
+is identical either way, but the question costs prompt tokens on every heard
+line and it can stay opt-in until scoring says it earns them. Candidates are
+capped at 40 - the window the masked-hierarchical-transformer disentanglement
+work uses - excluding the line itself, and fetched in speech order rather
+than delivery order. A backend failure returns no candidates, which means the
+question is simply never asked.
 
-133 tests pass. MUTATION TESTED: making capture_key ignore the canonical
-field fails six tests, so the rename is load-bearing rather than cosmetic.
+150 tests pass. MUTATION TESTED, and it found a second real gap: deleting the
+capture-time sort left every test green, because the fixture happened to list
+its rows already in the expected order. The fixture now returns them the way
+PocketBase actually does - newest delivered first, the reverse of speech
+order - so the sort has real work to do and its removal fails two tests.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>

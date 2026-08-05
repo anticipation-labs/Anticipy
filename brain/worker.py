@@ -709,6 +709,72 @@ def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
     return items[:BATCH]
 
 
+# How many earlier lines the model is shown to point at. 40 is the window
+# the masked-hierarchical-transformer disentanglement work uses; wider costs
+# tokens on every heard line and buys little, because a line that continues
+# something 40 turns back will almost always continue something nearer too.
+LINK_WINDOW = 40
+# Off by default. The verdict is written to the record and read by nothing,
+# so production behaviour is identical either way — but the switch means the
+# extra prompt tokens are opt-in until the scoring says they earn their keep.
+LINKS_ON = os.environ.get("ANTICIPY_LINKS", "").lower() in ("1", "true", "on")
+
+
+def link_candidates(kind: str = "transcript") -> list[tuple[str, str]]:
+    """Recent heard lines as (id, text), oldest first, for the link question.
+
+    Blanks are dropped HERE, where ids and texts leave together, so the two
+    can never drift: the model answers with a 1-based index into this list
+    and the mapping back to an id is positional. Filtering anywhere further
+    down would shift every number after the gap and mis-link silently.
+    """
+    try:
+        r = pb.get(
+            f"{PB}/api/collections/events/records",
+            params={"filter": f'kind="{kind}"', "perPage": LINK_WINDOW + 8,
+                    "sort": "-created"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        rows = r.json().get("items", [])
+    except Exception:
+        return []                     # no candidates -> question never asked
+    rows.sort(key=capture_key)        # speech order, not delivery order
+    out = [(row.get("id") or "", (row.get("text") or "").strip())
+           for row in rows]
+    return [(i, t) for i, t in out if i and t][-LINK_WINDOW:]
+
+
+def resolve_link(idx, event_id: str,
+                 cands: list[tuple[str, str]]) -> str | None:
+    """Turn the model's 1-based index into the id to store, or None.
+
+    Extracted from the poll loop so it can be tested: the mapping is
+    positional, and an off-by-one here links every line to the wrong parent
+    with no symptom anyone would notice. 0 means "starts something new" and
+    is stored as a self-link, because "she decided this was new" and "she
+    never answered" must stay distinguishable in the record.
+    """
+    if idx is None or not cands:
+        return None
+    if idx == 0:
+        return event_id
+    if 1 <= idx <= len(cands):
+        return cands[idx - 1][0]
+    return None
+
+
+def record_link(event_id: str, parent_id: str) -> None:
+    """Write which line this one carries on from. Best effort on purpose:
+    nothing reads it yet, and a failed PATCH here must never cost the line
+    itself — the decision has already been acted on by this point."""
+    try:
+        pb.patch(f"{PB}/api/collections/events/records/{event_id}",
+                 json={"parent_line": parent_id}, timeout=10)
+    except Exception as e:
+        print(f"link: {event_id} -> {parent_id} failed: {e}")
+
+
 def mark_processed(event_id: str, decision: str, addressee: str = "",
                    goal: str = "") -> bool:
     """Returns whether the mark actually landed. A silently-failed PATCH left
@@ -889,12 +955,22 @@ def main() -> None:
                             convo_context = segments.recent_turns(open_seg["id"])
                     except Exception:
                         convo_context = []
+                # Which earlier line does this one carry on from? Asked as
+                # part of the triage call that already runs, so it costs no
+                # extra request. `cands` is the index space the model answers
+                # into; it excludes this line itself, because a line cannot
+                # continue itself and offering it would invite exactly that.
+                cands = []
+                if LINKS_ON:
+                    cands = [c for c in link_candidates() if c[0] != ev["id"]]
                 try:
                     # The phone's local voice verdict rides along when the
                     # app stamped one (owner|other); absent on old builds.
                     out = anticipy.hear(line, context=convo_context,
                                         may_say=SPEAK_ONCE,
-                                        speaker=(ev.get("speaker") or None))
+                                        speaker=(ev.get("speaker") or None),
+                                        link_candidates=[t for _, t in cands]
+                                        or None)
                 except TypeError:
                     # An older core without the speaker kwarg keeps hearing.
                     out = anticipy.hear(line, context=convo_context,
@@ -903,6 +979,17 @@ def main() -> None:
                     mark_processed(ev["id"], "error")
                     print(f"heard: {line!r} -> error: {e}")
                     continue
+                # Store the link. A self-link (points at its own id) is the
+                # "starts something new" answer, and it is written down just
+                # as explicitly as a continuation — the difference between
+                # "she decided this was new" and "she never answered" has to
+                # survive into the record, or the scoring cannot tell them
+                # apart either.
+                parent = resolve_link(
+                    getattr(out["decision"], "continues", None),
+                    ev["id"], cands)
+                if parent:
+                    record_link(ev["id"], parent)
                 decision = out["decision"].decision
                 mark_processed(ev["id"], decision,
                                addressee=getattr(out["decision"], "addressee",
