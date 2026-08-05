@@ -1,5 +1,30 @@
 # Brief 09 — Local speaker recognition (roadmap §7.2, promoted to NOW)
 
+## SHIPPED 2026-08-05 (build 43). This brief is now REFERENCE, not a to-do.
+The iOS half exists and runs on the phone: sherpa-onnx linked as a Swift
+package (revision-pinned — Package.swift postdates the newest version
+tag, so `from:`/`exactVersion` cannot resolve), the English model ships
+in the bundle, VoiceRoster.swift mirrors proof/voice_roster.py (parity
+enforced by tests/test_roster_parity.py), SpeakerTagger converts the mic
+tap to 16k mono in a 20s rolling window and judges each finished line,
+and VoiceEnrollView asks for twelve seconds in her own voice.
+
+MODEL: 3dspeaker_speech_eres2net_sv_en_voxceleb_16k (26MB, 192-dim,
+English). Chosen by measurement over six alternatives on margin-per-MB.
+REJECTED FOR CAUSE, do not revisit without re-benchmarking:
+wespeaker_en_voxceleb_resnet34_LM scores a stranger 0.859 against the
+owner (it identifies them AS the owner); wespeaker CAM++_LM and
+campplus_sv_en_voxceleb are broken in this runtime (negative margins on
+the vendor's own reference clips). Shipped-model verification on the
+real clips: owner across days 0.923, friend re-identified 0.896, third
+voice UNKNOWN at 0.633.
+
+REMAINING (small, real): the app has no gentle way yet to ASK who a
+recurring voice belongs to ("I keep hearing someone — who is that?");
+Settings only reports the count. Also unmeasured: battery cost of
+per-utterance embedding over a full day, and behaviour with three or
+more enrolled people in one room.
+
 ## SCOPE GREW 2026-08-05 (Omar): not just "is it him" — WHO ELSE.
 The roster is built and proven: proof/voice_roster.py (owner profile +
 learned people, stable ids, names attachable later, 85/15 drift) and

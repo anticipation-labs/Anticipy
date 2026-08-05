@@ -111,9 +111,17 @@ the b32 history/HANDOFF.md — xcodegen + archive (profile 'Anticipy
 AppStore SIWA', bundle ai.anticipy.app) + exportArchive + altool with
 key JM8NMC2CQ4. build_on_mac.sh is only a simulator smoke script.
 
-Speaker recognition remains half-shipped ON PURPOSE: brain+backend live,
-iOS enrollment+tagging is the fleet's job —
-NEXT WAVE, FIRST: design/briefs/09-local-speaker-recognition.md — Omar's
+SPEAKER RECOGNITION IS NOW WHOLE (build 43, 2026-08-05). Phone computes
+the verdict on-device and sends ONE word; brain uses it; roster learns
+recurring people and takes names. design/briefs/09 is now REFERENCE (it
+records the model bench, the two models rejected for cause, and the
+0.78/0.05 thresholds). tests/test_roster_parity.py fails if the Swift
+constants ever drift from proof/voice_roster.py — never "fix" one side
+alone. Open, small: no gentle in-app way to ASK who a recurring voice
+is; battery cost of per-utterance embedding unmeasured; 3+ enrolled
+people in one room untested.
+
+NEXT WAVE candidates (nothing is mid-flight): — Omar's
 explicit order ("we want local everything… solve the speaker recognition
 part"). The approach is already PROVEN on the Mac, zero cloud
 (proof/local_diarization_poc.py): diarization 3.8x realtime CPU with
