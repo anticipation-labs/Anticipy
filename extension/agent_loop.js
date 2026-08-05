@@ -547,9 +547,25 @@ export async function runAgentGoal(goal, opts) {
       // foreground is the worst offender: it is NOT spared, focus goes back to
       // the owner's tab first, then it closes like the rest (§9).
       try {
-        const spawnedNow = (await chrome.tabs.query({}))
-          .filter((t) => t.openerTabId === tab.id && t.id !== tab.id && !t.active);
-        for (const t of spawnedNow) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
+        // Descendants, not just children: a spawned tab's own popups carry
+        // ITS id as opener, so a first-generation filter left grandchildren
+        // standing — the "five tabs of cactus club" pile. Walk the whole
+        // family, restore the owner's focus if one of them grabbed it, then
+        // close them all.
+        const all = await chrome.tabs.query({});
+        const mine = new Set([tab.id]);
+        let grew = true;
+        while (grew) {
+          grew = false;
+          for (const t of all) {
+            if (!mine.has(t.id) && mine.has(t.openerTabId)) { mine.add(t.id); grew = true; }
+          }
+        }
+        for (const t of all) {
+          if (t.id === tab.id || !mine.has(t.id)) continue;
+          if (t.active) await restoreOwnerFocus();
+          try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ }
+        }
       } catch (e) { /* best effort */ }
       const banked = blockedDomain(state.url);
       if (banked) {
