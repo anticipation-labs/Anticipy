@@ -287,6 +287,36 @@ final class AnticipyBackend {
         return true
     }
 
+    /// Release the browser this owner had paired, so the extension stops
+    /// claiming a link the phone has let go of.
+    ///
+    /// The two sides answer "are we linked?" from different places — the
+    /// extension from its own row, the phone from a lookup by owner id — and
+    /// nothing kept them honest with each other. When the phone's identity
+    /// rotated, the row kept the old id and both sides were correct and
+    /// contradictory at once. Unpairing here is what makes disagreement
+    /// impossible: the extension falls back to showing a pair code, which is
+    /// the state a person can actually act on.
+    func unpairAgent(owner: String) async {
+        guard !owner.isEmpty else { return }
+        let listURL = baseURL.appendingPathComponent("api/collections/agents/records")
+        let filter = "owner=\"\(owner)\"".addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed)!
+        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        comps.percentEncodedQuery = "filter=\(filter)&perPage=20"
+        guard let url = comps.url,
+              let data = try? await readData(from: url),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = root["items"] as? [[String: Any]] else { return }
+        for item in items {
+            guard let id = item["id"] as? String else { continue }
+            var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
+            patch.httpBody = try? JSONSerialization.data(
+                withJSONObject: ["owner": "", "paired": false])
+            _ = try? await send(patch)
+        }
+    }
+
     /// The agent paired to this owner (if any), with its latest heartbeat.
     func fetchAgent(owner: String) async throws -> BrowserAgent? {
         let listURL = baseURL.appendingPathComponent("api/collections/agents/records")

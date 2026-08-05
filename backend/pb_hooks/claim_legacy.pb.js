@@ -7,10 +7,19 @@
 //
 // Two different kinds of row, and they are claimed on different evidence:
 //
-//   jobs, owner_profile, segments — carry an `owner` column holding the UUID
-//   the phone generated for itself. Matching that against the caller's own
-//   `legacy_uuid` is real evidence: only the device that made those rows knows
-//   the value, and it was recorded on the account at sign-up.
+//   jobs, owner_profile, segments, agents — carry an `owner` column holding
+//   the UUID the phone generated for itself. Matching that against the
+//   caller's own `legacy_uuid` is real evidence: only the device that made
+//   those rows knows the value, and it was recorded on the account at sign-up.
+//
+//   `agents` was missing from this list until 2026-08-05, and the symptom was
+//   ugly: the Chrome extension said "Paired with your iPhone" and showed a
+//   completed booking, while the phone said "Chrome not linked", and neither
+//   reloading nor re-installing the extension could reconcile them. Both were
+//   telling the truth. agents.owner is written ONCE, at pairing; the phone
+//   looks the row up BY that id; and the id rotates (a reset in Settings, a
+//   second account from the same device, a reinstall). Every other table got
+//   carried across on sign-in and this one silently did not.
 //
 //   events — have NEVER had an owner column (see 1700000009), so there is no
 //   evidence on the row at all. They are therefore claimed ONLY when this is
@@ -28,11 +37,11 @@ routerAdd("POST", "/auth/claim", (e) => {
   try { body = e.requestInfo().body || {}; } catch (_) {}
   const legacy = String(body.legacy_uuid || "").trim();
 
-  const claimed = { jobs: 0, owner_profile: 0, segments: 0, events: 0 };
+  const claimed = { jobs: 0, owner_profile: 0, segments: 0, agents: 0, events: 0 };
 
   // 1. Rows that can prove they are this person's.
   if (legacy.length >= 8) {
-    for (const table of ["jobs", "owner_profile", "segments"]) {
+    for (const table of ["jobs", "owner_profile", "segments", "agents"]) {
       try {
         const field = table === "owner_profile" ? "owner_id" : "owner";
         const rows = e.app.findRecordsByFilter(

@@ -572,6 +572,17 @@ struct SettingsView: View {
         detailsSaved = false
         phoneSaved = false
         if pendant.hasPairedPendant { pendant.forgetPendant() }
+        // Let go of the browser BEFORE the identity rotates, or the pairing is
+        // orphaned: agents.owner is written once, at pairing, with whatever
+        // ownerID the phone had then, and NOTHING ever rewrites it — the
+        // /auth/claim hook re-owns jobs, owner_profile, segments and events,
+        // but never agents. So the row goes on saying paired to an id this
+        // phone no longer uses. Seen for real on 2026-08-05: the extension
+        // said "Paired with your iPhone" and showed a completed booking while
+        // the phone said "Chrome not linked", and no amount of reloading
+        // either side could reconcile them, because they were both right.
+        let orphan = session.ownerID
+        Task { await session.backend.unpairAgent(owner: orphan) }
         // A fresh identity: nothing said from here on is tied to the old one,
         // and the jobs list (which IS scoped by owner) genuinely empties.
         session.ownerID = UUID().uuidString
