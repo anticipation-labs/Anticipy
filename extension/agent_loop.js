@@ -542,6 +542,88 @@ export async function planRun(apiKey, model, goal, ownerProfile, scope) {
   }
 }
 
+/// "Did anything actually happen?" — where we are, how many things are on the
+/// page, and how much text. Typing, a menu opening, a row appearing, a dialog:
+/// all move it. Staring at an unchanged page does not. Named and exported so
+/// the spreadsheet case can be pinned by a test rather than hoped for.
+export function pageFingerprint(state) {
+  const st = state || {};
+  return `${st.url || ""}|${(st.elements || "").length}|${(st.text || "").length}`;
+}
+
+// WHEN IT GETS STUCK, GO FIND OUT HOW — do not just stop.
+//
+// The loop gave up flatly after 18 steps on one page. That is the right
+// instinct (flailing is worse) but the wrong ending: it handed back a dead
+// page and no attempt to work out what it had got wrong. A person stuck on
+// a website looks up how the thing is done and tries again.
+//
+// So: once per run, at the moment it would have quit, it asks what it should
+// have known before starting — how is this task actually done, and where.
+// The answer can be a different URL, a different route through the same site,
+// or an honest "this genuinely needs the owner", which ends the run the way
+// it would have ended anyway.
+//
+// Once. Not a loop. A second failure after researching is a real dead end and
+// pretending otherwise burns the owner's money and his patience.
+const RESEARCH_SYSTEM = `A browser agent is stuck. It has spent many steps on
+one page without progress, and is about to give up.
+
+You know how websites work. Work out what it got wrong and what to do instead.
+The usual causes: it is on a search engine when the task lives inside a
+specific product; it is on the right site but the wrong part of it; the thing
+it wants is behind a menu, a tab or a sign-in it has not opened; or the task
+needs something looked up first that it never went and got.
+
+Be concrete about WHERE. If it is on a search page and the task is a real
+piece of work, name the product's own URL. If a fact is missing, say where in
+the owner's own accounts it lives.
+
+Say honestly when only the owner can unblock it — a login, a payment, a choice
+that is genuinely theirs. Guessing costs more than asking.
+
+Reply ONLY with compact JSON:
+{"diagnosis":"<10 words: what went wrong>",
+ "go_to":"https://…  (or null to stay on this page)",
+ "then":["<2-4 concrete next moves>"],
+ "give_up":false}`;
+
+async function researchStuck(apiKey, model, goal, url, title, history) {
+  if (!apiKey) return null;
+  const user = `GOAL: ${goal}\n\nSTUCK ON: ${url}\nPAGE TITLE: ${title}`
+    + `\n\nWHAT IT HAS TRIED (most recent last):\n${history.slice(-14).join("\n") || "(nothing recorded)"}`;
+  try {
+    const r = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model, temperature: 0,
+        messages: [{ role: "system", content: RESEARCH_SYSTEM }, { role: "user", content: user }],
+      }),
+    });
+    if (!r.ok) return null;
+    const raw = (await r.json())?.choices?.[0]?.message?.content || "";
+    const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
+    if (s < 0 || e <= s) return null;
+    const out = JSON.parse(raw.slice(s, e + 1));
+    let go = null;
+    if (out.go_to && out.go_to !== "null") {
+      try {
+        const u = new URL(String(out.go_to));
+        if (u.protocol === "https:" || u.protocol === "http:") go = u.toString();
+      } catch (e) { /* unusable — stay put */ }
+    }
+    return {
+      diagnosis: String(out.diagnosis || "").slice(0, 140),
+      goTo: go,
+      then: Array.isArray(out.then) ? out.then.slice(0, 4).map(String) : [],
+      giveUp: out.give_up === true,
+    };
+  } catch (e) {
+    return null;                 // stuck stays stuck; never worse
+  }
+}
+
 /// The plan as the step loop sees it: context it may override, never orders.
 export function planBlock(plan) {
   if (!plan) return "";
@@ -656,6 +738,11 @@ export async function runAgentGoal(goal, opts) {
   let mapFailures = 0;
   // When the text map is not getting us anywhere, look at the page.
   let stuckStreak = 0;
+  // One research attempt per run. A second dead end after looking it up is
+  // a real dead end, and looping on it burns money and patience.
+  let researched = false;
+  // Last seen shape of the page, for telling real work from flailing.
+  let lastFingerprint = "";
   // Steps spent on one page without navigating anywhere. A run that is going
   // somewhere changes pages; one that clicks the same page twenty times is
   // wedged, and every further step is another spawned tab and another minute
@@ -708,8 +795,53 @@ export async function runAgentGoal(goal, opts) {
       }
 
       mapFailures = 0;
-      if (state.url !== lastUrl) { stuckStreak = 0; stepsOnPage = 0; }  // real navigation is progress
-      else if (++stepsOnPage > 18) {
+      // PROGRESS IS THE PAGE CHANGING, NOT THE URL CHANGING.
+      //
+      // This used to be `state.url !== lastUrl`, so the only thing that
+      // counted as getting somewhere was a navigation. That quietly made
+      // every serious task impossible: a spreadsheet is ONE url for an entire
+      // editing session, so is composing mail, so is any long form, so is any
+      // single-page app. All of them looked frozen from step one and were
+      // killed at nineteen while genuinely working. It was not a stall
+      // detector, it was a cap on how much could be done in one place.
+      //
+      // The fingerprint is what a person would call "did anything happen":
+      // where we are, how many things are on the page, and how much text.
+      // Typing into a field, opening a menu, a row appearing, a dialog — all
+      // move it. Staring at an unchanged page eighteen times does not.
+      const fingerprint = pageFingerprint(state);
+      if (fingerprint !== lastFingerprint) {
+        stuckStreak = 0; stepsOnPage = 0;   // something actually happened
+        lastFingerprint = fingerprint;
+      } else if (++stepsOnPage > 18) {
+        // Stuck. Before quitting, go and work out what was wrong — ONCE.
+        // A person in this position looks up how the thing is done rather
+        // than staring at the same page; giving up flatly was the loop's
+        // worst habit, and it is what produced "19 steps on a Bing results
+        // page" instead of ever opening a mail client.
+        if (!researched) {
+          researched = true;
+          const found = await researchStuck(apiKey, model, goal, state.url, state.title, history);
+          if (found && !found.giveUp) {
+            console.log(`agent: stuck -> ${found.diagnosis}${found.goTo ? ` -> ${found.goTo}` : ""}`);
+            history.push(`RESEARCHED after getting stuck: ${found.diagnosis}`
+              + (found.then.length ? ` Now: ${found.then.join(" -> ")}` : ""));
+            if (found.goTo && found.goTo !== state.url) {
+              try {
+                await chrome.tabs.update(tab.id, { url: found.goTo });
+                lastUrl = found.goTo;
+              } catch (e) { /* navigation refused; carry on where we are */ }
+            }
+            stepsOnPage = 0;      // earned a fresh budget, not an endless one
+            stuckStreak = 0;
+            continue;
+          }
+          // Researching said the owner is genuinely needed, or produced
+          // nothing usable. Fall through and end exactly as before.
+          if (found && found.giveUp && found.diagnosis) {
+            return (handBack = true) && { status: "needs_user", result: `I got stuck on ${state.url}. ${found.diagnosis}. The page is open for you.`, tabId: tab.id };
+          }
+        }
         return (handBack = true) && { status: "needs_user", result: `I spent ${stepsOnPage} steps on ${state.url} without getting anywhere, so I stopped instead of flailing. The page is open for you — it likely needs a human choice I couldn't make.`, tabId: tab.id };
       }
       // Anything the working tab spawned (target=_blank, window.open) gets

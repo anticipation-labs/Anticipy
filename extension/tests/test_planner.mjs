@@ -27,7 +27,7 @@ globalThis.chrome = globalThis.chrome || {
   runtime: {}, debugger: {}, tabGroups: {}, notifications: {}, alarms: {},
 };
 
-const { planRun, planBlock } = await import(join(ext, "agent_loop.js"));
+const { planRun, planBlock, pageFingerprint } = await import(join(ext, "agent_loop.js"));
 
 let pass = 0, fail = 0;
 const realFetch = globalThis.fetch;
@@ -118,6 +118,37 @@ check(/const openAt = \(plan && plan\.startUrl\) \|\| startUrl;/.test(src),
       "a null plan falls back to exactly that default");
 check(/planning && !opts\.startUrl/.test(src),
       "an explicit start_url on the job still wins over the planner");
+
+// ------------------------------------ progress means the PAGE changed
+
+// The loop used to treat ONLY a url change as progress, so anything that
+// happens in one place — a spreadsheet, composing mail, a long form, any
+// single-page app — looked frozen from step one and was killed at nineteen
+// while genuinely working. These pin the replacement.
+const sheet = { url: "https://docs.google.com/spreadsheets/d/abc/edit",
+                elements: "e".repeat(400), text: "t".repeat(9000) };
+check(pageFingerprint(sheet) === pageFingerprint({ ...sheet }),
+      "an unchanged page fingerprints the same (a real stall is still caught)");
+check(pageFingerprint(sheet) !== pageFingerprint({ ...sheet, text: "t".repeat(9001) }),
+      "SPREADSHEET: same url, one more character typed, counts as progress");
+check(pageFingerprint(sheet) !== pageFingerprint({ ...sheet, elements: "e".repeat(401) }),
+      "same url, a new element appeared (menu/dialog/row), counts as progress");
+check(pageFingerprint(sheet) !== pageFingerprint({ ...sheet, url: sheet.url + "#gid=2" }),
+      "navigation still counts as progress");
+check(pageFingerprint(undefined) === "|0|0" && pageFingerprint({}) === "|0|0",
+      "a missing or empty state does not throw");
+check(pageFingerprint(undefined) === pageFingerprint({}),
+      "and two empty states agree, so a broken map does not read as progress");
+
+const loopSrc = readFileSync(join(ext, "agent_loop.js"), "utf8");
+check(/const fingerprint = pageFingerprint\(state\);/.test(loopSrc),
+      "the loop actually uses the fingerprint");
+check(!/if \(state\.url !== lastUrl\) \{ stuckStreak = 0; stepsOnPage = 0; \}/.test(loopSrc),
+      "the old url-only progress test is gone");
+check(/if \(!researched\)/.test(loopSrc),
+      "it researches before giving up");
+check(/researched = true;/.test(loopSrc),
+      "and researches only once per run");
 
 globalThis.fetch = realFetch;
 console.log(`\ntest_planner: ${pass} passed, ${fail} failed`);
