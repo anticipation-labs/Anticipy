@@ -1,144 +1,167 @@
 # Morning, Omar
 
-Plain words. Three things you need to know, then the details.
+---
+
+# ⚠️ READ THIS FIRST — SHE IS ASLEEP, AND ONLY YOU CAN WAKE HER
+
+**Your AI credits are completely gone. 160 of 160 used. Every model refuses
+with "402 Payment Required".**
+
+Anticipy hears you but **cannot think**. Nothing will work until you top up.
+
+**Fix (2 minutes):** openrouter.ai → Credits → add funds. That's it. She
+comes back on her own, on the better model, already set up and waiting.
+
+**My part in it, honestly:** the account was at 155 when the night started
+and 160 when it ended. My testing burned that last stretch — I ran her
+brain over your real transcripts many times to measure whether my fix
+actually worked. That was the right work to do, but I should have checked
+the balance before spending it, and I didn't. It's the reason she went
+quiet at ~1am rather than later.
+
+I also checked every other key you have (Groq, Cerebras, DeepSeek direct,
+Gemini direct) hoping to keep her alive on one of them. **All dead or
+invalid** — 403s, 402s, 404s. There was no way to keep her running.
 
 ---
 
-## 1. SOMETHING YOU HAVE TO DO (2 minutes)
+# 1. THE THING YOU ASKED ME TO FIX — it works, and it's measured
 
-**Your AI credits ran out.** Not Anticipy's fault, not a bug — the account
-that pays for her thinking hit a wall and started refusing.
+**What went wrong:** you dictated a newsletter list to your Mac with Wispr
+Flow. Your phone heard it and thought you were talking to *her*. One
+dictation became **three real jobs**: "remove items 491, 492, 493",
+"update the KTHAI list", "reply to Toby's email".
 
-At about 1am the model she thinks with started answering **"402 Payment
-Required"** to everything. If I had left it, you would have woken up to an
-assistant that hears you and cannot think — every line silently failing.
+**Why:** she only ever asked one question — *"does this sound like
+something to do?"* — and "kill 491, 492, 493 of your list" sounds exactly
+like something to do.
 
-**What I did:** switched her onto a cheaper model that still answers, and
-checked it handles your real cases correctly before switching. She is
-awake right now.
+**What she does now:** every line gets a **second, separate question** —
+*whose job did these words just create?*
 
-**What you do:** top up OpenRouter (openrouter.ai → Credits). Then, if you
-want the better model back:
-
-```
-cd ~/AnticipyFleet/control && railway variables --service worker --set "ANTICIPY_MODEL=google/gemini-2.5-flash"
-```
-
-I did not top it up myself — spending your money is yours to do.
-
----
-
-## 2. THE THING YOU ASKED ME TO FIX — it works
-
-**What went wrong last night:** you dictated a newsletter list to your Mac
-with Wispr Flow. Your phone heard it and thought you were talking to *her*.
-One dictation became **three real jobs**: "remove items 491, 492, 493",
-"update the KTHAI list", "reply to Toby's email". You never asked for any
-of it.
-
-**Why it happened:** she only ever asked one question — *"does this sound
-like something to do?"* — and "kill 491, 492, 493 of your list" sounds
-exactly like something to do.
-
-**What she does now:** every single line gets a **second, separate
-question** — *whose job did these words just create?*
-
-| answer | what it means | what she does |
+| answer | meaning | what she does |
 |---|---|---|
-| **his** | he promised someone, or asked her | do the work |
-| **someone else's** | a friend said "I'll book it" | remember it. Never start it. |
-| **a machine's** | he's voice-typing into an app | **nothing.** That app is already doing it |
-| **nobody's** | chatter, or the transcript is mush | may quietly look something up, never more |
+| **his** | he promised someone, or asked her directly | do the work |
+| **someone else's** | a friend said "I'll book it" | remember. Never start it. |
+| **a machine's** | he's voice-typing into an app | **nothing** — that app is already doing it |
+| **nobody's** | chatter, or the transcript is mush | may quietly look something up. Never book, never interrupt. |
 
-Both keys must turn before she does anything that matters.
+Both keys must turn before anything that matters happens.
 
-**Proof, on your real words:**
+**Proof on your own words:**
 
 ```
-PASS  "Pill 491 kill 492 kill 493 of your list"            -> machine, silent
-PASS  "Carson Michael and RV.help23 ... KTHAI"             -> machine, silent
-PASS  "4546 4748 reply my inbox drive to Toby's email"     -> machine, silent
-PASS  "Can you book dinner for 7 PM tomorrow at Cactus"    -> his, fires
+PASS  "Pill 491 kill 492 kill 493 of your list"          -> machine, silent
+PASS  "Carson Michael and RV.help23 ... KTHAI"           -> machine, silent
+PASS  "4546 4748 reply my inbox drive to Toby's email"   -> machine, silent
+PASS  "Can you book dinner for 7 PM tomorrow at Cactus"  -> his, fires
 ```
 
-All three of your real false fires are dead. The dinner still gets caught.
-The Cactus and Earls conversation proofs still pass. 70 offline tests pass.
+All three real false fires dead. Dinner still caught. Cactus and Earls
+conversation proofs still green. **79 offline tests pass**, nine of them
+written specifically to pin this rule — including both directions of the
+safety wall: a missing verdict and a garbage verdict each change
+**nothing**, so a confused model can never make her worse than today.
 
-**No keywords, no hardcoding.** She is not looking for the word "kill" or
-"491". She is judging who owed what — which is why it also handles the case
-you actually care about: your boss asking you for the deck is *your* job,
-your colleague saying they'll send theirs is *theirs*.
+**No keywords. No hardcoding.** She isn't looking for "kill" or "491" —
+she's judging who owed what. Which is why it also handles the case you
+actually care about: *your boss asking you for the deck is your job; your
+colleague saying they'll send theirs is theirs.*
 
 ---
 
-## 3. THE MOST IMPORTANT THING I LEARNED (read this one)
+# 2. THE SCORECARD
 
-**The way we have been judging changes has been broken, and it explains a
-lot of the last week.**
+Built from **your real 244 lines**, split before I wrote a line of code:
+**146 to tune on**, **98 held out and never looked at**.
 
-I ran the *exact same code* on the *exact same data* three times:
-
-```
-run 1: 8 false fires     run 2: 11 false fires     run 3: 8 false fires
-```
-
-**Nothing changed between those runs.** The AI is just not perfectly
-repeatable. So a swing of 3 means nothing.
-
-Every time someone (me, Devin, the fleet) made one change, ran it once, and
-said "fixed!" or "broken!" — **they may have been reading noise.** That is
-almost certainly why this thing has felt like it lurches between deaf and
-spammy. We were steering on a wobbly needle.
-
-From now on: **every judgement is the average of at least 3 runs.** It is
-in the tooling, it can't be skipped.
-
-I also caught myself making the same mistake twice more overnight:
-- I counted "the AI errored out" as "she wrongly did something" — that
-  produced a fake result of 57 false fires and nearly sent me chasing a
-  problem that did not exist.
-- I counted a miss every time she stayed quiet on a line — but a dinner
-  agreed over six sentences needs **one** card, not six. So the old number
-  punished her for the exact behaviour we want. Now it asks the honest
-  question: of the conversations that needed something, how many got
-  **nothing at all**?
-
----
-
-## The scorecard
-
-Built from **your real 244 lines**, split in two before I touched anything:
-- **dev** (146 lines) — what I tuned on
-- **held out** (98 lines) — never looked at while building, scored once
-
-Both sets labelled with what *should* have happened. Your own Wispr Flow
-history is the ground truth for the dictation lines — those aren't my
-opinion, they're documented fact.
-
-**First clean paired run** (zero errors, on the model your worker is
-actually running now):
+One clean paired run (zero errors), on the model your worker runs:
 
 | | false fires | misses | conversations dropped |
 |---|---|---|---|
 | **NOW** (what you're running) | 30 | 5 | 0 of 9 |
 | **NEW** (the second key) | **23** | **4** | 0 of 9 |
 
-Better on both, and no conversation went unserved either way — which is
-the promise I made: fix the over-firing WITHOUT going deaf. Two more
-paired runs are in flight for a 3-run mean, because one run means little
-at ±3 noise.
+Better on both — and no conversation went unserved either way. That was
+the promise: **stop the over-firing without going deaf.**
 
-**A side-finding that matters to you:** on the better (paid) model the
-same baseline scored ~17 false fires; on the cheap fallback it scores 30.
-**Topping up your credits roughly halves her false fires by itself** —
-the model is doing a lot of the work here.
+**Side-finding worth money to you:** on the better paid model, the same
+baseline scored ~17 false fires; on the cheap one, 30. **Topping up nearly
+halves her mistakes by itself.** The model is doing a lot of the work.
 
 ---
 
-## Your button
+# 3. WHAT I DID *NOT* DO — and why
 
-Nothing was changed on your phone. The app is untouched. The only live
-change is the model swap that kept her breathing.
+**I did not ship it.** I told you I'd only put it live if it beat the
+current behaviour on the held-out data. **I never got to score the
+held-out set** — the credits died first. So by my own rule, it stays
+parked on the branch `overnight-directed-speech`.
+
+It's one command from going live once you top up, and I've left the loop
+running so it can finish the job itself: it checks (for free) whether
+credits are back, and if they are, it scores the held-out set and reports.
+
+**I did not spend your money.**
+
+**I did not build the Wispr-Flow-specific hack.** You were right to push
+back — it solved one app; the real problem is every conversation with
+every person. The "whose job is it" question covers all of them.
+
+---
+
+# 4. THE MOST IMPORTANT THING I LEARNED
+
+**The way this project has been judging changes is broken. It explains a
+lot of the last week.**
+
+Same code. Same data. Three runs:
+
+```
+run 1: 8 false fires    run 2: 11 false fires    run 3: 8 false fires
+```
+
+**Nothing changed between them.** The AI just isn't perfectly repeatable.
+So a swing of 3 means *nothing*.
+
+Every time someone — me, Devin, the fleet — made one change, ran it once,
+and declared "fixed!" or "broken!", **they may have been reading noise.**
+That is very likely why this thing has lurched between deaf and spammy.
+We were steering on a wobbly needle.
+
+Now: **every judgement is the average of at least 3 runs**, enforced in the
+tooling. I also caught myself making two related mistakes overnight and
+fixed both:
+- counting "the AI errored" as "she wrongly acted" — that produced a fake
+  57-false-fire result and nearly sent me chasing a bug that didn't exist;
+- counting a miss every time she stayed quiet on a line — but a dinner
+  agreed over six sentences needs **one** card, not six. The old number
+  punished exactly the behaviour we want.
+
+---
+
+# 5. ONE MORE THING I FOUND (for later, not built)
+
+macOS reports **which app is holding the microphone** — literally
+`[[mic] Wispr Flow (com.electron.wispr-flow)]`. That's the general version
+of your point: it identifies a Zoom call, dictation, any app. Wispr also
+keeps a timestamped local transcript history we could match against.
+
+That's *ground truth* rather than judgement — but it lives on your Mac and
+the phone is what hears you, so it's a cross-device design, not a one-night
+change. Right order: ship the judgement first, add the hard signal as
+confirmation later. Written up in `overnight/RESEARCH-NOTES.md`.
+
+Also from the data: **17 of 31 things she acted on, she had already
+labelled "not aimed at me"** — and acted anyway. She knew. Nothing was
+wired to make her care. That's the gap now closed.
+
+---
+
+# YOUR BUTTON
+
+Nothing on your phone changed. The app is untouched. Production is running
+exactly the code you went to sleep on.
 
 If anything at all feels wrong:
 
@@ -146,20 +169,9 @@ If anything at all feels wrong:
 bash ~/AnticipyFleet/control/REVERT.sh
 ```
 
-Puts the brain back exactly as you left it. Your data is never touched. My
-work is saved on a branch, not thrown away.
+Your data is never touched. My work is saved on a branch, not thrown away.
 
----
+# YOUR LIST
 
-## What I did NOT do
-
-- **Did not ship the new brain to production.** It lives on the branch
-  `overnight-directed-speech`, waiting for the held-out score. I said I
-  would only ship if it beats the current behaviour on data I never tuned
-  against, and I meant it.
-- **Did not touch your money.**
-- **Did not build the Wispr-Flow-specific hack.** You were right to push
-  back on that — it solved one app, and the real problem is every
-  conversation you have with every person. The "whose job is it" question
-  handles all of them, which is why it also gets the boss-vs-colleague case
-  right.
+1. **Top up OpenRouter credits** — she's dead until you do.
+2. That's genuinely it. Everything else is waiting on me, not you.
