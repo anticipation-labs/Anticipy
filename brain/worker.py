@@ -22,7 +22,7 @@ import requests
 from . import pb
 from . import research
 
-from .anticipy_core import Anticipy
+from .anticipy_core import Anticipy, goal_tokens
 from .memory import Memory
 from .segmenter import SegmentStore, place_turn
 from .conversation import Conversation, MockTransport, TwilioTransport
@@ -510,14 +510,14 @@ def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
         # Cactus…" vs "confirm the Cactus Club plan for tomorrow"), so exact
         # equality was a guard that never fired across rephrasings. Same
         # word-overlap idea the job queue uses.
-        want = {w for w in re.findall(r"[a-z0-9']+", goal.lower()) if len(w) > 3}
+        want = goal_tokens(goal)
         for ev in r.json().get("items", []):
             other = (ev.get("goal") or "").strip()
             if not other:
                 continue
             if other == goal:
                 return True
-            have = {w for w in re.findall(r"[a-z0-9']+", other.lower()) if len(w) > 3}
+            have = goal_tokens(other)
             if (want and have
                     and len(want & have) / min(len(want), len(have)) >= 0.6):
                 return True

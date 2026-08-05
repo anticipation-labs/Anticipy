@@ -30,6 +30,12 @@ committing, exactly as much as a full sentence would be.
   researching options, laying booking groundwork. A vague desire with a real
   anchor (a time, a place, a person) deserves a quiet start on options, not
   silence. Give a short machine goal string.
+  When the context shows a plan ALREADY under discussion, a short line that
+  adds or changes one of its details — the time, the place, the day, HOW
+  MANY people ("it'll be us four", "make it eight instead") — is that plan
+  firming up, not chatter: decision "act", and the goal restates the FULL
+  plan carrying every detail known so far, the new one included. A detail
+  that never makes it into a goal is a detail lost.
   This INCLUDES a factual question the owner says out loud that you could
   answer by looking it up — "what time is the demo day on Monday", "how late
   is that place open", "what did that cost". Looking something up is

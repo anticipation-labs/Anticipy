@@ -38,13 +38,18 @@ NAME = "Anticipy"
 # leaves the owner's world (sending, booking, buying, signing up, calling,
 # posting, deleting) is held for confirmation regardless of what triage said.
 # LLM goal strings are free-form, so exact-match sets are not enough.
+# VERB forms only, never the -ation/-ment noun: "find Earls hours and
+# reservation options" is research whose sentence happens to contain the
+# noun "reservation" in action position, and the broad reserv\w* read it as
+# the verb "reserve" — a pure lookup became a held card with a text asking
+# permission to look. Same trap for invitation/confirmation/cancellation.
 _VERBS = (
-    r"send\w*|email\w*|book\w*|reserv\w*|buy\w*|purchas\w*|order\w*|pay\w*|"
+    r"send\w*|email\w*|book\w*|reserv(?:e|es|ed|ing)|buy\w*|purchas\w*|order\w*|pay\w*|"
     r"sign(?:\s+\w+)?\s*up|sign\w*|register\w*|subscrib\w*|submit\w*|post\w*|publish\w*|"
-    r"repl(?:y|ies|ying)|messag\w*|text\w*|call\w*|cancel\w*|delet\w*|"
-    r"unsubscrib\w*|transfer\w*|schedul\w*|invit\w*|rsvp|book\w*|"
-    r"shar\w*|forward\w*|respond\w*|confirm\w*|appl(?:y|ies|ying)|"
-    r"wire|venmo|e-?transfer|donat\w*|checkout|check\s*out|upload\w*|deposit\w*"
+    r"repl(?:y|ies|ying)|messag\w*|text\w*|call\w*|cancel(?:s|led|ling|ed|ing)?|delet\w*|"
+    r"unsubscrib\w*|transfer\w*|schedul\w*|invit(?:e|es|ed|ing)|rsvp|"
+    r"shar\w*|forward\w*|respond\w*|confirm(?:s|ed|ing)?|appl(?:y|ies|ying)|"
+    r"wire|venmo|e-?transfer|donat(?:e|es|ed|ing)|checkout|check\s*out|upload\w*|deposit\w*"
 )
 # Only in ACTION position — the start of the goal, or after and/then/to/&/comma.
 # A verb buried in a noun phrase is not an action: "noise CANCELLING
@@ -127,6 +132,34 @@ def is_consequential(goal: str, params: dict | None = None,
     return not _READ_ONLY_RE.search(g)
 
 
+def goal_tokens(text: str) -> set:
+    """The meaningful words of a goal, normalized just enough that trivial
+    morphology cannot defeat a match. "Earls" / "Earl's" / "earl" are one
+    word; "book" / "booking" are one word. And NUMBERS ARE KEPT whatever
+    their length — "for 4 people" vs "for 2 people" and "at 1" vs "at 7"
+    are exactly the details a plan-card match must see, and the old
+    len>3 filter silently deleted them: a card saying "2 people" could
+    never be corrected by "all four of us", because the 4 and the 2 were
+    both invisible.
+
+    This is generic morphology, not scenario tuning: strip a possessive,
+    strip -ing, strip a plural s. Nothing here knows any venue."""
+    out = set()
+    for w in re.findall(r"[a-z0-9']+", (text or "").lower()):
+        w = w.replace("'", "")
+        if w.isdigit():
+            out.add(w)
+            continue
+        if len(w) <= 3:
+            continue
+        if len(w) > 5 and w.endswith("ing"):
+            w = w[:-3]
+        elif len(w) > 4 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+        out.add(w)
+    return out
+
+
 # How long a conversation stays "live" — the window the split-thought carry
 # and the addressee stickiness already use. People pause for seconds.
 CONVERSATION_WINDOW = 120
@@ -177,7 +210,11 @@ How you text (non-negotiable):
 - Like a sharp friend over SMS: short, lowercase-casual is fine, contractions
   always. Most texts are one sentence; two is the ceiling.
 - Reference the specific thing and the specific detail, never a category —
-  "the 7:30 at Cactus Club" beats "your reservation".
+  "the 9am with the dentist" beats "your appointment". Every concrete
+  detail you state (a time, a place, a count) must come from THIS moment's
+  goal or what was heard — repeat them exactly; NEVER invent or borrow one,
+  not from an example, not from anywhere. A live text once said "7pm" about
+  a 1pm booking; a wrong detail is worse than no text.
 - Never open two texts in a row the same way. Ban openers: "Hey, just",
   "Just a quick", "Just checking", "I wanted to", "Friendly reminder".
 - One question max, and only the question that actually unblocks you.
@@ -316,6 +353,12 @@ class Anticipy:
         It rides on the job so the answer can go back the way the question
         came: an SMS ask is replied to in-thread, everything else lands on
         the desk (the app feed) without buzzing his phone."""
+        # The conversation, kept where the plan-matcher can see it: two goals
+        # judged as bare strings ("book reservation at Earl's" vs "draft an
+        # invitation for Saturday at 1") read as different errands; the same
+        # two goals read WITH the lunch being planned around them are plainly
+        # one plan. Refreshed every line, so it is always this conversation.
+        self._last_convo = [c for c in (context or []) if c][-6:]
         # Unmistakable dictation is known before anything can answer or act:
         # a line the owner voice-typed at another machine must not be
         # answered from memory as if he had asked HER. Explicit lines (he
@@ -434,30 +477,32 @@ class Anticipy:
                     params["missing"] = decision.missing
                 # He may have agreed to the same thing three times in one
                 # conversation ("seven works" … "see you at seven"). One plan,
-                # one card.
-                already = self._same_pending(goal)
-                if already:
-                    decision = Decision(
-                        decision="ignore", goal=goal,
-                        reason=f"{addressee}-directed: already on her desk",
-                        addressee=addressee)
-                else:
-                    missing, assumption = decision.missing, decision.assumption
-                    # A firming-up plan merges into its existing card inside
-                    # _queue_job; only a genuinely NEW card earns the one text.
-                    before = {j.get("id") for j in self._pending_jobs()}
-                    job_id = self._queue_job(goal, params, hold=True)
-                    fresh = bool(job_id) and job_id not in before
+                # one card — but the dedupe belongs to _queue_job, which also
+                # knows how to IMPROVE the card. A _same_pending shortcut here
+                # used to swallow late details entirely: "all four of us" on
+                # the last line matched the pending card and returned before
+                # anything could patch "for 2 people" up to four.
+                missing, assumption = decision.missing, decision.assumption
+                # A firming-up plan merges into its existing card inside
+                # _queue_job; only a genuinely NEW card earns the one text.
+                before = {j.get("id") for j in self._pending_jobs()}
+                job_id = self._queue_job(goal, params, hold=True)
+                fresh = bool(job_id) and job_id not in before
+                if fresh:
                     self.loops.append(LoopRecord(
                         commitment_id=mem.get("commitment_id") or -1,
                         what=goal, status="handling", job_id=job_id))
-                    decision = Decision(
-                        decision="act", goal=goal,
-                        reason=f"{addressee}-directed: prepared, waiting on his OK",
-                        needs_confirmation=True, addressee=addressee)
-                    # Held work must never sit silently: one text asks for his
-                    # go-ahead and names anything essential still unknown. The
-                    # queue's dedupe above keeps this to ONE text per plan.
+                decision = Decision(
+                    decision="act" if fresh else "ignore", goal=goal,
+                    reason=(f"{addressee}-directed: prepared, waiting on his OK"
+                            if fresh else
+                            f"{addressee}-directed: already on her desk"),
+                    needs_confirmation=True, addressee=addressee)
+                handled = None
+                if fresh:
+                    # Held work must never sit silently: one text asks for
+                    # his go-ahead and names anything essential still
+                    # unknown. The queue's dedupe keeps this to ONE per plan.
                     handled = self._voice({
                         "situation": "overheard a plan he made with someone; "
                                      "prepared it, held for his OK"
@@ -475,13 +520,12 @@ class Anticipy:
                     # Kind "ambient_act": the worker's guard gives overheard-
                     # plan texts the clock's quiet hours — he never invited
                     # this one. And the text only counts if it actually SENT:
-                    # a failed Twilio call used to leave `handled` truthy, the
-                    # worker posted it as said, and the speak-once guard then
-                    # suppressed every retry forever — a silent card wearing a
-                    # "he was told" sticker.
-                    if not (fresh
-                            and self._may_say(may_say, handled, goal,
-                                              "ambient_act")
+                    # a failed Twilio call used to leave `handled` truthy,
+                    # the worker posted it as said, and the speak-once guard
+                    # then suppressed every retry forever — a silent card
+                    # wearing a "he was told" sticker.
+                    if not (self._may_say(may_say, handled, goal,
+                                          "ambient_act")
                             and self.notify_owner(handled)):
                         handled = None
             else:
@@ -935,7 +979,7 @@ class Anticipy:
         researched the restaurant, he said "book it", and _queue_job handed
         back the research job's id and created nothing. A job that changes his
         world can never be deduped against one that only reads."""
-        want = {w for w in re.findall(r"[a-z0-9']+", (goal or "").lower()) if len(w) > 3}
+        want = goal_tokens(goal)
         if not want:
             return None
         want_consequential = is_consequential(goal)
@@ -943,8 +987,7 @@ class Anticipy:
             other = j.get("goal") or ""
             if is_consequential(other) != want_consequential:
                 continue
-            have = {w for w in re.findall(r"[a-z0-9']+", other.lower())
-                    if len(w) > 3}
+            have = goal_tokens(other)
             if not have:
                 continue
             overlap = len(want & have) / max(len(want), len(have))
@@ -956,8 +999,8 @@ class Anticipy:
     def _covered_by(goal: str, other: str) -> bool:
         """Does `other` already say everything `goal` says? Then patching
         would only lose detail."""
-        want = {w for w in re.findall(r"[a-z0-9']+", (goal or "").lower()) if len(w) > 3}
-        have = {w for w in re.findall(r"[a-z0-9']+", (other or "").lower()) if len(w) > 3}
+        want = goal_tokens(goal)
+        have = goal_tokens(other)
         return bool(want) and want <= have
 
     def _same_plan(self, new_goal: str, pending_goal: str) -> bool:
@@ -979,22 +1022,35 @@ class Anticipy:
         reservation" vs "reserve a table at the park spot" — does the model
         answer, and with no model those stay two cards: a duplicate card is
         an annoyance, a swallowed errand is a loss."""
-        want = {w for w in re.findall(r"[a-z0-9']+", (new_goal or "").lower()) if len(w) > 3}
-        have = {w for w in re.findall(r"[a-z0-9']+", (pending_goal or "").lower()) if len(w) > 3}
+        want = goal_tokens(new_goal)
+        have = goal_tokens(pending_goal)
         if not want or not have:
             return False
         if len(want & have) / min(len(want), len(have)) >= 0.5:
             return True
         if self.llm and getattr(self.llm, "live", False):
             try:
+                # The conversation rides along. Judged as bare strings,
+                # "book reservation at Earl's Brooklyn" and "draft an
+                # invitation for Saturday at 1 PM at Earl's" read as two
+                # errands; judged inside the lunch being planned line by
+                # line, they are obviously one plan taking shape — and a
+                # wrong "different" here is a second card and a second text.
+                convo = getattr(self, "_last_convo", None) or []
+                user = f"A: {pending_goal}\nB: {new_goal}"
+                if convo:
+                    user += ("\nThe conversation they both came from, in "
+                             "order: " + " | ".join(convo))
                 res = self.llm.chat(
                     "Two task descriptions from the SAME conversation, "
                     "minutes apart. They may be one real-world plan worded "
                     "differently — the later one usually richer as details "
-                    "(time, place, who) arrive — or two different errands "
-                    "with different real-world outcomes. Reply ONLY with "
+                    "(time, place, who) arrive, and the wording may drift "
+                    "(a booking phrased as a draft, an invitation, a "
+                    "reservation) — or two genuinely different errands with "
+                    "different real-world outcomes. Reply ONLY with "
                     'JSON: {"same": true} or {"same": false}.',
-                    f"A: {pending_goal}\nB: {new_goal}")
+                    user)
                 return bool(json.loads(_extract_json(res.text)).get("same"))
             except Exception:
                 pass
@@ -1025,7 +1081,7 @@ class Anticipy:
         Only within one consequence class, and only when the newcomer is
         genuinely richer — otherwise a vague line arriving late would drag a
         good card backwards."""
-        want = {w for w in re.findall(r"[a-z0-9']+", (goal or "").lower()) if len(w) > 3}
+        want = goal_tokens(goal)
         if not want:
             return None
         want_consequential = is_consequential(goal)
@@ -1033,7 +1089,7 @@ class Anticipy:
             other = j.get("goal") or ""
             if is_consequential(other) != want_consequential:
                 continue
-            have = {w for w in re.findall(r"[a-z0-9']+", other.lower()) if len(w) > 3}
+            have = goal_tokens(other)
             if not have or len(want) <= len(have):
                 continue
             if len(want & have) / len(have) >= 0.8:
