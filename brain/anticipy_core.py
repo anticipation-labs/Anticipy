@@ -420,11 +420,27 @@ class Anticipy:
         # pre-filter above already marked unmistakable dictation.
         last_a = self._last_addressee
         prev_addressee = last_a[0] if last_a and time.time() - last_a[1] < 120 else None
-        if speaker not in ("owner", "other"):
-            speaker = None          # unknown and garbage are the same: no verdict
+        # The phone's verdict, in the roster's vocabulary: "owner",
+        # "other" (a person it cannot place), or "other:<who>" where <who>
+        # is a stable local voice id or a name he has taught it ("Sarah").
+        # Anything else — "unknown", empty, a garbled value from a build we
+        # have never seen — is NO VERDICT, and no verdict must change
+        # nothing at all.
+        speaker_name = None
+        if speaker == "owner":
+            pass
+        elif isinstance(speaker, str) and speaker.startswith("other"):
+            _, _, who = speaker.partition(":")
+            who = who.strip()
+            # A bare local id ("v2") names nobody; a real name does.
+            if who and not re.fullmatch(r"v\d+", who):
+                speaker_name = who
+            speaker = "other"
+        else:
+            speaker = None
         decision = self._decide(line, mem, prev_line=prev_line, convo=context,
                                 prev_addressee=prev_addressee, dictated=dictated,
-                                speaker=speaker)
+                                speaker=speaker, speaker_name=speaker_name)
         # The EFFECTIVE addressee — the one her behaviour actually keys on,
         # written back so the event record shows what was applied. An
         # explicit line (he texted/typed it AT her) is assistant by
@@ -675,7 +691,8 @@ class Anticipy:
                 convo: Optional[list[str]] = None,
                 prev_addressee: Optional[str] = None,
                 dictated: bool = False,
-                speaker: Optional[str] = None) -> Decision:
+                speaker: Optional[str] = None,
+                speaker_name: Optional[str] = None) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
             prompt = line
@@ -706,12 +723,18 @@ class Anticipy:
                 prompt = (f"{prompt}\n(Voice check: this line was spoken by "
                           f"the OWNER himself — his enrolled voice matched.)")
             elif speaker == "other":
+                who = (f"{speaker_name} — a person he knows, not him"
+                       if speaker_name else
+                       "someone who is NOT the owner — a different person's "
+                       "voice")
                 prompt = (f"{prompt}\n(Voice check: this line was spoken by "
-                          f"someone who is NOT the owner — a different "
-                          f"person's voice. Their commitments, promises and "
-                          f"errands are THEIRS, never the owner's own; only "
-                          f"things the owner would plainly want caught from "
-                          f"another person's words deserve quiet work.)")
+                          f"{who}. Their commitments, promises and errands "
+                          f"are THEIRS, never the owner's own; only things "
+                          f"the owner would plainly want caught from another "
+                          f"person's words deserve quiet work"
+                          + (f". When it matters who said it, say "
+                             f"{speaker_name} by name." if speaker_name else "")
+                          + ".)")
             if context:
                 notes = "; ".join(f["fact"] for f in context)
                 prompt = f"{prompt}\n(Related memory: {notes})"

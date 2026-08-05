@@ -99,3 +99,23 @@ def test_a_direct_question_still_gets_asked():
     a.notify_owner = lambda m, channel="sms": texts.append(m) or {"ok": True}
     a.hear("hey should I do the park location or downtown?")
     assert len(texts) == 1, texts
+
+
+def test_a_named_person_reaches_the_model_by_name():
+    a, llm = _anticipy(IGNORE)
+    a.hear("I'll grab the tickets", speaker="other:Sarah")
+    p = llm.triage_prompts[0]
+    assert "Sarah" in p and "not him" in p
+
+
+def test_a_bare_voice_id_is_not_treated_as_a_name():
+    a, llm = _anticipy(IGNORE)
+    a.hear("I'll grab the tickets", speaker="other:v2")
+    p = llm.triage_prompts[0]
+    assert "NOT the owner" in p and "v2" not in p
+
+
+def test_unknown_from_the_roster_is_no_verdict():
+    a, llm = _anticipy(IGNORE)
+    a.hear("I'll grab the tickets", speaker="unknown")
+    assert "Voice check" not in llm.triage_prompts[0]
