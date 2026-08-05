@@ -18,6 +18,8 @@
 		732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */; };
 		7E48A45EE188911B2EFB7A66 /* TranscriberClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3C23460620BAF04806F594 /* TranscriberClient.swift */; };
 		993491F4C18D27922491739D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7686379B8FF9FE21D398381F /* ContentView.swift */; };
+		A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */; };
+		ABAB1EE3B1D325D6B3600473 /* ConversationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B72B7E633EA125C09A7923 /* ConversationCard.swift */; };
 		BED64104EF9A77E836CD99FA /* VoiceRoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */; };
 		C4743CD12B7A47A9E6B3F8F3 /* speaker-embedding.onnx in Resources */ = {isa = PBXBuildFile; fileRef = 5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */; };
 		C4D475F4BA8EF258C2B27C02 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94C340A3EF64050C750BCD7 /* SettingsView.swift */; };
@@ -47,7 +49,9 @@
 		A935B05F51033496D5EF92C9 /* HapticEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticEngine.swift; sourceTree = "<group>"; };
 		BE0AB97746861DA294983C3B /* AnticipyBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyBackend.swift; sourceTree = "<group>"; };
 		DF9F21774275ABF326AAC99C /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		E0B72B7E633EA125C09A7923 /* ConversationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationCard.swift; sourceTree = "<group>"; };
 		E94C340A3EF64050C750BCD7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeardGroup.swift; sourceTree = "<group>"; };
 		F00793646933CBDFE4070BF5 /* PendantManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -130,6 +134,8 @@
 			children = (
 				DF9F21774275ABF326AAC99C /* AuthView.swift */,
 				7686379B8FF9FE21D398381F /* ContentView.swift */,
+				E0B72B7E633EA125C09A7923 /* ConversationCard.swift */,
+				EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */,
 				3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */,
 				E94C340A3EF64050C750BCD7 /* SettingsView.swift */,
 				2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */,
@@ -235,7 +241,9 @@
 				FF9C51D6755044E050520ADE /* AuthView.swift in Sources */,
 				45D9F3C3D9B3BAEDDED3DC28 /* BrainClient.swift in Sources */,
 				993491F4C18D27922491739D /* ContentView.swift in Sources */,
+				ABAB1EE3B1D325D6B3600473 /* ConversationCard.swift in Sources */,
 				E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */,
+				A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */,
 				732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */,
 				58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */,
 				4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */,

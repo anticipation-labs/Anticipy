@@ -31,6 +31,12 @@ struct BrainEvent: Decodable, Identifiable, Equatable {
     let decision: String?
     let goal: String?
     let created: String
+    /// The conversation this turn belongs to, stamped by the brain's segmenter
+    /// when it places the turn. Absent (nil) on rows written before the
+    /// segmenter existed, and empty ("") on any turn it failed to place or when
+    /// segmenting is switched off — in which case the feed groups nothing and
+    /// renders exactly as it does today.
+    let segment: String?
 }
 
 /// Thin client for the Anticipy PocketBase backend (pairing, events, jobs).

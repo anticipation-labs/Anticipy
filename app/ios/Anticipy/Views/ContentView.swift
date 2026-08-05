@@ -76,6 +76,18 @@ struct HomeView: View {
     private var handling: [AgentJob] { session.jobs.filter { $0.status == "queued" || $0.status == "running" } }
     private var finished: [AgentJob] { session.jobs.filter { $0.status == "done" || $0.status == "failed" } }
 
+    /// What she heard, as conversations rather than as a wall of lines.
+    ///
+    /// The window is the same newest-30 lines the feed has always shown; only
+    /// the grouping is new, and it groups on the one field that exists —
+    /// `events.segment`. A line the segmenter never stamped is a conversation
+    /// of one, so with no segments at all this renders the identical list of
+    /// rows it renders today. Newest conversation first, the way "Heard" has
+    /// always been chronological.
+    private var heardGroups: [HeardGroup] {
+        Array(HeardGroup.build(Array(session.transcript.suffix(30))).reversed())
+    }
+
     /// Nothing to show at all. WHY there's nothing is a separate question, and
     /// the answer decides which of four very different screens you get.
     private var feedIsEmpty: Bool {
@@ -178,20 +190,7 @@ struct HomeView: View {
                                     }
                                 }
                             }
-                            if !session.transcript.isEmpty {
-                                sectionHeader("Heard")
-                                    .padding(.top, Theme.Space.section)
-                                    .padding(.bottom, Theme.Space.tight)
-                                VStack(spacing: Theme.Space.card) {
-                                    ForEach(Array(session.transcript.suffix(30).reversed().enumerated()), id: \.element.id) { i, line in
-                                        TranscriptRow(line: line)
-                                            .transition(.asymmetric(
-                                                insertion: .move(edge: .top).combined(with: .opacity),
-                                                removal: .opacity))
-                                            .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)), value: session.transcript)
-                                    }
-                                }
-                            }
+                            heardSection
                             if !finished.isEmpty {
                                 sectionHeader("Done")
                                     .padding(.top, Theme.Space.section)
@@ -646,6 +645,35 @@ struct HomeView: View {
             : "I'm not listening yet — tap Listen with phone and I'll start picking things up."
     }
 
+    /// What she heard — one card per conversation, newest first.
+    ///
+    /// The groups are built ONCE here rather than per row: `heardGroups` is a
+    /// computed property, and the separator rule below has to look at the
+    /// previous sibling.
+    @ViewBuilder private var heardSection: some View {
+        let groups = heardGroups
+        if !groups.isEmpty {
+            sectionHeader("Heard")
+                .padding(.top, Theme.Space.section)
+                .padding(.bottom, Theme.Space.tight)
+            VStack(spacing: 0) {
+                ForEach(Array(groups.enumerated()), id: \.element.id) { i, group in
+                    // A hairline belongs between two rows on the ink. It does
+                    // not belong beside a card, which has its own edge already.
+                    if i > 0, !group.isCarded, !groups[i - 1].isCarded {
+                        Rectangle().fill(Theme.stroke).frame(height: 0.5)
+                    }
+                    ConversationCard(group: group)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity))
+                        .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)),
+                                   value: session.transcript)
+                }
+            }
+        }
+    }
+
     /// Chronology sections — a tracked uppercase micro-label beside the
     /// serif is an editorial move: it gives the big type something to be
     /// big against.
@@ -1051,15 +1079,12 @@ struct FoundCard: View {
 
     private var headline: String {
         // The goal reads like machine shorthand ("research dinner spots in
-        // Vancouver"); soften it into the thing itself.
+        // Vancouver"); soften it into the thing itself. The softening moved to
+        // Humanize.goal so this card and the conversation cards share ONE
+        // implementation; the fallback below is this card's own and unchanged.
         let g = (event.goal ?? "").trimmingCharacters(in: .whitespaces)
         guard !g.isEmpty else { return "Something you mentioned" }
-        var s = g
-        for prefix in ["research ", "Research ", "research: ", "Research: ",
-                       "look up ", "Look up ", "find ", "Find "] {
-            if s.hasPrefix(prefix) { s = String(s.dropFirst(prefix.count)); break }
-        }
-        return s.prefix(1).uppercased() + s.dropFirst()
+        return Humanize.goal(g)
     }
 
     var body: some View {
