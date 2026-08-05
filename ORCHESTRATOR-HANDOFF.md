@@ -133,6 +133,18 @@ pending).
 
 ---
 
+## 0.5 ARCHITECTURE LAW — LOCAL-FIRST (Omar, 2026-08-05)
+
+"Everything must be local-first architecture." Read design/LOCAL-FIRST.md
+before any design decision. Understanding happens on the DEVICE; only
+conclusions and outward actions travel. Raw audio NEVER leaves a device
+(this killed the idea of moving phone transcription to Deepgram —
+improve the LOCAL model instead). Voiceprints never leave, never sync,
+never enter git. Cloud today: triage judgment + the memory graph — both
+are named gaps with a staged path in that doc, not permanent choices.
+The research arm reading the public web is fine forever; what must be
+audited is raw transcript text riding along in job params.
+
 ## 1. What Anticipy IS (the point of everything)
 
 **"Anticipy is a friend who's always with you."** Not a chatbot. A
