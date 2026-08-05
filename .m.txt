@@ -1,0 +1,33 @@
+A scorer, and the honest finding that it cannot yet score anything
+
+I built ground truth by cutting his 244 logged lines wherever he went quiet
+for more than ten minutes, then scored links against it. Links lost badly:
+19 conversations against the timer's 6, on a truth of 3.
+
+The result is meaningless, and so is its opposite. The ground truth is itself
+a TIMER - a 600s one - so a link method was being marked against the very
+mechanism it exists to replace. Circular by construction. The sister branch
+flagged this same trap in its own report and I walked into it anyway.
+
+Then I read what the truth labels actually contain. The largest "one
+conversation" is 37 lines running: greetings, a direct question to Claude
+about speaker recognition, his local-first architecture ruling, and a Wispr
+dictation of a numbered list. At least four unrelated things, called one
+conversation solely because he typed them inside ten minutes.
+
+The model answering "0, this starts something new" to those lines was MORE
+correct than my label for them.
+
+So the corpus cannot settle this. It is mostly his testing noise, not
+conversation, and the one genuinely real example - the Angie phone call from
+his screenshot - was never captured to the repo. Offline scoring is blocked
+on data that does not exist, not on effort.
+
+The scorer is committed anyway, because it is correct and it will work the
+moment real linked data exists. What it needs is parent_line verdicts
+collected from real days, which is exactly what the shadow switch produces.
+
+Nothing is claimed for links. They are not proven better and they are not
+proven worse.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
