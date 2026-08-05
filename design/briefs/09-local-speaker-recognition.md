@@ -1,5 +1,19 @@
 # Brief 09 — Local speaker recognition (roadmap §7.2, promoted to NOW)
 
+## SCOPE GREW 2026-08-05 (Omar): not just "is it him" — WHO ELSE.
+The roster is built and proven: proof/voice_roster.py (owner profile +
+learned people, stable ids, names attachable later, 85/15 drift) and
+proof/voice_roster_proof.py (his voice across days; the same friend
+recognised on a separate day; a new voice new; a name that sticks).
+THRESHOLD CORRECTION — the 0.60 in the section below was UNSAFE and is
+superseded: a third voice scored 0.667 against the owner, so match is
+now 0.78 AND a 0.05 margin over the runner-up, else "unknown". The iOS
+half must implement VoiceRoster's rules exactly (that file is the
+reference; keep Swift in step) and send its `tag` — "owner",
+"other:<id>", "other:<name>" or nothing. Enrollment UX also gains: a
+gentle way to name a recurring voice she keeps hearing ("who was that?
+— that's Sarah"), never a form.
+
 ## STATUS 2026-08-05: brain + backend halves SHIPPED and live-proven.
 Done: events.speaker migration deployed; hear(speaker=…) → "(Voice check)"
 triage context with the measured-evidence rule; honesty-wall fallback
