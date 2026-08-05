@@ -1,0 +1,31 @@
+{
+ "set": "heldout",
+ "lines": 97,
+ "false_fires": 2,
+ "misses": 1,
+ "agreed": 94,
+ "errors": 0,
+ "conversations_needing_work": 4,
+ "conversations_dropped": 0,
+ "false_fire_rate": 2.1,
+ "miss_rate": 1.0,
+ "false_fire_examples": [
+  {
+   "text": "Hi he's a demo hey how are you been I've been really good I'm really good have you been good same time yeah yeah as long time yeah really has the kids kids are great yeah yeah yeah that's been great why don't we go for dinner tomorrow yeah we really should we should really catch up OK yeah what time is good for you I think 5 PM tomorrow",
+   "did": "text",
+   "why": "other person's obligation"
+  },
+  {
+   "text": "Got it",
+   "did": "text",
+   "why": "acknowledgement"
+  }
+ ],
+ "miss_examples": [
+  {
+   "text": "What time do I normally like to go to cactus",
+   "wanted": "quiet",
+   "why": "find preferred time"
+  }
+ ]
+}

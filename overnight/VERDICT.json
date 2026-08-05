@@ -1,0 +1,39 @@
+{
+ "verdict": "PARKED \u2014 did not beat baseline on held-out, per the rule set before starting",
+ "heldout": {
+  "now": {
+   "false_fires": [
+    6,
+    4,
+    2
+   ],
+   "misses": [
+    1,
+    0,
+    1
+   ]
+  },
+  "new": {
+   "false_fires": [
+    4,
+    6,
+    4
+   ],
+   "misses": [
+    1,
+    1,
+    1
+   ]
+  },
+  "conversations_dropped": "0 of 4 for both"
+ },
+ "why_inconclusive": "held-out contains only 2 anchored machine-dictation lines (dev has 7) and the baseline makes just 4 false fires there, so there is almost no headroom to demonstrate the fix; run-to-run noise is +/-2-4, which swamps the effect. It shows no harm either.",
+ "hard_bar": "all 5 of Omar's real reported misfires now silent; dinner still fires (production model)",
+ "conversation_proofs": "dinner_demo, second_scenario, speaker_gate all PASS on production model",
+ "dev_set": {
+  "now_false_fires": 30,
+  "new_false_fires": 23,
+  "now_misses": 5,
+  "new_misses": 4
+ }
+}
