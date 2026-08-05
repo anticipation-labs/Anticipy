@@ -38,6 +38,16 @@ final class PhoneListener: NSObject, ObservableObject {
     @Published var suspended = false
 
     var onLine: ((String) -> Void)?
+    /// Who said it, decided on this device. Fires with the same line that
+    /// went to `onLine`, carrying "owner" / "other:<who>" — or nil when the
+    /// phone cannot honestly say, which the brain reads as no verdict.
+    var onSpeaker: ((String, String?) -> Void)?
+    /// The on-device voice check. Optional: without a model the app runs
+    /// exactly as it did before speaker recognition existed.
+    var speaker: SpeakerTagger?
+    /// True while recording a voice sample for enrollment. Audio still
+    /// feeds the voice check; nothing is transcribed, emitted or sent.
+    var enrolling = false
 
     private var engine = AVAudioEngine()
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
@@ -148,6 +158,10 @@ final class PhoneListener: NSObject, ObservableObject {
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
+            // The same audio the recognizer hears also feeds the on-device
+            // voice check — a short rolling window, never stored, never
+            // sent. Only its one-word verdict ever leaves the phone.
+            self.speaker?.accept(buffer)
             self.orphanLock.lock()
             if self.acceptingAudio, let req = self.request {
                 req.append(buffer)
@@ -331,7 +345,17 @@ final class PhoneListener: NSObject, ObservableObject {
         let line = fresh.joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
-        onLine?(line)
+        // A voice sample is not something he said. Never emit it.
+        guard !enrolling else { return }
+        // Judge the voice behind THIS line before the window moves on. Done
+        // here rather than on the audio thread: embedding takes tens of
+        // milliseconds and must never stall capture.
+        if let speaker, let onSpeaker {
+            let tag = speaker.tagForLatestUtterance()
+            onSpeaker(line, tag)
+        } else {
+            onLine?(line)
+        }
     }
 
     /// After a pause, cut a line from the running text — WITHOUT ending the
@@ -361,6 +385,23 @@ final class PhoneListener: NSObject, ObservableObject {
         request = nil
         guard isListening else { return }
         startRecognition()
+    }
+
+    /// Enrollment needs the microphone but NOT the transcriber: those twelve
+    /// seconds are a voice sample, not a thing he said, and they must never
+    /// reach the feed or the brain. Remembers whether ambient listening was
+    /// already on so it can be handed back untouched.
+    private var wasListeningBeforeEnrollment = false
+
+    func startForEnrollment() {
+        wasListeningBeforeEnrollment = isListening
+        enrolling = true
+        if !isListening { start() }
+    }
+
+    func stopAfterEnrollment() {
+        enrolling = false
+        if !wasListeningBeforeEnrollment { stop() }
     }
 
     func stop() {

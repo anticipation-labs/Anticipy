@@ -295,11 +295,16 @@ final class AnticipyBackend {
     /// The signed-in account these writes belong to, when there is one.
     var accountID: String = ""
 
-    func pushEvent(kind: String, text: String, decision: String? = nil, goal: String? = nil) async throws {
+    func pushEvent(kind: String, text: String, decision: String? = nil,
+                   goal: String? = nil, speaker: String? = nil) async throws {
         var body: [String: Any] = [
             "device_id": deviceID, "kind": kind, "text": text,
             "decision": decision ?? "", "goal": goal ?? "",
         ]
+        // The ONLY thing the voice check ever sends: one short word about
+        // who spoke ("owner", "other:v2", "other:Sarah"). The voiceprint it
+        // came from never leaves the phone, and neither does the audio.
+        if let speaker, !speaker.isEmpty { body["speaker"] = speaker }
         // Say whose words these are. Until today `events` had no owner column
         // at all, which is why a brand-new account opened the app to a stranger's
         // transcripts — seen for real in the simulator against production.

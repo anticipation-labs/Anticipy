@@ -11,21 +11,27 @@
 		18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0AB97746861DA294983C3B /* AnticipyBackend.swift */; };
 		4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00793646933CBDFE4070BF5 /* PendantManager.swift */; };
 		45D9F3C3D9B3BAEDDED3DC28 /* BrainClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E82F42600D1770EAC8F97FD /* BrainClient.swift */; };
+		559F9FEC6235905176009C57 /* VoiceEnrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */; };
 		57F25F7D221433600AB7BFCE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 11B56391BC84404B937B150F /* Assets.xcassets */; };
 		58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */; };
 		6B99B2021748028CD2676754 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57259004332BAAB061719DF1 /* Theme.swift */; };
 		732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */; };
 		7E48A45EE188911B2EFB7A66 /* TranscriberClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3C23460620BAF04806F594 /* TranscriberClient.swift */; };
 		993491F4C18D27922491739D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7686379B8FF9FE21D398381F /* ContentView.swift */; };
+		BED64104EF9A77E836CD99FA /* VoiceRoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */; };
 		C4D475F4BA8EF258C2B27C02 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94C340A3EF64050C750BCD7 /* SettingsView.swift */; };
 		D87272FC45C0E3640E24CA7E /* PhoneListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E88365017E289B62475F24B /* PhoneListener.swift */; };
 		E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A935B05F51033496D5EF92C9 /* HapticEngine.swift */; };
+		F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */; };
 		FF9C51D6755044E050520ADE /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9F21774275ABF326AAC99C /* AuthView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		008EC9F3B3E9368F8EBD22BF /* Anticipy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Anticipy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakerTagger.swift; sourceTree = "<group>"; };
 		11B56391BC84404B937B150F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRoster.swift; sourceTree = "<group>"; };
+		2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceEnrollView.swift; sourceTree = "<group>"; };
 		2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTranscriber.swift; sourceTree = "<group>"; };
 		3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		46B2C841F09576CCA3A85B50 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -89,7 +95,9 @@
 			children = (
 				2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */,
 				8E88365017E289B62475F24B /* PhoneListener.swift */,
+				10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */,
 				8F3C23460620BAF04806F594 /* TranscriberClient.swift */,
+				207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -101,6 +109,7 @@
 				7686379B8FF9FE21D398381F /* ContentView.swift */,
 				3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */,
 				E94C340A3EF64050C750BCD7 /* SettingsView.swift */,
+				2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -203,8 +212,11 @@
 				4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */,
 				D87272FC45C0E3640E24CA7E /* PhoneListener.swift in Sources */,
 				C4D475F4BA8EF258C2B27C02 /* SettingsView.swift in Sources */,
+				F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */,
 				6B99B2021748028CD2676754 /* Theme.swift in Sources */,
 				7E48A45EE188911B2EFB7A66 /* TranscriberClient.swift in Sources */,
+				559F9FEC6235905176009C57 /* VoiceEnrollView.swift in Sources */,
+				BED64104EF9A77E836CD99FA /* VoiceRoster.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

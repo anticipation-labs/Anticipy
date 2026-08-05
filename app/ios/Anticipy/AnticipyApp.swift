@@ -123,6 +123,13 @@ final class AnticipySession: ObservableObject {
         listener.onLine = { [weak self] line in
             Task { await self?.heard(line) }
         }
+        // The on-device voice check rides with each line. It only engages
+        // when a model is present AND he has enrolled; otherwise every line
+        // travels bare, exactly as before.
+        listener.speaker = speakerTagger
+        listener.onSpeaker = { [weak self] line, tag in
+            Task { await self?.heard(line, speaker: tag) }
+        }
         // Re-render views observing the session when the listener changes.
         listener.objectWillChange
             .receive(on: DispatchQueue.main)
@@ -135,7 +142,11 @@ final class AnticipySession: ObservableObject {
     /// backend where the brain worker ingests it (memory + triage + jobs).
     /// The line is ALSO kept locally until the server view contains it, so
     /// spoken words never visually disappear, even if a push fails or lags.
-    func heard(_ line: String) async {
+    /// The on-device voice check. Owns the roster (his voiceprint and the
+    /// people he talks to) — all of it local to this phone.
+    let speakerTagger = SpeakerTagger()
+
+    func heard(_ line: String, speaker: String? = nil) async {
         // A typed line deserves an instant felt ack. Ambient listening does
         // NOT — buzzing on every finalized utterance all day is a phone that
         // won't stop twitching; the meaningful buzz is the act-verdict one.
@@ -143,7 +154,8 @@ final class AnticipySession: ObservableObject {
         sessionLines.append(SessionLine(text: line))
         transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line, decision: nil))
         do {
-            try await backend.pushEvent(kind: "transcript", text: line)
+            try await backend.pushEvent(kind: "transcript", text: line,
+                                        speaker: speaker)
         } catch {
             // A dropped push used to vanish into try? — the line then sat at
             // the top of the feed saying "Thinking…" forever while the brain

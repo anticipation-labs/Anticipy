@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var email = ""
     @State private var birthday = ""
     @State private var detailsSaved = false
+    @State private var showVoiceEnroll = false
     /// The live timer behind a timed pause. Held here so a second visit to
     /// this screen can re-arm it rather than leaving a promise unattended.
     @State private var resumeTask: Task<Void, Never>?
@@ -143,6 +144,35 @@ struct SettingsView: View {
                 if email.isEmpty { email = session.ownerEmail }
                 if birthday.isEmpty { birthday = session.ownerBirthday }
             }
+
+            Section("Your voice") {
+                Text(session.speakerTagger.available
+                     ? (session.speakerTagger.hasOwnerProfile
+                        ? "I know your voice. When someone else makes a promise near me, it stays theirs."
+                        : "Teach me your voice and I'll stop mixing up your plans with other people's.")
+                     : "Learning voices needs a piece I don't have on this phone yet.")
+                    .font(.callout)
+                    .foregroundStyle(Theme.sand)
+                if session.speakerTagger.available {
+                    Button(session.speakerTagger.hasOwnerProfile
+                           ? "Teach me again" : "Teach me your voice") {
+                        showVoiceEnroll = true
+                    }
+                    .foregroundStyle(Theme.champagne)
+                    let known = session.speakerTagger.roster.unnamedPeople
+                    if !known.isEmpty {
+                        Text(known.count == 1
+                             ? "I've started recognising one other voice around you."
+                             : "I've started recognising \(known.count) other voices around you.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.gray)
+                    }
+                    Text("Your voice never leaves this phone — not the recording, not a copy. Only the word \"you\" or \"someone else\" travels.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
+                }
+            }
+            .listRowBackground(Theme.card)
 
             Section("Your number") {
                 HStack {
@@ -384,6 +414,9 @@ struct SettingsView: View {
         )
         .tint(Theme.champagne)
         .navigationTitle("Settings")
+        .sheet(isPresented: $showVoiceEnroll) {
+            VoiceEnrollView().environmentObject(session)
+        }
     }
 
     // MARK: - Listening
