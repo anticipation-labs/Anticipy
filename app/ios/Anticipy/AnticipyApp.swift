@@ -250,7 +250,15 @@ final class AnticipySession: ObservableObject {
             var serverLines = events
                 .filter { $0.kind == "transcript" }
                 .reversed()
-                .map { TranscriptLine(id: $0.id, text: $0.text ?? "", decision: ($0.decision?.isEmpty == false) ? $0.decision : nil, goal: ($0.goal?.isEmpty == false) ? $0.goal : nil) }
+                .map { TranscriptLine(id: $0.id, text: $0.text ?? "",
+                                      decision: ($0.decision?.isEmpty == false) ? $0.decision : nil,
+                                      goal: ($0.goal?.isEmpty == false) ? $0.goal : nil,
+                                      // Same empty-string-is-nothing normalisation the
+                                      // two fields above already use: PocketBase sends
+                                      // "" for an unset text column, and "" must mean
+                                      // ungrouped, not a segment named "".
+                                      segmentID: ($0.segment?.isEmpty == false) ? $0.segment : nil,
+                                      created: $0.created) }
             // Reconcile one-to-one by CONSUMING matches: saying the same
             // sentence twice used to mark both local copies received off a
             // single server row, and inherit the older row's verdict.
@@ -480,7 +488,9 @@ final class AnticipySession: ObservableObject {
         }
     }
 
-    static func parsePBDate(_ s: String) -> Date? {
+    /// Pure string→Date; nothing about it touches session state, and a view
+    /// needs it to put a clock time on a card.
+    nonisolated static func parsePBDate(_ s: String) -> Date? {
         // PocketBase dates: "2026-07-21 04:55:00.123Z" or ISO8601.
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "en_US_POSIX")
@@ -553,6 +563,18 @@ final class AnticipySession: ObservableObject {
         /// "left alone" and "looking into it", which used to render
         /// identically and read as her being dead.
         var goal: String? = nil
+        /// The conversation this line belongs to, from `events.segment`.
+        /// Empty or nil means ungrouped, which means one card of one line —
+        /// i.e. exactly the row this app already draws.
+        ///
+        /// Appended AFTER `goal`, with a default, so the synthesized
+        /// memberwise init keeps every existing call site compiling and every
+        /// local line keeps behaving as it does today.
+        var segmentID: String? = nil
+        /// PocketBase `created`, carried through so a card can show a clock
+        /// time. Empty on local lines and on anything we could not read a date
+        /// from; the time is then simply not drawn.
+        var created: String = ""
     }
 
     /// One line spoken in the current Listen session, tracked locally from
