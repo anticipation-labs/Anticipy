@@ -600,10 +600,13 @@ Use {"facts": {}} when there is nothing durable."""
         quiet = lambda *a, **k: False
         context = []
         if phone:
-            turns = list(self._thread(phone)[-9:])
+            # Twenty turns is a ten-message conversation — the old bound of
+            # eight (then cut to six downstream) is where "after about three
+            # messages she forgets what it's doing" came from.
+            turns = list(self._thread(phone)[-21:])
             if turns and turns[-1].role == "owner" and turns[-1].text == text:
                 turns = turns[:-1]
-            context = [f"{t.role}: {t.text}" for t in turns[-8:]]
+            context = [f"{t.role}: {t.text}" for t in turns[-20:]]
         attempts = (
             dict(context=context, may_say=quiet, explicit=True, channel="sms"),
             dict(may_say=quiet, explicit=True, channel="sms"),
@@ -655,12 +658,21 @@ Use {"facts": {}} when there is nothing durable."""
             t.extend(self._thread_from_record(phone))
         return t
 
-    def _thread_from_record(self, phone: str, limit: int = 10) -> list[Turn]:
-        """Recent turns reconstructed from the backend, newest last."""
+    def _thread_from_record(self, phone: str, limit: int = 20) -> list[Turn]:
+        """Recent turns reconstructed from the backend, newest last.
+
+        kind="anticipy_text" is in the filter because that is what the worker
+        actually stamps on every SMS reply she sends (worker.py posts the
+        reply as anticipy_text). The rebuild originally read only
+        anticipy_says/sms_reply, so HER half of every conversation vanished
+        on redeploy — the thread came back as him talking to silence, and
+        "after about three messages she forgets" was partly this: the worker
+        redeployed mid-conversation and her own questions were gone."""
         try:
             r = pb.get(
                 f"{self.anticipy.backend_url}/api/collections/events/records",
-                params={"filter": 'kind="anticipy_says" || kind="sms_reply"',
+                params={"filter": ('kind="anticipy_says" || kind="sms_reply"'
+                                   ' || kind="anticipy_text"'),
                         "perPage": limit, "sort": "-created"},
                 timeout=10,
             )
@@ -671,7 +683,9 @@ Use {"facts": {}} when there is nothing durable."""
                 text = (ev.get("text") or "").strip()
                 if not text:
                     continue
-                role = "anticipy" if ev.get("kind") == "anticipy_says" else "owner"
+                role = ("anticipy"
+                        if ev.get("kind") in ("anticipy_says", "anticipy_text")
+                        else "owner")
                 turns.append(Turn(role, text))
             return turns
         except Exception:
@@ -694,7 +708,7 @@ Use {"facts": {}} when there is nothing durable."""
             return []
 
     def _classify(self, phone: str, text: str) -> dict:
-        thread = [{"who": t.role, "text": t.text} for t in self._thread(phone)[-10:]]
+        thread = [{"who": t.role, "text": t.text} for t in self._thread(phone)[-20:]]
         memory = [f["fact"] for f in self.anticipy.memory.recall(text, limit=3)]
         payload = json.dumps({"thread": thread, "pending": self._pending(),
                               "blocked": self._blocked(), "memory": memory,

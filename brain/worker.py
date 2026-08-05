@@ -492,15 +492,36 @@ def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
         filt = f'kind="anticipy_says" && created>="{since}"'
-        if decision:
+        # "act" and "clock" are two mouths on the same face: a plan raised by
+        # a held-plan text must immunize the clock, and vice versa. On
+        # 2026-08-05 the held dinner text went out (decision="act"), then the
+        # clock — checking only its own class — texted "just confirming for
+        # tomorrow night, what time and where…" about the very same dinner.
+        if decision in ("act", "clock"):
+            filt += ' && (decision="act" || decision="clock")'
+        elif decision:
             filt += f' && decision="{decision}"'
         r = pb.get(f"{PB}/api/collections/events/records",
                    params={"filter": filt, "perPage": 100, "sort": "-created"},
                    timeout=10)
         if not r.ok:
             return False
-        return any((ev.get("goal") or "").strip() == goal
-                   for ev in r.json().get("items", []))
+        # The goal is model-phrased fresh each time ("book dinner for 2 at
+        # Cactus…" vs "confirm the Cactus Club plan for tomorrow"), so exact
+        # equality was a guard that never fired across rephrasings. Same
+        # word-overlap idea the job queue uses.
+        want = {w for w in re.findall(r"[a-z0-9']+", goal.lower()) if len(w) > 3}
+        for ev in r.json().get("items", []):
+            other = (ev.get("goal") or "").strip()
+            if not other:
+                continue
+            if other == goal:
+                return True
+            have = {w for w in re.findall(r"[a-z0-9']+", other.lower()) if len(w) > 3}
+            if (want and have
+                    and len(want & have) / min(len(want), len(have)) >= 0.6):
+                return True
+        return False
     except Exception as e:
         print(f"already_raised check failed: {e}")
         return False
@@ -546,11 +567,21 @@ def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6) ->
 # What triage decided is stamped on every outbound event, so a question can be
 # deduped against earlier QUESTIONS and a held job against earlier HELD JOBS,
 # without one silencing the other.
-_KIND_TO_DECISION = {"ask": "ask", "act": "act", "clock": "clock"}
+_KIND_TO_DECISION = {"ask": "ask", "act": "act", "clock": "clock",
+                     "ambient_act": "act"}
 
 
 def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
-    """May she say this unprompted? Only if she has not already."""
+    """May she say this unprompted? Only if she has not already — and, for
+    speech born from OVERHEARD plans (kind="ambient_act"), only in waking
+    hours. He never invited that text, so it obeys the same quiet hours as
+    the clock; the card is already on his desk either way, and the morning
+    clock pass raises anything still waiting. A direct ask keeps texting at
+    any hour — answering him is a reply, not an interruption."""
+    if kind == "ambient_act":
+        hour = datetime.now(CLOCK_TZ).hour
+        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+            return False
     return not already_raised(goal, text,
                               decision=_KIND_TO_DECISION.get(kind))
 

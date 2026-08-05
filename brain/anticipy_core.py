@@ -140,8 +140,15 @@ CONVERSATION_WINDOW = 120
 OPEN_PLAN_WINDOW = 600
 
 
+# The browser as a TARGET is a navigational construction — "in my browser",
+# "open Chrome", "pull it up in a new tab" — never the bare word. The first
+# version matched the word anywhere, so "research the best Chrome extensions"
+# and an overheard "my browser keeps crashing" rerouted server research into
+# his actual Chrome.
 _BROWSER_TARGET_RE = re.compile(
-    r"\b(browser|chrome|safari|firefox|web\s+browser|new\s+tab|browser\s+tab)\b",
+    r"\b(?:in|into|on|via|using|with|through)\s+(?:my\s+|the\s+|your\s+|a\s+)?"
+    r"(?:web\s+)?(?:browser|chrome|safari|firefox|new\s+tab|browser\s+tab)\b"
+    r"|\bopen\s+(?:my\s+|the\s+|a\s+)?(?:web\s+)?(?:browser|chrome|safari|firefox)\b",
     re.IGNORECASE,
 )
 
@@ -465,9 +472,17 @@ class Anticipy:
                            if missing else "")
                         + "Say go and I'll book it."
                     )
-                    if fresh and self._may_say(may_say, handled, goal, "act"):
-                        self.notify_owner(handled)
-                    else:
+                    # Kind "ambient_act": the worker's guard gives overheard-
+                    # plan texts the clock's quiet hours — he never invited
+                    # this one. And the text only counts if it actually SENT:
+                    # a failed Twilio call used to leave `handled` truthy, the
+                    # worker posted it as said, and the speak-once guard then
+                    # suppressed every retry forever — a silent card wearing a
+                    # "he was told" sticker.
+                    if not (fresh
+                            and self._may_say(may_say, handled, goal,
+                                              "ambient_act")
+                            and self.notify_owner(handled)):
                         handled = None
             else:
                 # Dictation he is AUTHORING (voice-typing, instructing another
@@ -514,10 +529,14 @@ class Anticipy:
             # but the TEXT went out every single time regardless — which is why
             # his history has six messages about one email to Marcus. If it was
             # already pending she has already asked; saying it again is nagging,
-            # not diligence.
-            repeat = bool(self._same_pending(decision.goal))
+            # not diligence. Judged by what the queue ACTUALLY did (same
+            # snapshot pattern as the ambient branch): _same_pending alone
+            # missed merges made by _refines_pending and the open-plan carry,
+            # and each miss was one more text about the same dinner.
+            before_ids = {j.get("id") for j in self._pending_jobs()}
             job_id = self._queue_job(decision.goal, params, hold=held,
                                      explicit=explicit)
+            repeat = not (bool(job_id) and job_id not in before_ids)
             loop = LoopRecord(
                 commitment_id=mem.get("commitment_id") or -1,
                 what=decision.goal,
@@ -534,8 +553,18 @@ class Anticipy:
             }) or self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
             # texts the owner — their go-ahead releases the held job.
-            if held and not repeat and self._may_say(may_say, handled, decision.goal, "act"):
-                self.notify_owner(handled)
+            #
+            # `handled` survives when the guard or the repeat check said "no
+            # unprompted text" — the SMS conversation layer passes a muted
+            # guard on purpose and delivers these words in-thread itself. It
+            # is dropped ONLY when a send was attempted and FAILED: a failed
+            # Twilio call used to leave `handled` truthy, the worker posted
+            # it as said, and the speak-once guard then suppressed every
+            # retry forever — a silent card wearing a "he was told" sticker.
+            if held and not repeat and self._may_say(may_say, handled,
+                                                     decision.goal, "act"):
+                if not self.notify_owner(handled):
+                    handled = None
             elif held:
                 print(f"already waiting on him for {decision.goal!r} — not asking twice")
         elif decision.decision == "ask":
@@ -574,7 +603,7 @@ class Anticipy:
             # question lands naked — "what time is the demo day Monday" with
             # no idea which demo day, which is exactly what happened live.
             if convo:
-                earlier = " | ".join(c for c in convo[-6:] if c and c != line)
+                earlier = " | ".join(c for c in convo[-16:] if c and c != line)
                 if earlier:
                     prompt = f"{prompt}\n(Earlier in this conversation: {earlier})"
             # People think across pauses: "I'll send the Devon invoice" …
@@ -708,7 +737,12 @@ class Anticipy:
             if self.conversation and self.owner_phone and channel == "sms":
                 return self.conversation.reach_out(self.owner_phone, message)
             if not (self.voice and self.owner_phone):
-                return None
+                # No transport is not a FAILED send — dev and test rigs run
+                # without Twilio, and her feed voice must survive there. Only
+                # an attempted send that errored returns None (below), which
+                # is what tells hear() to drop `handled` so the record never
+                # claims he was told.
+                return {"skipped": "no transport"}
             if channel == "call":
                 return self.voice.call(self.owner_phone, message)
             return self.voice.text(self.owner_phone, message)

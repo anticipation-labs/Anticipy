@@ -38,7 +38,9 @@ def make(jobs):
     convo._open_work = lambda: convo._pending() + convo._blocked()
     convo._fetch = lambda jid: state.get(jid)
     convo._remember_about_owner = lambda text: {}
-    convo._think = lambda text: None
+    # b883258 gave _think the phone so it can carry the SMS thread; this rig
+    # only needs it to stay out of the way.
+    convo._think = lambda text, phone=None: None
 
     def flip(jid, fields, verb):
         state[jid].update(fields)
