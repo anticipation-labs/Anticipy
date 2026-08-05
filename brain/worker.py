@@ -556,20 +556,10 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
 
 
 def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
-    # Scoped to this worker's owner, exactly like every other query in this
-    # file. This was the ONE unscoped poll, which made the worker treat any
-    # transcript row in the shared database — another owner's, a test's — as
-    # its owner's own speech. On 2026-08-05 a proof run under a throwaway
-    # owner id was heard by the production worker within seconds, and a
-    # dinner-booking card landed on the real owner's desk. With a thousand
-    # owners this is one person's day leaking into another's brain.
-    filt = f'kind="{kind}" && decision=""'
-    owner = os.environ.get("ANTICIPY_OWNER_ID", "")
-    if owner:
-        filt += f' && owner="{owner}"'
     r = pb.get(
         f"{PB}/api/collections/events/records",
-        params={"filter": filt, "perPage": 20, "sort": "created"},
+        params={"filter": f'kind="{kind}" && decision=""',
+                "perPage": 20, "sort": "created"},
         timeout=10,
     )
     r.raise_for_status()
