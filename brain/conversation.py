@@ -310,7 +310,7 @@ class Conversation:
                     acted, asked_back = None, True
             if not acted and not asked_back and not learned and not resumed:
                 # Nothing absorbed it — treat it as a fresh thought.
-                spoken = self._think(text)
+                spoken = self._think(text, phone)
                 if spoken:
                     parsed["reply"] = spoken
         elif self._is_repair(text):
@@ -333,7 +333,7 @@ class Conversation:
             # request never reached her brain at all. Triage decides what is
             # actionable; a genuinely social line comes back "ignore" and her
             # warm reply stands.
-            spoken = self._think(text)
+            spoken = self._think(text, phone)
             if spoken:
                 parsed["reply"] = spoken
 
@@ -581,7 +581,7 @@ Use {"facts": {}} when there is nothing durable."""
         except Exception:
             return None
 
-    def _think(self, text: str) -> Optional[str]:
+    def _think(self, text: str, phone: str = "") -> Optional[str]:
         """Hand it to the one brain and bring back what she decided to say.
 
         Her message comes back as THIS reply rather than going out as a second
@@ -598,7 +598,14 @@ Use {"facts": {}} when there is nothing durable."""
         # Dropping may_say along with explicit re-opened the double-text this
         # method exists to prevent, so it is the LAST thing to go.
         quiet = lambda *a, **k: False
+        context = []
+        if phone:
+            turns = list(self._thread(phone)[-9:])
+            if turns and turns[-1].role == "owner" and turns[-1].text == text:
+                turns = turns[:-1]
+            context = [f"{t.role}: {t.text}" for t in turns[-8:]]
         attempts = (
+            dict(context=context, may_say=quiet, explicit=True, channel="sms"),
             dict(may_say=quiet, explicit=True, channel="sms"),
             dict(may_say=quiet, explicit=True),
             dict(may_say=quiet),

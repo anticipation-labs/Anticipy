@@ -31,6 +31,15 @@ def test_a_goal_that_reads_both_ways_is_browser():
     assert job_lane("research restaurants and reserve one for Friday") == ""
 
 
+def test_explicit_browser_navigation_uses_the_browser_arm():
+    for goal in ("open Wikipedia in my browser",
+                 "go to the dashboard in Chrome",
+                 "show the article in a new tab"):
+        assert job_lane(goal) == "", goal
+    assert job_lane("open Wikipedia") == "research"
+    assert job_lane("open Wikipedia", {"source": "open it in my browser"}) == ""
+
+
 def _queue(monkeypatch, goal, key="test-key"):
     """Drive _queue_job with pb mocked; returns the record it would create."""
     if key is None:
@@ -55,6 +64,12 @@ def _queue(monkeypatch, goal, key="test-key"):
     monkeypatch.setattr(a, "_same_pending", lambda goal: None)
     a._queue_job(goal, {"source": "test", "now": "now"})
     return posted
+
+
+def test_queue_stamps_explicit_browser_navigation_on_browser_lane(monkeypatch):
+    posted = _queue(monkeypatch, "open Wikipedia in my browser")
+    assert posted["lane"] == ""
+    assert posted["status"] == "queued"
 
 
 def test_queue_stamps_the_research_lane(monkeypatch):

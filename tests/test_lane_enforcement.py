@@ -113,6 +113,30 @@ def test_think_marks_the_sms_channel():
     assert calls["explicit"] is True
 
 
+def test_think_carries_recent_sms_context_into_the_brain():
+    from brain.conversation import Turn
+    calls = {}
+
+    class A(_Base):
+        def hear(self, text, context=None, may_say=None, explicit=False, channel=""):
+            calls.update(context=context, channel=channel, explicit=explicit)
+            return self._out()
+
+    convo = _convo(A())
+    convo.threads["+1"] = [
+        Turn("owner", "I need a flight to Paris tomorrow"),
+        Turn("anticipy", "what time do you want to land in paris"),
+        Turn("owner", "Anytime"),
+        Turn("owner", "give me five options"),
+    ]
+    assert convo._think("give me five options", "+1") == "on it"
+    assert calls["context"] == [
+        "owner: I need a flight to Paris tomorrow",
+        "anticipy: what time do you want to land in paris",
+        "owner: Anytime",
+    ]
+
+
 def test_think_survives_a_core_without_channel():
     calls = {}
 

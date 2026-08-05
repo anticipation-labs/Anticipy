@@ -140,15 +140,23 @@ CONVERSATION_WINDOW = 120
 OPEN_PLAN_WINDOW = 600
 
 
-def job_lane(goal: str) -> str:
-    """Which arm runs this job. Read-only goals (the _READ_ONLY_RE class) run
-    in the WORKER — Brave search + fetch + summarize — so research never
-    touches the owner's browser (roadmap §6, the tab-flood fix). Anything
-    that could leave the owner's world keeps the browser lane ("") and its
-    confirmation gate; when a goal reads both ways ("find a flight and book
-    it"), the consequential reading wins."""
+_BROWSER_TARGET_RE = re.compile(
+    r"\b(browser|chrome|safari|firefox|web\s+browser|new\s+tab|browser\s+tab)\b",
+    re.IGNORECASE,
+)
+
+
+def job_lane(goal: str, params: dict | None = None) -> str:
+    """Choose the executor from intent, not merely the leading verb.
+
+    Ordinary read-only work belongs on the server research arm. An explicit
+    request to operate the owner's browser belongs on the browser arm even
+    when the action itself is read-only (open, visit, show)."""
     g = (goal or "").strip()
+    source = str((params or {}).get("source") or "")
     if _IRREVERSIBLE_RE.search(g):
+        return ""
+    if _BROWSER_TARGET_RE.search(f"{g} {source}"):
         return ""
     return "research" if _READ_ONLY_RE.search(g) else ""
 
@@ -740,7 +748,7 @@ class Anticipy:
         # Without a Brave key the worker has no way to run it, so the job
         # keeps the browser lane rather than queueing for an executor that
         # does not exist — graceful fallback, never a dead queue.
-        lane = job_lane(goal) if os.environ.get("BRAVE_API_KEY") else ""
+        lane = job_lane(goal, params) if os.environ.get("BRAVE_API_KEY") else ""
         try:
             r = pb.post(
                 f"{self.backend_url}/api/collections/jobs/records",
