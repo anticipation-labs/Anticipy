@@ -3,7 +3,57 @@
 You are the new orchestrator of Anticipy. You run on Omar's Mac with full
 access to this repo, his Chrome, Xcode, the Railway CLI, and a fleet of
 Claude Code subagents you can spawn. You have no other context. This
-document is your entire memory. The previous orchestrator (Devin) wrote it.
+document is your entire memory. The previous orchestrator (Devin) wrote it;
+the addendum below it is from the orchestrator after him (2026-08-05).
+
+---
+
+## 0. ADDENDUM 2026-08-05 — the dinner fix (read before §6)
+
+The demo Omar needs: he talks through a dinner plan with a friend
+(Cactus Club, park location, 7 PM tomorrow, two people, said messily over
+eight turns) and ONE held booking card, carrying all of it, lands on his
+desk. On 2026-08-04 every line came back "Noted — nothing needed". Three
+defects, all fixed, deployed to the Railway worker, live:
+
+1. The ambient lane refused ALL consequential work from person-to-person
+   speech. "May she SPEAK" and "may she WORK" are separate questions now:
+   a plan agreed with another human becomes a prepared, HELD job
+   (lane=desk) and she still says nothing. Dictation stays inert
+   (AUTHORED_ADDRESSEES in orchestrator.py).
+2. Word-overlap dedupe let a research job swallow the booking job
+   ("research Cactus Club…" vs "book Cactus Club…"). Dedupe never crosses
+   the consequence line now (tests/test_job_dedupe.py).
+3. One dinner minted one card per turn. Consequential work now keeps ONE
+   open plan per conversation (OPEN_PLAN_WINDOW=600s), merged words-first,
+   model-second (_same_plan); a card only ever gets richer.
+
+The proof: `proof/dinner_demo_proof.py` — replays the REAL transcript
+through the live model, demands exactly one held booking with venue+time+
+day, no duplicates, no syllable spoken over ambient speech. 16 consecutive
+green runs locally (incl. 4/4 on the production model
+google/gemini-2.5-flash), and the deployed production worker itself
+produced exactly 1 held booking + 1 research job from the transcript's
+opening lines. Run several in PARALLEL when gating — nondeterminism needs
+streaks, not one green.
+
+TRAP LEARNED THE HARD WAY (cost ~10 min of production deafness): the
+worker's transcript poll (fetch_unprocessed) is the ONE query not
+owner-scoped, and you cannot naively scope it — events carry `owner_ref`
+(a PocketBase owners-record id like l5wygrhnb067lbs), NOT the
+ANTICIPY_OWNER_ID uuid that jobs.owner uses. Two keyspaces. A `&& owner=`
+filter 400s every poll and she goes DEAF while looking deployed (commit
+7769e95, reverted in b032e2a). Consequences until fixed properly: (a) any
+transcript row anyone writes into the shared DB is heard as Omar's own
+speech — NEVER post test events to production; prove locally against a
+fake PB instead, (b) the real fix needs the owners-table identity mapping
+— it is queued as its own task.
+
+Wave 2 (§6) remains parked, uncommitted, in ~/AnticipyFleet/agent4-8 —
+their Claude session limit reset is 3:10pm Vancouver 2026-08-04 (already
+passed; relaunch by hand if logs show no DONE). Agent7's diff changes
+hear()'s signature — merge it AFTER re-basing onto the dinner fix, the
+same region moved.
 
 ---
 
