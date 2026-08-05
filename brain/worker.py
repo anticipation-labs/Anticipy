@@ -166,6 +166,41 @@ STALL_MINUTES = 10        # queued this long with nothing to run it is stuck
 AGENT_FRESH_SECONDS = 90  # the extension heartbeats far more often than this
 
 
+def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> None:
+    """Text him what she found — her words, varied every time, one text.
+
+    Overheard FYIs ("caught this earlier, looked into it") respect the same
+    quiet hours as every other uninvited text; an answer he asked for out
+    loud goes out whenever it is ready. The caller's already_raised guard
+    on the goal is what keeps this to one text per finding — this function
+    is only ever reached for a fresh result."""
+    trimmed = (result or "").strip()
+    if not trimmed:
+        return
+    if overheard:
+        hour = datetime.now(CLOCK_TZ).hour
+        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+            print(f"fyi held for morning (quiet hours): {goal[:50]}")
+            return
+    if len(trimmed) > 320:
+        trimmed = trimmed[:317] + "…"
+    try:
+        say = anticipy._voice({
+            "situation": ("you caught something he said to someone earlier, "
+                          "quietly looked into it, and are sharing what you "
+                          "found — a light fyi, nothing needed from him, do "
+                          "not ask a question"
+                          if overheard else
+                          "you finished looking into what he asked out loud "
+                          "and are texting him the answer"),
+            "goal": goal, "answer": trimmed,
+        }) or (f"caught the {goal} thing earlier — fyi: {trimmed}"
+               if overheard else trimmed)
+        anticipy.notify_owner(say)
+    except Exception as e:
+        print(f"fyi text failed (feed still has it): {e}")
+
+
 def ambient_job(job: dict) -> bool:
     """Was this job born from speech that was never aimed at her — a
     dictation run, a conversation with another person? Ambient work is done
@@ -377,9 +412,19 @@ def report_finished_jobs(anticipy) -> None:
             # of work he never asked for is not news at all.
             if ambient_job(job):
                 if result and not failed and not already_raised(goal, decision="done"):
+                    # Rule change 2026-08-05, Omar's call: quiet work is no
+                    # longer INVISIBLE work. He watched her research Paris
+                    # flights and dinner spots, saw only "Noted — nothing
+                    # needed", and reasonably concluded she was dead. A
+                    # finished overheard lookup now sends ONE light FYI text
+                    # in her own words and lands in the feed. Failures stay
+                    # silent — a dead end on work he never asked for is not
+                    # news. Text first, then the durable feed record (the
+                    # record is what dedupes, so it must land second).
+                    deliver_fyi(anticipy, goal, result, overheard=True)
                     post_event("anticipy_says", result, decision="done", goal=goal)
                 REPORTED.add(job["id"])
-                print(f"ambient job {job['id']} finished quietly ({job.get('status')})")
+                print(f"ambient job {job['id']} finished — fyi'd and on the feed")
                 continue
             # Durable: has she already delivered THIS result? Keyed on the goal
             # and on being a result, so her earlier "want me to?" about the same
@@ -400,6 +445,10 @@ def report_finished_jobs(anticipy) -> None:
             if (job.get("lane") or "") == "research" and channel != "sms":
                 said = result or (f"Couldn't get there on {goal}." if failed
                                   else f"That's done: {goal}.")
+                # He asked for this one out loud, so the answer goes to his
+                # hand, not just the feed (same 2026-08-05 rule change).
+                if result and not failed:
+                    deliver_fyi(anticipy, goal, result, overheard=False)
                 post_event("anticipy_says", said, decision="done", goal=goal)
                 REPORTED.add(job["id"])
                 print(f"desk: research {job['status']} {job['id']} — {goal[:60]}")

@@ -134,11 +134,22 @@ DONE = {"id": "r1", "goal": "research: opening hours of the aquarium",
         "claimed_by": "worker-research", "owner": "own1"}
 
 
-def test_research_results_land_on_the_desk_not_his_phone(monkeypatch):
+def test_research_results_reach_the_desk_AND_his_phone(monkeypatch):
+    """Rule change 2026-08-05 (Omar): 'it should text you the results.'
+    Desk-only delivery made finished quiet work indistinguishable from her
+    being dead — he watched the Paris research complete and saw nothing."""
     patches, posts, notified = [], [], []
     wire(monkeypatch, DONE, patches, posts)
+
+    class FakeDT:
+        @staticmethod
+        def now(tz=None):
+            from datetime import datetime as dt
+            return dt(2026, 8, 5, 14, 0, tzinfo=tz)
+
+    monkeypatch.setattr(W, "datetime", FakeDT)
     W.report_finished_jobs(make_anticipy(notified))
-    assert notified == []                       # desk delivery: no SMS
+    assert len(notified) == 1                   # the answer reaches his hand
     assert posts, "no conversation entry was written"
     assert posts[0]["kind"] == "anticipy_says"
     assert posts[0]["decision"] == "done"

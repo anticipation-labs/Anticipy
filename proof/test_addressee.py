@@ -373,8 +373,21 @@ JOBS[:] = [{"id": "amb1", "goal": "research flight options to Vienna",
             "status": "done"}]
 POSTS.clear()
 W.report_finished_jobs(fake_anticipy)
-check("an ambient result is never texted", TEXTS == [], f"{TEXTS}")
-check("but it does land in the feed",
+# Rule change 2026-08-05 (Omar): quiet work is no longer invisible work.
+# A finished overheard lookup sends ONE light FYI text — he watched her
+# research Paris flights, saw only "Noted — nothing needed", and reasonably
+# concluded she was dead. (This rig runs at a daytime hour only if the wall
+# clock says so; the quiet-hours branch is unit-tested in tests/.)
+from datetime import datetime as _dt
+_quiet_now = (W.CLOCK_QUIET_START <= _dt.now(W.CLOCK_TZ).hour
+              or _dt.now(W.CLOCK_TZ).hour < W.CLOCK_QUIET_END)
+if _quiet_now:
+    check("an overheard result holds its text through quiet hours",
+          TEXTS == [], f"{TEXTS}")
+else:
+    check("a finished overheard lookup texts ONE fyi",
+          len(TEXTS) == 1 and "October" in TEXTS[0], f"{TEXTS}")
+check("and it lands in the feed",
       any((p[1] or {}).get("kind") == "anticipy_says" and
           "October" in (p[1] or {}).get("text", "") for p in POSTS),
       str(POSTS))
