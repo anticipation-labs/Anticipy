@@ -1,0 +1,108 @@
+{
+ "set": "dev",
+ "lines": 146,
+ "false_fires": 12,
+ "misses": 7,
+ "agreed": 127,
+ "false_fire_rate": 8.2,
+ "miss_rate": 4.8,
+ "false_fire_examples": [
+  {
+   "text": "Oh hi there how are you today oh I'm well thank you let's go out for dinner tomorrow for sure where how's cactus club which one Park Royal OK bet 7 PM OK me and you just the two of us I'll pick you up",
+   "did": "text",
+   "why": "Other person is making plans"
+  },
+  {
+   "text": "Yeah yeah yeah yeah the one in Royal",
+   "did": "quiet",
+   "why": "chatter, no commitment"
+  },
+  {
+   "text": "Anytime there's something actionable it shows up here and then a chat lovers above it and that in the messages pieces are reflecting of each other and are always *NSYNC with each other but you know there's gaps in between when I start speaking I don't like sometimes I'm three seconds of 70 seconds but if I'm going back to packing a meeting with room 25 people and they got three second gap before talking to a new person I don't think it's able to identify recognition I don't think it's all these major major issues that are very incompetent upon ourselves in order to solve them in order to be fully production right I mean there's privacy and security but that's the final issue that we're gonna solve that I don't think I won't even get you to touch on it now so I want you to layout every single one of these issues layout every single one of your solutions take a look at her coat base do some research and figure out what the best solution is and then we're gonna tackle them one at a time but testing always testing it as a whole but designing research researching research is key and understanding imp",
+   "did": "text",
+   "why": "thinking aloud, no clear action"
+  },
+  {
+   "text": "Anytime there's something actionable it shows up here and then a chat lovers above it and that in the messages pieces are reflecting of each each other and are always in sync with each other right but you know there's gaps in between when I start speaking I don't like sometimes I'm three seconds of 70 seconds but if I'm going back to a meeting with room 25 people and they got three second gap before talking to a new person I don't think it's able to identify recognition I don't think it's all these major major issues that are very incompetent upon ourselves in order to solve them in order to be fully production right I mean there's privacy and security but that's the final issue that we're gonna solve and I don't think I won't even get you to touch on it now so I want to layout every single one of these issues layout every single one of your solutions take a look at her co-base do some research and figure out what the best solution is and then we're gonna tackle them one at a time but testing always testing as a hole but designing researching research is key then understanding imp",
+   "did": "text",
+   "why": "thinking aloud, no commitment"
+  },
+  {
+   "text": "What's going on right you know there's 1 million and one problems I need you to list them out and list out solutions and the problem is we're gonna forget about certain problems and every palm is gonna uncover a new problem and then this is all one big paradoxical Marry go Round of problems and problems problems with zero end to the solution solutions right",
+   "did": "text",
+   "why": "venting, no clear action"
+  },
+  {
+   "text": "With who just the two of us OK for sure see you tomorrow",
+   "did": "text",
+   "why": "chatter"
+  },
+  {
+   "text": "We should go for dinner yeah yeah we really should OK where should we go I don't know how about that cactus club in Park Royal OK but how's tomorrow yeah yeah tomorrow's good with me OK sure I'll see you there I'll do tomorrow at 7 PM OK I'll grab the rest of us",
+   "did": "text",
+   "why": "other person will grab the rest"
+  },
+  {
+   "text": "Scrap at 6 PM",
+   "did": "text",
+   "why": "too mangled to act on safely"
+  },
+  {
+   "text": "I mean I think the next piece to bring in a speaker recognition so we know how many speakers are in the room how that works and so forth does that work with an FR 32 or an RF 32 sense processor board",
+   "did": "text",
+   "why": "voice-typing, not a command"
+  },
+  {
+   "text": "Carson Michael and RV.help23@gmail.com all those excluded KTHAI should be included handle should be included",
+   "did": "text",
+   "why": "Omar's own Wispr history"
+  },
+  {
+   "text": "And just a CSV with the list of emails for CSV with a pure list of all however many people's emails probably accept emails or so",
+   "did": "text",
+   "why": "Omar's own Wispr history"
+  },
+  {
+   "text": "High group 603 relationships here of course nothing get screwed up what button do I press I don't want to get a welcome email OK I just want to when I send out the newsletter pops up like that that he goes to all of them and there's zero room for screw ups what do I press here",
+   "did": "text",
+   "why": "Omar's own Wispr history"
+  }
+ ],
+ "miss_examples": [
+  {
+   "text": "What are you doing",
+   "wanted": "text",
+   "why": "Omar asked assistant directly"
+  },
+  {
+   "text": "White House chief staff",
+   "wanted": "quiet",
+   "why": "Omar wonders about a fact"
+  },
+  {
+   "text": "Hey we should go ahead and make a dinner reservation yeah for sure",
+   "wanted": "desk",
+   "why": "Omar wants a dinner reservation."
+  },
+  {
+   "text": "Let's go out tomorrow",
+   "wanted": "desk",
+   "why": "propose outing for tomorrow"
+  },
+  {
+   "text": "Tomorrow 7 PM cactus",
+   "wanted": "desk",
+   "why": "Schedule event for Omar."
+  },
+  {
+   "text": "confirming we're still we're still good for 5 PM I have a 5 PM table of the two of you at cactus Grill on August 5 should I confirm that yet",
+   "wanted": "desk",
+   "why": "Omar needs to confirm a reservation"
+  },
+  {
+   "text": "My phone is dead my only one",
+   "wanted": "desk",
+   "why": "charge phone"
+  }
+ ]
+}

@@ -105,16 +105,69 @@ def main() -> int:
         print("need OPENROUTER_API_KEY")
         return 1
 
-    false_fires, misses, right = [], [], 0
+    # Replay CONVERSATIONALLY, the way the worker actually runs: lines in the
+    # order he said them, sharing one mind and a rolling context within a
+    # conversation, with a fresh mind when the day moves on. Scoring each
+    # line in isolation was unfair in both directions — it hid the open-plan
+    # merge (so early turns each looked like a separate text) and it stripped
+    # the context that makes "tomorrow 7 PM" part of a dinner rather than
+    # three meaningless words.
+    gold.sort(key=lambda g: g.get("created") or "")
+
+    def gap_minutes(a_, b_):
+        from datetime import datetime
+        try:
+            fmt = "%Y-%m-%d %H:%M:%S"
+            ta = datetime.strptime((a_ or "")[:19], fmt)
+            tb = datetime.strptime((b_ or "")[:19], fmt)
+            return abs((tb - ta).total_seconds()) / 60
+        except Exception:
+            return 999
+
+    false_fires, misses, errors, right = [], [], [], 0
+    a = None
+    convo: list = []
+    texts: list = []
+    prev_created = None
+    # Conversation-level truth. A dinner agreed over six turns needs ONE
+    # card, not six — so counting a "miss" on every turn that stayed quiet
+    # punishes exactly the behaviour we want. What matters is whether the
+    # plan was caught AT ALL before the conversation ended.
+    sessions: list = []
+    cur: dict = {}
     for i, g in enumerate(gold):
         JOBS.clear()
-        texts: list = []
-        a = Anticipy(memory=Memory(llm=llm), llm=llm, owner_id="eval")
-        a.notify_owner = lambda m, channel="sms": texts.append(m) or {"ok": True}
+        if a is None or gap_minutes(prev_created, g.get("created")) > 10:
+            a = Anticipy(memory=Memory(llm=llm), llm=llm, owner_id="eval")
+            a.notify_owner = lambda m, channel="sms": texts.append(m) or {"ok": True}
+            convo = []
+            cur = {"wanted_work": False, "did_work": False, "lines": 0}
+            sessions.append(cur)
+        cur["lines"] += 1
+        if g["gold"] in ("quiet", "desk", "text"):
+            cur["wanted_work"] = True
+        prev_created = g.get("created")
+        before_texts = len(texts)
         try:
-            got = run_line(a, g["text"], texts)
+            before_jobs = len(JOBS)
+            out = a.hear(g["text"], context=list(convo[-8:]))
+            got = "silent"
+            for j in JOBS[before_jobs:]:
+                got = max(got, "desk" if j.get("status") == "awaiting_confirm"
+                          else "quiet", key=LOUDNESS.get)
+            if len(texts) > before_texts or out.get("anticipy_says"):
+                got = max(got, "text", key=LOUDNESS.get)
+            convo.append(g["text"])
         except Exception as e:
             got = f"error:{e}"
+        # An LLM error is NOT a false fire. Counting it as one turned API
+        # rate-limiting into a fake 57-false-fire result and nearly sent me
+        # chasing a regression that did not exist. Errors get their own bin.
+        if got.startswith("error"):
+            errors.append({"text": g["text"], "err": got[:120]})
+            continue
+        if got != "silent":
+            cur["did_work"] = True
         want = g["gold"]
         if want == "silent" and got != "silent":
             false_fires.append({"text": g["text"], "did": got, "why": g.get("why")})
@@ -127,11 +180,16 @@ def main() -> int:
                   f"(false fires {len(false_fires)}, misses {len(misses)})")
 
     n = len(gold)
+    need = [s for s in sessions if s["wanted_work"]]
+    dropped = [s for s in need if not s["did_work"]]
     report = {
         "set": args.which, "lines": n,
         "false_fires": len(false_fires),
         "misses": len(misses),
         "agreed": right,
+        "errors": len(errors),
+        "conversations_needing_work": len(need),
+        "conversations_dropped": len(dropped),
         "false_fire_rate": round(100 * len(false_fires) / max(1, n), 1),
         "miss_rate": round(100 * len(misses) / max(1, n), 1),
         "false_fire_examples": false_fires[:12],
@@ -143,6 +201,11 @@ def main() -> int:
     print(f"  MISSES      : {len(misses):3}  ({report['miss_rate']}%)"
           f"   <- stayed quiet when she should have acted")
     print(f"  agreed      : {right:3}")
+    if errors:
+        print(f"  errors      : {len(errors):3}  (model/API failures — NOT counted "
+              f"as either; rerun if this is more than a couple)")
+    print(f"  DROPPED CONVERSATIONS: {len(dropped)} of {len(need)} that needed "
+          f"work got none at all  <- the one that actually matters")
     if false_fires:
         print("\n  worst false fires:")
         for f in false_fires[:6]:

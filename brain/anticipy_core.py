@@ -472,16 +472,44 @@ class Anticipy:
         # is the one asking, and no second opinion overrides him.
         # No verdict at all (older model, unparseable reply) changes nothing:
         # the honesty wall, same as every other judgement she makes.
+        # The price of being wrong is not the same in both directions, so the
+        # bar is not either. Looking something up is silent, free and
+        # reversible — being generous there costs him nothing. Booking,
+        # sending, buying, or buzzing his phone costs him trust. So:
+        #
+        #   machine  -> silence, full stop. He is voice-typing; the machine
+        #               in front of him is already doing it, and "helpfully"
+        #               doing it again is the 2026-08-04 bug.
+        #   nobody   -> no consequential work and no interruption, but a
+        #               read-only lookup may still run quietly. "Let's go out
+        #               tomorrow" carries no firm obligation yet, and going
+        #               silent on it is how she went deaf last time.
         if (decision.owes in NOT_HIS and not explicit
                 and decision.decision in ("act", "ask")):
-            reason = ("operating a machine by voice — it is already doing it"
-                      if decision.owes == "machine"
-                      else "no obligation to anyone")
-            self._prev = (line, time.time())
+            goal = decision.goal
+            may_look = (decision.owes == "nobody" and decision.decision == "act"
+                        and goal and not decision.missing
+                        and not is_consequential(goal))
+            if not may_look:
+                reason = ("operating a machine by voice — it is already doing it"
+                          if decision.owes == "machine"
+                          else "no obligation to anyone")
+                self._prev = (line, time.time())
+                return {"memory": mem, "decision": Decision(
+                    decision="ignore", goal=goal,
+                    reason=f"not his to do: {reason}",
+                    addressee=addressee, owes=decision.owes),
+                    "anticipy_says": None}
+            params = {"source": line, "now": now_line(), "lane": "ambient"}
+            job_id = self._queue_job(goal, params)
+            self.loops.append(LoopRecord(
+                commitment_id=mem.get("commitment_id") or -1,
+                what=goal, status="handling", job_id=job_id))
+            self._prev = None
             return {"memory": mem, "decision": Decision(
-                decision="ignore", goal=decision.goal,
-                reason=f"not his to do: {reason}",
-                addressee=addressee, owes=decision.owes),
+                decision="ignore", goal=goal,
+                reason="no firm obligation yet — looking quietly, saying nothing",
+                addressee=addressee, owes="nobody"),
                 "anticipy_says": None}
 
         # Someone ELSE took it on. Remember it — he may want it tracked, and
