@@ -185,15 +185,20 @@ check("and it is HELD — she prepares it, she does not book it behind his back"
 check("the card goes to her desk, not down the ambient hole",
       a.queued and a.queued[0]["params"].get("lane") == "desk",
       str(a.queued and a.queued[0]["params"]))
-check("and she still says NOTHING — the app is where he finds it",
-      a.texts == [] and out["anticipy_says"] is None, f"{a.texts}")
+# 2026-08-05: silence here was overturned by Omar himself — the held dinner
+# card sat unseen while he waited for a text that never came. Held work now
+# earns exactly ONE text asking for his go-ahead (and any missing details).
+check("and he is texted ONCE for his go-ahead — held work never sits silent",
+      len(a.texts) == 1 and out["anticipy_says"], f"{a.texts}")
 
 a, out = hear("Maybe the trip should be that first week.",
               {"decision": "ask", "goal": "plan the Vienna trip",
                "missing": ["which dates"], "addressee": "person",
                "reason": "needs dates"})
-check("a clarifying question is never texted at someone else's conversation",
-      a.texts == [] and out["anticipy_says"] is None, f"{a.texts}")
+check("a consequential plan with unknowns is held and asked about once",
+      a.queued and a.queued[0]["hold"] is True and len(a.texts) == 1
+      and "which dates" in str(a.queued[0]["params"].get("missing")),
+      f"{a.queued} {a.texts}")
 
 # ------------------------------------------- self-talk keeps today's behaviour
 

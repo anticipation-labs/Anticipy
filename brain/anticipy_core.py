@@ -405,7 +405,8 @@ class Anticipy:
                     decision="ignore", goal=goal,
                     reason=f"{addressee}-directed: quiet research, saying nothing",
                     addressee=addressee)
-            elif startable and addressee not in AUTHORED_ADDRESSEES:
+            elif goal and consequential and addressee not in AUTHORED_ADDRESSEES \
+                    and decision.decision in ("act", "ask"):
                 # A real plan, made out loud with another human, that ends in
                 # something irreversible — the dinner he just agreed to. This
                 # is not chatter to be filed; it is the single thing Anticipy
@@ -416,12 +417,14 @@ class Anticipy:
                 # The lane was answering the wrong question. "May she SPEAK
                 # about this?" and "May she WORK on this?" are different, and
                 # collapsing them turned "interrupt almost never" into "do
-                # nothing". So: the work is prepared and HELD for his yes, and
-                # that yes is asked for on her DESK — a card in the app — not
-                # as a text. She stays silent; she just isn't idle.
+                # nothing". So: the work is prepared and HELD for his yes —
+                # a card on her desk plus ONE text asking for the go-ahead and
+                # naming any essential unknowns. Held work never sits silent.
                 params = {"source": line, "now": now_line(), "lane": "desk"}
                 if decision.assumption:
                     params["assumption"] = decision.assumption
+                if decision.missing:
+                    params["missing"] = decision.missing
                 # He may have agreed to the same thing three times in one
                 # conversation ("seven works" … "see you at seven"). One plan,
                 # one card.
@@ -432,7 +435,12 @@ class Anticipy:
                         reason=f"{addressee}-directed: already on her desk",
                         addressee=addressee)
                 else:
+                    missing, assumption = decision.missing, decision.assumption
+                    # A firming-up plan merges into its existing card inside
+                    # _queue_job; only a genuinely NEW card earns the one text.
+                    before = {j.get("id") for j in self._pending_jobs()}
                     job_id = self._queue_job(goal, params, hold=True)
+                    fresh = bool(job_id) and job_id not in before
                     self.loops.append(LoopRecord(
                         commitment_id=mem.get("commitment_id") or -1,
                         what=goal, status="handling", job_id=job_id))
@@ -440,6 +448,27 @@ class Anticipy:
                         decision="act", goal=goal,
                         reason=f"{addressee}-directed: prepared, waiting on his OK",
                         needs_confirmation=True, addressee=addressee)
+                    # Held work must never sit silently: one text asks for his
+                    # go-ahead and names anything essential still unknown. The
+                    # queue's dedupe above keeps this to ONE text per plan.
+                    handled = self._voice({
+                        "situation": "overheard a plan he made with someone; "
+                                     "prepared it, held for his OK"
+                                     + ("; essential details are missing"
+                                        if missing else ""),
+                        "heard": line, "goal": goal,
+                        "missing": missing or None,
+                        "assumption": assumption,
+                    }) or (
+                        f"Caught your plan — ready to go: {goal}. "
+                        + (f"First I need: {', '.join(missing)}. "
+                           if missing else "")
+                        + "Say go and I'll book it."
+                    )
+                    if fresh and self._may_say(may_say, handled, goal, "act"):
+                        self.notify_owner(handled)
+                    else:
+                        handled = None
             else:
                 # Dictation he is AUTHORING (voice-typing, instructing another
                 # AI) is content, not commitment — a booking inside it is a
@@ -452,7 +481,8 @@ class Anticipy:
                     addressee=addressee)
             acted = decision.decision == "act" or quiet_research
             self._prev = None if acted else (line, time.time())
-            return {"memory": mem, "decision": decision, "anticipy_says": None}
+            return {"memory": mem, "decision": decision,
+                    "anticipy_says": handled}
 
         self._prev = None if decision.decision in ("act", "ask") else (line, time.time())
 
