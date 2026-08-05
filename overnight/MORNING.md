@@ -115,8 +115,23 @@ Both sets labelled with what *should* have happened. Your own Wispr Flow
 history is the ground truth for the dictation lines — those aren't my
 opinion, they're documented fact.
 
-(Final before/after numbers are appended below by the last run of the
-night — if this section says TBD, the run was still going when you woke.)
+**First clean paired run** (zero errors, on the model your worker is
+actually running now):
+
+| | false fires | misses | conversations dropped |
+|---|---|---|---|
+| **NOW** (what you're running) | 30 | 5 | 0 of 9 |
+| **NEW** (the second key) | **23** | **4** | 0 of 9 |
+
+Better on both, and no conversation went unserved either way — which is
+the promise I made: fix the over-firing WITHOUT going deaf. Two more
+paired runs are in flight for a 3-run mean, because one run means little
+at ±3 noise.
+
+**A side-finding that matters to you:** on the better (paid) model the
+same baseline scored ~17 false fires; on the cheap fallback it scores 30.
+**Topping up your credits roughly halves her false fires by itself** —
+the model is doing a lot of the work here.
 
 ---
 
