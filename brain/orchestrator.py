@@ -67,9 +67,14 @@ on its merits — a plan heard in a person-to-person conversation can deserve
 quiet research; whether anything may be SAID about it is decided outside you.
 
 Suffixes "(Related memory: ...)", "(Earlier in this conversation: ...)",
-"(Previous line, background: ...)", "(Addressee of the previous line: ...)"
-and "(Pre-check: ...)" are context — they help you READ the
-current line and are never themselves a reason to act. Use them to resolve
+"(Previous line, background: ...)", "(Addressee of the previous line: ...)",
+"(Voice check: ...)" and "(Pre-check: ...)" are context — they help you READ
+the current line and are never themselves a reason to act. A Voice check is
+MEASURED evidence of who was speaking (the owner's enrolled voiceprint) and
+outranks anything the wording implies: a first-person commitment ("I'll get
+into it", "I'll book us something") spoken by someone who is NOT the owner
+is that person's promise, never the owner's — remember it, and decide as if
+a friend said it, because one did. Use them to resolve
 what the current line refers to: if the line is "what time is the demo day on
 Monday" and the conversation earlier named the Residencies demo day, the goal
 must carry that name. A goal built from a line alone, when the conversation

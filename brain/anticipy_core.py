@@ -67,7 +67,13 @@ _READ_ONLY_RE = re.compile(
     r"^\s*(research|compar\w*|look\s*up|find|check(?!\s*out)\w*|search\w*|read\w*|"
     r"summar\w*|gather\w*|browse|price|monitor|watch|list|"
     r"open(?!\s+(?:an?\s+)?account)|go\s+to|visit|navigat\w*|show|load|"
-    r"pull\s+up|view|display|tell)\b",
+    # "Plan the weekend at Earls" is PREPARATION — options, hours, logistics
+    # — nothing leaves his world until a book/send verb appears. Held "plan"
+    # cards were the seed of every two-card night: the model words early
+    # vague turns as "plan X", the real "book X" arrives minutes later, and
+    # whenever the judge blinked he got two cards and two texts for one
+    # dinner.
+    r"pull\s+up|view|display|tell|plan(?:s|ned|ning)?\b)",
     re.IGNORECASE,
 )
 
@@ -346,13 +352,22 @@ class Anticipy:
             return True
 
     def hear(self, line: str, context: Optional[list[str]] = None,
-             may_say=None, explicit: bool = False, channel: str = "") -> dict:
+             may_say=None, explicit: bool = False, channel: str = "",
+             speaker: Optional[str] = None) -> dict:
         """One transcript line in; memory, decision, and delegation out.
 
         channel names where the line arrived from ("sms" when he texted it).
         It rides on the job so the answer can go back the way the question
         came: an SMS ask is replied to in-thread, everything else lands on
-        the desk (the app feed) without buzzing his phone."""
+        the desk (the app feed) without buzzing his phone.
+
+        speaker is the phone's LOCAL voice verdict for this line — "owner"
+        (matched his enrolled voice profile), "other" (someone else's
+        voice), or None/"unknown" (no verdict: too short, too noisy, old
+        app build). It is evidence about WHO SPOKE, which wording alone can
+        never supply: "I'll get into it" from his friend's mouth is the
+        friend's promise; the identical words in his voice are his own.
+        The honesty wall applies — no verdict changes NOTHING."""
         # The conversation, kept where the plan-matcher can see it: two goals
         # judged as bare strings ("book reservation at Earl's" vs "draft an
         # invitation for Saturday at 1") read as different errands; the same
@@ -405,8 +420,11 @@ class Anticipy:
         # pre-filter above already marked unmistakable dictation.
         last_a = self._last_addressee
         prev_addressee = last_a[0] if last_a and time.time() - last_a[1] < 120 else None
+        if speaker not in ("owner", "other"):
+            speaker = None          # unknown and garbage are the same: no verdict
         decision = self._decide(line, mem, prev_line=prev_line, convo=context,
-                                prev_addressee=prev_addressee, dictated=dictated)
+                                prev_addressee=prev_addressee, dictated=dictated,
+                                speaker=speaker)
         # The EFFECTIVE addressee — the one her behaviour actually keys on,
         # written back so the event record shows what was applied. An
         # explicit line (he texted/typed it AT her) is assistant by
@@ -639,7 +657,8 @@ class Anticipy:
     def _decide(self, line: str, mem: dict, prev_line: Optional[str] = None,
                 convo: Optional[list[str]] = None,
                 prev_addressee: Optional[str] = None,
-                dictated: bool = False) -> Decision:
+                dictated: bool = False,
+                speaker: Optional[str] = None) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
             prompt = line
@@ -662,6 +681,20 @@ class Anticipy:
             if dictated:
                 prompt = (f"{prompt}\n(Pre-check: this line reads as machine "
                           f"dictation — a long fluent run of instruction-prose.)")
+            # The phone's LOCAL voice verdict — measured evidence, stronger
+            # than anything wording can imply. It rides in as context the
+            # model must weigh: "I'll get into it" in someone else's voice
+            # is someone else's promise.
+            if speaker == "owner":
+                prompt = (f"{prompt}\n(Voice check: this line was spoken by "
+                          f"the OWNER himself — his enrolled voice matched.)")
+            elif speaker == "other":
+                prompt = (f"{prompt}\n(Voice check: this line was spoken by "
+                          f"someone who is NOT the owner — a different "
+                          f"person's voice. Their commitments, promises and "
+                          f"errands are THEIRS, never the owner's own; only "
+                          f"things the owner would plainly want caught from "
+                          f"another person's words deserve quiet work.)")
             if context:
                 notes = "; ".join(f["fact"] for f in context)
                 prompt = f"{prompt}\n(Related memory: {notes})"

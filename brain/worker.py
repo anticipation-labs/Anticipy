@@ -816,6 +816,13 @@ def main() -> None:
                     except Exception:
                         convo_context = []
                 try:
+                    # The phone's local voice verdict rides along when the
+                    # app stamped one (owner|other); absent on old builds.
+                    out = anticipy.hear(line, context=convo_context,
+                                        may_say=SPEAK_ONCE,
+                                        speaker=(ev.get("speaker") or None))
+                except TypeError:
+                    # An older core without the speaker kwarg keeps hearing.
                     out = anticipy.hear(line, context=convo_context,
                                         may_say=SPEAK_ONCE)
                 except Exception as e:

@@ -25,3 +25,6 @@ venv/
 
 # Editor / OS noise
 .DS_Store
+
+# local speaker-recognition models + the owner's voice profile — never in git
+.speaker-models/
