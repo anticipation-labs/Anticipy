@@ -55,6 +55,48 @@ passed; relaunch by hand if logs show no DONE). Agent7's diff changes
 hear()'s signature — merge it AFTER re-basing onto the dinner fix, the
 same region moved.
 
+### Addendum, part two (later on 2026-08-05) — the second-family pass
+
+Product rule changed by Omar (Devin's 35e9ffd): a held overheard plan now
+texts ONCE for the go-ahead — silence was the old rule. dinner_demo_proof
+enforces exactly-one-text (never zero, never two).
+
+A 10-agent adversarial audit (all blockers CONFIRMED by independent
+re-derivation) then drove these fixes, all deployed:
+- NOT hardcoded: exhaustive sweep found zero Cactus-special product code
+  and zero site recipes. The Cactus-vs-Earls gap was (a) a STALE shipped
+  zip (0.2.4 sweeper) + (b) general defects only a second wording family
+  could trip.
+- proof/second_scenario_proof.py (Earls Brooklyn, Saturday 1pm, four
+  people, terse) is the anti-overfitting gate. Both proofs must pass,
+  several parallel runs each, on google/gemini-2.5-flash.
+- One voice: already_raised is fuzzy + act/clock cross-class (the clock
+  double-texted the dinner); failed sends are never recorded as said;
+  ambient texts (kind ambient_act) obey quiet hours; act-branch repeat
+  uses the queue snapshot.
+- SMS amnesia: context bounds ~20 turns; thread rebuild reads
+  kind=anticipy_text (what the worker actually stamps).
+- goal_tokens(): shared tokenizer, numbers kept (a "2 people" card can be
+  corrected to 4), light morphology (Earls/Earl's, book/booking).
+- _VERBS matches VERB forms only — "reservation options" in a find-goal
+  is not the verb reserve. 10-case classification check in the commit.
+- _same_plan judges with the conversation visible, and hear() stashes
+  self._last_convo for it.
+- TEXTING_STYLE example leaked a literal "7:30" into live texts (a 1pm
+  booking texted as 7pm) — neutral example + never-invent-details rule.
+- Extension 0.2.6: neutralizeSpawners (target=_blank→_self + MAIN-world
+  window.open hook, working tab only) and spawnedThisRun budget (5) that
+  NEVER resets on navigation → clean needs_user instead of a 20-tab pile.
+  Zip rebuilt AND ~/Anticipy/Extension refreshed (0.2.4 backup alongside).
+  Omar still owes the ↻ reload — must say 0.2.6 now.
+
+Still open for the fleet (audit fix-sketches in the run journal):
+iframe/shadow-DOM visibility for embedded booking widgets (SevenRooms —
+the real Earls capability gap), onCreated-registry tab sweep, numbered-
+clarifier durability across redeploys, segment parent-context carry,
+desk-only events leaking into the SMS thread rebuild, owner_ref scoping
+of the transcript poll (task chip pending).
+
 ---
 
 ## 1. What Anticipy IS (the point of everything)
