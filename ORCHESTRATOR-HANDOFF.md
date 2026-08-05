@@ -90,12 +90,29 @@ re-derivation) then drove these fixes, all deployed:
   Zip rebuilt AND ~/Anticipy/Extension refreshed (0.2.4 backup alongside).
   Omar still owes the ↻ reload — must say 0.2.6 now.
 
-Still open for the fleet (audit fix-sketches in the run journal):
-iframe/shadow-DOM visibility for embedded booking widgets (SevenRooms —
-the real Earls capability gap), onCreated-registry tab sweep, numbered-
-clarifier durability across redeploys, segment parent-context carry,
-desk-only events leaking into the SMS thread rebuild, owner_ref scoping
-of the transcript poll (task chip pending).
+Rule change (2026-08-05, Omar): quiet work is no longer invisible.
+Finished research — overheard or asked — texts ONE varied FYI in her
+voice (worker deliver_fyi; overheard FYIs obey quiet hours) and lands on
+the feed. Live in production the same night; first FYI observed in the
+worker log minutes after deploy.
+
+NEXT WAVE, FIRST: design/briefs/09-local-speaker-recognition.md — Omar's
+explicit order ("we want local everything… solve the speaker recognition
+part"). The approach is already PROVEN on the Mac, zero cloud
+(proof/local_diarization_poc.py): diarization 3.8x realtime CPU with
+correct boundaries + re-identification, voice-profile gate 0.923 owner
+vs 0.236 stranger. The brief is the build order; do not re-litigate the
+stack, benchmark it on real recordings of Omar.
+
+Still open for the fleet after that (audit fix-sketches in the run
+journal): iframe/shadow-DOM visibility for embedded booking widgets
+(SevenRooms — the real Earls capability gap), a "Looking into it,
+quietly" feed chip + result cards in the app (needs an iOS build — Omar
+has already asked for results "at the top of the app"), onCreated-
+registry tab sweep, numbered-clarifier durability across redeploys,
+segment parent-context carry, desk-only events leaking into the SMS
+thread rebuild, owner_ref scoping of the transcript poll (task chip
+pending).
 
 ---
 
