@@ -70,7 +70,7 @@ async function screenshot(tabId) {
   }
 }
 
-async function llmStep(apiKey, model, goal, state, history, _retries, image, visionModel, authorized, scope, ownerProfile) {
+async function llmStep(apiKey, model, goal, state, history, _retries, image, visionModel, authorized, scope, ownerProfile, plan = null) {
   const messages = [
     // Grounded per-call, not per-worker-load: a model with no clock
     // hallucinated "this coming Sunday, July 28th" (the past) in a live
@@ -101,7 +101,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
               })()
             + "\nIf a required field is something you do NOT have here, do not guess and do not give up: stop with needs_user naming EXACTLY what you need (e.g. \"I need your date of birth to finish the reservation\"). She will ask him, remember the answer, and this task will resume by itself."
           : "\n\nTHE OWNER: their name, email and phone are NOT on file. If a form needs them, stop with needs_user and say exactly which details you need.";
-        const body = `${authLine}${who}\n\nGOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}` +
+        const body = `${authLine}${who}${planBlock(plan)}\n\nGOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}` +
           (state.overlay ? "\nNOTE: a dialog/picker is open — the elements below are ITS contents, which is what the user is looking at." : "") +
           `\nELEMENTS:\n${state.elements}\n\nPAGE TEXT:\n${state.text}`;
         // With an image the content becomes multipart; text-only stays a
@@ -167,7 +167,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
         if (fixed) return fixed;
       }
     } catch (_) { /* fall through to the plain retry */ }
-    return llmStep(apiKey, model, goal, state, history, (_retries || 0) + 1, image, visionModel, authorized, scope, ownerProfile);
+    return llmStep(apiKey, model, goal, state, history, (_retries || 0) + 1, image, visionModel, authorized, scope, ownerProfile, plan);
   }
   // Still nothing. This is OUR failure, not something the owner can fix, so
   // report it as a step error (the loop keeps going and bails on repeats)
@@ -432,12 +432,143 @@ async function elementCenter(tabId, index) {
   return result;
 }
 
+// THINK BEFORE TOUCHING ANYTHING.
+//
+// Without this the loop was a reactive clicker with no idea where it was
+// going: every run opened a hardcoded search page, and step 1 was always
+// "type the goal into the box", because that is the only sensible move on a
+// search page. "Send email to Andy from Barry" spent 19 steps on a Bing
+// results page and gave up — not because the model was bad at clicking, but
+// because nobody ever asked it WHERE the task happens.
+//
+// One call, before the tab opens. It answers three things the step loop can
+// never work out from the page it is staring at:
+//   * which site this actually happens on (Gmail, not a search engine)
+//   * what has to be LOOKED UP first, and where, before acting is possible
+//     (an address the owner has in his own contacts or past mail)
+//   * the order, when the task spans more than one site — a doc, then a link,
+//     then a message.
+//
+// It is deliberately not a script. The step loop still decides every action
+// against the real page; the plan is context, never a command, so a wrong
+// plan costs a worse first guess and nothing else.
+//
+// SAFETY. Any failure at all — no key, bad JSON, an unusable URL, a timeout,
+// the flag off — returns null, and the caller then behaves exactly as it did
+// before this existed. There is no path where planning makes the run fail.
+const PLAN_SYSTEM = `You plan a task that a browser agent will then carry out
+by clicking a real Chrome window, as the owner, already signed into their own
+accounts.
+
+Answer where the work actually HAPPENS, not how to search for it. Almost
+nothing worth doing is done on a search engine: mail is done in a mail client,
+a table in a spreadsheet, a booking on the venue or a reservation platform, a
+document in a document editor. Reach for search only when the task genuinely
+is to find something out, or when you truly cannot name the site.
+
+Say what must be FOUND before acting is even possible. If the goal names a
+person but not their address, that address exists somewhere the owner can
+already reach — their contacts, a past thread — and it is looked up there, in
+their own accounts, never invented and never guessed from a public web page
+about a stranger with a similar name.
+
+Prefer sites the owner is known to use. If two or three are plausible and
+nothing says which, list them in order and let the agent try them; if it is
+genuinely unknowable and the task cannot proceed without it, say so in
+ask_owner and the agent will ask.
+
+Reply ONLY with compact JSON:
+{"start_url":"https://…",
+ "why":"<8 words: why that site>",
+ "must_find":["<fact needed before acting, and where it lives>"],
+ "steps":["<short ordered steps, 2-6 of them>"],
+ "fallback_urls":["https://…"],
+ "ask_owner":"<what only the owner can answer, or null>"}`;
+
+export async function planRun(apiKey, model, goal, ownerProfile, scope) {
+  if (!apiKey || !goal) return null;
+  const who = ownerProfile
+    ? Object.entries({
+        "first name": ownerProfile.first_name, "last name": ownerProfile.last_name,
+        email: ownerProfile.email, phone: ownerProfile.phone,
+      }).filter(([, v]) => v).map(([k, v]) => `  ${k}: ${v}`).join("\n")
+    : "";
+  // Everything she has learned about him, including which services he uses.
+  // Asked once, remembered forever — nothing here is pre-programmed.
+  let learned = "";
+  try {
+    const extra = JSON.parse((ownerProfile && ownerProfile.facts) || "{}");
+    learned = Object.entries(extra).map(([k, v]) => `  ${k.replace(/_/g, " ")}: ${v}`).join("\n");
+  } catch (e) { /* no facts yet */ }
+
+  const user = `GOAL: ${goal}`
+    + (scope ? `\n\nWHAT THEY AGREED TO: ${scope}` : "")
+    + (who ? `\n\nTHE OWNER:\n${who}` : "\n\nTHE OWNER: nothing on file yet.")
+    + (learned ? `\n\nWHAT IS KNOWN ABOUT HOW THEY WORK:\n${learned}` : "")
+    + `\n\nRight now it is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}.`;
+
+  try {
+    const r = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model, temperature: 0,
+        messages: [{ role: "system", content: PLAN_SYSTEM }, { role: "user", content: user }],
+      }),
+    });
+    if (!r.ok) return null;
+    const raw = (await r.json())?.choices?.[0]?.message?.content || "";
+    const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
+    if (s < 0 || e <= s) return null;
+    const plan = JSON.parse(raw.slice(s, e + 1));
+    // A start_url we cannot open is worse than no plan: validate it here so a
+    // malformed one falls back instead of opening a broken tab.
+    let url = null;
+    try {
+      const u = new URL(String(plan.start_url || ""));
+      if (u.protocol === "https:" || u.protocol === "http:") url = u.toString();
+    } catch (e) { /* unusable */ }
+    if (!url) return null;
+    return {
+      startUrl: url,
+      why: String(plan.why || "").slice(0, 120),
+      mustFind: Array.isArray(plan.must_find) ? plan.must_find.slice(0, 6).map(String) : [],
+      steps: Array.isArray(plan.steps) ? plan.steps.slice(0, 8).map(String) : [],
+      fallbacks: Array.isArray(plan.fallback_urls) ? plan.fallback_urls.slice(0, 4).map(String) : [],
+      askOwner: plan.ask_owner && plan.ask_owner !== "null" ? String(plan.ask_owner) : null,
+    };
+  } catch (e) {
+    return null;                 // never let planning break a run
+  }
+}
+
+/// The plan as the step loop sees it: context it may override, never orders.
+export function planBlock(plan) {
+  if (!plan) return "";
+  const bits = [`\n\nPLAN (made before this run started — guidance, not orders; the real page always wins):`];
+  if (plan.why) bits.push(`  starting at ${plan.startUrl} — ${plan.why}`);
+  if (plan.mustFind.length) bits.push(`  find first: ${plan.mustFind.join("; ")}`);
+  if (plan.steps.length) bits.push(`  intended order: ${plan.steps.join(" -> ")}`);
+  if (plan.fallbacks.length) bits.push(`  if that site is wrong, try: ${plan.fallbacks.join(", ")}`);
+  bits.push(`  If the plan is wrong about this page, ignore it and do what the page needs.`);
+  return bits.join("\n");
+}
+
 // Runs one autonomous browser goal inside a background tab in the Anticipy
 // tab group. Returns {status, result}.
 export async function runAgentGoal(goal, opts) {
   // Default to a scriptable search page: about:blank can't be script-injected,
   // so mapPage would fail every step and the run would die without acting.
-  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null } = opts;
+  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true } = opts;
+
+  // Work out WHERE this happens before opening anything. An explicit
+  // start_url on the job still wins — the caller knew something we did not.
+  // A null plan means we open exactly what we would have opened before.
+  const plan = (planning && !opts.startUrl)
+    ? await planRun(apiKey, model, goal, ownerProfile, scope)
+    : null;
+  const openAt = (plan && plan.startUrl) || startUrl;
+  if (plan) console.log(`agent: plan -> ${plan.startUrl} (${plan.why})`);
 
   const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
   // Never-foreground (§9): remember which tab the owner is looking at BEFORE
@@ -456,7 +587,7 @@ export async function runAgentGoal(goal, opts) {
     for (const id of agentTabs) { try { await chrome.tabs.remove(id); } catch (e) { /* gone */ } }
     await chrome.storage.local.set({ agentTabs: [] });
   } catch (e) { /* best effort */ }
-  const tab = await chrome.tabs.create({ url: startUrl, active: false });
+  const tab = await chrome.tabs.create({ url: openAt, active: false });
   userCancelledTabs.delete(tab.id);
   // The owner may switch tabs mid-run; keep following where THEY are, so a
   // restore lands on the tab they were actually using. A tab our working tab
@@ -638,7 +769,7 @@ export async function runAgentGoal(goal, opts) {
       // to describe; a picture generalises to every widget that will ever
       // exist. Per-widget special cases are a treadmill.
       const eyes = await screenshot(tab.id);
-      try { decision = await withTimeout(llmStep(apiKey, model, goal, state, history, 0, eyes, visionModel, authorized, scope, ownerProfile), 90000, "llmStep"); }
+      try { decision = await withTimeout(llmStep(apiKey, model, goal, state, history, 0, eyes, visionModel, authorized, scope, ownerProfile, plan), 90000, "llmStep"); }
       catch (e) {
         // A dead/rotated/out-of-credit key or a rate limit used to be retried
         // for all 32 steps in ~90 seconds and then reported as a browsing

@@ -8,6 +8,7 @@ const suites = [
   "check_never_foreground.mjs",
   "test_agent_loop_focus.mjs",
   "test_background_handback.mjs",
+  "test_planner.mjs",
 ];
 let failed = 0;
 for (const s of suites) {
