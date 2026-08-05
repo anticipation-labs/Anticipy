@@ -76,3 +76,26 @@ def test_old_callers_without_the_kwarg_still_work():
     a, llm = _anticipy(IGNORE)
     out = a.hear("I'll get into it", context=["earlier line"])
     assert out["decision"].decision == "ignore"
+
+
+ASK_SELF = {"decision": "ask", "goal": None, "addressee": "self",
+            "reason": "mumbling through a plan"}
+ASK_ASSIST = {"decision": "ask", "goal": None, "addressee": "assistant",
+              "reason": "asked her directly"}
+
+
+def test_self_talk_questions_are_never_texted():
+    a, llm = _anticipy(ASK_SELF)
+    texts = []
+    a.notify_owner = lambda m, channel="sms": texts.append(m) or {"ok": True}
+    out = a.hear("when do you wanna go here for")
+    assert texts == [], texts
+    assert out["anticipy_says"] is None
+
+
+def test_a_direct_question_still_gets_asked():
+    a, llm = _anticipy(ASK_ASSIST)
+    texts = []
+    a.notify_owner = lambda m, channel="sms": texts.append(m) or {"ok": True}
+    a.hear("hey should I do the park location or downtown?")
+    assert len(texts) == 1, texts

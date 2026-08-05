@@ -646,18 +646,29 @@ def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
     return r.json().get("items", [])
 
 
-def mark_processed(event_id: str, decision: str, addressee: str = "") -> bool:
+def mark_processed(event_id: str, decision: str, addressee: str = "",
+                   goal: str = "") -> bool:
     """Returns whether the mark actually landed. A silently-failed PATCH left
     the event unmarked and the 2s poll replayed it — minting a duplicate job
     and a duplicate text per cycle.
 
     The addressee (who the owner was judged to be talking to) is stamped
     alongside the decision so a misclassification — a dictated line that
-    fired, a direct ask that went ambient — is auditable from the record."""
+    fired, a direct ask that went ambient — is auditable from the record.
+
+    The goal is stamped too when work came of the line — including QUIET
+    work, where the outward decision stays "ignore". That pairing
+    (decision=ignore + a goal) is how the app tells "left alone" from
+    "looking into it, quietly": Omar watched her research Paris flights
+    behind a "Noted — nothing needed" label and reasonably concluded she
+    did nothing and it landed nowhere. Old app builds ignore the field —
+    they keep rendering exactly what they render today."""
     try:
         body = {"decision": decision}
         if addressee:
             body["addressee"] = addressee
+        if goal:
+            body["goal"] = goal
         r = pb.patch(f"{PB}/api/collections/events/records/{event_id}",
                      json=body, timeout=10)
         return bool(getattr(r, "ok", False))
@@ -832,7 +843,8 @@ def main() -> None:
                 decision = out["decision"].decision
                 mark_processed(ev["id"], decision,
                                addressee=getattr(out["decision"], "addressee",
-                                                 "") or "")
+                                                 "") or "",
+                               goal=getattr(out["decision"], "goal", "") or "")
                 # STEP 1 of the capture architecture: record which
                 # conversation this turn belongs to. NOTHING reads it yet —
                 # triage above is untouched — so this is observation only,

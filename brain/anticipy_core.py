@@ -457,9 +457,14 @@ class Anticipy:
             consequential = bool(goal) and (decision.needs_confirmation
                                             or goal in IRREVERSIBLE
                                             or is_consequential(goal))
-            startable = (decision.decision == "act" and goal
-                         and not decision.missing)
-            quiet_research = startable and not consequential
+            # Read-only preparation ALWAYS starts quietly — even when triage
+            # wanted a detail first ("plan the Vienna trip", dates unknown:
+            # research both weeks; the FYI text delivers whatever is found).
+            # She never interrupts his conversation to ask about prep work;
+            # a question is only worth his attention when the unknown blocks
+            # something consequential — and that path holds a card and asks
+            # exactly once, below.
+            quiet_research = bool(goal) and not consequential
             if quiet_research:
                 # Free to do, lands on her desk — queued unheld, said nowhere.
                 params = {"source": line, "now": now_line(), "lane": "ambient"}
@@ -643,7 +648,19 @@ class Anticipy:
             # check their hours" twice, seventeen seconds apart, and again
             # twenty minutes later. Asking is fine; asking the same thing over
             # and over is what made her exhausting.
-            if self._may_say(may_say, handled, decision.goal, "ask"):
+            # A question is an interruption, and interrupting is earned by
+            # being ADDRESSED — he asked her, or typed at her. Thinking
+            # aloud is not an invitation: one mumbled dinner plan once drew
+            # THREE different "what night were you thinking?" texts in two
+            # minutes, because each goalless self-talk ask dodged the
+            # goal-keyed dedupe. Self-talk still gets her help — acts queue,
+            # plans firm up through the open-plan carry — she just doesn't
+            # tug his sleeve about it. (No classification at all keeps the
+            # old texting behaviour: the honesty wall cuts both ways.)
+            if decision.addressee == "self" and not explicit:
+                print(f"self-talk question stays unasked: {handled!r}")
+                handled = None
+            elif self._may_say(may_say, handled, decision.goal, "ask"):
                 self.notify_owner(handled)
             else:
                 print(f"already asked him about {decision.goal!r} — staying quiet")

@@ -238,7 +238,7 @@ final class AnticipySession: ObservableObject {
             var serverLines = events
                 .filter { $0.kind == "transcript" }
                 .reversed()
-                .map { TranscriptLine(id: $0.id, text: $0.text ?? "", decision: ($0.decision?.isEmpty == false) ? $0.decision : nil) }
+                .map { TranscriptLine(id: $0.id, text: $0.text ?? "", decision: ($0.decision?.isEmpty == false) ? $0.decision : nil, goal: ($0.goal?.isEmpty == false) ? $0.goal : nil) }
             // Reconcile one-to-one by CONSUMING matches: saying the same
             // sentence twice used to mark both local copies received off a
             // single server row, and inherit the older row's verdict.
@@ -535,6 +535,12 @@ final class AnticipySession: ObservableObject {
         let id: String
         let text: String
         let decision: String? // ignore | act | ask
+        /// What she is quietly chasing because of this line. The brain
+        /// stamps it even when the outward decision is "ignore" — that
+        /// pairing (ignored, but with a goal) is the difference between
+        /// "left alone" and "looking into it", which used to render
+        /// identically and read as her being dead.
+        var goal: String? = nil
     }
 
     /// One line spoken in the current Listen session, tracked locally from

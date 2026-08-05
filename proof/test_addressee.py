@@ -195,9 +195,24 @@ a, out = hear("Maybe the trip should be that first week.",
               {"decision": "ask", "goal": "plan the Vienna trip",
                "missing": ["which dates"], "addressee": "person",
                "reason": "needs dates"})
-check("a consequential plan with unknowns is held and asked about once",
+# 2026-08-05, second revision: "plan X" is read-only preparation now, and
+# read-only prep ALWAYS starts quietly — dates unknown means research both
+# weeks, not stand idle and not interrupt his conversation. The results
+# reach him as the FYI text when they land.
+check("read-only prep with an unknown still starts, quietly, unheld",
+      len(a.queued) == 1 and a.queued[0]["hold"] is False
+      and a.queued[0]["params"].get("lane") == "ambient",
+      f"{a.queued}")
+check("and nothing is said or texted about starting it",
+      a.texts == [] and out["anticipy_says"] is None, f"{a.texts}")
+
+a, out = hear("We should book that boat tour when we know the day.",
+              {"decision": "ask", "goal": "book the Vienna boat tour",
+               "missing": ["which day"], "addressee": "person",
+               "reason": "needs the day"})
+check("a CONSEQUENTIAL plan with unknowns is held and asked about once",
       a.queued and a.queued[0]["hold"] is True and len(a.texts) == 1
-      and "which dates" in str(a.queued[0]["params"].get("missing")),
+      and "which day" in str(a.queued[0]["params"].get("missing")),
       f"{a.queued} {a.texts}")
 
 # ------------------------------------------- self-talk keeps today's behaviour

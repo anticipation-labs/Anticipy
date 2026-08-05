@@ -64,6 +64,15 @@ struct HomeView: View {
     // section at all — the job silently disappeared while the card said
     // "Nothing needs you right now". It belongs in the attention section.
     private var needsOK: [AgentJob] { session.jobs.filter { $0.status == "awaiting_confirm" || $0.status == "needs_user" } }
+    /// Finished quiet work — anticipy_says events the brain marked done.
+    /// Newest first, capped so the desk never becomes a landfill.
+    private var foundForYou: [BrainEvent] {
+        let done = session.anticipySays.filter { ev in
+            ev.kind == "anticipy_says" && ev.decision == "done"
+                && (ev.text?.isEmpty == false)
+        }
+        return Array(done.prefix(5))
+    }
     private var handling: [AgentJob] { session.jobs.filter { $0.status == "queued" || $0.status == "running" } }
     private var finished: [AgentJob] { session.jobs.filter { $0.status == "done" || $0.status == "failed" } }
 
@@ -99,6 +108,25 @@ struct HomeView: View {
                         // day one the empty state carries the whole screen.
                         if verified && !feedIsEmpty {
                             anticipyCardView.padding(.top, Theme.Space.snug)
+                        }
+                        // What she found — the quiet work, delivered. Lives
+                        // at the top because Omar's words were exact: "it
+                        // should text you the results and pull it up at the
+                        // top of the app." Before this section existed her
+                        // finished research sat in the database and nowhere
+                        // else a human looks.
+                        if verified && !foundForYou.isEmpty {
+                            foundHeader
+                                .padding(.top, Theme.Space.section)
+                                .padding(.bottom, Theme.Space.tight)
+                            VStack(spacing: Theme.Space.snug) {
+                                ForEach(foundForYou, id: \.id) { ev in
+                                    FoundCard(event: ev)
+                                        .transition(.asymmetric(
+                                            insertion: .move(edge: .top).combined(with: .opacity),
+                                            removal: .opacity))
+                                }
+                            }
                         }
                         listenCard.padding(.top, feedIsEmpty ? Theme.Space.tight : Theme.Space.roomy)
                         if feedIsEmpty {
@@ -645,6 +673,21 @@ struct HomeView: View {
         }
     }
 
+    private var foundHeader: some View {
+        HStack(spacing: Theme.Space.tight) {
+            Text("Found for you")
+                .font(Theme.display(22))
+                .tracking(-0.2)
+                .foregroundStyle(Theme.ivory)
+            Text("\(foundForYou.count)")
+                .font(.system(size: 12, weight: .bold))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Theme.champagne))
+                .foregroundStyle(Theme.ink)
+        }
+    }
+
     // MARK: - The four empty screens
 
     /// Still asking. The first probe can take the full timeout, and this is
@@ -999,6 +1042,58 @@ struct HandlingCard: View {
 
 /// A completed job with its result — or a failed one, which gets a plain
 /// sentence and a way forward instead of a shrug and a stack trace.
+/// Something she quietly looked into, delivered. Her sentence leads —
+/// the card IS her speaking, not a log row. Tap to read the whole thing
+/// (sources and all); collapsed it stays a glanceable three lines.
+struct FoundCard: View {
+    let event: BrainEvent
+    @State private var expanded = false
+
+    private var headline: String {
+        // The goal reads like machine shorthand ("research dinner spots in
+        // Vancouver"); soften it into the thing itself.
+        let g = (event.goal ?? "").trimmingCharacters(in: .whitespaces)
+        guard !g.isEmpty else { return "Something you mentioned" }
+        var s = g
+        for prefix in ["research ", "Research ", "research: ", "Research: ",
+                       "look up ", "Look up ", "find ", "Find "] {
+            if s.hasPrefix(prefix) { s = String(s.dropFirst(prefix.count)); break }
+        }
+        return s.prefix(1).uppercased() + s.dropFirst()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "sparkle")
+                .foregroundStyle(Theme.champagne)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(headline)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Theme.ivory)
+                Text(event.text ?? "")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.sand)
+                    .lineLimit(expanded ? nil : 3)
+                    .fixedSize(horizontal: false, vertical: expanded)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        Haptics.tap()
+                        withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+                    }
+                if !expanded {
+                    Text("tap for the full picture")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.gray)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .anticipyCard()
+    }
+}
+
 struct DoneCard: View {
     let job: AgentJob
     @EnvironmentObject var session: AnticipySession
@@ -1152,11 +1247,23 @@ struct TranscriptRow: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Theme.champagne)
             case "ignore":
-                // Silence used to look like the app doing nothing at all;
-                // say plainly that it heard and chose to leave it alone.
-                Text("Noted — nothing needed")
-                    .font(.caption)
-                    .foregroundStyle(Theme.gray)
+                // Two different silences, finally told apart. "Ignored with
+                // a goal" means she quietly started work because of this
+                // line — Omar watched her research Paris flights behind
+                // "Noted — nothing needed" and reasonably concluded she was
+                // dead. Truly-left-alone keeps the plain label.
+                if line.goal?.isEmpty == false {
+                    HStack(spacing: 5) {
+                        Image(systemName: "magnifyingglass").accessibilityHidden(true)
+                        Text("Looking into it — I'll text you what I find")
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Theme.champagne.opacity(0.85))
+                } else {
+                    Text("Noted — nothing needed")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
+                }
             default:
                 if waitedTooLong {
                     VStack(alignment: .leading, spacing: 6) {
