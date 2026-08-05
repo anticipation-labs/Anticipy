@@ -18,6 +18,10 @@ the whole point is that nothing here is keyword-matched or pre-programmed —
 she has to actually understand a messy, overlapping, half-transcribed
 conversation and pull one clean intention out of it.
 
+Speech rule updated 2026-08-05 (commit 35e9ffd, Omar's explicit call): a
+held overheard plan earns exactly ONE text asking his go-ahead — silence
+was the old rule and it left him staring at a card he never knew existed.
+
 Run:  OPENROUTER_API_KEY=... PYTHONPATH=. python3 proof/dinner_demo_proof.py
 """
 from __future__ import annotations
@@ -105,14 +109,11 @@ def main() -> int:
     texts: list[str] = []
     a.notify_owner = lambda msg, channel="sms": texts.append(msg)
 
-    intrusions, convo = [], []
+    convo = []
     for line in TRANSCRIPT:
-        before = len(texts)
         out = a.hear(line, context=list(convo[-8:]))
         convo.append(line)
         d = out["decision"]
-        if len(texts) > before and d.addressee in ("person", "dictation"):
-            intrusions.append((line, texts[-1]))
         print(f"  heard: {line[:64]}")
         print(f"      -> {d.decision:6} addressee={d.addressee} goal={d.goal}")
 
@@ -144,8 +145,21 @@ def main() -> int:
     if len(JOBS) > 3:
         failures.append(f"{len(JOBS)} jobs for one dinner — duplicates are back")
 
-    if intrusions:
-        failures.append(f"{len(intrusions)} texts fired on speech not aimed at her")
+    # The speech rule as of 2026-08-05 (Omar's call, commit 35e9ffd): an
+    # overheard plan that ends in a held card earns exactly ONE text asking
+    # his go-ahead. Zero texts is the silent card he spent a night staring
+    # at ("why did I not get a text"); two or more is the spam that made
+    # her exhausting. One.
+    if len(texts) == 0:
+        failures.append("silent card — the plan was held but he was never asked")
+    elif len(texts) > 1:
+        failures.append(f"{len(texts)} texts for one dinner plan — spam is back: {texts}")
+    elif not re.search(r"dinner|cactus|book|reserv|tomorrow", texts[0], re.I):
+        failures.append(f"the one text is not about the plan: {texts[0]!r}")
+
+    print(f"\n  texts sent ({len(texts)}):")
+    for t in texts:
+        print(f"      {t}")
 
     print()
     if failures:
@@ -155,7 +169,7 @@ def main() -> int:
         return 1
     print("PASS one held booking, carrying venue + time + day from the conversation")
     print("PASS no duplicate pile-up")
-    print("PASS she never spoke over speech that wasn't aimed at her")
+    print("PASS exactly one text asking his go-ahead — never silence, never spam")
     print("\nDINNER DEMO: READY")
     return 0
 
