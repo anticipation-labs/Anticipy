@@ -1,5 +1,19 @@
 # Brief 09 — Local speaker recognition (roadmap §7.2, promoted to NOW)
 
+## STATUS 2026-08-05: brain + backend halves SHIPPED and live-proven.
+Done: events.speaker migration deployed; hear(speaker=…) → "(Voice check)"
+triage context with the measured-evidence rule; honesty-wall fallback
+(5 unit tests); proof/speaker_gate_proof.py 4/4 live (the friend's "I'll
+get into it" never reaches Omar's desk, his own voice starts real work);
+proof/speaker_live_test.py — the fully-local human test (enroll on the Mac
+mic → record a conversation → diarize + owner-match + whisper-transcribe
+on-device → live triage per tagged line) ran end-to-end: owner 0.99/0.92,
+friend 0.23, and only the owner's "I will book the table right now"
+became an act. REMAINING (this brief's open scope): the iOS half —
+enrollment UX + on-device tagging in the app via sherpa-onnx's iOS
+support, stamping `speaker` on transcript events. Sections below are the
+build order for exactly that.
+
 Omar, 2026-08-05: *"We want local everything… solve the speaker recognition
 part, because that can affect how we see everything as a whole."*
 
