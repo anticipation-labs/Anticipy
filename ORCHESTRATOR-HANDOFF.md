@@ -158,9 +158,17 @@ are a thousand owners, not one.
   if things "do nothing", check this first; it caused the worst night.
 - **Restore point**: git tag `checkpoint-working-2026-08-04` + PB backups.
 
-Deploy: `railway up --service backend` FROM `backend/` (from repo root the
-build hangs forever); `railway up --service worker` from repo root. Push
-to GitHub does NOT deploy. Verify worker logs after every deploy.
+Deploy: `railway up --service worker` from repo root. BACKEND: with
+Railway CLI ≥5.30 (on the Mac since 2026-08-05), `railway up` from
+`backend/` uploads the GIT ROOT, the builder can't find `Dockerfile`, and
+the deploy FAILS (safely — the old deployment keeps serving). Deploy the
+backend from a GIT-FREE COPY instead:
+`cp -R backend /tmp/backend-deploy && cd /tmp/backend-deploy &&
+railway link --project anticipy-production && railway service backend &&
+railway up --service backend`. Expect ~8s of worker 502s while the data
+volume switches instances — it self-recovers; confirm the 502 count in
+worker logs stops growing. Push to GitHub does NOT deploy. Verify worker
+logs and the served /anticipy-extension.zip version after every deploy.
 
 ## 3. Proven-in-production (never regress these)
 
