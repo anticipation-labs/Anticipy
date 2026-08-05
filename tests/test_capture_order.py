@@ -30,11 +30,28 @@ def iso(dt):
 NOW = datetime(2026, 8, 5, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def ev(i, created, spoken=None):
+def ev(i, created, spoken=None, field="capture_started_at"):
     row = {"id": i, "text": i, "created": iso(created)}
     if spoken is not None:
-        row["spoken_at"] = iso(spoken)
+        row[field] = iso(spoken)
     return row
+
+
+def test_both_capture_field_names_are_honoured():
+    """`capture_started_at` is the canonical column and what the phone now
+    writes. `spoken_at` is accepted too so that neither name is silently
+    ignored mid-rollout — a dropped stamp fails SILENTLY, by looking exactly
+    like an old build, which is the worst way for this to break."""
+    canonical = ev("a", NOW + timedelta(minutes=40), NOW)
+    alias = ev("b", NOW + timedelta(minutes=40), NOW, field="spoken_at")
+    assert W.capture_key(canonical) == W.capture_key(alias)
+    assert W.capture_key(canonical) == W._ts(iso(NOW))
+
+
+def test_the_canonical_field_wins_when_both_are_present():
+    row = ev("x", NOW + timedelta(minutes=40), NOW)
+    row["spoken_at"] = iso(NOW - timedelta(hours=2))
+    assert W.capture_key(row) == W._ts(iso(NOW))
 
 
 def order(rows):
@@ -128,7 +145,7 @@ def test_the_skew_window_is_generous_enough_for_a_real_backlog():
     """A genuinely long offline stretch must NOT be mistaken for a broken
     clock. Four hours buffered is a flight, not a bug."""
     row = ev("long_flight", NOW, NOW - timedelta(hours=4))
-    assert W.capture_key(row) == W._ts(row["spoken_at"]), \
+    assert W.capture_key(row) == W._ts(row["capture_started_at"]), \
         "a 4h backlog was thrown away as if the clock were broken"
 
 

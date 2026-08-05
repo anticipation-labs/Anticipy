@@ -681,7 +681,10 @@ def capture_key(ev: dict) -> float:
     arrival time, so a device with a broken clock cannot reorder his day.
     """
     arrived = _ts(ev.get("created"))
-    spoken = _ts(ev.get("spoken_at"))
+    # `capture_started_at` is the canonical column and the one the phone now
+    # writes; `spoken_at` is accepted too so that either name works during a
+    # rollout and neither is silently ignored.
+    spoken = _ts(ev.get("capture_started_at")) or _ts(ev.get("spoken_at"))
     if spoken is None:
         return arrived if arrived is not None else 0.0
     if arrived is not None and abs(spoken - arrived) > CLOCK_SKEW_MAX_S:

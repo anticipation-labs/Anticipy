@@ -1,0 +1,25 @@
+Write the capture stamp to the column that already existed
+
+Verifying the migration against the live database showed the events table
+already carries capture_started_at, capture_ended_at, gap_before_ms, segment,
+seq, boot_id, backfill and source. They were provisioned by earlier capture
+work and NO app build has ever written to any of them, which is exactly why
+everything downstream fell back to PocketBase's `created`.
+
+So the column was never the missing piece. The phone was.
+
+I added a spoken_at of my own before checking the live schema, which
+duplicated capture_started_at. The phone now writes the canonical name
+instead. capture_key reads capture_started_at first and still accepts
+spoken_at, so neither name is silently ignored during a rollout - a dropped
+stamp fails by looking exactly like an old build, which is the worst way for
+this to break.
+
+The redundant spoken_at column stays for now rather than being migrated away
+mid-rollout; it is optional, unread by anything, and removing a column is a
+worse risk than leaving an empty one.
+
+133 tests pass. MUTATION TESTED: making capture_key ignore the canonical
+field fails six tests, so the rename is load-bearing rather than cosmetic.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>

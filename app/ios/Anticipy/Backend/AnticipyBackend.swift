@@ -311,7 +311,11 @@ final class AnticipyBackend {
         // the last place that knows. The server treats an implausible stamp
         // as absent, so a device with a wrong clock degrades to today's
         // behaviour rather than reordering his day.
-        body["spoken_at"] = ISO8601DateFormatter.anticipyUTC.string(from: Date())
+        // `capture_started_at` is the column the rest of the system already
+        // names for this — it was provisioned long ago and no build ever wrote
+        // to it, which is why everything downstream fell back to `created`.
+        // Writing the existing name rather than a second one of my own.
+        body["capture_started_at"] = ISO8601DateFormatter.anticipyUTC.string(from: Date())
         // The ONLY thing the voice check ever sends: one short word about
         // who spoke ("owner", "other:v2", "other:Sarah"). The voiceprint it
         // came from never leaves the phone, and neither does the audio.
