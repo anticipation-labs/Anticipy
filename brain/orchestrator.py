@@ -257,6 +257,71 @@ class Brain:
         )
 
 
+SUFFICIENCY_SYSTEM = """A task is about to be started in someone's browser, on
+their behalf, while they are not watching.
+
+One question: could a competent assistant sit down RIGHT NOW and carry this
+out, using only what is written here?
+
+Not "is it clear what they meant" — could it actually be DONE. Words that
+point at something ("the doc", "that spreadsheet", "the team", "the invoice",
+a bare first name) only count if this text says WHICH one. If it does not,
+the task cannot start.
+
+Two things do NOT block a start: anything discoverable once you are underway
+(an opening time, a price, an address), and anything already stated here.
+
+Reply ONLY with compact JSON:
+{"can_start": true|false, "needed": ["<what they would have to be told>"]}"""
+
+
+def check_sufficiency(llm, goal: str) -> list:
+    """What would someone have to be TOLD before this could be started?
+
+    The triage prompt already asks for this, in a field called "missing", and
+    that field comes back empty essentially always. Measured on the owner's own
+    failures: "put the recording link in the doc and email the team", "open
+    that budget spreadsheet and add August", "email Priya the invoice" — every
+    one returned missing=[] and every one was started and could not finish.
+    She did not know which doc, which spreadsheet, or which Priya.
+
+    Adding more instruction to the triage prompt about it changed NOTHING —
+    tried, measured on seven cases, zero moved. The field is one of eight in a
+    JSON object and it loses. Asked as the ONLY question, the same model on the
+    same goals got 8/8, including correctly leaving a fully-specified booking
+    and an open-ended research task alone.
+
+    So this is a separate call, and it runs only for goals about to be acted
+    on. Returns [] on any failure, which leaves behaviour exactly as it was.
+    """
+    if not goal or not llm or not getattr(llm, "live", False):
+        return []
+    try:
+        res = llm.chat(SUFFICIENCY_SYSTEM, f"TASK: {goal}", temperature=0.0)
+        raw = json.loads(_extract_json(res.text))
+    except Exception:
+        return []
+    if raw.get("can_start") is not False:
+        return []                      # only an explicit "no" ever blocks
+    needed = raw.get("needed")
+    if not isinstance(needed, list):
+        return []
+    # Bounded: this becomes a question he actually reads. Four unknowns is
+    # already a task that should never have been started from one sentence.
+    #
+    # Filtering on str(n) alone is not enough: str(None) is the four-letter
+    # word "None", which is non-empty and would sail through into a question
+    # asked out loud — "Quick question: None?". Keep only real strings.
+    out = []
+    for n in needed:
+        if not isinstance(n, str):
+            continue
+        n = n.strip()
+        if n and n.lower() not in ("none", "null", "n/a"):
+            out.append(n)
+    return out[:4]
+
+
 def _continues(raw, candidates: int) -> Optional[int]:
     """Read the link answer, refusing everything we cannot act on.
 

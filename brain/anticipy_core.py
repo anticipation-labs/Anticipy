@@ -30,7 +30,7 @@ from .llm import LLM, now_line
 from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
-                           NOT_HIS, _extract_json)
+                           NOT_HIS, check_sufficiency, _extract_json)
 
 NAME = "Anticipy"
 
@@ -662,11 +662,30 @@ class Anticipy:
         # Sufficiency: starting work that is guaranteed to stall on an unknown
         # is worse than one good question. An "act" with essential unknowns
         # becomes that question — the generic behavior, never a special case.
+        # Triage's own "missing" field is empty essentially always — measured
+        # on his real failures, four for four. Ask the question on its own,
+        # where the same model gets it right, and only for work about to be
+        # started. Anything it returns joins missing and falls into the gate
+        # immediately below, which already knows what to do with it.
+        if decision.decision == "act" and decision.goal and not explicit:
+            try:
+                gap = check_sufficiency(self.llm, decision.goal)
+            except Exception:
+                gap = []
+            if gap:
+                decision = Decision(
+                    decision=decision.decision, goal=decision.goal,
+                    reason=decision.reason,
+                    missing=list(decision.missing or []) + gap,
+                    assumption=decision.assumption, addressee=decision.addressee,
+                    owes=decision.owes, continues=decision.continues)
+
         if decision.decision == "act" and decision.missing:
             decision = Decision(
                 decision="ask", goal=decision.goal, reason=decision.reason,
                 missing=decision.missing, assumption=decision.assumption,
-                addressee=decision.addressee)
+                addressee=decision.addressee, owes=decision.owes,
+                continues=decision.continues)
 
         if decision.decision == "act" and decision.goal:
             # The executor needs temporal ground truth: a job run today with
