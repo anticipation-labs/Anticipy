@@ -482,6 +482,40 @@ def report_finished_jobs(anticipy) -> None:
         print(f"result report failed: {e}")
 
 
+def asked_about_recently(goal: str, minutes: float = 45.0) -> bool:
+    """Did she already ask about THIS task a moment ago?
+
+    The existing guard compares the browser's words about what it needs
+    against HER paraphrase of them, and a paraphrase drops most of the
+    original words — so a short, freshly-worded ask slides under the 50%
+    threshold every time. On 2026-08-05 that produced FIFTEEN texts about one
+    stuck Zoom page in sixty-five seconds, each one a new rewording of the
+    same sentence, because the poll runs every few seconds and nothing in the
+    loop was keyed to anything stable.
+
+    This one reads no wording at all: has an ask about this exact task gone
+    out recently? A blocked job is blocked for minutes at least, so asking
+    twice inside the window is never right, whatever the wording.
+    """
+    goal = (goal or "").strip()
+    if not goal:
+        return False
+    try:
+        since = (datetime.now(timezone.utc)
+                 - timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": f'kind="anticipy_says" && decision="needs_user"'
+                                     f' && created>="{since}"',
+                           "perPage": 50, "sort": "-created"}, timeout=10)
+        if not r.ok:
+            return False
+        return any((ev.get("goal") or "").strip() == goal
+                   for ev in r.json().get("items", []))
+    except Exception as e:
+        print(f"asked_about_recently check failed: {e}")
+        return False
+
+
 def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
                        covered: float = 0.5) -> bool:
     """Has she already told him what THIS task is waiting for?
@@ -839,6 +873,12 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # An ambient job that hit a wall does not earn a text — he never
             # asked for it. It stays visible in the app, nothing more.
             if ambient_job(job):
+                continue
+            # Cheapest guard FIRST. This whole block used to compose the
+            # message before deciding whether to send it, so every poll of a
+            # stuck job burned a model call whose output was then discarded.
+            if asked_about_recently(job.get("goal", "")):
+                print(f"stuck job {job['id']}: asked about this moments ago, staying quiet")
                 continue
             said = anticipy._voice({
                 "situation": "you got most of the way through a task in their browser "
