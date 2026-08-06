@@ -284,6 +284,62 @@ _GOAL_VERBS = {
 }
 
 
+_NUMWORD = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+            "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+            "eleven": "11", "twelve": "12", "a": "1", "an": "1", "couple": "2",
+            "single": "1", "dozen": "12"}
+
+
+def _numbers(text: str) -> set:
+    """Every number in the text, as digits, however it was written.
+
+    "four" and "4" are the same fact. Without this, a goal saying "at 4 PM"
+    built from him saying "at four" would read as invented, and the check
+    would block correct work — which is worse than the bug it exists to stop.
+    """
+    out = set()
+    low = (text or "").lower()
+    for w in re.findall(r"[a-z0-9]+", low):
+        if w.isdigit():
+            out.add(str(int(w)))
+        elif w in _NUMWORD:
+            out.add(_NUMWORD[w])
+    return out
+
+
+def unsupported_counts(goal: str, *heard: str) -> list:
+    """Head counts in the goal that he never gave.
+
+    "For two" is what she reaches for when nobody said how many, and she does
+    it constantly: measured across every real job carrying a head count,
+    SEVEN OF TEN invented it. On 2026-08-06 that produced "Book lunch for two
+    at Cactus" from a line with no number of people in it — and the venue only
+    takes parties of six to eight, so the invented two was the reason the
+    whole booking failed.
+
+    A party size is not a detail to guess. Two people and six people are
+    different bookings, different tables, sometimes different restaurants.
+    """
+    if not goal:
+        return []
+    said = set()
+    for h in heard:
+        said |= _numbers(h)
+    out = []
+    for m in re.finditer(r"\b(?:for|party of|table for|group of)\s+"
+                         r"(one|two|three|four|five|six|seven|eight|nine|ten|"
+                         r"eleven|twelve|a|an|couple|dozen|\d+)\b",
+                         goal, re.I):
+        raw = m.group(1).lower()
+        digits = _NUMWORD.get(raw, raw if raw.isdigit() else None)
+        if digits is None:
+            continue
+        digits = str(int(digits))
+        if digits not in said:
+            out.append(f"how many people — you did not say {raw}")
+    return out[:2]
+
+
 def unsupported_names(goal: str, *heard: str) -> list:
     """Names in the goal that she never actually heard.
 

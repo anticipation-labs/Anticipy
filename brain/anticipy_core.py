@@ -31,6 +31,7 @@ from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
                            NOT_HIS, check_sufficiency, unsupported_names,
+                           unsupported_counts,
                            _extract_json)
 
 NAME = "Anticipy"
@@ -792,14 +793,17 @@ class Anticipy:
             # acting on it books the wrong restaurant in the wrong city. Folded
             # into the same gate: it becomes a question instead of a booking.
             try:
-                made_up = unsupported_names(
-                    decision.goal, line, " ".join(context or []),
-                    prev_line or "")
+                heard_bits = (decision.goal and [line, " ".join(context or []),
+                                                 prev_line or ""]) or []
+                made_up = (unsupported_names(decision.goal, *heard_bits)
+                           + unsupported_counts(decision.goal, *heard_bits))
             except Exception:
                 made_up = []
             if made_up:
-                gap = list(gap) + [f"which {n} you meant — I do not think you"
-                                   f" actually said that" for n in made_up]
+                gap = list(gap) + [
+                    n if n.startswith("how many")
+                    else f"which {n} you meant — I do not think you actually said that"
+                    for n in made_up]
             if gap:
                 decision = Decision(
                     decision=decision.decision, goal=decision.goal,
