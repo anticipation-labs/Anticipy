@@ -104,6 +104,60 @@ _DICTATION_INSTRUCT_RE = re.compile(
     r"(?:a|an|the|that|this|it)\b)", re.IGNORECASE)
 
 
+# ONE SIDE OF A CONVERSATION.
+#
+# On a call — AirPods, a handset, anything not on speaker — she hears only him.
+# Half of what he says is agreeing with, or repeating back, a person she cannot
+# hear. And a request he makes OF THEM looks exactly like a request he makes of
+# her: "if you don't mind putting that word in" became the task "Remind Sakib
+# about the word", when he was asking the man on the phone to put in a good
+# word for him. The obligation was inverted and the sentence was mangled.
+#
+# The tell is back-channel: "yeah", "ok", "exactly", "of course", "right".
+# Nobody talks that way to an assistant, or to themselves. It is what listening
+# sounds like.
+#
+# Measured on his own logs — a real 19-minute investor call against the rest of
+# the same day: 28% of lines in the call were almost entirely acknowledgement,
+# against 4% outside it. Seven times the rate, with nothing in between.
+_BACKCHANNEL = {
+    "yeah", "yep", "yes", "ok", "okay", "right", "sure", "exactly", "mhm", "mm",
+    "oh", "of", "course", "pardon", "got", "it", "i", "see", "no", "problem",
+    "for", "totally", "nice", "wow", "hmm", "cool", "alright", "bye", "thank",
+    "you", "thanks", "and", "then", "like", "so", "well", "um", "uh", "that", "s",
+}
+BACKCHANNEL_LINE = 0.8      # a line that is essentially pure acknowledgement
+CONVERSATION_SHARE = 0.20   # how many of the recent lines must look like that
+# NOT `CONVERSATION_WINDOW` — that name is already taken further down
+# this file, by an unrelated 120-line context bound. Mine was silently
+# overridden by it, so the detector read 120 lines instead of 10 and a
+# call from an hour ago still marked everything after it as a call.
+CALL_WINDOW_LINES = 10
+
+
+def _is_backchannel(line: str) -> bool:
+    words = re.findall(r"[a-z']+", (line or "").lower())
+    if not words:
+        return False
+    hits = sum(1 for w in words if w in _BACKCHANNEL)
+    return hits / len(words) >= BACKCHANNEL_LINE
+
+
+def in_conversation(recent: Optional[list]) -> bool:
+    """Is he mid-conversation with someone she cannot hear?
+
+    Deliberately not "is a call in progress" — she has no way to know that
+    today, and this covers the same ground from the speech itself: a person
+    across a table whose voice the pendant misses reads identically to a
+    person on the phone.
+    """
+    lines = [l for l in (recent or []) if l and l.strip()][-CALL_WINDOW_LINES:]
+    if len(lines) < 4:
+        return False               # too little to tell; claim nothing
+    hits = sum(1 for l in lines if _is_backchannel(l))
+    return hits / len(lines) >= CONVERSATION_SHARE
+
+
 def looks_like_dictation(line: str) -> bool:
     """Deterministic pre-filter for the unmistakable case only. Anything it
     is unsure about returns False and is left to the model's classification —
@@ -472,7 +526,8 @@ class Anticipy:
         decision = self._decide(line, mem, prev_line=prev_line, convo=context,
                                 prev_addressee=prev_addressee, dictated=dictated,
                                 speaker=speaker, speaker_name=speaker_name,
-                                link_candidates=link_candidates)
+                                link_candidates=link_candidates,
+                                mid_conversation=in_conversation(context))
         # The EFFECTIVE addressee — the one her behaviour actually keys on,
         # written back so the event record shows what was applied. An
         # explicit line (he texted/typed it AT her) is assistant by
@@ -833,7 +888,8 @@ class Anticipy:
                 dictated: bool = False,
                 speaker: Optional[str] = None,
                 speaker_name: Optional[str] = None,
-                link_candidates: Optional[list[str]] = None) -> Decision:
+                link_candidates: Optional[list[str]] = None,
+                mid_conversation: bool = False) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
             prompt = line
@@ -856,6 +912,18 @@ class Anticipy:
             if dictated:
                 prompt = (f"{prompt}\n(Pre-check: this line reads as machine "
                           f"dictation — a long fluent run of instruction-prose.)")
+            # MEASURED, not guessed: a fifth or more of his recent lines were
+            # pure acknowledgement, which is what listening sounds like. He is
+            # talking WITH someone whose side never reached the microphone.
+            if mid_conversation:
+                prompt = (f"{prompt}\n(Pre-check: he is mid-conversation with "
+                          f"someone whose side you CANNOT hear — a fifth of his "
+                          f"recent lines are pure acknowledgement. So \"you\" in "
+                          f"his words almost certainly means THAT PERSON, not "
+                          f"you; a request he makes is a request OF THEM, and "
+                          f"the obligation is theirs. He may also be repeating "
+                          f"back what they just said, which is not his intent. "
+                          f"Only take on what he plainly commits HIMSELF to.)")
             # The phone's LOCAL voice verdict — measured evidence, stronger
             # than anything wording can imply. It rides in as context the
             # model must weigh: "I'll get into it" in someone else's voice
