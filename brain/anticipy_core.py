@@ -667,7 +667,23 @@ class Anticipy:
         # where the same model gets it right, and only for work about to be
         # started. Anything it returns joins missing and falls into the gate
         # immediately below, which already knows what to do with it.
-        if decision.decision == "act" and decision.goal and not explicit:
+        # NOT when this plan is already on his desk. The live dinner proof
+        # caught this immediately: the plan was raised, he then said "can you
+        # book dinner for 7pm tomorrow", and a fresh sufficiency question
+        # ("which Cactus Club Park location?") went out as a SECOND text about
+        # one dinner. Whatever is underspecified about a plan she has already
+        # spoken to him about, a second question is not how it gets fixed —
+        # one plan, one voice. The dedupe that knows this runs later, so the
+        # check has to consult it here rather than assume it will be reached.
+        already = None
+        if decision.decision == "act" and decision.goal:
+            try:
+                already = (self._same_pending(decision.goal)
+                           or self._refines_pending(decision.goal)
+                           or (self._open_plan and self._open_plan[0]))
+            except Exception:
+                already = None
+        if decision.decision == "act" and decision.goal and not explicit and not already:
             try:
                 gap = check_sufficiency(self.llm, decision.goal)
             except Exception:

@@ -44,10 +44,23 @@ committing, exactly as much as a full sentence would be.
   specific thing, and carry every detail they gave (the event, the day).
 - "ask": help is clearly wanted but one missing detail blocks starting — the
   single question you'd lean over and ask.
+  A THING HE SAYS HE HAS TO DO IS THE WHOLE JOB. "I have to email Priya
+  about the invoice", "I've gotta call the dentist back", "I still need to
+  send that deposit" — this is how people voice a real errand, and it is
+  precisely what you exist to catch. It being HIS obligation, and stated to
+  nobody in particular, is not a reason to stay out of it; it is the reason
+  to get involved. Never dismiss one of these as thinking aloud.
 - "ignore": a great assistant stays quiet: chatter, venting, jokes, questions
   aimed at other people, facts merely mentioned, and commitments that belong
   to someone else. Everything is remembered regardless; ignore only means no
   task right now.
+  The line between a to-do and a mere wish is whether there is a REAL,
+  FINISHABLE act at the end of it — something you could tell somebody had
+  been done. "I have to email Priya" finishes. "I should get to the gym
+  more", "I need to be better about this", "we should hang out sometime" do
+  not: no act, no anchor, nothing to complete. Those stay quiet. And this is
+  about the ACT, never the verb — "have to", "need to", "gotta", "should"
+  and "must" all mean the same thing and none of them decides anything.
 
 Separately from the decision, answer WHO the owner is talking to right now
 — "addressee". The pendant hears everything, so a lot of what reaches you
