@@ -487,34 +487,40 @@ def _words(text: str) -> list:
 
 
 def longest_shared_run(a: str, b: str) -> int:
-    """The longest run of words these two share, in order, unbroken.
+    """How many words these two share, IN ORDER, gaps allowed.
 
-    Overlap alone is the wrong measure here: "yeah Cactus Club at 7" shares
-    plenty of words with "got it, booking Cactus Club Park Royal for two at 7"
-    and is a genuine confirmation, not an echo. Reading a message ALOUD is
-    different in kind — it produces a long unbroken run, because that is what
-    reading is.
+    This was a strictly contiguous run, and it failed on the very first real
+    pair it was tested against. She had stored "i don't have mother's contact
+    info can you send that over"; he read it back as "I don't have YOUR
+    mother's contact can you send it over". One inserted word cut the
+    unbroken run from nine to three and the echo sailed through.
+
+    Nobody reads a sentence back word-perfect, and ASR guarantees they will
+    not: small words get inserted, dropped and swapped. What survives is the
+    ORDER. So gaps are allowed and order is not — which is exactly the thing
+    that separates reading a message aloud from happening to use some of the
+    same words.
     """
     x, y = _words(a), _words(b)
     if not x or not y:
         return 0
-    best = 0
     prev = [0] * (len(y) + 1)
     for i in range(1, len(x) + 1):
         cur = [0] * (len(y) + 1)
         for j in range(1, len(y) + 1):
-            if x[i - 1] == y[j - 1]:
-                cur[j] = prev[j - 1] + 1
-                if cur[j] > best:
-                    best = cur[j]
+            cur[j] = prev[j - 1] + 1 if x[i - 1] == y[j - 1] else max(prev[j], cur[j - 1])
         prev = cur
-    return best
+    return prev[len(y)]
 
 
-# Six words in a row is far past coincidence and is what reading a sentence
-# out loud looks like. Below this, shared wording is just people talking about
-# the same thing, which is normal and must never be silenced.
+# Measured on real pairs from his own logs. The two genuine echoes score 9
+# and 16 shared words in order, at 0.82 and 0.70 of his line; every genuine
+# non-echo — a confirmation, a correction, the same topic in his own words,
+# the same words rearranged — scores 1, 1, 2, 3, 4 and 5. Six separates them
+# with room on both sides. The fraction is the second guard, so a long ramble
+# that happens to contain six scattered matches is not mistaken for reading.
 ECHO_RUN = 6
+ECHO_FRACTION = 0.6
 
 
 def is_echo_of_her(line: str, minutes: float = 30.0) -> bool:
@@ -541,8 +547,10 @@ def is_echo_of_her(line: str, minutes: float = 30.0) -> bool:
                            "perPage": 40, "sort": "-created"}, timeout=10)
         if not r.ok:
             return False
+        mine = len(_words(line))
         for ev in r.json().get("items", []):
-            if longest_shared_run(line, ev.get("text", "")) >= ECHO_RUN:
+            shared = longest_shared_run(line, ev.get("text", ""))
+            if shared >= ECHO_RUN and shared / max(1, mine) >= ECHO_FRACTION:
                 return True
     except Exception as e:
         print(f"echo check failed: {e}")

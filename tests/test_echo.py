@@ -61,9 +61,39 @@ def test_the_august_data_echo(monkeypatch):
 
 
 def test_the_mothers_contact_echo(monkeypatch):
+    """The stored text, VERBATIM from the events table — not the version in
+    the screenshot.
+
+    This test originally used the SMS wording, which reads "your mother's".
+    What she actually stored has no "your", and that single inserted word cut
+    the contiguous run from nine to three and let the echo straight through
+    on live data. Fixtures now come from the database, not from what a
+    message looked like on a phone."""
     monkeypatch.setattr(W.pb, "get", backend(said(
-        "hey, i don't have your mother's contact info. can you send that over?"))[0])
+        "i don't have mother's contact info—can you send that over?"))[0])
     assert W.is_echo_of_her("I don't have your mother's contact can you send it over") is True
+
+
+def test_small_words_inserted_dropped_and_swapped_still_echo(monkeypatch):
+    """Nobody reads a sentence back word-perfect, and ASR guarantees it. What
+    survives is the ORDER, which is what actually separates reading aloud from
+    sharing some vocabulary."""
+    hers = "i'll put that together, then send it to you before it goes out to the team"
+    monkeypatch.setattr(W.pb, "get", backend(said(hers))[0])
+    assert W.is_echo_of_her(
+        "I got a text message saying hey I'll put that together then send it "
+        "to you before it goes out to the team") is True
+
+
+def test_a_long_ramble_sharing_scattered_words_is_not_an_echo(monkeypatch):
+    """The second guard. Order alone is not enough if his line is long enough
+    to accidentally contain six of her words in sequence."""
+    monkeypatch.setattr(W.pb, "get", backend(said(
+        "i'll put that together, then send it to you before it goes out to the team"))[0])
+    his = ("so anyway I was thinking that we should probably put together a plan and "
+           "then figure out what to send over to everyone else about the whole thing "
+           "before it all goes out to the wider group next week sometime")
+    assert W.is_echo_of_her(his) is False
 
 
 def test_the_team_email_echo(monkeypatch):
