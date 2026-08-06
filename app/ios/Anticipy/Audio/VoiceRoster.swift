@@ -167,12 +167,26 @@ final class VoiceRoster {
             // unknown and teaches the roster nothing — one bad row poisons
             // every future match.
             let ownerScore = scores.first { $0.1 == "owner" }?.0 ?? 0
-            let ambiguous = ownerScore >= (Self.match - 0.15)
+            // With nobody enrolled there is no owner score, so nothing ever
+            // looked ambiguous and EVERY utterance became a brand new person:
+            // 195 identities across 200 real lines, 97% of them seen exactly
+            // once. You cannot say whose voice this is not until you know
+            // whose voice his is.
+            let noOwnerToCompareAgainst = (owner == nil)
+            let ambiguous = noOwnerToCompareAgainst || ownerScore >= (Self.match - 0.15)
             if learn && !ambiguous && best.0 < Self.match {
                 let id = "v\(people.count + 1)"
                 people[id] = Person(vec: vec, name: nil, heard: 1)
                 save()
-                return Verdict(tag: "other:\(id)", id: id, name: nil,
+                // FILED, BUT NOT CLAIMED. Keeping the print means this voice
+                // can be recognised tomorrow, which is the point of a roster.
+                // Reporting it as "other:<id>" was the mistake: on the wire
+                // that is indistinguishable from a CONFIDENT match to someone
+                // known, and the brain reasonably read it as "this is not
+                // him" — so his own to-dos were handed to a stranger and
+                // dropped. An unrecognised voice is not evidence of anything;
+                // it is the absence of evidence, and it says so.
+                return Verdict(tag: "unknown", id: id, name: nil,
                                score: best.0, confident: false)
             }
             return Verdict(tag: "unknown", id: nil, name: nil,

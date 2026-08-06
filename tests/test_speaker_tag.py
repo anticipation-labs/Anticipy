@@ -108,11 +108,41 @@ def test_a_named_person_reaches_the_model_by_name():
     assert "Sarah" in p and "not him" in p
 
 
-def test_a_bare_voice_id_is_not_treated_as_a_name():
+def test_a_bare_voice_id_is_NO_VERDICT_not_someone_else():
+    """AMENDED 2026-08-06, on production evidence.
+
+    This test used to require that "other:v2" reach the model as "NOT the
+    owner". That was wrong, and it cost him real work.
+
+    The roster emits `other:<id>` in two opposite situations that look
+    identical on the wire: a CONFIDENT match to someone it knows, and a brand
+    new voice it has never heard and has just filed. VoiceRoster carries a
+    `confident` flag distinguishing them and throws it away before sending.
+
+    Measured on 200 real tagged lines: 195 distinct identities, 97% of them
+    seen exactly once, the owner recognised twice. He has never enrolled, so
+    there is no voiceprint to match against and every utterance becomes a new
+    stranger. Both of the "I have to email Priya" lines she ignored were
+    tagged other:v210 and other:v215 — and the triage prompt rightly treats a
+    first-person commitment from someone who is NOT the owner as that
+    person's promise. His own to-dos were being handed to a stranger.
+
+    Failing to recognise a voice is not the same as recognising a different
+    one. A bare auto-generated id is no verdict.
+    """
     a, llm = _anticipy(IGNORE)
     a.hear("I'll grab the tickets", speaker="other:v2")
     p = llm.triage_prompts[0]
-    assert "NOT the owner" in p and "v2" not in p
+    assert "Voice check" not in p, "an unplaced voice must not speak for him"
+    assert "v2" not in p
+
+
+def test_a_NAMED_other_is_still_real_evidence():
+    """The half that must keep working: she knows who this is."""
+    a, llm = _anticipy(IGNORE)
+    a.hear("I'll grab the tickets", speaker="other:Sarah")
+    p = llm.triage_prompts[0]
+    assert "NOT the owner" in p or "Sarah" in p
 
 
 def test_unknown_from_the_roster_is_no_verdict():

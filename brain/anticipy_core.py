@@ -442,9 +442,31 @@ class Anticipy:
             _, _, who = speaker.partition(":")
             who = who.strip()
             # A bare local id ("v2") names nobody; a real name does.
-            if who and not re.fullmatch(r"v\d+", who):
-                speaker_name = who
-            speaker = "other"
+            if not who or not re.fullmatch(r"v\d+", who):
+                # Bare "other" is the roster saying it is confident this is
+                # not him. A NAME is that plus who. Both are evidence.
+                speaker_name = who or None
+                speaker = "other"
+            else:
+                # AN AUTO-GENERATED ID IS NOT A PERSON. "other:v215" means the
+                # roster could not place this voice, so it filed a new one —
+                # and failing to recognise a voice is not the same thing as
+                # recognising a different one.
+                #
+                # Passed through as "other" it became strong evidence, because
+                # the triage prompt rightly treats a first-person commitment
+                # from someone who is NOT the owner as that person's promise.
+                # So his own to-dos were being handed to a stranger. Both of
+                # the "I have to email Priya" lines she ignored were tagged
+                # other:v210 and other:v215.
+                #
+                # Measured on 200 real tagged lines: 195 distinct identities,
+                # 97% of them seen exactly once, and the owner recognised
+                # twice. He has never enrolled, so there is no voiceprint to
+                # match against and every utterance becomes a new stranger. A
+                # signal that wrong is worse than no signal, and no verdict is
+                # the state the honesty wall was built for.
+                speaker = None
         else:
             speaker = None
         decision = self._decide(line, mem, prev_line=prev_line, convo=context,
