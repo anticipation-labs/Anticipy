@@ -721,6 +721,70 @@ _KIND_TO_DECISION = {"ask": "ask", "act": "act", "clock": "clock",
                      "ambient_act": "act"}
 
 
+# She has raised it twice and he has not resolved it. A third time is not
+# diligence, it is nagging, and it is the difference between an assistant and
+# an alarm clock. Deliberately small: two is one more chance than one.
+NAG_LIMIT = 2
+# Long enough to span the way a real question actually decays. The Cactus
+# dinner was raised on the 4th, the 5th and the 6th, each time as a brand-new
+# open loop with a brand-new id, so every same-day guard passed cleanly.
+NAG_WINDOW_DAYS = 14
+# How much of the goal a past message must cover to be about the same thing.
+NAG_OVERLAP = 0.34
+
+
+def raised_and_ignored(goal: str, text: str = "") -> bool:
+    """Has she already put this to him more than once, and got nowhere?
+
+    Every existing guard is same-day and keyed on an open loop's ID. A loop
+    gets a fresh id each time the subject comes up in conversation, so the
+    same dinner produced a new loop on three consecutive days and every guard
+    waved it through:
+
+      Aug 4 15:02  "just checking in about our plan to go to Cactus today..."
+      Aug 4 21:32  "Just confirming for the dinner reservation, what date..."
+      Aug 5 01:57  "just confirming for tomorrow night, what time and where..."
+      Aug 5 21:35  "Just confirming for dinner tomorrow at Cactus Park at 7"
+      Aug 6 01:37  "Just confirming for tomorrow: Cactus Club Park Royal at 2:07 PM?"
+
+    So this asks the only question that actually generalises: how many times
+    have I said something about THIS, ever. Not "today", and not keyed to an
+    id that changes. Silence, twice over, is an answer.
+    """
+    goal = (goal or "").strip()
+    if not goal:
+        return False
+    want = _content_words(goal)
+    if not want:
+        return False
+    try:
+        since = (datetime.now(timezone.utc)
+                 - timedelta(days=NAG_WINDOW_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": f'kind="anticipy_says" && created>="{since}"',
+                           "perPage": 200, "sort": "-created"}, timeout=10)
+        if not r.ok:
+            return False
+        seen = 0
+        for ev in r.json().get("items", []):
+            said = _content_words((ev.get("goal") or "") + " " + (ev.get("text") or ""))
+            shared = want & said
+            # Measured on the real five, against four real unrelated subjects.
+            # Same dinner scored 0.29, 0.43, 0.57, 0.71, 0.71; Marcus, the car
+            # insurance, the Priya email and the headphones all scored 0.00.
+            # The gap is the whole width of the range, so the threshold sits
+            # in it rather than at either edge — and only two hits are needed,
+            # so catching four of the five is ample. The absolute floor stops
+            # a short goal from tripping on one generic word.
+            if len(shared) >= 2 and len(shared) / len(want) >= NAG_OVERLAP:
+                seen += 1
+                if seen >= NAG_LIMIT:
+                    return True
+    except Exception as e:
+        print(f"nag check failed: {e}")
+    return False
+
+
 def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     """May she say this unprompted? Only if she has not already — and, for
     speech born from OVERHEARD plans (kind="ambient_act"), only in waking
@@ -732,6 +796,10 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
         hour = datetime.now(CLOCK_TZ).hour
         if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
             return False
+    # Twice with no resolution is where diligence turns into nagging.
+    if raised_and_ignored(goal, text):
+        print(f"quiet: already put this to him twice with no answer -> {goal[:60]!r}")
+        return False
     return not already_raised(goal, text,
                               decision=_KIND_TO_DECISION.get(kind))
 
