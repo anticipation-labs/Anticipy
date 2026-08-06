@@ -27,7 +27,7 @@ globalThis.chrome = globalThis.chrome || {
   runtime: {}, debugger: {}, tabGroups: {}, notifications: {}, alarms: {},
 };
 
-const { planRun, planBlock, pageFingerprint } = await import(join(ext, "agent_loop.js"));
+const { planRun, planBlock, pageFingerprint, isAuthored, AUTHORED_WORDS } = await import(join(ext, "agent_loop.js"));
 
 let pass = 0, fail = 0;
 const realFetch = globalThis.fetch;
@@ -149,6 +149,61 @@ check(/if \(!researched\)/.test(loopSrc),
       "it researches before giving up");
 check(/researched = true;/.test(loopSrc),
       "and researches only once per run");
+
+
+// ------------------------------ words she wrote vs facts he gave
+
+// She composed a whole email and pressed Send under his name. Told as a RULE
+// in the agent prompt this changed nothing — measured, 3 of 3 still clicked
+// Send. So it is a stop, and these pin where the line sits.
+const EMAIL = "Hi Priya, just wanted to follow up on the invoice. Could you let me know the status when you get a chance? Thanks, Omar";
+check(isAuthored(EMAIL, "Email Priya about the invoice", ""),
+      "a composed message body is HERS and must be shown");
+check(!isAuthored("Omar Ebrahim", "Book dinner for two at Cactus Club tomorrow at 7 PM", ""),
+      "his own name typed into a form is not composition");
+check(!isAuthored("7:00 PM", "Book dinner for two at 7pm", ""), "a time is not composition");
+check(!isAuthored("omarkebrahim@gmail.com", "Email omarkebrahim@gmail.com the invoice", ""),
+      "an address he gave is not composition");
+check(!isAuthored("noise cancelling headphones under 400 dollars",
+                  "Research noise cancelling headphones under 400 dollars", ""),
+      "a search built from his own goal is not composition");
+// LONG but still his: caught by mutation testing. Every other "not
+// composition" case here is short, so making isAuthored return true for
+// anything long left the suite green while breaking the actual distinction.
+check(!isAuthored(
+        "noise cancelling headphones under 400 dollars for travel and commuting on long flights",
+        "Research the best noise cancelling headphones under 400 dollars for travel and "
+        + "commuting on long flights", ""),
+      "a LONG value made of his own words is still not composition");
+check(!isAuthored("book a table for two", "book a table for two at seven", ""),
+      "anything short is never composition");
+check(isAuthored("Dear Sir or Madam, I am writing to enquire about the availability of your "
+                 + "premises for a private event later this month, and would welcome a call.",
+                 "ask about venue hire", ""),
+      "long prose she invented is composition even when the goal is short");
+check(AUTHORED_WORDS >= 10, "the threshold sits past anything he could have dictated as a field");
+
+const loop2 = readFileSync(join(ext, "agent_loop.js"), "utf8");
+check(/if \(!draftShown && isAuthored\(decision\.text, goal, scope\)\)/.test(loop2),
+      "the stop is wired into the type path");
+check(/draftShown = true;/.test(loop2), "and it only ever fires once per run");
+const stopIdx = loop2.indexOf("if (!draftShown && isAuthored");
+const enterIdx = loop2.indexOf("await pressEnter(tab.id);", stopIdx);
+check(stopIdx > 0 && enterIdx > stopIdx, "it stops BEFORE the keystroke that commits");
+
+// ------------------------------ the field's own verdict
+const pm = readFileSync(join(ext, "page_map.js"), "utf8");
+check(/window\.__anticipyValidity/.test(pm), "the page exposes its own validity verdict");
+const vBlock = pm.slice(pm.indexOf("window.__anticipyValidity"),
+                        pm.indexOf("window.__anticipyClear"));
+check(/activeEditable\(\) \|\| window\.__anticipyMap\[idx\]/.test(vBlock),
+      "validated on the field that actually received the text, not the mapped placeholder");
+check(/checkValidity/.test(pm) && !/@|gmail|email address regex/i.test(
+        pm.slice(pm.indexOf("__anticipyValidity"), pm.indexOf("__anticipyValidity") + 900)),
+      "it asks the browser rather than knowing about formats itself");
+const bad = loop2.indexOf("const bad = await fieldRejects");
+const enter2 = loop2.indexOf("await pressEnter(tab.id);", bad);
+check(bad > 0 && enter2 > bad, "a rejected value is never committed with Enter");
 
 globalThis.fetch = realFetch;
 console.log(`\ntest_planner: ${pass} passed, ${fail} failed`);

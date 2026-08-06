@@ -167,6 +167,34 @@
     return document.activeElement === el;
   };
 
+  // Does the field itself reject what is now in it?
+  //
+  // Asked of the PAGE, never decided by us: an <input type="email"> already
+  // knows that the bare word "Priya" is not an address, and type=tel, type=url,
+  // pattern= and required= all know their own rules. Constraint validation is
+  // the browser handing us that verdict. No site knowledge, no list of formats,
+  // and it works on every page that declares anything about its fields.
+  //
+  // Resolved the same way as clearing and typing — through activeEditable()
+  // first — because when a dialog steals focus the value went into THAT field,
+  // and validating the mapped placeholder would be checking the wrong box.
+  window.__anticipyValidity = (idx) => {
+    const el = activeEditable() || window.__anticipyMap[idx];
+    if (!el || typeof el.checkValidity !== "function") return null;
+    if (el.checkValidity()) return null;
+    const v = el.validity || {};
+    const why = v.typeMismatch ? "is not a valid " + (el.type || "value")
+      : v.patternMismatch ? "does not match the format this field requires"
+      : v.valueMissing ? "is required and is empty"
+      : (v.rangeUnderflow || v.rangeOverflow) ? "is outside the allowed range"
+      : (v.tooShort || v.tooLong) ? "is the wrong length"
+      : "is not accepted by this field";
+    return { why: why,
+             type: el.type || el.tagName.toLowerCase(),
+             message: String(el.validationMessage || "").slice(0, 120),
+             value: String(el.value || "").slice(0, 60) };
+  };
+
   window.__anticipyClear = (idx) => {
     const el = activeEditable() || window.__anticipyMap[idx];
     if (!el) return false;

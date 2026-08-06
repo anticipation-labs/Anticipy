@@ -81,6 +81,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
       content: (() => {
         const authLine = authorized
           ? `WHAT THEY AGREED TO (their one answer, already given):\n${scope || goal}\nYou have their authority for all of it, to the end. Only a MATERIAL difference from the above may stop you.`
+            + `\n\nWORDS YOU WROTE ARE NOT WORDS THEY APPROVED. They approved the TASK. Anything you compose yourself — the body of a message, a subject line, a note, a comment, a description — they have never seen. If you are about to hand authored text of yours to ANOTHER PERSON, stop first with needs_user and put the exact text in the reason so they can read it. That is not asking permission again; they already gave that. It is showing them what is about to go out in their name.\nThis does NOT apply to facts they gave you. Their own name, date, time, party size, address, a link they specified — putting those into a form is carrying out the task, not writing on their behalf. Fill those in and keep going.\nThe test is authorship, not danger: did YOU write it, and is it leaving for someone who is not them.`
           : `NOT YET AGREED. They have not answered yet, so do everything that is reversible — fill the form completely — and then reply needs_user saying it is ready and exactly what pressing the final button would commit them to.`;
         // Who the owner is. Every booking, reservation and signup form asks
         // for the same identity; without it a run reaches the form and dies.
@@ -551,6 +552,60 @@ export function pageFingerprint(state) {
   return `${st.url || ""}|${(st.elements || "").length}|${(st.text || "").length}`;
 }
 
+/// Did the agent WRITE this, or is it carrying something the owner gave?
+///
+/// The distinction that matters before anything leaves for another person.
+/// Their own name, a date, a party size, a link they specified — putting those
+/// into a form is carrying out the task. A message body is not: those are the
+/// agent's words, going out under their name, and they have never seen them.
+///
+/// Told to the model as a rule, this changed NOTHING — measured, 3 runs out of
+/// 3 it still clicked Send on a fully composed email. So it is not a rule, it
+/// is a stop. Twelve words is past any field the owner could have dictated and
+/// well into prose; anything largely echoing the goal is not authored at all.
+export const AUTHORED_WORDS = 12;
+
+export function isAuthored(text, goal, scope) {
+  const w = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (w.length < AUTHORED_WORDS) return false;
+  const known = new Set(
+    `${goal || ""} ${scope || ""}`.toLowerCase().match(/[a-z0-9']+/g) || []);
+  if (!known.size) return true;
+  const lower = w.map((x) => x.toLowerCase().replace(/[^a-z0-9']/g, ""));
+  const fromGoal = lower.filter((x) => x && known.has(x)).length;
+  // Mostly the owner's own words rearranged is not composition.
+  return (fromGoal / w.length) < 0.6;
+}
+
+/// Ask the PAGE whether what we just typed is acceptable in that field.
+///
+/// She typed the bare word "Priya" into Gmail's address box and pressed send.
+/// The instinct is to teach her about email addresses, which is the wrong
+/// shape of fix — it solves one field on one site and nothing else.
+///
+/// Every browser already carries this knowledge. An <input type="email"> knows
+/// "Priya" is not an address; a type="tel", a type="url", a type="number", a
+/// pattern= or a required= all know their own rules; and the browser exposes
+/// the verdict through constraint validation. So we ask the field instead of
+/// deciding for it: no site knowledge, no list of formats, nothing to keep up
+/// to date, and it covers every field on every page that declares anything at
+/// all about itself.
+///
+/// Fields that declare nothing — a plain type="text" — validate as fine, which
+/// is correct: the page is not asking for a shape, so there is none to break.
+async function fieldRejects(tabId, index) {
+  try {
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (i) => window.__anticipyValidity && window.__anticipyValidity(i),
+      args: [index],
+    });
+    return (res && res.result) || null;
+  } catch (e) {
+    return null;                 // cannot ask -> behave exactly as before
+  }
+}
+
 // WHEN IT GETS STUCK, GO FIND OUT HOW — do not just stop.
 //
 // The loop gave up flatly after 18 steps on one page. That is the right
@@ -741,6 +796,11 @@ export async function runAgentGoal(goal, opts) {
   // One research attempt per run. A second dead end after looking it up is
   // a real dead end, and looping on it burns money and patience.
   let researched = false;
+  // How many times a field has thrown our value back. Three is not a typo,
+  // it is a task that cannot be completed with what we know.
+  let badFields = 0;
+  // Whether the owner has already been shown text this run composed.
+  let draftShown = false;
   // Last seen shape of the page, for telling real work from flailing.
   let lastFingerprint = "";
   // Steps spent on one page without navigating anywhere. A run that is going
@@ -1087,6 +1147,32 @@ export async function runAgentGoal(goal, opts) {
             });
           } catch (e) { /* best effort */ }
           await trustedType(tab.id, decision.text || "", decision.index);
+          // Never commit a value the field itself rejects. Pressing Enter is
+          // what turns a wrong value into a sent thing, so the check goes
+          // exactly here, between typing and committing.
+          const bad = await fieldRejects(tab.id, decision.index);
+          if (bad) {
+            badFields++;
+            history.push(`step ${step}: the field REFUSED that value — "${bad.value}" ${bad.why}`
+              + (bad.message ? ` (the page says: ${bad.message})` : "")
+              + `. Do NOT submit this form. Either put a real ${bad.type} in, or if you do not have one, stop with needs_user and say exactly what you need.`);
+            stuckStreak++;
+            continue;                       // not submitted, and not our guess to fix
+          }
+          // The stop. Not "is this button dangerous" — the model cannot be
+          // trusted with that question and was measured failing it. The moment
+          // the agent has composed something of its own, the run pauses ONCE
+          // and shows it, whatever the next click would have been. On resume
+          // the draft is part of what was agreed, so it reads as the owner's
+          // words and this never fires twice.
+          if (!draftShown && isAuthored(decision.text, goal, scope)) {
+            draftShown = true;
+            return (handBack = true) && {
+              status: "needs_user",
+              result: `Before this goes out in your name, here is what I wrote:\n\n${String(decision.text).slice(0, 900)}\n\nSay go and I'll send it, or tell me what to change.`,
+              tabId: tab.id,
+            };
+          }
           if (decision.enter !== false) {
             await new Promise((r) => setTimeout(r, 200));
             await pressEnter(tab.id);
