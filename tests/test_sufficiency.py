@@ -153,3 +153,22 @@ def test_the_gate_keeps_the_second_key():
     block = src[i:i + 320]
     assert "owes=decision.owes" in block
     assert "continues=decision.continues" in block
+
+
+def test_an_unrelated_pending_job_does_not_skip_the_check():
+    """The regression that let the Priya email out.
+
+    The first cut of the "already on his desk" guard also skipped whenever ANY
+    plan was open, which says nothing about the goal in hand. With an
+    unrelated email job pending, "Email Priya about the invoice" went straight
+    past the check: she never asked who Priya was, opened Gmail, typed the
+    word "Priya" into the address field, and pressed send.
+    """
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
+    i = src.index("already = None")
+    block = src[i:i + 500]
+    assert "_same_pending(decision.goal)" in block
+    assert "_refines_pending(decision.goal)" in block
+    assert "_open_plan" not in block, \
+        "a bare open plan is not evidence about THIS goal"

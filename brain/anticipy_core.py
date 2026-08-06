@@ -675,12 +675,20 @@ class Anticipy:
         # spoken to him about, a second question is not how it gets fixed —
         # one plan, one voice. The dedupe that knows this runs later, so the
         # check has to consult it here rather than assume it will be reached.
+        # ONLY when the pending thing is THIS goal. The first cut of this
+        # guard also skipped whenever ANY plan happened to be open
+        # (`self._open_plan`), which is not evidence about the goal in hand at
+        # all — and it cost him immediately. "Email Priya about the invoice"
+        # sailed straight past the check while an unrelated email job sat
+        # pending, so she never asked who Priya was, opened Gmail, typed the
+        # word "Priya" into the address field and pressed send. Both remaining
+        # tests are goal-specific and answer a question about THIS work; a bare
+        # open plan answers a question about some other work.
         already = None
         if decision.decision == "act" and decision.goal:
             try:
                 already = (self._same_pending(decision.goal)
-                           or self._refines_pending(decision.goal)
-                           or (self._open_plan and self._open_plan[0]))
+                           or self._refines_pending(decision.goal))
             except Exception:
                 already = None
         if decision.decision == "act" and decision.goal and not explicit and not already:
