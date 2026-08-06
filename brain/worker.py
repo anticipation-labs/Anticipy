@@ -482,6 +482,73 @@ def report_finished_jobs(anticipy) -> None:
         print(f"result report failed: {e}")
 
 
+def _words(text: str) -> list:
+    return re.findall(r"[a-z0-9']+", (text or "").lower())
+
+
+def longest_shared_run(a: str, b: str) -> int:
+    """The longest run of words these two share, in order, unbroken.
+
+    Overlap alone is the wrong measure here: "yeah Cactus Club at 7" shares
+    plenty of words with "got it, booking Cactus Club Park Royal for two at 7"
+    and is a genuine confirmation, not an echo. Reading a message ALOUD is
+    different in kind — it produces a long unbroken run, because that is what
+    reading is.
+    """
+    x, y = _words(a), _words(b)
+    if not x or not y:
+        return 0
+    best = 0
+    prev = [0] * (len(y) + 1)
+    for i in range(1, len(x) + 1):
+        cur = [0] * (len(y) + 1)
+        for j in range(1, len(y) + 1):
+            if x[i - 1] == y[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                if cur[j] > best:
+                    best = cur[j]
+        prev = cur
+    return best
+
+
+# Six words in a row is far past coincidence and is what reading a sentence
+# out loud looks like. Below this, shared wording is just people talking about
+# the same thing, which is normal and must never be silenced.
+ECHO_RUN = 6
+
+
+def is_echo_of_her(line: str, minutes: float = 30.0) -> bool:
+    """Is he simply reading back something SHE said?
+
+    He does it constantly while testing, and every time she has taken it as a
+    fresh instruction. On 2026-08-05 she texted "the August data is ready to
+    add in the spreadsheet"; he said that sentence out loud; she made a second
+    job out of it. Later she asked for "your mother's contact info", he
+    repeated it, and she made a job to go and get it.
+
+    Her own output is not a request. She has a record of everything she has
+    said — this reads it, rather than hoping the model notices.
+    """
+    line = (line or "").strip()
+    if len(_words(line)) < ECHO_RUN:
+        return False
+    try:
+        since = (datetime.now(timezone.utc)
+                 - timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": f'(kind="anticipy_says" || kind="anticipy_text")'
+                                     f' && created>="{since}"',
+                           "perPage": 40, "sort": "-created"}, timeout=10)
+        if not r.ok:
+            return False
+        for ev in r.json().get("items", []):
+            if longest_shared_run(line, ev.get("text", "")) >= ECHO_RUN:
+                return True
+    except Exception as e:
+        print(f"echo check failed: {e}")
+    return False
+
+
 def asked_about_recently(goal: str, minutes: float = 45.0) -> bool:
     """Did she already ask about THIS task a moment ago?
 
@@ -984,6 +1051,16 @@ def main() -> None:
                 # post-hoc mark that fails means the whole thing runs again.
                 if not claim(ev["id"]):
                     print(f"heard: {line!r} -> could not claim, retrying later")
+                    continue
+                # Her own words, read back at her, are not an instruction. He
+                # does this constantly while testing and every time she has
+                # treated it as a fresh order: she texted "the August data is
+                # ready to add in the spreadsheet", he said that sentence out
+                # loud, and she minted a second job from it. Checked before
+                # triage, so it costs a cheap read instead of a model call.
+                if is_echo_of_her(line):
+                    mark_processed(ev["id"], "ignore")
+                    print(f"heard: {line!r} -> that is her own message read back, ignoring")
                     continue
                 # What was already said in this conversation, so a question
                 # never arrives stripped of what it was about.
