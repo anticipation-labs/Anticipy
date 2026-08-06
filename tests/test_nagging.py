@@ -134,7 +134,7 @@ def test_the_gate_actually_consults_it(monkeypatch):
     original version of this test green because already_raised was answering
     for it."""
     monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
-    assert W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL) is False
+    assert W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock") is False
 
 
 def test_two_shared_words_is_the_floor_that_protects_other_subjects(monkeypatch):
@@ -159,3 +159,31 @@ def test_the_gate_still_lets_a_first_word_through(monkeypatch):
     monkeypatch.setattr(W.pb, "get", backend([])[0])
     assert W.SPEAK_ONCE("Heads up, the invoice is due Friday",
                         goal="Remind about the Friday invoice") is True
+
+
+def test_a_blocking_question_is_never_nagging(monkeypatch):
+    """The regression this fix caused, hours after shipping.
+
+    He said "I've gotta email Priya the invoice". The sufficiency check
+    correctly asked WHICH Priya — and the nag limit swallowed the question,
+    because "Priya", "email" and "invoice" had come up twice already that day.
+    He got a card reading "Quick question for you" and no question.
+
+    Nagging is outreach SHE started. A question blocking work HE started
+    seconds ago is the opposite: silencing it does not stop nagging, it
+    strands the task.
+    """
+    # THREE DAYS old, so the same-day guard cannot be the thing answering
+    # here. If this passes it is because the nag limit stood aside for a
+    # blocking question, which is the whole point.
+    monkeypatch.setattr(W.pb, "get", backend(
+        says(THE_FIVE, goal="Email Priya the invoice", days_ago=3))[0])
+    assert W.SPEAK_ONCE("Quick question — who is Priya?",
+                        goal="Email Priya the invoice", kind="ask") is True
+
+
+def test_speech_she_started_is_still_limited(monkeypatch):
+    """The half that must keep working. All five Cactus messages were clock."""
+    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
+    assert W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock") is False
+    assert W.SPEAK_ONCE("I can book that for you", goal=GOAL, kind="ambient_act") is False

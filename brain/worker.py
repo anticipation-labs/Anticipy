@@ -810,8 +810,21 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
         hour = datetime.now(CLOCK_TZ).hour
         if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
             return False
-    # Twice with no resolution is where diligence turns into nagging.
-    if raised_and_ignored(goal, text):
+    # NAGGING IS OUTREACH SHE STARTED. It is not a question that is blocking
+    # work HE started seconds ago.
+    #
+    # The first cut of this applied to every kind, and within hours it ate the
+    # thing it was never meant to touch: he said "I've gotta email Priya the
+    # invoice", the sufficiency check correctly asked WHICH Priya — and the nag
+    # limit swallowed the question, because the words "Priya", "email" and
+    # "invoice" had come up twice already that day. He got a card that said
+    # "Quick question for you" and no question.
+    #
+    # All five Cactus messages were kind="clock": she woke up and decided to
+    # raise something. That is the thing being limited. An "ask" is the
+    # opposite — he set the work in motion and she cannot finish without an
+    # answer. Silencing that does not stop nagging, it strands the task.
+    if kind in ("clock", "ambient_act") and raised_and_ignored(goal, text):
         print(f"quiet: already put this to him twice with no answer -> {goal[:60]!r}")
         return False
     return not already_raised(goal, text,
