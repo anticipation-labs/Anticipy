@@ -7,6 +7,7 @@ then asks the user to confirm anything irreversible (send/book/pay).
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, asdict
 from typing import Optional
 
@@ -268,6 +269,64 @@ class Brain:
             owes=owes,
             continues=continues,
         )
+
+
+# Verbs she is entitled to use; they are hers, not his.
+_GOAL_VERBS = {
+    "book", "email", "research", "add", "open", "send", "draft", "reschedule",
+    "prepare", "confirm", "remind", "check", "update", "find", "make", "pull",
+    "edit", "identify", "fix", "look", "call", "text", "order", "buy", "cancel",
+    "schedule", "invite", "reply", "post", "share", "upload", "review", "plan",
+    "the", "a", "an", "and", "or", "for", "to", "at", "of", "on", "in", "with",
+    "i", "it", "this", "that", "today", "tomorrow", "tonight", "morning",
+    "afternoon", "evening", "week", "month", "day", "days", "time", "table",
+    "dinner", "lunch", "breakfast", "meeting", "invoice", "reservation",
+}
+
+
+def unsupported_names(goal: str, *heard: str) -> list:
+    """Names in the goal that she never actually heard.
+
+    On 2026-08-06 he said, garbled: "Hey we should go out for dinner you
+    haven't really shit let's do it but". The goal came back "Book a table at
+    EARL'S for dinner THE DAY AFTER TOMORROW", and the first appearance of the
+    word Earl's anywhere in the system — his speech, the conversation, the
+    segment, memory — was that goal. She invented a restaurant, then texted him
+    a time and a party size nobody had mentioned, then spent 58 steps failing
+    to book it at a branch in Winnipeg.
+
+    Measured across the last fourteen real jobs, six carried a proper noun
+    that appears nowhere in what he said.
+
+    Only PROPER NOUNS are checked, and only against everything she was
+    actually given. Completing a name she half-heard is legitimate and stays
+    legitimate — "cactus" becoming "Cactus Club Cafe" is her knowing the
+    world. Producing "Earl's" from a sentence with no venue in it is not
+    knowing the world, it is filling a blank.
+    """
+    if not goal:
+        return []
+    hay = " ".join(h or "" for h in heard).lower()
+    out = []
+    # PHRASES, not words. "Cactus Club Cafe Park Royal" is ONE name, and she
+    # is entitled to complete it from "cactus" — knowing the world is the job.
+    # Checking word by word flagged "Club" and "Cafe" as inventions, which
+    # would have blocked a perfectly good booking. "Earl's" is a phrase whose
+    # every part is absent from everything she was given; that is the tell.
+    for phrase in re.findall(r"\b(?:[A-Z][\w']*)(?:\s+[A-Z][\w']*)*\b", goal):
+        words = [w for w in phrase.split()
+                 if w.lower().rstrip("'s") not in _GOAL_VERBS and len(w) > 2]
+        if not words:
+            continue
+        supported = False
+        for w in words:
+            low = w.lower().rstrip("'s").rstrip("s")
+            if low and (low in hay or w.lower() in hay):
+                supported = True
+                break
+        if not supported:
+            out.append(" ".join(words))
+    return out[:4]
 
 
 SUFFICIENCY_SYSTEM = """A task is about to be started in someone's browser, on

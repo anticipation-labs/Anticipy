@@ -30,7 +30,8 @@ from .llm import LLM, now_line
 from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
-                           NOT_HIS, check_sufficiency, _extract_json)
+                           NOT_HIS, check_sufficiency, unsupported_names,
+                           _extract_json)
 
 NAME = "Anticipy"
 
@@ -370,7 +371,9 @@ class Anticipy:
         # and "reserve a table at Cactus Club" share not one word). What ties
         # them together is that they are the same conversation. One plan under
         # discussion, one card on his desk, getting better as he talks.
-        self._open_plan: Optional[tuple[str, float]] = None
+        # (job id, when, the goal it was raised with). The GOAL is what makes
+        # "is this the same plan?" answerable here, without a backend read.
+        self._open_plan: Optional[tuple[str, float, str]] = None
 
     # ------------------------------------------------------------ hearing
 
@@ -766,6 +769,18 @@ class Anticipy:
             try:
                 already = (self._same_pending(decision.goal)
                            or self._refines_pending(decision.goal))
+                # And the plan she is already holding, IF it is this plan. The
+                # first cut skipped on any open plan at all, which let the
+                # Priya email past unasked. Deleting the check outright then
+                # broke the other direction: every refining line of one dinner
+                # ("Brooklyn one", "Saturday at one", "us four") re-ran the
+                # sufficiency check and came back as a fresh question, so the
+                # plan never became a card. Same plan, skip; different plan,
+                # ask.
+                if not already and self._open_plan:
+                    open_goal = self._open_plan[2] if len(self._open_plan) > 2 else ""
+                    if open_goal and self._same_plan(decision.goal, open_goal):
+                        already = self._open_plan[0]
             except Exception:
                 already = None
         if decision.decision == "act" and decision.goal and not explicit and not already:
@@ -773,6 +788,18 @@ class Anticipy:
                 gap = check_sufficiency(self.llm, decision.goal)
             except Exception:
                 gap = []
+            # A name she never heard is not a detail, it is an invention, and
+            # acting on it books the wrong restaurant in the wrong city. Folded
+            # into the same gate: it becomes a question instead of a booking.
+            try:
+                made_up = unsupported_names(
+                    decision.goal, line, " ".join(context or []),
+                    prev_line or "")
+            except Exception:
+                made_up = []
+            if made_up:
+                gap = list(gap) + [f"which {n} you meant — I do not think you"
+                                   f" actually said that" for n in made_up]
             if gap:
                 decision = Decision(
                     decision=decision.decision, goal=decision.goal,
@@ -1134,7 +1161,7 @@ class Anticipy:
                                 timeout=10)
                         except Exception:
                             pass
-                    self._open_plan = (job_id, time.time())
+                    self._open_plan = (job_id, time.time(), goal)
                     return job_id
 
         existing = self._same_pending(goal)
@@ -1177,7 +1204,7 @@ class Anticipy:
             if job_id and r.json().get("status") == "awaiting_confirm":
                 # From here until the conversation goes quiet, anything else
                 # consequential he says is this same plan firming up.
-                self._open_plan = (job_id, time.time())
+                self._open_plan = (job_id, time.time(), goal)
             return job_id
         except Exception:
             return None

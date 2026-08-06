@@ -172,3 +172,34 @@ def test_an_unrelated_pending_job_does_not_skip_the_check():
     assert "_refines_pending(decision.goal)" in block
     assert "_open_plan" not in block, \
         "a bare open plan is not evidence about THIS goal"
+
+
+def test_the_open_plan_skip_is_goal_specific_not_all_or_nothing():
+    """Both directions of the same mistake, one week apart in the same file.
+
+    Skipping the check whenever ANY plan was open let "Email Priya about the
+    invoice" past unasked — she opened Gmail and typed the word "Priya" into
+    the address field.
+
+    Deleting the check outright broke the opposite case: every refining line
+    of ONE dinner ("Brooklyn one", "Saturday at one", "it'll be us four")
+    re-ran sufficiency and came back a fresh question, so the plan never
+    became a card at all. The live Earls proof failed 2 of 2.
+
+    The answer is neither: skip only when the open plan IS this plan.
+    """
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
+    i = src.index("already = None")
+    block = src[i:i + 1400]
+    assert "_same_pending(decision.goal)" in block
+    assert "_refines_pending(decision.goal)" in block
+    assert "self._same_plan(decision.goal, open_goal)" in block, \
+        "an open plan may only skip the check when it is the SAME plan"
+    # And the branch must be REACHABLE. Mutation testing walked straight past
+    # the assertion above by replacing the condition with `if False:` — the
+    # line was still in the file, just dead.
+    assert "if not already and self._open_plan:" in block, \
+        "the goal-specific skip must actually be reachable"
+    # And the goal has to be carried, or the comparison has nothing to read.
+    assert "self._open_plan = (job_id, time.time(), goal)" in src
