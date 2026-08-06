@@ -29,7 +29,16 @@ async function writeHeaders() {
 
 const POLL_SECONDS = 5;
 const HEARTBEAT_SECONDS = 10;
-const STALE_JOB_MS = 2 * 60 * 1000; // running w/ no heartbeat -> requeued
+// A real task takes minutes: a booking, a spreadsheet, anything spanning two
+// sites. Two minutes declared live work abandoned and handed it to the next
+// sweep while it was still going. The heartbeat is meant to prevent that, but
+// it lives in an in-memory set that a service-worker restart empties.
+const STALE_JOB_MS = 8 * 60 * 1000; // running w/ no heartbeat -> requeued
+// Retrying is right. Retrying without end is not. A job that has been started
+// three times and finished none of them will not finish on the fourth — it
+// will just keep opening tabs and typing. On 2026-08-06 the same Priya email
+// ran about six times this way, because nothing counted.
+const MAX_ATTEMPTS = 3;
 
 // ---------------------------------------------------------------- pairing
 // Each install registers itself once with a 6-digit pair code. The phone app
@@ -142,9 +151,18 @@ async function requeueStaleJobs() {
   for (const j of items || []) {
     if (activeJobs.has(j.id)) continue; // this worker is running it right now
     const claimed = j.claimed_at ? Date.parse(j.claimed_at) : Date.parse(j.updated);
-    if (now - claimed > STALE_JOB_MS) {
-      await updateJob(j.id, { status: "queued", claimed_by: "", claimed_at: null });
+    if (now - claimed <= STALE_JOB_MS) continue;
+    const tries = Number(j.attempts) || 0;
+    if (tries >= MAX_ATTEMPTS) {
+      // Say so once, plainly, and stop. Leaving it queued would mean the next
+      // sweep picks it up again and we are back where we started.
+      await updateJob(j.id, {
+        status: "failed", claimed_by: "", claimed_at: null,
+        result: `I tried this ${tries} times and could not get it done. I have stopped rather than keep going.`,
+      });
+      continue;
     }
+    await updateJob(j.id, { status: "queued", claimed_by: "", claimed_at: null });
   }
 }
 
@@ -241,7 +259,18 @@ async function claimJob() {
   // This closes the race where concurrent poll() calls (SSE + alarm + worker
   // wake) would each spawn an agent loop for the same job.
   const me = agentId || "unknown";
-  await updateJob(job.id, { status: "running", claimed_by: me, claimed_at: new Date().toISOString() });
+  // Counted at the claim, which is the only place that means "started".
+  // Counting on failure would miss the case that actually bit: a job that
+  // never reaches an ending at all and is swept back to queued forever.
+  const tries = (Number(job.attempts) || 0) + 1;
+  if (tries > MAX_ATTEMPTS) {
+    await updateJob(job.id, {
+      status: "failed", claimed_by: "", claimed_at: null,
+      result: `I tried this ${tries - 1} times and could not get it done. I have stopped rather than keep going.`,
+    });
+    return null;
+  }
+  await updateJob(job.id, { status: "running", claimed_by: me, attempts: tries, claimed_at: new Date().toISOString() });
   const check = await fetch(`${BASE}/api/collections/jobs/records/${job.id}`,
     { headers: await writeHeaders() });
   if (!check.ok) return null;
