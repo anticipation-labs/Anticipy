@@ -132,3 +132,37 @@ def test_the_guard_runs_before_the_message_is_written():
     guard = block.index('asked_about_recently(job.get("goal", "")')
     compose = block.index("said = anticipy._voice({")
     assert guard < compose, "the cheap guard must come before the model call"
+
+
+def test_a_NEW_thing_to_say_is_never_swallowed_by_the_cooldown():
+    """The conflict between the two fixes, caught before it shipped.
+
+    The cooldown silences a question repeated. But the most important message
+    this path ever sends is the DRAFT of something about to go out in his
+    name — and it arrives on the same job and the same goal as whatever was
+    asked before it. Keyed on the goal alone, the anti-spam fix would have
+    eaten the very message the draft rule exists to deliver.
+
+    So quiet requires BOTH: asked recently, AND about to say the same thing.
+    """
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "brain", "worker.py")).read()
+    block = src[src.index("def ask_about_stuck_jobs"):]
+    block = block[:block.index("\ndef ", 10)]
+    i = block.index("asked_about_recently(job.get(")
+    guard = block[max(0, i - 260):i + 80]
+    assert "_last_blocker.get(job[\"id\"]) == blocker" in guard, \
+        "the cooldown must also require that the blocker is unchanged"
+    assert "_last_blocker[job[\"id\"]] = blocker" in block, \
+        "and it must record what it actually said, or it can never tell"
+
+
+def test_the_blocker_is_recorded_only_after_a_send_that_landed():
+    """Recording an ask that never left would mute the next real one."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "brain", "worker.py")).read()
+    block = src[src.index("def ask_about_stuck_jobs"):]
+    block = block[:block.index("\ndef ", 10)]
+    sendfail = block.index("send failed, not recording it as said")
+    record = block.index("_last_blocker[job[\"id\"]] = blocker")
+    assert sendfail < record, "the failed-send bail must come first"

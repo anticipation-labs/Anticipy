@@ -549,6 +549,12 @@ def is_echo_of_her(line: str, minutes: float = 30.0) -> bool:
     return False
 
 
+# What we last told him each job was waiting on. In memory only: a restart
+# costs at most one repeated message, where getting this wrong the other way
+# costs a draft he never sees.
+_last_blocker: dict = {}
+
+
 def asked_about_recently(goal: str, minutes: float = 45.0) -> bool:
     """Did she already ask about THIS task a moment ago?
 
@@ -1012,8 +1018,15 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # Cheapest guard FIRST. This whole block used to compose the
             # message before deciding whether to send it, so every poll of a
             # stuck job burned a model call whose output was then discarded.
-            if asked_about_recently(job.get("goal", "")):
-                print(f"stuck job {job['id']}: asked about this moments ago, staying quiet")
+            # The cooldown is for a question REPEATED. It must never swallow
+            # something new — and the most important message this path ever
+            # sends is the draft of something about to go out in his name,
+            # which arrives on the same job and the same goal as whatever was
+            # asked before it. Quiet only when we are about to say the same
+            # thing again.
+            if (_last_blocker.get(job["id"]) == blocker
+                    and asked_about_recently(job.get("goal", ""))):
+                print(f"stuck job {job['id']}: same thing again moments ago, staying quiet")
                 continue
             said = anticipy._voice({
                 "situation": "you got most of the way through a task in their browser "
@@ -1033,6 +1046,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             if not anticipy.notify_owner(said):
                 print(f"stuck job {job['id']}: send failed, not recording it as said")
                 continue
+            _last_blocker[job["id"]] = blocker
             post_event("anticipy_says", said, decision="needs_user",
                        goal=job.get("goal", ""))
             print(f"asked about stuck job {job['id']}: {said[:80]}")
