@@ -385,6 +385,167 @@ def unsupported_names(goal: str, *heard: str) -> list:
     return out[:4]
 
 
+# --------------------------------------------------------------------------
+# READING DATA INTO A MACHINE
+#
+# Three lines from Omar's own logs, every one of which became real jobs:
+#
+#     Pill 491 kill 492 kill 493 of your list
+#     Carson Michael and RV.help23 add that to the KTHAI list
+#     4546 4748 reply my inbox drive to Toby's email
+#
+# He was dictating into his laptop. The pendant overheard it. `looks_like_
+# dictation` misses all three: it is tuned for Wispr Flow's long fluent
+# instruction-prose, and these are short, garbled, number-dense fragments.
+#
+# MEASURED 2026-08-06 on google/gemini-2.5-flash — the model production
+# actually runs, confirmed via `railway variables --service worker`. Eight runs
+# per line: all three fired EIGHT TIMES OUT OF EIGHT. On the local deepseek
+# default they fired 3/8 and 2/8, which is why this was never caught here.
+#
+# What did NOT work: asking the model on its own (11/18 silenced, and the
+# KTHAI line 0/6 — because "add that to the list" IS a request, just one aimed
+# at a machine already doing it). What did NOT work either: deciding
+# mechanically (it silences "the flight is AC123" and "I need 2x4s", which are
+# real things people say).
+#
+# What works is mechanical evidence handed to the model as evidence, with the
+# model still making the call: 24/24 garbage silenced, 119/120 real speech
+# untouched. And because every one of the three carries evidence, the model is
+# only ever asked when there is something to look at — so an ordinary spoken
+# sentence costs nothing, and no evidence means no call and no change at all.
+# --------------------------------------------------------------------------
+
+# Ordinary ways speech really does fuse a number to letters. Everything else
+# with digits buried in it is an identifier, and people do not say identifiers
+# out loud to each other.
+_SPOKEN_NUMERIC_RE = re.compile(
+    r"^\d+(?:am|pm|st|nd|rd|th|s|k|m|b|x|hr|hrs|min|mins|sec|secs|kg|g|lb|lbs|"
+    r"ml|l|oz|ft|in|cm|mm|km|mi|c|f|pc|%)$", re.I)
+
+# A phone number read aloud to another person is speech. Seven, ten or eleven
+# digits is a phone number; it is the reason "text Priya on 604 555 1234" must
+# never be mistaken for reference numbers being read into a form.
+_PHONE_DIGIT_COUNTS = (7, 10, 11)
+
+
+def not_speech_evidence(line: str) -> list:
+    """Mechanical marks of text being read INTO something. Pure, no model.
+
+    This is EVIDENCE, never a verdict. Acting on it directly silences real
+    speech — measured, it kills "the flight is AC123 landing at 6am" and
+    "I need 2x4s and a 10mm bolt". It exists to give the judgement something
+    to look at, and to keep the judgement from being asked at all on the
+    ordinary sentences that make up almost everything he says.
+    """
+    text = line or ""
+    notes = []
+
+    # 1. Tokens that fuse letters and digits — usernames, codes, references.
+    ids = []
+    for raw in re.findall(r"\S+", text):
+        tok = raw.strip(".,!?;:\"'()[]{}")
+        if (tok and re.search(r"[A-Za-z]", tok) and re.search(r"\d", tok)
+                and not _SPOKEN_NUMERIC_RE.match(tok)):
+            ids.append(tok)
+    if ids:
+        notes.append("tokens that are not pronounceable words: "
+                     + ", ".join(ids[:6]))
+
+    # 2. Runs of bare numbers with nothing attached — minus phone numbers.
+    runs, cur = [], []
+    for raw in re.findall(r"\S+", text):
+        tok = raw.strip(".,!?;:\"'()[]{}")
+        if re.fullmatch(r"\d+", tok or ""):
+            cur.append(tok)
+        else:
+            if len(cur) >= 2:
+                runs.append(" ".join(cur))
+            cur = []
+    if len(cur) >= 2:
+        runs.append(" ".join(cur))
+    runs = [r for r in runs
+            if len(r.replace(" ", "")) not in _PHONE_DIGIT_COUNTS]
+    if runs:
+        notes.append("runs of bare numbers: " + "; ".join(runs[:4]))
+
+    # 3. Numbers stepping evenly upward — 491, 492, 493. A list being recited.
+    #    Conversation does not count.
+    nums = [int(n) for n in re.findall(r"\b\d{1,6}\b", text)]
+    for i in range(max(0, len(nums) - 2)):
+        a, b, c = nums[i:i + 3]
+        step = b - a
+        if step != 0 and abs(step) <= 3 and c - b == step:
+            notes.append(f"numbers counting upward in step: {a}, {b}, {c}")
+            break
+
+    # Every note goes into a model prompt. A transcript of three hundred
+    # numbers produced one note over a thousand characters long — cost and
+    # latency on the hot path, for no extra signal. Enough to see the shape.
+    return [n if len(n) <= 120 else n[:117] + "..." for n in notes]
+
+
+READ_ALOUD_SYSTEM = """You are given ONE line a wearable microphone overheard,
+and any mechanical observations about it.
+
+Decide one thing only: is this a person SPEAKING — to someone else, or thinking
+out loud — or is it a person reading text and data INTO a device (dictating a
+message, entering items on a list, spelling out identifiers, reading reference
+numbers into a form, instructing another assistant)?
+
+Speech has a request, an opinion, a plan or a thought in it, even when the
+transcription is rough. Numbers and names inside real speech are fine: times,
+dates, prices, party sizes, a phone number read aloud, a flight number, a part
+number. A person really does say "the flight is AC123" and "I need 2x4s".
+
+Numbers that count upward in step are never conversation. They are a list being
+recited into something.
+
+Data being read into a device is made of items rather than sentences: bare
+reference numbers attached to nothing, codes, usernames, identifiers with
+digits buried inside them, a list being recited. It often CONTAINS an
+instruction — "add that to the list", "reply to my inbox" — but the instruction
+is aimed at the machine already carrying it out, so there is nothing left for
+anyone else to do.
+
+The observations are evidence, not a verdict. Weigh them against whether an
+actual sentence is being said.
+
+If you cannot tell, it is speech.
+
+Reply with JSON only: {"speech": true|false, "why": "<six words>"}"""
+
+
+def read_into_a_machine(llm, line: str) -> bool:
+    """Was this line read INTO a device rather than said to anybody?
+
+    THE HONESTY WALL. Every failure — no model, no evidence, bad JSON, a
+    network error, a blank line — returns False, which is exactly the behaviour
+    she had before this existed. This check may only ever take work away that
+    was never anybody's; it may never be the reason something happens.
+    """
+    text = (line or "").strip()
+    if not text:
+        return False
+    evidence = not_speech_evidence(text)
+    if not evidence:
+        # Nothing to look at. Do not spend a model call, and do not guess.
+        return False
+    if llm is None or not getattr(llm, "live", False):
+        return False
+    try:
+        res = llm.chat(READ_ALOUD_SYSTEM,
+                       f"LINE: {text}\n\nOBSERVATIONS: " + "; ".join(evidence),
+                       temperature=0.0)
+        got = json.loads(_extract_json(res.text))
+    except Exception:
+        return False
+    # Only an explicit, literal false is a verdict. Absent, null, the STRING
+    # "false", a number — none of those are the model saying "this is data",
+    # and treating them as one would silence real speech on a malformed reply.
+    return got.get("speech") is False
+
+
 SUFFICIENCY_SYSTEM = """A task is about to be started in someone's browser, on
 their behalf, while they are not watching.
 

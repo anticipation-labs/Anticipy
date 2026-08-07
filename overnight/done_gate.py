@@ -172,8 +172,10 @@ def leg_2_one_conversation() -> str:
 # --------------------------------------------------------------------------
 def leg_3_judges() -> str:
     try:
+        from brain.anticipy_core import looks_like_dictation
         from brain.llm import LLM
-        from brain.orchestrator import TRIAGE_SYSTEM, _extract_json
+        from brain.orchestrator import (TRIAGE_SYSTEM, _extract_json,
+                                        read_into_a_machine)
     except Exception as e:
         raise LegFailed(f"brain triage will not import: {e}")
 
@@ -193,25 +195,44 @@ def leg_3_judges() -> str:
         ("can you book us dinner at 7 tomorrow at Cactus Club", True),
     ]
 
-    wrong = []
-    for text, should_fire in cases:
+    # The whole decision, not one prompt. This used to run TRIAGE_SYSTEM alone,
+    # which is not what reaches his phone: hear() puts both dictation filters in
+    # front of triage, and a line either of them catches never gets triaged at
+    # all. Measuring the prompt on its own reported a failure the shipped system
+    # does not have, and would have hidden one it did. The composition below is
+    # the same expression as anticipy_core's `dictated`, and tests/
+    # test_read_into_a_machine.py fails if the two ever drift apart.
+    #
+    # THREE runs per line, all of which must agree. A live model varies
+    # run to run, and a single green pass is not evidence of anything — one of
+    # these lines scored 5/8 under a version of the fix that looked green once.
+    RUNS = 3
+
+    def decide(text: str) -> bool:
+        if looks_like_dictation(text) or read_into_a_machine(llm, text):
+            return False
         try:
-            res = llm.chat(TRIAGE_SYSTEM, text, temperature=0.0)
-            got = json.loads(_extract_json(res.text))
+            got = json.loads(_extract_json(
+                llm.chat(TRIAGE_SYSTEM, text, temperature=0.0).text))
         except Exception as e:
             raise LegFailed(f"triage errored on {text!r}: {e}")
-        fired = got.get("decision") in ("act", "ask")
-        owes = got.get("owes")
-        if owes in ("machine", "nobody"):
-            fired = False
-        note(f"{'FIRE' if fired else 'quiet'}  owes={owes}  {text[:52]}")
-        if fired != should_fire:
-            wrong.append(f"{text[:44]!r} -> {'fired' if fired else 'silent'}"
-                         f" (wanted {'fire' if should_fire else 'silence'})")
+        if got.get("owes") in ("machine", "nobody"):
+            return False
+        return got.get("decision") in ("act", "ask")
+
+    wrong = []
+    for text, should_fire in cases:
+        results = [decide(text) for _ in range(RUNS)]
+        agreed = sum(1 for r in results if r == should_fire)
+        note(f"{agreed}/{RUNS} right  {text[:56]}")
+        if agreed != RUNS:
+            wrong.append(
+                f"{text[:40]!r} -> wanted {'fire' if should_fire else 'silence'}"
+                f", got it {agreed}/{RUNS} times")
 
     if wrong:
         raise LegFailed("judgement wrong on " + "; ".join(wrong))
-    return "dictation stays silent, a real plan still fires"
+    return f"dictation stays silent and a real plan still fires, {RUNS}/{RUNS}"
 
 
 # --------------------------------------------------------------------------

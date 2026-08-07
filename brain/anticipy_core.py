@@ -31,7 +31,8 @@ from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
                            NOT_HIS, check_sufficiency, unsupported_names,
-                           unsupported_counts,
+                           unsupported_counts, read_into_a_machine,
+                           not_speech_evidence,
                            _extract_json)
 
 NAME = "Anticipy"
@@ -445,7 +446,15 @@ class Anticipy:
         # a line the owner voice-typed at another machine must not be
         # answered from memory as if he had asked HER. Explicit lines (he
         # texted/typed them at her) are never dictation by definition.
-        dictated = not explicit and looks_like_dictation(line)
+        # Two filters, because they catch opposite shapes. looks_like_dictation
+        # wants a LONG fluent run of instruction-prose (Wispr Flow into another
+        # assistant). The three lines that became real jobs on 2026-08-04 were
+        # the other shape entirely — short, garbled, number-dense fragments —
+        # and it missed all three. read_into_a_machine only spends a model call
+        # when the line carries mechanical evidence, so ordinary speech costs
+        # nothing and never reaches it.
+        dictated = not explicit and (looks_like_dictation(line)
+                                     or read_into_a_machine(self.llm, line))
         # Owner questions are answered, not triaged: a briefing request goes
         # to the briefing engine, and a memory question is answered straight
         # from the graph. Neither should ever spawn a browser job.
