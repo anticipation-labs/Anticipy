@@ -908,6 +908,22 @@ class Anticipy:
             # plans firm up through the open-plan carry — she just doesn't
             # tug his sleeve about it. (No classification at all keeps the
             # old texting behaviour: the honesty wall cuts both ways.)
+            # TRIED AND REVERTED, 2026-08-07 — do not narrow this to goalless
+            # asks. The reasoning looked airtight: the incident above was about
+            # GOALLESS asks dodging the goal-keyed dedupe, so with a goal
+            # present _may_say should stop the repeats. It does not. Each turn
+            # of one dinner produces a slightly DIFFERENT goal — "Book dinner
+            # reservation for tomorrow at 7 PM", then "...for 2 tomorrow at
+            # 7 PM" — and the dedupe reads those as separate errands.
+            #
+            # Measured on the live model the moment it was tried:
+            #   dinner_demo_proof      FAIL 3/3 — FOUR texts for one dinner
+            #   second_scenario_proof  FAIL 2/3 — SIX texts, and no held booking
+            #
+            # This guard is load-bearing. The real complaint it looks
+            # responsible for — a card headed "Quick question for you" with no
+            # question under it — is the CARD lying about a silence that was
+            # correct, and belongs in ConversationCard.swift, not here.
             if decision.addressee == "self" and not explicit:
                 print(f"self-talk question stays unasked: {handled!r}")
                 handled = None
