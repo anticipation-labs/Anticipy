@@ -116,17 +116,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     throw error;
   }
 
-  try {
-    await sendPreorderConfirmation(email.toLowerCase(), {
-      name: row.name,
-      amount: row.amount_total,
-      currency: row.currency,
-      sessionId: session.id,
-    });
-  } catch (err) {
-    console.error("Pre-order confirmation email failed:", err);
-  }
-
+  // The owner detail email is a convenience — a failure here must not cost the
+  // customer their confirmation, so it is sent first and its error is only
+  // logged. The owner still receives the customer's own email via the bcc
+  // below, so a failure here does not lose the record of the sale.
   try {
     await sendOwnerPreorderNotification(email.toLowerCase(), {
       name: row.name,
@@ -141,6 +134,21 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   } catch (err) {
     console.error("Pre-order owner notification failed:", err);
   }
+
+  // The customer confirmation is not optional. Let it throw: the POST handler
+  // turns that into a 500, which makes Stripe retry the event with backoff for
+  // up to three days. The upsert above is idempotent on
+  // stripe_checkout_session_id, so replaying the event is safe.
+  //
+  // This is deliberately louder than the previous behaviour, which caught the
+  // error, logged it, and returned 200 — telling Stripe the pre-order was
+  // fully handled while the customer got nothing.
+  await sendPreorderConfirmation(email.toLowerCase(), {
+    name: row.name,
+    amount: row.amount_total,
+    currency: row.currency,
+    sessionId: session.id,
+  });
 }
 
 async function handleChargeRefunded(charge: Stripe.Charge) {
