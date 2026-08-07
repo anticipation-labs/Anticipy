@@ -1,4 +1,8 @@
 import { escapeHtml, sanitizeHeader } from "./escape";
+import {
+  preorderConfirmationHtml,
+  waitlistWelcomeHtml,
+} from "./email-templates";
 
 // Deliberately a DIFFERENT key from RESEND_API_KEY. The site's transactional
 // mail sends from anticipyupdates.com, which is verified in the
@@ -145,9 +149,8 @@ export async function sendInvestorWelcome(email: string, name?: string | null) {
 // ─── WAITLIST SIGNUP (from main site) ──────────────────────────
 export async function sendWaitlistWelcome(email: string, name?: string | null) {
   // Same header-injection protection as sendInvestorWelcome — see note there.
+  // The template escapes the name for HTML; this strips control chars.
   const rawFirstName = sanitizeHeader(name?.split(" ")[0] || "", 60);
-  const firstName = escapeHtml(rawFirstName);
-  const greeting = firstName ? `Hey ${firstName}` : "Hey";
 
   return sendMail({
     to: email,
@@ -155,28 +158,7 @@ export async function sendWaitlistWelcome(email: string, name?: string | null) {
     replyTo: REPLY_TO,
     tag: "waitlist-welcome",
     subject: "Welcome to the Anticipy waitlist",
-    html: `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.7;">
-  <p style="font-size: 16px;">${greeting},</p>
-
-  <p style="font-size: 16px;">Welcome to the waitlist. You're officially one of the first people following what we're building.</p>
-
-  <p style="font-size: 16px;">Anticipy is an AI wearable that doesn't just listen — it acts. It handles real tasks for you: books appointments, sends follow-ups, fills out forms. You wear it, forget it's there, and things just get done.</p>
-
-  <p style="font-size: 16px;">We'll keep you posted as things progress. When there's something to show, you'll be the first to know.</p>
-
-  <p style="font-size: 16px;">Thanks for believing early.</p>
-
-  <p style="font-size: 16px;">— Omar</p>
-
-  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 32px 0;" />
-
-  <p style="font-size: 13px; color: #8a8a8a;">
-    Anticipy. The AI wearable that acts.<br/>
-    <a href="https://anticipy.ai" style="color: #C9A227;">anticipy.ai</a>
-  </p>
-</div>
-    `.trim(),
+    html: waitlistWelcomeHtml({ firstName: rawFirstName }),
   });
 }
 
@@ -192,9 +174,8 @@ export async function sendPreorderConfirmation(
     sessionId: string;
   }
 ) {
+  // The template escapes the name for HTML; this strips control chars first.
   const rawFirstName = sanitizeHeader(opts.name?.split(" ")[0] || "", 60);
-  const firstName = escapeHtml(rawFirstName);
-  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
   const amountDisplay = (opts.amount / 100).toFixed(2);
   const currencyDisplay = (opts.currency || "usd").toUpperCase();
 
@@ -204,32 +185,12 @@ export async function sendPreorderConfirmation(
     replyTo: REPLY_TO,
     tag: "preorder-confirmation",
     subject: "Your Anticipy pre-order is confirmed",
-    html: `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.7;">
-  <p style="font-size: 16px;">${greeting}</p>
-
-  <p style="font-size: 16px;">Your Anticipy pendant pre-order is locked in at $${amountDisplay} ${currencyDisplay}. That is $50 off the $199 retail price, plus free shipping to the United States and Canada.</p>
-
-  <p style="font-size: 16px;"><strong>What happens next.</strong> We're targeting shipping for August 2026. When manufacturing finishes, we will email you for any final shipping address confirmation and then ship the pendant, chain, and wireless charging pad to the address you entered at checkout.</p>
-
-  <p style="font-size: 16px;"><strong>Your receipt.</strong> Stripe sent a separate emailed receipt to this address. Keep it for your records.</p>
-
-  <p style="font-size: 16px;"><strong>Need to make changes.</strong> Reply to this email. We respond to every pre-order inquiry personally.</p>
-
-  <p style="font-size: 13px; color: #8a8a8a; margin-top: 24px;">Reference: ${escapeHtml(opts.sessionId)}</p>
-
-  <p style="font-size: 16px;">Thank you for being early.</p>
-
-  <p style="font-size: 16px;">Omar Ebrahim<br/>Founder, Anticipy</p>
-
-  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 32px 0;" />
-
-  <p style="font-size: 13px; color: #8a8a8a;">
-    Anticipation Labs Inc. · <a href="https://anticipy.ai" style="color: #C9A227;">anticipy.ai</a><br/>
-    Pre-order terms: <a href="https://anticipy.ai/pre-orders/agreement" style="color: #C9A227;">anticipy.ai/pre-orders/agreement</a>
-  </p>
-</div>
-    `.trim(),
+    html: preorderConfirmationHtml({
+      firstName: rawFirstName,
+      amountDisplay,
+      currencyDisplay,
+      sessionId: opts.sessionId,
+    }),
   });
 }
 
