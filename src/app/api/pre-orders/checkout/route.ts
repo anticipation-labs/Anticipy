@@ -21,6 +21,19 @@ export async function POST(request: NextRequest) {
     const agreementAccepted = body.agreementAccepted === true;
     const marketingOptIn = body.marketingOptIn === true;
 
+    // Carried through Stripe so the webhook can attribute the paid order to
+    // the same PostHog person who did the browsing. Length-capped because
+    // Stripe rejects metadata values over 500 chars, and treated as opaque —
+    // never trusted, never used for authorisation, only for analytics joins.
+    const posthogDistinctId =
+      typeof body.posthogDistinctId === "string"
+        ? body.posthogDistinctId.slice(0, 200)
+        : "";
+    const posthogSessionId =
+      typeof body.posthogSessionId === "string"
+        ? body.posthogSessionId.slice(0, 200)
+        : "";
+
     if (!email || !EMAIL_REGEX.test(email)) {
       return NextResponse.json({ error: "Enter a valid email." }, { status: 400 });
     }
@@ -110,6 +123,8 @@ export async function POST(request: NextRequest) {
         age_confirmed: "true",
         ip,
         customer_name: name || "",
+        posthog_distinct_id: posthogDistinctId,
+        posthog_session_id: posthogSessionId,
       },
       success_url: `${origin}/pre-orders/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pre-orders/purchase?canceled=1`,

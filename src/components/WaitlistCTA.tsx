@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { motion } from "motion/react";
 import { ScrollReveal } from "./ScrollReveal";
 import { ease } from "@/lib/animation";
+import { capture, identifyByEmail, emailDomainClass } from "@/lib/analytics";
 
 type FormState = "idle" | "loading" | "success" | "duplicate" | "error";
 
@@ -27,8 +28,44 @@ export function WaitlistCTA() {
 
       if (res.ok) {
         setState("success");
+
+        // Identify on successful submit only. A 409 means this person was
+        // already on the list — still a real identity, but not a new
+        // consent event, so it is recorded as a duplicate rather than
+        // re-stamping consent metadata.
+        await identifyByEmail(
+          email,
+          {
+            lifecycle_stage: "waitlist",
+            marketing_consent: true,
+            marketing_consent_at: new Date().toISOString(),
+            marketing_consent_source: "waitlist_form",
+            // Versioned so that three years from now we can produce the
+            // exact wording this person agreed to. CASL requires proof of
+            // consent, not just a boolean.
+            marketing_consent_copy_version: "v1",
+            casl_basis: "express",
+          },
+          {
+            first_seen_at: new Date().toISOString(),
+            first_intent: "waitlist",
+          }
+        );
+
+        capture("waitlist_submitted", {
+          email_domain_class: emailDomainClass(email),
+          entry_point: "waitlist_section",
+          has_name: Boolean(name.trim()),
+          consent_text_version: "v1",
+        });
       } else if (res.status === 409) {
         setState("duplicate");
+        capture("waitlist_submitted", {
+          email_domain_class: emailDomainClass(email),
+          entry_point: "waitlist_section",
+          is_duplicate: true,
+          consent_text_version: "v1",
+        });
       } else {
         setState("error");
       }

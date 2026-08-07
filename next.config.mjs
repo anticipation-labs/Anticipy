@@ -1,5 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // PostHog's ingest endpoints are on well-known hostnames that every major
+  // content blocker ships a rule for, which silently drops a large share of
+  // events — disproportionately from the technical, privacy-minded audience
+  // this product is aimed at. Proxying through our own origin means the
+  // requests are first-party. Note this changes only WHERE events are sent,
+  // not WHAT: consent gating and masking still govern collection.
+  skipTrailingSlashRedirect: true,
+  async rewrites() {
+    return [
+      {
+        source: "/ingest/static/:path*",
+        destination: "https://us-assets.i.posthog.com/static/:path*",
+      },
+      {
+        source: "/ingest/:path*",
+        destination: "https://us.i.posthog.com/:path*",
+      },
+    ];
+  },
   async headers() {
     return [
       {

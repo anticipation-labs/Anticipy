@@ -3,6 +3,7 @@ import { DM_Serif_Display, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { LenisProvider } from "@/components/LenisProvider";
 import { PostHogProvider } from "@/components/PostHogProvider";
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -137,6 +138,7 @@ export default function RootLayout({
     <html lang="en" className={`${dmSerif.variable} ${jakarta.variable}`}>
       <body className="font-sans antialiased">
         <PostHogProvider />
+        <AnalyticsProvider />
         <LenisProvider>{children}</LenisProvider>
         <Analytics />
         <SpeedInsights />

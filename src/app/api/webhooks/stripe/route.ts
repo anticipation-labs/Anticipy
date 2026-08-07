@@ -6,6 +6,7 @@ import {
   sendPreorderConfirmation,
   sendOwnerPreorderNotification,
 } from "@/lib/email";
+import { captureServer, emailHashServer } from "@/lib/analytics-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +115,45 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   if (error) {
     console.error("Failed to upsert pre-order row:", error);
     throw error;
+  }
+
+  // Revenue attribution, emitted server-side.
+  //
+  // The distinct_id is the SHA-256 of the email rather than the browser's
+  // anonymous id, because that hash is what identifyByEmail() set on the
+  // client at form submit — so this event lands on the same person as all
+  // the pre-purchase browsing. The anonymous id from checkout metadata is
+  // kept as a property for debugging stitch failures, not used as the key.
+  //
+  // Awaited rather than fire-and-forget: this handler runs in a serverless
+  // function that can be frozen the instant it returns, which would drop an
+  // in-flight request. captureServer never throws.
+  try {
+    await captureServer({
+      distinctId: emailHashServer(email),
+      event: "order_paid",
+      properties: {
+        amount_total_cents: session.amount_total ?? 0,
+        amount_subtotal_cents: session.amount_subtotal ?? 0,
+        amount_discount_cents: session.total_details?.amount_discount ?? 0,
+        currency: session.currency ?? "usd",
+        stripe_checkout_session_id: session.id,
+        anonymous_distinct_id: session.metadata?.posthog_distinct_id || null,
+        posthog_session_id: session.metadata?.posthog_session_id || null,
+        marketing_opt_in: session.metadata?.marketing_opt_in === "true",
+        shipping_country: row.shipping_address_country,
+      },
+      set: {
+        lifecycle_stage: "customer",
+        order_value_cents: session.amount_total ?? 0,
+        stripe_customer_id: row.stripe_customer_id,
+      },
+      setOnce: {
+        first_order_at: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("Server-side order_paid capture failed:", err);
   }
 
   // The owner detail email is a convenience — a failure here must not cost the

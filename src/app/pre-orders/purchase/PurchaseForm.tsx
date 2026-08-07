@@ -3,6 +3,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { ease } from "@/lib/animation";
+import {
+  capture,
+  identifyByEmail,
+  attributionIds,
+  emailDomainClass,
+} from "@/lib/analytics";
 
 type FormState = "idle" | "loading" | "error";
 
@@ -24,6 +30,44 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
     }
   }, [canceled]);
 
+  // Top of the checkout funnel. Emitted once on mount so the form-level
+  // drop-off (reached the form -> submitted an email) is measurable
+  // independently of the redirect to Stripe.
+  useEffect(() => {
+    capture("checkout_started", {
+      entry_point: "purchase_page",
+      price_shown_cents: 14999,
+      returned_canceled: canceled,
+    });
+    if (canceled) {
+      capture("checkout_returned_canceled", { entry_point: "purchase_page" });
+    }
+    // Intentionally mount-only: re-firing on `canceled` flips would
+    // double-count a single visit to the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Fires when the visitor leaves the email field with something in it.
+   *
+   * Deliberately carries NO address and NO local part — only whether it
+   * parses and what class of domain it is. Capturing a typed-but-unsubmitted
+   * address is the Popa v. Harriet Carter fact pattern, and under PostHog's
+   * identified_only model a half-typed address would become a permanent
+   * distinct_id that cannot be rewritten later. This gives the abandonment
+   * signal without either problem.
+   */
+  const onEmailBlur = () => {
+    const v = email.trim();
+    if (!v) return;
+    capture("checkout_email_field_completed", {
+      form: "purchase",
+      email_valid: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v),
+      email_domain_class: emailDomainClass(v),
+      fields_completed_count: [name.trim(), v].filter(Boolean).length,
+    });
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -32,18 +76,51 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmedEmail)) {
       setError("Enter a valid email address.");
+      capture("checkout_validation_failed", { field: "email", reason: "invalid_format" });
       return;
     }
     if (!ageConfirmed) {
       setError("You must confirm that you are at least 18 years old.");
+      capture("checkout_validation_failed", { field: "age_confirmed", reason: "unchecked" });
       return;
     }
     if (!agreed) {
       setError("Accept the Pre-Order Agreement to continue.");
+      capture("checkout_validation_failed", { field: "agreement", reason: "unchecked" });
       return;
     }
 
     setState("loading");
+
+    // Identify on SUBMIT — never earlier. This is the moment the visitor
+    // hands over the address of their own accord, and it is what collapses
+    // every anonymous event they have generated so far onto a real person.
+    await identifyByEmail(
+      trimmedEmail,
+      {
+        marketing_consent: marketingOptIn === true,
+        marketing_consent_at: new Date().toISOString(),
+        marketing_consent_source: "purchase_form",
+        marketing_consent_copy_version: "v1",
+        lifecycle_stage: "checkout_started",
+      },
+      {
+        first_seen_at: new Date().toISOString(),
+        first_intent: "purchase",
+      }
+    );
+
+    capture("checkout_email_submitted", {
+      email_domain_class: emailDomainClass(trimmedEmail),
+      has_name: Boolean(name.trim()),
+      marketing_opt_in: marketingOptIn === true,
+    });
+
+    // Carried into Stripe metadata so the webhook can attribute the paid
+    // order to this same person server-side. Client-side purchase events are
+    // routinely blocked; the webhook is not.
+    const { distinctId, sessionId } = attributionIds();
+
     try {
       const res = await fetch("/api/pre-orders/checkout", {
         method: "POST",
@@ -54,6 +131,8 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
           ageConfirmed: true,
           agreementAccepted: true,
           marketingOptIn,
+          posthogDistinctId: distinctId,
+          posthogSessionId: sessionId,
         }),
       });
 
@@ -61,13 +140,25 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
       if (!res.ok || !data.url) {
         setState("error");
         setError(data.error || "Could not start checkout. Try again.");
+        capture("checkout_validation_failed", {
+          field: "server",
+          reason: data.error?.slice(0, 120) || `http_${res.status}`,
+        });
         return;
       }
+
+      // Last event we control before the visitor leaves for Stripe's domain.
+      // The gap between this and order_paid from the webhook is the true
+      // hosted-checkout drop-off, which nothing client-side can observe.
+      capture("checkout_redirected_to_stripe", {
+        email_domain_class: emailDomainClass(trimmedEmail),
+      });
 
       window.location.href = data.url;
     } catch {
       setState("error");
       setError("Network error. Try again.");
+      capture("checkout_validation_failed", { field: "network", reason: "fetch_failed" });
     }
   };
 
@@ -120,6 +211,7 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onBlur={onEmailBlur}
           placeholder="you@example.com"
           required
           autoComplete="email"
@@ -207,6 +299,12 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
       <button
         type="submit"
         disabled={state === "loading"}
+        data-attr="preorder-submit"
+        data-cta-id="preorder_submit"
+        data-cta-location="hero"
+        data-cta-type="preorder"
+        data-cta-style="primary"
+        data-cta-label="Continue to payment"
         className="mt-2 px-8 py-4 rounded-pill text-[16px] font-medium transition-all duration-300 disabled:opacity-60"
         style={{
           background: "var(--dark)",
