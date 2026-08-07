@@ -164,7 +164,7 @@ export function preorderConfirmationHtml(opts: {
           8
         )}
         ${p(
-          `<strong style="color:${TEXT};">It arrives.</strong> Pendant, chain and wireless charging pad, in the box above.`,
+          `<strong style="color:${TEXT};">It arrives.</strong> Pendant, chain and wireless charging pad, boxed and ready to wear.`,
           8
         )}
 
@@ -195,9 +195,9 @@ export function preorderConfirmationHtml(opts: {
   return shell({
     preheader: `Your Anticipy pendant is reserved — $${opts.amountDisplay} ${opts.currencyDisplay}, free shipping.`,
     eyebrow: "Pre-order confirmed",
-    heroSrc: `${IMG}/preorder-hero.jpg`,
+    heroSrc: `${IMG}/preorder-hero-v2.jpg`,
     heroAlt:
-      "An Anticipy pendant and chain resting in its black presentation box",
+      "An Anticipy pendant hanging on its chain, the indicator lit warm amber",
     body,
     footerNote: `You're receiving this because you pre-ordered an Anticipy pendant. Pre-order terms: <a href="${SITE}/pre-orders/agreement" style="color:${MUTED};text-decoration:underline;">anticipy.ai/pre-orders/agreement</a>`,
   });
