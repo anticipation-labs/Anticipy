@@ -7,7 +7,6 @@ import { LiveDemo } from "@/components/story/LiveDemo";
 import { ObjectSection } from "@/components/story/ObjectSection";
 import { Worn } from "@/components/story/Worn";
 import { Trust } from "@/components/story/Trust";
-import { Honest } from "@/components/story/Honest";
 import { Compare } from "@/components/story/Compare";
 import { Faq } from "@/components/story/Faq";
 import { Close } from "@/components/story/Close";
@@ -45,9 +44,6 @@ export default function Home() {
 
       {/* 07 — Trust: three quiet rules */}
       <Trust />
-
-      {/* 07a — Two-sided honesty: what it doesn't do */}
-      <Honest />
 
       {/* 08 — Objections answered, founder's word */}
       <Faq />
