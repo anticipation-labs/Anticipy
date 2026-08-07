@@ -221,6 +221,7 @@ def leg_3_judges() -> str:
 # --------------------------------------------------------------------------
 def leg_4_does_it() -> str:
     try:
+        from brain import pb
         from brain.anticipy_core import Anticipy, is_consequential
     except Exception as e:
         raise LegFailed(f"brain/anticipy_core.py will not import: {e}")
@@ -230,23 +231,90 @@ def leg_4_does_it() -> str:
             "is_consequential() does not consider booking a table "
             "consequential, so nothing would ever be held for approval")
 
-    engine = os.environ.get("ANTICIPY_ENGINE_URL")
-    if not engine:
-        raise LegFailed(
-            "cannot verify: ANTICIPY_ENGINE_URL is unset, so there is no engine "
-            "to hand a job to. Start the local engine and re-run")
+    # ---- the leg's actual claim: a judged plan BECOMES a held job -----------
+    # Against a stand-in table, never the real one. Posting a test job to the
+    # shared backend once put a ghost booking card on Omar's real desk within
+    # seconds, because the worker's poll was not owner-scoped. The gate does not
+    # get to repeat that.
+    goal = "book a table for two at 7pm at Cactus Club"
+    rows: list = []
 
+    class _Reply:
+        def __init__(self, payload):
+            self._p, self.ok = payload, True
+
+        def json(self):
+            return self._p
+
+        def raise_for_status(self):
+            return None
+
+    def _get(url, params=None, timeout=None, **kw):
+        want = [s for s in ("awaiting_confirm", "queued")
+                if s in (params or {}).get("filter", "")]
+        return _Reply({"items": [r for r in rows if r.get("status") in want]})
+
+    def _post(url, json=None, timeout=None, **kw):
+        rec = dict(json or {})
+        rec["id"] = f"gate{len(rows) + 1}"
+        rows.append(rec)
+        return _Reply(rec)
+
+    def _patch(url, json=None, timeout=None, **kw):
+        jid = url.rstrip("/").rsplit("/", 1)[-1]
+        for r in rows:
+            if r.get("id") == jid:
+                r.update(json or {})
+        return _Reply({})
+
+    real = (pb.get, pb.post, pb.patch)
     try:
-        import urllib.request
-        with urllib.request.urlopen(engine.rstrip("/") + "/health", timeout=5) as r:
-            ok = r.status == 200
+        pb.get, pb.post, pb.patch = _get, _post, _patch
+        job_id = Anticipy(owner_id="gate")._queue_job(goal, {"source": "gate"})
     except Exception as e:
-        raise LegFailed(f"engine at {engine} is not reachable: {e}")
-    if not ok:
-        raise LegFailed(f"engine at {engine} did not return healthy")
+        raise LegFailed(f"queueing a judged plan raised: {e}")
+    finally:
+        pb.get, pb.post, pb.patch = real
 
-    _ = Anticipy  # the class must at least be constructible-importable
-    return "a consequential plan is recognised and an engine is standing by"
+    if not job_id or not rows:
+        raise LegFailed(
+            "a consequential plan produced no job at all — she understood it "
+            "and did nothing")
+    job = rows[0]
+    if (job.get("goal") or "") != goal:
+        raise LegFailed(
+            f"the job was created but does not carry the plan: {job.get('goal')!r}")
+    if job.get("status") != "awaiting_confirm":
+        raise LegFailed(
+            f"a booking was queued as {job.get('status')!r} instead of being held "
+            "for approval — it would go ahead without him")
+
+    # ---- and something has to be standing by to run it ---------------------
+    backend = (os.environ.get("ANTICIPY_ENGINE_URL")
+               or os.environ.get("ANTICIPY_BACKEND_URL")
+               or os.environ.get("BACKEND_URL"))
+    if not backend:
+        raise LegFailed(
+            "cannot verify: no backend URL is set, so there is nowhere to hand "
+            "the job. Set ANTICIPY_BACKEND_URL (or ANTICIPY_ENGINE_URL) and "
+            "re-run. A leg that cannot be tested does not pass")
+
+    import urllib.request
+    base = backend.rstrip("/")
+    # PocketBase serves /api/health; the older stand-alone engine served
+    # /health. Either one answering is proof something is home — checking only
+    # one of them failed a perfectly healthy backend for a whole day.
+    tried = []
+    for path in ("/api/health", "/health"):
+        try:
+            with urllib.request.urlopen(base + path, timeout=8) as r:
+                if r.status == 200:
+                    return ("a booking is held for his approval, and "
+                            f"{base} is standing by to run it")
+                tried.append(f"{path} -> {r.status}")
+        except Exception as e:
+            tried.append(f"{path} -> {e}")
+    raise LegFailed(f"nothing healthy at {base}: " + "; ".join(tried))
 
 
 # --------------------------------------------------------------------------
@@ -280,8 +348,16 @@ def leg_5_one_card() -> str:
     if not _have("swift"):
         raise LegFailed("cannot verify: swift is not on PATH")
 
-    runner = os.path.join(ROOT, "app/ios/Tests/run_heard_group_tests.sh")
-    if not os.path.exists(runner):
+    # Two names have been used for this runner. Accept either — but ONLY
+    # because the checks behind it are real and green; the gate spent a day
+    # reporting "no runner" at a passing 67-case suite sitting next to it.
+    runner = ""
+    for name in ("run_heard_group_tests.sh", "run_heard_tests.sh"):
+        candidate = os.path.join(ROOT, "app/ios/Tests", name)
+        if os.path.exists(candidate):
+            runner = candidate
+            break
+    if not runner:
         raise LegFailed(
             "HeardGroupTests.swift exists but there is no runner script for it, "
             "so nothing in CI or in this gate can execute it")
