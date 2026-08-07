@@ -21,6 +21,13 @@
 //   second account from the same device, a reinstall). Every other table got
 //   carried across on sign-in and this one silently did not.
 //
+//   That 08-05 change did NOT work and was reported as though it had. The
+//   filter below reads `owner_ref = ''`, and 1700000009 never gave `agents` an
+//   owner_ref column — so the query threw, the throw was swallowed by the
+//   try/catch, and the loop claimed nothing at all for two days. Fixed by
+//   1700000022, which adds the column. This line only does something once that
+//   migration has actually run on the instance being talked to.
+//
 //   events — have NEVER had an owner column (see 1700000009), so there is no
 //   evidence on the row at all. They are therefore claimed ONLY when this is
 //   the single account on the whole instance, i.e. the pre-accounts era had
