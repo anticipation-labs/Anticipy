@@ -161,6 +161,36 @@ def in_conversation(recent: Optional[list]) -> bool:
     return hits / len(lines) >= CONVERSATION_SHARE
 
 
+# A web address, an email address or a bare domain is a THING BEING NAMED, not
+# somebody being spoken to. Stripped out before anything looks for her name.
+_ADDRESSES_RE = re.compile(
+    r"""\b(?:[a-z][a-z0-9+.-]*://\S+          # any scheme://…
+        |[^\s@]+@[^\s@]+                      # an email address
+        |[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+  # a bare domain, foo.ai / a.b.co
+        )""",
+    re.IGNORECASE | re.VERBOSE)
+
+
+def addressed_by_name(line: str) -> bool:
+    """Did he say HER NAME to her — as a name, not as part of some address?
+
+    Her name is Anticipy. His company's site is anticipy.ai. A plain substring
+    test therefore reported "she was addressed by name" for every sentence
+    mentioning his own website, which switched the dictation filter OFF for
+    exactly the lines it exists to catch.
+
+    Seen live 2026-08-07. He dictated sixty-one words of instruction at Wispr
+    Flow — "Please go on anticipY.ai … make sure the wording is correct … the
+    job listing essentially" — and because the word anticipy appeared inside
+    the domain, the filter stood down, triage read it as work, and a truncated
+    follow-on fragment ("Tell people to contact omar@aNt") became a job to
+    draft a public post. Delete the domain from that same sentence and the
+    filter catches it correctly. One substring test, one bad afternoon.
+    """
+    text = _ADDRESSES_RE.sub(" ", line or "")
+    return re.search(rf"\b{re.escape(NAME)}\b", text, re.IGNORECASE) is not None
+
+
 def looks_like_dictation(line: str) -> bool:
     """Deterministic pre-filter for the unmistakable case only. Anything it
     is unsure about returns False and is left to the model's classification —
@@ -168,7 +198,7 @@ def looks_like_dictation(line: str) -> bool:
     text = (line or "").strip()
     if len(text.split()) < DICTATION_MIN_WORDS:
         return False
-    if NAME.lower() in text.lower():
+    if addressed_by_name(text):
         return False          # she was addressed by name: not dictation
     if _DICTATION_FILLERS_RE.search(text):
         return False          # disfluent = spoken to the room
