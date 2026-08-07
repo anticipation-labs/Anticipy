@@ -46,9 +46,32 @@ _ANAPHORIC = re.compile(
     r"it|that|they|he|she|those|these|which)\b", re.IGNORECASE)
 
 
-def parse_ts(value: Optional[str]) -> Optional[datetime]:
-    """PocketBase and ISO8601 both, always tz-aware UTC."""
-    if not value:
+# A capture time is only believable inside a window a person could have spoken
+# in. 2001 to 2096 in seconds, the same window in milliseconds. Anything else —
+# a date written as 20260806, a duration, a zero — is not a moment in time, and
+# guessing at it would put speech in the wrong conversation.
+_EPOCH_S_MIN, _EPOCH_S_MAX = 1_000_000_000, 4_000_000_000
+_EPOCH_MS_MIN, _EPOCH_MS_MAX = _EPOCH_S_MIN * 1000, _EPOCH_S_MAX * 1000
+
+
+def parse_ts(value) -> Optional[datetime]:
+    """PocketBase, ISO8601 and epoch numbers, always tz-aware UTC.
+
+    Epoch is handled because the alternative is worse than a wrong format: an
+    unreadable capture time makes a turn UNPLACEABLE, and an unplaceable turn is
+    silently dropped. Losing what someone said, because a number arrived where a
+    string was expected, is not a failure this is allowed to have.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):            # True is not a timestamp
+        return None
+    if isinstance(value, (int, float)):
+        n = float(value)
+        if _EPOCH_S_MIN <= n <= _EPOCH_S_MAX:
+            return datetime.fromtimestamp(n, tz=timezone.utc)
+        if _EPOCH_MS_MIN <= n <= _EPOCH_MS_MAX:
+            return datetime.fromtimestamp(n / 1000.0, tz=timezone.utc)
         return None
     s = str(value).strip().replace(" ", "T")
     if s.endswith("Z"):
@@ -56,7 +79,11 @@ def parse_ts(value: Optional[str]) -> Optional[datetime]:
     try:
         dt = datetime.fromisoformat(s)
     except ValueError:
-        return None
+        # A bare epoch that arrived as text is still a moment in time.
+        try:
+            return parse_ts(float(s))
+        except ValueError:
+            return None
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
@@ -146,6 +173,87 @@ def is_late(event: dict, now: datetime) -> bool:
     """Too old to act on — remember it, never act."""
     start, _ = capture_span(event)
     return bool(start and (now - start).total_seconds() > LATE_MAX_S)
+
+
+def _as_prev_segment(turns: list[dict]) -> dict:
+    """Shape a conversation-so-far the way `decide_link` expects to read one.
+
+    Mirrors what SegmentStore.append writes: the spoken text as the summary,
+    and the accumulated proper nouns as entities, capped the same way.
+    """
+    text = " ".join((t.get("text") or "") for t in turns)
+    entities: set[str] = set()
+    for t in turns:
+        entities |= proper_nouns(t.get("text") or "")
+    return {"summary": text, "entities": json.dumps(sorted(entities)[:40])}
+
+
+def segment_all(turns: list[dict]) -> list[list[dict]]:
+    """Group heard turns into conversations. Pure — no database, no network,
+    no model, and no wall clock.
+
+    This exists so the one question that matters can actually be ASKED: "how
+    many conversations was that?" Everything else in this module answers it one
+    turn at a time against PocketBase, which means the only way to check the
+    boundary rules was to run the whole system and look at a screenshot.
+
+    THE LAW IT UPHOLDS: the answer depends on when things were SPOKEN and on
+    nothing else. The pendant is store-and-forward — it buffers and flushes, so
+    arrival order is not speech order, and a backlog can land in one lump
+    minutes later. Judging by arrival is what shatters one phone call into three
+    conversations (Omar's screenshot; the bug Omi ships as #6551). So turns are
+    ordered by capture time, ties are broken by content, and `created` is never
+    read except as a fallback for old app builds that posted no capture time.
+
+    Turns with no usable capture time at all are left out rather than guessed
+    at — they cannot be placed in time, and inventing a position for them is
+    exactly the kind of filled-in blank that causes the damage elsewhere.
+
+    MAX_SEGMENT_S is deliberately NOT applied here. Force-closing a runaway
+    segment bounds the size of a database row; it does not mean the person
+    stopped having the conversation. A forty-minute call is one call.
+
+    Returns conversations in capture order, each a list of turns in capture
+    order. The input list is not modified.
+    """
+    placed: list[tuple[datetime, datetime, dict]] = []
+    for t in turns or []:
+        if not isinstance(t, dict):
+            continue
+        start, end = capture_span(t)
+        if start is None:
+            continue
+        placed.append((start, end or start, t))
+    if not placed:
+        return []
+
+    # Capture time, then content. Never arrival: two turns spoken in the same
+    # second must land in the same order however the network delivered them.
+    placed.sort(key=lambda p: (p[0], p[1],
+                               str(p[2].get("id") or ""), str(p[2].get("text") or "")))
+
+    conversations: list[list[dict]] = []
+    spans: list[tuple[datetime, datetime]] = []      # (started, last speech)
+    for start, end, turn in placed:
+        if not conversations:
+            conversations.append([turn])
+            spans.append((start, end))
+            continue
+        began, last = spans[-1]
+        gap_s = max(0.0, (start - last).total_seconds())
+        decision, _why = decide_link(gap_s, turn.get("text") or "",
+                                     _as_prev_segment(conversations[-1]))
+        # `append` is the same breath; `link` is the same subject picked back
+        # up, which is the same conversation by any human reading. `escalate`
+        # means the rules genuinely cannot tell — and with no model to ask,
+        # this stays with what the live path does with it: start a new one.
+        if decision in ("append", "link"):
+            conversations[-1].append(turn)
+            spans[-1] = (began, max(last, end))
+        else:
+            conversations.append([turn])
+            spans.append((start, end))
+    return conversations
 
 
 class SegmentStore:

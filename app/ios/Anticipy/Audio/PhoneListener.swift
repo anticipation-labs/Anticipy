@@ -57,12 +57,14 @@ final class PhoneListener: NSObject, ObservableObject {
     private var watchdog: Timer?
     private var observersInstalled = false
 
-    /// How many WORDS of the current task's text have already been sent as
-    /// lines. Words, not characters: Apple refines earlier words as it hears
-    /// more ("Cineplex" becomes "the Cineplex"), and a character-prefix check
-    /// treats that as a brand-new sentence and sends the whole thing twice —
-    /// which is exactly what happened live.
-    private var emittedWords = 0
+    /// Which words of the current task's text have already been sent as lines.
+    ///
+    /// Not a count. A count was the bug: Apple REWRITES its transcript rather
+    /// than appending to it ("Cineplex" becomes "the Cineplex"), so the moment
+    /// a word is inserted or dropped near the front, an index points at the
+    /// wrong word and one sentence goes out as two overlapping fragments. The
+    /// cursor remembers the words themselves and re-finds them every time.
+    private var cursor = TranscriptCursor()
     /// Audio captured while no request is accepting it, replayed into the next
     /// one so a swap can never lose speech.
     private var orphanBuffers: [AVAudioPCMBuffer] = []
@@ -260,15 +262,9 @@ final class PhoneListener: NSObject, ObservableObject {
 
     // --------------------------------------------------------- recognition
 
-    private var currentWords: [String] {
-        partial.split(whereSeparator: { $0 == " " || $0 == "\n" }).map(String.init)
-    }
-
     /// Words heard on the current task that haven't been sent yet.
     private var pendingTail: String {
-        let words = currentWords
-        guard words.count > emittedWords else { return "" }
-        return words[emittedWords...].joined(separator: " ")
+        cursor.peek(partial)
     }
 
     private func startRecognition() {
@@ -279,7 +275,7 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         requestBornAt = Date()
         lastResultAt = Date()
-        emittedWords = 0
+        cursor.reset()
         partial = ""
 
         orphanLock.lock()
@@ -301,15 +297,14 @@ final class PhoneListener: NSObject, ObservableObject {
                 self.lastResultAt = Date()
 
                 if let result {
-                    let text = result.bestTranscription.formattedString
                     // A window reset replaces the text instead of extending it
-                    // (a 12s sentence collapsing to "Of August"). Bank what we
-                    // had before accepting the new, shorter reality.
-                    if self.partial.count > text.count + 10 {
-                        self.flushTail()
-                        self.emittedWords = 0
-                    }
-                    self.partial = text
+                    // (a 12s sentence collapsing to "Of August"). There used to
+                    // be a character-count guess here that banked the tail and
+                    // zeroed the cursor — which then said the short text again.
+                    // The cursor re-finds the said words in whatever the
+                    // recogniser now believes, so a collapse needs no special
+                    // case and no magic number.
+                    self.partial = result.bestTranscription.formattedString
                     if result.isFinal {
                         // Only speak up if they actually said more.
                         self.flushTail(minNewWords: 3)
@@ -334,15 +329,7 @@ final class PhoneListener: NSObject, ObservableObject {
     /// so a final only speaks up when the person genuinely said more.
     private func flushTail(minNewWords: Int = 1) {
         silenceFlush?.cancel()
-        let words = currentWords
-        guard words.count > emittedWords else {
-            emittedWords = max(emittedWords, words.count)
-            return
-        }
-        let fresh = Array(words[emittedWords...])
-        emittedWords = words.count
-        guard fresh.count >= minNewWords else { return }
-        let line = fresh.joined(separator: " ")
+        let line = cursor.take(partial, minNewWords: minNewWords)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
         // A voice sample is not something he said. Never emit it.
@@ -424,7 +411,7 @@ final class PhoneListener: NSObject, ObservableObject {
         request = nil
         task = nil
         partial = ""
-        emittedWords = 0
+        cursor.reset()
         // Hand the audio session back. Leaving it active kept the recording
         // mode — and everything it suppresses — in force for the rest of the
         // process, so turning Listen OFF never restored normal behavior.
