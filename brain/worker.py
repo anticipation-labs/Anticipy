@@ -26,7 +26,7 @@ from .anticipy_core import Anticipy, goal_tokens
 from .memory import Memory
 from .segmenter import SegmentStore, place_turn
 from .conversation import Conversation, MockTransport, TwilioTransport
-from .llm import LLM
+from .llm import LLM, TZ as TZ_FALLBACK
 from .voice_arm import VoiceArm
 
 PB = os.environ.get("ANTICIPY_PB", "http://127.0.0.1:8090")
@@ -53,6 +53,29 @@ def fetch_owner_phone() -> str | None:
         items = r.json().get("items", [])
         phone = (items[0].get("phone") or "").strip() if items else ""
         return phone or None
+    except Exception:
+        return None
+
+
+def fetch_owner_timezone() -> str | None:
+    """The owner's own IANA zone, as their phone reported it.
+
+    Before this, the zone was one server-wide env var, so every prompt was
+    grounded in Vancouver's time of day whoever was speaking, and the quiet
+    hours that stop her texting at night were somebody else's night. It also
+    means she finally knows the CITY — an identifier like America/Vancouver
+    carries both, and costs the user no permission prompt and no typing.
+
+    None when unknown, which restores the old behaviour exactly.
+    """
+    try:
+        r = pb.get(f"{PB}/api/collections/owner_profile/records",
+                   params={"sort": "-updated", "perPage": 1}, timeout=10)
+        if not r.ok:
+            return None
+        items = r.json().get("items", [])
+        tz = (items[0].get("timezone") or "").strip() if items else ""
+        return tz or None
     except Exception:
         return None
 
@@ -1132,7 +1155,11 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
 
 
 def main() -> None:
-    llm = LLM()
+    # The owner's own zone, from their profile — so every prompt is grounded in
+    # THEIR time of day and THEIR city, not the server's. Read once at startup
+    # and refreshed on the same beat as the phone number below; unknown simply
+    # means the old server-default behaviour.
+    llm = LLM(owner_zone=fetch_owner_timezone())
     mem_db = os.environ.get("ANTICIPY_MEMORY_DB", ":memory:")
     memory = Memory(path=mem_db, llm=llm if llm.live else None)
     anticipy = Anticipy(llm=llm if llm.live else None, memory=memory, backend_url=PB,
@@ -1157,6 +1184,7 @@ def main() -> None:
     # does, so the log proves which build is live instead of implying it.
     print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
           f" · sms={'live' if live_sms else 'mock'} · pb={PB}"
+          f" · where={llm.owner_zone or 'server-default:' + str(TZ_FALLBACK)}"
           f" · brain={_brain_fingerprint()}")
     if not anticipy.owner_id:
         # Paired extensions only claim their owner's jobs, so unstamped jobs
@@ -1181,6 +1209,13 @@ def main() -> None:
                 if entered and entered != anticipy.owner_phone:
                     anticipy.owner_phone = entered
                     print(f"owner phone updated from the app: …{entered[-4:]}")
+                # Same beat for the zone: somebody travels, or onboards after
+                # the worker started, and every prompt should follow them
+                # without a redeploy.
+                zone = fetch_owner_timezone()
+                if zone and zone != llm.owner_zone:
+                    llm.owner_zone = zone
+                    print(f"owner timezone updated from the app: {zone}")
             # Is the number still wired to us? Cheap, and the failure it
             # catches is invisible from in here — she simply never hears him.
             if time.time() - last_webhook > WEBHOOK_CHECK_EVERY_SECONDS:
