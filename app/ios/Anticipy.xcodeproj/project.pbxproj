@@ -25,7 +25,6 @@
 		C4743CD12B7A47A9E6B3F8F3 /* speaker-embedding.onnx in Resources */ = {isa = PBXBuildFile; fileRef = 5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */; };
 		C4D475F4BA8EF258C2B27C02 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94C340A3EF64050C750BCD7 /* SettingsView.swift */; };
 		D87272FC45C0E3640E24CA7E /* PhoneListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E88365017E289B62475F24B /* PhoneListener.swift */; };
-		DADE2F027C1013968D052B37 /* sherpa-onnx in Frameworks */ = {isa = PBXBuildFile; productRef = 18E77196B32C3DF5E3B7DFE6 /* sherpa-onnx */; };
 		E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A935B05F51033496D5EF92C9 /* HapticEngine.swift */; };
 		F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */; };
 		FF9C51D6755044E050520ADE /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9F21774275ABF326AAC99C /* AuthView.swift */; };
@@ -56,17 +55,6 @@
 		EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeardGroup.swift; sourceTree = "<group>"; };
 		F00793646933CBDFE4070BF5 /* PendantManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		C8BE82B262E932B2D460310C /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				DADE2F027C1013968D052B37 /* sherpa-onnx in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		063094A8D9088415CCE84AA3 /* Resources */ = {
@@ -171,7 +159,6 @@
 			buildPhases = (
 				465B6D7E5FF0789D0FB52693 /* Sources */,
 				404FF3D5A303F31E167F1701 /* Resources */,
-				C8BE82B262E932B2D460310C /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -179,7 +166,6 @@
 			);
 			name = Anticipy;
 			packageProductDependencies = (
-				18E77196B32C3DF5E3B7DFE6 /* sherpa-onnx */,
 			);
 			productName = Anticipy;
 			productReference = 008EC9F3B3E9368F8EBD22BF /* Anticipy.app */;
@@ -209,9 +195,6 @@
 			);
 			mainGroup = 1C5B00E7BB520953DD781CA2;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				011B3FF5B18E742C209F4C91 /* XCRemoteSwiftPackageReference "sherpa-onnx" */,
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6A539E9BBDA1A25C8270B543 /* Products */;
 			projectDirPath = "";
@@ -316,7 +299,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 48;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -395,7 +378,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 48;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -451,25 +434,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		011B3FF5B18E742C209F4C91 /* XCRemoteSwiftPackageReference "sherpa-onnx" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/k2-fsa/sherpa-onnx";
-			requirement = {
-				kind = revision;
-				revision = 00ad9a19a63751a6c4b12050a00eacfeb204814e;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		18E77196B32C3DF5E3B7DFE6 /* sherpa-onnx */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 011B3FF5B18E742C209F4C91 /* XCRemoteSwiftPackageReference "sherpa-onnx" */;
-			productName = "sherpa-onnx";
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 053E0002B5B783EA0A998BBC /* Project object */;
 }
