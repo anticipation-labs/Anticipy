@@ -365,13 +365,19 @@ export function BuildForm() {
           </div>
         )}
 
-        <AnimatePresence mode="wait" initial={false}>
+        {/* Deliberately NOT AnimatePresence with mode="wait". That gates the
+            next screen on the previous one's EXIT animation finishing, so
+            anything which stalls that animation leaves the form frozen with
+            the old question on screen and no fields — observed directly in a
+            backgrounded tab, where animation frames pause. Keying a plain
+            motion.div swaps immediately and replays the entry fade, and the
+            flash covers the change anyway, so the exit was buying nothing. */}
+        <div>
           <motion.div
             key={screen}
             ref={paneRef}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
             transition={{ duration: 0.14, ease }}
           >
             {screen === 0 && (
@@ -551,7 +557,7 @@ export function BuildForm() {
               </>
             )}
           </motion.div>
-        </AnimatePresence>
+        </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 32 }}>
           <button
