@@ -20,12 +20,10 @@ export function Wound() {
       const tl = gsap.timeline({
         scrollTrigger: {
           trigger: rootRef.current,
-          // Unpinned. This held the viewport for the length of the
-          // animation; the visitor scrolled and the page refused to move.
-          // The timeline now plays as the section passes through view.
-          start: "top 75%",
-          end: "bottom 25%",
+          start: "top top",
+          end: "+=2300",
           scrub: 0.6,
+          pin: true,
         },
       });
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Serif_Display, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { LenisProvider } from "@/components/LenisProvider";
 import { PostHogProvider } from "@/components/PostHogProvider";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { OfferMount } from "@/components/offer/OfferMount";
@@ -140,7 +141,7 @@ export default function RootLayout({
         <PostHogProvider />
         <AnalyticsProvider />
         <OfferMount />
-        {children}
+        <LenisProvider>{children}</LenisProvider>
         <Analytics />
         <SpeedInsights />
         <script
