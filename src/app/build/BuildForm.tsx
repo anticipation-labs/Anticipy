@@ -51,7 +51,7 @@ const rule = (focused: boolean, invalid: boolean): React.CSSProperties => ({
 function Q({ children }: { children: React.ReactNode }) {
   return (
     <h2
-      className="font-serif"
+      className="font-serif ap-q"
       style={{
         fontSize: "clamp(25px, 3.4vw, 36px)",
         lineHeight: 1.14,
@@ -67,7 +67,7 @@ function Q({ children }: { children: React.ReactNode }) {
 
 function Sub({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ color: "var(--text-on-dark-muted)", fontSize: 15, lineHeight: 1.6, margin: "0 0 26px", maxWidth: 520 }}>
+    <p className="ap-sub" style={{ color: "var(--text-on-dark-muted)", fontSize: 15, lineHeight: 1.6, margin: "0 0 26px", maxWidth: 520 }}>
       {children}
     </p>
   );
@@ -273,6 +273,26 @@ export function BuildForm() {
     return (
       <div style={{ ...shell, overflowY: "auto" }}>
         <Flash active={flashing} />
+
+      {/* On a short viewport — a phone held sideways, or a small laptop with
+          the keyboard open — the default rhythm pushes Continue below the
+          fold. The panel already degrades to scrolling rather than clipping,
+          but having to hunt for the button is still bad. These rules tighten
+          the spacing so the whole screen fits instead. !important because the
+          values they override are inline styles. */}
+      <style>{`
+        @media (max-height: 560px) {
+          .ap-inner { padding-top: 14px !important; padding-bottom: 14px !important; }
+          .ap-inner > div:first-child { margin-bottom: 14px !important; }
+          .ap-q { font-size: 21px !important; margin-bottom: 6px !important; }
+          .ap-sub { margin-bottom: 16px !important; font-size: 14px !important; }
+          .ap-inner textarea { max-height: 22vh !important; }
+        }
+        @media (max-height: 430px) {
+          .ap-q { font-size: 18px !important; }
+          .ap-sub { display: none !important; }
+        }
+      `}</style>
         <div style={{ ...inner, marginTop: 40, marginBottom: 40 }}>
           <motion.div
             initial={{ scaleX: 0 }}
@@ -311,7 +331,7 @@ export function BuildForm() {
     <div style={shell} onKeyDown={onKeyDown}>
       <Flash active={flashing} />
 
-      <div style={inner}>
+      <div style={inner} className="ap-inner">
         {/* Wordmark — the only chrome. */}
         <div style={{ marginBottom: screen === 0 ? 40 : 30 }}>
           <a
