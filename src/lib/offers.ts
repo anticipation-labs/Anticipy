@@ -166,13 +166,22 @@ export function scoreVisitor(p: VisitorProfile): Scores {
 }
 
 /**
- * Picks the deepest tier the visitor genuinely qualifies for.
+ * Picks the tier this visitor has earned.
  *
- * Tiers are evaluated in sort order and the LAST match wins, so the table
- * reads top-to-bottom from full price down to the floor. A tier that has
- * exhausted its redemption budget or passed its expiry is skipped rather
- * than clamped, so a sold-out offer silently falls back to the next-best
- * one the visitor qualifies for instead of failing closed to full price.
+ * The intent bands are treated as CONTIGUOUS AND EXHAUSTIVE: every possible
+ * score lands in exactly one band, so there is no combination of signals that
+ * falls through to full price by accident.
+ *
+ * An earlier version applied `min_friction_score` and `min_sessions` as hard
+ * gates on top of the bands. That left 20% of the score space matching no
+ * tier at all, and worse, made the ladder non-monotonic — a first-session
+ * visitor scoring 40 received nothing while one scoring 30 received $20 off.
+ * Friction now DEEPENS an already-chosen tier instead of being able to
+ * disqualify a visitor from every tier at once.
+ *
+ * Tiers that are inactive, expired, or out of redemptions are skipped
+ * SHALLOWER (toward full price), never deeper: running out of budget on a
+ * discount must not promote someone into a bigger one.
  */
 export function selectTier(
   scores: Scores,
@@ -181,18 +190,37 @@ export function selectTier(
 ): OfferTier | null {
   const now = Date.now();
 
-  const eligible = tiers
-    .filter((t) => t.active)
-    .filter((t) => !t.expires_at || new Date(t.expires_at).getTime() > now)
-    .filter((t) => t.max_redemptions == null || t.redemption_count < t.max_redemptions)
-    .filter((t) => profile.session_count >= t.min_sessions)
-    .filter((t) => scores.intent >= t.min_intent_score)
-    .filter((t) => t.max_intent_score == null || scores.intent <= t.max_intent_score)
-    .filter((t) => scores.friction >= t.min_friction_score)
-    .sort((a, b) => a.sort_order - b.sort_order);
+  const available = (t: OfferTier): boolean =>
+    t.active &&
+    (!t.expires_at || new Date(t.expires_at).getTime() > now) &&
+    (t.max_redemptions == null || t.redemption_count < t.max_redemptions);
 
-  if (!eligible.length) return null;
-  return eligible[eligible.length - 1];
+  const ordered = [...tiers].sort((a, b) => a.sort_order - b.sort_order);
+  if (!ordered.length) return null;
+
+  // Base tier from the intent band. Bands run deepest-discount-last, so the
+  // first band whose lower bound the score clears (scanning from the floor
+  // upward) is the match.
+  let idx = ordered.findIndex(
+    (t) =>
+      scores.intent >= t.min_intent_score &&
+      (t.max_intent_score == null || scores.intent <= t.max_intent_score)
+  );
+
+  // Defensive: if an admin edit leaves a genuine gap in the bands, fall back
+  // to the shallowest tier rather than returning nothing. Erring toward full
+  // price is the safe direction for a misconfiguration.
+  if (idx < 0) idx = 0;
+
+  // Clear hesitation earns one step deeper — but only one, so friction
+  // cannot cascade a casual visitor to the floor.
+  if (scores.friction >= 2 && idx + 1 < ordered.length) idx += 1;
+
+  // Walk shallower until an available tier is found.
+  for (let i = idx; i >= 0; i--) {
+    if (available(ordered[i])) return ordered[i];
+  }
+  return null;
 }
 
 /**
