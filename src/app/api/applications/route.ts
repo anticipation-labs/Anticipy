@@ -185,9 +185,31 @@ export async function POST(request: NextRequest) {
     user_agent: request.headers.get("user-agent")?.slice(0, 400) ?? null,
   };
 
-  const { error: dbErr } = await supabaseAdmin
-    .from("anticipy_applications")
-    .upsert(row, { onConflict: "email" });
+  // Insert, then fall back to update on a duplicate — deliberately NOT an
+  // upsert with onConflict:"email". The unique index is on lower(email), an
+  // EXPRESSION index, and Postgres will not match an ON CONFLICT clause naming
+  // the bare column against it: it fails with 42P10 "no unique or exclusion
+  // constraint matching the ON CONFLICT specification". That failure is silent
+  // from the applicant's side, so every submission emailed through correctly
+  // while storing nothing.
+  //
+  // Doing it this way keeps the case-insensitive index and needs no migration.
+  // `email` is lowercased above, and stored lowercased, so the .eq() matches.
+  let dbErr: { message: string } | null = null;
+  {
+    const ins = await supabaseAdmin.from("anticipy_applications").insert(row);
+    if (ins.error) {
+      if (ins.error.code === "23505") {
+        const upd = await supabaseAdmin
+          .from("anticipy_applications")
+          .update(row)
+          .eq("email", email);
+        dbErr = upd.error;
+      } else {
+        dbErr = ins.error;
+      }
+    }
+  }
 
   if (dbErr) {
     // Logged but NOT fatal: the notification email below carries the whole
