@@ -995,6 +995,38 @@ def record_link(event_id: str, parent_id: str) -> None:
         print(f"link: {event_id} -> {parent_id} failed: {e}")
 
 
+def stamp_for(decision: str, said) -> str:
+    """What to write on the transcript row, given what she actually said.
+
+    AN ASK THAT ASKED NOTHING IS NOT AN ASK.
+
+    2026-08-07, live. He planned dinner out loud with another person. The
+    pendant hears one side, so it read as thinking aloud, and the self-talk
+    rule held the question back. Holding it is CORRECT — loosening that rule
+    the same afternoon produced FOUR texts for one dinner and SIX for the Earls
+    plan, and was reverted.
+
+    But the row was still stamped "ask", and the feed renders any "ask" as the
+    header "Quick question for you". He got that header with no question under
+    it and no text. The silence was right; the card claiming a question was the
+    lie.
+
+    Quiet work already has a stamp: decision="ignore" carrying the goal, which
+    the app has rendered as "Looking into it" since the Paris-flights incident.
+    A held-back question is exactly that — she has the plan, she is carrying
+    it, she is not tugging his sleeve. Nothing server-side reads "ask" off a
+    transcript row, so this needs no app update and is correct on the build
+    already on his phone.
+
+    Only "ask" is ever rewritten, and only when there is genuinely nothing to
+    show. Everything else is returned untouched.
+    """
+    if decision != "ask":
+        return decision
+    text = said if isinstance(said, str) else ""
+    return "ask" if text.strip() else "ignore"
+
+
 def mark_processed(event_id: str, decision: str, addressee: str = "",
                    goal: str = "") -> bool:
     """Returns whether the mark actually landed. A silently-failed PATCH left
@@ -1241,7 +1273,11 @@ def main() -> None:
                     ev["id"], cands)
                 if parent:
                     record_link(ev["id"], parent)
-                decision = out["decision"].decision
+                decision = stamp_for(out["decision"].decision,
+                                     out.get("anticipy_says"))
+                if decision != out["decision"].decision:
+                    print("ask with nothing to ask -> filing as quiet work, "
+                          "not a question he never got")
                 mark_processed(ev["id"], decision,
                                addressee=getattr(out["decision"], "addressee",
                                                  "") or "",
