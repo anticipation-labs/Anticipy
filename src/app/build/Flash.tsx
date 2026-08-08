@@ -3,17 +3,21 @@
 import { motion, AnimatePresence } from "motion/react";
 
 /**
- * The transition between screens.
+ * The cut between screens.
  *
- * Three fast beats rather than a fade. A cross-fade reads as "loading"; a
- * rhythmic flash reads as a deliberate cut, which is the difference between
- * feeling like a form and feeling like something was made. The whole sequence
- * is 330ms — long enough to register as intentional, short enough that a
- * person filling in seven screens never waits on it.
+ * Timing is measured, not chosen: a screen change should land in 240-300ms and
+ * never exceed 320ms, because on a five-screen flow the person pays that cost
+ * five times. The first version of this ran a 330ms flash and then swapped the
+ * screen 150ms in — about 480ms of perceived latency, with the flash competing
+ * against the screen change rather than covering it. That is what "not smooth"
+ * was.
  *
- * `pointerEvents: none` throughout: the flash must never eat a tap from
- * someone moving quickly. And it is skipped entirely under reduced-motion,
- * where three rapid luminance changes are exactly the pattern to avoid.
+ * Now the whole thing is 260ms and the swap happens at 90ms, under the second
+ * beat, so the change is hidden inside the cut rather than racing it.
+ *
+ * `pointerEvents: none` so it never swallows a tap from someone moving fast,
+ * and skipped entirely under reduced-motion, where rapid luminance changes are
+ * exactly the pattern to avoid.
  */
 export function Flash({ active }: { active: boolean }) {
   const reduced =
@@ -28,16 +32,20 @@ export function Flash({ active }: { active: boolean }) {
         <motion.div
           aria-hidden="true"
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.5, 0, 0.32, 0, 0.16, 0] }}
+          animate={{ opacity: [0, 0.42, 0.06, 0.3, 0.04, 0.16, 0] }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.33, times: [0, 0.12, 0.24, 0.42, 0.56, 0.74, 1], ease: "linear" }}
+          transition={{
+            duration: 0.26,
+            times: [0, 0.14, 0.3, 0.46, 0.62, 0.78, 1],
+            ease: "linear",
+          }}
           style={{
             position: "fixed",
             inset: 0,
             background: "var(--gold)",
+            mixBlendMode: "overlay",
             pointerEvents: "none",
             zIndex: 60,
-            mixBlendMode: "overlay",
           }}
         />
       )}
