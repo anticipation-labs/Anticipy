@@ -223,10 +223,23 @@ export async function POST(request: NextRequest) {
     // second discount. Deliberately fire-and-forget: a failure here must not
     // block a checkout the customer has already committed to.
     if (offer?.visitorId && offer.couponId) {
-      void supabaseAdmin
-        .from("anticipy_visitor_profiles")
-        .update({ offer_redeemed: true })
-        .eq("visitor_id", offer.visitorId);
+      // AWAITED, not fire-and-forget. A Supabase query builder is a lazy
+      // thenable: it issues no HTTP request until it is awaited. The previous
+      // `void` never triggered it, so offer_redeemed was never set for anyone
+      // and the one-time discount was infinitely reusable.
+      //
+      // Awaiting it also matters on serverless, where the function can be
+      // frozen the instant it returns and an in-flight request is simply
+      // dropped. The error is swallowed so a bookkeeping failure cannot break
+      // a checkout the customer has already committed to.
+      try {
+        await supabaseAdmin
+          .from("anticipy_visitor_profiles")
+          .update({ offer_redeemed: true })
+          .eq("visitor_id", offer.visitorId);
+      } catch (err) {
+        console.error("Failed to burn offer for", offer.visitorId, err);
+      }
     }
 
     return NextResponse.json({ url: session.url, id: session.id }, { status: 200 });

@@ -36,6 +36,16 @@ export const LIST_PRICE_CENTS = 14999;
 /** Hard floor. No tier, admin action, or scoring accident may go below this. */
 export const FLOOR_PRICE_CENTS = 10999;
 
+/**
+ * Minimum intent score before ANY discount is offered.
+ *
+ * Set at the lower bound of the mid ladder so the deep tiers are reachable
+ * only by being bumped down from here on demonstrated friction — never by
+ * simply scoring low. Discounts are for people who are deciding and stalling,
+ * not for people who just arrived.
+ */
+export const MIN_OFFER_INTENT = 14;
+
 export interface VisitorProfile {
   visitor_id: string;
   session_count: number;
@@ -198,9 +208,17 @@ export function selectTier(
   const ordered = [...tiers].sort((a, b) => a.sort_order - b.sort_order);
   if (!ordered.length) return null;
 
-  // Base tier from the intent band. Bands run deepest-discount-last, so the
-  // first band whose lower bound the score clears (scanning from the floor
-  // upward) is the match.
+  // NOTHING is offered below this. A visitor who has read nothing is not a
+  // persuadable, they are a bounce — and a discount is wasted on them twice
+  // over: it cannot change a decision they have not started making, and it
+  // hands away margin to anyone who simply loads the page.
+  //
+  // An earlier revision omitted this. Because the intent bands are
+  // exhaustive, a brand-new visitor scored 0 and landed in the deepest band,
+  // so the very first request from someone with zero seconds on site
+  // returned the $109.99 floor. That was live and verified in production.
+  if (scores.intent < MIN_OFFER_INTENT) return null;
+
   let idx = ordered.findIndex(
     (t) =>
       scores.intent >= t.min_intent_score &&
@@ -216,9 +234,17 @@ export function selectTier(
   // cannot cascade a casual visitor to the floor.
   if (scores.friction >= 2 && idx + 1 < ordered.length) idx += 1;
 
-  // Walk shallower until an available tier is found.
+  // Walk shallower until a tier is both available AND one this visitor
+  // actually qualifies for. min_friction_score and min_sessions are enforced
+  // HERE rather than as entry filters: as filters they could disqualify a
+  // visitor from every tier at once and blow a hole in the ladder, but as a
+  // downward walk they only ever move someone toward full price.
   for (let i = idx; i >= 0; i--) {
-    if (available(ordered[i])) return ordered[i];
+    const t = ordered[i];
+    if (!available(t)) continue;
+    if (scores.friction < t.min_friction_score) continue;
+    if (profile.session_count < t.min_sessions) continue;
+    return t;
   }
   return null;
 }

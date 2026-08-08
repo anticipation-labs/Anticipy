@@ -27,9 +27,11 @@ interface CerebrasMessage {
 
 // Hardcoded fallback when CEREBRAS_API_KEY isn't in Vercel env (we
 // can't add env vars from code, and the user shouldn't need to). This
-// is a free-tier key — risk of public-repo exposure is bounded by the
-// free quota cap. See same pattern in /api/extension/auth.
-const FALLBACK_KEY = "csk-jw66w22nrhcfkwckkv82jpjdep6rjdhvy96nce5hf94dfcpv";
+// No hardcoded fallback. A committed key is a live credential in every
+// clone, fork and CI log of this repo, and "it is only free tier" stops
+// being true the moment the account is upgraded or the quota is used as
+// a denial-of-service against our own service.
+const FALLBACK_KEY = "";
 
 export function cerebrasAvailable(): boolean {
   return Boolean(process.env.CEREBRAS_API_KEY || FALLBACK_KEY);

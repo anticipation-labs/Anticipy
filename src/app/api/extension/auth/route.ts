@@ -89,13 +89,12 @@ export async function POST(req: Request) {
   const geminiApiKey = process.env.GOOGLE_API_KEY || null;
   const mistralApiKey = process.env.MISTRAL_API_KEY || null;
   const deepseekApiKey = process.env.DEEPSEEK_API_KEY || null;
-  // Cerebras free 1M tokens/day. Hardcoded fallback when CEREBRAS_API_KEY
-  // isn't in Vercel env so the extension still gets the fastest, highest-
-  // RPM-headroom tier without any manual env config. Risk: this key is
-  // free-tier only, no money attached — worst case is the 1M/day cap gets
-  // shared and we rotate. Public-repo exposure acceptable.
-  const cerebrasApiKey = process.env.CEREBRAS_API_KEY ||
-    "csk-jw66w22nrhcfkwckkv82jpjdep6rjdhvy96nce5hf94dfcpv";
+  // Cerebras free tier, 1M tokens/day.
+  // Hardcoded fallback removed. It was a live credential committed to the
+  // repository and served to any caller holding an access code, so it was
+  // readable by anyone who could obtain one. Cerebras is now simply
+  // unavailable unless CEREBRAS_API_KEY is configured.
+  const cerebrasApiKey = process.env.CEREBRAS_API_KEY || "";
   // kimiApiKey kept as explicit null in response so old extension builds
   // (v4-) that destructure it don't crash; new builds ignore the field.
   // Remove once extension v7+ drops Kimi entirely.

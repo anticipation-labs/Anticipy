@@ -1,11 +1,18 @@
 /**
- * GET  /api/crm/users  -> list (gate-only). For login, callers may also see
- *                         users while unauthenticated by passing ?for=login,
- *                         which returns a minimal projection (id, name, email,
- *                         has_password) so the picker can render before sign-in.
+ * GET  /api/crm/users  -> list. Gate required, with no exceptions.
  * POST /api/crm/users  -> admin only. Creates a new user; an initial password
  *                         may be supplied, otherwise the user sets one on
  *                         their first sign-in.
+ *
+ * SECURITY: this route previously honoured `?for=login`, which skipped the
+ * gate entirely and returned every user's id, name, email and whether they
+ * had a password set — unauthenticated, to anyone on the internet. It was
+ * intended to let a login picker render before sign-in. In combination with
+ * the first-login password-claim path in /api/crm/gate, it also told an
+ * attacker in real time exactly which account was claimable.
+ *
+ * The bypass is removed. A login screen must ask the user who they are
+ * rather than being handed the directory.
  */
 import { NextResponse } from "next/server";
 import { crmDb } from "@/lib/crm/db";
@@ -14,28 +21,6 @@ import { hashPassword } from "@/lib/crm/password";
 import { rateLimit, clientIp } from "@/lib/crm/rate-limit";
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const isLoginScope = url.searchParams.get("for") === "login";
-  if (isLoginScope) {
-    const ip = clientIp(req);
-    const limit = rateLimit(`crm-users-login:${ip}`, 30, 60 * 1000);
-    if (!limit.allowed) {
-      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
-    }
-    const { data, error } = await crmDb()
-      .from("crm_users")
-      .select("id, name, email, password_hash")
-      .order("created_at", { ascending: true });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const users = (data ?? []).map((u: any) => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      has_password: !!u.password_hash,
-    }));
-    return NextResponse.json({ users });
-  }
-
   const guard = requireCrmGate(req);
   if (guard) return guard;
   const { data, error } = await crmDb()
