@@ -16,10 +16,14 @@ export function Turn() {
       const tl = gsap.timeline({
         scrollTrigger: {
           trigger: rootRef.current,
-          start: "top top",
-          end: "+=2000",
+          // No pin. This previously locked the viewport and refused to release
+          // it until the visitor had scrolled 2000px — pushing down and having
+          // the page not move is the single most disorienting thing a site can
+          // do. The same timeline now plays as the section passes through the
+          // viewport normally, so scrolling always does what scrolling does.
+          start: "top 75%",
+          end: "bottom 25%",
           scrub: 0.6,
-          pin: true,
         },
       });
 

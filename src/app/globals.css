@@ -39,7 +39,11 @@
 }
 
 html {
-  scroll-behavior: auto; /* Lenis handles smooth scrolling */
+  /* Native scrolling. A smooth-scroll library used to intercept every
+     wheel and swipe and re-animate it over 1.2s, which made the whole site
+     feel like it was responding a second late. `auto` is the browser's own
+     immediate behaviour and is what makes scrolling feel direct. */
+  scroll-behavior: auto;
 }
 
 body {
