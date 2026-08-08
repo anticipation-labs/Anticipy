@@ -1161,7 +1161,10 @@ class Anticipy:
         # prepare Devon invoice email"). A colon keeps any goal grammatical.
         pretty = goal.replace("_", " ").strip()
         if needs_ok:
-            return f"I caught that — on it: {pretty}. Nothing goes out until you say so."
+            # Ends on the question. The old wording tacked on "Nothing goes out
+            # until you say so" — which Omar read, correctly, as a release note
+            # rather than something a person says. Asking IS the promise.
+            return f"Got this ready: {pretty}. Want me to go ahead?"
         return f"On it: {pretty}."
 
     def _answer_from_memory(self, question: str) -> Optional[str]:
