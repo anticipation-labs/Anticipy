@@ -13,11 +13,27 @@ const OfferDialog = dynamic(
   { ssr: false }
 );
 
-/** Routes where an offer would be an interruption rather than an offer. */
+/**
+ * Routes where an offer would be an interruption rather than an offer.
+ *
+ * Two categories, and the second is the one that is easy to get wrong:
+ *  - Pages where the visitor is already transacting or reading legal terms.
+ *  - Pages addressed to someone who is NOT a shopper. A pendant discount
+ *    shown to a job applicant or an investor is not a missed sale, it is a
+ *    signal that nobody is minding the site. This was caught live: the wheel
+ *    fired on /build while an engineer was mid-application.
+ *
+ * Adding a page that is not a purchase funnel? Add it here at the same time.
+ */
 const SUPPRESSED = [
   "/pre-orders/purchase",
   "/pre-orders/success",
   "/pre-orders/agreement",
+  "/build", // job applicants are not shoppers
+  "/apply", // redirects to /build, but guard the path anyway
+  "/jobs",
+  "/join",
+  "/funded", // investor page
   "/privacy",
   "/terms",
   "/refund",
