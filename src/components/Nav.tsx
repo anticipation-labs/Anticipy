@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { Tm } from "@/components/Tm";
 
 const navLinks = [
   { label: "Product", href: "#product" },
@@ -91,7 +92,7 @@ export function Nav() {
               />
               <circle cx="16" cy="20" r="1.8" fill="#C8A97E" />
             </svg>
-            Anticipy
+            Anticipy<Tm />
           </span>
         </a>
 

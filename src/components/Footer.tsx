@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Tm } from "@/components/Tm";
 
 export function Footer() {
   return (
@@ -12,7 +13,7 @@ export function Footer() {
       <div className="max-w-container mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
           <p className="text-[13px] text-[var(--text-on-dark-muted)]">
-            &copy; 2026 Anticipation Labs.
+            &copy; 2026 Anticipation Labs<Tm />.
           </p>
           <nav className="flex gap-4">
             <Link

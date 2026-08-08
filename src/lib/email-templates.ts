@@ -1,4 +1,5 @@
 import { escapeHtml } from "./escape";
+import { TM_HTML } from "./tm";
 
 /**
  * Branded HTML for customer-facing transactional email.
@@ -66,7 +67,7 @@ function shell(a: ShellArgs): string {
           <td style="padding:26px 32px 22px 32px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
               <tr>
-                <td align="left" style="font-family:${SERIF};font-size:21px;letter-spacing:0.02em;color:${GOLD};">Anticipy</td>
+                <td align="left" style="font-family:${SERIF};font-size:21px;letter-spacing:0.02em;color:${GOLD};">Anticipy${TM_HTML}</td>
                 <td align="right" style="font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:${MUTED};font-weight:600;">${a.eyebrow}</td>
               </tr>
             </table>
@@ -87,7 +88,7 @@ function shell(a: ShellArgs): string {
               <tr>
                 <td style="border-top:1px solid ${HAIRLINE};padding-top:20px;font-size:11px;line-height:1.6;color:${DIM};">
                   ${a.footerNote}<br /><br />
-                  Anticipation Labs Inc. &middot; <a href="${SITE}" style="color:${MUTED};text-decoration:underline;">anticipy.ai</a>
+                  Anticipation Labs${TM_HTML} Inc. &middot; <a href="${SITE}" style="color:${MUTED};text-decoration:underline;">anticipy.ai</a>
                 </td>
               </tr>
             </table>
