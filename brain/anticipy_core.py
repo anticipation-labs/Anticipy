@@ -758,9 +758,56 @@ class Anticipy:
                     # the worker posted it as said, and the speak-once guard
                     # then suppressed every retry forever — a silent card
                     # wearing a "he was told" sticker.
-                    if not (self._may_say(may_say, handled, goal,
-                                          "ambient_act")
-                            and self.notify_owner(handled)):
+                    # NOT ALLOWED TO SPEAK and TRIED AND FAILED TO SPEAK are
+                    # different things and must not share a branch. A refused
+                    # guard means he will never hear about this card, so it
+                    # must not exist. A failed Twilio call means the card is
+                    # real and simply undelivered — cancelling it would destroy
+                    # genuine work over a network blip.
+                    if not self._may_say(may_say, handled, goal, "ambient_act"):
+                        handled = None
+                        # SILENCE MUST MEAN STILLNESS.
+                        #
+                        # 2026-08-07, live, and the worst failure of the day.
+                        # He told Priya "I'll send it to your email". This lane
+                        # built the card and held it — correct. Then the
+                        # anti-nag guard refused the text ("already put this to
+                        # him twice with no answer") and the card stayed on his
+                        # desk. He approved something nobody had ever told him
+                        # about, and it opened Gmail.
+                        #
+                        # The comment eight lines up says it outright: "Held
+                        # work never sits silent." It did. The job is queued
+                        # BEFORE the speech is decided, so every guard in this
+                        # file silences her mouth and none of them stop her
+                        # hands — which makes the worst outcome the default.
+                        #
+                        # `fresh` is what makes this safe: a plan firming up
+                        # merges into its existing card and never reaches here,
+                        # so the card he IS waiting on is never touched. Only a
+                        # brand-new card that he was never told about dies.
+                        print(f"not allowed to raise {goal!r} — cancelling the "
+                              "card rather than leaving one he never heard of")
+                        self._cancel_job(job_id, "she was not allowed to raise "
+                                                 "this, so it was never his to "
+                                                 "approve")
+                        for l in self.loops:
+                            if getattr(l, "job_id", None) == job_id:
+                                l.status = "cancelled"
+                        decision = Decision(
+                            decision="ignore", goal=goal,
+                            reason=(f"{addressee}-directed: could not raise it, "
+                                    "so it was cancelled rather than left "
+                                    "waiting on him"),
+                            addressee=addressee)
+                    elif not self.notify_owner(handled):
+                        # Allowed, attempted, and the send failed. The card is
+                        # real and he simply has not been told yet — leave it
+                        # standing so a retry can reach him. `handled` is
+                        # dropped so nothing records it as said: a failed
+                        # Twilio call used to leave it truthy, the worker
+                        # posted it as said, and the speak-once guard then
+                        # suppressed every retry forever.
                         handled = None
             else:
                 # Dictation he is AUTHORING (voice-typing, instructing another
@@ -913,8 +960,40 @@ class Anticipy:
                                                      decision.goal, "act"):
                 if not self.notify_owner(handled):
                     handled = None
-            elif held:
+            elif held and repeat:
                 print(f"already waiting on him for {decision.goal!r} — not asking twice")
+            elif held and not explicit:
+                # SILENCE MUST MEAN STILLNESS.
+                #
+                # 2026-08-07, live. He told Priya "I'll send it to your email".
+                # A job was built and HELD for his approval — correct. Then the
+                # anti-nag guard refused the text ("already put this to him
+                # twice with no answer"), and the card stayed on his desk
+                # anyway. He approved something nobody had ever told him about,
+                # and it opened Gmail.
+                #
+                # Every guard here silences her MOUTH. None of them stopped her
+                # HANDS, because the job is queued before the speech is decided.
+                # That makes the worst outcome the default one: she does
+                # something real and says nothing.
+                #
+                # So a held card she is not allowed to speak about does not get
+                # to exist. Not deleted — cancelled, with the reason on it, so
+                # the record still says what happened.
+                #
+                # `explicit` is the exception and must stay: when he TEXTS her,
+                # conversation.py deliberately passes a muted guard
+                # (may_say=quiet, explicit=True) because it delivers her words
+                # itself, in-thread. Cancelling there would break the SMS lane
+                # outright.
+                print(f"not allowed to raise {decision.goal!r} — cancelling the "
+                      "card rather than leaving one he was never told about")
+                self._cancel_job(job_id, "she was not allowed to raise this, "
+                                         "so it was never his to approve")
+                for l in self.loops:
+                    if getattr(l, "job_id", None) == job_id:
+                        l.status = "cancelled"
+                handled = None
         elif decision.decision == "ask":
             handled = self._voice({
                 "situation": "one essential detail is missing before you can start",
@@ -1184,6 +1263,28 @@ class Anticipy:
             return None
 
     # ---------------------------------------------------------- action arm
+
+    def _cancel_job(self, job_id, why: str) -> bool:
+        """Take a card off his desk that he was never told about.
+
+        Cancelled, never deleted: the row stays, carrying the reason, so the
+        record still says what happened. "cancelled" is the status the
+        extension already uses when a run is stopped from Chrome, and the app
+        only renders awaiting_confirm/needs_user as cards — so this removes it
+        from his desk without inventing new vocabulary.
+
+        Never raises. A cancel that fails must not take hearing down with it;
+        the worst case is the behaviour that existed before this.
+        """
+        if not job_id:
+            return False
+        try:
+            pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+                     json={"status": "cancelled", "result": why}, timeout=10)
+            return True
+        except Exception as e:
+            print(f"could not cancel {job_id}: {e}")
+            return False
 
     def _queue_job(self, goal: str, params: dict, hold: bool = False,
                    explicit: bool = False) -> Optional[str]:
