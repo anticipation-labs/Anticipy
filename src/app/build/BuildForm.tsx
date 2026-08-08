@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ease } from "@/lib/animation";
+import { CalendarEmbed } from "./CalendarEmbed";
 
-const BOOKING_URL = "https://calendar.app.google/s97HJuvexjobnwgu9";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const URL_RE = /^https?:\/\/[^\s.]+\.[^\s]{2,}$/i;
 const MAX_RESUME_BYTES = 10 * 1024 * 1024;
@@ -301,40 +301,53 @@ export function BuildForm() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease, delay: 0.58 }}
         >
+          {/*
+            Copy passes one test: every sentence must be true of literally
+            everyone who reaches this screen, still true after that person is
+            rejected, and about what the APPLICANT DID or what WE WILL DO —
+            never a comparative judgement of their quality.
+
+            "Your application really stood out" fails all three. This screen
+            renders in milliseconds, so no human has read anything; an instant
+            *evaluation* is a lie with a timestamp, and this audience reasons
+            about latency for a living. The phrase is also verbatim in dozens
+            of published recruiting-template libraries they have each received
+            hundreds of times, and it is the exact wording engineers quote on
+            Blind as the insult they remember after a rejection.
+
+            The status signal comes from the costly, verifiable thing instead:
+            the founder's own calendar, bookable now. Under the persuasion-
+            knowledge model a recognised-but-CREDIBLE tactic raises regard for
+            the messenger rather than lowering it — and giving away the CEO's
+            calendar is expensive in a way a compliment is not.
+          */}
+          <p
+            style={{
+              color: "var(--text-on-dark)",
+              fontSize: 17,
+              lineHeight: 1.75,
+              margin: "24px 0 0",
+              maxWidth: 560,
+            }}
+          >
+            You just wrote three accounts of things you actually built. That
+            earns more than a form reply.
+          </p>
           <p
             style={{
               color: "var(--text-on-dark-muted)",
               fontSize: 16,
               lineHeight: 1.75,
-              margin: "24px 0 32px",
-              maxWidth: 540,
+              margin: "16px 0 0",
+              maxWidth: 560,
             }}
           >
-            You don&apos;t have to wait for that. This is Omar&apos;s own
-            calendar — not a screening call, not a recruiter. Take a slot and
-            talk to him directly.
+            Below is Omar&apos;s own calendar — the founder, not a recruiter
+            and not a screening round. Pick a time and talk to the person who
+            makes the decision.
           </p>
-          <a
-            href={BOOKING_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-cta-id="build_book_call"
-            data-cta-location="final_cta"
-            data-cta-type="contact"
-            data-cta-style="primary"
-            className="rounded-pill"
-            style={{
-              display: "inline-block",
-              background: "var(--gold)",
-              color: "var(--dark)",
-              padding: "14px 32px",
-              fontSize: 15,
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Book time with Omar
-          </a>
+
+          <CalendarEmbed />
         </motion.div>
       </motion.div>
     );
