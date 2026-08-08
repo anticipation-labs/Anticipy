@@ -300,21 +300,23 @@ export async function sendOwnerPreorderNotification(
 }
 
 // ─── BUILDER APPLICATION (from /build) ─────────────────────────────
-// Goes to the owner, with reply-to set to the applicant so a reply lands in
+// Goes to the owner with reply-to set to the applicant, so replying lands in
 // their inbox directly. This email is also the fallback record: if the
-// database write failed, everything the applicant wrote is still here, which
-// is why the whole submission is reproduced rather than summarised.
+// database write failed, everything they wrote is still here, which is why
+// the whole submission is reproduced rather than summarised.
 export async function sendApplicationNotification(a: {
   name: string;
   email: string;
   location: string;
   thing1: string;
+  thing1Extra: string;
   thing2: string;
-  thing3: string;
-  workAuthorized: boolean;
-  resumeUrl: string | null;
-  resumeFilename: string | null;
-  resumeLink?: string | null;
+  thing2Extra: string;
+  spokenFields: string[];
+  files: { url: string; filename: string }[];
+  resumeLink: string | null;
+  domainOk: boolean;
+  domainReason: string;
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
@@ -322,14 +324,22 @@ export async function sendApplicationNotification(a: {
   storedInDb: boolean;
 }) {
   const e = escapeHtml;
-  // Applicants write prose with line breaks; preserve them without letting
-  // any markup through.
+  // Applicants write prose with line breaks — preserve them, let no markup through.
   const para = (s: string) => e(s).replace(/\n/g, "<br/>");
+  const spoken = (f: string) =>
+    a.spokenFields.includes(f)
+      ? ' <span style="font-size:11px;color:#8a8a8a;font-weight:400;">(spoken)</span>'
+      : "";
 
-  const thing = (n: number, body: string) => `
-  <div style="margin: 0 0 22px 0;">
-    <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C9A227; font-weight: 600; margin: 0 0 6px 0;">Thing ${n}</p>
-    <p style="font-size: 15px; line-height: 1.65; color: #1a1a1a; margin: 0; white-space: normal;">${para(body)}</p>
+  const block = (label: string, body: string, extra: string, key: string) => `
+  <div style="margin: 0 0 26px 0;">
+    <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C9A227; font-weight: 600; margin: 0 0 6px 0;">${label}${spoken(key)}</p>
+    <p style="font-size: 15px; line-height: 1.65; color: #1a1a1a; margin: 0;">${para(body)}</p>
+    ${
+      extra
+        ? `<p style="font-size: 14px; line-height: 1.65; color: #4a4a4a; margin: 10px 0 0 0; padding-left: 12px; border-left: 2px solid #e8e2db;">${para(extra)}</p>`
+        : ""
+    }
   </div>`;
 
   const attribution = [
@@ -340,6 +350,15 @@ export async function sendApplicationNotification(a: {
   ]
     .filter(Boolean)
     .join(" &middot; ");
+
+  const fileList = a.files.length
+    ? a.files
+        .map(
+          (f) =>
+            `<p style="margin:0 0 6px 0;font-size:14px;"><a href="${e(f.url)}" style="color:#C9A227;font-weight:600;">${e(f.filename)}</a></p>`
+        )
+        .join("")
+    : "";
 
   return sendMail({
     to: OWNER_EMAILS,
@@ -352,48 +371,70 @@ export async function sendApplicationNotification(a: {
       Importance: "High",
     },
     html: `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 620px; margin: 0 auto; color: #1a1a1a; line-height: 1.6;">
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto; color: #1a1a1a; line-height: 1.6;">
   ${
     a.storedInDb
       ? ""
-      : `<p style="background:#FDECEC;border:1px solid #F5C2C2;border-radius:8px;padding:12px 14px;font-size:13px;color:#8A1F1F;margin:0 0 20px 0;"><strong>Not saved to the database.</strong> The row write failed, so this email is the only copy. Check that the anticipy_applications table exists.</p>`
+      : `<p style="background:#FDECEC;border:1px solid #F5C2C2;border-radius:8px;padding:12px 14px;font-size:13px;color:#8A1F1F;margin:0 0 20px 0;"><strong>Not saved to the database.</strong> The row write failed, so this email is the only copy. Check the anticipy_applications table exists.</p>`
   }
 
   <h2 style="margin: 0 0 4px 0; font-size: 21px;">${e(a.name)}</h2>
-  <p style="color: #6b635b; margin: 0 0 20px 0; font-size: 14px;">
+  <p style="color: #6b635b; margin: 0 0 22px 0; font-size: 14px;">
     <a href="mailto:${e(a.email)}" style="color: #C9A227;">${e(a.email)}</a>
     &middot; ${e(a.location)}
-    &middot; ${a.workAuthorized ? "Authorised to work locally" : "<strong style='color:#8A1F1F'>NOT authorised to work locally</strong>"}
+    ${a.domainOk ? "" : ` &middot; <span style="color:#8A1F1F;">email domain check: ${e(a.domainReason)}</span>`}
   </p>
 
-  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 0 0 22px 0;" />
+  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 0 0 24px 0;" />
 
-  ${thing(1, a.thing1)}
-  ${thing(2, a.thing2)}
-  ${thing(3, a.thing3)}
+  ${block("The first thing", a.thing1, a.thing1Extra, "thing1")}
+  ${block("The second thing", a.thing2, a.thing2Extra, "thing2")}
 
-  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 26px 0 18px 0;" />
-
-  <p style="font-size: 14px; margin: 0 0 8px 0;">
-    ${
-      a.resumeUrl
-        ? `<a href="${e(a.resumeUrl)}" style="color: #C9A227; font-weight: 600;">Download résumé${
-            a.resumeFilename ? ` (${e(a.resumeFilename)})` : ""
-          }</a> <span style="color:#8a8a8a; font-size: 12px;">— private link, expires in 7 days</span>`
-        : a.resumeLink
-          ? ""
-          : `<span style="color: #8a8a8a;">No résumé attached.</span>`
-    }
-  </p>
   ${
-    a.resumeLink
-      ? `<p style="font-size: 14px; margin: 0 0 8px 0;"><a href="${e(a.resumeLink)}" style="color: #C9A227; font-weight: 600;" rel="noopener noreferrer">${e(a.resumeLink)}</a> <span style="color:#8a8a8a; font-size: 12px;">— link they supplied</span></p>`
+    fileList || a.resumeLink
+      ? `<hr style="border: none; border-top: 1px solid #e8e2db; margin: 26px 0 18px 0;" />
+         ${fileList}
+         ${a.resumeLink ? `<p style="margin:0 0 6px 0;font-size:14px;"><a href="${e(a.resumeLink)}" style="color:#C9A227;font-weight:600;" rel="noopener noreferrer">${e(a.resumeLink)}</a></p>` : ""}
+         <p style="font-size:12px;color:#8a8a8a;margin:8px 0 0 0;">Private links, expire in 14 days.</p>`
       : ""
   }
 
-  ${attribution ? `<p style="font-size: 12px; color: #8a8a8a; margin: 14px 0 0 0;">${attribution}</p>` : ""}
+  ${attribution ? `<p style="font-size: 12px; color: #8a8a8a; margin: 20px 0 0 0;">${attribution}</p>` : ""}
+  <p style="font-size: 12px; color: #8a8a8a; margin: 16px 0 0 0;">Reply to this email to reach ${e(a.name)} directly.</p>
+</div>
+    `.trim(),
+  });
+}
 
-  <p style="font-size: 12px; color: #8a8a8a; margin: 18px 0 0 0;">Reply to this email to reach ${e(a.name)} directly.</p>
+// ─── APPLICANT RECEIPT ─────────────────────────────────────────────
+// Sent to the applicant. Two jobs: it closes the loop for a person who has
+// just spent real effort, and it is the only genuine proof the address
+// exists — a hard bounce on this message is ground truth, obtained at zero
+// friction. That is why there is no magic-link confirmation step on the form.
+export async function sendApplicantReceipt(email: string, name: string) {
+  const first = escapeHtml(sanitizeHeader(name.split(" ")[0] || "", 60));
+  return sendMail({
+    to: email,
+    bccOwner: false,
+    replyTo: REPLY_TO,
+    tag: "application-receipt",
+    subject: "Your Anticipy application",
+    html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.7;">
+  <p style="font-size: 16px;">${first ? `${first},` : "Hi,"}</p>
+
+  <p style="font-size: 16px;">Your application is in. A person reads these — there is no filter and no scoring.</p>
+
+  <p style="font-size: 16px;">If you booked a time with Omar, it is in your calendar and he will be there. If you did not, and you would like to, the link is still on the confirmation page.</p>
+
+  <p style="font-size: 16px;">Replying to this email reaches us directly.</p>
+
+  <p style="font-size: 16px;">Omar Ebrahim<br/><span style="color:#8a8a8a;font-size:14px;">Founder, Anticipy</span></p>
+
+  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 32px 0;" />
+  <p style="font-size: 13px; color: #8a8a8a;">
+    Anticipation Labs Inc. &middot; <a href="https://anticipy.ai" style="color: #C9A227;">anticipy.ai</a>
+  </p>
 </div>
     `.trim(),
   });

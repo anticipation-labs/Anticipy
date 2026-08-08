@@ -4,34 +4,34 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ease } from "@/lib/animation";
 import { CalendarEmbed } from "./CalendarEmbed";
+import { LocationInput } from "./LocationInput";
+import { VoiceInput } from "./VoiceInput";
+import { Flash } from "./Flash";
+import { suggestEmail } from "@/lib/email-check";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const URL_RE = /^https?:\/\/[^\s.]+\.[^\s]{2,}$/i;
-const MAX_RESUME_BYTES = 10 * 1024 * 1024;
-const ALLOWED_EXT = /\.(pdf|doc|docx)$/i;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_EXT = /\.(pdf|doc|docx|png|jpe?g|webp|heic|heif|gif|mp4|mov)$/i;
 
-const THING_PROMPT =
-  "What did you build, what did you personally own, and where can we see it?";
-
+type Status = "idle" | "submitting" | "success";
 type Errors = Partial<Record<string, string>>;
-type Status = "idle" | "submitting" | "success" | "error";
 
-const STEPS = ["You", "The work", "Résumé", "One last thing"] as const;
+/** One thing per screen. There is no third thing. */
+const SCREENS = [
+  "Who you are",
+  "Where you are",
+  "The first thing",
+  "Anything else",
+  "The second thing",
+  "Anything else",
+  "Anything to show",
+] as const;
 
-/**
- * Editorial field chrome: a bottom rule rather than a box.
- *
- * Boxed inputs on a near-black page read as a form; a baseline rule reads as
- * writing on a page, which is the register the rest of the site is in. The
- * rule is the only thing that moves on focus, and it moves to gold — the same
- * single accent the site spends everywhere else.
- */
-const field = (focused: boolean, invalid: boolean): React.CSSProperties => ({
+const rule = (focused: boolean, invalid: boolean): React.CSSProperties => ({
   background: "transparent",
   border: "none",
-  borderBottom: `1px solid ${
-    invalid ? "#C97E7E" : focused ? "var(--gold)" : "var(--dark-border)"
-  }`,
+  borderBottom: `1px solid ${invalid ? "#C97E7E" : focused ? "var(--gold)" : "var(--dark-border)"}`,
   color: "var(--text-on-dark)",
   padding: "10px 0 12px",
   fontSize: 18,
@@ -42,15 +42,37 @@ const field = (focused: boolean, invalid: boolean): React.CSSProperties => ({
   borderRadius: 0,
 });
 
-function useFocusRing() {
-  const [focused, setFocused] = useState<string | null>(null);
-  return {
-    focused,
-    bind: (name: string) => ({
-      onFocus: () => setFocused(name),
-      onBlur: () => setFocused((f) => (f === name ? null : f)),
-    }),
-  };
+function Q({ children }: { children: React.ReactNode }) {
+  return (
+    <h2
+      className="font-serif"
+      style={{
+        fontSize: "clamp(27px, 3.8vw, 40px)",
+        lineHeight: 1.14,
+        letterSpacing: "-0.02em",
+        margin: "0 0 12px",
+        color: "var(--text-on-dark)",
+      }}
+    >
+      {children}
+    </h2>
+  );
+}
+
+function Sub({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      style={{
+        color: "var(--text-on-dark-muted)",
+        fontSize: 15,
+        lineHeight: 1.65,
+        margin: "0 0 32px",
+        maxWidth: 520,
+      }}
+    >
+      {children}
+    </p>
+  );
 }
 
 function Err({ msg }: { msg?: string }) {
@@ -72,83 +94,46 @@ function Err({ msg }: { msg?: string }) {
   );
 }
 
-function Question({ children }: { children: React.ReactNode }) {
-  return (
-    <h2
-      className="font-serif"
-      style={{
-        fontSize: "clamp(26px, 3.6vw, 38px)",
-        lineHeight: 1.15,
-        letterSpacing: "-0.02em",
-        margin: "0 0 10px",
-        color: "var(--text-on-dark)",
-      }}
-    >
-      {children}
-    </h2>
-  );
-}
-
-function Hint({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      style={{
-        color: "var(--text-on-dark-muted)",
-        fontSize: 15,
-        lineHeight: 1.65,
-        margin: "0 0 34px",
-        maxWidth: 520,
-      }}
-    >
-      {children}
-    </p>
-  );
-}
-
 export function BuildForm() {
-  const [step, setStep] = useState(0);
-  const [dir, setDir] = useState(1);
+  const [screen, setScreen] = useState(0);
+  const [flashing, setFlashing] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [errors, setErrors] = useState<Errors>({});
   const [serverError, setServerError] = useState<string | null>(null);
-  const { focused, bind } = useFocusRing();
+  const [focus, setFocus] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [emailFix, setEmailFix] = useState<string | null>(null);
   const [location, setLocation] = useState("");
-  const [geoLabel, setGeoLabel] = useState<string | null>(null);
-  const [things, setThings] = useState(["", "", ""]);
+  const [thing1, setThing1] = useState("");
+  const [thing1Extra, setThing1Extra] = useState("");
+  const [thing2, setThing2] = useState("");
+  const [thing2Extra, setThing2Extra] = useState("");
   const [resumeLink, setResumeLink] = useState("");
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [workAuth, setWorkAuth] = useState<"yes" | "no" | "">("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [spoken, setSpoken] = useState<Set<string>>(new Set());
 
   const fileRef = useRef<HTMLInputElement>(null);
   const startedAt = useRef(0);
-  const stepRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     startedAt.current = Date.now();
-    // Suggest a location from the edge headers. Failure is silent — this is a
-    // convenience, and a broken suggestion must never block the field.
-    fetch("/api/geo")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.label) setGeoLabel(d.label);
-      })
-      .catch(() => {});
   }, []);
 
-  // Move focus to the new step's first control so the keyboard stays usable
-  // and screen readers announce the change.
   useEffect(() => {
     if (status === "success") return;
     const t = window.setTimeout(() => {
-      stepRef.current
-        ?.querySelector<HTMLElement>("input, textarea, button[data-choice]")
-        ?.focus();
-    }, 380);
+      paneRef.current?.querySelector<HTMLElement>("input, textarea")?.focus();
+    }, 420);
     return () => window.clearTimeout(t);
-  }, [step, status]);
+  }, [screen, status]);
+
+  const bind = (k: string) => ({
+    onFocus: () => setFocus(k),
+    onBlur: () => setFocus((f) => (f === k ? null : f)),
+  });
 
   const validate = useCallback(
     (s: number): Errors => {
@@ -158,31 +143,29 @@ export function BuildForm() {
         if (!email.trim()) e.email = "Required.";
         else if (!EMAIL_RE.test(email.trim()))
           e.email = "That doesn't look like an email address.";
-        if (!location.trim()) e.location = "Required — city and country.";
       }
-      if (s === 1) {
-        things.forEach((t, i) => {
-          if (!t.trim()) e[`thing${i + 1}`] = "Required.";
-        });
-      }
-      if (s === 2 && resumeLink.trim() && !URL_RE.test(resumeLink.trim())) {
+      if (s === 1 && !location.trim()) e.location = "Required.";
+      if (s === 2 && !thing1.trim()) e.thing1 = "Tell us one thing you built.";
+      if (s === 4 && !thing2.trim()) e.thing2 = "One more.";
+      if (s === 6 && resumeLink.trim() && !URL_RE.test(resumeLink.trim()))
         e.resumeLink = "That doesn't look like a link.";
-      }
-      if (s === 3 && workAuth !== "yes" && workAuth !== "no") {
-        e.workAuthorized = "Required.";
-      }
       return e;
     },
-    [name, email, location, things, resumeLink, workAuth]
+    [name, email, location, thing1, thing2, resumeLink]
   );
 
+  /** Advance with the flash between screens. */
   const advance = () => {
-    const e = validate(step);
+    const e = validate(screen);
     setErrors(e);
     if (Object.keys(e).length) return;
-    if (step < STEPS.length - 1) {
-      setDir(1);
-      setStep((s) => s + 1);
+
+    if (screen < SCREENS.length - 1) {
+      setFlashing(true);
+      // Swap the screen mid-flash so the change is hidden inside the beat
+      // rather than competing with it.
+      window.setTimeout(() => setScreen((s) => s + 1), 150);
+      window.setTimeout(() => setFlashing(false), 360);
     } else {
       void submit();
     }
@@ -190,9 +173,41 @@ export function BuildForm() {
 
   const back = () => {
     setErrors({});
-    setDir(-1);
-    setStep((s) => Math.max(0, s - 1));
+    setFlashing(true);
+    window.setTimeout(() => setScreen((s) => Math.max(0, s - 1)), 150);
+    window.setTimeout(() => setFlashing(false), 360);
   };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "Enter") return;
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "TEXTAREA" && !(e.metaKey || e.ctrlKey)) return;
+    // The location combobox handles its own Enter and stops propagation of
+    // the default; if it bubbles here the list was closed.
+    e.preventDefault();
+    advance();
+  };
+
+  const addFiles = (list: FileList | null) => {
+    if (!list) return;
+    const next: File[] = [];
+    let rejected = "";
+    for (const f of Array.from(list)) {
+      if (!ALLOWED_EXT.test(f.name)) {
+        rejected = "Some files were the wrong type.";
+        continue;
+      }
+      if (f.size > MAX_FILE_BYTES) {
+        rejected = "Some files were over 10 MB.";
+        continue;
+      }
+      next.push(f);
+    }
+    setErrors((p) => ({ ...p, files: rejected || undefined }));
+    setFiles((prev) => [...prev, ...next].slice(0, 6));
+  };
+
+  const markSpoken = (k: string) => setSpoken((s) => new Set(s).add(k));
 
   const submit = async () => {
     setServerError(null);
@@ -202,16 +217,15 @@ export function BuildForm() {
     fd.set("name", name.trim());
     fd.set("email", email.trim());
     fd.set("location", location.trim());
-    fd.set("thing1", things[0].trim());
-    fd.set("thing2", things[1].trim());
-    fd.set("thing3", things[2].trim());
-    fd.set("workAuthorized", workAuth);
+    fd.set("thing1", thing1.trim());
+    fd.set("thing1Extra", thing1Extra.trim());
+    fd.set("thing2", thing2.trim());
+    fd.set("thing2Extra", thing2Extra.trim());
     fd.set("resumeLink", resumeLink.trim());
+    fd.set("spokenFields", Array.from(spoken).join(","));
     fd.set("startedAt", String(startedAt.current));
-    fd.set("company", ""); // honeypot, left empty by real people
-
-    const f = fileRef.current?.files?.[0];
-    if (f) fd.set("resume", f);
+    fd.set("company", "");
+    files.forEach((f) => fd.append("files", f));
 
     const qs = new URLSearchParams(window.location.search);
     fd.set("utmSource", qs.get("utm_source") ?? "");
@@ -224,240 +238,151 @@ export function BuildForm() {
       const res = await fetch("/api/applications", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setStatus("error");
+        setStatus("idle");
         setServerError(data.error || "Something went wrong. Try again.");
         return;
       }
-      setStatus("success");
+      setFlashing(true);
+      window.setTimeout(() => setStatus("success"), 160);
+      window.setTimeout(() => setFlashing(false), 380);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
-      setStatus("error");
+      setStatus("idle");
       setServerError("Network error. Try again.");
     }
-  };
-
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    setErrors((p) => ({ ...p, resume: undefined }));
-    if (!f) return setFileName(null);
-    if (!ALLOWED_EXT.test(f.name)) {
-      setErrors((p) => ({ ...p, resume: "PDF, DOC or DOCX only." }));
-      e.target.value = "";
-      return setFileName(null);
-    }
-    if (f.size > MAX_RESUME_BYTES) {
-      setErrors((p) => ({ ...p, resume: "That file is over 10 MB." }));
-      e.target.value = "";
-      return setFileName(null);
-    }
-    setFileName(f.name);
-  };
-
-  // Enter advances, except inside a textarea where it must insert a newline.
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key !== "Enter") return;
-    const tag = (e.target as HTMLElement).tagName;
-    if (tag === "TEXTAREA" && !(e.metaKey || e.ctrlKey)) return;
-    e.preventDefault();
-    advance();
   };
 
   // ── Success ──────────────────────────────────────────────────
   if (status === "success") {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, ease }}
-      >
+      <>
+        <Flash active={flashing} />
         <motion.div
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 0.9, ease, delay: 0.15 }}
-          style={{
-            height: 1,
-            background: "var(--gold)",
-            transformOrigin: "left",
-            marginBottom: 34,
-          }}
-        />
-        <motion.h2
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease, delay: 0.32 }}
-          className="font-serif"
-          style={{
-            fontSize: "clamp(28px, 4vw, 42px)",
-            lineHeight: 1.15,
-            letterSpacing: "-0.02em",
-            margin: 0,
-          }}
+          transition={{ duration: 0.65, ease }}
         >
-          Got it. If the work is a fit, Omar will reach out.
-        </motion.h2>
-
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease, delay: 0.58 }}
-        >
-          {/*
-            Copy passes one test: every sentence must be true of literally
-            everyone who reaches this screen, still true after that person is
-            rejected, and about what the APPLICANT DID or what WE WILL DO —
-            never a comparative judgement of their quality.
-
-            "Your application really stood out" fails all three. This screen
-            renders in milliseconds, so no human has read anything; an instant
-            *evaluation* is a lie with a timestamp, and this audience reasons
-            about latency for a living. The phrase is also verbatim in dozens
-            of published recruiting-template libraries they have each received
-            hundreds of times, and it is the exact wording engineers quote on
-            Blind as the insult they remember after a rejection.
-
-            The status signal comes from the costly, verifiable thing instead:
-            the founder's own calendar, bookable now. Under the persuasion-
-            knowledge model a recognised-but-CREDIBLE tactic raises regard for
-            the messenger rather than lowering it — and giving away the CEO's
-            calendar is expensive in a way a compliment is not.
-          */}
-          <p
+          <motion.div
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.85, ease, delay: 0.1 }}
+            style={{ height: 1, background: "var(--gold)", transformOrigin: "left", marginBottom: 32 }}
+          />
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease, delay: 0.28 }}
+            className="font-serif"
             style={{
-              color: "var(--text-on-dark)",
-              fontSize: 17,
-              lineHeight: 1.75,
-              margin: "24px 0 0",
-              maxWidth: 560,
+              fontSize: "clamp(28px, 4vw, 42px)",
+              lineHeight: 1.15,
+              letterSpacing: "-0.02em",
+              margin: 0,
             }}
           >
-            You just wrote three accounts of things you actually built. That
-            earns more than a form reply.
-          </p>
-          <p
-            style={{
-              color: "var(--text-on-dark-muted)",
-              fontSize: 16,
-              lineHeight: 1.75,
-              margin: "16px 0 0",
-              maxWidth: 560,
-            }}
-          >
-            Below is Omar&apos;s own calendar — the founder, not a recruiter
-            and not a screening round. Pick a time and talk to the person who
-            makes the decision.
-          </p>
+            Got it. If the work is a fit, Omar will reach out.
+          </motion.h2>
 
-          <CalendarEmbed />
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease, delay: 0.5 }}
+          >
+            <p style={{ color: "var(--text-on-dark)", fontSize: 17, lineHeight: 1.75, margin: "22px 0 0", maxWidth: 560 }}>
+              You just wrote up two things you actually built. That earns more
+              than a form reply.
+            </p>
+            <p style={{ color: "var(--text-on-dark-muted)", fontSize: 16, lineHeight: 1.75, margin: "14px 0 0", maxWidth: 560 }}>
+              Below is Omar&apos;s own calendar — the founder, not a recruiter
+              and not a screening round. Take the earliest slot that works.
+            </p>
+            <CalendarEmbed />
+          </motion.div>
         </motion.div>
-      </motion.div>
+      </>
     );
   }
 
-  const isLast = step === STEPS.length - 1;
+  const last = screen === SCREENS.length - 1;
 
   return (
     <div onKeyDown={onKeyDown}>
-      {/* Progress: a rule that fills. Four dots would read as a wizard. */}
-      <div style={{ marginBottom: 46 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            marginBottom: 12,
-          }}
-        >
-          <span
-            className="tracking-wide-label"
-            style={{ fontSize: 11, textTransform: "uppercase", color: "var(--gold)" }}
-          >
-            {String(step + 1).padStart(2, "0")} — {STEPS[step]}
+      <Flash active={flashing} />
+
+      {/* Progress */}
+      <div style={{ marginBottom: 44 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 11 }}>
+          <span className="tracking-wide-label" style={{ fontSize: 11, textTransform: "uppercase", color: "var(--gold)" }}>
+            {String(screen + 1).padStart(2, "0")} — {SCREENS[screen]}
           </span>
-          <span style={{ fontSize: 11, color: "#5A5A5A" }}>
-            {String(STEPS.length).padStart(2, "0")}
-          </span>
+          <span style={{ fontSize: 11, color: "#5A5A5A" }}>{String(SCREENS.length).padStart(2, "0")}</span>
         </div>
         <div style={{ height: 1, background: "var(--dark-border)", position: "relative" }}>
           <motion.div
-            animate={{ scaleX: (step + 1) / STEPS.length }}
+            animate={{ scaleX: (screen + 1) / SCREENS.length }}
             initial={false}
-            transition={{ duration: 0.7, ease }}
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: "var(--gold)",
-              transformOrigin: "left",
-            }}
+            transition={{ duration: 0.55, ease }}
+            style={{ position: "absolute", inset: 0, background: "var(--gold)", transformOrigin: "left" }}
           />
         </div>
       </div>
 
-      <div style={{ position: "relative", minHeight: 340 }}>
-        <AnimatePresence mode="wait" initial={false} custom={dir}>
+      <div style={{ position: "relative", minHeight: 300 }}>
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={step}
-            ref={stepRef}
-            custom={dir}
-            initial={{ opacity: 0, x: dir * 26 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: dir * -26 }}
-            transition={{ duration: 0.42, ease }}
+            key={screen}
+            ref={paneRef}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease }}
           >
-            {/* ── 1. You ─────────────────────────────────── */}
-            {step === 0 && (
+            {screen === 0 && (
               <>
-                <Question>First, who are you?</Question>
-                <Hint>Three quick things, then we get to the work.</Hint>
-
+                <Q>First — who are you?</Q>
+                <Sub>Name and email. That&apos;s the whole screen.</Sub>
                 <div style={{ display: "grid", gap: 30 }}>
                   <div>
                     <input
-                      name="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Your name"
                       autoComplete="name"
                       aria-label="Your name"
-                      aria-invalid={!!errors.name}
-                      style={field(focused === "name", !!errors.name)}
+                      style={rule(focus === "name", !!errors.name)}
                       {...bind("name")}
                     />
                     <Err msg={errors.name} />
                   </div>
                   <div>
                     <input
-                      name="email"
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setEmailFix(null);
+                      }}
+                      onBlur={() => {
+                        setFocus(null);
+                        // Catch the typo before they submit — this is where
+                        // nearly all of the real-world win is. An MX check
+                        // would not help: gmial.com has a live MX record.
+                        const s = suggestEmail(email.trim());
+                        setEmailFix(s);
+                      }}
+                      onFocus={() => setFocus("email")}
                       placeholder="Email"
                       autoComplete="email"
                       aria-label="Email"
-                      aria-invalid={!!errors.email}
-                      style={field(focused === "email", !!errors.email)}
-                      {...bind("email")}
+                      style={rule(focus === "email", !!errors.email)}
                     />
                     <Err msg={errors.email} />
-                  </div>
-                  <div>
-                    <input
-                      name="location"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="City, country"
-                      autoComplete="address-level2"
-                      aria-label="Location"
-                      aria-invalid={!!errors.location}
-                      style={field(focused === "location", !!errors.location)}
-                      {...bind("location")}
-                    />
-                    <Err msg={errors.location} />
-                    {geoLabel && location.trim() !== geoLabel && (
+                    {emailFix && (
                       <button
                         type="button"
                         onClick={() => {
-                          setLocation(geoLabel);
-                          setErrors((p) => ({ ...p, location: undefined }));
+                          setEmail(emailFix);
+                          setEmailFix(null);
                         }}
                         style={{
                           background: "none",
@@ -469,7 +394,7 @@ export function BuildForm() {
                           fontFamily: "inherit",
                         }}
                       >
-                        Use {geoLabel}
+                        Did you mean {emailFix}?
                       </button>
                     )}
                   </div>
@@ -477,206 +402,199 @@ export function BuildForm() {
               </>
             )}
 
-            {/* ── 2. The work ────────────────────────────── */}
-            {step === 1 && (
+            {screen === 1 && (
               <>
-                <Question>Show us the three best things you&apos;ve built.</Question>
-                <Hint>
-                  Photos, video, GitHub, schematics, demos or shipped
-                  products—anything real. {THING_PROMPT}
-                </Hint>
-
-                <div style={{ display: "grid", gap: 30 }}>
-                  {[0, 1, 2].map((i) => (
-                    <div key={i}>
-                      <span
-                        className="tracking-wide-label"
-                        style={{
-                          fontSize: 11,
-                          textTransform: "uppercase",
-                          color: "var(--text-on-dark-muted)",
-                          display: "block",
-                          marginBottom: 6,
-                        }}
-                      >
-                        Thing {i + 1}
-                      </span>
-                      <textarea
-                        name={`thing${i + 1}`}
-                        value={things[i]}
-                        onChange={(e) =>
-                          setThings((t) => t.map((v, j) => (j === i ? e.target.value : v)))
-                        }
-                        rows={3}
-                        aria-label={`Thing ${i + 1}`}
-                        aria-invalid={!!errors[`thing${i + 1}`]}
-                        style={{
-                          ...field(focused === `thing${i}`, !!errors[`thing${i + 1}`]),
-                          fontSize: 16,
-                          lineHeight: 1.6,
-                          resize: "vertical",
-                        }}
-                        {...bind(`thing${i}`)}
-                      />
-                      <Err msg={errors[`thing${i + 1}`]} />
-                    </div>
-                  ))}
-                </div>
+                <Q>Where are you?</Q>
+                <Sub>Start typing — we&apos;ll find it.</Sub>
+                <LocationInput
+                  value={location}
+                  onChange={(v) => {
+                    setLocation(v);
+                    setErrors((p) => ({ ...p, location: undefined }));
+                  }}
+                  invalid={!!errors.location}
+                  onEnterWhenClosed={advance}
+                />
+                <Err msg={errors.location} />
               </>
             )}
 
-            {/* ── 3. Résumé ──────────────────────────────── */}
-            {step === 2 && (
+            {screen === 2 && (
               <>
-                <Question>Got a résumé?</Question>
-                <Hint>
-                  Completely optional — the work above matters more. But if
-                  you&apos;ve got one, we&apos;d still like to see it. Upload a
-                  file or paste a link.
-                </Hint>
+                <Q>Tell us about one thing you built.</Q>
+                <Sub>
+                  What was it, what was actually yours, and where can we see it?
+                  Type it, or press the button and just talk.
+                </Sub>
+                <textarea
+                  value={thing1}
+                  onChange={(e) => setThing1(e.target.value)}
+                  rows={6}
+                  aria-label="One thing you built"
+                  style={{ ...rule(focus === "t1", !!errors.thing1), fontSize: 16, lineHeight: 1.65, resize: "vertical" }}
+                  {...bind("t1")}
+                />
+                <VoiceInput
+                  onText={(t) => {
+                    setThing1((v) => (v ? `${v} ${t}` : t));
+                    markSpoken("thing1");
+                  }}
+                />
+                <Err msg={errors.thing1} />
+              </>
+            )}
 
-                <div style={{ display: "grid", gap: 26 }}>
-                  <div>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      onChange={onFile}
-                      style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileRef.current?.click()}
-                      style={{
-                        ...field(false, !!errors.resume),
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 16,
-                        cursor: "pointer",
-                        textAlign: "left",
-                        fontSize: 16,
-                        color: fileName ? "var(--text-on-dark)" : "var(--text-on-dark-muted)",
-                      }}
-                    >
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {fileName ?? "PDF, DOC or DOCX — up to 10 MB"}
-                      </span>
-                      <span style={{ color: "var(--gold)", fontSize: 13, flexShrink: 0 }}>
-                        {fileName ? "Replace" : "Upload"}
-                      </span>
-                    </button>
-                    {fileName && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (fileRef.current) fileRef.current.value = "";
-                          setFileName(null);
-                        }}
+            {screen === 3 && (
+              <>
+                <Q>Anything else about it?</Q>
+                <Sub>Optional. Skip if you said it all.</Sub>
+                <textarea
+                  value={thing1Extra}
+                  onChange={(e) => setThing1Extra(e.target.value)}
+                  rows={5}
+                  aria-label="Anything else about the first thing"
+                  style={{ ...rule(focus === "t1x", false), fontSize: 16, lineHeight: 1.65, resize: "vertical" }}
+                  {...bind("t1x")}
+                />
+                <VoiceInput
+                  onText={(t) => {
+                    setThing1Extra((v) => (v ? `${v} ${t}` : t));
+                    markSpoken("thing1Extra");
+                  }}
+                />
+              </>
+            )}
+
+            {screen === 4 && (
+              <>
+                <Q>And one more.</Q>
+                <Sub>A second thing you built. Same question.</Sub>
+                <textarea
+                  value={thing2}
+                  onChange={(e) => setThing2(e.target.value)}
+                  rows={6}
+                  aria-label="A second thing you built"
+                  style={{ ...rule(focus === "t2", !!errors.thing2), fontSize: 16, lineHeight: 1.65, resize: "vertical" }}
+                  {...bind("t2")}
+                />
+                <VoiceInput
+                  onText={(t) => {
+                    setThing2((v) => (v ? `${v} ${t}` : t));
+                    markSpoken("thing2");
+                  }}
+                />
+                <Err msg={errors.thing2} />
+              </>
+            )}
+
+            {screen === 5 && (
+              <>
+                <Q>Anything else about that one?</Q>
+                <Sub>Optional again.</Sub>
+                <textarea
+                  value={thing2Extra}
+                  onChange={(e) => setThing2Extra(e.target.value)}
+                  rows={5}
+                  aria-label="Anything else about the second thing"
+                  style={{ ...rule(focus === "t2x", false), fontSize: 16, lineHeight: 1.65, resize: "vertical" }}
+                  {...bind("t2x")}
+                />
+                <VoiceInput
+                  onText={(t) => {
+                    setThing2Extra((v) => (v ? `${v} ${t}` : t));
+                    markSpoken("thing2Extra");
+                  }}
+                />
+              </>
+            )}
+
+            {screen === 6 && (
+              <>
+                <Q>Anything to show us?</Q>
+                <Sub>
+                  Photos, a video, a résumé, a link. Completely optional — the
+                  two answers above matter more than any of it.
+                </Sub>
+
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.heic,.heif,.gif,.mp4,.mov"
+                  onChange={(e) => addFiles(e.target.files)}
+                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  style={{
+                    ...rule(false, !!errors.files),
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontSize: 16,
+                    color: "var(--text-on-dark-muted)",
+                  }}
+                >
+                  <span>{files.length ? `${files.length} file${files.length > 1 ? "s" : ""}` : "Photos, video, PDF — up to 10 MB each"}</span>
+                  <span style={{ color: "var(--gold)", fontSize: 13 }}>Add</span>
+                </button>
+                <Err msg={errors.files} />
+
+                {files.length > 0 && (
+                  <ul style={{ listStyle: "none", padding: 0, margin: "14px 0 0" }}>
+                    {files.map((f, i) => (
+                      <li
+                        key={`${f.name}-${i}`}
                         style={{
-                          background: "none",
-                          border: "none",
-                          color: "var(--text-on-dark-muted)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
                           fontSize: 13,
-                          padding: "9px 0 0",
-                          cursor: "pointer",
-                          textDecoration: "underline",
-                          fontFamily: "inherit",
+                          color: "var(--text-on-dark-muted)",
+                          padding: "7px 0",
                         }}
                       >
-                        Remove
-                      </button>
-                    )}
-                    <Err msg={errors.resume} />
-                  </div>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setFiles((p) => p.filter((_, j) => j !== i))}
+                          style={{ background: "none", border: "none", color: "#6A6A6A", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
-                      color: "#4A4A4A",
-                      fontSize: 12,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.12em",
-                    }}
-                  >
-                    <span style={{ flex: 1, height: 1, background: "var(--dark-border)" }} />
-                    or
-                    <span style={{ flex: 1, height: 1, background: "var(--dark-border)" }} />
-                  </div>
-
-                  <div>
-                    <input
-                      name="resumeLink"
-                      value={resumeLink}
-                      onChange={(e) => setResumeLink(e.target.value)}
-                      placeholder="https://…  LinkedIn, personal site, anything"
-                      inputMode="url"
-                      aria-label="Link to your résumé"
-                      aria-invalid={!!errors.resumeLink}
-                      style={field(focused === "resumeLink", !!errors.resumeLink)}
-                      {...bind("resumeLink")}
-                    />
-                    <Err msg={errors.resumeLink} />
-                  </div>
+                <div style={{ marginTop: 28 }}>
+                  <input
+                    value={resumeLink}
+                    onChange={(e) => setResumeLink(e.target.value)}
+                    placeholder="…or paste a link"
+                    inputMode="url"
+                    aria-label="A link to your work"
+                    style={rule(focus === "link", !!errors.resumeLink)}
+                    {...bind("link")}
+                  />
+                  <Err msg={errors.resumeLink} />
                 </div>
-              </>
-            )}
-
-            {/* ── 4. Work authorisation ──────────────────── */}
-            {step === 3 && (
-              <>
-                <Question>Are you legally able to work where you live?</Question>
-                <Hint>Last one. Then you&apos;re done.</Hint>
-
-                <div style={{ display: "flex", gap: 12 }}>
-                  {(["yes", "no"] as const).map((v) => {
-                    const active = workAuth === v;
-                    return (
-                      <button
-                        key={v}
-                        type="button"
-                        data-choice
-                        onClick={() => {
-                          setWorkAuth(v);
-                          setErrors((p) => ({ ...p, workAuthorized: undefined }));
-                        }}
-                        aria-pressed={active}
-                        className="rounded-pill"
-                        style={{
-                          minWidth: 118,
-                          padding: "13px 30px",
-                          fontSize: 15,
-                          cursor: "pointer",
-                          background: active ? "var(--gold)" : "transparent",
-                          color: active ? "var(--dark)" : "var(--text-on-dark-muted)",
-                          border: `1px solid ${active ? "var(--gold)" : "var(--dark-border)"}`,
-                          fontWeight: active ? 600 : 400,
-                          transition: "all 240ms ease",
-                          fontFamily: "inherit",
-                        }}
-                      >
-                        {v === "yes" ? "Yes" : "No"}
-                      </button>
-                    );
-                  })}
-                </div>
-                <Err msg={errors.workAuthorized} />
               </>
             )}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* ── Controls ──────────────────────────────────── */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 22,
-          marginTop: 44,
-          paddingTop: 26,
+          marginTop: 40,
+          paddingTop: 24,
           borderTop: "1px solid var(--dark-border)",
         }}
       >
@@ -684,7 +602,7 @@ export function BuildForm() {
           type="button"
           onClick={advance}
           disabled={status === "submitting"}
-          data-cta-id={isLast ? "build_submit" : `build_step_${step + 1}`}
+          data-cta-id={last ? "build_submit" : `build_screen_${screen + 1}`}
           data-cta-location="final_cta"
           data-cta-type="contact"
           data-cta-style="primary"
@@ -698,50 +616,27 @@ export function BuildForm() {
             fontWeight: 600,
             cursor: status === "submitting" ? "default" : "pointer",
             opacity: status === "submitting" ? 0.6 : 1,
-            transition: "opacity 220ms ease",
             fontFamily: "inherit",
           }}
         >
-          {status === "submitting"
-            ? "Sending…"
-            : isLast
-              ? "Show us what you built"
-              : "Continue"}
+          {status === "submitting" ? "Sending…" : last ? "Show us what you built" : "Continue"}
         </button>
 
-        {step > 0 && status !== "submitting" && (
+        {screen > 0 && status !== "submitting" && (
           <button
             type="button"
             onClick={back}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--text-on-dark-muted)",
-              fontSize: 14,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
+            style={{ background: "none", border: "none", color: "var(--text-on-dark-muted)", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}
           >
             Back
           </button>
         )}
 
-        {step === 2 && !fileName && !resumeLink.trim() && (
+        {(screen === 3 || screen === 5) && (
           <button
             type="button"
-            onClick={() => {
-              setDir(1);
-              setStep(3);
-            }}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5A5A5A",
-              fontSize: 14,
-              cursor: "pointer",
-              marginLeft: "auto",
-              fontFamily: "inherit",
-            }}
+            onClick={advance}
+            style={{ background: "none", border: "none", color: "#5A5A5A", fontSize: 14, cursor: "pointer", marginLeft: "auto", fontFamily: "inherit" }}
           >
             Skip
           </button>

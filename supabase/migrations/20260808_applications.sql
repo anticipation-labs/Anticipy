@@ -1,39 +1,52 @@
 -- Applications submitted from /build.
 --
--- RLS is enabled and anon/authenticated are revoked in the same breath as the
--- table is created. The audit on 2026-08-07 found engine_users world-readable
--- through the public anon key, which ships inside the site's own JavaScript
--- bundle — this table holds names, email addresses, locations and résumé
--- pointers, so it is locked from the first second it exists rather than as a
--- follow-up step someone forgets.
+-- Replaces the earlier draft of this file. That version was never run, so
+-- this is a straight rewrite rather than an ALTER: the flow changed from
+-- three "things" plus a work-authorisation question to two things, each with
+-- an optional follow-up, and attachments became a list rather than a single
+-- résumé.
 --
--- Résumés themselves are NOT stored here. They live in the private
--- `applications` storage bucket (public = false) and this table holds only
--- the object path. Links are minted as short-lived signed URLs at email time,
--- so a leaked row still exposes no document.
+-- RLS is enabled and anon/authenticated revoked in the same breath as the
+-- table is created. A prior audit found another table world-readable through
+-- the public anon key — which ships inside the site's own JavaScript — and
+-- this one holds names, emails, locations and pointers to private files.
+--
+-- Files are NOT stored here. They live in the private `applications` bucket
+-- (public = false) and this table holds only object paths. Links are minted
+-- as short-lived signed URLs at email time, so a leaked row exposes no file.
 
-CREATE TABLE IF NOT EXISTS public.anticipy_applications (
+DROP TABLE IF EXISTS public.anticipy_applications;
+
+CREATE TABLE public.anticipy_applications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
   name text NOT NULL,
   email text NOT NULL,
   location text NOT NULL,
 
-  -- The three things they built. This is the substance of the application.
+  -- Two things they built. The first of each pair is required; the "_extra"
+  -- is the optional "anything else?" screen that follows it.
   thing_1 text NOT NULL,
+  thing_1_extra text,
   thing_2 text NOT NULL,
-  thing_3 text NOT NULL,
+  thing_2_extra text,
 
-  work_authorized boolean NOT NULL,
+  -- Which answers were spoken rather than typed. Useful for reading the
+  -- transcript charitably — dictated prose has different texture.
+  spoken_fields text[] NOT NULL DEFAULT '{}',
 
-  -- Object path inside the private `applications` bucket, never a URL.
-  resume_path text,
-  resume_filename text,
-  resume_size_bytes integer,
-  -- A link they pasted instead of (or as well as) uploading a file.
+  -- [{ path, filename, size, type }] inside the private bucket.
+  attachments jsonb NOT NULL DEFAULT '[]'::jsonb,
   resume_link text,
 
-  -- Attribution, captured as hidden fields on the form.
+  -- What the domain check said at submit time. Advisory only: it is recorded
+  -- so a bounce can be correlated later, never used to reject an applicant.
+  email_domain_ok boolean,
+  email_domain_reason text,
+  -- Set by the Resend bounce webhook. This is the only real proof the address
+  -- exists, and it arrives after the fact.
+  email_bounced boolean NOT NULL DEFAULT false,
+
   utm_source text,
   utm_medium text,
   utm_campaign text,
@@ -43,23 +56,30 @@ CREATE TABLE IF NOT EXISTS public.anticipy_applications (
   ip_address text,
   user_agent text,
 
-  -- Set once the applicant has been contacted, so the list stays workable.
   status text NOT NULL DEFAULT 'new',
   notes text,
 
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS anticipy_applications_created_idx
+CREATE INDEX anticipy_applications_created_idx
   ON public.anticipy_applications (created_at DESC);
-CREATE INDEX IF NOT EXISTS anticipy_applications_status_idx
+CREATE INDEX anticipy_applications_status_idx
   ON public.anticipy_applications (status, created_at DESC);
 
--- One application per email address. A refreshed submission should update the
--- existing record rather than quietly creating a duplicate that splits the
--- reviewer's attention across two half-applications.
-CREATE UNIQUE INDEX IF NOT EXISTS anticipy_applications_email_uniq
+-- One application per address: a resubmission updates the existing record
+-- rather than splitting a reviewer's attention across two half-applications.
+CREATE UNIQUE INDEX anticipy_applications_email_uniq
   ON public.anticipy_applications (lower(email));
 
 ALTER TABLE public.anticipy_applications ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.anticipy_applications FROM anon, authenticated;
+
+-- Verify: rls_enabled true, anon_can_select false.
+SELECT
+  c.relname        AS table_name,
+  c.relrowsecurity AS rls_enabled,
+  has_table_privilege('anon', c.oid, 'SELECT') AS anon_can_select
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relname = 'anticipy_applications';
