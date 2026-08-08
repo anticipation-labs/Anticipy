@@ -314,6 +314,7 @@ export async function sendApplicationNotification(a: {
   workAuthorized: boolean;
   resumeUrl: string | null;
   resumeFilename: string | null;
+  resumeLink?: string | null;
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
@@ -379,9 +380,16 @@ export async function sendApplicationNotification(a: {
         ? `<a href="${e(a.resumeUrl)}" style="color: #C9A227; font-weight: 600;">Download résumé${
             a.resumeFilename ? ` (${e(a.resumeFilename)})` : ""
           }</a> <span style="color:#8a8a8a; font-size: 12px;">— private link, expires in 7 days</span>`
-        : `<span style="color: #8a8a8a;">No résumé attached.</span>`
+        : a.resumeLink
+          ? ""
+          : `<span style="color: #8a8a8a;">No résumé attached.</span>`
     }
   </p>
+  ${
+    a.resumeLink
+      ? `<p style="font-size: 14px; margin: 0 0 8px 0;"><a href="${e(a.resumeLink)}" style="color: #C9A227; font-weight: 600;" rel="noopener noreferrer">${e(a.resumeLink)}</a> <span style="color:#8a8a8a; font-size: 12px;">— link they supplied</span></p>`
+      : ""
+  }
 
   ${attribution ? `<p style="font-size: 12px; color: #8a8a8a; margin: 14px 0 0 0;">${attribution}</p>` : ""}
 

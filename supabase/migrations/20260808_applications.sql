@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS public.anticipy_applications (
   resume_path text,
   resume_filename text,
   resume_size_bytes integer,
+  -- A link they pasted instead of (or as well as) uploading a file.
+  resume_link text,
 
   -- Attribution, captured as hidden fields on the form.
   utm_source text,

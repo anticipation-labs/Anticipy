@@ -89,10 +89,27 @@ export async function POST(request: NextRequest) {
 
   const workAuthorized = workAuthorizedRaw === "yes";
 
-  // ── Résumé (optional) ──────────────────────────────────────────
+  // ── Résumé (optional) — a file, a link, or neither ─────────────
   let resumePath: string | null = null;
   let resumeFilename: string | null = null;
   let resumeSize: number | null = null;
+
+  // Only http(s) is accepted. Without this check a `javascript:` value would
+  // be rendered as an href in the notification email, turning the owner's own
+  // inbox into the delivery vector.
+  const rawLink = str(form.get("resumeLink"), 500);
+  let resumeLink: string | null = null;
+  if (rawLink) {
+    try {
+      const u = new URL(rawLink);
+      if (u.protocol === "http:" || u.protocol === "https:") {
+        resumeLink = u.toString().slice(0, 500);
+      }
+    } catch {
+      // Unparseable — treated as absent. The field is optional, so a malformed
+      // link should not cost someone their application.
+    }
+  }
 
   const file = form.get("resume");
   if (file && typeof file !== "string" && file.size > 0) {
@@ -157,6 +174,7 @@ export async function POST(request: NextRequest) {
     resume_path: resumePath,
     resume_filename: resumeFilename,
     resume_size_bytes: resumeSize,
+    resume_link: resumeLink,
     utm_source: utmSource,
     utm_medium: utmMedium,
     utm_campaign: utmCampaign,
@@ -201,6 +219,7 @@ export async function POST(request: NextRequest) {
       workAuthorized,
       resumeUrl,
       resumeFilename,
+      resumeLink,
       utmSource,
       utmMedium,
       utmCampaign,
