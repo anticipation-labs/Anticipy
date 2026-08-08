@@ -298,3 +298,95 @@ export async function sendOwnerPreorderNotification(
     `.trim(),
   });
 }
+
+// ─── BUILDER APPLICATION (from /build) ─────────────────────────────
+// Goes to the owner, with reply-to set to the applicant so a reply lands in
+// their inbox directly. This email is also the fallback record: if the
+// database write failed, everything the applicant wrote is still here, which
+// is why the whole submission is reproduced rather than summarised.
+export async function sendApplicationNotification(a: {
+  name: string;
+  email: string;
+  location: string;
+  thing1: string;
+  thing2: string;
+  thing3: string;
+  workAuthorized: boolean;
+  resumeUrl: string | null;
+  resumeFilename: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  referrer: string | null;
+  storedInDb: boolean;
+}) {
+  const e = escapeHtml;
+  // Applicants write prose with line breaks; preserve them without letting
+  // any markup through.
+  const para = (s: string) => e(s).replace(/\n/g, "<br/>");
+
+  const thing = (n: number, body: string) => `
+  <div style="margin: 0 0 22px 0;">
+    <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C9A227; font-weight: 600; margin: 0 0 6px 0;">Thing ${n}</p>
+    <p style="font-size: 15px; line-height: 1.65; color: #1a1a1a; margin: 0; white-space: normal;">${para(body)}</p>
+  </div>`;
+
+  const attribution = [
+    a.utmSource && `source: ${e(a.utmSource)}`,
+    a.utmMedium && `medium: ${e(a.utmMedium)}`,
+    a.utmCampaign && `campaign: ${e(a.utmCampaign)}`,
+    a.referrer && `referrer: ${e(a.referrer)}`,
+  ]
+    .filter(Boolean)
+    .join(" &middot; ");
+
+  return sendMail({
+    to: OWNER_EMAILS,
+    replyTo: a.email,
+    tag: "builder-application",
+    subject: `[BUILD] ${a.name} — ${a.location}`,
+    headers: {
+      "X-Priority": "1",
+      "X-MSMail-Priority": "High",
+      Importance: "High",
+    },
+    html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 620px; margin: 0 auto; color: #1a1a1a; line-height: 1.6;">
+  ${
+    a.storedInDb
+      ? ""
+      : `<p style="background:#FDECEC;border:1px solid #F5C2C2;border-radius:8px;padding:12px 14px;font-size:13px;color:#8A1F1F;margin:0 0 20px 0;"><strong>Not saved to the database.</strong> The row write failed, so this email is the only copy. Check that the anticipy_applications table exists.</p>`
+  }
+
+  <h2 style="margin: 0 0 4px 0; font-size: 21px;">${e(a.name)}</h2>
+  <p style="color: #6b635b; margin: 0 0 20px 0; font-size: 14px;">
+    <a href="mailto:${e(a.email)}" style="color: #C9A227;">${e(a.email)}</a>
+    &middot; ${e(a.location)}
+    &middot; ${a.workAuthorized ? "Authorised to work locally" : "<strong style='color:#8A1F1F'>NOT authorised to work locally</strong>"}
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 0 0 22px 0;" />
+
+  ${thing(1, a.thing1)}
+  ${thing(2, a.thing2)}
+  ${thing(3, a.thing3)}
+
+  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 26px 0 18px 0;" />
+
+  <p style="font-size: 14px; margin: 0 0 8px 0;">
+    ${
+      a.resumeUrl
+        ? `<a href="${e(a.resumeUrl)}" style="color: #C9A227; font-weight: 600;">Download résumé${
+            a.resumeFilename ? ` (${e(a.resumeFilename)})` : ""
+          }</a> <span style="color:#8a8a8a; font-size: 12px;">— private link, expires in 7 days</span>`
+        : `<span style="color: #8a8a8a;">No résumé attached.</span>`
+    }
+  </p>
+
+  ${attribution ? `<p style="font-size: 12px; color: #8a8a8a; margin: 14px 0 0 0;">${attribution}</p>` : ""}
+
+  <p style="font-size: 12px; color: #8a8a8a; margin: 18px 0 0 0;">Reply to this email to reach ${e(a.name)} directly.</p>
+</div>
+    `.trim(),
+  });
+}
