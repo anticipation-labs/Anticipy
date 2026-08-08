@@ -30,6 +30,13 @@ struct AnticipyApp: App {
             .environmentObject(session)
             .preferredColorScheme(.dark)
             .tint(Theme.champagne)
+            // Tell her what time it is where you are — and therefore where
+            // you are — on every launch, so it follows you when you travel.
+            // Only once signed in: there is no profile to write to before
+            // that. Costs no permission prompt and no typing.
+            .task(id: session.isSignedIn) {
+                if session.isSignedIn { await session.reportTimeZone() }
+            }
         }
     }
 }
@@ -323,6 +330,25 @@ final class AnticipySession: ObservableObject {
         if digits.count == 10 { return "+1" + digits }        // NANP local
         if digits.count == 11, digits.hasPrefix("1") { return "+" + digits }
         return "+" + digits
+    }
+
+    /// Tell the brain what time it is where you are, and therefore WHERE you
+    /// are. Reported, never asked for.
+    ///
+    /// Two things were wrong without it, and both were invisible while there
+    /// was exactly one user. Her clock was a single server-wide constant, so
+    /// anyone onboarding outside Vancouver was told the wrong time of day and
+    /// had her night-time quiet hours land in their afternoon. And nothing
+    /// anywhere told her the CITY, which is how "book dinner" became a
+    /// reservation in Seattle for somebody who lives in Vancouver.
+    ///
+    /// An IANA identifier carries both. It needs no permission prompt, no
+    /// location services and no typing — iOS already knows it. Sent on every
+    /// launch so it follows you when you travel.
+    func reportTimeZone() async {
+        let zone = TimeZone.current.identifier
+        guard !zone.isEmpty else { return }
+        _ = await backend.upsertOwner(ownerID: ownerID, fields: ["timezone": zone])
     }
 
     /// Save the owner's number where the brain can read it, so texting works

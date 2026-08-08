@@ -25,6 +25,12 @@ struct OnboardingView: View {
     @State private var phoneSaveFailed = false
     @State private var savingPhone = false
     @State private var phoneSkipped = false
+    // Her name and email were never asked for anywhere in onboarding, only
+    // buried in Settings. That is why she invents them: a booking form wants a
+    // name and an email, and with none on file she fills the blank rather than
+    // admitting it. Asked here, once, beside the number — all three skippable.
+    @State private var firstName = ""
+    @State private var email = ""
 
     // Microphone
     @State private var micAsked = false
@@ -239,6 +245,15 @@ struct OnboardingView: View {
 
     @MainActor
     private func savePhoneOnLeaving() {
+        // Name and email save INDEPENDENTLY of the number. They used to sit
+        // behind the phone's validity guard, so skipping the number — or
+        // mistyping it — silently threw away the two facts that stop her
+        // inventing an address on a booking form.
+        let first = firstName.trimmingCharacters(in: .whitespaces)
+        let mail = email.trimmingCharacters(in: .whitespaces)
+        if !first.isEmpty || !mail.isEmpty {
+            Task { _ = await session.saveOwnerDetails(first: first, last: "", email: mail) }
+        }
         guard !phoneSaved, !savingPhone, session.e164(phone) != nil else { return }
         Task {
             savingPhone = true
@@ -500,11 +515,37 @@ struct OnboardingView: View {
                 .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
                 .multilineTextAlignment(.center)
-            Text("When something needs your word, I'll text you here. Nothing else uses it.")
+            Text("When something needs your word, I'll text you. The rest is what every booking form asks for — so I never have to guess it.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
                 .foregroundStyle(Theme.sand)
                 .multilineTextAlignment(.center)
+            TextField("First name", text: $firstName)
+                .textContentType(.givenName)
+                .autocorrectionDisabled()
+                .font(.title3)
+                .foregroundStyle(Theme.ivory)
+                .multilineTextAlignment(.center)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 12)
+                .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                    .strokeBorder(Theme.stroke, lineWidth: 1))
+                .task { if firstName.isEmpty { firstName = session.ownerFirstName } }
+            TextField("you@example.com", text: $email)
+                .keyboardType(.emailAddress)
+                .textContentType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.title3)
+                .foregroundStyle(Theme.ivory)
+                .multilineTextAlignment(.center)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 12)
+                .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                    .strokeBorder(Theme.stroke, lineWidth: 1))
+                .task { if email.isEmpty { email = session.ownerEmail } }
             TextField("+1 604 555 0123", text: $phone)
                 .keyboardType(.phonePad)
                 .textContentType(.telephoneNumber)
