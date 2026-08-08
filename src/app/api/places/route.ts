@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import cities from "@/data/cities.json";
 
 export const runtime = "nodejs";
-// The dataset never changes between deploys, so responses are fully cacheable.
-export const dynamic = "force-static";
-export const revalidate = 86400;
+// MUST be dynamic. `force-static` looks right here — the dataset never changes
+// between deploys — but it makes Next prerender the route at build time, when
+// there is no query string, so every request gets the same empty result. That
+// shipped once and returned {"results":[]} for every search in production.
+// Caching is done with the Cache-Control header below instead, which gives the
+// CDN the same win without hiding the query from the handler.
+export const dynamic = "force-dynamic";
 
 /**
  * City autocomplete, served from a bundled GeoNames dataset.
