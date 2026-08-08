@@ -831,6 +831,30 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
                               decision=_KIND_TO_DECISION.get(kind))
 
 
+def _brain_fingerprint() -> str:
+    """A short hash of the code that decides what she does.
+
+    Printed at startup so "the fix is live" is something the log PROVES rather
+    than something a deploy status implies. Compare it against
+    `python3 -c "from brain.worker import _brain_fingerprint; print(_brain_fingerprint())"`
+    run on the commit you believe you shipped; if they differ, the container is
+    running something else.
+
+    Never raises: a fingerprint that cannot be computed must not stop the
+    worker from starting.
+    """
+    import hashlib
+    here = os.path.dirname(os.path.abspath(__file__))
+    h = hashlib.sha256()
+    for name in ("anticipy_core.py", "orchestrator.py", "worker.py"):
+        try:
+            with open(os.path.join(here, name), "rb") as f:
+                h.update(f.read())
+        except Exception:
+            return "unknown"
+    return h.hexdigest()[:12]
+
+
 BATCH = 20
 # Read a little wider than the slice, because the re-sort below can only
 # reorder rows it can see: if the page is exactly the slice, a line spoken
@@ -1093,8 +1117,15 @@ def main() -> None:
     # Observation only in step 1; a failure here must never touch hearing.
     segments = SegmentStore(PB, owner=anticipy.owner_id) \
         if os.environ.get("ANTICIPY_SEGMENTS", "1") == "1" else None
+    # A fingerprint of the brain that is ACTUALLY running, printed at startup.
+    #
+    # "Deployed" has meant "Railway said RUNNING" up to now, which is a claim
+    # about a container, not about the code inside it. Twice today that gap
+    # mattered. This hashes the source of the two files that decide what she
+    # does, so the log proves which build is live instead of implying it.
     print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
-          f" · sms={'live' if live_sms else 'mock'} · pb={PB}")
+          f" · sms={'live' if live_sms else 'mock'} · pb={PB}"
+          f" · brain={_brain_fingerprint()}")
     if not anticipy.owner_id:
         # Paired extensions only claim their owner's jobs, so unstamped jobs
         # would sit queued forever with nothing reporting a problem.
