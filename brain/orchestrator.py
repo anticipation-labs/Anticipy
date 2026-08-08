@@ -185,6 +185,14 @@ OWES = ("owner", "other", "machine", "nobody")
 # obligation for him is remembered and nothing more — this is what stops
 # her acting on a list he is reading into his laptop, or on a friend's
 # promise, without needing a single keyword.
+#
+# "other" is deliberately NOT here, and adding it was tried and reverted on
+# 2026-08-08. It looks like an omission — the prompt says of "other" that "it
+# is not his errand and never becomes one on their say-so" — but that case
+# already has its own branch in anticipy_core (search: "someone else took this
+# on"), which blocks it AND records an accurate reason. Routing it through here
+# instead changes nothing except the reason he sees, from "someone else took
+# this on" to the plainly wrong "no obligation to anyone".
 NOT_HIS = ("machine", "nobody")
 
 # Goals whose final step changes the world -> require explicit user yes.
