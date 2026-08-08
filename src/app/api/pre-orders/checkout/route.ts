@@ -6,9 +6,78 @@ import {
   ALLOWED_SHIPPING_COUNTRIES,
 } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getOrCreateVisitorId, loadProfile } from "@/lib/visitor";
+import {
+  selectTier,
+  scoreVisitor,
+  resolvePrice,
+  type OfferTier,
+} from "@/lib/offers";
+import { ensureCoupon } from "@/lib/offer-coupons";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+interface ResolvedOffer {
+  visitorId: string;
+  arm: string;
+  tierKey: string | null;
+  amountOffCents: number;
+  couponId: string | null;
+}
+
+/**
+ * Derives the discount this visitor has actually earned, from the httpOnly
+ * cookie and the stored profile — never from the request body.
+ *
+ * Returns null on any failure. A broken offer engine must degrade to
+ * full-price checkout, never to a blocked checkout: losing a discount costs
+ * margin, losing the sale costs the whole order.
+ */
+async function resolveOfferForRequest(): Promise<ResolvedOffer | null> {
+  try {
+    const { visitorId } = await getOrCreateVisitorId();
+    const profile = await loadProfile(visitorId);
+    if (!profile) return null;
+
+    const base: ResolvedOffer = {
+      visitorId,
+      arm: profile.holdout_arm,
+      tierKey: null,
+      amountOffCents: 0,
+      couponId: null,
+    };
+
+    // Control and legacy arms pay list price — that is what makes the
+    // ladder's incremental lift measurable rather than merely observed.
+    if (profile.holdout_arm !== "ladder") return base;
+    if (profile.offer_redeemed) return base;
+
+    const scores = scoreVisitor(profile);
+    const { data } = await supabaseAdmin
+      .from("anticipy_offer_tiers")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order");
+
+    const tier = selectTier(scores, profile, (data ?? []) as OfferTier[]);
+    if (!tier || tier.amount_off_cents <= 0) return base;
+
+    const { amountOffCents } = resolvePrice(tier.amount_off_cents);
+    const couponId = await ensureCoupon(amountOffCents);
+    if (!couponId) return base;
+
+    return {
+      ...base,
+      tierKey: tier.tier_key,
+      amountOffCents,
+      couponId,
+    };
+  } catch (err) {
+    console.error("Offer resolution failed, falling back to list price:", err);
+    return null;
+  }
+}
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -75,6 +144,11 @@ export async function POST(request: NextRequest) {
       request.headers.get("origin") ||
       `https://${request.headers.get("host") || "www.anticipy.ai"}`;
 
+    // Re-derive the earned tier here rather than trusting anything the
+    // client sent. The browser never passes a tier or a price — if it could,
+    // the whole ladder would be a DevTools exercise ending at the floor.
+    const offer = await resolveOfferForRequest();
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [{ price: PREORDER_PRICE_ID, quantity: 1 }],
@@ -115,7 +189,6 @@ export async function POST(request: NextRequest) {
             "Charges $149.99 USD now to lock in your Anticipy pendant at $50 off the $199 retail price.",
         },
       },
-      allow_promotion_codes: true,
       metadata: {
         product_type: "preorder",
         agreement_version: AGREEMENT_VERSION,
@@ -125,10 +198,36 @@ export async function POST(request: NextRequest) {
         customer_name: name || "",
         posthog_distinct_id: posthogDistinctId,
         posthog_session_id: posthogSessionId,
+        offer_tier: offer?.tierKey ?? "",
+        offer_amount_off_cents: String(offer?.amountOffCents ?? 0),
+        holdout_arm: offer?.arm ?? "",
       },
       success_url: `${origin}/pre-orders/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pre-orders/purchase?canceled=1`,
+
+      // `discounts` and `allow_promotion_codes` are MUTUALLY EXCLUSIVE on a
+      // Checkout Session — Stripe rejects a request carrying both, and it
+      // does so even when allow_promotion_codes is false. So exactly one of
+      // these keys may be present, which is why this is a spread rather than
+      // two static fields.
+      //
+      // When the visitor has earned a tier we pre-apply it and suppress the
+      // promo-code box: they should not be prompted to hunt for a better code
+      // than the one already applied. Otherwise the box stays available.
+      ...(offer?.couponId
+        ? { discounts: [{ coupon: offer.couponId }] }
+        : { allow_promotion_codes: true }),
     });
+
+    // Burn the offer so the same visitor cannot re-run the ladder for a
+    // second discount. Deliberately fire-and-forget: a failure here must not
+    // block a checkout the customer has already committed to.
+    if (offer?.visitorId && offer.couponId) {
+      void supabaseAdmin
+        .from("anticipy_visitor_profiles")
+        .update({ offer_redeemed: true })
+        .eq("visitor_id", offer.visitorId);
+    }
 
     return NextResponse.json({ url: session.url, id: session.id }, { status: 200 });
   } catch (err: unknown) {

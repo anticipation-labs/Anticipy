@@ -4,6 +4,7 @@ import "./globals.css";
 import { LenisProvider } from "@/components/LenisProvider";
 import { PostHogProvider } from "@/components/PostHogProvider";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
+import { OfferMount } from "@/components/offer/OfferMount";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -139,6 +140,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <PostHogProvider />
         <AnalyticsProvider />
+        <OfferMount />
         <LenisProvider>{children}</LenisProvider>
         <Analytics />
         <SpeedInsights />
