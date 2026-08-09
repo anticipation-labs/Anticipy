@@ -127,6 +127,60 @@ def fetch_owner_timezone() -> str | None:
         return None
 
 
+def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> bool:
+    """Day zero's first proactive touch: the moment a BRAND-NEW owner saves
+    their number, she says hello — once, ever, per number.
+
+    Guardrails outside any model:
+      - only when the owner_profile record itself is young (a fresh
+        onboarding), so a long-standing owner editing their settings is
+        never suddenly 'welcomed';
+      - one durable stamp per number in the clock state file, so a redeploy
+        can never re-send it.
+    Returns True when a welcome actually went out."""
+    now = now if now is not None else time.time()
+    phone = anticipy.owner_phone
+    if not phone:
+        return False
+    digits = "".join(ch for ch in phone if ch.isdigit())[-10:]
+    if not digits or digits in state.get("welcomed_phones", []):
+        return False
+    try:
+        r = pb.get(f"{PB}/api/collections/owner_profile/records",
+                   params={"sort": "-updated", "perPage": 1}, timeout=10)
+        items = r.json().get("items", []) if r.ok else []
+        created = (items[0].get("created") or "") if items else ""
+        ts = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() \
+            if created else 0
+    except Exception:
+        return False
+    if not ts or now - ts > 3600:
+        # An old profile only means the stamp file was lost — mark it so the
+        # check never runs again, but say nothing.
+        state.setdefault("welcomed_phones", []).append(digits)
+        _save_clock_state(state)
+        return False
+    first = (items[0].get("first_name") or "").strip()
+    said = anticipy._voice({
+        "situation": "their very first minutes with you — they just finished "
+                     "onboarding and saved their number; introduce yourself "
+                     "warmly in one or two short sentences",
+        "their_name": first or "unknown",
+        "what_you_do": "you listen through the day, remember what matters, "
+                       "and handle errands — always asking before anything "
+                       "consequential goes out",
+    }) or (f"Hey{' ' + first if first else ''} — I'm here. I listen, remember "
+           "what matters, and handle things; I'll always ask before anything "
+           "real goes out. Text me anytime.")
+    if not anticipy.notify_owner(said):
+        return False
+    state.setdefault("welcomed_phones", []).append(digits)
+    _save_clock_state(state)
+    post_event("anticipy_says", said, decision="welcome", goal="")
+    print(f"welcomed new owner …{digits[-4:]}")
+    return True
+
+
 def seed_profile_identity(memory, _seen={}) -> None:
     """Day zero: what he TOLD her at onboarding (name, email) becomes profile
     knowledge the moment the worker sees it — she must never have to overhear
@@ -1284,6 +1338,10 @@ def main() -> None:
                 if entered and entered != anticipy.owner_phone:
                     anticipy.owner_phone = entered
                     print(f"owner phone updated from the app: …{entered[-4:]}")
+                # Day zero: a brand-new owner's first proactive touch — one
+                # welcome, stamped durably, never repeated.
+                if anticipy.owner_phone:
+                    maybe_welcome_new_owner(anticipy, _clock_state())
                 # Same beat for the zone: somebody travels, or onboards after
                 # the worker started, and every prompt should follow them
                 # without a redeploy.
