@@ -372,6 +372,11 @@ export function ApplyForm() {
           .ap-inner textarea { max-height: 22vh !important; }
         }
         @media (max-height: 430px) { .ap-q { font-size: 17px !important; } .ap-sub { display: none !important; } }
+        @media (max-width: 430px) {
+          .ap-inner { padding-top: 18px !important; padding-bottom: 18px !important; }
+          .ap-fields { gap: 15px !important; }
+          .ap-sub { margin-bottom: 16px !important; }
+        }
       `}</style>
 
       <div style={inner} className="ap-inner">
@@ -448,7 +453,7 @@ export function ApplyForm() {
               <>
                 <Q>First — who are you?</Q>
                 <Sub>Name, email, and where you are.</Sub>
-                <div style={{ display: "grid", gap: 22 }}>
+                <div className="ap-fields" style={{ display: "grid", gap: 22 }}>
                   <div>
                     <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" aria-label="Your name" style={rule(focus === "name", !!errors.name)} {...bind("name")} />
                     <Err msg={errors.name} />
@@ -546,7 +551,7 @@ export function ApplyForm() {
               <>
                 <Q>Last bit — the practical stuff.</Q>
                 <Sub>Four quick answers and you&apos;re done.</Sub>
-                <div style={{ display: "grid", gap: 22 }}>
+                <div className="ap-fields" style={{ display: "grid", gap: 22 }}>
                   <div>
                     <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--text-on-dark-muted)", display: "block", marginBottom: 6 }}>
                       Current availability
@@ -577,7 +582,7 @@ export function ApplyForm() {
                   </div>
                   <div>
                     <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--text-on-dark-muted)", display: "block", marginBottom: 8 }}>
-                      Are you legally able to work, and do you meet the minimum working age where you are?
+                      Are you legally allowed to work, and old enough to do so where you live?
                     </span>
                     <div style={{ display: "flex", gap: 8 }}>
                       {(["yes", "no"] as const).map((v) => (
