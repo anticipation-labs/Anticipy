@@ -236,12 +236,28 @@ def goal_tokens(text: str) -> set:
     both invisible.
 
     This is generic morphology, not scenario tuning: strip a possessive,
-    strip -ing, strip a plural s. Nothing here knows any venue."""
+    strip -ing, strip a plural s. Nothing here knows any venue.
+
+    Numbers count HOWEVER they were written: "7pm" carries the same 7 as
+    "7 PM", and "two"/"seven" the same digit a transcriber might have typed.
+    "book at 7pm" once read as covered by "book at 8" — both spellings were
+    invisible — so a spoken correction never rewrote the card."""
+    words = {"zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+             "five": "5", "six": "6", "seven": "7", "eight": "8",
+             "nine": "9", "ten": "10", "eleven": "11", "twelve": "12"}
     out = set()
     for w in re.findall(r"[a-z0-9']+", (text or "").lower()):
         w = w.replace("'", "")
+        if w in words:
+            out.add(words[w])
+            continue
         if w.isdigit():
             out.add(w)
+            continue
+        # "7pm", "3x", "2nd": the digits are the detail worth matching on.
+        m = re.match(r"^(\d+)[a-z]+$", w)
+        if m:
+            out.add(m.group(1))
             continue
         if len(w) <= 3:
             continue
@@ -1304,6 +1320,19 @@ class Anticipy:
         # share not one word — only the fact that he is still talking about
         # it, plus a meaning check that it IS the same plan and not a second
         # errand raised in the same breath.
+        if self._RETRACT_RE.match(goal or ""):
+            retracted = self._retract_pending(goal)
+            # An overheard "scratch that" ends here either way. If she held
+            # the plan, it is now cancelled; if she never held it, there is
+            # nothing in the world she could safely cancel from a half-heard
+            # remark — a card reading "cancel the gym" with no gym anywhere
+            # is nonsense work. Only a direct, explicit ask ("cancel my
+            # Comcast subscription") that names something she is NOT already
+            # holding earns a real cancellation errand.
+            if retracted:
+                return None
+            if not explicit and self._retracting_mere_talk(goal):
+                return None
         if is_consequential(goal, params, explicit=explicit):
             open_plan = self._open_plan
             if open_plan and time.time() - open_plan[1] < OPEN_PLAN_WINDOW:
@@ -1512,6 +1541,83 @@ class Anticipy:
         want = goal_tokens(goal)
         have = goal_tokens(other)
         return bool(want) and want <= have
+
+    # "cancel …", "call off …" — a retraction names the thing it is
+    # retracting. The verb list is deliberately tiny and unambiguous:
+    # these words have no other meaning at the head of a goal.
+    _RETRACT_RE = re.compile(
+        r"^\s*(?:cancel|call\s+off|scrap|drop|abandon|un-?do)\b[\s:,-]*(.+)",
+        re.IGNORECASE)
+
+    def _retract_pending(self, goal: str) -> bool:
+        """He scratched a plan SHE is still holding — take it off his desk.
+
+        "Actually scratch the gym" used to mint a brand-new 'cancel gym'
+        card while the original gym card (and the research it spawned) sat
+        there untouched: three jobs about a plan that no longer exists.
+        A cancellation of work that is still only hers — queued or waiting
+        on his yes, nothing booked in the world yet — is not a new errand;
+        it is the death of an old one. Anything already RUNNING, or a
+        cancellation of something real out in the world ("cancel my Comcast
+        subscription"), matches no pending job and flows through untouched.
+        Returns True when at least one pending job was retracted."""
+        m = self._RETRACT_RE.match(goal or "")
+        if not m:
+            return False
+        what = m.group(1).strip()
+        want = goal_tokens(what)
+        if not want:
+            return False
+        hit = False
+        try:
+            for j in self._pending_jobs():
+                other = j.get("goal") or ""
+                have = goal_tokens(other)
+                if not have:
+                    continue
+                overlap = len(want & have) / min(len(want), len(have))
+                if overlap >= 0.5 or self._same_plan(what, other):
+                    if self._cancel_job(j.get("id"),
+                                        "he called this off out loud"):
+                        hit = True
+                        if self._open_plan and self._open_plan[0] == j.get("id"):
+                            self._open_plan = None
+        except Exception:
+            pass
+        return hit
+
+    def _retracting_mere_talk(self, goal: str) -> bool:
+        """Is this cancellation aimed at TALK — a plan that only ever existed
+        in the conversation she just heard — or at something standing in the
+        world (a membership, a subscription, a real booking)?
+
+        Calling off talk is a no-op: she holds nothing about it and there is
+        nothing out in the world either, so a card would be nonsense work.
+        Cancelling a standing arrangement is a genuine errand. The words
+        cannot tell these apart, so the model answers with the conversation
+        in view; with no model, the errand survives — a useless card is an
+        annoyance, a swallowed real cancellation is a loss."""
+        if not (self.llm and getattr(self.llm, "live", False)):
+            return False
+        try:
+            convo = getattr(self, "_last_convo", None) or []
+            user = f"Task: {goal}"
+            if convo:
+                user += "\nThe conversation it came from: " + " | ".join(convo)
+            res = self.llm.chat(
+                "Someone's assistant heard them call something off. Decide "
+                "what the cancellation is aimed at. \"talk\": a casual plan "
+                "or idea that only existed in this conversation — nothing "
+                "was ever booked, bought, or arranged in the world, so there "
+                "is nothing to cancel. \"world\": a standing real-world "
+                "arrangement — a membership, subscription, reservation, "
+                "appointment, order — that exists outside this conversation "
+                "and needs a real cancellation. Reply ONLY with JSON: "
+                '{"aimed_at": "talk"} or {"aimed_at": "world"}.',
+                user)
+            return json.loads(_extract_json(res.text)).get("aimed_at") == "talk"
+        except Exception:
+            return False
 
     def _same_plan(self, new_goal: str, pending_goal: str) -> bool:
         """Same plan firming up, or a second errand in the same breath?

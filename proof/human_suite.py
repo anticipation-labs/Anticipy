@@ -457,6 +457,45 @@ def s27_wrong_conversation_pull(check):
               "7" in dinner[-1]["goal"], dinner[-1]["goal"])
 
 
+APP_STATUSES = {"awaiting_confirm", "needs_user", "queued", "running",
+                "done", "failed", "cancelled"}
+
+
+def s28_whole_day(check):
+    """One continuous realistic day, start to finish — not isolated turns.
+    Then the invariants the APP renders by: every job in a state the app
+    knows, every card carrying a real goal, one dinner = one card, the
+    cancelled gym plan gone from his desk, no text spam across the day."""
+    a, texts = fresh()
+    run_lines(a, [
+        "ugh ok coffee first then that standup",
+        "morning yeah I'm on, let's keep it short today",
+        "so the launch slipped to Thursday, Priya owns the comms update",
+        "lunch idea, maybe sushi, eh, actually whatever's close",
+        "hey! yes! dinner tomorrow, let's do Earls Brooklyn at 7, four of us",
+        "perfect, see you all there",
+        ("look up whether Earls Brooklyn takes big group bookings", {"explicit": True}),
+        "oh and I should hit the gym with Marcus Saturday",
+        "actually scratch the gym, Marcus is out of town",
+        "ok wrapping up, tomorrow's going to be good",
+    ])
+    for j in JOBS:
+        check(f"app can render status {j['status']!r}",
+              j["status"] in APP_STATUSES, f"{j}")
+        check("no blank card ever reaches his desk",
+              bool((j.get("goal") or "").strip()), f"{j}")
+    held = held_jobs()
+    dinners = [j for j in held if re.search(r"earls|dinner", j["goal"], re.I)]
+    check("one whole day yields ONE dinner card", len(dinners) <= 1,
+          f"{[j['goal'] for j in dinners]}")
+    gyms = [j for j in JOBS if re.search(r"gym|marcus", j["goal"], re.I)
+            and j["status"] in ("awaiting_confirm", "queued", "needs_user")]
+    check("the scratched gym plan is off his desk", not gyms,
+          f"{[j['goal'] for j in gyms]}")
+    check("a whole day is at most a couple of texts", len(texts) <= 2,
+          f"{texts}")
+
+
 def s25_conditional_plan(check):
     """A plan hedged on a condition ('IF the demo goes well...') is not armed yet."""
     a, texts = fresh()
@@ -478,7 +517,7 @@ SCENARIOS = [s01_full_plan, s02_missing_details, s03_dictation_inert,
              s19_sarcasm, s20_joking_hyperbole, s21_mixed_audience,
              s22_one_sided_call, s23_correction_midstream,
              s24_third_party_story, s25_conditional_plan,
-             s26_asr_mush, s27_wrong_conversation_pull]
+             s26_asr_mush, s27_wrong_conversation_pull, s28_whole_day]
 
 
 def main() -> int:

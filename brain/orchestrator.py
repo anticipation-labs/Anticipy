@@ -94,6 +94,14 @@ Monday" and the conversation earlier named the Residencies demo day, the goal
 must carry that name. A goal built from a line alone, when the conversation
 told you what it was about, is a failure.
 
+A plan under discussion is LIVE until the conversation moves on, and later
+lines routinely change it. A line that corrects a detail of that plan —
+"actually make it 8 not 7", "make it earlier, like 7", "the Brooklyn one
+instead" — is an "act" whose goal is the FULL plan restated with the
+corrected detail, never a fragment and never the stale value. A line that
+calls the plan off — "scratch that", "never mind the gym", "cancel it" —
+is an "act" whose goal is "cancel <the plan>", naming what he called off.
+
 Before "act", check sufficiency the way a human would: do you know enough to
 actually start — the what, the where or who, the when this task needs? First
 try to fill gaps YOURSELF from the line and the context; when the context
