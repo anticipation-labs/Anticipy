@@ -10,6 +10,14 @@ Recall is graph-walk + time, not embedding soup: start at the entities named in
 the query, walk their edges, and return a time-ordered chain of connected facts
 (a "linear graph"). That answers "what did I tell Sarah last week?" with the
 actual chain: episode -> commitment -> person, newest first, with provenance.
+
+On top of the raw graph sits the PROFILE layer (roadmap §1): a consolidation
+pass reads recent episodes and distills the stable facts worth knowing someone
+by — "partner is Sarah", "prefers 7pm dinners" — each with importance (1-5),
+confidence, and the episode ids it came from. Recall consults the profile
+first, ranked importance x recency x relevance, so "my mom is in hospital"
+outranks a grocery mumble instead of weighing the same. Raw episodes are never
+deleted; the profile is a lens, not a replacement.
 """
 from __future__ import annotations
 
@@ -49,6 +57,20 @@ CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src);
 CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst);
 CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name);
 CREATE INDEX IF NOT EXISTS idx_episodes_ts ON episodes(ts);
+CREATE TABLE IF NOT EXISTS profile_facts (
+    id INTEGER PRIMARY KEY,
+    fact TEXT NOT NULL,
+    importance INTEGER NOT NULL DEFAULT 3,   -- 1-5, model-judged at distillation
+    confidence REAL NOT NULL DEFAULT 0.6,    -- grows each time the fact re-appears
+    source TEXT NOT NULL DEFAULT 'consolidation',  -- consolidation | interview | import
+    provenance TEXT NOT NULL DEFAULT '[]',   -- JSON list of episode ids
+    first_seen_ts REAL NOT NULL,
+    last_seen_ts REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS consolidation_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 # Full-text index so recall searches EVERY episode instead of the newest few.
@@ -88,6 +110,26 @@ People are proper names only. Topics are 1-3 word noun phrases. A commitment is
 only something the SPEAKER promised to do. "completed" is for past-tense
 reports of finishing something ("sent Priya the deck", "already paid it",
 "that's done") — the thing that got done, not the whole sentence."""
+
+CONSOLIDATE_SYSTEM = """You distill what someone's assistant should KNOW about them from
+lines overheard during their day. Each input line is "[id] text".
+Reply ONLY with compact JSON:
+{"facts":[{"fact":"...","importance":N,"episode_ids":[id,...]}]}
+A fact is something STABLE — true for weeks, worth knowing them by: who
+matters to them ("partner is Sarah"), preferences ("prefers 7pm dinners"),
+their work ("building Anticipy"), health, routines, ongoing situations
+("mom is in hospital"). NOT one-off logistics, small talk, or anything that
+is only a task. Write each fact as a short third-person note. importance is
+1-5: 5 = core of their life (family, health, hard boundaries), 3 = a solid
+preference or ongoing project, 1 = mildly useful color. episode_ids lists
+the [id]s of the input lines the fact came from — only ids you were given.
+Nothing worth keeping -> {"facts":[]}."""
+
+SAME_FACT_SYSTEM = """Two short notes about the same person. Decide whether they state the
+SAME underlying fact (one restates or updates the other) or genuinely
+different facts. "partner is Sarah" / "his partner's name is Sarah" -> same.
+"prefers 7pm dinners" / "prefers Italian food" -> different.
+Reply ONLY with compact JSON: {"same":true} or {"same":false}."""
 
 # Rule fallback so completion still works with no model available.
 _DONE_RE = re.compile(
@@ -220,6 +262,11 @@ class Memory:
         matches every episode and recent noise buries the real answer."""
         words = {w.strip(".,!?").lower() for w in query.split()
                  if len(w) > 2 and w.strip(".,!?").lower() not in self._STOP}
+        # What she KNOWS about him answers before what she happened to
+        # overhear: the distilled profile is consulted first, ranked
+        # importance x recency x relevance, and the raw graph/episode search
+        # fills whatever window is left (roadmap §1).
+        profile = self._profile_recall(words, limit)
         rows = self.db.execute("SELECT id, type, name, status FROM nodes").fetchall()
 
         def seeds_match(name: str) -> bool:
@@ -251,7 +298,7 @@ class Memory:
                               "src_type": "episode", "dst_type": "episode",
                               "ts": ts, "quote": text})
         if not seeds and not facts:
-            return []
+            return profile
 
         seen = set()
         frontier = [r[0] for r in seeds]
@@ -280,7 +327,8 @@ class Memory:
         def relevance(f):
             blob = (f["fact"] + " " + (f.get("quote") or "")).lower()
             return sum(1 for w in words if w in blob)
-        return sorted(uniq.values(), key=lambda f: (-relevance(f), -f["ts"]))[:limit]
+        graph = sorted(uniq.values(), key=lambda f: (-relevance(f), -f["ts"]))
+        return (profile + graph)[:limit]
 
     def _search_episodes(self, words: set[str], limit: int = 300):
         """Every episode ever heard is searchable — no recency cliff. Uses
@@ -337,11 +385,264 @@ class Memory:
         self.db.commit()
 
     def briefing_facts(self, since_ts: float) -> dict:
-        """Raw material for the assistant's 'I overheard…' briefing."""
+        """Raw material for the assistant's 'I overheard…' briefing.
+
+        The profile leads: what she KNOWS about him (distilled, ranked by
+        importance x recency) comes before the raw lines she happened to
+        hear, so a briefing is grounded in who he is, not just today's
+        noise. `heard` and `open_loops` keep their exact old shape."""
         heard = self.db.execute(
             "SELECT text FROM episodes WHERE ts>=? ORDER BY ts", (since_ts,)
         ).fetchall()
-        return {"heard": [h[0] for h in heard], "open_loops": self.open_loops()}
+        profile = [{"fact": f["fact"], "importance": f["importance"]}
+                   for f in self.profile_facts(limit=10)]
+        return {"profile": profile,
+                "heard": [h[0] for h in heard],
+                "open_loops": self.open_loops()}
+
+    # ------------------------------------------------- profile / consolidation
+
+    def remember_fact(self, text: str, importance: int = 4,
+                      source: str = "interview", confidence: float = 0.9,
+                      ts: Optional[float] = None) -> int:
+        """Seed the profile directly — the day-zero interview (roadmap §8)
+        writes what he tells her here, so she is not amnesiac on install.
+        Merges into an existing row when it already states the same fact
+        (re-posting an interview answer must not dupe). Returns the row id."""
+        text = (text or "").strip()
+        if not text:
+            raise ValueError("remember_fact needs actual text")
+        ts = ts or time.time()
+        importance = max(1, min(5, int(importance)))
+        match = self._find_same_fact(text)
+        if match is not None:
+            self._merge_fact(match, importance, ts, [])
+            self.db.commit()
+            return match
+        fid = self._insert_fact(text, importance, confidence, source, ts, [])
+        self.db.commit()
+        return fid
+
+    def profile_facts(self, limit: Optional[int] = None) -> list[dict]:
+        """The distilled profile, most important-and-fresh first. Salience
+        here is importance x recency (half-life 30 days on last_seen), so a
+        core fact stays near the top for months and stale color sinks."""
+        now = time.time()
+        out = []
+        for r in self.db.execute(
+            "SELECT id, fact, importance, confidence, source, provenance, "
+            "first_seen_ts, last_seen_ts FROM profile_facts"
+        ):
+            try:
+                prov = json.loads(r[5] or "[]")
+            except Exception:
+                prov = []
+            age_days = max(0.0, (now - r[7]) / 86400.0)
+            out.append({
+                "id": r[0], "fact": r[1], "importance": r[2],
+                "confidence": r[3], "source": r[4], "provenance": prov,
+                "first_seen_ts": r[6], "last_seen_ts": r[7],
+                "salience": r[2] * (0.5 ** (age_days / 30.0)),
+            })
+        out.sort(key=lambda f: -f["salience"])
+        return out[:limit] if limit else out
+
+    def consolidate(self, now: Optional[float] = None, batch: int = 200) -> dict:
+        """One incremental consolidation pass: read episodes newer than the
+        last consolidated id, have the model distill stable facts, merge or
+        insert them, then advance the cursor — all in ONE transaction, so a
+        crash mid-pass loses nothing and the same episodes are simply read
+        again next time. With llm=None the pass is skipped entirely: the
+        profile just stays empty, nothing crashes.
+
+        Returns counters: {"ran", "episodes", "new", "merged", "remaining"}.
+        ran=False means nothing was written OR advanced (no model, or the
+        model's output was unusable)."""
+        if not self.llm:
+            return {"ran": False, "reason": "no llm", "episodes": 0,
+                    "new": 0, "merged": 0, "remaining": 0}
+        now = now or time.time()
+        last = int(self._state_get("last_episode_id", "0") or 0)
+        rows = self.db.execute(
+            "SELECT id, ts, text FROM episodes WHERE id>? ORDER BY id LIMIT ?",
+            (last, batch)).fetchall()
+        if not rows:
+            self._state_set("last_run_ts", str(now))
+            self.db.commit()
+            return {"ran": True, "episodes": 0, "new": 0, "merged": 0,
+                    "remaining": 0}
+        try:
+            listing = "\n".join(f"[{r[0]}] {r[2]}" for r in rows)
+            res = self.llm.chat(CONSOLIDATE_SYSTEM, listing)
+            cands = json.loads(_extract_json(res.text)).get("facts")
+            if not isinstance(cands, list):
+                raise ValueError("no facts list in model output")
+        except Exception as e:
+            # Nothing advanced: these episodes stay unconsolidated and the
+            # next pass re-reads them. A flaky model must not eat a day.
+            return {"ran": False, "reason": f"model output unusable: {e}",
+                    "episodes": 0, "new": 0, "merged": 0,
+                    "remaining": self._episodes_after(last)}
+        valid = {r[0]: r[1] for r in rows}  # id -> ts
+        new = merged = 0
+        try:
+            for c in cands:
+                if not isinstance(c, dict):
+                    continue
+                text = c.get("fact")
+                if not isinstance(text, str) or not text.strip():
+                    continue
+                text = text.strip()
+                try:
+                    imp = max(1, min(5, int(c.get("importance", 3))))
+                except Exception:
+                    imp = 3
+                eps = c.get("episode_ids")
+                # The model writes ids as ints or as digit strings ("[1]" in
+                # the prompt invites both); either way they must resolve to
+                # episodes it was actually shown.
+                clean: list[int] = []
+                for e in eps if isinstance(eps, list) else []:
+                    if isinstance(e, bool):
+                        continue
+                    if isinstance(e, str) and e.strip().isdigit():
+                        e = int(e.strip())
+                    if isinstance(e, int) and e in valid:
+                        clean.append(e)
+                eps = list(dict.fromkeys(clean))
+                # A fact with no traceable source does not get written — same
+                # doctrine as commitments: nothing unevidenced in the graph.
+                if not eps:
+                    continue
+                fact_ts = max(valid[e] for e in eps)
+                match = self._find_same_fact(text)
+                if match is not None:
+                    self._merge_fact(match, imp, fact_ts, eps)
+                    merged += 1
+                else:
+                    self._insert_fact(text, imp, 0.6, "consolidation",
+                                      fact_ts, eps)
+                    new += 1
+            self._state_set("last_episode_id", str(rows[-1][0]))
+            self._state_set("last_run_ts", str(now))
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        return {"ran": True, "episodes": len(rows), "new": new,
+                "merged": merged, "remaining": self._episodes_after(rows[-1][0])}
+
+    def last_consolidation_ts(self) -> float:
+        try:
+            return float(self._state_get("last_run_ts", "0") or 0)
+        except ValueError:
+            return 0.0
+
+    def _episodes_after(self, episode_id: int) -> int:
+        return self.db.execute(
+            "SELECT COUNT(*) FROM episodes WHERE id>?", (episode_id,)
+        ).fetchone()[0]
+
+    def _profile_recall(self, words: set[str], limit: int) -> list[dict]:
+        """Profile facts matching the query, ranked by importance x recency
+        x relevance — so "mom is in hospital" beats a grocery mumble even
+        when the mumble is newer and matches more words."""
+        if not words:
+            return []
+        out = []
+        for f in self.profile_facts():
+            blob = f["fact"].lower()
+            rel = sum(1 for w in words if w in blob)
+            if not rel:
+                continue
+            out.append({
+                "fact": f'known: {f["fact"]}',
+                "src_type": "profile", "dst_type": "profile",
+                "ts": f["last_seen_ts"], "quote": None,
+                "importance": f["importance"],
+                "salience": f["salience"] * rel,
+            })
+        out.sort(key=lambda f: -f["salience"])
+        return out[:limit]
+
+    def _find_same_fact(self, text: str) -> Optional[int]:
+        """The existing profile row that states the same fact, or None.
+        Identical-after-normalization needs no model; near matches are
+        LLM-judged same-fact; with no model only the deterministic paths
+        run, so near-identical wording still merges offline."""
+        norm = " ".join(_fact_tokens(text))
+        cand_words = {w for w in _fact_tokens(text)
+                      if len(w) > 2 and w not in self._STOP}
+        near = []
+        for rid, fact in self.db.execute(
+                "SELECT id, fact FROM profile_facts").fetchall():
+            fnorm = " ".join(_fact_tokens(fact))
+            if fnorm == norm:
+                return rid
+            fwords = {w for w in _fact_tokens(fact)
+                      if len(w) > 2 and w not in self._STOP}
+            if not cand_words or not fwords:
+                continue
+            overlap = len(cand_words & fwords) / len(cand_words | fwords)
+            if overlap >= 0.8:
+                return rid          # near-identical wording; no model needed
+            if overlap >= 0.4:
+                near.append((overlap, rid, fact))
+        if self.llm and near:
+            for _overlap, rid, fact in sorted(near, reverse=True)[:3]:
+                try:
+                    res = self.llm.chat(SAME_FACT_SYSTEM,
+                                        json.dumps({"a": fact, "b": text}))
+                    if json.loads(_extract_json(res.text)).get("same") is True:
+                        return rid
+                except Exception:
+                    continue
+        return None
+
+    def _insert_fact(self, text: str, importance: int, confidence: float,
+                     source: str, ts: float, episode_ids: list[int]) -> int:
+        cur = self.db.execute(
+            "INSERT INTO profile_facts(fact, importance, confidence, source, "
+            "provenance, first_seen_ts, last_seen_ts) VALUES (?,?,?,?,?,?,?)",
+            (text, importance, confidence, source,
+             json.dumps(episode_ids or []), ts, ts))
+        return cur.lastrowid
+
+    def _merge_fact(self, fact_id: int, importance: int, ts: float,
+                    episode_ids: list[int]) -> None:
+        """A restatement is evidence, not a new row: bump confidence, keep
+        the higher importance, extend provenance, refresh last_seen. The
+        original wording stays — churning the text on every restatement
+        would make the profile impossible to audit."""
+        row = self.db.execute(
+            "SELECT importance, confidence, provenance, last_seen_ts "
+            "FROM profile_facts WHERE id=?", (fact_id,)).fetchone()
+        if not row:
+            return
+        try:
+            prov = json.loads(row[2] or "[]")
+        except Exception:
+            prov = []
+        for e in episode_ids or []:
+            if e not in prov:
+                prov.append(e)
+        prov = prov[-40:]  # bound growth; the newest evidence matters most
+        self.db.execute(
+            "UPDATE profile_facts SET importance=?, confidence=?, "
+            "provenance=?, last_seen_ts=? WHERE id=?",
+            (max(row[0], importance), min(0.99, row[1] + 0.15),
+             json.dumps(prov), max(row[3], ts), fact_id))
+
+    def _state_get(self, key: str, default: str = "") -> str:
+        row = self.db.execute(
+            "SELECT value FROM consolidation_state WHERE key=?", (key,)
+        ).fetchone()
+        return row[0] if row else default
+
+    def _state_set(self, key: str, value: str) -> None:
+        self.db.execute(
+            "INSERT OR REPLACE INTO consolidation_state(key, value) "
+            "VALUES (?, ?)", (key, value))
 
     # ----------------------------------------------------------- internals
 
@@ -418,6 +719,13 @@ class Memory:
 def _extract_json(text: str) -> str:
     start, end = text.find("{"), text.rfind("}")
     return text[start:end + 1] if start >= 0 <= end else "{}"
+
+
+def _fact_tokens(text: str) -> list[str]:
+    """Lowercase word tokens with possessives folded — "partner's" and
+    "partner" must count as the same word or restatements never match."""
+    words = re.findall(r"[a-z0-9']+", (text or "").lower())
+    return [w[:-2] if w.endswith("'s") else w for w in words]
 
 
 _COMMIT_RE = re.compile(

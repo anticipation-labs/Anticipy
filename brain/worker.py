@@ -39,6 +39,53 @@ CLOCK_TZ = ZoneInfo(os.environ.get("ANTICIPY_TZ", "America/Vancouver"))
 CLOCK_QUIET_START, CLOCK_QUIET_END = 22, 8   # never initiate at night
 CLOCK_STATE = os.environ.get("ANTICIPY_CLOCK_STATE", "/data/clock_state.json")
 
+# ---- nightly memory consolidation (roadmap §1): while he sleeps, distill the
+# day's episodes into profile facts. Once a night, inside the clock's quiet
+# hours; the cursor and last-run stamp live in the memory DB itself, so a
+# redeploy resumes instead of repeating.
+CONSOLIDATE_MIN_GAP_SECONDS = 20 * 3600
+CONSOLIDATE_MAX_BATCHES = 10          # bounds one night's model spend
+CONSOLIDATE_RETRY_SECONDS = 30 * 60   # a failing model retries gently, not per tick
+
+
+def run_nightly_consolidation(memory, now: float | None = None) -> None:
+    """Distill the day into the profile layer (memory.consolidate).
+
+    Guardrails live HERE, outside the model, like the clock's: only during
+    quiet hours, at most once per night, bounded batches. With no live LLM
+    the pass is skipped outright — the profile stays empty, nothing crashes,
+    and hearing is never touched."""
+    try:
+        if getattr(memory, "llm", None) is None:
+            return
+        now = now if now is not None else time.time()
+        hour = datetime.fromtimestamp(now, CLOCK_TZ).hour
+        if not (CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END):
+            return          # daytime belongs to hearing
+        if now - memory.last_consolidation_ts() < CONSOLIDATE_MIN_GAP_SECONDS:
+            return          # already ran tonight
+        # Only a SUCCESSFUL pass stamps last_run_ts, and this runs on every
+        # poll tick — so without an attempt gap, one flaky night means a
+        # model call every two seconds until dawn.
+        if now - getattr(memory, "_nightly_attempt_ts", 0.0) < CONSOLIDATE_RETRY_SECONDS:
+            return
+        memory._nightly_attempt_ts = now
+        totals = {"episodes": 0, "new": 0, "merged": 0}
+        for _ in range(CONSOLIDATE_MAX_BATCHES):
+            out = memory.consolidate(now=now)
+            if not out.get("ran"):
+                print(f"consolidation: pass skipped ({out.get('reason', '?')})")
+                break
+            for k in totals:
+                totals[k] += out.get(k, 0)
+            if not out.get("remaining"):
+                break
+        print(f"consolidation: {totals['episodes']} episodes -> "
+              f"{totals['new']} new facts, {totals['merged']} merged")
+    except Exception as e:
+        # This must never be able to take hearing down with it.
+        print(f"consolidation failed (harmless): {e}")
+
 
 def fetch_owner_phone() -> str | None:
     """The owner's number as THEY entered it in the app. Falls back to the
@@ -1402,6 +1449,11 @@ def main() -> None:
             # And when nothing can run at all, say that too rather than
             # leaving a task queued behind a browser that is not open.
             report_stalled_work(anticipy)
+
+            # Nightly, while he sleeps: distill the day's episodes into
+            # profile facts (roadmap §1). Incremental and idempotent — a
+            # crash or redeploy resumes at the cursor, never repeats.
+            run_nightly_consolidation(memory)
 
             # Surface anything she "texted" (mock transport) into the feed too.
             sent = getattr(convo.transport, "sent", None)
