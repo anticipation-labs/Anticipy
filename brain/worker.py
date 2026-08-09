@@ -127,6 +127,34 @@ def fetch_owner_timezone() -> str | None:
         return None
 
 
+def seed_profile_identity(memory, _seen={}) -> None:
+    """Day zero: what he TOLD her at onboarding (name, email) becomes profile
+    knowledge the moment the worker sees it — she must never have to overhear
+    her own owner's name. Idempotent: remember_fact merges restatements, and
+    the seen-cache keeps the poll from re-writing unchanged values."""
+    try:
+        r = pb.get(f"{PB}/api/collections/owner_profile/records",
+                   params={"sort": "-updated", "perPage": 1}, timeout=10)
+        if not r.ok:
+            return
+        items = r.json().get("items", [])
+        if not items:
+            return
+        p = items[0]
+        first = (p.get("first_name") or "").strip()
+        last = (p.get("last_name") or "").strip()
+        email = (p.get("email") or "").strip()
+        name = " ".join(x for x in (first, last) if x)
+        for key, fact in (("name", f"Their name is {name}." if name else ""),
+                          ("email", f"Their email is {email}." if email else "")):
+            if fact and _seen.get(key) != fact:
+                memory.remember_fact(fact, importance=5, source="interview")
+                _seen[key] = fact
+                print(f"profile seeded from onboarding: {key}")
+    except Exception as e:
+        print(f"profile identity seed failed (harmless): {e}")
+
+
 def same_phone(a: str, b: str) -> bool:
     """E.164 comparison tolerant of formatting. Empty owner phone never
     matches — an unconfigured owner must not authorize the whole world."""
@@ -1263,6 +1291,9 @@ def main() -> None:
                 if zone and zone != llm.owner_zone:
                     llm.owner_zone = zone
                     print(f"owner timezone updated from the app: {zone}")
+                # What onboarding collected becomes profile knowledge on the
+                # same beat — she should know his name from minute one.
+                seed_profile_identity(memory)
             # Is the number still wired to us? Cheap, and the failure it
             # catches is invisible from in here — she simply never hears him.
             if time.time() - last_webhook > WEBHOOK_CHECK_EVERY_SECONDS:

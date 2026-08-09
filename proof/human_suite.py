@@ -418,6 +418,45 @@ def s24_third_party_story(check):
     check("no text about someone else's story", not texts, f"{texts}")
 
 
+def s26_asr_mush(check):
+    """Real transcription: no punctuation, misheard words, run-ons. The plan
+    must still land as one held card carrying the essentials."""
+    a, texts = fresh()
+    run_lines(a, [
+        "ok so um lets do dinner tomorrow yeah cactus club the park one",
+        "seven pm works for me to just us to",  # 'to'='two', ASR-style
+    ])
+    held = held_jobs()
+    check("mushy ASR still yields at most one held card", len(held) <= 1,
+          f"{[j['goal'] for j in held]}")
+    if held:
+        g = held[0]["goal"].lower()
+        check("the venue survived the mush", "cactus" in g, g)
+    check("mushy ASR never spams", len(texts) <= 1, f"{texts}")
+
+
+def s27_wrong_conversation_pull(check):
+    """Yesterday: flights to Toronto. Today: dinner. 'Make it earlier' must
+    change the DINNER, not the flight."""
+    a, texts = fresh()
+    run_lines(a, [
+        "so the Toronto flight is Thursday at 9 am right",
+        "yeah 9 am Thursday, gate change possible",
+        "ok separate thing, book us dinner at Earls tomorrow at 8, two people",
+        "actually can you make it earlier, like 7",
+    ])
+    held = held_jobs()
+    dinner = [j for j in held if re.search(r"earls|dinner", j["goal"], re.I)]
+    flightish = [j for j in JOBS if re.search(r"flight|toronto", j["goal"], re.I)
+                 and j["status"] in ("queued", "awaiting_confirm")
+                 and re.search(r"7|earlier", j["goal"], re.I)]
+    check("'make it earlier' changed the dinner, not the flight",
+          not flightish, f"{[j['goal'] for j in JOBS]}")
+    if dinner:
+        check("the dinner card carries the corrected 7",
+              "7" in dinner[-1]["goal"], dinner[-1]["goal"])
+
+
 def s25_conditional_plan(check):
     """A plan hedged on a condition ('IF the demo goes well...') is not armed yet."""
     a, texts = fresh()
@@ -438,7 +477,8 @@ SCENARIOS = [s01_full_plan, s02_missing_details, s03_dictation_inert,
              s16_pause_mid_plan, s17_impossible_ask, s18_greeting,
              s19_sarcasm, s20_joking_hyperbole, s21_mixed_audience,
              s22_one_sided_call, s23_correction_midstream,
-             s24_third_party_story, s25_conditional_plan]
+             s24_third_party_story, s25_conditional_plan,
+             s26_asr_mush, s27_wrong_conversation_pull]
 
 
 def main() -> int:

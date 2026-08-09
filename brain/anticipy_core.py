@@ -1331,6 +1331,21 @@ class Anticipy:
 
         existing = self._same_pending(goal)
         if existing:
+            # Same card — but a correction ("make it 7 not 8") arrives as the
+            # same plan with a changed detail, and returning without writing
+            # would keep the stale card. Patch unless the pending wording
+            # already says everything this one does.
+            try:
+                current = next((j for j in self._pending_jobs()
+                                if j.get("id") == existing), None)
+                if current and not self._covered_by(
+                        goal, current.get("goal") or ""):
+                    pb.patch(
+                        f"{self.backend_url}/api/collections/jobs/records/{existing}",
+                        json={"goal": goal, "params": json.dumps(params)},
+                        timeout=10)
+            except Exception:
+                pass
             return existing
         # A plan is assembled over several turns, not stated once. "Book
         # dinner tomorrow" becomes "book dinner for 2 at Cactus Club park
