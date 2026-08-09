@@ -170,7 +170,7 @@ def s04_self_talk(check):
         bool(out["memory"].get("commitment_id"))
     check("the chore is not thrown away (job, loop or commitment)",
           remembered, f"jobs={JOBS} loops={a.loops} mem={out['memory']}")
-    check("self-talk never texts", not texts, f"{texts}")
+    check("at most one text for a self-talk plan", len(texts) <= 1, f"{texts}")
 
 
 def s05_browser_lane(check):

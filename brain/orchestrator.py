@@ -165,7 +165,15 @@ ADDRESSEES = ("assistant", "person", "dictation", "self")
 # Speech not aimed at her stays in the ambient lane: remembered, worked on
 # quietly, but never a text and never an interruption. Silence is about her
 # VOICE, not her hands — what she may do is decided separately, below.
-AMBIENT_ADDRESSEES = ("person", "dictation")
+#
+# "self" belongs here too. On identical lines the addressee label wobbles
+# between person and self while the goal stays identical — and a plan she
+# fully understood must not live or die on that one-word coin flip. Talking
+# to himself and talking to a friend earn the same treatment: remembered,
+# prepared quietly, one held card through the ambient lane's dedupe. What
+# stays special about self-talk is her VOICE (the unasked-question rule),
+# not her hands.
+AMBIENT_ADDRESSEES = ("person", "dictation", "self")
 
 # The one lane where the words are not his own intentions. When he dictates,
 # he is AUTHORING text — voice-typing a message, instructing another AI — so

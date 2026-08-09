@@ -172,18 +172,21 @@ def _anticipy(monkeypatch, decision: Decision):
     return a, sent
 
 
-def test_a_self_talk_question_stays_quiet_even_with_a_goal(monkeypatch):
-    """The behaviour that keeps one plan to one text. Silence here is CORRECT;
-    what was broken is the card claiming a question exists — see the last test
-    in this file."""
+def test_a_consequential_self_talk_plan_is_held_and_asked_about_once(monkeypatch):
+    """A plan is a plan whichever way the addressee label wobbles. "self" and
+    "person" are indistinguishable through a one-sided pendant mic, and on
+    identical lines the label flips between them run to run. So a consequential
+    self-labelled plan takes the SAME lane as a person-labelled one: one held
+    card, one text asking his go-ahead. What stays special about self-talk is
+    the plain ask branch below the ambient lane — a bare question with no plan
+    behind it still never texts (see the goalless tests)."""
     a, sent = _anticipy(monkeypatch, Decision(
         decision="ask", goal="Book dinner at Earls for tomorrow",
         reason="need the location", addressee="self",
         missing=["what time at Earls tomorrow, and which location?"]))
     out = a.hear("we should grab Earls tomorrow but")
-    assert sent == [], f"self-talk texted him: {sent}"
-    assert not out["anticipy_says"], \
-        "nothing was sent, so the card must not be handed a question either"
+    assert len(sent) == 1, f"expected one go-ahead text, got: {sent}"
+    assert out["anticipy_says"], "the card must carry what was actually said"
 
 
 def test_a_goalless_self_talk_question_is_still_swallowed(monkeypatch):

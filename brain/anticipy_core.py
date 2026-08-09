@@ -664,7 +664,9 @@ class Anticipy:
         # addressee logged beside it says why, and any quiet job carries
         # lane=ambient so the whole story is auditable.
         if addressee in AMBIENT_ADDRESSEES and decision.decision in ("act", "ask"):
-            goal = decision.goal
+            # A goal of pure whitespace is no goal at all — a blank card must
+            # never be prepared, held, or texted about.
+            goal = (decision.goal or "").strip() or None
             consequential = bool(goal) and (decision.needs_confirmation
                                             or goal in IRREVERSIBLE
                                             or is_consequential(goal))
