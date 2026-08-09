@@ -1,16 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { BuildForm } from "./BuildForm";
+import { ApplyForm } from "./ApplyForm";
 
 export const metadata: Metadata = {
-  title: "Built something that shouldn't have worked? — Anticipy",
+  title: "Apply — Anticipy",
   description:
-    "Anticipy is looking for one hardware + software builder to own a tiny connected product from board to factory.",
-  alternates: { canonical: "https://www.anticipy.ai/build" },
+    "Four open roles at Anticipy: Founding Head of Content & Growth, Senior Software Engineer, Senior Hardware Engineer, and Senior Hardware & Software Engineer.",
+  alternates: { canonical: "https://www.anticipy.ai/apply" },
   openGraph: {
-    title: "Built something that shouldn't have worked?",
+    title: "Come build the thing. — Anticipy",
     description:
-      "One hardware + software builder to own a tiny connected product from board to factory.",
-    url: "https://www.anticipy.ai/build",
+      "Four open roles. One application, a few screens, no cover letter.",
+    url: "https://www.anticipy.ai/apply",
     type: "website",
   },
 };
@@ -30,17 +30,17 @@ export const viewport: Viewport = {
 
 
 /**
- * The application page.
+ * The shared application page for every open role.
  *
- * One screen at a time, each sized to the viewport, and the document itself
- * never scrolls — the intro, every question and the confirmation are all
- * panels rather than a long page. No nav, no footer, no team grid, no
- * benefits list. The whole surface is one question and a way to answer it.
+ * Same funnel as /build — one question at a time, each screen sized to the
+ * viewport, the document itself never scrolls. `?role=` preselects, but the
+ * role screen is always shown so somebody arriving cold can choose, and
+ * somebody who followed the wrong link can correct it.
  */
-export default function BuildPage() {
+export default function ApplyPage() {
   return (
     <main className="section-dark">
-      <BuildForm />
+      <ApplyForm />
     </main>
   );
 }

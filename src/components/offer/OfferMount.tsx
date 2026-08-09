@@ -30,7 +30,8 @@ const SUPPRESSED = [
   "/pre-orders/success",
   "/pre-orders/agreement",
   "/build", // job applicants are not shoppers
-  "/apply", // redirects to /build, but guard the path anyway
+  "/apply", // the shared application funnel
+  "/growth", // the Head of Content & Growth listing
   "/jobs",
   "/join",
   "/funded", // investor page

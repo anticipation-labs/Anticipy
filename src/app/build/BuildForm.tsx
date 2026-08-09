@@ -283,7 +283,7 @@ export function BuildForm() {
       <style>{`
         @media (max-height: 560px) {
           .ap-inner { padding-top: 14px !important; padding-bottom: 14px !important; }
-          .ap-inner > div:first-child { margin-bottom: 14px !important; }
+          .ap-brand { margin-bottom: 14px !important; }
           .ap-q { font-size: 21px !important; margin-bottom: 6px !important; }
           .ap-sub { margin-bottom: 16px !important; font-size: 14px !important; }
           .ap-inner textarea { max-height: 22vh !important; }
@@ -333,7 +333,7 @@ export function BuildForm() {
 
       <div style={inner} className="ap-inner">
         {/* Wordmark — the only chrome. */}
-        <div style={{ marginBottom: screen === 0 ? 40 : 30 }}>
+        <div className="ap-brand" style={{ marginBottom: screen === 0 ? 40 : 30 }}>
           <a
             href="/"
             className="font-serif"

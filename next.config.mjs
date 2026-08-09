@@ -7,13 +7,12 @@ const nextConfig = {
   // requests are first-party. Note this changes only WHERE events are sent,
   // not WHAT: consent gating and masking still govern collection.
   skipTrailingSlashRedirect: true,
-  // /build is the canonical application page. These three are the URLs
-  // people guess or that get written into a post, so they are permanent (308)
-  // redirects rather than rewrites — search engines should consolidate onto
-  // /build, and anyone who bookmarked the old path lands in the right place.
+  // /apply is now a real page — the shared application funnel for every open
+  // role — so it is no longer redirected. These two remain permanent (308)
+  // redirects onto /build, which is still the canonical listing for the
+  // hardware + software role.
   async redirects() {
     return [
-      { source: "/apply", destination: "/build", permanent: true },
       { source: "/jobs", destination: "/build", permanent: true },
       { source: "/join", destination: "/build", permanent: true },
     ];

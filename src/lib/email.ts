@@ -312,6 +312,15 @@ export async function sendApplicationNotification(a: {
   thing1Extra: string;
   thing2: string;
   thing2Extra: string;
+  // Role-application fields. Empty on the /build funnel, which has no role.
+  roleLabels?: string[];
+  questionSet?: string | null;
+  answers?: { id: string; question: string; answer: string }[];
+  links?: string[];
+  availability?: string;
+  startDate?: string;
+  vancouver?: string;
+  workAuthorized?: boolean | null;
   spokenFields: string[];
   files: { url: string; filename: string }[];
   resumeLink: string | null;
@@ -360,11 +369,55 @@ export async function sendApplicationNotification(a: {
         .join("")
     : "";
 
+  const roles = a.roleLabels ?? [];
+  const answers = a.answers ?? [];
+  const isRole = roles.length > 0;
+
+  // Role applications carry their own questions, so the two fixed /build
+  // blocks are replaced by the answer list the candidate actually saw.
+  const answerBlocks = answers
+    .map((ans) => block(ans.question, ans.answer, "", ans.id))
+    .join("");
+
+  const linkBlock = (a.links ?? []).length
+    ? `<div style="margin: 0 0 26px 0;">
+         <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C9A227; font-weight: 600; margin: 0 0 6px 0;">Links</p>
+         ${(a.links ?? [])
+           .map(
+             (l) =>
+               `<p style="margin:0 0 5px 0;font-size:14px;"><a href="${e(l)}" style="color:#C9A227;" rel="noopener noreferrer">${e(l)}</a></p>`
+           )
+           .join("")}
+       </div>`
+    : "";
+
+  const logistics = [
+    a.availability && `<strong>Availability:</strong> ${e(a.availability)}`,
+    a.startDate && `<strong>Can start:</strong> ${e(a.startDate)}`,
+    a.vancouver && `<strong>Vancouver:</strong> ${e(a.vancouver)}`,
+    a.workAuthorized === false
+      ? `<strong style="color:#8A1F1F;">Not legally able to work / under minimum age</strong>`
+      : a.workAuthorized === true
+        ? `<strong>Legally able to work:</strong> yes`
+        : "",
+  ]
+    .filter(Boolean)
+    .join("<br/>");
+
+  const logisticsBlock = logistics
+    ? `<div style="margin: 0 0 26px 0; padding: 14px 16px; background: #FAF8F5; border-radius: 8px;">
+         <p style="font-size: 14px; line-height: 1.7; color: #1a1a1a; margin: 0;">${logistics}</p>
+       </div>`
+    : "";
+
   return sendMail({
     to: OWNER_EMAILS,
     replyTo: a.email,
-    tag: "builder-application",
-    subject: `[BUILD] ${a.name} — ${a.location}`,
+    tag: isRole ? "role-application" : "builder-application",
+    // The tag in the subject is what makes these filterable in a mailbox.
+    subject: isRole
+      ? `[${roles.length > 1 ? "MULTI" : (a.questionSet ?? "ROLE").toUpperCase()}] ${a.name} — ${a.location}`
+      : `[BUILD] ${a.name} — ${a.location}`,
     headers: {
       "X-Priority": "1",
       "X-MSMail-Priority": "High",
@@ -378,6 +431,13 @@ export async function sendApplicationNotification(a: {
       : `<p style="background:#FDECEC;border:1px solid #F5C2C2;border-radius:8px;padding:12px 14px;font-size:13px;color:#8A1F1F;margin:0 0 20px 0;"><strong>Not saved to the database.</strong> The row write failed, so this email is the only copy. Check the anticipy_applications table exists.</p>`
   }
 
+  ${
+    isRole
+      ? `<p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C9A227; font-weight: 600; margin: 0 0 8px 0;">Applying for</p>
+         <p style="font-size: 16px; font-weight: 600; margin: 0 0 16px 0;">${roles.map((r) => e(r)).join("<br/>")}</p>`
+      : ""
+  }
+
   <h2 style="margin: 0 0 4px 0; font-size: 21px;">${e(a.name)}</h2>
   <p style="color: #6b635b; margin: 0 0 22px 0; font-size: 14px;">
     <a href="mailto:${e(a.email)}" style="color: #C9A227;">${e(a.email)}</a>
@@ -387,8 +447,14 @@ export async function sendApplicationNotification(a: {
 
   <hr style="border: none; border-top: 1px solid #e8e2db; margin: 0 0 24px 0;" />
 
-  ${block("The first thing", a.thing1, a.thing1Extra, "thing1")}
-  ${block("The second thing", a.thing2, a.thing2Extra, "thing2")}
+  ${logisticsBlock}
+
+  ${
+    isRole
+      ? `${answerBlocks}${linkBlock}`
+      : `${block("The first thing", a.thing1, a.thing1Extra, "thing1")}
+         ${block("The second thing", a.thing2, a.thing2Extra, "thing2")}`
+  }
 
   ${
     fileList || a.resumeLink
@@ -411,14 +477,83 @@ export async function sendApplicationNotification(a: {
 // just spent real effort, and it is the only genuine proof the address
 // exists — a hard bounce on this message is ground truth, obtained at zero
 // friction. That is why there is no magic-link confirmation step on the form.
-export async function sendApplicantReceipt(email: string, name: string) {
+export async function sendApplicantReceipt(
+  email: string,
+  name: string,
+  copy?: {
+    roleLabels?: string[];
+    answers?: { id: string; question: string; answer: string }[];
+    links?: string[];
+    availability?: string;
+    startDate?: string;
+    vancouver?: string;
+    attachmentNames?: string[];
+  }
+) {
   const first = escapeHtml(sanitizeHeader(name.split(" ")[0] || "", 60));
+  const e = escapeHtml;
+  const para = (s: string) => e(s).replace(/\n/g, "<br/>");
+
+  const roles = copy?.roleLabels ?? [];
+  const answers = copy?.answers ?? [];
+
+  // A copy of what they wrote. Worth including for its own sake — people
+  // rarely keep a record of what they said — and it also means a candidate
+  // arriving at the interview can reread their own answers.
+  const transcript = answers.length
+    ? `
+  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 32px 0 24px;" />
+  <p style="font-size: 13px; color: #8a8a8a; margin: 0 0 20px;">Your answers, for your records:</p>
+  ${
+    roles.length
+      ? `<p style="font-size: 14px; margin: 0 0 20px;"><strong>Role:</strong> ${roles.map((r) => e(r)).join(", ")}</p>`
+      : ""
+  }
+  ${answers
+    .map(
+      (ans) => `
+  <div style="margin: 0 0 20px;">
+    <p style="font-size: 13px; color: #6b635b; margin: 0 0 5px;">${e(ans.question)}</p>
+    <p style="font-size: 15px; line-height: 1.65; margin: 0;">${para(ans.answer)}</p>
+  </div>`
+    )
+    .join("")}
+  ${
+    (copy?.links ?? []).length
+      ? `<div style="margin: 0 0 20px;"><p style="font-size: 13px; color: #6b635b; margin: 0 0 5px;">Links</p>${(copy?.links ?? [])
+          .map(
+            (l) =>
+              `<p style="margin:0 0 4px;font-size:14px;"><a href="${e(l)}" style="color:#C9A227;" rel="noopener noreferrer">${e(l)}</a></p>`
+          )
+          .join("")}</div>`
+      : ""
+  }
+  ${
+    (copy?.attachmentNames ?? []).length
+      ? `<p style="font-size: 14px; margin: 0 0 20px;"><strong>Attached:</strong> ${(copy?.attachmentNames ?? []).map((f) => e(f)).join(", ")}</p>`
+      : ""
+  }
+  ${
+    copy?.availability || copy?.startDate || copy?.vancouver
+      ? `<p style="font-size: 14px; line-height: 1.7; margin: 0 0 20px; color: #4a4a4a;">${[
+          copy?.availability && `Availability: ${e(copy.availability)}`,
+          copy?.startDate && `Can start: ${e(copy.startDate)}`,
+          copy?.vancouver && `Location: ${e(copy.vancouver)}`,
+        ]
+          .filter(Boolean)
+          .join("<br/>")}</p>`
+      : ""
+  }`
+    : "";
+
   return sendMail({
     to: email,
     bccOwner: false,
     replyTo: REPLY_TO,
     tag: "application-receipt",
-    subject: "Your Anticipy application",
+    subject: roles.length
+      ? `Your Anticipy application — ${sanitizeHeader(roles[0], 80)}`
+      : "Your Anticipy application",
     html: `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.7;">
   <p style="font-size: 16px;">${first ? `${first},` : "Hi,"}</p>
@@ -430,7 +565,7 @@ export async function sendApplicantReceipt(email: string, name: string) {
   <p style="font-size: 16px;">Replying to this email reaches us directly.</p>
 
   <p style="font-size: 16px;">Omar Ebrahim<br/><span style="color:#8a8a8a;font-size:14px;">Founder, Anticipy</span></p>
-
+  ${transcript}
   <hr style="border: none; border-top: 1px solid #e8e2db; margin: 32px 0;" />
   <p style="font-size: 13px; color: #8a8a8a;">
     Anticipation Labs Inc. &middot; <a href="https://anticipy.ai" style="color: #C9A227;">anticipy.ai</a>
