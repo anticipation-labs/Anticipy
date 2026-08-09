@@ -335,12 +335,110 @@ def s18_greeting(check):
     check("greeting never queues work", not JOBS, f"{JOBS}")
 
 
+def s19_sarcasm(check):
+    """Sarcasm ('oh great, ANOTHER meeting') is not a request to book one."""
+    a, texts = fresh()
+    run_lines(a, [
+        "Oh great, another Monday meeting, exactly what my life was missing",
+    ])
+    booked = [j for j in JOBS if re.search(r"book|schedul|meeting", j["goal"], re.I)
+              and j["status"] in ("queued", "awaiting_confirm")]
+    check("sarcasm does not schedule anything", not booked,
+          f"{[j['goal'] for j in JOBS]}")
+    check("sarcasm does not text", not texts, f"{texts}")
+
+
+def s20_joking_hyperbole(check):
+    """'I'm going to kill Marcus if he's late again' is venting, not a task."""
+    a, texts = fresh()
+    run_lines(a, ["I swear I'm going to kill Marcus if he is late again"])
+    check("hyperbole creates no work aimed at Marcus",
+          not [j for j in JOBS if j["status"] in ("queued", "awaiting_confirm")],
+          f"{[j['goal'] for j in JOBS]}")
+    check("hyperbole does not text", not texts, f"{texts}")
+
+
+def s21_mixed_audience(check):
+    """Mid-conversation he turns to HER by name -> that one line is hers."""
+    a, texts = fresh()
+    outs = run_lines(a, [
+        "So yeah Marcus, Friday works for the gym",
+        "Anticipy, remind me to bring my headphones on Friday",
+        "anyway Marcus where were we",
+    ])
+    d = outs[1]["decision"]
+    check("the named line is heard as directed at her",
+          d.addressee == "assistant" or bool(JOBS) or bool(a.loops)
+          or bool(outs[1]["anticipy_says"]),
+          f"addressee={d.addressee} jobs={JOBS} says={outs[1]['anticipy_says']}")
+
+
+def s22_one_sided_call(check):
+    """One side of a phone call, half agreements -> at most one card, no spam."""
+    a, texts = fresh()
+    run_lines(a, [
+        "Hey! ... yeah ... no for sure ...",
+        "uh huh ... Saturday could work ...",
+        "OK so one o'clock at Earls Brooklyn ... yeah I'll see you then",
+    ])
+    held = held_jobs()
+    check("a half-heard call never spawns multiple cards", len(held) <= 1,
+          f"{[j['goal'] for j in held]}")
+    check("at most one text for a half-heard call", len(texts) <= 1,
+          f"{texts}")
+
+
+def s23_correction_midstream(check):
+    """He corrects a detail mid-plan -> the card carries the CORRECTED value."""
+    a, texts = fresh()
+    run_lines(a, [
+        "Book us dinner at Cactus Club tomorrow at 7",
+        "wait actually make that 8 not 7, same place",
+    ])
+    held = held_jobs()
+    check("one card after the correction", len(held) <= 1,
+          f"{[j['goal'] for j in held]}")
+    if held:
+        g = held[0]["goal"]
+        check("the corrected time (8) won", "8" in g and " 7" not in g.replace("17", ""),
+              g)
+
+
+def s24_third_party_story(check):
+    """A story about someone ELSE's plan is not his plan."""
+    a, texts = fresh()
+    run_lines(a, [
+        "So apparently Jake booked a huge dinner at Hy's for his whole team Friday",
+        "yeah crazy, forty people",
+    ])
+    booked = [j for j in JOBS if j["status"] in ("queued", "awaiting_confirm")
+              and re.search(r"book|reserv", j["goal"], re.I)]
+    check("Jake's dinner is not booked for him", not booked,
+          f"{[j['goal'] for j in JOBS]}")
+    check("no text about someone else's story", not texts, f"{texts}")
+
+
+def s25_conditional_plan(check):
+    """A plan hedged on a condition ('IF the demo goes well...') is not armed yet."""
+    a, texts = fresh()
+    run_lines(a, [
+        "If the demo goes well on Friday we should celebrate, maybe book somewhere fancy",
+    ])
+    armed = [j for j in JOBS if j["status"] in ("queued", "awaiting_confirm")
+             and re.search(r"book|reserv", j["goal"], re.I)]
+    check("a conditional maybe-plan is not held as a booking", not armed,
+          f"{[j['goal'] for j in JOBS]}")
+
+
 SCENARIOS = [s01_full_plan, s02_missing_details, s03_dictation_inert,
              s04_self_talk, s05_browser_lane, s06_research_lane,
              s07_sms_context, s08_fragment, s09_quiet_research,
              s10_repeat_no_spam, s11_direct_consequential, s12_briefing,
              s13_never_mind, s14_someone_elses_job, s15_her_own_echo,
-             s16_pause_mid_plan, s17_impossible_ask, s18_greeting]
+             s16_pause_mid_plan, s17_impossible_ask, s18_greeting,
+             s19_sarcasm, s20_joking_hyperbole, s21_mixed_audience,
+             s22_one_sided_call, s23_correction_midstream,
+             s24_third_party_story, s25_conditional_plan]
 
 
 def main() -> int:

@@ -91,7 +91,10 @@ async function ensureLLMKey(force = false) {
   if (!agentId) return openrouterKey || null;
   try {
     const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
-    if (!r.ok) return null;
+    // A refresh that fails must never LOSE a key we already hold — a stale
+    // bundle plus one backend hiccup would otherwise fail every job with
+    // "no LLM key" while a perfectly good key sits in storage.
+    if (!r.ok) return openrouterKey || null;
     const { openrouter_key, model, vision_model, service_token, owner } = await r.json();
     if (openrouter_key) {
       await chrome.storage.local.set({
