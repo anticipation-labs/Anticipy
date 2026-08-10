@@ -217,7 +217,16 @@ class Memory:
             "closed": closed,
         }
 
-    def close_from_speech(self, text: str, completed: Optional[str] = None) -> list[str]:
+    def close_matching(self, about: str, status: str = "done") -> list[str]:
+        """A plan finished or died OUTSIDE speech — its job was cancelled,
+        its card declined — and the promise it grew from must close with it.
+        Live, 2026-08-10: a toothbrush order was cancelled on the 4th, but
+        the commitment behind it stayed "open", so six days later the clock
+        texted "did you manage to get the toothbrush?" about a dead plan."""
+        return self.close_from_speech(about, completed=about, status=status)
+
+    def close_from_speech(self, text: str, completed: Optional[str] = None,
+                          status: str = "done") -> list[str]:
         """The owner said they finished something — find which open promise
         that was and mark it done. Matches on word overlap, and only when the
         overlap is real, so 'I sent it' never closes an unrelated promise."""
@@ -241,7 +250,7 @@ class Memory:
         # done" with one open loop still closes it; with several it does not
         # guess, because closing the wrong promise is worse than closing none.
         if best_id is not None and best_score >= 0.5:
-            self.resolve(best_id)
+            self.resolve(best_id, status)
             return [best]
         return []
 

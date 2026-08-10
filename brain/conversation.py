@@ -1043,7 +1043,16 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             return "ambiguous"
         if not job:
             return None
-        return self._flip(job["id"], {"status": "cancelled"}, "cancelled")
+        out = self._flip(job["id"], {"status": "cancelled"}, "cancelled")
+        if out.startswith("cancelled:"):
+            # The promise behind the job dies with it — a cancelled plan
+            # left "open" in memory becomes a clock follow-up days later.
+            try:
+                self.anticipy.memory.close_matching(
+                    job.get("goal", ""), "cancelled")
+            except Exception:
+                pass
+        return out
 
     def _amend(self, job_id: Optional[str], changes: dict) -> Optional[str]:
         job = self._job(job_id)

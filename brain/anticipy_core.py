@@ -1689,6 +1689,12 @@ class Anticipy:
                     if self._cancel_job(j.get("id"),
                                         "he called this off out loud"):
                         hit = True
+                        # The promise behind the job dies with it, or the
+                        # clock later chases a plan he already called off.
+                        try:
+                            self.memory.close_matching(other, "cancelled")
+                        except Exception:
+                            pass
                         if self._open_plan and self._open_plan[0] == j.get("id"):
                             self._open_plan = None
         except Exception:
@@ -1843,6 +1849,9 @@ class Anticipy:
                         loop.status = "needs_you"
                     elif status == "cancelled":
                         loop.status = "declined"
+                        if loop.commitment_id > 0:
+                            self.memory.resolve(loop.commitment_id,
+                                                "cancelled")
                 except Exception:
                     pass
             out.append({"what": loop.what, "status": loop.status, "job": loop.job_id})
