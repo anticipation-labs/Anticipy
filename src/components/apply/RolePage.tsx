@@ -22,11 +22,13 @@ export interface RoleSection {
 export interface RolePageContent {
   /** Hero shot description. Renders as an empty 16:9 slot until a photo lands. */
   heroPhoto: string;
+  /** Set this and the slot becomes the photo; heroPhoto stays as the alt text. */
+  heroPhotoSrc?: string;
   /** Paragraphs between the hero photo and the first section. */
   intro: string[];
   sections: RoleSection[];
   /** Optional inline 4:3 slot, dropped in after the section at this index. */
-  inlinePhoto?: { afterSection: number; caption: string };
+  inlinePhoto?: { afterSection: number; caption: string; src?: string };
 }
 
 export function RolePage({ role, content }: { role: Role; content: RolePageContent }) {
@@ -88,7 +90,7 @@ export function RolePage({ role, content }: { role: Role; content: RolePageConte
         </Reveal>
 
         <Reveal delay={0.16}>
-          <Photo caption={content.heroPhoto} priority />
+          <Photo caption={content.heroPhoto} src={content.heroPhotoSrc} priority />
         </Reveal>
 
         <Reveal delay={0.22}>
@@ -134,7 +136,7 @@ export function RolePage({ role, content }: { role: Role; content: RolePageConte
 
             {content.inlinePhoto?.afterSection === i && (
               <Reveal delay={0.26}>
-                <Photo ratio="4:3" caption={content.inlinePhoto.caption} />
+                <Photo ratio="4:3" caption={content.inlinePhoto.caption} src={content.inlinePhoto.src} />
               </Reveal>
             )}
           </div>
