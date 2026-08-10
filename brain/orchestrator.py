@@ -120,7 +120,12 @@ differently depending on who said it and who "you" refers to:
 - "other": the obligation belongs to somebody else in the room. A friend
   saying "I'll book it" or "leave that with me" has taken it on
   THEMSELVES. Remember it — he may want it tracked — but it is not his
-  errand and never becomes one on their say-so.
+  errand and never becomes one on their say-so. THE TEST: if the friend
+  vanished, would the owner still be on the hook? "Leave the flights with
+  me" — no, entirely theirs, "other". "Let's do dinner tomorrow, I'll
+  text you a time" — yes: the dinner is a plan HE agreed to attend, so it
+  is "owner" even though the friend owes one detail. A shared plan is
+  never "other" just because the other person owns a piece of it.
 - "machine": he is operating a computer BY VOICE right now — voice-typing,
   dictating a message, reading a list into an app, instructing another
   assistant. Tells: references to things on a screen rather than in the
@@ -591,6 +596,40 @@ made — those are their call, and guessing them books the wrong thing.
 
 Reply ONLY with compact JSON:
 {"can_start": true|false, "needed": ["<what they would have to be told>"]}"""
+
+
+PARTY_SYSTEM = """A personal assistant overheard her owner talking with
+someone. A plan came up, and the other person owns at least the next step.
+
+One question: is the OWNER a party to this plan — did he agree to be there,
+is it his own plan made together with the other person? Or is the work
+entirely the other person's, with nothing the owner is on the hook for?
+
+"Let's do dinner tomorrow, I'll text you a time" — the owner agreed to the
+dinner, so he IS a party, even though the friend owes the time.
+"Leave the flights with me, I'll sort them" — entirely the friend's; he is
+NOT a party to any work here.
+
+Reply ONLY with compact JSON: {"owner_is_party": true|false}"""
+
+
+def owner_is_party(llm, line: str, goal: str) -> bool:
+    """The tiebreaker for owes="other". Asked as its own question because
+    triage answers it wrong when both are bundled: shown the full mush of a
+    dinner he plainly agreed to, it fixates on "I'll text you a time" and
+    files the whole plan under the friend — measured six for six on the live
+    2026-08-09 conversation. The same model, asked ONLY this, gets it right.
+    Only an explicit true flips anything; absent, malformed, or dead-model
+    replies leave the inert behavior exactly as it was."""
+    if not goal or not llm or not getattr(llm, "live", False):
+        return False
+    try:
+        res = llm.chat(PARTY_SYSTEM,
+                       f"HEARD: {line}\n\nTASK: {goal}", temperature=0.0)
+        raw = json.loads(_extract_json(res.text))
+    except Exception:
+        return False
+    return raw.get("owner_is_party") is True
 
 
 def check_sufficiency(llm, goal: str) -> list:

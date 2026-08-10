@@ -30,7 +30,8 @@ from .llm import LLM, now_line
 from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
-                           NOT_HIS, check_sufficiency, unsupported_names,
+                           NOT_HIS, check_sufficiency, owner_is_party,
+                           unsupported_names,
                            unsupported_counts, read_into_a_machine,
                            not_speech_evidence,
                            _extract_json)
@@ -650,9 +651,15 @@ class Anticipy:
                           if decision.owes == "machine"
                           else "no obligation to anyone")
                 self._prev = (line, time.time())
+                # goal="" is deliberate: ignore + a goal is the feed's
+                # "Looking into it — I'll text you what I find" card, and
+                # she is doing NOTHING here. A do-nothing verdict wearing
+                # that label is a promise she never intends to keep — he
+                # watched four of them in a row and reasonably concluded
+                # every plan "gets stuck there".
                 return {"memory": mem, "decision": Decision(
-                    decision="ignore", goal=goal,
-                    reason=f"not his to do: {reason}",
+                    decision="ignore", goal="",
+                    reason=f"not his to do: {reason} — {goal!r}",
                     addressee=addressee, owes=decision.owes),
                     "anticipy_says": None}
             params = {"source": line, "now": now_line(), "lane": "ambient"}
@@ -672,12 +679,23 @@ class Anticipy:
         # but their word never becomes his errand.
         if (decision.owes == "other" and not explicit
                 and decision.decision in ("act", "ask")):
-            self._prev = (line, time.time())
-            return {"memory": mem, "decision": Decision(
-                decision="ignore", goal=decision.goal,
-                reason="someone else took this on; remembered, not started",
-                addressee=addressee, owes="other"),
-                "anticipy_says": None}
+            # "other" is right about WHO OWNS THE NEXT STEP and wrong about
+            # whose plan it is: shown a dinner he plainly agreed to where the
+            # friend said "I'll text you a time", triage filed the whole plan
+            # under the friend, six for six, and she went inert on his own
+            # dinner. Ask that one question on its own — is he a party to
+            # this plan? — and only an explicit yes flips it back into his
+            # lane. "Leave the flights with me" still stays theirs.
+            if not owner_is_party(self.llm, line, decision.goal or ""):
+                self._prev = (line, time.time())
+                # goal="" for the same reason as above: she is tracking, not
+                # looking, and the feed must not claim otherwise.
+                return {"memory": mem, "decision": Decision(
+                    decision="ignore", goal="",
+                    reason="someone else took this on; remembered, not "
+                           f"started: {decision.goal!r}",
+                    addressee=addressee, owes="other"),
+                    "anticipy_says": None}
 
         # The ambient lane (roadmap §7.1): speech not aimed at her — another
         # person, a dictation machine — is remembered, and researched quietly
@@ -863,10 +881,10 @@ class Anticipy:
                             if getattr(l, "job_id", None) == job_id:
                                 l.status = "cancelled"
                         decision = Decision(
-                            decision="ignore", goal=goal,
-                            reason=(f"{addressee}-directed: could not raise it, "
-                                    "so it was cancelled rather than left "
-                                    "waiting on him"),
+                            decision="ignore", goal="",
+                            reason=(f"{addressee}-directed: could not raise "
+                                    f"{goal!r}, so it was cancelled rather "
+                                    "than left waiting on him"),
                             addressee=addressee)
                     elif not self.notify_owner(handled):
                         # Allowed, attempted, and the send failed. The card is
@@ -883,9 +901,12 @@ class Anticipy:
                 # sentence, not a plan, and acting on it is the 2026-08-04
                 # "On it" bug. Likewise a question would interrupt him about
                 # speech never aimed at her. Remembered; nothing queued.
+                # goal="" — nothing is queued here, and ignore + a goal is
+                # the feed's "Looking into it" card. Only actual quiet work
+                # gets to say so.
                 decision = Decision(
-                    decision="ignore", goal=goal,
-                    reason=f"{addressee}-directed: stays ambient",
+                    decision="ignore", goal="",
+                    reason=f"{addressee}-directed: stays ambient — {goal!r}",
                     addressee=addressee)
             acted = decision.decision == "act" or quiet_research
             self._prev = None if acted else (line, time.time())
