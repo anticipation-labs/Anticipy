@@ -551,8 +551,10 @@ export async function sendApplicantReceipt(
     bccOwner: false,
     replyTo: REPLY_TO,
     tag: "application-receipt",
+    // Every role they picked, not just the first — somebody who applied for
+    // both engineering roles was being told their application was for one.
     subject: roles.length
-      ? `Your Anticipy application — ${sanitizeHeader(roles[0], 80)}`
+      ? `Your Anticipy application — ${sanitizeHeader(roles.join(" + "), 120)}`
       : "Your Anticipy application",
     html: `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.7;">
