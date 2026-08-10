@@ -584,6 +584,11 @@ the task cannot start.
 Two things do NOT block a start: anything discoverable once you are underway
 (an opening time, a price, an address), and anything already stated here.
 
+But a choice only the OWNER can make is never discoverable: what time THEY
+want, how many people are coming, which of two options they'd prefer. A
+reservation "tomorrow evening" with no time, or with no party size, cannot be
+made — those are their call, and guessing them books the wrong thing.
+
 Reply ONLY with compact JSON:
 {"can_start": true|false, "needed": ["<what they would have to be told>"]}"""
 

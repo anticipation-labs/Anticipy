@@ -343,7 +343,12 @@ filler; no exclamation-point cheer. If you're asking, ask exactly ONE clear
 question — the single thing that unblocks you. If you relied on an assumption
 from earlier context, say it casually so they can correct you. If you're
 starting something consequential, make clear in your own words that nothing
-goes out until they give the word.
+goes out until they give the word. NEVER say or imply an action already
+happened ("got you a table", "booked it", "sent it") when you are holding it
+for their OK — you have a plan, not a result, and claiming a result that
+doesn't exist is the one unforgivable text. If a detail is listed as missing,
+your job is to ASK for it — never supply a value for it, however obvious it
+seems from their habits.
 {TEXTING_STYLE}"""
 
 
@@ -722,6 +727,19 @@ class Anticipy:
                 # nothing". So: the work is prepared and HELD for his yes —
                 # a card on her desk plus ONE text asking for the go-ahead and
                 # naming any essential unknowns. Held work never sits silent.
+                # Triage's own "missing" field is empty essentially always
+                # (measured; see the sufficiency comment below for the direct
+                # lane). The ambient lane returned before that check ever ran,
+                # so "dinner tomorrow, I don't know when though" arrived with
+                # missing=[] — and the one text about it filled the gap from
+                # habit and said 7 PM. Same gate, same reason, this lane too.
+                if not explicit:
+                    try:
+                        for gap in check_sufficiency(self.llm, goal):
+                            if gap not in decision.missing:
+                                decision.missing.append(gap)
+                    except Exception:
+                        pass
                 params = {"source": line, "now": now_line(), "lane": "desk"}
                 if decision.assumption:
                     params["assumption"] = decision.assumption
@@ -755,15 +773,30 @@ class Anticipy:
                     # Held work must never sit silently: one text asks for
                     # his go-ahead and names anything essential still
                     # unknown. The queue's dedupe keeps this to ONE per plan.
-                    handled = self._voice({
+                    said = self._voice({
                         "situation": "overheard a plan he made with someone; "
-                                     "prepared it, held for his OK"
-                                     + ("; essential details are missing"
+                                     "prepared it but NOTHING IS BOOKED OR "
+                                     "SENT YET — you are asking his go-ahead"
+                                     + ("; essential details are missing — "
+                                        "ask for them, never fill them in"
                                         if missing else ""),
                         "heard": line, "goal": goal,
                         "missing": missing or None,
                         "assumption": assumption,
-                    }) or (
+                    })
+                    # A number she never heard is an invention, whatever the
+                    # prompt says — a live text once announced "Monday at
+                    # 7 p.m." for a dinner whose time he explicitly did not
+                    # know. Any digit in her text must have been spoken or be
+                    # part of the plan; otherwise the plain fallback speaks.
+                    if said:
+                        allowed = goal_tokens(
+                            f"{line} {goal} {assumption or ''} "
+                            + " ".join(missing or []))
+                        nums = {t for t in goal_tokens(said) if t.isdigit()}
+                        if nums - {t for t in allowed if t.isdigit()}:
+                            said = None
+                    handled = said or (
                         f"Caught your plan — ready to go: {goal}. "
                         + (f"First I need: {', '.join(missing)}. "
                            if missing else "")
