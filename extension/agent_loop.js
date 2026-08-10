@@ -704,6 +704,16 @@ export async function runAgentGoal(goal, opts) {
   // so mapPage would fail every step and the run would die without acting.
   const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true } = opts;
 
+  // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
+  // itself about operating a financial account never even starts — the
+  // domain guard alone let "log into the bank" wander off searching for a
+  // bank before anything could refuse it.
+  if (/\b(bank(ing)?|brokerage|credit\s*card|crypto\s*(exchange|wallet))\b/i.test(goal)
+      && /\b(log\s*in|sign\s*in|password|statements?|transfers?|balance|accounts?)\b/i.test(goal)) {
+    return { status: "needs_user",
+             result: "refused: operating financial accounts is protected — that one's yours to do" };
+  }
+
   // Work out WHERE this happens before opening anything. An explicit
   // start_url on the job still wins — the caller knew something we did not.
   // A null plan means we open exactly what we would have opened before.

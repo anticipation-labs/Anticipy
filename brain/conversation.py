@@ -78,7 +78,11 @@ intents:
   not merely informing you, they are telling you to go.
 - "new_request": something new to handle. NEVER use this to cancel or call
   off something — calling anything off is "decline" even when no pending item
-  matches (pending_id null); do not invent a cancellation task.
+  matches (pending_id null); do not invent a cancellation task. And NEVER use
+  it for a text that picks a detail for something already pending: with a
+  dinner waiting on a time, "let's do 7" or "make it Tuesday" is about THAT
+  dinner (confirm or answer, changes filled in) — a bare number or time next
+  to a pending question is almost never a brand-new errand.
 - "chat": ONLY social talk — greetings, thanks, jokes, how-are-you. Anything
   that asks for information or for something to be done is "new_request",
   however casually it is phrased. "what's the weather in Vancouver", "what
@@ -106,6 +110,9 @@ Grounding rules (hard):
   reply a clarifying question ("the newsletter or the pitch deck?") — do not
   guess, and never re-ask a question they have already answered.
 - If nothing is pending and they seem to confirm, ask what they mean.
+- Facts about the owner's life come ONLY from "memory" and the thread. If
+  they ask something those don't answer (their usual spot, a name, a date),
+  say you're not sure — never invent a plausible-sounding answer.
 - When "blocked" is not empty and their message supplies what a blocked task
   needed, say so plainly and that you are getting on with it ("Perfect — I'll
   finish the booking now"). Never ask what the information was for; the
@@ -325,6 +332,25 @@ class Conversation:
             if last:
                 parsed["reply"] = f"Sorry — what I meant was: {last}"
             intent = "chat"
+        elif intent == "new_request" and self._pending() and \
+                (verdict := self._about_pending(phone, text)) != "no":
+            # A wobbly classification must not FORK the plan: "let's do 7,
+            # go ahead" with a dinner already held once spawned a second card
+            # for "7 people". One isolated second look settles whether the
+            # text belongs to the held item — a go-ahead releases it, a bare
+            # detail amends it, and only a genuinely new errand goes to triage.
+            if verdict == "go":
+                acted = self._release(pending_id, changes, owner_text=text_for_guard)
+                if acted == "ambiguous":
+                    fresh = self._freshest_pending()
+                    acted = self._release(fresh, changes, owner_text=None) \
+                        if fresh else None
+                intent = "confirm"
+            else:
+                acted = self._amend(pending_id, changes or {"note": text})
+                if acted == "ambiguous":
+                    acted = None
+                intent = "answer"
         elif intent in ("new_request", "chat"):
             # Feed it back through the one brain — same path as the pendant.
             #
@@ -710,9 +736,36 @@ Use {"facts": {}} when there is nothing durable."""
         except Exception:
             return []
 
+    ABOUT_PENDING = """A personal assistant is holding work that waits on her
+owner's word. He just texted her. One question: is his text about a HELD
+item, or a brand-new errand?
+
+Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
+- "go": his text belongs to a held item AND tells her to proceed — a plain
+  yes, or a missing detail plus a go-ahead ("let's do 7, go ahead").
+- "detail": it belongs to a held item but only supplies or changes a detail,
+  with no instruction to proceed.
+- "no": it is genuinely a new, unrelated errand or question."""
+
+    def _about_pending(self, phone: str, text: str) -> str:
+        """Isolated second look before a 'new_request' may fork a held plan."""
+        if not (self.llm and self.llm.live):
+            return "no"
+        held = "; ".join(p["goal"] for p in self._pending())
+        last = self._last_anticipy_line(phone) or ""
+        try:
+            res = self.llm.chat(
+                self.ABOUT_PENDING,
+                f"HELD: {held}\nHER LAST TEXT: {last}\nHE TEXTED: {text}",
+                temperature=0.0)
+            verdict = self._parse(res.text).get("verdict")
+        except Exception:
+            return "no"
+        return verdict if verdict in ("go", "detail") else "no"
+
     def _classify(self, phone: str, text: str) -> dict:
         thread = [{"who": t.role, "text": t.text} for t in self._thread(phone)[-20:]]
-        memory = [f["fact"] for f in self.anticipy.memory.recall(text, limit=3)]
+        memory = [f["fact"] for f in self.anticipy.memory.recall(text, limit=6)]
         payload = json.dumps({"thread": thread, "pending": self._pending(),
                               "blocked": self._blocked(), "memory": memory,
                               "owner_text": text})
@@ -940,12 +993,13 @@ Use {"facts": {}} when there is nothing durable."""
         pending = self._pending() if pool is None else pool
         if job_id:
             job = self._fetch(job_id)
-            if not job:
-                return None
-            if owner_text is not None and len(pending) > 1 \
-                    and not self._references(owner_text, job):
-                return "ambiguous"
-            return job
+            if job:
+                if owner_text is not None and len(pending) > 1 \
+                        and not self._references(owner_text, job):
+                    return "ambiguous"
+                return job
+            # A made-up id (the model invents "dinner-1" style handles) must
+            # not sink the whole release — resolve as if no id was given.
         if len(pending) == 1:
             return pending[0]
         return "ambiguous" if pending else None

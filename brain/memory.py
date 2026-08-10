@@ -563,6 +563,23 @@ class Memory:
                 "salience": f["salience"] * rel,
             })
         out.sort(key=lambda f: -f["salience"])
+        if len(out) < limit:
+            # Wording is the model's, not the owner's — "go-to restaurant"
+            # answers "usual dinner spot" yet shares no word with it. The
+            # most important known facts ride along so a paraphrased
+            # question still reaches what she actually knows.
+            have = {f["fact"] for f in out}
+            rest = sorted((f for f in self.profile_facts()
+                           if f"known: {f['fact']}" not in have),
+                          key=lambda f: -f["importance"])
+            for f in rest[:limit - len(out)]:
+                out.append({
+                    "fact": f'known: {f["fact"]}',
+                    "src_type": "profile", "dst_type": "profile",
+                    "ts": f["last_seen_ts"], "quote": None,
+                    "importance": f["importance"],
+                    "salience": 0.0,
+                })
         return out[:limit]
 
     def _find_same_fact(self, text: str) -> Optional[int]:
