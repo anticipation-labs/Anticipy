@@ -17,10 +17,9 @@ export const metadata: Metadata = {
 };
 
 const content: RolePageContent = {
-  heroPhoto:
-    "Hero, 16:9 — the rejected factory samples laid out flat on a plain surface, top-down, one hard light, imperfections visible.",
-  intro: [
+  lede:
     "You own the physical pendant.",
+  intro: [
     "People wear it where they'd wear jewellery. That means it gets judged up close by someone who does not care how clever the inside is. That constraint drives more decisions than the electronics do, and it's harder.",
     "The first factory samples came back bad. Bad enough that I'm hand-building units instead of shipping what arrived. The next run is bigger and goes through a process nobody here has proven yet. Both of those are now your problem — and I mean that as the job description, not a complaint.",
   ],
@@ -54,12 +53,6 @@ const content: RolePageContent = {
       ],
     },
   ],
-  // Sits directly after "Your first month", as specified.
-  inlinePhoto: {
-    afterSection: 0,
-    caption:
-      "Inline, 4:3 — the hand-assembly bench exactly as it is: tools, parts, mess. Do not tidy it first.",
-  },
 };
 
 export default function BuildPage() {

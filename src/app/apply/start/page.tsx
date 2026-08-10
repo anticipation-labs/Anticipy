@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ApplyForm } from "./ApplyForm";
+import { HIRE_THEME } from "@/components/apply/theme";
 
 export const metadata: Metadata = {
   title: "Apply — Anticipy",
@@ -32,7 +33,7 @@ export const viewport: Viewport = {
  */
 export default function ApplyStartPage() {
   return (
-    <main className="section-dark">
+    <main style={HIRE_THEME}>
       <ApplyForm />
     </main>
   );

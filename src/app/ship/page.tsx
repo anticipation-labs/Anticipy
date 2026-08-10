@@ -17,10 +17,9 @@ export const metadata: Metadata = {
 };
 
 const content: RolePageContent = {
-  heroPhoto:
-    "Hero, 16:9 — laptop screen mid agent-run at night: logs or a browser automating visible, desk lamp on, text not readable.",
-  intro: [
+  lede:
     "The pendant hears what you said. You own everything that happens next.",
+  intro: [
     "That means browser agents. Someone mentions they'll book the flight, and an agent on their computer goes and books it. When it works, it's the best demo I've ever shown anyone. When it doesn't, it clicks the wrong button and reports success anyway.",
     "The current answer is running the same task several ways and letting the results vote. It beats one agent trying harder. Making that faster, cheaper, and less wrong isn't a roadmap item. It is the product.",
   ],

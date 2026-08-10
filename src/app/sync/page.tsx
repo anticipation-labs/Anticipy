@@ -17,10 +17,9 @@ export const metadata: Metadata = {
 };
 
 const content: RolePageContent = {
-  heroPhoto:
-    "Hero, 16:9 — a small circuit board on the bench, tweezers beside it, close macro shot, warm desk-lamp light.",
-  intro: [
+  lede:
     "This is the role in the middle, and it pays more because it's the one everyone else is happy not to own.",
+  intro: [
     "The hardware has limits. The software has ambitions. They argue, and the argument ends at your desk. Capture on the device, holding what it heard when the phone isn't around, syncing clean when it comes back, knowing when it's being worn and when it's sitting on a desk — all on a battery much smaller than anyone's plans for it.",
   ],
   sections: [

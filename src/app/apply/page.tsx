@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Reveal } from "@/components/apply/Reveal";
-import { Photo } from "@/components/apply/Photo";
 import { Tm } from "@/components/Tm";
+import { HIRE_THEME } from "@/components/apply/theme";
 import { ROLES } from "./roles";
 
 export const metadata: Metadata = {
@@ -27,139 +26,166 @@ const HOW = [
 /**
  * The listings hub.
  *
- * A normal scrolling page — the fixed-height, one-question-at-a-time funnel
- * starts at /apply/start. Cards link to the role pages rather than straight
- * into the wizard, because the job description is what makes somebody decide
- * to apply, and skipping it costs more than the extra click.
+ * The product is the argument for the job, so the pendant opens the page and
+ * is the only dark thing on it. Roles are a table, not cards: four rows of
+ * title / what it is / what it pays is the shape an engineer scans in one
+ * pass, and a card grid would pad the same four facts into four boxes.
+ *
+ * No motion. The page renders and sits still.
  */
 export default function ApplyHubPage() {
   return (
-    <main className="section-dark" style={{ minHeight: "100dvh", padding: "0 24px" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto", paddingTop: 56, paddingBottom: 96 }}>
-        <Reveal>
+    <main style={{ ...HIRE_THEME, minHeight: "100dvh" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 28px" }}>
+        <header
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "space-between",
+            gap: 16,
+            padding: "26px 0",
+            borderBottom: "1px solid var(--rule)",
+          }}
+        >
           <Link
             href="/"
             className="font-serif"
-            style={{ fontSize: 19, color: "var(--gold)", textDecoration: "none", letterSpacing: "0.02em" }}
+            style={{ fontSize: 19, color: "var(--ink)", textDecoration: "none", letterSpacing: "0.01em" }}
           >
             Anticipy<Tm />
           </Link>
-        </Reveal>
-
-        <Reveal delay={0.08}>
-          <h1
-            className="font-serif"
+          <span
             style={{
-              fontSize: "clamp(34px, 6vw, 62px)",
-              lineHeight: 1.04,
-              letterSpacing: "-0.03em",
-              margin: "46px 0 0",
-              color: "var(--text-on-dark)",
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--accent-ink)",
             }}
           >
-            Come build the thing.
-          </h1>
-        </Reveal>
+            Four open roles
+          </span>
+        </header>
 
-        <Reveal delay={0.16}>
-          <p style={{ fontSize: "clamp(17px, 2.1vw, 21px)", lineHeight: 1.55, color: "var(--text-on-dark)", margin: "26px 0 18px" }}>
-            Anticipy is a pendant that listens while you talk and does the
-            things you mention. No wake word, no &ldquo;hey pendant.&rdquo; You
-            say it to whoever you&apos;re with, and an agent on your computer
-            quietly handles it.
-          </p>
-          <p style={{ fontSize: 16, lineHeight: 1.75, color: "var(--text-on-dark-muted)", margin: 0 }}>
-            I&apos;m hiring four people to build it with me. No cover letter, no
-            resume. I read every application myself.
-          </p>
-        </Reveal>
+        <div className="hub-top">
+          <div>
+            <h1
+              className="font-serif"
+              style={{
+                fontSize: "clamp(40px, 7vw, 76px)",
+                lineHeight: 0.98,
+                letterSpacing: "-0.03em",
+                color: "var(--ink)",
+                margin: 0,
+              }}
+            >
+              Come build
+              <br />
+              the thing.
+            </h1>
+            <p style={{ fontSize: "clamp(17px, 2vw, 20px)", lineHeight: 1.55, color: "var(--ink)", margin: "30px 0 0", maxWidth: "30em" }}>
+              Anticipy is a pendant that listens while you talk and does the
+              things you mention. No wake word, no &ldquo;hey pendant.&rdquo;
+              You say it to whoever you&apos;re with, and an agent on your
+              computer quietly handles it.
+            </p>
+            <p style={{ fontSize: 16, lineHeight: 1.7, color: "var(--ink-2)", margin: "18px 0 0", maxWidth: "30em" }}>
+              I&apos;m hiring four people to build it with me. No cover letter,
+              no resume. I read every application myself.
+            </p>
+          </div>
 
-        <Reveal delay={0.22}>
-          <Photo
-            priority
-            caption="Hero, 16:9 — the pendant on a person, close crop at collarbone height, plain sweater or tee, daylight from a window on one side, no logos."
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/media/hiring/pendant.jpg"
+            alt="The Anticipy pendant, chain coiled around it, on black slate."
+            className="hub-shot"
+            width={1632}
+            height={918}
           />
-        </Reveal>
+        </div>
 
-        <div style={{ display: "grid", gap: 12 }}>
-          {ROLES.map((r, i) => (
-            <Reveal key={r.key} delay={0.26 + i * 0.05}>
+        <ol className="role-table">
+          {ROLES.map((r) => (
+            <li key={r.key}>
               <Link
                 href={`/${r.slug}`}
+                className="role-row"
                 data-cta-id={`hub_role_${r.slug}`}
                 data-cta-location="mid_page"
                 data-cta-type="contact"
                 data-cta-style="secondary"
-                className="apply-card"
-                style={{
-                  display: "block",
-                  textDecoration: "none",
-                  padding: "22px 24px",
-                  borderRadius: 12,
-                  border: "1px solid var(--dark-border)",
-                  background: "var(--dark-elevated)",
-                }}
               >
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14 }}>
-                  <h2
-                    className="font-serif"
-                    style={{ fontSize: "clamp(19px, 2.4vw, 23px)", letterSpacing: "-0.02em", margin: 0, color: "var(--text-on-dark)" }}
-                  >
-                    {r.label}
-                  </h2>
-                  <span aria-hidden style={{ color: "var(--gold)", fontSize: 17, flexShrink: 0 }}>
-                    →
-                  </span>
-                </div>
-                <p style={{ fontSize: 15.5, lineHeight: 1.6, color: "var(--text-on-dark-muted)", margin: "8px 0 14px" }}>
-                  {r.tagline}
-                </p>
-                <span
-                  className="rounded-pill"
-                  style={{
-                    display: "inline-block",
-                    fontSize: 12.5,
-                    padding: "5px 13px",
-                    color: "var(--gold)",
-                    border: "1px solid var(--dark-border)",
-                    background: "var(--gold-dim)",
-                  }}
-                >
-                  {r.comp}
+                <span className="role-name font-serif">{r.label}</span>
+                <span className="role-line">{r.tagline}</span>
+                <span className="role-pay">{r.comp}</span>
+                <span className="role-arrow" aria-hidden>
+                  →
                 </span>
               </Link>
-            </Reveal>
+            </li>
           ))}
-        </div>
+        </ol>
 
-        <Reveal delay={0.3}>
-          <div style={{ height: 1, background: "var(--dark-border)", margin: "48px 0 34px" }} />
+        <section style={{ padding: "80px 0 110px" }}>
+          <div style={{ width: 38, height: 2, background: "var(--accent)", marginBottom: 18 }} />
           <h2
             className="font-serif"
-            style={{ fontSize: "clamp(22px, 2.8vw, 28px)", letterSpacing: "-0.02em", margin: "0 0 22px", color: "var(--text-on-dark)" }}
+            style={{ fontSize: "clamp(24px, 3vw, 30px)", letterSpacing: "-0.02em", color: "var(--ink)", margin: "0 0 26px" }}
           >
             How hiring works
           </h2>
-          <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 16, counterReset: "step" }}>
+          <ol className="how-list">
             {HOW.map((h, i) => (
-              <li key={h} style={{ display: "flex", gap: 16, fontSize: 16, lineHeight: 1.65, color: "var(--text-on-dark)" }}>
-                <span
-                  aria-hidden
-                  style={{ color: "var(--gold)", flexShrink: 0, fontVariantNumeric: "tabular-nums", opacity: 0.75 }}
-                >
-                  {i + 1}.
-                </span>
+              <li key={h}>
+                <span className="how-num">{String(i + 1).padStart(2, "0")}</span>
                 <span>{h}</span>
               </li>
             ))}
           </ol>
-        </Reveal>
+        </section>
       </div>
 
-      <style>{`
-        .apply-card { transition: border-color 220ms ease, background 220ms ease; }
-        .apply-card:hover { border-color: var(--gold); background: var(--dark-hover); }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .hub-top { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; padding: 72px 0 76px; }
+        .hub-shot { width: 100%; height: auto; display: block; border-radius: 3px; }
+
+        .role-table { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+        .role-table li { border-bottom: 1px solid var(--rule); }
+        .role-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.95fr) auto 22px;
+          gap: 28px;
+          align-items: baseline;
+          padding: 26px 4px;
+          text-decoration: none;
+          transition: background 180ms ease, padding-left 180ms ease;
+        }
+        .role-row:hover { background: var(--paper-2); padding-left: 14px; }
+        .role-name { font-size: clamp(18px, 1.9vw, 22px); letter-spacing: -0.02em; color: var(--ink); }
+        .role-line { font-size: 15.5px; line-height: 1.5; color: var(--ink-2); }
+        .role-pay {
+          font-family: var(--mono);
+          font-size: 12.5px; color: var(--accent-ink); white-space: nowrap;
+        }
+        .role-arrow { font-size: 17px; color: var(--accent); justify-self: end; transition: transform 180ms ease; }
+        .role-row:hover .role-arrow { transform: translateX(4px); }
+
+        .how-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; max-width: 34em; }
+        .how-list li { display: flex; gap: 18px; font-size: 16.5px; line-height: 1.65; color: var(--ink); }
+        .how-num {
+          font-family: var(--mono);
+          font-size: 11.5px; color: var(--accent-ink); padding-top: 5px; flex-shrink: 0;
+        }
+
+        @media (max-width: 900px) {
+          .hub-top { grid-template-columns: 1fr; gap: 40px; padding: 48px 0 56px; }
+          .role-row { grid-template-columns: 1fr auto; gap: 8px 20px; padding: 22px 4px; }
+          .role-line { grid-column: 1 / -1; }
+          .role-pay { grid-column: 1; }
+          .role-arrow { grid-column: 2; grid-row: 1; }
+        }
+      ` }} />
     </main>
   );
 }

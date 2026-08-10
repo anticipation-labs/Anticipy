@@ -50,8 +50,8 @@ interface Saved {
 const rule = (focused: boolean, invalid: boolean): React.CSSProperties => ({
   background: "transparent",
   border: "none",
-  borderBottom: `1px solid ${invalid ? "#C97E7E" : focused ? "var(--gold)" : "var(--dark-border)"}`,
-  color: "var(--text-on-dark)",
+  borderBottom: `1px solid ${invalid ? "var(--danger)" : focused ? "var(--accent)" : "var(--rule)"}`,
+  color: "var(--ink)",
   padding: "10px 0 12px",
   fontSize: 18,
   width: "100%",
@@ -69,10 +69,10 @@ const rule = (focused: boolean, invalid: boolean): React.CSSProperties => ({
  * answer goes" without a word of instruction.
  */
 const box = (focused: boolean, invalid: boolean): React.CSSProperties => ({
-  background: "var(--dark-elevated)",
-  border: `1px solid ${invalid ? "#C97E7E" : focused ? "var(--gold)" : "var(--dark-border)"}`,
+  background: "#FFFFFF",
+  border: `1px solid ${invalid ? "var(--danger)" : focused ? "var(--accent)" : "var(--rule)"}`,
   borderRadius: 8,
-  color: "var(--text-on-dark)",
+  color: "var(--ink)",
   padding: "13px 14px",
   fontSize: MIN_INPUT_PX,
   lineHeight: 1.6,
@@ -93,7 +93,7 @@ function Q({ children }: { children: React.ReactNode }) {
         lineHeight: 1.16,
         letterSpacing: "-0.02em",
         margin: "0 0 10px",
-        color: "var(--text-on-dark)",
+        color: "var(--ink)",
       }}
     >
       {children}
@@ -103,7 +103,7 @@ function Q({ children }: { children: React.ReactNode }) {
 
 function Sub({ children }: { children: React.ReactNode }) {
   return (
-    <p className="ap-sub" style={{ color: "var(--text-on-dark-muted)", fontSize: 15, lineHeight: 1.6, margin: "0 0 24px", maxWidth: 540 }}>
+    <p className="ap-sub" style={{ color: "var(--ink-2)", fontSize: 15, lineHeight: 1.6, margin: "0 0 24px", maxWidth: 540 }}>
       {children}
     </p>
   );
@@ -119,7 +119,7 @@ function Err({ msg }: { msg?: string }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, ease }}
-          style={{ color: "#C97E7E", fontSize: 13, marginTop: 8 }}
+          style={{ color: "var(--danger)", fontSize: 13, marginTop: 8 }}
         >
           {msg}
         </motion.p>
@@ -147,9 +147,9 @@ function Choice({
         padding: "11px 22px",
         fontSize: 15,
         cursor: "pointer",
-        background: active ? "var(--gold)" : "transparent",
-        color: active ? "var(--dark)" : "var(--text-on-dark-muted)",
-        border: `1px solid ${active ? "var(--gold)" : "var(--dark-border)"}`,
+        background: active ? "var(--ink)" : "transparent",
+        color: active ? "var(--paper)" : "var(--ink-2)",
+        border: `1px solid ${active ? "var(--ink)" : "var(--rule)"}`,
         fontWeight: active ? 600 : 400,
         transition: "all 200ms ease",
         fontFamily: "inherit",
@@ -467,7 +467,7 @@ export function ApplyForm() {
 
   const brand = (
     <div className="ap-brand" style={{ marginBottom: screen === 0 ? 36 : 26 }}>
-      <a href="/" className="font-serif" style={{ fontSize: 19, color: "var(--gold)", textDecoration: "none", letterSpacing: "0.02em" }}>
+      <a href="/" className="font-serif" style={{ fontSize: 19, color: "var(--ink)", textDecoration: "none", letterSpacing: "0.01em" }}>
         Anticipy<Tm />
       </a>
     </div>
@@ -489,7 +489,7 @@ export function ApplyForm() {
           <motion.div
             initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
             transition={{ duration: 0.8, ease, delay: 0.05 }}
-            style={{ height: 1, background: "var(--gold)", transformOrigin: "left", marginBottom: 28 }}
+            style={{ height: 1, background: "var(--accent)", transformOrigin: "left", marginBottom: 28 }}
           />
           <motion.h2
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -503,7 +503,7 @@ export function ApplyForm() {
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, ease, delay: 0.38 }}
           >
-            <p style={{ color: "var(--text-on-dark)", fontSize: 17, lineHeight: 1.7, margin: "18px 0 0", maxWidth: 560 }}>
+            <p style={{ color: "var(--ink)", fontSize: 17, lineHeight: 1.7, margin: "18px 0 0", maxWidth: 560 }}>
               Here&apos;s Omar&apos;s personal calendar — the founder, not a
               recruiter and not a screening round. Take the first slot you can.
               A copy of your answers is on its way to your inbox.
@@ -522,7 +522,7 @@ export function ApplyForm() {
   return (
     <div style={shell} onKeyDown={onKeyDown}>
       <Flash active={flashing} />
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @media (max-height: 560px) {
           .ap-inner { padding-top: 14px !important; padding-bottom: 14px !important; }
           .ap-brand { margin-bottom: 14px !important; }
@@ -536,8 +536,8 @@ export function ApplyForm() {
           .ap-fields { gap: 15px !important; }
           .ap-sub { margin-bottom: 16px !important; }
         }
-        .ap-inner textarea::placeholder { color: #4E4E4E; }
-      `}</style>
+        .ap-inner textarea::placeholder { color: #9A948A; }
+      ` }} />
 
       <div style={inner} className="ap-inner">
         {brand}
@@ -547,15 +547,15 @@ export function ApplyForm() {
             {/* One indicator: a label and the bar it fills. There is no second
                 numeric counter — two of them competing was just noise. */}
             <div style={{ marginBottom: 10 }}>
-              <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--gold)" }}>
+              <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--accent-ink)" }}>
                 {stepLabel}
               </span>
             </div>
-            <div style={{ height: 1, background: "var(--dark-border)", position: "relative" }}>
+            <div style={{ height: 1, background: "var(--rule)", position: "relative" }}>
               <motion.div
                 animate={{ scaleX: FILL[screen] }} initial={false}
                 transition={{ duration: 0.32, ease, delay: 0.12 }}
-                style={{ position: "absolute", inset: 0, background: "var(--gold)", transformOrigin: "left" }}
+                style={{ position: "absolute", inset: 0, background: "var(--accent)", transformOrigin: "left" }}
               />
             </div>
           </div>
@@ -575,15 +575,15 @@ export function ApplyForm() {
           >
             {screen === 0 && (
               <>
-                <h1 className="font-serif" style={{ fontSize: "clamp(30px, 5vw, 54px)", lineHeight: 1.07, letterSpacing: "-0.03em", margin: 0, color: "var(--text-on-dark)" }}>
+                <h1 className="font-serif" style={{ fontSize: "clamp(30px, 5vw, 54px)", lineHeight: 1.07, letterSpacing: "-0.03em", margin: 0, color: "var(--ink)" }}>
                   Come build the thing.
                 </h1>
-                <p style={{ fontSize: "clamp(16px, 2vw, 19px)", lineHeight: 1.6, color: "var(--text-on-dark)", margin: "20px 0 0", maxWidth: 560 }}>
+                <p style={{ fontSize: "clamp(16px, 2vw, 19px)", lineHeight: 1.6, color: "var(--ink)", margin: "20px 0 0", maxWidth: 560 }}>
                   Anticipy is a pendant that listens while you talk and does the
                   things you mention. I&apos;m hiring four people to build it
                   with me, and this is the whole application.
                 </p>
-                <p style={{ fontSize: 15, lineHeight: 1.7, color: "var(--text-on-dark-muted)", margin: "16px 0 0", maxWidth: 560 }}>
+                <p style={{ fontSize: 15, lineHeight: 1.7, color: "var(--ink-2)", margin: "16px 0 0", maxWidth: 560 }}>
                   No cover letter, no resume. I read every one myself.
                 </p>
               </>
@@ -611,13 +611,13 @@ export function ApplyForm() {
               <>
                 {roles.length > 0 && (
                   <div style={{ marginBottom: 14, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 13.5, color: "var(--text-on-dark-muted)" }}>
+                    <span style={{ fontSize: 13.5, color: "var(--ink-2)" }}>
                       {roles.map((r) => ROLE_LABEL[r]).join(" + ")}
                     </span>
                     <button
                       type="button"
                       onClick={() => go(1)}
-                      style={{ background: "none", border: "none", padding: 0, color: "var(--gold)", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}
+                      style={{ background: "none", border: "none", padding: 0, color: "var(--accent-ink)", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}
                     >
                       change role
                     </button>
@@ -642,7 +642,7 @@ export function ApplyForm() {
                     <Err msg={errors.email} />
                     {emailFix && (
                       <button type="button" onClick={() => { setEmail(emailFix); setEmailFix(null); }}
-                        style={{ background: "none", border: "none", color: "var(--gold)", fontSize: 13, padding: "8px 0 0", cursor: "pointer", fontFamily: "inherit" }}>
+                        style={{ background: "none", border: "none", color: "var(--accent-ink)", fontSize: 13, padding: "8px 0 0", cursor: "pointer", fontFamily: "inherit" }}>
                         Did you mean {emailFix}?
                       </button>
                     )}
@@ -700,18 +700,18 @@ export function ApplyForm() {
                     onChange={(e) => addFiles(e.target.files)}
                     style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />
                   <button type="button" onClick={() => fileRef.current?.click()}
-                    style={{ ...rule(false, !!errors.files), display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left", fontSize: MIN_INPUT_PX, color: "var(--text-on-dark-muted)" }}>
+                    style={{ ...rule(false, !!errors.files), display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left", fontSize: MIN_INPUT_PX, color: "var(--ink-2)" }}>
                     <span>{files.length ? `${files.length} file${files.length > 1 ? "s" : ""}` : "Résumé or work samples — optional"}</span>
-                    <span style={{ color: "var(--gold)", fontSize: 13 }}>Add</span>
+                    <span style={{ color: "var(--accent-ink)", fontSize: 13 }}>Add</span>
                   </button>
                   <Err msg={errors.files} />
                   {files.length > 0 && (
                     <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0", maxHeight: "14vh", overflowY: "auto" }}>
                       {files.map((f, i) => (
-                        <li key={`${f.name}-${i}`} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-on-dark-muted)", padding: "5px 0" }}>
+                        <li key={`${f.name}-${i}`} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--ink-2)", padding: "5px 0" }}>
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
                           <button type="button" onClick={() => setFiles((p) => p.filter((_, j) => j !== i))}
-                            style={{ background: "none", border: "none", color: "#6A6A6A", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Remove</button>
+                            style={{ background: "none", border: "none", color: "var(--ink-2)", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Remove</button>
                         </li>
                       ))}
                     </ul>
@@ -726,7 +726,7 @@ export function ApplyForm() {
                 <Sub>Four quick answers and you&apos;re done.</Sub>
                 <div className="ap-fields" style={{ display: "grid", gap: 22 }}>
                   <div>
-                    <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--text-on-dark-muted)", display: "block", marginBottom: 6 }}>
+                    <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--ink-2)", display: "block", marginBottom: 6 }}>
                       Current availability
                     </span>
                     <input value={availability} onChange={(e) => setAvailability(e.target.value)}
@@ -735,7 +735,7 @@ export function ApplyForm() {
                     <Err msg={errors.availability} />
                   </div>
                   <div>
-                    <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--text-on-dark-muted)", display: "block", marginBottom: 6 }}>
+                    <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--ink-2)", display: "block", marginBottom: 6 }}>
                       Possible start date
                     </span>
                     <input value={startDate} onChange={(e) => setStartDate(e.target.value)}
@@ -743,7 +743,7 @@ export function ApplyForm() {
                       style={rule(focus === "start", false)} {...bind("start")} />
                   </div>
                   <div>
-                    <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--text-on-dark-muted)", display: "block", marginBottom: 8 }}>
+                    <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--ink-2)", display: "block", marginBottom: 8 }}>
                       Can you work from Vancouver, or travel when it matters?
                     </span>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -754,7 +754,7 @@ export function ApplyForm() {
                     <Err msg={errors.vancouver} />
                   </div>
                   <div>
-                    <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--text-on-dark-muted)", display: "block", marginBottom: 8 }}>
+                    <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--ink-2)", display: "block", marginBottom: 8 }}>
                       Are you legally allowed to work, and old enough to do so where you live?
                     </span>
                     <div style={{ display: "flex", gap: 8 }}>
@@ -779,7 +779,7 @@ export function ApplyForm() {
             data-cta-location="final_cta" data-cta-type="contact" data-cta-style="primary"
             className="rounded-pill"
             style={{
-              background: "var(--gold)", color: "var(--dark)", border: "none",
+              background: "var(--ink)", color: "var(--paper)", border: "none",
               padding: "13px 32px", fontSize: 15, fontWeight: 600,
               cursor: status === "busy" ? "default" : "pointer",
               opacity: status === "busy" ? 0.6 : 1, fontFamily: "inherit", transition: "opacity 90ms ease",
@@ -789,14 +789,14 @@ export function ApplyForm() {
           </button>
           {screen > entryScreen && status !== "busy" && (
             <button type="button" onClick={back}
-              style={{ background: "none", border: "none", color: "var(--text-on-dark-muted)", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ background: "none", border: "none", color: "var(--ink-2)", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
               Back
             </button>
           )}
         </div>
 
         {screen === entryScreen && (
-          <p style={{ fontSize: 12.5, color: "#5A5A5A", margin: "16px 0 0" }}>
+          <p style={{ fontSize: 12.5, color: "var(--ink-2)", margin: "16px 0 0" }}>
             Your answers save automatically.
           </p>
         )}
@@ -816,7 +816,7 @@ export function ApplyForm() {
         <AnimatePresence>
           {serverError && (
             <motion.p role="alert" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ color: "#C97E7E", fontSize: 14, marginTop: 14 }}>
+              style={{ color: "var(--danger)", fontSize: 14, marginTop: 14 }}>
               {serverError}
             </motion.p>
           )}

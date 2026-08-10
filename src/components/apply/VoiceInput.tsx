@@ -148,8 +148,8 @@ export function VoiceInput({
           alignItems: "center",
           gap: 9,
           background: "transparent",
-          border: `1px solid ${state === "recording" ? "#C97E7E" : "var(--dark-border)"}`,
-          color: state === "recording" ? "#E0A0A0" : "var(--text-on-dark-muted)",
+          border: `1px solid ${state === "recording" ? "var(--danger)" : "var(--rule)"}`,
+          color: state === "recording" ? "var(--danger)" : "var(--ink-2)",
           borderRadius: 100,
           padding: "8px 16px",
           fontSize: 13,
@@ -162,7 +162,7 @@ export function VoiceInput({
           <motion.span
             animate={{ opacity: [1, 0.25, 1] }}
             transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
-            style={{ width: 8, height: 8, borderRadius: 99, background: "#C97E7E" }}
+            style={{ width: 8, height: 8, borderRadius: 99, background: "var(--danger)" }}
           />
         ) : (
           <span
@@ -170,7 +170,7 @@ export function VoiceInput({
               width: 8,
               height: 8,
               borderRadius: 99,
-              background: "var(--text-on-dark-muted)",
+              background: "var(--ink-2)",
               opacity: 0.6,
             }}
           />
@@ -185,7 +185,7 @@ export function VoiceInput({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease }}
-            style={{ color: "#9A9A9A", fontSize: 12, marginTop: 8 }}
+            style={{ color: "var(--ink-2)", fontSize: 12, marginTop: 8 }}
           >
             {msg}
           </motion.p>

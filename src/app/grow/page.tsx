@@ -17,10 +17,9 @@ export const metadata: Metadata = {
 };
 
 const content: RolePageContent = {
-  heroPhoto:
-    "Hero, 16:9 — the actual filming setup mid-take: phone on tripod, whatever light is really used, room as it really is.",
-  intro: [
+  lede:
     "Almost nobody knows Anticipy exists yet. Fixing that is the whole job.",
+  intro: [
     "It looks like this: I'm on camera most days. You decide what I say, I film it from your shot list at night after school, and you cut it into something people watch to the end. There are four accounts to feed — mine, the company's, one faceless, one for the startup crowd — and they shouldn't all sound the same.",
     "When something works organically, you turn it into paid. You bring in creators who get paid when they sell, not when they post. And you set up tracking before any of that, because right now I honestly could not tell you which video sold a pendant.",
   ],

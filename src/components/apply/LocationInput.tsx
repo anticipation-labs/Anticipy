@@ -129,8 +129,8 @@ export function LocationInput({
         style={{
           background: "transparent",
           border: "none",
-          borderBottom: `1px solid ${invalid ? "#C97E7E" : focused ? "var(--gold)" : "var(--dark-border)"}`,
-          color: "var(--text-on-dark)",
+          borderBottom: `1px solid ${invalid ? "var(--danger)" : focused ? "var(--accent)" : "var(--rule)"}`,
+          color: "var(--ink)",
           padding: "10px 0 12px",
           fontSize: 18,
           width: "100%",
@@ -151,8 +151,12 @@ export function LocationInput({
             left: 0,
             right: 0,
             marginTop: 6,
-            background: "#141414",
-            border: "1px solid var(--dark-border)",
+            background: "#FFFFFF",
+            border: "1px solid var(--rule)",
+            // A white panel on cream is only a few percent lighter than the
+            // page, so without a shadow it reads as part of the form rather
+            // than as something floating above it.
+            boxShadow: "0 12px 28px rgba(23, 21, 18, 0.10)",
             borderRadius: 10,
             listStyle: "none",
             padding: 5,
@@ -179,8 +183,8 @@ export function LocationInput({
                 borderRadius: 7,
                 fontSize: 15,
                 cursor: "pointer",
-                color: i === active ? "var(--dark)" : "var(--text-on-dark)",
-                background: i === active ? "var(--gold)" : "transparent",
+                color: i === active ? "var(--paper)" : "var(--ink)",
+                background: i === active ? "var(--accent)" : "transparent",
               }}
             >
               {r}

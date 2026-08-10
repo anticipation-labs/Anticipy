@@ -32,7 +32,7 @@ export function Flash({ active }: { active: boolean }) {
         <motion.div
           aria-hidden="true"
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.42, 0.06, 0.3, 0.04, 0.16, 0] }}
+          animate={{ opacity: [0, 0.10, 0.02, 0.07, 0.01, 0.04, 0] }}
           exit={{ opacity: 0 }}
           transition={{
             duration: 0.26,
@@ -42,7 +42,7 @@ export function Flash({ active }: { active: boolean }) {
           style={{
             position: "fixed",
             inset: 0,
-            background: "var(--gold)",
+            background: "var(--ink)",
             mixBlendMode: "overlay",
             pointerEvents: "none",
             zIndex: 60,

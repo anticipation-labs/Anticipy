@@ -68,7 +68,7 @@ export function CalendarEmbed() {
           background: "#FFFFFF",
           borderRadius: 16,
           overflow: "hidden",
-          border: "1px solid var(--dark-border)",
+          border: "1px solid var(--rule)",
           minHeight: 560,
         }}
       >
@@ -104,8 +104,8 @@ export function CalendarEmbed() {
                 rel="noopener noreferrer"
                 className="rounded-pill"
                 style={{
-                  background: "var(--gold)",
-                  color: "var(--dark)",
+                  background: "var(--accent)",
+                  color: "var(--paper)",
                   padding: "14px 32px",
                   fontSize: 15,
                   fontWeight: 600,
@@ -115,7 +115,7 @@ export function CalendarEmbed() {
                 Open Omar&apos;s calendar
               </a>
             ) : (
-              <span style={{ color: "#8A8A8A", fontSize: 14 }}>
+              <span style={{ color: "var(--ink-2)", fontSize: 14 }}>
                 Loading available times…
               </span>
             )}
@@ -126,7 +126,7 @@ export function CalendarEmbed() {
       <p
         style={{
           fontSize: 12,
-          color: "#5A5A5A",
+          color: "var(--ink-2)",
           margin: "14px 0 0",
         }}
       >
@@ -135,7 +135,7 @@ export function CalendarEmbed() {
           href={FALLBACK_URL}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: "var(--text-on-dark-muted)", textDecoration: "underline" }}
+          style={{ color: "var(--ink-2)", textDecoration: "underline" }}
         >
           Open the calendar in a new tab
         </a>
