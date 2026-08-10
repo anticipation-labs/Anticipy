@@ -976,7 +976,17 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     # raise something. That is the thing being limited. An "ask" is the
     # opposite — he set the work in motion and she cannot finish without an
     # answer. Silencing that does not stop nagging, it strands the task.
-    if kind in ("clock", "ambient_act") and raised_and_ignored(goal, text):
+    #
+    # An overheard plan (kind="ambient_act") belongs on the "he started it"
+    # side of that line, not the nag side. He spoke a NEW plan seconds ago;
+    # her one text about it is the receipt for that plan, not a third
+    # unprompted knock about an old one. Keying it into the nag count meant
+    # any subject she had ever raised twice became permanently untextable:
+    # a genuinely fresh dinner made out loud produced a held card that was
+    # then CANCELLED because days-old texts about a previous dinner had used
+    # up the quota. The same-plan-within-24h guard below still stops a
+    # repeated mention from texting twice.
+    if kind == "clock" and raised_and_ignored(goal, text):
         print(f"quiet: already put this to him twice with no answer -> {goal[:60]!r}")
         return False
     return not already_raised(goal, text,

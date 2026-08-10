@@ -186,4 +186,27 @@ def test_speech_she_started_is_still_limited(monkeypatch):
     """The half that must keep working. All five Cactus messages were clock."""
     monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE[:2], days_ago=3))[0])
     assert W.SPEAK_ONCE("Just confirming tomorrow at 7?", goal=GOAL, kind="clock") is False
-    assert W.SPEAK_ONCE("I can book that for you", goal=GOAL, kind="ambient_act") is False
+
+
+def test_a_fresh_overheard_plan_is_never_nagging(monkeypatch):
+    """Live, 2026-08-09: he made a brand-new dinner plan out loud — held card,
+    "I'll text you what I find" — and no text ever came, because days-old
+    messages about a PREVIOUS dinner had spent the nag quota for the subject.
+    Worse, the no-silent-cards rule then cancelled the card. A plan he just
+    spoke is work HE started; her one text about it is a receipt, not a nag.
+    The 24-hour same-plan guard is what stops a repeated mention texting twice.
+    """
+    monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE, days_ago=3))[0])
+    assert W.SPEAK_ONCE("Caught your plan — dinner at Earls tomorrow at 7.",
+                        goal="Book dinner for tomorrow at Earls in West Van",
+                        kind="ambient_act") is True
+
+
+def test_the_same_plan_still_cannot_text_twice_in_a_day(monkeypatch):
+    monkeypatch.setattr(W.pb, "get", backend(says(
+        ["Caught your plan — dinner at Earls in West Van tomorrow at 7."],
+        goal="Book dinner for tomorrow at Earls in West Van",
+        days_ago=0.1))[0])
+    assert W.SPEAK_ONCE("Ready to book Earls in West Van for tomorrow.",
+                        goal="Book dinner tomorrow at Earls in West Van",
+                        kind="ambient_act") is False
