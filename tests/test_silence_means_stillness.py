@@ -264,7 +264,7 @@ def test_the_exception_is_keyed_on_explicit_not_on_the_guard(monkeypatch):
     # `fresh` — a plan firming up merges into its existing card and never
     # reaches the cancel.
     amb = src.index('"ambient_act")')
-    block = src[amb:amb + 2200]
+    block = src[amb:amb + 3400]
     assert "_cancel_job" in block, "the ambient lane still leaves silent cards"
     assert "if fresh:" in src[:amb], "the cancel must sit behind the fresh check"
     # And the plain act lane, which handles self-talk and direct asks.
@@ -272,3 +272,14 @@ def test_the_exception_is_keyed_on_explicit_not_on_the_guard(monkeypatch):
     assert "_cancel_job" in src[i:i + 2600]
     assert src.index("elif held and repeat:") < i, \
         "the repeat case must be handled before the cancel case"
+
+
+def test_quiet_hours_defer_keeps_the_card_and_sends_nothing(monkeypatch):
+    """NOT NOW is not NEVER. A plan made at midnight gets a card that waits
+    for morning; before "defer" existed, the quiet-hours refusal read as a
+    dedupe refusal and the cancel branch destroyed every late-night plan."""
+    a, fake, sent = _anticipy(monkeypatch, _act())
+    a.hear(LINE, may_say=lambda *a_, **k_: "defer")
+    assert sent == [], "quiet hours must send nothing"
+    assert len(fake.cards()) == 1, "the midnight plan's card must survive"
+    assert fake.jobs[0]["status"] == "awaiting_confirm"

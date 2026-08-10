@@ -113,7 +113,7 @@ def test_the_dedupe_that_replaces_the_guard_is_keyed_on_the_goal():
 def test_a_broken_dedupe_never_silences_a_question():
     """The honesty wall on the thing now doing the work."""
     i = SRC.index("def _may_say(")
-    body = SRC[i:i + 800]
+    body = SRC[i:i + 1100]
     assert "except Exception" in body
     assert "return True" in body.split("except Exception")[1][:200], \
         "a failing guard must let the question through, not eat it"

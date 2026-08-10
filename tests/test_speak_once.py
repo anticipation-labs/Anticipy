@@ -76,7 +76,10 @@ def test_overheard_texts_obey_quiet_hours(monkeypatch):
             return datetime(2026, 8, 5, 23, 30, tzinfo=tz)
 
     monkeypatch.setattr(W, "datetime", FakeDT)
-    assert W.SPEAK_ONCE("caught your plan", "book dinner", "ambient_act") is False
+    # "defer", never False: quiet hours are NOT NOW, and a plain False reads
+    # as a dedupe refusal downstream — the core would cancel the card and a
+    # plan made at midnight would silently vanish.
+    assert W.SPEAK_ONCE("caught your plan", "book dinner", "ambient_act") == "defer"
 
 
 def test_direct_asks_text_at_any_hour(monkeypatch):

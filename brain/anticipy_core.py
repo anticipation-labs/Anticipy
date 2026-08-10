@@ -455,7 +455,11 @@ class Anticipy:
         if not may_say:
             return True
         try:
-            return bool(may_say(text, goal or "", kind))
+            got = may_say(text, goal or "", kind)
+            # "defer" is a third verdict and must survive the bool: NOT NOW
+            # (quiet hours — the card is real, morning raises it) is not
+            # NEVER (a dedupe refusal — the card must not exist).
+            return got if got == "defer" else bool(got)
         except Exception as e:
             # A broken guard must never silence a genuine message.
             print(f"may_say check failed ({kind}): {e}")
@@ -815,7 +819,20 @@ class Anticipy:
                     # must not exist. A failed Twilio call means the card is
                     # real and simply undelivered — cancelling it would destroy
                     # genuine work over a network blip.
-                    if not self._may_say(may_say, handled, goal, "ambient_act"):
+                    verdict = self._may_say(may_say, handled, goal,
+                                            "ambient_act")
+                    if verdict == "defer":
+                        # Quiet hours. He planned something at midnight; the
+                        # plan is real and so is the card — it simply waits
+                        # for a civilised hour. Cancelling here would make
+                        # every plan made late at night silently vanish.
+                        handled = None
+                        decision = Decision(
+                            decision="act", goal=goal,
+                            reason=(f"{addressee}-directed: held quietly "
+                                    "overnight; raised in the morning"),
+                            needs_confirmation=True, addressee=addressee)
+                    elif not verdict:
                         handled = None
                         # SILENCE MUST MEAN STILLNESS.
                         #

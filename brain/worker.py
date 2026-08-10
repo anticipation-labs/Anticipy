@@ -961,7 +961,10 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     if kind == "ambient_act":
         hour = datetime.now(CLOCK_TZ).hour
         if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
-            return False
+            # NOT NOW is not NEVER: a plan made at midnight is still a plan.
+            # A plain False here reads as a dedupe refusal and the core
+            # cancels the card — every late-night plan would silently vanish.
+            return "defer"
     # NAGGING IS OUTREACH SHE STARTED. It is not a question that is blocking
     # work HE started seconds ago.
     #
@@ -984,11 +987,21 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     # any subject she had ever raised twice became permanently untextable:
     # a genuinely fresh dinner made out loud produced a held card that was
     # then CANCELLED because days-old texts about a previous dinner had used
-    # up the quota. The same-plan-within-24h guard below still stops a
-    # repeated mention from texting twice.
+    # up the quota. The pending-card merge is what stops a repeated mention
+    # from texting twice.
     if kind == "clock" and raised_and_ignored(goal, text):
         print(f"quiet: already put this to him twice with no answer -> {goal[:60]!r}")
         return False
+    # For an overheard plan the CARD is the dedupe, and it is a better one:
+    # a re-mention of a plan she is already holding merges into the pending
+    # card inside _queue_job and never reaches this guard at all — only a
+    # genuinely NEW card earns speech. Word-overlap against yesterday's texts
+    # is the wrong key for this kind: a brand-new dinner plan shares most of
+    # its words with the last dinner plan, and matching on them silenced the
+    # text and then cancelled the card. Three times, live, in one day —
+    # each a different guard doing the same wrong thing.
+    if kind == "ambient_act":
+        return True
     return not already_raised(goal, text,
                               decision=_KIND_TO_DECISION.get(kind))
 

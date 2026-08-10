@@ -202,11 +202,23 @@ def test_a_fresh_overheard_plan_is_never_nagging(monkeypatch):
                         kind="ambient_act") is True
 
 
-def test_the_same_plan_still_cannot_text_twice_in_a_day(monkeypatch):
+def test_a_new_card_speaks_even_when_yesterdays_plan_rhymed_with_it(monkeypatch):
+    """Third live silence in one day, third different guard: after the nag
+    limit was fixed, the 24-hour word-overlap dedupe caught the NEXT fresh
+    dinner ("Confirm dinner at Earls West End tomorrow" vs the morning's
+    "Book dinner at Earls...") — silenced the text and cancelled the card.
+
+    Word overlap against her past texts is the wrong key for this kind: a
+    brand-new dinner plan will always share most of its words with the last
+    one. The pending-card merge in _queue_job is the real dedupe — a
+    re-mention of a plan she is HOLDING never reaches SPEAK_ONCE at all
+    (test_a_repeat_of_a_card_he_already_knows_about_is_left_alone) — so a
+    goal that DOES reach it is a genuinely new card, and a new card speaks.
+    """
     monkeypatch.setattr(W.pb, "get", backend(says(
-        ["Caught your plan — dinner at Earls in West Van tomorrow at 7."],
+        ["Caught your plan — dinner at Earls in West Van tomorrow."],
         goal="Book dinner for tomorrow at Earls in West Van",
         days_ago=0.1))[0])
     assert W.SPEAK_ONCE("Ready to book Earls in West Van for tomorrow.",
-                        goal="Book dinner tomorrow at Earls in West Van",
-                        kind="ambient_act") is False
+                        goal="Confirm dinner at Earls West End tomorrow",
+                        kind="ambient_act") is True
