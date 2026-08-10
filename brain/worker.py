@@ -816,8 +816,19 @@ def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
         for ev in r.json().get("items", []):
             if (ev.get("goal") or "").strip() != goal:
                 continue
-            said = _content_words(ev.get("text", ""))
+            text = ev.get("text", "")
+            said = _content_words(text)
             if said and len(want & said) / len(want) >= covered:
+                return True
+            # Word overlap misses a paraphrase (live, 2026-08-10: the same
+            # parked booking was re-asked every 45 minutes, freshly worded
+            # each time). Every ask now carries the blocker's hard facts
+            # exactly, so a prior needs_user ask whose facts match IS this
+            # question, whatever the words around them. A new requirement has
+            # new facts and still gets raised.
+            if (ev.get("decision") == "needs_user"
+                    and _fact_tokens(blocker)
+                    and carries_facts(text, blocker)):
                 return True
     except Exception as e:
         print(f"need_already_asked check failed: {e}")

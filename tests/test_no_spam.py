@@ -166,3 +166,32 @@ def test_the_blocker_is_recorded_only_after_a_send_that_landed():
     sendfail = block.index("send failed, not recording it as said")
     record = block.index("_last_blocker[job[\"id\"]] = blocker")
     assert sendfail < record, "the failed-send bail must come first"
+
+
+BLOCKER = ("The current reservation is for Mon, Aug 10 at 6:30 PM, but the "
+           "task is to book for tomorrow (Aug 11) at noon.")
+BOOK = "Book lunch at Earls on Marine Drive in West Vancouver for tomorrow at noon."
+
+
+def test_a_parked_question_is_not_reasked_every_45_minutes(monkeypatch):
+    """Live, 2026-08-10: one parked booking re-asked at 18:12, 18:57, 19:37
+    and 20:22 — the same question, freshly worded each time, sliding under
+    the 50% word-overlap bar. Every ask now carries the blocker's facts
+    exactly, so a prior ask whose facts match IS this question."""
+    prior = ("I'm nearly through " + BOOK + " — " + BLOCKER)
+    rows = [{"kind": "anticipy_says", "decision": "needs_user", "goal": BOOK,
+             "text": prior, "created": stamp(90)}]
+    get, _ = fake_events(rows)
+    monkeypatch.setattr(W.pb, "get", get)
+    assert W.need_already_asked(BOOK, BLOCKER) is True
+
+
+def test_a_new_requirement_on_the_same_task_is_still_raised(monkeypatch):
+    """A second stop on something genuinely new has new facts and goes out."""
+    prior = ("I'm nearly through " + BOOK + " — " + BLOCKER)
+    rows = [{"kind": "anticipy_says", "decision": "needs_user", "goal": BOOK,
+             "text": prior, "created": stamp(90)}]
+    get, _ = fake_events(rows)
+    monkeypatch.setattr(W.pb, "get", get)
+    new_blocker = "the form needs a phone number ending in 4 digits to hold the table"
+    assert W.need_already_asked(BOOK, new_blocker) is False
