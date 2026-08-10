@@ -467,6 +467,12 @@ a table in a spreadsheet, a booking on the venue or a reservation platform, a
 document in a document editor. Reach for search only when the task genuinely
 is to find something out, or when you truly cannot name the site.
 
+"Confirm", "finalize", "lock in", "get that booked" about a plan mean CARRY
+THE PLAN OUT — make the reservation, place the order — on the venue's own
+site or its platform. They never mean "send someone a confirmation message".
+Mail and messaging apps are only ever the destination when the task itself
+is to write to somebody.
+
 Say what must be FOUND before acting is even possible. If the goal names a
 person but not their address, that address exists somewhere the owner can
 already reach — their contacts, a past thread — and it is looked up there, in

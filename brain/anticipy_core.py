@@ -1418,14 +1418,7 @@ class Anticipy:
                     # The richer wording wins, whichever order they arrived
                     # in — a card must only ever get better.
                     if not self._covered_by(goal, current.get("goal") or ""):
-                        try:
-                            pb.patch(
-                                f"{self.backend_url}/api/collections/jobs/records/{job_id}",
-                                json={"goal": goal,
-                                      "params": json.dumps(params)},
-                                timeout=10)
-                        except Exception:
-                            pass
+                        self._merge_into(job_id, current, goal, params)
                     self._open_plan = (job_id, time.time(), goal)
                     return job_id
 
@@ -1440,10 +1433,7 @@ class Anticipy:
                                 if j.get("id") == existing), None)
                 if current and not self._covered_by(
                         goal, current.get("goal") or ""):
-                    pb.patch(
-                        f"{self.backend_url}/api/collections/jobs/records/{existing}",
-                        json={"goal": goal, "params": json.dumps(params)},
-                        timeout=10)
+                    self._merge_into(existing, current, goal, params)
             except Exception:
                 pass
             return existing
@@ -1456,11 +1446,10 @@ class Anticipy:
         # has simply learned more: improve that card in place.
         refined = self._refines_pending(goal)
         if refined:
-            try:
-                pb.patch(f"{self.backend_url}/api/collections/jobs/records/{refined}",
-                         json={"goal": goal, "params": json.dumps(params)}, timeout=10)
-            except Exception:
-                pass
+            current = next((j for j in self._pending_jobs()
+                            if j.get("id") == refined), None)
+            if current:
+                self._merge_into(refined, current, goal, params)
             return refined
         # Route read-only work to the worker's research arm (roadmap §6).
         # Without a Brave key the worker has no way to run it, so the job
@@ -1604,6 +1593,55 @@ class Anticipy:
             if overlap >= 0.7:
                 return j["id"]
         return None
+
+    def _merge_into(self, job_id: str, current: dict, goal: str,
+                    params: dict) -> None:
+        """A re-mention may ADD to a card; it must never bleach one out.
+
+        Live, 2026-08-09: "Book a table for 2 at Earls in West Vancouver for
+        tomorrow evening" was a held card; he then said "I'll get that booked
+        now", triaged as "Confirm Earls West Van tomorrow at 7 PM" — same
+        plan, so the merge fired, and the old REPLACE-the-goal merge wrote
+        that meta-wording over the card. The booking verb, the party size and
+        the venue details were gone; the browser agent read "Confirm …" as
+        "send a confirmation" and opened GMAIL.
+
+        A correction is different: "7 PM not 8 PM" arrives with the same
+        shape and ONE detail swapped, and there the new wording must win —
+        keeping the 8 was a live bug of its own. What tells the two apart is
+        how much of the card the new wording would erase: a correction
+        preserves nearly everything, a meta-rewording bleaches most of it.
+        Either way the ORIGINAL conversation is kept — the new params'
+        source ("booked now") is a fragment, not a replacement for what was
+        actually heard."""
+        try:
+            cur_params = json.loads(current.get("params") or "{}")
+        except Exception:
+            cur_params = {}
+        cur_goal = current.get("goal") or ""
+        cur_src = (cur_params.get("source") or "").strip()
+        new_src = (params.get("source") or "").strip()
+        merged = dict(cur_params, **params)
+        if cur_src and new_src and new_src not in cur_src:
+            merged["source"] = f"{cur_src} … then: {new_src}"
+        elif cur_src:
+            merged["source"] = cur_src
+        fields = {}
+        have = goal_tokens(cur_goal)
+        want = goal_tokens(goal)
+        erased = len(have - want) / len(have) if have else 0
+        if erased <= 1 / 3:
+            fields["goal"] = goal          # richer or corrected: new wins
+        else:
+            merged["update"] = goal        # both hold detail: lose neither
+            if merged.get("source"):
+                merged["source"] += f" (update: {goal})"
+        fields["params"] = json.dumps(merged)
+        try:
+            pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+                     json=fields, timeout=10)
+        except Exception:
+            pass
 
     @staticmethod
     def _covered_by(goal: str, other: str) -> bool:

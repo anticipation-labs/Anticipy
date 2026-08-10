@@ -101,7 +101,10 @@ def test_a_plan_filled_in_over_several_turns_is_one_card(monkeypatch):
     assert first == second, "the refined plan opened a second card"
     assert len(fake.jobs) == 1, [j["goal"] for j in fake.jobs]
     assert fake.jobs[0]["goal"] == full, "the card kept the vaguer wording"
-    assert json.loads(fake.jobs[0]["params"])["source"] == "later"
+    # The merge keeps the whole conversation: the original line survives and
+    # the refining line is appended, so the agent sees everything he said.
+    src = json.loads(fake.jobs[0]["params"])["source"]
+    assert "early" in src and "later" in src
 
 
 def test_a_vaguer_line_arriving_late_never_drags_a_good_card_backwards(monkeypatch):

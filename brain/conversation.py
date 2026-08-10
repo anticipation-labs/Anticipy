@@ -72,7 +72,10 @@ intents:
   empty, it lists tasks stopped waiting for information and what each needs —
   a reply that supplies any of it is an "answer", even if you have no memory
   of asking (your thread does not survive a restart; the blocked list does).
-  Capture the substance in changes.
+  Capture the substance in changes. BUT a reply that supplies the detail AND
+  plainly says to proceed — "let's do 7", "yeah, 7 works, go ahead", "make it
+  Tuesday and book it" — is "confirm" with the detail in changes: they are
+  not merely informing you, they are telling you to go.
 - "new_request": something new to handle. NEVER use this to cancel or call
   off something — calling anything off is "decline" even when no pending item
   matches (pending_id null); do not invent a cancellation task.
