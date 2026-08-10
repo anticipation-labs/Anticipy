@@ -473,6 +473,16 @@ async function runJobInner(job, params) {
         // Exactly what the owner agreed to, in their own words plus what
         // she told them — the only thing an action is measured against.
         scope: params.approved_scope || params.say || params.source || "",
+        // Every concrete detail already on the job record (time, party size,
+        // an address, an answer he texted) — so the agent SETS them instead
+        // of asking for them. Bookkeeping keys are not facts.
+        facts: Object.entries(params)
+          .filter(([k, v]) => !["source", "say", "now", "lane", "missing",
+                                "authorized", "approved_scope", "needed",
+                                "start_url", "task", "assumption", "note"].includes(k)
+                              && (typeof v === "string" || typeof v === "number")
+                              && String(v).length < 200)
+          .map(([k, v]) => `  ${k.replace(/_/g, " ")}: ${v}`).join("\n"),
       });
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.

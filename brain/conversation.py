@@ -303,7 +303,7 @@ class Conversation:
         elif intent == "modify" and changes:
             # No pending_id is normal (the model is told to null it when
             # unsure); _amend's single-pending fallback resolves it.
-            acted = self._amend(pending_id, changes)
+            acted = self._amend(pending_id, changes, owner_text=text)
             if acted == "ambiguous":
                 parsed["reply"] = self._which_one()
                 acted, asked_back = None, True
@@ -314,7 +314,7 @@ class Conversation:
             # re-triaged longer ones into DUPLICATE jobs, while the reply
             # cheerfully said "Sunday it is".
             if changes:
-                acted = self._amend(pending_id, changes)
+                acted = self._amend(pending_id, changes, owner_text=text)
                 if acted == "ambiguous":
                     parsed["reply"] = self._which_one()
                     acted, asked_back = None, True
@@ -347,7 +347,8 @@ class Conversation:
                         if fresh else None
                 intent = "confirm"
             else:
-                acted = self._amend(pending_id, changes or {"note": text})
+                acted = self._amend(pending_id, changes or {"note": text},
+                                    owner_text=text)
                 if acted == "ambiguous":
                     acted = None
                 intent = "answer"
@@ -1013,8 +1014,11 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             return None
         # Only a job still waiting on the owner may be released. Without this,
         # a model-supplied id could re-queue a cancelled/failed/done job — the
-        # resurrection class the 2026-07-31 audit flagged.
-        if job.get("status") != "awaiting_confirm":
+        # resurrection class the 2026-07-31 audit flagged. A job the browser
+        # parked with a question (needs_user) is also waiting on the owner:
+        # "K do it" after her "showing 6:30, did you mean noon?" must put it
+        # back to work, not be answered politely while the job sits parked.
+        if job.get("status") not in ("awaiting_confirm", "needs_user"):
             return None
         # The owner's yes is recorded ON the job, so the browser agent knows
         # it may finish the task — including the final Submit. The gate lives
@@ -1027,11 +1031,21 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         # Record WHAT was agreed, not just that something was: every later
         # action is measured against this, which is what makes "only stop if
         # reality differs" a rule rather than a vibe.
-        params["approved_scope"] = (
-            f"Task: {job.get('goal', '')}. "
-            f"They said: \"{(owner_text or 'yes').strip()}\". "
-            f"Heard originally: {params.get('source', '')}"
-        ).strip()
+        if job.get("status") == "needs_user" and params.get("approved_scope"):
+            # Resuming a parked run: the original approval stands; what's new
+            # is his answer to the question the browser stopped on. The agent
+            # reads its authority from this field, so the answer lives here.
+            answer = (owner_text or "").strip() or json.dumps(changes or {})
+            asked = (job.get("result") or params.get("needed") or "").strip()
+            params["approved_scope"] += (
+                f' You stopped and asked: "{asked}". '
+                f'They answered: "{answer}" — that answer is final; act on it.')
+        else:
+            params["approved_scope"] = (
+                f"Task: {job.get('goal', '')}. "
+                f"They said: \"{(owner_text or 'yes').strip()}\". "
+                f"Heard originally: {params.get('source', '')}"
+            ).strip()
         if changes:
             params.update(changes)
         fields = {"status": "queued", "params": json.dumps(params)}
@@ -1054,8 +1068,13 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 pass
         return out
 
-    def _amend(self, job_id: Optional[str], changes: dict) -> Optional[str]:
-        job = self._job(job_id)
+    def _amend(self, job_id: Optional[str], changes: dict,
+               owner_text: str = "") -> Optional[str]:
+        # The pool includes blocked (needs_user) work: an answer that supplies
+        # what a parked browser run asked for belongs ON that run — amending a
+        # copy while the real job stays parked is how "Noon pls" got a cheerful
+        # reply and changed nothing.
+        job = self._job(job_id, pool=self._open_work())
         if job == "ambiguous":
             return "ambiguous"
         if not job:
@@ -1065,6 +1084,18 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         except Exception:
             params = {}
         params.update(changes)
+        if job.get("status") == "needs_user":
+            need = (job.get("result") or "").strip()
+            if need and not params.get("needed"):
+                params["needed"] = need[:300]
+            if params.get("approved_scope"):
+                answer = (owner_text or "").strip() or json.dumps(changes)
+                params["approved_scope"] += (
+                    f' You stopped and asked: "{(need or params.get("needed") or "").strip()}". '
+                    f'They answered: "{answer}" — that answer is final; act on it.')
+            return self._flip(job["id"],
+                              {"status": "queued", "params": json.dumps(params)},
+                              "resumed")
         return self._flip(job["id"], {"params": json.dumps(params)}, "amended")
 
     def _flip(self, job_id: str, fields: dict, verb: str) -> str:

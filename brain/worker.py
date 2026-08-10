@@ -715,6 +715,41 @@ def is_echo_of_her(line: str, minutes: float = 30.0) -> bool:
 _last_blocker: dict = {}
 
 
+_FACT_TOKEN = re.compile(r"\d[\d:]*(?:\s*[ap]\.?m\.?)?", re.IGNORECASE)
+
+
+def _fact_tokens(text: str) -> set:
+    """The numbers, times and dates in a sentence, normalized. These are the
+    tokens a paraphrase has no license to drop or invent."""
+    out = set()
+    for m in _FACT_TOKEN.findall(text or ""):
+        t = re.sub(r"[\s.]", "", m.lower()).rstrip(":")
+        if t:
+            out.add(t)
+    return out
+
+
+def carries_facts(said: str, facts: str) -> bool:
+    """Did a paraphrase keep every hard fact, and invent none?
+
+    Voice may rephrase freely; numbers, times and dates are not hers to
+    change. A rewrite that loses "noon"/"tomorrow" or conjures a figure the
+    source never had is worse than sending the source verbatim."""
+    want, have = _fact_tokens(facts), _fact_tokens(said)
+    if not want <= have:
+        return False
+    if have - want:
+        return False
+    # Day words are facts too: a blocker about "tomorrow" must still be
+    # about tomorrow after the rewrite.
+    day_words = {"today", "tomorrow", "tonight", "noon", "midnight",
+                 "monday", "tuesday", "wednesday", "thursday", "friday",
+                 "saturday", "sunday"}
+    src = {w for w in re.findall(r"[a-z]+", (facts or "").lower()) if w in day_words}
+    out = {w for w in re.findall(r"[a-z]+", (said or "").lower()) if w in day_words}
+    return src <= out
+
+
 def asked_about_recently(goal: str, minutes: float = 45.0) -> bool:
     """Did she already ask about THIS task a moment ago?
 
@@ -1285,10 +1320,22 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                 continue
             said = anticipy._voice({
                 "situation": "you got most of the way through a task in their browser "
-                             "and need one thing from them to finish",
+                             "and need one thing from them to finish. Carry the facts "
+                             "below EXACTLY — every number, time, date and name in "
+                             "what_you_need must survive into your text unchanged",
                 "task": job.get("goal", ""),
                 "what_you_need": blocker,
-            }) or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
+            })
+            # Her paraphrase is voice, not authority: if it dropped or invented
+            # a number/time/date, the facts go out verbatim instead. Live,
+            # 2026-08-10: "showing 6:30 PM, task is tomorrow at noon" was
+            # rewritten as "I'm gonna drive at 6:30. I can change it for
+            # tomorrow" — word salad about a booking he was waiting on.
+            if said and not carries_facts(said, blocker):
+                print(f"stuck job {job['id']}: paraphrase mangled the facts, "
+                      f"sending them verbatim")
+                said = None
+            said = said or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
             # What she actually sent is the durable record — a set in memory
             # would forget across a redeploy and re-ask for his name and email.
             if need_already_asked(job.get("goal", ""), blocker):
