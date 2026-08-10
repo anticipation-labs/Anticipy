@@ -29,9 +29,14 @@ const SUPPRESSED = [
   "/pre-orders/purchase",
   "/pre-orders/success",
   "/pre-orders/agreement",
-  "/build", // job applicants are not shoppers
-  "/apply", // the shared application funnel
-  "/growth", // the Head of Content & Growth listing
+  // Hiring. Job applicants are not shoppers — a discount wheel must never
+  // fire on top of a job application.
+  "/apply", // the listings hub and the wizard at /apply/start
+  "/grow",
+  "/ship",
+  "/build",
+  "/sync",
+  "/growth", // legacy, redirects to /grow
   "/jobs",
   "/join",
   "/funded", // investor page

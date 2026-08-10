@@ -7,14 +7,19 @@ const nextConfig = {
   // requests are first-party. Note this changes only WHERE events are sent,
   // not WHAT: consent gating and masking still govern collection.
   skipTrailingSlashRedirect: true,
-  // /apply is now a real page — the shared application funnel for every open
-  // role — so it is no longer redirected. These two remain permanent (308)
-  // redirects onto /build, which is still the canonical listing for the
-  // hardware + software role.
+  // /apply is the listings hub for every open role, so the URLs people guess
+  // all point there. /growth was the old single-role page and is redirected to
+  // its replacement so any link already posted keeps working.
+  //
+  // Note /build has CHANGED MEANING: it used to be the combined hardware +
+  // software role and is now Senior Hardware Engineer. That is deliberate, and
+  // it is why nothing redirects to /build any more.
   async redirects() {
     return [
-      { source: "/jobs", destination: "/build", permanent: true },
-      { source: "/join", destination: "/build", permanent: true },
+      { source: "/jobs", destination: "/apply", permanent: true },
+      { source: "/join", destination: "/apply", permanent: true },
+      { source: "/careers", destination: "/apply", permanent: true },
+      { source: "/growth", destination: "/grow", permanent: true },
     ];
   },
   async rewrites() {

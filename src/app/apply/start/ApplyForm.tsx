@@ -3,32 +3,50 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ease } from "@/lib/animation";
-import { CalendarEmbed } from "../build/CalendarEmbed";
-import { LocationInput } from "../build/LocationInput";
-import { VoiceInput } from "../build/VoiceInput";
-import { Flash } from "../build/Flash";
-import { useViewport } from "../build/useViewport";
+import { CalendarEmbed } from "@/components/apply/CalendarEmbed";
+import { LocationInput } from "@/components/apply/LocationInput";
+import { VoiceInput } from "@/components/apply/VoiceInput";
+import { Flash } from "@/components/apply/Flash";
+import { useViewport } from "@/components/apply/useViewport";
 import { suggestEmail } from "@/lib/email-check";
 import { Tm } from "@/components/Tm";
 import {
   ROLES,
   QUESTIONS,
+  ROLE_LABEL,
   resolveQuestionSet,
   parseRoleParam,
   type RoleKey,
-} from "./roles";
+} from "../roles";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXT = /\.(pdf|doc|docx|png|jpe?g|webp|heic|heif|gif|mp4|mov)$/i;
 const MIN_INPUT_PX = 16;
 
-/**
- * Style primitives, deliberately duplicated from BuildForm rather than
- * extracted into a shared module. Extracting would mean editing the /build
- * funnel, which is live and tested; thirty lines of duplication is the
- * cheaper risk. If a third funnel appears, extract then.
- */
+// 0 intro · 1 role · 2 you · 3..6 questions · 7 links+cv · 8 logistics
+const LAST = 8;
+
+const SAVE_KEY = "anticipy.apply.v1";
+const SAVE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface Saved {
+  t: number;
+  screen: number;
+  roles: RoleKey[];
+  name: string;
+  email: string;
+  location: string;
+  answers: Record<string, string>;
+  links: string;
+  availability: string;
+  startDate: string;
+  vancouver: string;
+  workAuth: "yes" | "no" | "";
+  spoken: string[];
+}
+
+/** Single-line fields: a rule under the text, gold on focus. */
 const rule = (focused: boolean, invalid: boolean): React.CSSProperties => ({
   background: "transparent",
   border: "none",
@@ -41,6 +59,29 @@ const rule = (focused: boolean, invalid: boolean): React.CSSProperties => ({
   transition: "border-color 220ms ease",
   fontFamily: "inherit",
   borderRadius: 0,
+});
+
+/**
+ * Essay fields get a full visible border instead of a single rule.
+ *
+ * A bottom-rule textarea reads as a one-line input and people answer it like
+ * one. A bordered box that can be dragged taller says "this is where the long
+ * answer goes" without a word of instruction.
+ */
+const box = (focused: boolean, invalid: boolean): React.CSSProperties => ({
+  background: "var(--dark-elevated)",
+  border: `1px solid ${invalid ? "#C97E7E" : focused ? "var(--gold)" : "var(--dark-border)"}`,
+  borderRadius: 8,
+  color: "var(--text-on-dark)",
+  padding: "13px 14px",
+  fontSize: MIN_INPUT_PX,
+  lineHeight: 1.6,
+  width: "100%",
+  outline: "none",
+  transition: "border-color 220ms ease",
+  fontFamily: "inherit",
+  resize: "vertical",
+  display: "block",
 });
 
 function Q({ children }: { children: React.ReactNode }) {
@@ -125,7 +166,13 @@ type Status = "idle" | "busy" | "done";
 export function ApplyForm() {
   useViewport();
 
+  // Everything below the fold of this component depends on localStorage and
+  // the query string, neither of which exists during the server render. The
+  // form stays hidden for one frame rather than rendering the intro screen and
+  // then jumping — which is what somebody arriving from a role page would see.
+  const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState(0);
+  const [entryScreen, setEntryScreen] = useState(0);
   const [flashing, setFlashing] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
@@ -151,33 +198,127 @@ export function ApplyForm() {
   const startedAt = useRef(0);
   const paneRef = useRef<HTMLDivElement>(null);
 
-  // Preselect from ?role=growth, but the role screen is still shown so anyone
-  // arriving directly — or arriving on the wrong link — can change it.
+  const questionSet = resolveQuestionSet(roles);
+  const qs = questionSet ? QUESTIONS[questionSet] : [];
+
+  // ── Restore, then decide where to start ───────────────────────────
   useEffect(() => {
     startedAt.current = Date.now();
-    const r = parseRoleParam(new URLSearchParams(window.location.search).get("role"));
-    if (r) setRoles([r]);
+
+    let restored: Saved | null = null;
+    try {
+      const raw = window.localStorage.getItem(SAVE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw) as Saved;
+        if (s && typeof s.t === "number" && Date.now() - s.t < SAVE_MAX_AGE_MS) restored = s;
+        else window.localStorage.removeItem(SAVE_KEY);
+      }
+    } catch {
+      /* corrupt or unavailable storage — start clean rather than fail */
+    }
+
+    if (restored) {
+      setRoles(Array.isArray(restored.roles) ? restored.roles : []);
+      setName(restored.name || "");
+      setEmail(restored.email || "");
+      setLocation(restored.location || "");
+      setAnswers(restored.answers || {});
+      setLinks(restored.links || "");
+      setAvailability(restored.availability || "");
+      setStartDate(restored.startDate || "");
+      setVancouver(restored.vancouver || "");
+      setWorkAuth(restored.workAuth || "");
+      setSpoken(new Set(restored.spoken || []));
+    }
+
+    // A role in the URL is an explicit choice made one click ago, so it wins
+    // over whatever was saved, and it skips the intro and role screens.
+    const fromUrl = parseRoleParam(new URLSearchParams(window.location.search).get("role"));
+    let start = restored ? Math.min(Math.max(restored.screen ?? 0, 0), LAST) : 0;
+    if (fromUrl) {
+      setRoles([fromUrl]);
+      if (start < 2) start = 2;
+    }
+
+    setEntryScreen(start);
+    setScreen(start);
+    setReady(true);
+    window.history.replaceState({ apStep: start }, "");
+  }, []);
+
+  // ── Autosave ──────────────────────────────────────────────────────
+  // Files are deliberately not persisted: a File cannot be serialised, and
+  // silently "restoring" a filename with no bytes behind it would be worse
+  // than asking for the upload again.
+  const save = useCallback(() => {
+    if (!ready) return;
+    const payload: Saved = {
+      t: Date.now(),
+      screen,
+      roles,
+      name,
+      email,
+      location,
+      answers,
+      links,
+      availability,
+      startDate,
+      vancouver,
+      workAuth,
+      spoken: Array.from(spoken),
+    };
+    try {
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+    } catch {
+      /* private mode or quota — autosave is a convenience, never a blocker */
+    }
+  }, [ready, screen, roles, name, email, location, answers, links, availability, startDate, vancouver, workAuth, spoken]);
+
+  // On step change.
+  useEffect(() => {
+    save();
+  }, [screen, save]);
+
+  const clearSave = () => {
+    try {
+      window.localStorage.removeItem(SAVE_KEY);
+    } catch {
+      /* nothing to do */
+    }
+  };
+
+  // ── Browser back moves one step, never off the page ───────────────
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const step = (e.state as { apStep?: number } | null)?.apStep;
+      if (typeof step === "number") {
+        setErrors({});
+        setScreen(step);
+      }
+      // No apStep means this entry predates the wizard — let the browser
+      // navigate, which returns them to the role page they came from.
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   useEffect(() => {
-    if (status === "done" || screen === 0) return;
+    if (!ready || status === "done" || screen === 0) return;
     if (window.matchMedia?.("(pointer: coarse)").matches) return;
     const t = window.setTimeout(() => {
       paneRef.current?.querySelector<HTMLElement>("input, textarea")?.focus();
     }, 300);
     return () => window.clearTimeout(t);
-  }, [screen, status]);
+  }, [screen, status, ready]);
 
   const set = useCallback((id: string, v: string) => setAnswers((a) => ({ ...a, [id]: v })), []);
   const bind = (k: string) => ({
     onFocus: () => setFocus(k),
-    onBlur: () => setFocus((f) => (f === k ? null : f)),
+    onBlur: () => {
+      setFocus((f) => (f === k ? null : f));
+      save(); // on blur
+    },
   });
-
-  const questionSet = resolveQuestionSet(roles);
-  const qs = questionSet ? QUESTIONS[questionSet] : [];
-  // 0 intro · 1 role · 2 you · 3..6 questions · 7 links+cv · 8 logistics
-  const LAST = 8;
 
   const toggleRole = (key: RoleKey) => {
     setErrors((p) => ({ ...p, roles: undefined }));
@@ -216,6 +357,7 @@ export function ApplyForm() {
 
   const go = (next: number) => {
     setFlashing(true);
+    window.history.pushState({ apStep: next }, "");
     window.setTimeout(() => setScreen(next), 90);
     window.setTimeout(() => setFlashing(false), 280);
   };
@@ -224,14 +366,14 @@ export function ApplyForm() {
     const e = validate(screen);
     setErrors(e);
     if (Object.keys(e).length) return;
+    save();
     if (screen < LAST) go(screen + 1);
     else void submit();
   };
 
-  const back = () => {
-    setErrors({});
-    go(Math.max(0, screen - 1));
-  };
+  // Routed through history so the in-page control and the browser control are
+  // the same action, and history cannot grow one entry per Back click.
+  const back = () => window.history.back();
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== "Enter") return;
@@ -293,6 +435,7 @@ export function ApplyForm() {
         setServerError(data.error || "Something went wrong. Try again.");
         return;
       }
+      clearSave();
       setFlashing(true);
       window.setTimeout(() => setStatus("done"), 100);
       window.setTimeout(() => setFlashing(false), 300);
@@ -321,6 +464,22 @@ export function ApplyForm() {
     paddingTop: 28,
     paddingBottom: 28,
   };
+
+  const brand = (
+    <div className="ap-brand" style={{ marginBottom: screen === 0 ? 36 : 26 }}>
+      <a href="/" className="font-serif" style={{ fontSize: 19, color: "var(--gold)", textDecoration: "none", letterSpacing: "0.02em" }}>
+        Anticipy<Tm />
+      </a>
+    </div>
+  );
+
+  if (!ready) {
+    return (
+      <div style={shell}>
+        <div style={inner} className="ap-inner">{brand}</div>
+      </div>
+    );
+  }
 
   if (status === "done") {
     return (
@@ -377,20 +536,20 @@ export function ApplyForm() {
           .ap-fields { gap: 15px !important; }
           .ap-sub { margin-bottom: 16px !important; }
         }
+        .ap-inner textarea::placeholder { color: #4E4E4E; }
       `}</style>
 
       <div style={inner} className="ap-inner">
-        <div className="ap-brand" style={{ marginBottom: screen === 0 ? 36 : 26 }}>
-          <a href="/" className="font-serif" style={{ fontSize: 19, color: "var(--gold)", textDecoration: "none", letterSpacing: "0.02em" }}>
-            Anticipy<Tm />
-          </a>
-        </div>
+        {brand}
 
         {screen > 0 && (
           <div style={{ marginBottom: 30 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-              <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--gold)" }}>{stepLabel}</span>
-              <span style={{ fontSize: 10.5, color: "#5A5A5A" }}>{screen} / {LAST}</span>
+            {/* One indicator: a label and the bar it fills. There is no second
+                numeric counter — two of them competing was just noise. */}
+            <div style={{ marginBottom: 10 }}>
+              <span className="tracking-wide-label" style={{ fontSize: 10.5, textTransform: "uppercase", color: "var(--gold)" }}>
+                {stepLabel}
+              </span>
             </div>
             <div style={{ height: 1, background: "var(--dark-border)", position: "relative" }}>
               <motion.div
@@ -420,13 +579,12 @@ export function ApplyForm() {
                   Come build the thing.
                 </h1>
                 <p style={{ fontSize: "clamp(16px, 2vw, 19px)", lineHeight: 1.6, color: "var(--text-on-dark)", margin: "20px 0 0", maxWidth: 560 }}>
-                  Anticipy is a tiny team building a connected product from board
-                  to factory. We&apos;re hiring for four roles, and this is the
-                  whole application — a few screens, no cover letter.
+                  Anticipy is a pendant that listens while you talk and does the
+                  things you mention. I&apos;m hiring four people to build it
+                  with me, and this is the whole application.
                 </p>
                 <p style={{ fontSize: 15, lineHeight: 1.7, color: "var(--text-on-dark-muted)", margin: "16px 0 0", maxWidth: 560 }}>
-                  We don&apos;t care about school or titles. We care about what
-                  you built and what was actually yours.
+                  No cover letter, no resume. I read every one myself.
                 </p>
               </>
             )}
@@ -451,6 +609,20 @@ export function ApplyForm() {
 
             {screen === 2 && (
               <>
+                {roles.length > 0 && (
+                  <div style={{ marginBottom: 14, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13.5, color: "var(--text-on-dark-muted)" }}>
+                      {roles.map((r) => ROLE_LABEL[r]).join(" + ")}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => go(1)}
+                      style={{ background: "none", border: "none", padding: 0, color: "var(--gold)", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}
+                    >
+                      change role
+                    </button>
+                  </div>
+                )}
                 <Q>First — who are you?</Q>
                 <Sub>Name, email, and where you are.</Sub>
                 <div className="ap-fields" style={{ display: "grid", gap: 22 }}>
@@ -463,7 +635,7 @@ export function ApplyForm() {
                       type="email" value={email}
                       onChange={(e) => { setEmail(e.target.value); setEmailFix(null); }}
                       onFocus={() => setFocus("email")}
-                      onBlur={() => { setFocus(null); setEmailFix(suggestEmail(email.trim())); }}
+                      onBlur={() => { setFocus(null); setEmailFix(suggestEmail(email.trim())); save(); }}
                       placeholder="Email" autoComplete="email" aria-label="Email"
                       style={rule(focus === "email", !!errors.email)}
                     />
@@ -496,8 +668,9 @@ export function ApplyForm() {
                   value={answers[q.id] || ""}
                   onChange={(e) => set(q.id, e.target.value)}
                   rows={5}
+                  placeholder={q.placeholder}
                   aria-label={q.q}
-                  style={{ ...rule(focus === q.id, !!errors[q.id]), fontSize: MIN_INPUT_PX, lineHeight: 1.6, resize: "none", maxHeight: "30vh", overflowY: "auto" }}
+                  style={{ ...box(focus === q.id, !!errors[q.id]), maxHeight: "34vh" }}
                   {...bind(q.id)}
                 />
                 <VoiceInput onText={(t) => { set(q.id, (answers[q.id] ? answers[q.id] + " " : "") + t); setSpoken((s) => new Set(s).add(q.id)); }} />
@@ -516,9 +689,9 @@ export function ApplyForm() {
                   value={links}
                   onChange={(e) => setLinks(e.target.value)}
                   rows={4}
-                  placeholder={"https://github.com/…\nhttps://…"}
+                  placeholder={"https://github.com/you\nhttps://yoursite.com\nhttps://tiktok.com/@you"}
                   aria-label="Relevant links"
-                  style={{ ...rule(focus === "links", false), fontSize: MIN_INPUT_PX, lineHeight: 1.6, resize: "none", maxHeight: "22vh", overflowY: "auto" }}
+                  style={{ ...box(focus === "links", false), maxHeight: "26vh" }}
                   {...bind("links")}
                 />
                 <div style={{ marginTop: 20 }}>
@@ -614,13 +787,19 @@ export function ApplyForm() {
           >
             {status === "busy" ? "Sending…" : screen === LAST ? "Send it" : screen === 0 ? "Start" : "Continue"}
           </button>
-          {screen > 0 && status !== "busy" && (
+          {screen > entryScreen && status !== "busy" && (
             <button type="button" onClick={back}
               style={{ background: "none", border: "none", color: "var(--text-on-dark-muted)", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
               Back
             </button>
           )}
         </div>
+
+        {screen === entryScreen && (
+          <p style={{ fontSize: 12.5, color: "#5A5A5A", margin: "16px 0 0" }}>
+            Your answers save automatically.
+          </p>
+        )}
 
         {/* Honeypot. Hidden from sight AND from assistive tech, off the tab
             order, and never autofilled — so no human can reach it, while a

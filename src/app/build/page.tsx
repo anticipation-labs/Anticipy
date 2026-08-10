@@ -1,46 +1,67 @@
-import type { Metadata, Viewport } from "next";
-import { BuildForm } from "./BuildForm";
+import type { Metadata } from "next";
+import { RolePage, type RolePageContent } from "@/components/apply/RolePage";
+import { ROLE_BY_SLUG } from "@/app/apply/roles";
+
+const role = ROLE_BY_SLUG.build;
 
 export const metadata: Metadata = {
-  title: "Built something that shouldn't have worked? — Anticipy",
-  description:
-    "Anticipy is looking for one hardware + software builder to own a tiny connected product from board to factory.",
+  title: `${role.label} — Anticipy`,
+  description: role.tagline,
   alternates: { canonical: "https://www.anticipy.ai/build" },
   openGraph: {
-    title: "Built something that shouldn't have worked?",
-    description:
-      "One hardware + software builder to own a tiny connected product from board to factory.",
+    title: role.label,
+    description: role.tagline,
     url: "https://www.anticipy.ai/build",
     type: "website",
   },
 };
 
-// Next 14 ignores a `viewport` key inside the metadata export — it must be its
-// own export or it is silently dropped, which is what was happening here.
-// `interactive-widget=resizes-content` shrinks the layout viewport when the
-// on-screen keyboard opens, so a fixed-height screen keeps fitting. It works
-// on Chrome and Firefox for Android with no JavaScript. WebKit has not
-// implemented it, which is why useViewport() also drives the height from
-// visualViewport — the two agree rather than conflict.
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  interactiveWidget: "resizes-content",
+const content: RolePageContent = {
+  heroPhoto:
+    "Hero, 16:9 — the rejected factory samples laid out flat on a plain surface, top-down, one hard light, imperfections visible.",
+  intro: [
+    "You own the physical pendant.",
+    "People wear it where they'd wear jewellery. That means it gets judged up close by someone who does not care how clever the inside is. That constraint drives more decisions than the electronics do, and it's harder.",
+    "The first factory samples came back bad. Bad enough that I'm hand-building units instead of shipping what arrived. The next run is bigger and goes through a process nobody here has proven yet. Both of those are now your problem — and I mean that as the job description, not a complaint.",
+  ],
+  sections: [
+    {
+      heading: "Your first month",
+      body: [
+        "Take over the hand-built run and make it repeatable without me in the room.",
+        "Sort batch one's failures into design problems and manufacturing problems. They're tangled together right now and they need different fixes.",
+      ],
+    },
+    {
+      heading: "The honest part",
+      body: [
+        "Some weeks this is engineering. Other weeks it's opening a box of wrong parts on a Tuesday and deciding what we do by Friday. The second kind happens more than I expected.",
+        "The workspace is not a lab. It will be, eventually. It isn't yet.",
+      ],
+    },
+    {
+      heading: "You'll probably fit if",
+      body: [
+        "You've taken a physical product from prototype into a real production run.",
+        "A batch has come back unusable on you before, and you can tell me what you did next.",
+        "You have opinions about finish and materials that you can defend to a non-engineer.",
+      ],
+    },
+    {
+      heading: "Before you apply",
+      body: [
+        "Look at the comparison pages on the site against the other pendants. Tell me what you'd change about the object itself.",
+      ],
+    },
+  ],
+  // Sits directly after "Your first month", as specified.
+  inlinePhoto: {
+    afterSection: 0,
+    caption:
+      "Inline, 4:3 — the hand-assembly bench exactly as it is: tools, parts, mess. Do not tidy it first.",
+  },
 };
 
-
-/**
- * The application page.
- *
- * One screen at a time, each sized to the viewport, and the document itself
- * never scrolls — the intro, every question and the confirmation are all
- * panels rather than a long page. No nav, no footer, no team grid, no
- * benefits list. The whole surface is one question and a way to answer it.
- */
 export default function BuildPage() {
-  return (
-    <main className="section-dark">
-      <BuildForm />
-    </main>
-  );
+  return <RolePage role={role} content={content} />;
 }
