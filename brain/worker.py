@@ -1021,7 +1021,10 @@ def _brain_fingerprint() -> str:
     import hashlib
     here = os.path.dirname(os.path.abspath(__file__))
     h = hashlib.sha256()
-    for name in ("anticipy_core.py", "orchestrator.py", "worker.py"):
+    # Every module in the brain counts — conversation.py and memory.py
+    # changed once with no fingerprint movement, which silently defeated
+    # the whole "the log PROVES it" idea.
+    for name in sorted(n for n in os.listdir(here) if n.endswith(".py")):
         try:
             with open(os.path.join(here, name), "rb") as f:
                 h.update(f.read())
