@@ -656,7 +656,9 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === "anticipy-poll") { poll(); openRealtime(); }
-  if (a.name === "anticipy-heartbeat") heartbeat();
+  // A network blip during a beat is routine, not an error worth logging —
+  // the next alarm retries anyway.
+  if (a.name === "anticipy-heartbeat") heartbeat().catch(() => {});
 });
 // Also poll immediately on worker wake, and re-assert the badge — it is
 // derived state, and a restarted browser comes up with it blank.
