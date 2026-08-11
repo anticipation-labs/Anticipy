@@ -339,11 +339,7 @@ async function trustedClick(tabId, x, y) {
 async function trustedType(tabId, text, index) {
   // Clear whatever's there (select-all + delete) so retries don't concatenate.
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (i) => window.__anticipyClear(i),
-      args: [index],
-    });
+    await inFrame(tabId, index, (i) => window.__anticipyClear(i));
   } catch (e) { /* best effort */ }
   for (const ch of String(text)) {
     // rawKeyDown does NOT insert text; only the char event does. Sending text
@@ -408,36 +404,127 @@ async function neutralizeSpawners(tabId) {
   } catch (e) { /* best effort — the per-step sweep still backstops */ }
 }
 
-async function mapPage(tabId) {
+// FRAMES ARE PART OF THE PAGE. Booking widgets, payment forms, embedded
+// search — sites put their real controls inside iframes (Earls' "Make a
+// Reservation" is an embedded reservation iframe), and a mapper that only
+// reads the top document literally cannot see the date picker or the book
+// button. It re-opens the widget forever and looks like it "refuses to press
+// book". So every frame is mapped; each frame's elements get a slot of 1000
+// indexes (main frame = 0..999, first subframe = 1000.., …) and actions are
+// routed back to the frame that owns the index.
+let frameSlots = [0];
+let frameOffsets = {};              // frameId -> {x, y} in top-page coords, when known
+const frameOf = (idx) => frameSlots[Math.floor(idx / 1000)] ?? 0;
+const localOf = (idx) => idx % 1000;
+function frameTarget(tabId, index) {
+  const frameId = frameOf(index);
+  return frameId ? { tabId, frameIds: [frameId] } : { tabId };
+}
+async function inFrame(tabId, index, func, extraArgs = []) {
+  const res = await chrome.scripting.executeScript({
+    target: frameTarget(tabId, index),
+    func,
+    args: [localOf(index), ...extraArgs],
+  });
+  return res?.[0]?.result;
+}
+
+async function mapPage(tabId, _retry = 0) {
   await neutralizeSpawners(tabId);
-  const [{ result }] = await chrome.scripting.executeScript({
-    target: { tabId },
+  await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
     files: ["page_map.js"],
-  }).then(() => chrome.scripting.executeScript({
-    target: { tabId },
-    func: () => window.__anticipyMapPage(),
-  }));
-  // Autocomplete dropdown options are appended to the SAME index space so the
-  // agent can click one by index right after typing.
-  try {
-    const [{ result: sugg }] = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => window.__anticipySuggestions(),
-    });
-    if (sugg && sugg.trim()) {
-      result.elements += `\n--- SUGGESTIONS (click one to pick it) ---\n${sugg}`;
+  });
+  const frames = await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    func: () => {
+      const m = window.__anticipyMapPage();
+      try { m.sugg = window.__anticipySuggestions(); } catch (e) { m.sugg = ""; }
+      m.w = innerWidth; m.h = innerHeight;
+      m.iframes = [...document.querySelectorAll("iframe")].map((f) => {
+        const r = f.getBoundingClientRect();
+        return { src: f.src || "", x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
+      }).filter((f) => f.w >= 80 && f.h >= 60);
+      return m;
+    },
+  });
+  const main = frames.find((f) => f.frameId === 0)?.result;
+  if (!main) throw new Error("main frame not scriptable");
+  frameSlots = [0];
+  frameOffsets = {};
+  // Which subframes matter: visible, real size, and actually holding controls.
+  const subs = frames
+    .filter((f) => f.frameId !== 0 && f.result && f.result.elements
+      && f.result.w >= 80 && f.result.h >= 60)
+    .sort((a, b) => a.frameId - b.frameId)
+    .slice(0, 8);
+  // Top-page coordinates for trusted clicks inside a subframe: match the
+  // frame's URL to an <iframe src> its parent reported. Unmatched frames
+  // still work — their clicks fall back to in-frame element handlers.
+  const iframeRects = frames.flatMap((f) =>
+    (f.result?.iframes || []).map((r) => ({ ...r, parent: f.frameId })));
+  const withSugg = (res, remap) => {
+    let out = res.elements;
+    if (res.sugg && res.sugg.trim()) out += `\n--- SUGGESTIONS (click one to pick it) ---\n${res.sugg}`;
+    return remap ? out.replace(/^\[(\d+)\]/gm, (_, n) => `[${remap + Number(n)}]`) : out;
+  };
+  // A visible iframe whose content isn't mapped yet is a widget mid-load —
+  // mapping now would show the model a page with "no controls" and it would
+  // give up on a form that is two seconds from existing. Wait and remap.
+  // "Mid-load" = the parent shows visible iframes but has no controls of its
+  // own and no subframe produced any yet. A page whose own controls are up,
+  // or a frame that is genuinely empty/cross-origin, is never waited on.
+  const pendingIframe = (main.iframes || []).length > 0
+    && !main.elements && subs.length === 0;
+  if (pendingIframe && _retry < 3) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return mapPage(tabId, _retry + 1);
+  }
+  let elements = withSugg(main, 0);
+  let text = main.text || "";
+  for (const f of subs) {
+    const slot = frameSlots.length;
+    frameSlots.push(f.frameId);
+    const url = f.result.url || "";
+    const hit = iframeRects.filter((r) => r.src && url && (r.src === url || url.startsWith(r.src.split("#")[0])));
+    if (hit.length === 1) {
+      const base = frameOffsets[hit[0].parent] || { x: 0, y: 0 };
+      frameOffsets[f.frameId] = { x: base.x + hit[0].x, y: base.y + hit[0].y };
     }
-  } catch (e) { /* best effort */ }
-  return result;
+    elements += `\n--- EMBEDDED WIDGET (${url.slice(0, 100)}) — these controls work like any other ---\n`
+      + withSugg(f.result, slot * 1000);
+    if (f.result.text) text = (text + "\n" + f.result.text).slice(0, 2500);
+  }
+  return { url: main.url, title: main.title, elements, text,
+           overlay: main.overlay || subs.length > 0 };
 }
 
 async function elementCenter(tabId, index) {
-  const [{ result }] = await chrome.scripting.executeScript({
-    target: { tabId },
-    func: (i) => window.__anticipyCenter(i),
-    args: [index],
+  const result = await inFrame(tabId, index, (i) => window.__anticipyCenter(i));
+  if (!result) return result;
+  const frameId = frameOf(index);
+  if (!frameId) return result;
+  const off = frameOffsets[frameId];
+  if (off) return { x: off.x + result.x, y: off.y + result.y };
+  // No top-page coordinates for this frame: the caller must click in-frame.
+  return { x: result.x, y: result.y, inFrameOnly: true };
+}
+
+// A subframe whose position on the top page is unknown can't take a trusted
+// coordinate click — fire the element's own event sequence inside its frame.
+async function frameClick(tabId, index) {
+  return inFrame(tabId, index, (i) => {
+    const el = window.__anticipyMap[i];
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const opts = { bubbles: true, cancelable: true, view: window,
+                   clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 };
+    for (const t of ["pointerover", "pointerdown", "mousedown", "pointerup", "mouseup"]) {
+      el.dispatchEvent(t.startsWith("pointer") ? new PointerEvent(t, opts) : new MouseEvent(t, opts));
+    }
+    el.click();
+    return true;
   });
-  return result;
 }
 
 // THINK BEFORE TOUCHING ANYTHING.
@@ -608,12 +695,8 @@ export function isAuthored(text, goal, scope) {
 /// is correct: the page is not asking for a shape, so there is none to break.
 async function fieldRejects(tabId, index) {
   try {
-    const [res] = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (i) => window.__anticipyValidity && window.__anticipyValidity(i),
-      args: [index],
-    });
-    return (res && res.result) || null;
+    return (await inFrame(tabId, index,
+      (i) => window.__anticipyValidity && window.__anticipyValidity(i))) || null;
   } catch (e) {
     return null;                 // cannot ask -> behave exactly as before
   }
@@ -1040,7 +1123,7 @@ export async function runAgentGoal(goal, opts) {
         let out;
         try {
           const res = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
+            target: frameTarget(tab.id, decision.index),
             func: (i, want) => {
               const el = window.__anticipyMap[i];
               if (!el) return "element not found";
@@ -1102,7 +1185,7 @@ export async function runAgentGoal(goal, opts) {
               }
               return `element is <${el.tagName.toLowerCase()}>, not a dropdown or input`;
             },
-            args: [decision.index, decision.option || ""],
+            args: [localOf(decision.index), decision.option || ""],
           });
           out = res?.[0]?.result || "no result";
         } catch (e) {
@@ -1151,17 +1234,15 @@ export async function runAgentGoal(goal, opts) {
         try { c = await withTimeout(elementCenter(tab.id, decision.index), 15000, "elementCenter"); }
         catch (e) { history.push(`step ${step}: element lookup failed (${String(e).slice(0, 100)})`); continue; }
         if (!c) { stuckStreak++; history.push(`step ${step}: element ${decision.index} not found`); continue; }
-        await trustedClick(tab.id, c.x, c.y);
+        if (c.inFrameOnly) await frameClick(tab.id, decision.index);
+        else await trustedClick(tab.id, c.x, c.y);
         if (decision.action === "click" && actionCounts[sig] === 2) {
           // Second attempt at the same click: the coordinate click likely
           // missed (overlay buttons re-render/move). Fire the element's own
           // click handler as a fallback.
           try {
-            await chrome.scripting.executeScript({
-              target: { tabId: tab.id },
-              func: (i) => { const el = window.__anticipyMap[i]; if (el) el.click(); return !!el; },
-              args: [decision.index],
-            });
+            await inFrame(tab.id, decision.index,
+              (i) => { const el = window.__anticipyMap[i]; if (el) el.click(); return !!el; });
             history.push(`step ${step}: retried click ${decision.index} via element handler`);
           } catch (e) { /* best effort */ }
         }
@@ -1170,13 +1251,26 @@ export async function runAgentGoal(goal, opts) {
           // CDP clicks don't always land focus (overlays, shadow DOM); focus
           // the mapped element directly so insertText goes where intended.
           try {
-            await chrome.scripting.executeScript({
-              target: { tabId: tab.id },
-              func: (i) => window.__anticipyFocus(i),
-              args: [decision.index],
-            });
+            await inFrame(tab.id, decision.index, (i) => window.__anticipyFocus(i));
           } catch (e) { /* best effort */ }
           await trustedType(tab.id, decision.text || "", decision.index);
+          // CDP keystrokes land on the focused frame; when the field lives in
+          // a subframe, read the value back and — if the keys never arrived —
+          // set it through the native setter the framework listens to.
+          if (frameOf(decision.index)) {
+            try {
+              await inFrame(tab.id, decision.index, (i, want) => {
+                const a = document.activeElement;
+                const el = (a && "value" in a && a.tagName !== "BUTTON") ? a : window.__anticipyMap[i];
+                if (!el || !("value" in el) || el.value) return el && el.value;
+                const proto = el.tagName === "TEXTAREA" ? window.HTMLTextAreaElement : window.HTMLInputElement;
+                Object.getOwnPropertyDescriptor(proto.prototype, "value").set.call(el, want);
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+                el.dispatchEvent(new Event("change", { bubbles: true }));
+                return el.value;
+              }, [decision.text || ""]);
+            } catch (e) { /* best effort */ }
+          }
           // Never commit a value the field itself rejects. Pressing Enter is
           // what turns a wrong value into a sent thing, so the check goes
           // exactly here, between typing and committing.

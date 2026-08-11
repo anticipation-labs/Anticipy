@@ -601,6 +601,61 @@ Reply ONLY with compact JSON:
 {"can_start": true|false, "needed": ["<what they would have to be told>"]}"""
 
 
+MEMORY_FILL_SYSTEM = """A task is being prepared for someone. One detail was
+never stated in the conversation. Below is what is durably KNOWN about them
+from memory.
+
+One question: does what is KNOWN plainly settle the missing detail — their own
+established choice, habit, or standing preference (their usual place, their
+home neighbourhood, the location they always use)? A guess is not an answer.
+Something merely plausible is not an answer. Something about a DIFFERENT plan
+is not an answer. If memory does not plainly settle it, answer null.
+
+Reply ONLY with compact JSON:
+{"answer": "<the detail, concretely>" | null}"""
+
+
+def fill_gaps_from_memory(llm, memory, goal: str, gaps: list) -> tuple:
+    """Missing details are a question of last resort, not first. Before any
+    of them turns into a text, memory gets a chance to answer — the place he
+    always books, the city he lives in — and whatever it settles rides on the
+    card as an ASSUMPTION he sees at the go-ahead, where one "no, the other
+    one" fixes it. Only what memory cannot answer is ever asked. Every
+    failure path leaves the gap exactly as it was: unanswered means asked."""
+    filled: dict = {}
+    remaining: list = []
+    if not gaps:
+        return {}, []
+    if memory is None or llm is None or not getattr(llm, "live", False):
+        return {}, list(gaps)
+    for gap in gaps:
+        try:
+            facts = memory.recall(f"{goal} {gap}", limit=8)
+        except Exception:
+            facts = []
+        known = "\n".join(
+            f"- {f.get('fact') or f.get('text') or ''}".strip()
+            for f in facts if (f.get("fact") or f.get("text")))
+        if not known:
+            remaining.append(gap)
+            continue
+        try:
+            res = llm.chat(MEMORY_FILL_SYSTEM,
+                           f"TASK: {goal}\nMISSING: {gap}\n\nKNOWN:\n{known}",
+                           temperature=0.0)
+            raw = json.loads(_extract_json(res.text))
+        except Exception:
+            remaining.append(gap)
+            continue
+        ans = raw.get("answer")
+        if isinstance(ans, str) and ans.strip() \
+                and ans.strip().lower() not in ("none", "null", "n/a"):
+            filled[gap] = ans.strip()
+        else:
+            remaining.append(gap)
+    return filled, remaining
+
+
 PARTY_SYSTEM = """A personal assistant overheard her owner talking with
 someone. A plan came up, and the other person owns at least the next step.
 

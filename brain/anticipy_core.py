@@ -30,7 +30,8 @@ from .llm import LLM, now_line
 from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
-                           NOT_HIS, check_sufficiency, owner_is_party,
+                           NOT_HIS, check_sufficiency, fill_gaps_from_memory,
+                           owner_is_party,
                            unsupported_names,
                            unsupported_counts, read_into_a_machine,
                            not_speech_evidence,
@@ -410,6 +411,9 @@ class Anticipy:
         self.owner_id = owner_id
         self.conversation = conversation
         self.loops: list[LoopRecord] = []
+        # Gaps memory answered for the goal being decided right now; consumed
+        # into the job's params so the agent sees them as facts.
+        self._memory_filled: dict = {}
         self.session_start = time.time()
         self._prev: Optional[tuple[str, float]] = None  # (last ignored line, ts)
         # Who the owner was talking to on the last classified line. Sticky:
@@ -762,7 +766,27 @@ class Anticipy:
                                 decision.missing.append(gap)
                     except Exception:
                         pass
+                # Memory answers before he is asked: a gap his own history
+                # settles (the location he always books, his home city)
+                # becomes an assumption on the card he approves, not another
+                # question in the one text.
+                filled = {}
+                if decision.missing:
+                    try:
+                        filled, decision.missing = fill_gaps_from_memory(
+                            self.llm, self.memory, goal, decision.missing)
+                    except Exception:
+                        filled = {}
+                if filled:
+                    picked = "; ".join(f"{v}" for v in filled.values())
+                    decision.assumption = (
+                        (decision.assumption + " — " if decision.assumption
+                         else "") + f"from what I know about you: {picked}")
                 params = {"source": line, "now": now_line(), "lane": "desk"}
+                for k, v in filled.items():
+                    key = re.sub(r"\W+", " ", k).strip().lower()[:48]
+                    if key:
+                        params[key] = v
                 if decision.assumption:
                     params["assumption"] = decision.assumption
                 if decision.missing:
@@ -979,6 +1003,26 @@ class Anticipy:
                     n if n.startswith("how many")
                     else f"which {n} you meant — I do not think you actually said that"
                     for n in made_up]
+            # Memory before questions, this lane too — but never for a
+            # made-up detail: an invented name must be ASKED about, not
+            # quietly ratified by a memory lookup.
+            if gap and not made_up:
+                try:
+                    filled, gap = fill_gaps_from_memory(
+                        self.llm, self.memory, decision.goal, gap)
+                except Exception:
+                    filled = {}
+                if filled:
+                    picked = "; ".join(filled.values())
+                    decision = Decision(
+                        decision=decision.decision, goal=decision.goal,
+                        reason=decision.reason, missing=decision.missing,
+                        assumption=((decision.assumption + " — "
+                                     if decision.assumption else "")
+                                    + f"from what I know about you: {picked}"),
+                        addressee=decision.addressee, owes=decision.owes,
+                        continues=decision.continues)
+                    self._memory_filled = dict(filled)
             if gap:
                 decision = Decision(
                     decision=decision.decision, goal=decision.goal,
@@ -1000,6 +1044,11 @@ class Anticipy:
             params = {"source": line, "now": now_line()}
             if channel:
                 params["channel"] = channel
+            for k, v in (getattr(self, "_memory_filled", None) or {}).items():
+                key = re.sub(r"\W+", " ", k).strip().lower()[:48]
+                if key:
+                    params[key] = v
+            self._memory_filled = {}
             if decision.assumption:
                 params["assumption"] = decision.assumption
             # The EFFECTIVE hold: triage's flag OR the policy layer. The owner

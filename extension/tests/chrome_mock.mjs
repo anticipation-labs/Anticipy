@@ -120,7 +120,10 @@ export function installChrome() {
     scripting: {
       executeScript: async ({ target, func }) => {
         const src = func ? String(func) : "";
-        if (src.includes("__anticipyMapPage")) return [{ result: harness.mapPage ? harness.mapPage(target.tabId) : { url: "", title: "", elements: "", text: "" } }];
+        if (src.includes("__anticipyMapPage")) {
+          const m = harness.mapPage ? harness.mapPage(target.tabId) : { url: "", title: "", elements: "", text: "" };
+          return [{ frameId: 0, result: { w: 1280, h: 800, iframes: [], sugg: "", ...m } }];
+        }
         if (src.includes("__anticipySuggestions")) return [{ result: "" }];
         if (src.includes("__anticipyCenter")) return [{ result: { x: 5, y: 5 } }];
         return [{ result: null }];
