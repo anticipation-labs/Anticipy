@@ -36,6 +36,7 @@ const SUPPRESSED = [
   "/ship",
   "/build",
   "/sync",
+  "/ugc", // creator program — also not shoppers
   "/growth", // legacy, redirects to /grow
   "/jobs",
   "/join",

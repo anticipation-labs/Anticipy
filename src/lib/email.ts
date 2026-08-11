@@ -576,3 +576,140 @@ export async function sendApplicantReceipt(
     `.trim(),
   });
 }
+
+// ─── UGC CREATOR PROGRAM ───────────────────────────────────────────
+// Two messages per signup: the owner's copy of everything, and the creator's
+// own record of the link they claimed and the rate they claimed it at.
+
+export async function sendUgcNotification(a: {
+  name: string;
+  email: string;
+  location: string;
+  handle: string;
+  socials: Record<string, string>;
+  answers: { id: string; question: string; answer: string }[];
+  payoutMethod: string;
+  payoutDetail: string;
+  domainOk: boolean;
+  domainReason: string;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  referrer: string | null;
+  storedInDb: boolean;
+}) {
+  const e = escapeHtml;
+  const para = (s: string) => e(s).replace(/\n/g, "<br/>");
+
+  const socialRows = Object.entries(a.socials)
+    .map(
+      ([k, v]) =>
+        `<p style="margin:0 0 5px 0;font-size:14px;"><span style="color:#8a8a8a;text-transform:capitalize;">${e(k)}:</span> ${e(v)}</p>`
+    )
+    .join("");
+
+  const answerBlocks = a.answers
+    .filter((x) => x.answer)
+    .map(
+      (x) => `
+  <div style="margin: 0 0 26px 0;">
+    <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C9A227; font-weight: 600; margin: 0 0 6px 0;">${e(x.question)}</p>
+    <p style="font-size: 15px; line-height: 1.65; color: #1a1a1a; margin: 0;">${para(x.answer)}</p>
+  </div>`
+    )
+    .join("");
+
+  const attribution = [
+    a.utmSource && `source: ${e(a.utmSource)}`,
+    a.utmMedium && `medium: ${e(a.utmMedium)}`,
+    a.utmCampaign && `campaign: ${e(a.utmCampaign)}`,
+    a.referrer && `referrer: ${e(a.referrer)}`,
+  ]
+    .filter(Boolean)
+    .join(" &middot; ");
+
+  return sendMail({
+    to: OWNER_EMAILS,
+    replyTo: a.email,
+    tag: "ugc-signup",
+    subject: `[UGC] ${a.name} — /c/${a.handle}`,
+    html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto; color: #1a1a1a; line-height: 1.6;">
+  ${
+    a.storedInDb
+      ? ""
+      : `<p style="background:#FDECEC;border:1px solid #F5C2C2;border-radius:8px;padding:12px 14px;font-size:13px;color:#8A1F1F;margin:0 0 20px 0;"><strong>Not saved to the database.</strong> The row write failed, so this email is the only copy — and the link below is NOT reserved. Check the anticipy_ugc_creators table exists.</p>`
+  }
+
+  <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C9A227; font-weight: 600; margin: 0 0 8px 0;">New UGC creator</p>
+  <h2 style="margin: 0 0 4px 0; font-size: 21px;">${e(a.name)}</h2>
+  <p style="color: #6b635b; margin: 0 0 18px 0; font-size: 14px;">
+    <a href="mailto:${e(a.email)}" style="color: #C9A227;">${e(a.email)}</a>
+    &middot; ${e(a.location)}
+    ${a.domainOk ? "" : ` &middot; <span style="color:#8A1F1F;">email domain check: ${e(a.domainReason)}</span>`}
+  </p>
+
+  <div style="margin: 0 0 22px 0; padding: 14px 16px; background: #FAF8F5; border-radius: 8px;">
+    <p style="font-size: 15px; margin: 0 0 8px 0;"><strong>Their link:</strong> anticipy.ai/c/${e(a.handle)}</p>
+    <p style="font-size: 14px; margin: 0;"><strong>Pay to:</strong> ${e(a.payoutMethod)} &mdash; ${e(a.payoutDetail)}</p>
+  </div>
+
+  ${socialRows ? `<div style="margin: 0 0 22px 0;">${socialRows}</div>` : ""}
+
+  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 0 0 24px 0;" />
+
+  ${answerBlocks}
+
+  <p style="font-size: 12px; color: #8a8a8a; margin: 20px 0 0 0;">Agreed to ad disclosure and the 90-day paid-usage licence.</p>
+  ${attribution ? `<p style="font-size: 12px; color: #8a8a8a; margin: 8px 0 0 0;">${attribution}</p>` : ""}
+  <p style="font-size: 12px; color: #8a8a8a; margin: 8px 0 0 0;">Reply to this email to reach ${e(a.name)} directly.</p>
+</div>
+    `.trim(),
+  });
+}
+
+export async function sendUgcWelcome(email: string, name: string, handle: string) {
+  const first = escapeHtml(sanitizeHeader(name.split(" ")[0] || "", 60));
+  const h = escapeHtml(handle);
+  const link = `https://anticipy.ai/c/${h}`;
+
+  return sendMail({
+    to: email,
+    bccOwner: false,
+    replyTo: REPLY_TO,
+    tag: "ugc-welcome",
+    subject: `Your Anticipy link: anticipy.ai/c/${sanitizeHeader(handle, 40)}`,
+    html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.7;">
+  <p style="font-size: 16px;">${first ? `${first},` : "Hi,"}</p>
+
+  <p style="font-size: 16px;">You're in. This is your link — it's live right now, and everything you earn is tracked through it.</p>
+
+  <p style="text-align: center; margin: 28px 0;">
+    <a href="${link}" style="display:inline-block;padding:14px 28px;background:#171512;color:#FAF8F4;text-decoration:none;border-radius:100px;font-weight:600;font-size:15px;">${link.replace("https://", "")}</a>
+  </p>
+
+  <p style="font-size: 16px;">Put it in your bio before you post anything. A video without the link earns the flat fee and nothing else.</p>
+
+  <p style="font-size: 15px; line-height: 1.8;">
+    <strong>$25</strong> per video, once it passes 1,000 views.<br/>
+    <strong>$10</strong> for every waitlist signup through your link.<br/>
+    <strong>10%</strong> of every order through your link.
+  </p>
+
+  <p style="font-size: 16px;"><strong>To get paid for a video:</strong> post it, tag <strong>@anticipy</strong>, label it as an ad, then send me the link. Once it clears 1,000 views I'll pay it out.</p>
+
+  <p style="font-size: 15px; color: #6b635b;">Two things you agreed to, so they're not a surprise later: every paid video has to be labelled as an ad — the platform's paid-partnership toggle or #ad in the caption is enough — and we can run your video as an ad for 90 days from the day you send it. You keep the video and can post it wherever you like.</p>
+
+  <p style="font-size: 16px;">Reply to this email if anything's unclear. It reaches me directly.</p>
+
+  <p style="font-size: 16px;">Omar Ebrahim<br/><span style="color:#8a8a8a;font-size:14px;">Founder, Anticipy</span></p>
+
+  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 32px 0;" />
+  <p style="font-size: 13px; color: #8a8a8a;">
+    Anticipation Labs Inc. &middot; <a href="https://anticipy.ai" style="color: #C9A227;">anticipy.ai</a>
+  </p>
+</div>
+    `.trim(),
+  });
+}

@@ -42,6 +42,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.8,
     },
+    // The UGC creator program. /ugc/apply is the form and is noindex.
+    {
+      url: `${baseUrl}/ugc`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
     {
       url: `${baseUrl}/grow`,
       lastModified: new Date(),

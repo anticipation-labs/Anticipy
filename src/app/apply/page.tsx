@@ -4,6 +4,7 @@ import { Tm } from "@/components/Tm";
 import { HIRE_THEME } from "@/components/apply/theme";
 import { ApplyButton, APPLY_BUTTON_CSS } from "@/components/apply/ApplyButton";
 import { ROLES } from "./roles";
+import { PAY } from "@/app/ugc/program";
 
 export const metadata: Metadata = {
   title: "Come build the thing. — Anticipy",
@@ -132,6 +133,26 @@ export default function ApplyHubPage() {
           ))}
         </ol>
 
+        {/* Not a job. Kept visually distinct from the four salaried roles so
+            nobody applies to one thinking it is the other. */}
+        <section className="ugc-block">
+          <div>
+            <p style={{ fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--accent-ink)", margin: "0 0 12px" }}>
+              Not a job — anyone can do this
+            </p>
+            <h2 className="font-serif" style={{ fontSize: "clamp(26px, 3.4vw, 36px)", letterSpacing: "-0.025em", color: "var(--ink)", margin: "0 0 12px" }}>
+              Anticipy UGC Creator
+            </h2>
+            <p style={{ fontSize: 16.5, lineHeight: 1.65, color: "var(--ink-2)", margin: "0 0 18px", maxWidth: "30em" }}>
+              Make videos, get your own link, get paid three ways — ${PAY.perVideo} a
+              video past {PAY.viewFloor.toLocaleString()} views, ${PAY.perWaitlist} per
+              waitlist signup, and {PAY.purchaseSharePct}% of every order through
+              your link.
+            </p>
+            <ApplyButton href="/ugc" label="See how it works" id="hub_ugc" location="mid_page" />
+          </div>
+        </section>
+
         <section style={{ padding: "76px 0 110px" }}>
           <div style={{ width: 38, height: 2, background: "var(--accent)", marginBottom: 18 }} />
           <h2
@@ -182,6 +203,15 @@ export default function ApplyHubPage() {
           font-family: var(--mono); font-size: 12.5px;
           color: var(--accent-ink); white-space: nowrap;
         }
+
+        .ugc-block {
+          margin-top: 56px;
+          padding: 34px;
+          border: 1px solid var(--rule);
+          border-radius: 14px;
+          background: var(--paper-2);
+        }
+        @media (max-width: 620px) { .ugc-block { padding: 24px; margin-top: 40px; } }
 
         .how-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; max-width: 34em; }
         .how-list li { display: flex; gap: 18px; font-size: 16.5px; line-height: 1.65; color: var(--ink); }
