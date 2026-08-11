@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -48,6 +48,7 @@ text and draft your reply. Respond with EXACTLY one JSON object:
 {"intent": "...", "pending_id": "... or null",
  "pending_ids": ["every pending/blocked item their text applies to — one id,
  several, or all of them; [] when none"], "changes": {...} or null,
+ "redo": "the errand they actually wanted, or null",
  "reply": "your next text, 1-2 sentences, conversational"}
 
 Understand them the way a person would — slang, swearing, sarcasm, typos,
@@ -65,6 +66,34 @@ four days from now" — the LAST version is the one they mean. changes must
 carry only the corrected value, never the retracted one, and your reply must
 say the corrected value back so a misread surfaces immediately. A reply that
 repeats a value their own text just corrected away is a misread.
+
+FINISHING IS NOT CANCELLING: "do you wanna finish that", "can you finish
+it", "pick that back up", "let's get that done" — any language about
+finishing, resuming or completing a held or blocked item is a "confirm" of
+THAT item, never a decline. Scrapping something they asked you to finish is
+the opposite of what they said.
+
+ONE PLAN, NOT TWO: when their text redirects a pending item to a different
+place, person, day or thing ("let's do X instead", "make it Earls", "actually
+the blue one"), that IS the pending item, changed — carry the new target in
+changes on that pending_id. Never leave the old version alive beside a new
+one; parallel copies of the same errand is how the wrong one gets executed.
+And a bare follow-up go-ahead ("sounds good", "perfect") applies to whatever
+YOUR OWN last text said you were doing — never to an older sibling item.
+
+WRONG-THING CORRECTIONS: "I told you to book X", "that's not what I asked
+for", "you were supposed to email Y" is a decline of the wrong item AND a
+live request for the right one. Set intent "decline" on the wrong item and
+put the errand they actually wanted — with every detail already given in the
+thread (place, day, time, count) — in "redo". Leaving redo null there strands
+them: the wrong thing dies and the right thing never starts.
+
+RECENT OUTCOMES: "recent_outcomes" lists what just finished, failed or
+stopped. When they ask why nothing is happening, what the status is, or
+complain that you are idle, answer from it truthfully — name what failed or
+stopped and why, and offer to retry (or put the retry in "redo" if they are
+plainly telling you to get on with it). "There are no active requests" is
+never the answer when something of theirs failed minutes ago.
 
 intents:
 - "confirm": an explicit go-ahead for a pending item (any phrasing: "yeah
@@ -121,6 +150,10 @@ Grounding rules (hard):
 - Facts about the owner's life come ONLY from "memory" and the thread. If
   they ask something those don't answer (their usual spot, a name, a date),
   say you're not sure — never invent a plausible-sounding answer.
+- Never claim a booking, reservation, order or draft EXISTS unless a pending
+  item says so, and never carry a detail (a party size, a time) from a
+  cancelled or failed task into a new one as if they had said it — details
+  come from their words in this thread or from what you are explicitly told.
 - When "blocked" is not empty and their message supplies what a blocked task
   needed, say so plainly and that you are getting on with it ("Perfect — I'll
   finish the booking now"). Never ask what the information was for; the
@@ -389,6 +422,15 @@ class Conversation:
             if still:
                 parsed["reply"] = self._still_need(still)
 
+        # A wrong-thing correction carries two acts: kill the wrong item
+        # (handled above as the decline) and START the right one. Dropping
+        # the second half is how "I told you to book Earls" ended with
+        # nothing booked and "there are no active requests".
+        redo = parsed.get("redo")
+        redo_spoken = None
+        if isinstance(redo, str) and redo.strip() and intent in ("decline", "chat"):
+            redo_spoken = self._think(redo.strip(), phone)
+
         reply = parsed.get("reply") or "Got it."
         # Ground the reply in the job actually acted on — the model sometimes
         # drafts its sentence about a different pending item than the one the
@@ -411,6 +453,8 @@ class Conversation:
                         reply = f"Updated — {goal} is still waiting on your go-ahead."
                     else:
                         reply = f"On it — {goal} is moving."
+        if redo_spoken:
+            reply = f"{reply} {redo_spoken}".strip()
         self.say(phone, reply)
         return {"intent": intent, "pending_id": pending_id,
                 "changes": changes, "acted": acted, "reply": reply}
@@ -461,6 +505,28 @@ Use {"facts": {}} when there is nothing durable."""
                             "needs": (needs or kept or "")[:300],
                             "remembered_need": (kept or "")[:300]})
             return out
+        except Exception:
+            return []
+
+    def _recent_outcomes(self) -> list[dict]:
+        """What just finished, failed or stopped — the last hour of closed
+        work. Without it "why are you not booking?" gets answered "there are
+        no active requests" while their job died two minutes earlier."""
+        try:
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)
+                      ).strftime("%Y-%m-%d %H:%M:%S")
+            filt = (f'updated>="{cutoff}" && (status="failed" || '
+                    f'status="done" || status="cancelled")')
+            if self.anticipy.owner_id:
+                filt += f' && owner="{self.anticipy.owner_id}"'
+            r = pb.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 5, "sort": "-updated"},
+                       timeout=10)
+            if not r.ok:
+                return []
+            return [{"goal": j.get("goal", ""), "status": j.get("status", ""),
+                     "outcome": (j.get("result") or "")[:200]}
+                    for j in r.json().get("items", [])]
         except Exception:
             return []
 
@@ -777,6 +843,7 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         memory = [f["fact"] for f in self.anticipy.memory.recall(text, limit=6)]
         payload = json.dumps({"thread": thread, "pending": self._pending(),
                               "blocked": self._blocked(), "memory": memory,
+                              "recent_outcomes": self._recent_outcomes(),
                               "owner_text": text})
         if self.llm and self.llm.live:
             try:
