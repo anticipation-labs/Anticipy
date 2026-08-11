@@ -793,7 +793,7 @@ export function planBlock(plan) {
 export async function runAgentGoal(goal, opts) {
   // Default to a scriptable search page: about:blank can't be script-injected,
   // so mapPage would fail every step and the run would die without acting.
-  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true, facts = "", onTrace = null } = opts;
+  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true, facts = "", onTrace = null, resumeTabId = null } = opts;
 
   // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
   // itself about operating a financial account never even starts — the
@@ -805,10 +805,20 @@ export async function runAgentGoal(goal, opts) {
              result: "refused: operating financial accounts is protected — that one's yours to do" };
   }
 
+  // A parked run's tab IS its state: the site's session, the form already
+  // filled, the OTP prompt on screen. Resuming in a fresh tab throws all of
+  // that away — the verification code the site just sent becomes meaningless
+  // on a brand-new session. So a resume reattaches to the parked tab when it
+  // still exists, exactly where it stopped.
+  let resumeTab = null;
+  if (resumeTabId != null) {
+    try { resumeTab = await chrome.tabs.get(Number(resumeTabId)); } catch (e) { /* gone — start fresh */ }
+  }
+
   // Work out WHERE this happens before opening anything. An explicit
   // start_url on the job still wins — the caller knew something we did not.
   // A null plan means we open exactly what we would have opened before.
-  const plan = (planning && !opts.startUrl)
+  const plan = (planning && !opts.startUrl && !resumeTab)
     ? await planRun(apiKey, model, goal, ownerProfile, scope)
     : null;
   const openAt = (plan && plan.startUrl) || startUrl;
@@ -828,10 +838,13 @@ export async function runAgentGoal(goal, opts) {
   // them piled up. Storage survives service-worker restarts; memory does not.
   try {
     const { agentTabs = [] } = await chrome.storage.local.get(["agentTabs"]);
-    for (const id of agentTabs) { try { await chrome.tabs.remove(id); } catch (e) { /* gone */ } }
+    for (const id of agentTabs) {
+      if (resumeTab && id === resumeTab.id) continue;
+      try { await chrome.tabs.remove(id); } catch (e) { /* gone */ }
+    }
     await chrome.storage.local.set({ agentTabs: [] });
   } catch (e) { /* best effort */ }
-  const tab = await chrome.tabs.create({ url: openAt, active: false });
+  const tab = resumeTab || await chrome.tabs.create({ url: openAt, active: false });
   userCancelledTabs.delete(tab.id);
   // The owner may switch tabs mid-run; keep following where THEY are, so a
   // restore lands on the tab they were actually using. A tab our working tab
@@ -1173,6 +1186,12 @@ export async function runAgentGoal(goal, opts) {
                 if (type === "file" || type === "range") {
                   return `refused: I don't operate ${type} inputs`;
                 }
+                // A readonly input is a picker's display, not a field: the
+                // site sets it from its own calendar/dropdown widget, and no
+                // amount of writing to it will ever take.
+                if (el.readOnly || el.disabled) {
+                  return `refused: this field is ${el.disabled ? "disabled" : "readonly"} — the site sets it from its own picker widget. Click the field to open the picker, then click the value you want in what appears.`;
+                }
                 el.focus();
                 // React/Vue track the value on the node and swallow a plain
                 // assignment's input event, reverting the field while the
@@ -1184,7 +1203,7 @@ export async function runAgentGoal(goal, opts) {
                 fire();
                 // Read it back: only the DOM decides whether it took.
                 if (el.value !== v) {
-                  return `tried to set ${type} to "${v}" but the field now reads "${el.value}" — it did not take`;
+                  return `tried to set ${type} to "${v}" but the field now reads "${el.value}" — it did not take. The site controls this field itself; do NOT set it again — click the field to open its picker and choose the value from what appears.`;
                 }
                 return `set ${type} to "${el.value}"`;
               }

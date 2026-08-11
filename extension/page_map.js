@@ -138,6 +138,9 @@
         // identical to an empty one and the model re-types it forever.
         const v = String(el.value || "").trim();
         if (v) extra = ` [contains "${v.slice(0, 40)}"]`;
+        // A readonly input can only be changed through the widget it fronts —
+        // shown here so the model clicks it open instead of writing to it.
+        if (el.readOnly) extra += " [readonly — click to open its picker]";
       }
       lines.push(`[${idx}] <${role(el)}> ${label(el)}${stateOf(el)}${extra} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
       // 400, not 150: a booking page spends the first hundred on nav and menu

@@ -463,6 +463,9 @@ async function runJobInner(job, params) {
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
         startUrl: params.start_url || undefined,
+        // A resumed job goes back to its own parked tab — session, filled
+        // form and all — instead of starting the world over in a fresh one.
+        resumeTabId: params.resume_tab != null ? params.resume_tab : null,
         stillLive: () => jobStillLive(job.id),
         ...(agentModel ? { model: agentModel } : {}),
         ...(visionModel ? { visionModel } : {}),
@@ -479,7 +482,8 @@ async function runJobInner(job, params) {
         facts: Object.entries(params)
           .filter(([k, v]) => !["source", "say", "now", "lane", "missing",
                                 "authorized", "approved_scope", "needed",
-                                "start_url", "task", "assumption", "note"].includes(k)
+                                "start_url", "task", "assumption", "note",
+                                "resume_tab"].includes(k)
                               && (typeof v === "string" || typeof v === "number")
                               && String(v).length < 200)
           .map(([k, v]) => `  ${k.replace(/_/g, " ")}: ${v}`).join("\n"),
@@ -512,8 +516,12 @@ async function runJobInner(job, params) {
       // the job write so a deleted job row can't strand a hidden tab.
       if (status === "needs_user" && out.tabId != null) {
         await surfaceHandBack(out.tabId, out.result, "needs_user");
+        // Remember WHERE it parked, so the resume lands back in this tab.
+        await updateJob(job.id, { status, result: out.result,
+          params: JSON.stringify({ ...params, resume_tab: out.tabId }) });
+      } else {
+        await updateJob(job.id, { status, result: out.result });
       }
-      await updateJob(job.id, { status, result: out.result });
       // The job row keeps needs_user (the phone offers Try again on it), but
       // in Chrome the honest word for "you cancelled the debugging bar" is
       // stopped, not "I need you".

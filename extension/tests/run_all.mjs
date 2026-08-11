@@ -9,6 +9,7 @@ const suites = [
   "test_agent_loop_focus.mjs",
   "test_background_handback.mjs",
   "test_planner.mjs",
+  "test_resume_tab.mjs",
 ];
 let failed = 0;
 for (const s of suites) {
