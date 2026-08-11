@@ -149,6 +149,15 @@ export async function POST(request: NextRequest) {
     // the whole ladder would be a DevTools exercise ending at the floor.
     const offer = await resolveOfferForRequest();
 
+    // Which UGC creator sent this buyer, if any. /c/<handle> drops this
+    // cookie for 90 days; Stripe metadata is what carries it across the
+    // hosted checkout, since the webhook fires server-to-server and can see
+    // nothing else about the browser that started the session.
+    const creatorRef = (request.cookies.get("ap_ref")?.value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "")
+      .slice(0, 24);
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [{ price: PREORDER_PRICE_ID, quantity: 1 }],
@@ -201,6 +210,7 @@ export async function POST(request: NextRequest) {
         offer_tier: offer?.tierKey ?? "",
         offer_amount_off_cents: String(offer?.amountOffCents ?? 0),
         holdout_arm: offer?.arm ?? "",
+        creator_ref: creatorRef,
       },
       success_url: `${origin}/pre-orders/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pre-orders/purchase?canceled=1`,

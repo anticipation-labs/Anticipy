@@ -7,6 +7,10 @@ import {
   sendOwnerPreorderNotification,
 } from "@/lib/email";
 import { captureServer, emailHashServer } from "@/lib/analytics-server";
+import { PAY as UGC_PAY } from "@/app/ugc/program";
+
+
+const CREATOR_SHARE_PCT = UGC_PAY.purchaseSharePct;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -103,6 +107,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     marketing_opt_in: session.metadata?.marketing_opt_in === "true",
     agreement_version: session.metadata?.agreement_version ?? "v1-2026-05-27",
     metadata: {
+      // Creator attribution, frozen at payment time. The rate is stored
+      // alongside the ref rather than looked up later, so raising the
+      // program's share never silently restates what was already owed.
+      creator_ref: session.metadata?.creator_ref || null,
+      creator_share_pct: session.metadata?.creator_ref
+        ? CREATOR_SHARE_PCT
+        : null,
+      creator_owed_cents: session.metadata?.creator_ref
+        ? Math.round(((session.amount_total ?? 0) * CREATOR_SHARE_PCT) / 100)
+        : null,
       checkout_consent_collection: session.consent ?? null,
       payment_link: session.payment_link ?? null,
     },
