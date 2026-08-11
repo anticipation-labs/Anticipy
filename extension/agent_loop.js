@@ -105,6 +105,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
                 } catch (_) { return ""; }
               })()
             + "\nIf a required field is something you do NOT have here, do not guess and do not give up: stop with needs_user naming EXACTLY what you need (e.g. \"I need your date of birth to finish the reservation\"). She will ask him, remember the answer, and this task will resume by itself."
+            + "\nIdentity fields (name, date of birth, address) take ONLY a value listed above, verbatim. A name is NOT derivable from an email address, a username, or a company — inventing one books under a fake identity. Not listed = needs_user."
           : "\n\nTHE OWNER: their name, email and phone are NOT on file. If a form needs them, stop with needs_user and say exactly which details you need.";
         const factsBlock = facts
           ? `\n\nFACTS ALREADY GIVEN (from the owner and the task record — set form fields to these; never ask for any of them):\n${facts}`
@@ -1199,6 +1200,11 @@ export async function runAgentGoal(goal, opts) {
           stuckStreak++;
           const sig = JSON.stringify(["select", decision.index, decision.option || ""]);
           actionCounts[sig] = (actionCounts[sig] || 0) + 1;
+          if (actionCounts[sig] >= 4) {
+            return (handBack = true) && { status: "needs_user",
+              result: `I got stuck: setting "${decision.option}" on ${state.url.slice(0, 100)} kept failing (${out.slice(0, 120)}). Tell me what to use instead.`,
+              tabId: tab.id };
+          }
           if (actionCounts[sig] >= 2) {
             history.push(`step ${step}: select ${decision.index} "${decision.option}" -> ${out}\nBLOCKED — that option does not exist on this page and asking again won't create it. If the agreed value is genuinely not offered, stop with needs_user and name what IS available; otherwise pick from the real options.`);
             continue;
@@ -1215,6 +1221,15 @@ export async function runAgentGoal(goal, opts) {
         actionCounts[sig] = (actionCounts[sig] || 0) + 1;
         if (actionCounts[sig] > 2) {
           stuckStreak++;
+          // A fifth identical attempt means the model is wedged, not working.
+          // Burning the remaining budget on it ends in "max steps reached"
+          // with nothing to show; an honest hand-back names the wall instead.
+          if (actionCounts[sig] >= 5) {
+            return (handBack = true) && { status: "needs_user",
+              result: `I got stuck: ${JSON.stringify(decision).slice(0, 120)} on ${state.url.slice(0, 100)} kept doing nothing. `
+                + `The page would not accept it and I won't keep hammering. Tell me how to proceed or what to use instead.`,
+              tabId: tab.id };
+          }
           if (actionCounts[sig] === 3) {
             // A wedged overlay (date pickers etc.) eats coordinate clicks;
             // Escape usually dismisses it and unblocks the flow. The element

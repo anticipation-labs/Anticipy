@@ -133,6 +133,11 @@
         const fmt = t === "date" ? "YYYY-MM-DD" : t === "month" ? "YYYY-MM"
           : t === "time" ? "HH:MM" : "YYYY-MM-DDTHH:MM";
         extra = ` (${t} field — use select action with option in the exact format ${fmt}${el.value ? `; currently "${el.value}"` : ""})`;
+      } else if ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && "value" in el) {
+        // What the field currently holds. Without this a filled field looks
+        // identical to an empty one and the model re-types it forever.
+        const v = String(el.value || "").trim();
+        if (v) extra = ` [contains "${v.slice(0, 40)}"]`;
       }
       lines.push(`[${idx}] <${role(el)}> ${label(el)}${stateOf(el)}${extra} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
       // 400, not 150: a booking page spends the first hundred on nav and menu
