@@ -42,7 +42,6 @@ CREATE TABLE IF NOT EXISTS public.anticipy_ugc_creators (
   -- retroactively to somebody who joined under the old one.
   terms_per_video        integer,
   terms_view_floor       integer,
-  terms_per_waitlist     integer,
   terms_purchase_pct     integer,
 
   status       text NOT NULL DEFAULT 'pending',

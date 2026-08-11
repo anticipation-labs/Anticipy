@@ -4,7 +4,7 @@ import { HIRE_THEME } from "@/components/apply/theme";
 
 export const metadata: Metadata = {
   title: "Become an Anticipy UGC Creator",
-  description: "Make videos, get your own link, get paid three ways.",
+  description: "Make videos, get your own link, get paid twice.",
   alternates: { canonical: "https://www.anticipy.ai/ugc/apply" },
   // /ugc is the page worth indexing; this is the form behind it.
   robots: { index: false, follow: true },

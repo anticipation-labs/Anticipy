@@ -12,8 +12,8 @@ const REF_COOKIE_DAYS = 90;
  * A creator's link: anticipy.ai/c/<handle>.
  *
  * Drops a first-party cookie naming the creator, then sends the visitor to
- * the homepage — the two things a creator earns on, the waitlist and a
- * pre-order, both start from there.
+ * the homepage, since that is where a pre-order starts and a pre-order is
+ * what the creator earns a share of.
  *
  * An unknown handle redirects to the homepage rather than 404ing. The link
  * will be printed in bios and burned into video captions where it cannot be

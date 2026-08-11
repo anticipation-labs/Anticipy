@@ -165,7 +165,6 @@ export async function POST(request: NextRequest) {
     // Frozen at signup so a later rate change is never applied backwards.
     terms_per_video: PAY.perVideo,
     terms_view_floor: PAY.viewFloor,
-    terms_per_waitlist: PAY.perWaitlist,
     terms_purchase_pct: PAY.purchaseSharePct,
     utm_source: str(form.get("utmSource"), 120) || null,
     utm_medium: str(form.get("utmMedium"), 120) || null,

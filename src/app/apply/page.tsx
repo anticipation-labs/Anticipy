@@ -144,10 +144,9 @@ export default function ApplyHubPage() {
               Anticipy UGC Creator
             </h2>
             <p style={{ fontSize: 16.5, lineHeight: 1.65, color: "var(--ink-2)", margin: "0 0 18px", maxWidth: "30em" }}>
-              Make videos, get your own link, get paid three ways — ${PAY.perVideo} a
-              video past {PAY.viewFloor.toLocaleString()} views, ${PAY.perWaitlist} per
-              waitlist signup, and {PAY.purchaseSharePct}% of every order through
-              your link.
+              Make videos, get your own link, get paid twice — ${PAY.perVideo} a
+              video past {PAY.viewFloor.toLocaleString()} views, and{" "}
+              {PAY.purchaseSharePct}% of every order through your link.
             </p>
             <ApplyButton href="/ugc" label="See how it works" id="hub_ugc" location="mid_page" />
           </div>

@@ -693,8 +693,7 @@ export async function sendUgcWelcome(email: string, name: string, handle: string
 
   <p style="font-size: 15px; line-height: 1.8;">
     <strong>$25</strong> per video, once it passes 1,000 views.<br/>
-    <strong>$10</strong> for every waitlist signup through your link.<br/>
-    <strong>10%</strong> of every order through your link.
+    <strong>15%</strong> of every order through your link.
   </p>
 
   <p style="font-size: 16px;"><strong>To get paid for a video:</strong> post it, tag <strong>@anticipy</strong>, label it as an ad, then send me the link. Once it clears 1,000 views I'll pay it out.</p>

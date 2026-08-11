@@ -6,12 +6,12 @@ import { ApplyButton, APPLY_BUTTON_CSS } from "@/components/apply/ApplyButton";
 import { PAY, PAY_LINES, LINK_BASE, AGREEMENTS } from "./program";
 
 export const metadata: Metadata = {
-  title: "Anticipy UGC Creator — get paid three ways",
-  description: `$${PAY.perVideo} a video past ${PAY.viewFloor.toLocaleString()} views, $${PAY.perWaitlist} per waitlist signup, and ${PAY.purchaseSharePct}% of every order through your link.`,
+  title: "Anticipy UGC Creator — get paid twice",
+  description: `$${PAY.perVideo} a video past ${PAY.viewFloor.toLocaleString()} views, and ${PAY.purchaseSharePct}% of every order through your link.`,
   alternates: { canonical: "https://www.anticipy.ai/ugc" },
   openGraph: {
     title: "Anticipy UGC Creator",
-    description: "Make videos. Get your own link. Get paid three ways.",
+    description: "Make videos. Get your own link. Get paid twice.",
     url: "https://www.anticipy.ai/ugc",
     type: "website",
   },
@@ -24,7 +24,7 @@ const RULES: { q: string; a: string }[] = [
   },
   {
     q: "When do I get paid?",
-    a: "Send me the link once it clears the view floor and I'll pay it out. Link earnings — waitlist signups and orders — are tallied and paid at the end of each month.",
+    a: "Send me the link once it clears the view floor and I'll pay it out. Your share of anything the link sells is tallied and paid at the end of each month.",
   },
   {
     q: "Do I have to say it's an ad?",
@@ -36,7 +36,7 @@ const RULES: { q: string; a: string }[] = [
   },
   {
     q: "What if nobody buys?",
-    a: `You still get $${PAY.perVideo} for every video that clears the view floor. The link earnings are on top, not instead.`,
+    a: `You still get $${PAY.perVideo} for every video that clears the view floor. The ${PAY.purchaseSharePct}% is on top, not instead.`,
   },
   {
     q: "Can I be anywhere?",
@@ -84,7 +84,7 @@ export default function UgcPage() {
           >
             Make videos.
             <br />
-            Get paid three ways.
+            Get paid twice.
           </h1>
           <p style={{ fontSize: "clamp(17px, 2vw, 20px)", lineHeight: 1.55, color: "var(--ink)", margin: "30px 0 0", maxWidth: "32em" }}>
             You get your own link, you post what you want, and you earn on the
@@ -118,7 +118,7 @@ export default function UgcPage() {
             <li><span className="how-num">01</span><span>Sign up and pick your link — <span style={{ fontFamily: "var(--mono)" }}>{LINK_BASE}yourname</span>. Put it in your bio.</span></li>
             <li><span className="how-num">02</span><span>Make a video. Post it on your own channel, tag <strong>@anticipy</strong>, label it as an ad.</span></li>
             <li><span className="how-num">03</span><span>Send me the link. Past {PAY.viewFloor.toLocaleString()} views, that&apos;s ${PAY.perVideo}.</span></li>
-            <li><span className="how-num">04</span><span>Anything your link brings in — waitlist signups, orders — is paid on top at the end of the month.</span></li>
+            <li><span className="how-num">04</span><span>Anything your link sells earns you {PAY.purchaseSharePct}% on top, paid at the end of the month.</span></li>
           </ol>
         </section>
 

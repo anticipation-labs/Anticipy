@@ -587,7 +587,7 @@ export function UgcForm() {
                   Anticipy UGC Creator
                 </p>
                 <h1 className="font-serif" style={{ fontSize: "clamp(30px, 5vw, 52px)", lineHeight: 1.04, letterSpacing: "-0.03em", margin: 0, color: "var(--ink)" }}>
-                  Make videos. Get paid three ways.
+                  Make videos. Get paid twice.
                 </h1>
                 <ul className="ugc-pay">
                   {PAY_LINES.map((l) => (

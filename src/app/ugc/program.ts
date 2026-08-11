@@ -13,10 +13,8 @@ export const PAY = {
   perVideo: 25,
   /** A video below this does not earn the flat fee. */
   viewFloor: 1000,
-  /** Paid per waitlist signup attributed to a creator's link. */
-  perWaitlist: 10,
   /** Share of each pre-order attributed to a creator's link. */
-  purchaseSharePct: 10,
+  purchaseSharePct: 15,
 } as const;
 
 /** The list price a creator's share is calculated against, in dollars. */
@@ -27,11 +25,6 @@ export const PAY_LINES: { amount: string; label: string; detail: string }[] = [
     amount: `$${PAY.perVideo}`,
     label: "per video",
     detail: `Once it passes ${PAY.viewFloor.toLocaleString()} views. Post it, tag us, send us the link.`,
-  },
-  {
-    amount: `$${PAY.perWaitlist}`,
-    label: "per waitlist signup",
-    detail: "Anyone who joins the waitlist through your link.",
   },
   {
     amount: `${PAY.purchaseSharePct}%`,
