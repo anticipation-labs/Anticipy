@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { HIRE_THEME } from "./theme";
 import { Tm } from "@/components/Tm";
+import { ApplyButton, APPLY_BUTTON_CSS } from "./ApplyButton";
 import type { Role } from "@/app/apply/roles";
 
 /**
@@ -125,6 +126,16 @@ export function RolePage({ role, content }: { role: Role; content: RolePageConte
               somebody reads three screens of prose deciding whether to apply. */}
           <aside className="rp-rail">
             <div className="rp-rail-inner">
+              <div className="rp-rail-cta">
+                <ApplyButton
+                  href={`/apply/start?role=${role.slug}`}
+                  label="Apply"
+                  size="md"
+                  block
+                  id={`role_rail_apply_${role.slug}`}
+                  location="sidebar"
+                />
+              </div>
               {spec.map(([label, value]) => (
                 <div key={label} className="rp-spec">
                   <span style={railLabel}>{label}</span>
@@ -162,25 +173,11 @@ export function RolePage({ role, content }: { role: Role; content: RolePageConte
             ))}
 
             <div style={{ marginTop: 60, paddingTop: 36, borderTop: "1px solid var(--rule)" }}>
-              <Link
+              <ApplyButton
                 href={`/apply/start?role=${role.slug}`}
-                className="rounded-pill rp-cta"
-                data-cta-id={`role_apply_${role.slug}`}
-                data-cta-location="final_cta"
-                data-cta-type="contact"
-                data-cta-style="primary"
-                style={{
-                  display: "inline-block",
-                  background: "var(--ink)",
-                  color: "var(--paper)",
-                  padding: "15px 34px",
-                  fontSize: 15.5,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                }}
-              >
-                Apply for this role →
-              </Link>
+                label="Apply for this role"
+                id={`role_apply_${role.slug}`}
+              />
               <p style={{ fontSize: 13.5, lineHeight: 1.7, color: "var(--ink-2)", margin: "20px 0 0" }}>
                 No cover letter, no resume required. Omar reads every application himself.
               </p>
@@ -189,7 +186,25 @@ export function RolePage({ role, content }: { role: Role; content: RolePageConte
         </div>
       </div>
 
+      <div className="rp-sticky">
+        <span className="rp-sticky-pay">{role.comp}</span>
+        <ApplyButton
+          href={`/apply/start?role=${role.slug}`}
+          label="Apply"
+          size="md"
+          id={`role_sticky_apply_${role.slug}`}
+          location="sticky_bar"
+        />
+      </div>
+
       <style dangerouslySetInnerHTML={{ __html: `
+        ${APPLY_BUTTON_CSS}
+
+        .rp-rail-cta { margin-bottom: 4px; }
+        /* The fixed bar is mobile-only; on desktop the rail CTA is always in
+           view already and a second one would be noise. */
+        .rp-sticky { display: none; }
+
         .rp-grid {
           display: grid;
           grid-template-columns: 176px 1fr;
@@ -198,7 +213,11 @@ export function RolePage({ role, content }: { role: Role; content: RolePageConte
           padding: 64px 0 110px;
           align-items: start;
         }
-        .rp-rail { grid-area: rail; }
+        /* The grid sets align-items:start, which collapses this cell to its
+           own height — and a sticky child needs a taller containing block to
+           have anywhere to travel. Stretching it across both rows is what
+           actually makes the Apply button follow the read. */
+        .rp-rail { grid-area: rail; align-self: stretch; }
         .rp-intro { grid-area: intro; }
         .rp-body { grid-area: body; }
         .rp-rail-inner { position: sticky; top: 48px; display: grid; gap: 26px; }
@@ -213,10 +232,29 @@ export function RolePage({ role, content }: { role: Role; content: RolePageConte
           .rp-grid {
             grid-template-columns: 1fr;
             grid-template-areas: 'intro' 'rail' 'body';
-            padding: 40px 0 80px;
+            padding: 40px 0 116px;
           }
           .rp-rail { margin: 34px 0 8px; }
           .rp-rail-inner { position: static; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+          .rp-rail-cta { display: none; }
+
+          .rp-sticky {
+            display: flex;
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            z-index: 30;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+            background: var(--paper);
+            border-top: 1px solid var(--rule);
+            box-shadow: 0 -8px 24px rgba(23, 21, 18, 0.06);
+          }
+          .rp-sticky-pay {
+            font-family: var(--mono); font-size: 12px;
+            color: var(--accent-ink); line-height: 1.35;
+          }
         }
         @media (max-width: 460px) {
           .rp-rail-inner { grid-template-columns: 1fr; gap: 0; }

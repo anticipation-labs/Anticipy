@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Tm } from "@/components/Tm";
 import { HIRE_THEME } from "@/components/apply/theme";
+import { ApplyButton, APPLY_BUTTON_CSS } from "@/components/apply/ApplyButton";
 import { ROLES } from "./roles";
 
 export const metadata: Metadata = {
@@ -26,12 +27,16 @@ const HOW = [
 /**
  * The listings hub.
  *
- * The product is the argument for the job, so the pendant opens the page and
- * is the only dark thing on it. Roles are a table, not cards: four rows of
- * title / what it is / what it pays is the shape an engineer scans in one
- * pass, and a card grid would pad the same four facts into four boxes.
+ * Every row carries its own Apply button straight into the form, and the page
+ * opens with one. Previously the only way in was an arrow glyph at the end of
+ * a row, which nobody reads as a button — the application was the thing this
+ * page exists for and the hardest thing on it to find.
  *
- * No motion. The page renders and sits still.
+ * The row splits into two separate links rather than one nested pair: the
+ * title area goes to the role page to be read, the pill goes straight to the
+ * form for somebody who already knows which job they want.
+ *
+ * No motion beyond hover. The page renders and sits still.
  */
 export default function ApplyHubPage() {
   return (
@@ -67,67 +72,67 @@ export default function ApplyHubPage() {
           </span>
         </header>
 
-        <div className="hub-top">
-          <div>
-            <h1
-              className="font-serif"
-              style={{
-                fontSize: "clamp(40px, 7vw, 76px)",
-                lineHeight: 0.98,
-                letterSpacing: "-0.03em",
-                color: "var(--ink)",
-                margin: 0,
-              }}
-            >
-              Come build
-              <br />
-              the thing.
-            </h1>
-            <p style={{ fontSize: "clamp(17px, 2vw, 20px)", lineHeight: 1.55, color: "var(--ink)", margin: "30px 0 0", maxWidth: "30em" }}>
+        <section className="hub-hero">
+          <h1
+            className="font-serif"
+            style={{
+              fontSize: "clamp(44px, 9vw, 104px)",
+              lineHeight: 0.94,
+              letterSpacing: "-0.035em",
+              color: "var(--ink)",
+              margin: 0,
+            }}
+          >
+            Come build the thing.
+          </h1>
+
+          <div className="hub-hero-body">
+            <p style={{ fontSize: "clamp(17px, 2vw, 20px)", lineHeight: 1.55, color: "var(--ink)", margin: 0 }}>
               Anticipy is a pendant that listens while you talk and does the
               things you mention. No wake word, no &ldquo;hey pendant.&rdquo;
               You say it to whoever you&apos;re with, and an agent on your
               computer quietly handles it.
             </p>
-            <p style={{ fontSize: 16, lineHeight: 1.7, color: "var(--ink-2)", margin: "18px 0 0", maxWidth: "30em" }}>
+            <p style={{ fontSize: 16, lineHeight: 1.7, color: "var(--ink-2)", margin: "16px 0 0" }}>
               I&apos;m hiring four people to build it with me. No cover letter,
               no resume. I read every application myself.
             </p>
-          </div>
 
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/media/hiring/pendant.jpg"
-            alt="The Anticipy pendant, chain coiled around it, on black slate."
-            className="hub-shot"
-            width={1632}
-            height={918}
-          />
-        </div>
+            <div className="hub-cta">
+              <ApplyButton
+                href="/apply/start"
+                label="Start your application"
+                id="hub_primary_apply"
+                location="hero"
+              />
+              <span style={{ fontSize: 14, color: "var(--ink-2)" }}>
+                Takes a few minutes. Your answers save as you go.
+              </span>
+            </div>
+          </div>
+        </section>
 
         <ol className="role-table">
           {ROLES.map((r) => (
-            <li key={r.key}>
-              <Link
-                href={`/${r.slug}`}
-                className="role-row"
-                data-cta-id={`hub_role_${r.slug}`}
-                data-cta-location="mid_page"
-                data-cta-type="contact"
-                data-cta-style="secondary"
-              >
+            <li key={r.key} className="role-row">
+              <Link href={`/${r.slug}`} className="role-main">
                 <span className="role-name font-serif">{r.label}</span>
                 <span className="role-line">{r.tagline}</span>
-                <span className="role-pay">{r.comp}</span>
-                <span className="role-arrow" aria-hidden>
-                  →
-                </span>
+                <span className="role-read">Read the role →</span>
               </Link>
+              <span className="role-pay">{r.comp}</span>
+              <ApplyButton
+                href={`/apply/start?role=${r.slug}`}
+                label="Apply"
+                size="md"
+                id={`hub_apply_${r.slug}`}
+                location="mid_page"
+              />
             </li>
           ))}
         </ol>
 
-        <section style={{ padding: "80px 0 110px" }}>
+        <section style={{ padding: "76px 0 110px" }}>
           <div style={{ width: 38, height: 2, background: "var(--accent)", marginBottom: 18 }} />
           <h2
             className="font-serif"
@@ -147,29 +152,36 @@ export default function ApplyHubPage() {
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
-        .hub-top { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; padding: 72px 0 76px; }
-        .hub-shot { width: 100%; height: auto; display: block; border-radius: 3px; }
+        ${APPLY_BUTTON_CSS}
+
+        .hub-hero { padding: 76px 0 72px; }
+        .hub-hero-body { max-width: 34em; margin-top: 34px; }
+        .hub-cta { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 34px; }
 
         .role-table { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
-        .role-table li { border-bottom: 1px solid var(--rule); }
         .role-row {
           display: grid;
-          grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.95fr) auto 22px;
-          gap: 28px;
-          align-items: baseline;
-          padding: 26px 4px;
-          text-decoration: none;
-          transition: background 180ms ease, padding-left 180ms ease;
+          grid-template-columns: minmax(0, 1fr) auto auto;
+          gap: 32px;
+          align-items: center;
+          border-bottom: 1px solid var(--rule);
+          padding: 22px 4px;
+          transition: background 160ms ease;
         }
-        .role-row:hover { background: var(--paper-2); padding-left: 14px; }
-        .role-name { font-size: clamp(18px, 1.9vw, 22px); letter-spacing: -0.02em; color: var(--ink); }
-        .role-line { font-size: 15.5px; line-height: 1.5; color: var(--ink-2); }
+        .role-row:hover { background: var(--paper-2); }
+        .role-main { display: block; text-decoration: none; }
+        .role-name { display: block; font-size: clamp(19px, 2.1vw, 24px); letter-spacing: -0.02em; color: var(--ink); }
+        .role-line { display: block; font-size: 15.5px; line-height: 1.5; color: var(--ink-2); margin-top: 5px; }
+        .role-read {
+          display: inline-block; margin-top: 9px;
+          font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+          text-transform: uppercase; color: var(--accent-ink);
+        }
+        .role-main:hover .role-read { text-decoration: underline; text-underline-offset: 3px; }
         .role-pay {
-          font-family: var(--mono);
-          font-size: 12.5px; color: var(--accent-ink); white-space: nowrap;
+          font-family: var(--mono); font-size: 12.5px;
+          color: var(--accent-ink); white-space: nowrap;
         }
-        .role-arrow { font-size: 17px; color: var(--accent); justify-self: end; transition: transform 180ms ease; }
-        .role-row:hover .role-arrow { transform: translateX(4px); }
 
         .how-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; max-width: 34em; }
         .how-list li { display: flex; gap: 18px; font-size: 16.5px; line-height: 1.65; color: var(--ink); }
@@ -178,12 +190,15 @@ export default function ApplyHubPage() {
           font-size: 11.5px; color: var(--accent-ink); padding-top: 5px; flex-shrink: 0;
         }
 
-        @media (max-width: 900px) {
-          .hub-top { grid-template-columns: 1fr; gap: 40px; padding: 48px 0 56px; }
-          .role-row { grid-template-columns: 1fr auto; gap: 8px 20px; padding: 22px 4px; }
-          .role-line { grid-column: 1 / -1; }
+        @media (max-width: 820px) {
+          .hub-hero { padding: 52px 0 48px; }
+          .role-row { grid-template-columns: 1fr auto; gap: 14px 18px; padding: 20px 4px; }
+          .role-main { grid-column: 1 / -1; }
+          .role-pay { align-self: center; }
+        }
+        @media (max-width: 420px) {
+          .role-row { grid-template-columns: 1fr; }
           .role-pay { grid-column: 1; }
-          .role-arrow { grid-column: 2; grid-row: 1; }
         }
       ` }} />
     </main>
