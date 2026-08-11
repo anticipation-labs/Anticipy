@@ -124,6 +124,11 @@ class LLM:
         payload = {
             "model": self.model,
             "temperature": temperature,
+            # A fixed seed (passed through to providers that honour it) so a
+            # classification is a function of its words, not of which replica
+            # served the request. Judgment being a coin flip across identical
+            # runs is itself a bug.
+            "seed": 11,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

@@ -31,7 +31,7 @@ from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
                            NOT_HIS, check_sufficiency, fill_gaps_from_memory,
-                           owner_is_party,
+                           owner_is_party, ends_in_the_world,
                            unsupported_names,
                            unsupported_counts, read_into_a_machine,
                            not_speech_evidence,
@@ -724,6 +724,16 @@ class Anticipy:
             # a question is only worth his attention when the unknown blocks
             # something consequential — and that path holds a card and asks
             # exactly once, below.
+            # The verb regex is a coin flip on sealed plans: the model words
+            # the same committed dinner "book X" one run and "plan X" the
+            # next, and "plan" reads as read-only — the whole thing went
+            # quiet. When the WORDING says read-only, one isolated question
+            # judges the SUBSTANCE: a plan that inherently ends in a
+            # reservation, order or message is consequential whatever its
+            # verb. Genuine research stays quiet, exactly as before.
+            if goal and not consequential \
+                    and ends_in_the_world(self.llm, line, goal):
+                consequential = True
             quiet_research = bool(goal) and not consequential
             if quiet_research:
                 # Free to do, lands on her desk — queued unheld, said nowhere.

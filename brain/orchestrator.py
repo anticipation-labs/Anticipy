@@ -259,13 +259,25 @@ class Brain:
     def __init__(self, llm: Optional[LLM] = None):
         self.llm = llm or LLM()
 
+    SECOND_LOOK = """A transcript line was triaged and the verdict came back
+contradictory: "do nothing", yet a concrete task was extracted from the
+owner's own words. One question, judged on meaning alone: does the OWNER
+himself plainly commit to this plan or errand in the line — agreeing to it,
+sealing it, taking it on — as opposed to it being someone else's promise,
+venting, a hypothetical, or a plan he only heard about?
+
+Reply ONLY with compact JSON: {"owner_committed": true|false}"""
+
     def triage(self, transcript_line: str, candidates: int = 0) -> Decision:
         """`candidates` is how many numbered earlier lines the caller showed.
         It is the only thing that makes a "continues" answer meaningful, and
         it is what an out-of-range number is checked against. Left at 0 — the
         default, and what every existing caller passes — the field is always
         discarded, so this parameter cannot change any current behaviour."""
-        res = self.llm.chat(TRIAGE_SYSTEM, transcript_line)
+        # Judgment is a classification, not prose: sampled at 0 so the same
+        # words get the same verdict every time, instead of a plan being
+        # caught on two runs out of three.
+        res = self.llm.chat(TRIAGE_SYSTEM, transcript_line, temperature=0.0)
         try:
             raw = json.loads(_extract_json(res.text))
         except Exception:
@@ -287,6 +299,24 @@ class Brain:
         if owes not in OWES:
             owes = None       # no answer changes nothing: the honesty wall
         continues = _continues(raw.get("continues"), candidates)
+        # An "ignore" that still names a concrete task is the model
+        # contradicting itself — the exact shape of a real plan slipping by
+        # ("let's do it" sealed a dinner; verdict said nothing to do). One
+        # isolated second look settles it; anything but a clear yes stays
+        # ignored, so venting and other people's promises are unaffected.
+        if decision == "ignore" and goal and raw.get("owes") != "other":
+            try:
+                second = self.llm.chat(self.SECOND_LOOK, transcript_line,
+                                       temperature=0.0)
+                if json.loads(_extract_json(second.text)).get(
+                        "owner_committed") is True:
+                    decision = "act"
+                    # A commitment of his own IS the answer to whose job it
+                    # is — without this the flipped verdict worked silently.
+                    if owes in (None, "nobody"):
+                        owes = "owner"
+            except Exception:
+                pass
         return Decision(
             decision=decision,
             goal=goal,
@@ -688,6 +718,37 @@ def owner_is_party(llm, line: str, goal: str) -> bool:
     except Exception:
         return False
     return raw.get("owner_is_party") is True
+
+
+WORLD_SYSTEM = """A transcript line was overheard, and one task was extracted
+from it. One question, judged on the SUBSTANCE of the plan and never on the
+verb the task happens to be worded with: does seeing this plan through
+inherently END in an action that leaves the owner's world — a reservation
+made, an order placed, a message sent, a payment — as opposed to work that
+only ever reads: research, comparing, looking something up, gathering
+options? A sealed dinner plan ends in a reservation whether the task says
+"book", "plan" or "arrange" it.
+
+Reply ONLY with compact JSON: {"ends_in_the_world": true|false}"""
+
+
+def ends_in_the_world(llm, line: str, goal: str) -> bool:
+    """The tiebreaker for a read-only-WORDED goal. The same sealed dinner
+    comes out of triage as "book dinner at X" one run and "plan dinner at X"
+    the next; the verb regex reads "plan" as read-only and the whole plan
+    went silent — a coin flip on whether he ever got the one text (seen live,
+    2026-08-09). Asked as its own question, the model judges the substance.
+    Only an explicit true escalates; absent, malformed or dead-model replies
+    leave the quiet behaviour exactly as it was."""
+    if not goal or not llm or not getattr(llm, "live", False):
+        return False
+    try:
+        res = llm.chat(WORLD_SYSTEM,
+                       f"HEARD: {line}\n\nTASK: {goal}", temperature=0.0)
+        raw = json.loads(_extract_json(res.text))
+    except Exception:
+        return False
+    return raw.get("ends_in_the_world") is True
 
 
 def check_sufficiency(llm, goal: str) -> list:
