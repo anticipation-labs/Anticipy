@@ -593,6 +593,9 @@ But a choice only the OWNER can make is never discoverable: what time THEY
 want, how many people are coming, which of two options they'd prefer. A
 reservation "tomorrow evening" with no time, or with no party size, cannot be
 made — those are their call, and guessing them books the wrong thing.
+WHICH PLACE is such a choice too: a business with more than one location (a
+chain restaurant, a bank branch, a gym) cannot be booked or visited without
+knowing which location they mean — unless this text names it.
 
 Reply ONLY with compact JSON:
 {"can_start": true|false, "needed": ["<what they would have to be told>"]}"""

@@ -53,6 +53,35 @@ const noNoon = user
            "step 3: select 1 'Tue Aug 11' -> ok\n"
            + "step 4: select 2 '12:00 PM' -> no option matching \"12:00 PM\" — options are: 6:30 PM | 7:00 PM | 7:30 PM");
 
+// Live, 2026-08-11: "Book Earls for lunch tomorrow" named no location; the
+// agent wandered a locations list — Winnipeg, Ambleside, back again — opening
+// reservation widgets on cities the owner never mentioned, for 60 steps. A
+// choice the task never gave is not the agent's to make.
+const noLocation = `WHAT THEY AGREED TO (their one answer, already given):
+Task: Book Earls for lunch tomorrow. They said: "Book it please for two people at 1 PM".
+You have their authority for all of it, to the end. Only a MATERIAL difference from the above may stop you.
+
+FACTS ALREADY GIVEN (from the owner and the task record — set form fields to these; never ask for any of them):
+  time: 1 PM
+  number of people: 2
+
+GOAL: Book Earls for lunch tomorrow
+
+HISTORY:
+step 1: navigate https://earls.ca/locations -> ok
+
+URL: https://earls.ca/locations
+TITLE: Locations | Earls Kitchen + Bar
+ELEMENTS:
+[0] <link> 300 Main Street (Winnipeg) — Make a Reservation
+[1] <link> Ambleside (West Vancouver) — Make a Reservation
+[2] <link> Robson Street (Vancouver) — Make a Reservation
+[3] <link> Yaletown (Vancouver) — Make a Reservation
+[4] <link> Park Royal (West Vancouver) — Make a Reservation
+
+PAGE TEXT:
+Find your Earls. 70 locations across North America.`;
+
 let pass = 0, runs = 3;
 for (let i = 0; i < runs; i++) {
   const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -89,5 +118,22 @@ for (let i = 0; i < runs; i++) {
   console.log(`  no-noon run ${i + 1}: ${ok ? "ok  " : "FAIL"} -> ${JSON.stringify(act).slice(0, 140)}`);
   if (ok) pass2++;
 }
-console.log(`agent defaults replay: set-fields ${pass}/${runs}, honest-stop ${pass2}/${runs}`);
-process.exit(pass === runs && pass2 === runs ? 0 : 1);
+let pass3 = 0;
+for (let i = 0; i < runs; i++) {
+  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model, temperature: 0, response_format: { type: "json_object" },
+      messages: [{ role: "system", content: `Right now it is Tuesday, August 11, 2026, 11:57 AM PDT.\n\n${sys}` },
+                 { role: "user", content: noLocation }] }),
+  });
+  const text = (await r.json()).choices?.[0]?.message?.content ?? "";
+  let act = {};
+  try { act = JSON.parse(text.match(/\{[\s\S]*\}/)[0]); } catch {}
+  const ok = act.action === "needs_user";
+  console.log(`  no-location run ${i + 1}: ${ok ? "ok  " : "FAIL"} -> ${JSON.stringify(act).slice(0, 140)}`);
+  if (ok) pass3++;
+}
+console.log(`agent defaults replay: set-fields ${pass}/${runs}, honest-stop ${pass2}/${runs}, no-location-stop ${pass3}/${runs}`);
+process.exit(pass === runs && pass2 === runs && pass3 === runs ? 0 : 1);
