@@ -483,6 +483,18 @@ async function runJobInner(job, params) {
                               && (typeof v === "string" || typeof v === "number")
                               && String(v).length < 200)
           .map(([k, v]) => `  ${k.replace(/_/g, " ")}: ${v}`).join("\n"),
+        // The step-by-step trace lands on the job row as the agent works, so
+        // a run is auditable after the fact. Throttled: at most one write
+        // every few seconds, always carrying the latest tail.
+        onTrace: (() => {
+          let last = 0;
+          return async (history, final = false) => {
+            const now = Date.now();
+            if (!final && now - last < 4000) return;
+            last = now;
+            await updateJob(job.id, { trace: history.slice(-80).join("\n").slice(-14000) });
+          };
+        })(),
       });
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.

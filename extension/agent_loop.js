@@ -792,7 +792,7 @@ export function planBlock(plan) {
 export async function runAgentGoal(goal, opts) {
   // Default to a scriptable search page: about:blank can't be script-injected,
   // so mapPage would fail every step and the run would die without acting.
-  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true, facts = "" } = opts;
+  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true, facts = "", onTrace = null } = opts;
 
   // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
   // itself about operating a financial account never even starts — the
@@ -1085,7 +1085,11 @@ export async function runAgentGoal(goal, opts) {
         await new Promise((r) => setTimeout(r, Math.round(1500 * (llmFailures + 1))));
         continue;
       }
-      history.push(`step ${step}: ${JSON.stringify(decision).slice(0, 160)}`);
+      history.push(`step ${step}: ${JSON.stringify(decision).slice(0, 160)} @ ${state.url.slice(0, 100)}`);
+      // Persist the trace as we go — "what did it actually click?" must be
+      // answerable from the job record after the run, not only from a
+      // debugger attached at the right moment.
+      if (onTrace) { try { await onTrace(history); } catch (e) { /* audit is best-effort */ } }
 
       if (decision.action === "done") {
         // A done claim is verified against the live page before it's trusted:
@@ -1339,6 +1343,9 @@ export async function runAgentGoal(goal, opts) {
     }
     throw e;
   } finally {
+    // The final trace always lands, including the steps since the last
+    // throttled write — the end of a run is the part worth auditing.
+    if (onTrace && history.length) { try { await onTrace(history, true) } catch (e) { /* best-effort */ } }
     userCancelledTabs.delete(tab.id);
     try { await chrome.debugger.detach({ tabId: tab.id }); } catch (e) { /* already closed */ }
     // Close the working tab. It is only kept when a HUMAN has to look at it
