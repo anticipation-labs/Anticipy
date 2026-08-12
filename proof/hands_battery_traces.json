@@ -1,10 +1,10 @@
 {
- "native_date": [
+ "unnamed_branch": [
   {
    "goal": "agent_goal",
-   "status": "done",
-   "result": "Booked 2026-08-12 at 2:00 PM. #CLINIC-12",
-   "trace": "step 0: {\"action\":\"select\",\"index\":0,\"option\":\"2026-08-12\"} @ http://127.0.0.1:8792/native-date\nstep 0: select 0 \"2026-08-12\" -> refused: this field is readonly \u2014 the site sets it from its own picker widget. Click the field to open the picker, then click the value you want in what appears.\nstep 1: {\"action\":\"click\",\"index\":0} @ http://127.0.0.1:8792/native-date\nstep 2: {\"action\":\"click\",\"index\":4} @ http://127.0.0.1:8792/native-date\nstep 3: {\"action\":\"select\",\"index\":1,\"option\":\"2:00 PM\"} @ http://127.0.0.1:8792/native-date\nstep 3: select 1 \"2:00 PM\" -> selected \"2:00 PM\"\nstep 4: {\"action\":\"click\",\"index\":3} @ http://127.0.0.1:8792/native-date\nstep 5: {\"action\":\"done\",\"result\":\"Booked 2026-08-12 at 2:00 PM. #CLINIC-12\"} @ http://127.0.0.1:8792/native-date"
+   "status": "needs_user",
+   "result": "The task is to book a table at \"Demo Bistro\". The current page shows 6 locations for \"Demo Bistro\". The task does not specify which location to choose. Please specify which location you would like to book at.",
+   "trace": "step 0: {\"action\":\"needs_user\",\"reason\":\"The task is to book a table at \\\"Demo Bistro\\\". The current page shows 6 locations for \\\"Demo Bistro\\\". The task does not speci @ http://127.0.0.1:8792/branches"
   }
  ]
 }

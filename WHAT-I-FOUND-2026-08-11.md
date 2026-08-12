@@ -68,16 +68,31 @@ Your own Chrome is fine — it is on 0.3.9, synced directly from the repo. The
 drift is in the artifact everyone else gets, including you if you ever follow
 your own setup page.
 
-**2. The deployed brain matches no commit in the repo.**
-The running worker prints `brain=ac7aa58025b8`. The committed tip hashes to
-`97fbc7e70868`, and `ac7aa58025b8` matches **none of the last 20 commits**. The
-two newest fix commits — "finishing is not cancelling, one plan not two,
-corrections redo the right thing" and "a resume returns to its parked tab" —
-were written, tested, committed, and **never deployed**. Deploys here are a
-manual command, and it was not run.
+**2. The brain running in production did not match the code on this Mac.**
+The running worker printed `brain=ac7aa58025b8`; the local tip hashed to
+`97fbc7e70868`. Two fix commits that existed here — "finishing is not
+cancelling, one plan not two, corrections redo the right thing" and "a resume
+returns to its parked tab" — were not what production was running.
 
-That is the whole mystery of "you said you fixed it and it's still broken." It
-was fixed. It just was not shipped.
+**And here I got it wrong, in the exact way this project keeps getting burned.**
+I first concluded "production matches no commit at all", because I had only
+walked the history on this Mac. It matched perfectly well — a commit that was
+on GitHub and had never been pulled down here. Two more people's fixes
+("corrections, invented OTPs, prompt-leak plans, evaporating clarifications,
+deflected status") were sitting on the remote, live in production, and absent
+from the working tree I was reasoning about.
+
+I then deployed my local branch over it, which removed those fixes from
+production for about twenty minutes. I caught it when the push was rejected,
+rebased my work on top of theirs so both survive, re-ran everything (412 tests
+green), and redeployed the merged tree.
+
+I am telling you this because it is the same disease as everything else in this
+document, and it bit the person writing the document: **three different places
+each believed they were the truth — this Mac, GitHub, and the running
+container — and nothing forced them to agree.** That is the actual root cause
+behind "fix two, break three". It is not carelessness; it is a missing
+check that takes ten seconds.
 
 ---
 
@@ -132,6 +147,29 @@ Tests: 399 pass (2 new regression guards). All 5 extension suites pass.
 
 ---
 
+## The one thing I would not ship yet
+
+While merging in the two commits that were on GitHub, the same battery caught
+a **regression on the worst failure there is**: given a task that named no
+location, the merged agent (0.4.0) went ahead and **booked at "Vancouver
+Robson"** — a branch nobody chose. The version before it stopped and listed the
+options, which is the correct answer and the whole point of the rule.
+
+That is the Winnipeg failure, and it spends your money at the wrong place.
+
+I am measuring it properly (`proof/ab_unnamed_branch.py`, both versions
+alternating in the same minutes) rather than deciding on one run, because the
+rule lives in the prompt and a prompt rule can be obeyed on one run and not the
+next. Until that comes back, **production keeps serving the older extension**
+— which is safe on this specific point — even though the newer one has a good
+OTP guard in it. A better guard is not worth a wrong booking.
+
+Whatever the count says, the deeper problem is already visible: **"never pick a
+branch they did not name" exists only as a sentence in a prompt.** Nothing in
+code stops it. Compare that to the confirm gate, which lives in the job queue
+where no model can talk its way past it. Anything that spends money should be
+enforced the second way.
+
 ## What is still wrong — the honest list
 
 - **Real hostile sites are still unproven.** My pages reproduce the failure
@@ -143,15 +181,46 @@ Tests: 399 pass (2 new regression guards). All 5 extension suites pass.
   the model *still* tried to write into the field first and learned from the
   refusal. The map telling the truth is necessary but not sufficient; the
   executor's refusal is what actually saves the run.
-- **One lane sits at 80%, not 100%.** Not silence — it still misses sometimes.
-- **A malformed model reply is silently treated as "ignore."** One bad JSON
-  response and the line is dropped with no retry. I did not change it, but it
-  is a real silence source worth closing.
-- **Two cards for one dinner still happens** in that transcript.
-- **Nothing above is live until it is deployed**, which is the very failure
-  this document is about.
+- **Neither lane is at 100%.** It still misses sometimes — just not by going
+  silent any more.
+- **Two cards for one dinner still happens** in that transcript: one "Plan
+  dinner for tomorrow" and one "Confirm dinner reservation…", for a single
+  plan. I saw it and did not fix it.
+- **I did not touch the iPhone app at all.** Nothing here says anything about
+  what you see on your phone.
+- **The pendant is untouched** — this was all phone/brain/browser.
+- **What I fixed, I fixed on the shapes I could reproduce.** Where the real
+  world is nastier than my pages, these fixes will be necessary but not
+  sufficient.
 
 ---
+
+## What is live now
+
+Verified, not assumed:
+
+- **The brain running in production is the code in the repo.** The worker
+  prints `brain=fd8a4d8fd029`; the merged tree hashes to the same. That
+  sentence has not been true for a while.
+- **The zip production hands out is built from the source** (was 0.3.3).
+- **This Mac, GitHub and production are the same commit** — 0 ahead, 0 behind.
+- The database is still sealed to strangers (403), backend healthy.
+
+## The ten-second check that would have prevented all of it
+
+`proof/is_it_live.py`. It asks the three places whether they agree and names
+what to do when they do not:
+
+```
+  git      : 0 ahead, 0 behind github/pendant-system
+  brain    : local fd8a4d8fd029   live fd8a4d8fd029
+  extension: source 0.4.0   served 0.3.9
+```
+
+It found a real drift within a minute of existing — the merge had bumped the
+extension to 0.4.0 while production still served 0.3.9. Run it before you
+believe anything is shipped, and run it before you deploy, because "behind"
+means someone else's fixes are live and you are about to deploy over them.
 
 ## The pattern worth fixing forever
 
