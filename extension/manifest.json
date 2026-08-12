@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Anticipy",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Anticipy's hands on your computer: she does tasks you approved in your own logged-in Chrome. Needs the Anticipy iPhone app.",
   "permissions": [
     "storage",

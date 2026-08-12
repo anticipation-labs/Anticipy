@@ -224,7 +224,7 @@ function extractAction(text) {
 // Second-opinion check on a done claim, against a FRESH page snapshot with no
 // step history to anchor on. Research goals verify by result content; action
 // goals (forms, submissions) verify by what the page actually shows.
-async function verifyDone(apiKey, model, goal, result, tabId) {
+async function verifyDone(apiKey, model, goal, result, tabId, scope = "") {
   let state;
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
   catch { return { verified: true, reason: "page unreadable; claim accepted unverified" }; }
@@ -234,7 +234,11 @@ async function verifyDone(apiKey, model, goal, result, tabId) {
     // it must actually SEE the fields: page text alone (capped at 1500 chars,
     // usually nav and menus) made it reject correct completions, the run
     // ground to maxSteps, and the owner was told a finished task had failed.
-    { role: "user", content: `GOAL: ${goal}\nCLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nFORM STATE:\n${(state.elements || "").slice(0, 3000)}\n\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
+    // The agreement, not just the goal wording: a correction ("make it 6pm
+    // instead") lives in the scope's "They changed: ..." line while the goal
+    // still says 8pm. Verifying against the goal alone rejected a truthful
+    // 6:00 PM confirmation 17 times and reported a finished booking as stuck.
+    { role: "user", content: `GOAL: ${goal}\n${scope ? `WHAT THEY AGREED TO (authoritative — corrected values here OVERRIDE the goal wording):\n${scope}\n` : ""}CLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nFORM STATE:\n${(state.elements || "").slice(0, 3000)}\n\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
   ];
   try {
     const ctl = new AbortController();
@@ -928,6 +932,7 @@ export async function runAgentGoal(goal, opts) {
   const deadIdx = new Set();
   let lastUrl = "";
   let lastDoneClaim = null;
+  let rejectedDones = 0;
   // Only a human-actionable outcome keeps its tab.
   let handBack = false;
   let llmFailures = 0;
@@ -1129,16 +1134,28 @@ export async function runAgentGoal(goal, opts) {
       if (decision.action === "done") {
         // A done claim is verified against the live page before it's trusted:
         // a mistyped form or an unsubmitted page must never report success.
-        let verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
+        let verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id, scope);
         if (!verdict.verified && /load|spinner|progress|wait/i.test(verdict.reason || "")) {
           // The page was mid-load, not wrong — give it a moment and re-check
           // once before rejecting.
           await new Promise((r) => setTimeout(r, 5000));
-          verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
+          verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id, scope);
         }
         if (verdict.verified) return { status: "done", result: decision.result, tabId: tab.id };
         lastDoneClaim = decision.result;
         history.push(`step ${step}: done claim rejected (${verdict.reason})`);
+        // An agent and its auditor disagreeing about the SAME claim on the
+        // SAME page will disagree forever — re-asking burned 17 steps once.
+        // Three strikes and the disagreement itself goes to the owner, with
+        // both sides quoted, instead of a false "got nowhere".
+        rejectedDones++;
+        if (rejectedDones >= 3) {
+          return (handBack = true) && {
+            status: "needs_user",
+            result: `The page looks finished to me — ${String(decision.result).slice(0, 300)} — but my checker keeps disagreeing (${String(verdict.reason).slice(0, 200)}). The page is open for you to confirm.`,
+            tabId: tab.id,
+          };
+        }
         continue;
       }
       if (decision.action === "needs_user") return (handBack = true) && { status: "needs_user", result: decision.reason, tabId: tab.id };
