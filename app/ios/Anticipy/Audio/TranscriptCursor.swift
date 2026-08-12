@@ -81,11 +81,14 @@ struct TranscriptCursor {
     }
 
     private mutating func remember(_ normal: [String], from cut: Int) {
-        guard cut < normal.count else { return }
-        var next = emitted + normal[cut...]
-        // The anchor only ever needs the recent tail — the front of a long day
-        // cannot be revised any more, and keeping all of it would grow without
-        // bound in a process that runs for hours.
+        guard !normal.isEmpty else { return }
+        // The anchor is the hypothesis itself, not the whole day. The
+        // recogniser can only rewrite the window it is currently holding —
+        // words that fell out of it never come back — so anchoring on hours
+        // of accumulated speech only ever ADDS coincidences: a brand-new
+        // sentence full of everyday words was being 'explained' by scattered
+        // matches against old speech and arrived shredded (live, 2026-08-12).
+        var next = normal
         if next.count > TranscriptCursor.alignmentWindow {
             next = Array(next.suffix(TranscriptCursor.alignmentWindow))
         }
@@ -143,13 +146,17 @@ struct TranscriptCursor {
             }
         }
 
-        var i = 0, j = 0, cut = 0
+        var i = 0, j = 0, cut = 0, matched = 0, runLength = 0, bestRun = 0
         while i < n && j < m {
             if E[i] == C[j] {
                 cut = j + 1
+                matched += 1
+                runLength += 1
+                bestRun = max(bestRun, runLength)
                 i += 1
                 j += 1
             } else if lcs[i + 1][j] > lcs[i][j + 1] {
+                runLength = 0
                 i += 1          // a said word the recogniser has since dropped
             } else {
                 // A word the recogniser has since inserted — and, on a tie,
@@ -158,7 +165,32 @@ struct TranscriptCursor {
                 // recogniser merely reshuffles words that were already said,
                 // nothing is said a second time. Saying it twice is the bug
                 // this whole type exists to kill, so ties break that way.
+                runLength = 0
                 j += 1
+            }
+        }
+        // The alignment must EXPLAIN the words it swallows, or it is a
+        // coincidence, not a revision. A brand-new sentence after a window
+        // reset shares its everyday words — "what", "the", "is" — with the
+        // last one, and those scattered matches used to drag the cut across
+        // speech that was never sent: a real conversation arrived as
+        // "Tomorrow you bet" (live, 2026-08-12). A real revision leaves a
+        // signature this checks for — one of:
+        //   • every said word was re-found (an insertion or a reshuffle of
+        //     what was already said: "Cineplex" -> "the Cineplex"), or
+        //   • at least two said words re-found back to back (a window
+        //     collapse keeps a run of the old tail: "...end of August" ->
+        //     "of August"), or
+        //   • the hypothesis contains no word that was not already said (a
+        //     pure reshuffle, nothing new to lose).
+        // Scattered lone matches satisfy none of these; fall back to the
+        // verbatim prefix and let the sentence through whole.
+        if matched < E.count && bestRun < 2 {
+            var pool: [String: Int] = [:]
+            for w in E { pool[w, default: 0] += 1 }
+            for w in C[..<cut] {
+                guard let left = pool[w], left > 0 else { return p }
+                pool[w] = left - 1
             }
         }
         return cut

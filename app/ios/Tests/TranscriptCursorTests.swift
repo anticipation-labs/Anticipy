@@ -154,6 +154,38 @@ enum Cases {
               c.take("email Toby back") == "back")
     }
 
+    /// THE 2026-08-12 LIVE SHRED. A long conversation, flushed sentence by
+    /// sentence; then the window resets and a brand-new sentence arrives. Its
+    /// everyday words — "tomorrow", "we", "for" — all appear somewhere in the
+    /// emitted history, and those scattered coincidences dragged the cut
+    /// across the whole sentence: only "Tomorrow you bet" survived out of
+    /// "How's Earls the one in West Van for tomorrow you bet".
+    static func aNewSentenceIsNotSwallowedByOldWords() {
+        var c = TranscriptCursor()
+        _ = c.take("Hey how are you good good yourself good that's great to "
+                   + "hear we really should grab some food I know we really "
+                   + "have to catch up over dinner and stuff")
+        // The recogniser's window resets: the next hypothesis is a fresh
+        // sentence sharing only everyday words with the history.
+        let out = c.take("How's Earls the one in West Van for tomorrow "
+                         + "you bet")
+        check("a fresh sentence after a reset comes out whole",
+              out.contains("Earls") && out.contains("West Van")
+                  && out.contains("tomorrow") && out.contains("you bet"))
+    }
+
+    /// The same trap with a profanity-shaped tail: "what the fuck is going
+    /// on" arrived live as just "fuck is going on" because "what" and "the"
+    /// matched old speech.
+    static func stopwordsCannotEatTheFrontOfASentence() {
+        var c = TranscriptCursor()
+        _ = c.take("I know what you mean the whole thing is a mess and "
+                   + "the deal needs work on the numbers side")
+        let out = c.take("what the hell is going on")
+        check("the sentence keeps its front",
+              out.contains("what") && out.contains("going on"))
+    }
+
     // ------------------------------------------------------------- the laws
 
     /// LAW 1 — nothing is ever said twice.
@@ -387,6 +419,8 @@ struct TranscriptCursorTests {
         Cases.repeatedWords()
         Cases.aRepeatedWordCannotSwallowSpeech()
         Cases.reorderedWordsAreNotNewSpeech()
+        Cases.aNewSentenceIsNotSwallowedByOldWords()
+        Cases.stopwordsCannotEatTheFrontOfASentence()
         Cases.nothingIsEverSaidTwice()
         Cases.nothingIsLostOnAppend()
         Cases.outputIsAlwaysInOrder()
