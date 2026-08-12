@@ -393,6 +393,26 @@ class Conversation:
             if last:
                 parsed["reply"] = f"Sorry — what I meant was: {last}"
             intent = "chat"
+        elif intent in ("new_request", "chat") and not changes \
+                and self._bare_ack(text):
+            # "Sounds good" after her own "got it, booking it" is warmth,
+            # not work. Re-triaging it forked the plan: a duplicate held
+            # card appeared whose text — "I'll hold off until you give me
+            # the word" — contradicted the booking already running (live
+            # 2026-08-12). A bare acknowledgment releases whatever is
+            # genuinely waiting; with nothing waiting and a plan in motion
+            # it earns a nod, never a new card.
+            if self._pending() and not self._asked_to_cancel():
+                fresh = self._freshest_pending()
+                acted = self._release(fresh, None, owner_text=None) \
+                    if fresh else None
+                intent = "confirm"
+            else:
+                running = self._running()
+                if running:
+                    goal = (running[0].get("goal") or "that").replace("_", " ")
+                    parsed["reply"] = f"On it — {goal} is moving."
+                intent = "chat"
         elif intent == "new_request" and self._pending() and \
                 (verdict := self._about_pending(phone, text)) != "no":
             # A wobbly classification must not FORK the plan: "let's do 7,
@@ -773,6 +793,21 @@ Use {"facts": {}} when there is nothing durable."""
 
     def _is_repair(self, text: str) -> bool:
         return bool(self.REPAIR.match(text.strip()))
+
+    ACK = re.compile(
+        r"^(ok(ay)?|yes|yep|yeah|sure|perfect|sounds? (good|great)|great"
+        r"|cool|nice|awesome|love it|got it|thanks|thank you|amazing)"
+        r"[\s!.\U0001F44D\U0001F44C]*$", re.IGNORECASE)
+
+    def _bare_ack(self, text: str) -> bool:
+        """An acknowledgment carrying no new content of its own."""
+        return bool(self.ACK.match(text.strip()))
+
+    def _running(self) -> list[dict]:
+        try:
+            return self.anticipy._running_jobs()
+        except Exception:
+            return []
 
     def _last_anticipy_line(self, phone: str) -> Optional[str]:
         for turn in reversed(self._thread(phone)):

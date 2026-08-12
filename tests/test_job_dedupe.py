@@ -40,7 +40,8 @@ class FakePB:
 
     def get(self, url, params=None, timeout=None, **kw):
         filt = (params or {}).get("filter", "")
-        want = [s for s in ("awaiting_confirm", "queued") if s in filt]
+        want = [s for s in ("awaiting_confirm", "queued", "running")
+                if f'"{s}"' in filt]
         return self._R({"items": list(reversed(
             [j for j in self.jobs if j["status"] in want]))})
 
@@ -114,6 +115,32 @@ def test_a_vaguer_line_arriving_late_never_drags_a_good_card_backwards(monkeypat
     a._queue_job(full, {}, hold=True)
     a._queue_job("book dinner reservation tomorrow", {}, hold=True)
     assert fake.jobs[0]["goal"] == full, "a later vague line overwrote the details"
+
+
+def test_a_plan_already_running_never_forks_a_second_card(monkeypatch):
+    """Live 2026-08-12: 'Sounds good' after her own 'got it, booking it'
+    went back through triage while the booking job was RUNNING. The dedupe
+    only saw pending jobs, so a duplicate held card appeared whose text
+    contradicted the work in motion."""
+    a, fake = _anticipy(monkeypatch)
+    a._queue_job("book dinner for two at Earls West Vancouver tomorrow at "
+                 "4 PM", {}, hold=True)
+    fake.jobs[0]["status"] = "running"
+    again = a._queue_job("Book dinner for two at Earls West Vancouver "
+                         "tomorrow, Thursday, August 13, at 4 PM", {},
+                         hold=True)
+    assert again == fake.jobs[0]["id"], "the running plan was not recognised"
+    assert len(fake.jobs) == 1, [j["goal"] for j in fake.jobs]
+    assert a._running_dup == fake.jobs[0]["id"]
+
+
+def test_a_running_plan_does_not_swallow_a_different_errand(monkeypatch):
+    a, fake = _anticipy(monkeypatch)
+    a._queue_job("book dinner at Cactus Club tomorrow at 7 PM", {}, hold=True)
+    fake.jobs[0]["status"] = "running"
+    a._queue_job("cancel the gym membership this week", {}, hold=True)
+    assert len(fake.jobs) == 2, [j["goal"] for j in fake.jobs]
+    assert a._running_dup is None
 
 
 def test_two_genuinely_different_errands_both_survive(monkeypatch):

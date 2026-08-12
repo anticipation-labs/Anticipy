@@ -903,7 +903,8 @@ class Anticipy:
                 # _queue_job; only a genuinely NEW card earns the one text.
                 before = {j.get("id") for j in self._pending_jobs()}
                 job_id = self._queue_job(goal, params, hold=True)
-                fresh = bool(job_id) and job_id not in before
+                fresh = (bool(job_id) and job_id not in before
+                         and not getattr(self, "_running_dup", None))
                 if fresh:
                     self.loops.append(LoopRecord(
                         commitment_id=mem.get("commitment_id") or -1,
@@ -1169,21 +1170,38 @@ class Anticipy:
             before_ids = {j.get("id") for j in self._pending_jobs()}
             job_id = self._queue_job(decision.goal, params, hold=held,
                                      explicit=explicit)
-            repeat = not (bool(job_id) and job_id not in before_ids)
-            loop = LoopRecord(
-                commitment_id=mem.get("commitment_id") or -1,
-                what=decision.goal,
-                status="awaiting_ok" if held else "handling",
-                job_id=job_id,
-            )
-            self.loops.append(loop)
+            running_dup = getattr(self, "_running_dup", None)
+            repeat = bool(running_dup) or \
+                not (bool(job_id) and job_id not in before_ids)
+            if not running_dup:
+                loop = LoopRecord(
+                    commitment_id=mem.get("commitment_id") or -1,
+                    what=decision.goal,
+                    status="awaiting_ok" if held else "handling",
+                    job_id=job_id,
+                )
+                self.loops.append(loop)
             # Her words are GENERATED for this exact moment — a template can
             # never sound like a person.
-            handled = self._voice({
-                "situation": "held for approval" if held else "quietly started",
-                "heard": line, "goal": decision.goal,
-                "assumption": decision.assumption,
-            }) or self.say_handling(decision.goal, held)
+            if running_dup:
+                # The plan is ALREADY EXECUTING: never re-ask for approval
+                # ("I'll hold off" about work in motion is a lie in both
+                # directions) and never claim it finished. One reassurance,
+                # and only in-thread — ambient chatter about a moving plan
+                # earns no text at all.
+                handled = (self._voice({
+                    "situation": "he mentioned work that is ALREADY in "
+                                 "motion — one short reassurance; never "
+                                 "re-ask approval, never claim it finished",
+                    "heard": line, "goal": decision.goal,
+                }) or f"Already on it — {decision.goal} is moving.") \
+                    if explicit else None
+            else:
+                handled = self._voice({
+                    "situation": "held for approval" if held else "quietly started",
+                    "heard": line, "goal": decision.goal,
+                    "assumption": decision.assumption,
+                }) or self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
             # texts the owner — their go-ahead releases the held job.
             #
@@ -1294,7 +1312,7 @@ class Anticipy:
                     params["assumption"] = decision.assumption
                 job_id = self._queue_job(decision.goal, params, hold=True,
                                          explicit=explicit)
-                if job_id:
+                if job_id and not getattr(self, "_running_dup", None):
                     self.loops.append(LoopRecord(
                         commitment_id=mem.get("commitment_id") or -1,
                         what=decision.goal, status="awaiting_ok",
@@ -1559,6 +1577,7 @@ class Anticipy:
 
     def _queue_job(self, goal: str, params: dict, hold: bool = False,
                    explicit: bool = False) -> Optional[str]:
+        self._running_dup = None
         # Mentioning the same thing twice must not produce two identical items
         # waiting on the owner. Five copies of "Draft email to Marcus" piled up
         # in production, each one texting him, and every "yes" after that was
@@ -1584,6 +1603,17 @@ class Anticipy:
             if not explicit and self._retracting_mere_talk(goal):
                 return None
         if is_consequential(goal, params, explicit=explicit):
+            # A plan ALREADY MOVING is not a new card. "Sounds good" after
+            # her own "got it, booking it" went back through triage, missed
+            # the running job (the dedupe below only saw pending ones) and
+            # forked a second held card whose text — "I'll hold off until
+            # you give me the word" — contradicted the booking she was doing
+            # at that very moment (live 2026-08-12). One plan in motion
+            # absorbs every re-mention of itself until it lands.
+            for j in self._running_jobs():
+                if self._same_plan(goal, j.get("goal") or ""):
+                    self._running_dup = j["id"]
+                    return j["id"]
             open_plan = self._open_plan
             if open_plan and time.time() - open_plan[1] < OPEN_PLAN_WINDOW:
                 job_id = open_plan[0]
@@ -1986,6 +2016,19 @@ class Anticipy:
             except Exception:
                 pass
         return False
+
+    def _running_jobs(self) -> list[dict]:
+        """Work already released and executing right now."""
+        try:
+            filt = 'status="running"'
+            if self.owner_id:
+                filt = f'({filt}) && owner="{self.owner_id}"'
+            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 10, "sort": "-created"},
+                       timeout=10)
+            return r.json().get("items", []) if r.ok else []
+        except Exception:
+            return []
 
     def _pending_jobs(self) -> list[dict]:
         """Everything still waiting — queued or held for his yes."""
