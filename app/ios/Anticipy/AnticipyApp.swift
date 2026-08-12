@@ -83,6 +83,7 @@ final class AnticipySession: ObservableObject {
     /// When we last threw away a refused key, so recovery retries at a sane
     /// pace rather than on every 3-second poll.
     private var lastTokenRecovery = Date.distantPast
+    private var earsKeyArmed = false
     let listener = PhoneListener()
 
     /// Words spoken with no network used to live in a plain in-memory array.
@@ -136,6 +137,12 @@ final class AnticipySession: ObservableObject {
         listener.speaker = speakerTagger
         listener.onSpeaker = { [weak self] line, tag in
             Task { await self?.heard(line, speaker: tag) }
+        }
+        // Ears telemetry — every recognizer restart, cloud drop and emitted
+        // line's origin lands in the events table, so "where did my words
+        // go" is answered by the data, never by guessing.
+        listener.onDiag = { [weak self] msg in
+            Task { try? await self?.backend.pushEvent(kind: "ears", text: msg) }
         }
         // Re-render views observing the session when the listener changes.
         listener.objectWillChange
@@ -216,6 +223,12 @@ final class AnticipySession: ObservableObject {
             return
         }
         await flushUnsent()
+        // Arm the cloud ears once per launch. Server-held key: no key
+        // configured means the app quietly stays on Apple's recognizer.
+        if !earsKeyArmed, let key = await b.fetchEarsKey() {
+            earsKeyArmed = true
+            listener.setCloudKey(key)
+        }
         // /api/health is NOT behind the guard hook, so "reachable" says nothing
         // about whether our reads are allowed. Only a real read can promote us
         // to .ready — otherwise the app reports itself perfectly healthy while

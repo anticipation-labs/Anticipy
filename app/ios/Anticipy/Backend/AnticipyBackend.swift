@@ -246,6 +246,18 @@ final class AnticipyBackend {
         return (token?.isEmpty == false) ? token : nil
     }
 
+    /// The transcription key for the cloud ears. Server-held so rotating it
+    /// is one env change; empty when the backend has none configured, in
+    /// which case the phone stays on Apple's recognizer alone.
+    func fetchEarsKey() async -> String? {
+        let url = baseURL.appendingPathComponent("ears/key")
+        guard let data = try? await readData(from: url),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        let key = root["deepgram_key"] as? String
+        return (key?.isEmpty == false) ? key : nil
+    }
+
     /// Pair this app to a pendant using the short code the pendant registered.
     func pair(code: String, owner: String) async throws -> Bool {
         let filter = "pair_code=\"\(code)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!

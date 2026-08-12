@@ -38,6 +38,12 @@ final class PhoneListener: NSObject, ObservableObject {
     @Published var suspended = false
 
     var onLine: ((String) -> Void)?
+    /// Ears telemetry, forwarded to the backend so a silent capture failure
+    /// leaves a record instead of a mystery.
+    var onDiag: ((String) -> Void)?
+    /// The main ears (Deepgram). Apple's recognizer keeps running as the
+    /// offline fallback; whichever ear is healthy speaks, never both.
+    let cloud = CloudEars()
     /// Who said it, decided on this device. Fires with the same line that
     /// went to `onLine`, carrying "owner" / "other:<who>" — or nil when the
     /// phone cannot honestly say, which the brain reads as no verdict.
@@ -81,6 +87,21 @@ final class PhoneListener: NSObject, ObservableObject {
     /// splits one intent into fragments. Nothing is closed to achieve this —
     /// the line is simply cut from the running text.
     private let utteranceGap: TimeInterval = 2.6
+
+    /// Bring the cloud ears up (or down when the key is empty). Safe to call
+    /// any time; listening does not depend on it.
+    func setCloudKey(_ key: String) {
+        if key.isEmpty { cloud.stop(); return }
+        cloud.onDiag = { [weak self] msg in self?.onDiag?(msg) }
+        cloud.onLine = { [weak self] line in
+            guard let self, self.isListening, !self.enrolling else { return }
+            self.onDiag?("heard by: cloud")
+            self.emit(line)
+        }
+        if isListening { cloud.start(apiKey: key) }
+        pendingCloudKey = key
+    }
+    private var pendingCloudKey = ""
 
     func start() {
         SFSpeechRecognizer.requestAuthorization { [weak self] auth in
@@ -127,6 +148,8 @@ final class PhoneListener: NSObject, ObservableObject {
         configureAndStartEngine()
         startRecognition()
         startWatchdog()
+        if !pendingCloudKey.isEmpty { cloud.start(apiKey: pendingCloudKey) }
+        onDiag?("listening started")
     }
 
     /// (Re)build the capture chain: audio session, tap (with the CURRENT
@@ -164,6 +187,9 @@ final class PhoneListener: NSObject, ObservableObject {
             // voice check — a short rolling window, never stored, never
             // sent. Only its one-word verdict ever leaves the phone.
             self.speaker?.accept(buffer)
+            // The same audio also feeds the cloud ears. Both ears always
+            // hear; only one is allowed to speak.
+            if !self.enrolling { self.cloud.accept(buffer) }
             self.orphanLock.lock()
             if self.acceptingAudio, let req = self.request {
                 req.append(buffer)
@@ -221,6 +247,7 @@ final class PhoneListener: NSObject, ObservableObject {
     /// Bring the whole capture chain back after whatever iOS did to it.
     private func recoverAudio() {
         guard isListening else { return }
+        onDiag?("audio chain rebuilt (interruption/route/stall)")
         engine.stop()
         configureAndStartEngine()
         // A live request's format was fixed by its first buffer; the new route
@@ -334,9 +361,23 @@ final class PhoneListener: NSObject, ObservableObject {
         guard !line.isEmpty else { return }
         // A voice sample is not something he said. Never emit it.
         guard !enrolling else { return }
-        // Judge the voice behind THIS line before the window moves on. Done
-        // here rather than on the audio thread: embedding takes tens of
-        // milliseconds and must never stall capture.
+        // While the cloud ear is delivering, Apple's version of the same
+        // speech stays quiet — two ears speaking is every line twice. Apple
+        // still consumed the words from its cursor above, so a later cloud
+        // outage can't replay them.
+        if cloud.healthy {
+            onDiag?("apple line suppressed (cloud healthy): \(line.prefix(40))")
+            return
+        }
+        onDiag?("heard by: apple")
+        emit(line)
+    }
+
+    /// One door for a finished line, whichever ear heard it. Judges the
+    /// voice behind it before the window moves on — done here rather than
+    /// on the audio thread: embedding takes tens of milliseconds and must
+    /// never stall capture.
+    private func emit(_ line: String) {
         if let speaker, let onSpeaker {
             let tag = speaker.tagForLatestUtterance()
             onSpeaker(line, tag)
@@ -394,6 +435,8 @@ final class PhoneListener: NSObject, ObservableObject {
     func stop() {
         isListening = false
         suspended = false
+        cloud.stop()
+        onDiag?("listening stopped")
         watchdog?.invalidate()
         watchdog = nil
         silenceFlush?.cancel()
