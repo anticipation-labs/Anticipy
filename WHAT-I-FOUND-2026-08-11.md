@@ -212,7 +212,7 @@ was live). But measured side by side it is expensive:
 | tree | Earls lane |
 |---|---|
 | without that change (my branch, earlier today) | 4/4 |
-| with it (what is deployed) | 2 of 6, the 4 failures all "got 2 cards" |
+| with it (what is deployed) | **2 of 8** — every failure "got 2 cards", or 3 |
 
 So a fix for a silence that happened *sometimes* introduced a double-card,
 double-text that happens *most times* on that conversation. That trade is worth
