@@ -1586,7 +1586,8 @@ def main() -> None:
                     post_event("anticipy_says", out["anticipy_says"],
                                decision=decision, goal=out["decision"].goal or "")
                 print(f"heard: {line!r} -> {decision}"
-                      f" ({out['decision'].goal or 'no goal'})")
+                      f" ({out['decision'].goal or 'no goal'})"
+                      f" [{getattr(out['decision'], 'reason', '') or '-'}]")
 
             # Inbound texts (Twilio webhook -> pb_hooks -> events) flow through
             # the same conversation the pendant path uses; the reply goes back

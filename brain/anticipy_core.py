@@ -31,7 +31,7 @@ from .memory import Memory
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
                            NOT_HIS, check_sufficiency, fill_gaps_from_memory,
-                           owner_is_party, ends_in_the_world,
+                           owner_is_party, ends_in_the_world, plan_is_settled,
                            unsupported_names,
                            unsupported_counts, read_into_a_machine,
                            not_speech_evidence,
@@ -727,7 +727,19 @@ class Anticipy:
             may_look = (decision.owes == "nobody" and decision.decision == "act"
                         and goal and not decision.missing
                         and not is_consequential(goal))
-            if not may_look:
+            # "nobody" is right about musing and wrong about a plan the
+            # speakers actually SETTLED: "we should really go out… Earl's
+            # tomorrow at 2:30… yeah for sure I'd be down" reads as mutual
+            # non-obligation, and this lane dropped it in total silence
+            # (seen live, 2026-08-12). A settled consequential plan falls
+            # through to the ambient lane below — prepared, held, one text —
+            # never into this hole. "machine" keeps its silence.
+            settled = (decision.owes == "nobody" and goal
+                       and addressee in AMBIENT_ADDRESSEES
+                       and (is_consequential(goal)
+                            or ends_in_the_world(self.llm, line, goal))
+                       and plan_is_settled(self.llm, line, goal))
+            if not may_look and not settled:
                 reason = ("operating a machine by voice — it is already doing it"
                           if decision.owes == "machine"
                           else "no obligation to anyone")
@@ -743,17 +755,18 @@ class Anticipy:
                     reason=f"not his to do: {reason} — {goal!r}",
                     addressee=addressee, owes=decision.owes),
                     "anticipy_says": None}
-            params = {"source": line, "now": now_line(), "lane": "ambient"}
-            job_id = self._queue_job(goal, params)
-            self.loops.append(LoopRecord(
-                commitment_id=mem.get("commitment_id") or -1,
-                what=goal, status="handling", job_id=job_id))
-            self._prev = None
-            return {"memory": mem, "decision": Decision(
-                decision="ignore", goal=goal,
-                reason="no firm obligation yet — looking quietly, saying nothing",
-                addressee=addressee, owes="nobody"),
-                "anticipy_says": None}
+            if not settled:
+                params = {"source": line, "now": now_line(), "lane": "ambient"}
+                job_id = self._queue_job(goal, params)
+                self.loops.append(LoopRecord(
+                    commitment_id=mem.get("commitment_id") or -1,
+                    what=goal, status="handling", job_id=job_id))
+                self._prev = None
+                return {"memory": mem, "decision": Decision(
+                    decision="ignore", goal=goal,
+                    reason="no firm obligation yet — looking quietly, saying nothing",
+                    addressee=addressee, owes="nobody"),
+                    "anticipy_says": None}
 
         # Someone ELSE took it on. Remember it — he may want it tracked, and
         # a promise made to him is exactly the sort of loop that goes quiet —

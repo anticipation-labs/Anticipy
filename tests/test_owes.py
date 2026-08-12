@@ -101,6 +101,48 @@ def test_no_obligation_never_buys_books_or_interrupts():
     assert a.queued == [] and a.texts == []
 
 
+class SettledLLM(ScriptedLLM):
+    """Scripted model that also answers the settled-plan tiebreaker."""
+
+    def __init__(self, triage, settled):
+        super().__init__(triage)
+        self.settled = settled
+
+    def chat(self, system, user, **kw):
+        if '"settled"' in (system or ""):
+            return types.SimpleNamespace(
+                text=json.dumps({"settled": self.settled}))
+        if '"ends_in_the_world"' in (system or ""):
+            return types.SimpleNamespace(
+                text=json.dumps({"ends_in_the_world": True}))
+        return super().chat(system, user, **kw)
+
+
+def test_a_settled_plan_survives_a_nobody_verdict():
+    """"We should… Earl's tomorrow at 2:30… I'd be down" is a settled plan,
+    not musing — a "nobody owes it" verdict must not drop it silently."""
+    a = build({"decision": "act",
+               "goal": "book dinner at Earl's in West Van tomorrow at 2:30",
+               "addressee": "person", "owes": "nobody",
+               "reason": "mutual plan"})
+    a.llm = SettledLLM(a.llm.triage, settled=True)
+    out = a.hear("Yeah I know we should really go out for dinner yeah we "
+                 "totally should tomorrow at Earl's at 2:30 in West Van "
+                 "yeah for sure I'd be down for that")
+    assert len(a.queued) == 1, "settled plan must reach the held-card lane"
+    assert a.queued[0]["hold"] is True
+    assert out["decision"].decision == "act"
+
+
+def test_unsettled_musing_stays_quiet_whatever_it_names():
+    a = build({"decision": "act",
+               "goal": "book dinner at Earl's in West Van",
+               "addressee": "person", "owes": "nobody", "reason": "musing"})
+    a.llm = SettledLLM(a.llm.triage, settled=False)
+    a.hear("we should totally do Earl's again at some point")
+    assert a.queued == [] and a.texts == []
+
+
 def test_when_he_asks_her_directly_nothing_overrides_him():
     """An explicit line is his own instruction; no second opinion applies."""
     a = build({**BOOK, "owes": "machine"})   # even a wrong verdict
