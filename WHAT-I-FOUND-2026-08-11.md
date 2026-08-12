@@ -147,28 +147,89 @@ Tests: 399 pass (2 new regression guards). All 5 extension suites pass.
 
 ---
 
-## The one thing I would not ship yet
+## The Winnipeg failure is real, and it is worse than anyone thought
 
-While merging in the two commits that were on GitHub, the same battery caught
-a **regression on the worst failure there is**: given a task that named no
-location, the merged agent (0.4.0) went ahead and **booked at "Vancouver
-Robson"** — a branch nobody chose. The version before it stopped and listed the
-options, which is the correct answer and the whole point of the rule.
+One run of the battery showed the merged agent booking at "Vancouver Robson"
+for a task that named no location. My first read was "the merge broke it", and
+I nearly withheld the release on that.
 
-That is the Winnipeg failure, and it spends your money at the wrong place.
+I measured it instead — both versions alternating in the same minutes
+(`proof/ab_unnamed_branch.py`) — and it said the opposite:
 
-I am measuring it properly (`proof/ab_unnamed_branch.py`, both versions
-alternating in the same minutes) rather than deciding on one run, because the
-rule lives in the prompt and a prompt rule can be obeyed on one run and not the
-next. Until that comes back, **production keeps serving the older extension**
-— which is safe on this specific point — even though the newer one has a good
-OTP guard in it. A better guard is not worth a wrong booking.
+```
+  merged (0.4.0) refused: 3/3      <- correct
+  before (0.3.9) refused: 1/3      <- BOOKED THE WRONG BRANCH, TWICE
+```
 
-Whatever the count says, the deeper problem is already visible: **"never pick a
-branch they did not name" exists only as a sentence in a prompt.** Nothing in
-code stops it. Compare that to the confirm gate, which lives in the job queue
-where no model can talk its way past it. Anything that spends money should be
-enforced the second way.
+There was no regression. **The build production had been serving all along was
+the one picking restaurants nobody chose, two runs in three.** That is your
+Winnipeg failure, reproduced on demand, and it was still shipping today. 0.4.0
+is now deployed.
+
+The deeper problem is what this rule is made of. **"Never pick a branch they
+did not name" exists only as a sentence in the prompt** (`agent_loop.js:34`).
+Nothing in code stops it. Compare the confirm gate, which lives in the job
+queue where no model can talk its way past it, or the new OTP guard, which
+mechanically refuses a code the owner never gave. A rule written in prose is
+obeyed on a *distribution* — 1 time in 3 here — and a rule that spends your
+money must not be a matter of the model's mood. **Enforcing this in code is the
+single highest-value thing left on the browser side**, and it is the one I would
+do next.
+
+## The bug I would fix next (it is your complaint, exactly)
+
+Measuring the deployed brain, one lane fails mostly one way. Here is a real
+failing run — one dinner:
+
+```
+  her desk:
+    [awaiting_confirm]  Plan dinner at Earls in Brooklyn this weekend
+    [queued]            Find out which Earl's location for this weekend
+    [awaiting_confirm]  Book Earls Brooklyn for 4 people on Saturday at 1 PM
+
+  texts sent (2):
+    "i'm ready to book a table at Earls for this weekend; which location and how many people?"
+    "for saturday at 1pm at earls in brooklyn, how many people should i say?"
+```
+
+Three cards and **two texts about one dinner** — and the second asks how many
+people while the card beside it already says *for 4 people*. That is "it asks
+me what I already told it" and "why is it texting me twice", from the same root.
+
+**Why.** A recent fix (a good one) stopped a sealed plan going quiet just
+because the model happened to word it "plan X" instead of "book X" — it now
+judges the substance. The side effect is that the early, vague line becomes a
+held card too, and the later precise line does not merge into it: "Plan dinner
+at Earls in Brooklyn this weekend" and "Book Earls Brooklyn for 4 people on
+Saturday at 1 PM" share almost no words, so the same-plan check does not fire.
+Two cards, each with its own idea of what is still unknown, each entitled to
+ask you a question.
+
+**This is not something I introduced** — the change that causes it was already
+running in production before I started (it is an ancestor of the commit that
+was live). But measured side by side it is expensive:
+
+| tree | Earls lane |
+|---|---|
+| without that change (my branch, earlier today) | 4/4 |
+| with it (what is deployed) | 2 of 6, the 4 failures all "got 2 cards" |
+
+So a fix for a silence that happened *sometimes* introduced a double-card,
+double-text that happens *most times* on that conversation. That trade is worth
+re-opening, and the answer is not to revert it — the silence it fixes is real —
+but to make the second plan MERGE into the first.
+
+It is the biggest remaining quality bug, it is squarely what you keep shouting
+about, and it is well-defined: **one plan must be one card.** The same-plan
+test needs to match on what identifies a plan — the venue, the day, the person
+— not on how many words two phrasings happen to share. A blunt version of the
+invariant would already help: *never hold two unconfirmed cards that name the
+same place.*
+
+I did not attempt it tonight. It is the most delicate code in the system, it
+would need the same interleaved A/B the other two fixes got, and starting that
+at the end of a long session — then going quiet — is exactly the pattern that
+has burned you. It is the first thing I would pick up.
 
 ## What is still wrong — the honest list
 
