@@ -100,7 +100,9 @@ stopped. When they ask why nothing is happening, what the status is, or
 complain that you are idle, answer from it truthfully — name what failed or
 stopped and why, and offer to retry (or put the retry in "redo" if they are
 plainly telling you to get on with it). "There are no active requests" is
-never the answer when something of theirs failed minutes ago.
+never the answer when something of theirs failed minutes ago — and neither
+is asking THEM which thing is stuck: when recent_outcomes names failed or
+stopped work, name it yourself, first.
 
 intents:
 - "confirm": an explicit go-ahead for a pending item (any phrasing: "yeah
@@ -111,7 +113,11 @@ intents:
   mine", "I didn't ask for this", "where did that come from". Denying that
   something is real IS calling it off; it is never an "answer".
 - "modify": changes requested but NOT yet a go-ahead ("make it shorter
-  first", "which restaurant did you pick?" then wait).
+  first", "which restaurant did you pick?" then wait). A text that ONLY
+  changes a detail of a held item — "make it 6pm instead", "actually
+  Tuesday", "two people, not four" — is a modify, NEVER a confirm: changing
+  something is not approving it, and releasing on it executes a plan they
+  were still correcting.
 - "answer": they are answering a question you asked. If "blocked" is not
   empty, it lists tasks stopped waiting for information and what each needs —
   a reply that supplies any of it is an "answer", even if you have no memory
@@ -328,6 +334,13 @@ class Conversation:
         if model_ids:
             pending_id = model_ids[0]
 
+        if intent == "confirm" and changes and phone \
+                and self._about_pending(phone, text) == "detail":
+            # "make it 6pm instead" classified as a confirm is the correction
+            # that gets acknowledged in words and ignored in deed: the job
+            # releases under its OLD scope while the reply claims the new
+            # value. A change with no go-ahead in it amends and keeps holding.
+            intent = "modify"
         if intent == "confirm":
             acted = self._release(pending_id, changes, owner_text=text_for_guard)
             if acted == "ambiguous":
@@ -401,6 +414,16 @@ class Conversation:
                     acted = None
                 intent = "answer"
         elif intent in ("new_request", "chat"):
+            # A status answer the classifier already grounded in a recent
+            # failure must SURVIVE: re-thinking "why is nothing happening"
+            # through triage overwrote "your booking failed — want me to
+            # retry?" with a deflecting question. If the drafted reply names
+            # recently failed/stopped work, it is the honest answer — keep it.
+            reply_now = parsed.get("reply") or ""
+            grounded = any(
+                o.get("status") in ("failed", "cancelled")
+                and self._references(reply_now, o)
+                for o in self._recent_outcomes())
             # Feed it back through the one brain — same path as the pendant.
             #
             # "chat" is included deliberately. This classifier is not the
@@ -411,9 +434,10 @@ class Conversation:
             # request never reached her brain at all. Triage decides what is
             # actionable; a genuinely social line comes back "ignore" and her
             # warm reply stands.
-            spoken = self._think(text, phone)
-            if spoken:
-                parsed["reply"] = spoken
+            if not grounded:
+                spoken = self._think(text, phone)
+                if spoken:
+                    parsed["reply"] = spoken
 
         # An answer that answers nothing is not an answer. On 2026-08-02 she
         # asked for his name, email and phone to finish a booking; he replied
@@ -1123,13 +1147,27 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 f' You stopped and asked: "{asked}". '
                 f'They answered: "{answer}" — that answer is final; act on it.')
         else:
+            said = (owner_text or "").strip()
+            # Never invent their words: a release that arrived without the
+            # owner's own text (a deterministic path) records the go-ahead as
+            # a fact, not as a quote they never said.
             params["approved_scope"] = (
                 f"Task: {job.get('goal', '')}. "
-                f"They said: \"{(owner_text or 'yes').strip()}\". "
-                f"Heard originally: {params.get('source', '')}"
+                + (f'They said: "{said}". ' if said
+                   else "They gave the go-ahead. ")
+                + f"Heard originally: {params.get('source', '')}"
             ).strip()
         if changes:
+            changes = self._drop_unquoted_codes(changes, owner_text)
+        if changes:
             params.update(changes)
+            corrected = "; ".join(f"{k}: {v}" for k, v in changes.items())
+            # The agent reads its authority from approved_scope, and the goal
+            # wording still carries the OLD value — so the correction must
+            # outrank it there, or the browser executes the retracted plan.
+            params["approved_scope"] += (
+                f" They changed: {corrected} — these corrected values "
+                "override the task wording and anything heard earlier.")
         fields = {"status": "queued", "params": json.dumps(params)}
         return self._flip(job["id"], fields, "released")
 
@@ -1165,6 +1203,10 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             params = json.loads(job.get("params") or "{}")
         except Exception:
             params = {}
+        if job.get("status") == "needs_user":
+            changes = self._drop_unquoted_codes(changes, owner_text)
+            if not changes:
+                return None
         params.update(changes)
         if job.get("status") == "needs_user":
             need = (job.get("result") or "").strip()
@@ -1179,6 +1221,28 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                               {"status": "queued", "params": json.dumps(params)},
                               "resumed")
         return self._flip(job["id"], {"params": json.dumps(params)}, "amended")
+
+    @staticmethod
+    def _drop_unquoted_codes(changes: Optional[dict],
+                             owner_text: Optional[str]) -> Optional[dict]:
+        """A value bound for a code/PIN field must be the owner's own
+        characters, verbatim. "I told you to make it 6 dammit" once became
+        verification_code="6" and the browser typed a fabricated code into a
+        real OTP form — a lockout/fraud-flag risk. A code is never derived,
+        completed or guessed: too short, or not present character-for-character
+        in what they actually texted, and it does not exist."""
+        if not changes:
+            return changes
+        out = {}
+        for k, v in changes.items():
+            key = re.sub(r"\W+", "_", str(k).lower())
+            if re.search(r"(^|_)(code|otp|pin)($|_)", key) \
+                    or "verification" in key:
+                sv = str(v).strip()
+                if len(sv) < 4 or sv not in (owner_text or ""):
+                    continue
+            out[k] = v
+        return out
 
     def _flip(self, job_id: str, fields: dict, verb: str) -> str:
         """Every queue change goes through here so a failed PATCH can never be

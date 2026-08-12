@@ -85,7 +85,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
       content: (() => {
         const authLine = authorized
           ? `WHAT THEY AGREED TO (their one answer, already given):\n${scope || goal}\nYou have their authority for all of it, to the end. Only a MATERIAL difference from the above may stop you.`
-            + `\n\nWORDS YOU WROTE ARE NOT WORDS THEY APPROVED. They approved the TASK. Anything you compose yourself — the body of a message, a subject line, a note, a comment, a description — they have never seen. If you are about to hand authored text of yours to ANOTHER PERSON, stop first with needs_user and put the exact text in the reason so they can read it. That is not asking permission again; they already gave that. It is showing them what is about to go out in their name.\nThis does NOT apply to facts they gave you. Their own name, date, time, party size, address, a link they specified — putting those into a form is carrying out the task, not writing on their behalf. Fill those in and keep going.\nThe test is authorship, not danger: did YOU write it, and is it leaving for someone who is not them.`
+            + `\n\nWORDS YOU WROTE ARE NOT WORDS THEY APPROVED. They approved the TASK. Anything you compose yourself — the body of a message, a subject line, a note, a comment, a description — they have never seen. If you are about to hand authored text of yours to ANOTHER PERSON, stop first with needs_user and put the exact text in the reason so they can read it. That is not asking permission again; they already gave that. It is showing them what is about to go out in their name.\nThis does NOT apply to facts they gave you. Their own name, date, time, party size, address, a link they specified — putting those into a form is carrying out the task, not writing on their behalf. Fill those in and keep going.\nThe test is authorship, not danger: did YOU write it, and is it leaving for someone who is not them.\nAnd the reverse: wording the agreement above QUOTES — a message they dictated, exact words they gave — is THEIR text, already seen and approved. Use it verbatim and do not stop to have it confirmed again.`
           : `NOT YET AGREED. They have not answered yet, so do everything that is reversible — fill the form completely — and then reply needs_user saying it is ready and exactly what pressing the final button would commit them to.`;
         // Who the owner is. Every booking, reservation and signup form asks
         // for the same identity; without it a run reaches the form and dies.
@@ -665,6 +665,27 @@ export function pageFingerprint(state) {
 /// is a stop. Twelve words is past any field the owner could have dictated and
 /// well into prose; anything largely echoing the goal is not authored at all.
 export const AUTHORED_WORDS = 12;
+
+/// A one-time/verification code is never composed, derived, or "completed".
+/// After "I told you to make it 6 dammit" landed on a job parked at an OTP
+/// form, the model typed "6" and then invented "666666" and SUBMITTED it —
+/// on a real site that is a lockout/fraud-flag risk. The rule is mechanical:
+/// a value bound for a code-shaped field must appear, character for
+/// character, in what the owner actually gave (goal/scope/facts), and real
+/// codes are never shorter than 4 characters. Exported for tests.
+export function unquotedCode(text, fieldAttrs, goal, scope, facts) {
+  const attrs = String(fieldAttrs || "");
+  const codeish =
+    /one[\s_-]?time[\s_-]?code|\botp\b|(verification|verify|security|2fa|mfa|auth)[\s_-]*code/i;
+  if (!codeish.test(attrs)) return null;
+  const v = String(text || "").trim();
+  const pool = `${goal || ""} ${scope || ""} ${facts || ""}`;
+  const esc = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const quoted = v.length >= 4
+    && new RegExp(`(^|[^A-Za-z0-9])${esc}([^A-Za-z0-9]|$)`).test(pool);
+  if (quoted) return null;
+  return `refused: this is a one-time/verification code field and "${v}" is not a code the owner actually gave — codes are never guessed, derived or padded out. Stop with needs_user and ask for the exact code.`;
+}
 
 export function isAuthored(text, goal, scope) {
   const w = String(text || "").trim().split(/\s+/).filter(Boolean);
@@ -1267,6 +1288,27 @@ export async function runAgentGoal(goal, opts) {
             history.push(`step ${step}: BLOCKED — you already did ${sig}; do something DIFFERENT`);
           }
           continue;
+        }
+        if (decision.action === "type") {
+          // Code fields get the mechanical check BEFORE anything is typed:
+          // by the time a wrong code is in the field, one Enter commits it.
+          let attrs = "";
+          try {
+            attrs = await inFrame(tab.id, decision.index, (i) => {
+              const el = window.__anticipyMap[i];
+              if (!el) return "";
+              return [el.name, el.id, el.autocomplete, el.placeholder,
+                el.getAttribute && el.getAttribute("aria-label"),
+                (el.labels && el.labels[0] && el.labels[0].textContent) || ""]
+                .filter(Boolean).join(" ");
+            });
+          } catch (e) { /* unmappable — the guard fails open */ }
+          const codeStop = unquotedCode(decision.text, attrs, goal, scope, facts);
+          if (codeStop) {
+            stuckStreak++;
+            history.push(`step ${step}: ${codeStop}`);
+            continue;
+          }
         }
         let c;
         try { c = await withTimeout(elementCenter(tab.id, decision.index), 15000, "elementCenter"); }

@@ -450,6 +450,54 @@ class Anticipy:
         re.IGNORECASE)
     _IMPERATIVE_RE = re.compile(r"^\s*(remind me to|remember to|make sure)\b", re.IGNORECASE)
 
+    # Contentless approval — nothing in it but the yes. Anything carrying a
+    # detail ("let's do Earls at 7") falls through to triage as before.
+    _GO_AHEAD_RE = re.compile(
+        r"^(ok(ay)?|yes|yeah|yep|sure|perfect|alright|cool|great)?[,!.\s]*"
+        r"(let'?s do it|do it|go ahead|go for it|make it happen|i'?m in|"
+        r"sounds good|let'?s go|book it|send it)[,!.\s]*$", re.IGNORECASE)
+
+    def _release_freshest_held(self, line: str) -> Optional[str]:
+        """Release the plan he was JUST asked about — and only that: the
+        newest held card, and only while the asking is minutes old. A yes an
+        hour later is about something else and stays with triage."""
+        try:
+            filt = 'status="awaiting_confirm"'
+            if self.owner_id:
+                filt += f' && owner="{self.owner_id}"'
+            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 1, "sort": "-created"},
+                       timeout=10)
+            items = r.json().get("items", []) if r.ok else []
+            if not items:
+                return None
+            job = items[0]
+            import datetime as _dt
+            try:
+                created = _dt.datetime.strptime(
+                    (job.get("created") or "")[:19], "%Y-%m-%d %H:%M:%S"
+                ).replace(tzinfo=_dt.timezone.utc).timestamp()
+            except Exception:
+                created = time.time()
+            if time.time() - created > 900:
+                return None
+            try:
+                params = json.loads(job.get("params") or "{}")
+            except Exception:
+                params = {}
+            params["authorized"] = True
+            params["approved_scope"] = (
+                f"Task: {job.get('goal', '')}. "
+                f'They said: "{line.strip()}". '
+                f"Heard originally: {params.get('source', '')}").strip()
+            pr = pb.patch(
+                f"{self.backend_url}/api/collections/jobs/records/{job['id']}",
+                json={"status": "queued", "params": json.dumps(params)},
+                timeout=10)
+            return (job.get("goal") or None) if getattr(pr, "ok", False) else None
+        except Exception:
+            return None
+
     @staticmethod
     def _may_say(may_say, text: str, goal: Optional[str], kind: str) -> bool:
         """One rule for every unprompted thing she says: has she already
@@ -546,6 +594,26 @@ class Anticipy:
             return {"memory": mem, "decision": Decision(
                 decision="ignore", goal=None, reason="fragment, no intent"),
                 "anticipy_says": None}
+        # A bare spoken go-ahead ("Okay let's do it") names nothing on its
+        # own — the "it" is the plan she just held and asked about. Triaging
+        # it as a fresh line is how a contentless yes once minted a brand-new
+        # goal out of injected context ("extract memory into compact JSON", a
+        # leaked internal instruction, live 2026-08-11). His yes lands on the
+        # freshly held plan; only when nothing is freshly held does the line
+        # fall through to triage.
+        if not dictated and speaker != "other" \
+                and self._GO_AHEAD_RE.match(line.strip()):
+            released = self._release_freshest_held(line)
+            if released:
+                self._prev = None
+                for l in self.loops:
+                    if l.what == released and l.status == "awaiting_ok":
+                        l.status = "handling"
+                return {"memory": mem, "decision": Decision(
+                    decision="act", goal=released,
+                    reason="his go-ahead — released the plan he was asked about",
+                    addressee="assistant", owes="owner"),
+                    "anticipy_says": None}
         # Split-thought context is only the last line, only if it's recent
         # (people pause seconds, not hours), and only if it wasn't already
         # acted on — an acted line re-fed as context mints duplicate jobs.
@@ -1188,6 +1256,27 @@ class Anticipy:
                 self.notify_owner(handled)
             else:
                 print(f"already asked him about {decision.goal!r} — staying quiet")
+            # A question with no card behind it is a plan that evaporates:
+            # "which saturday?" got its answer, the answer got a warm reply,
+            # and nothing existed for the answer to land on (live 2026-08-11).
+            # The asked-about plan is held — the answer amends it, his
+            # go-ahead releases it, and "forget it" kills it.
+            if handled and decision.goal:
+                params = {"source": line, "now": now_line()}
+                if channel:
+                    params["channel"] = channel
+                if decision.missing:
+                    params["missing"] = ", ".join(
+                        str(m) for m in decision.missing)
+                if decision.assumption:
+                    params["assumption"] = decision.assumption
+                job_id = self._queue_job(decision.goal, params, hold=True,
+                                         explicit=explicit)
+                if job_id:
+                    self.loops.append(LoopRecord(
+                        commitment_id=mem.get("commitment_id") or -1,
+                        what=decision.goal, status="awaiting_ok",
+                        job_id=job_id))
 
         return {
             "memory": mem,
@@ -1258,8 +1347,17 @@ class Anticipy:
                              f"{speaker_name} by name." if speaker_name else "")
                           + ".)")
             if context:
-                notes = "; ".join(f["fact"] for f in context)
-                prompt = f"{prompt}\n(Related memory: {notes})"
+                # Memory holds what people SAID, and models will happily store
+                # a stray instruction as a fact. Injected back here, one such
+                # note became the referent of a bare "let's do it" and a goal
+                # of its own. Prose only — anything shaped like an instruction
+                # or a schema stays out of the model's view.
+                notes = "; ".join(
+                    f["fact"] for f in context
+                    if not re.search(r"reply only|compact json|[{}]",
+                                     f.get("fact") or "", re.IGNORECASE))
+                if notes:
+                    prompt = f"{prompt}\n(Related memory: {notes})"
             # The link question. Recent lines numbered so the model can point
             # at ONE of them, which is how every disentanglement benchmark
             # since 2019 poses it — an index, never a free-text id, so a
