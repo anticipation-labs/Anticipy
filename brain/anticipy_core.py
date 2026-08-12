@@ -709,6 +709,17 @@ class Anticipy:
                 f"Task: {job.get('goal', '')}. "
                 f'They said: "{line.strip()}". '
                 f"Heard originally: {params.get('source', '')}").strip()
+            # Corrections that arrived while the card was held outrank the
+            # stale goal wording — the agent reads its authority from here.
+            # Folded in BEFORE the plan is approved, so the approval below
+            # captures the corrected authority, not the original wording.
+            corrections = params.get("corrections") or {}
+            if corrections:
+                corrected = "; ".join(
+                    f"{k}: {v}" for k, v in corrections.items())
+                params["approved_scope"] += (
+                    f" They changed: {corrected} — these corrected values "
+                    "override the task wording and anything heard earlier.")
             fields = {"status": "queued", "params": json.dumps(params)}
             workflow = workflow_from_params(params)
             if workflow:
