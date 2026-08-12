@@ -108,6 +108,35 @@ def test_detail_verdict_downgrades_a_confirm_to_amend(monkeypatch):
     assert p["time"] == "6pm"
 
 
+def test_a_prior_amend_rides_into_the_later_release(monkeypatch):
+    # The live re-verify (2026-08-12): "make it 6pm instead" amended, then a
+    # separate "go ahead" released with a scope still reading 8pm — the trace
+    # selected 8:00 PM. A correction must reach the authority no matter how
+    # many texts later the go-ahead comes.
+    job = {"id": "j1", "goal": "book dinner at 8pm",
+           "status": "awaiting_confirm", "params": json.dumps({})}
+    patched = _pb(monkeypatch, convmod, job)
+    c = _conv()
+    c._amend("j1", {"time": "6pm"}, owner_text="make it 6pm instead")
+    job["params"] = patched["params"]
+    c._release("j1", None, owner_text="go ahead")
+    p = json.loads(patched["params"])
+    assert "They changed: time: 6pm" in p["approved_scope"]
+    assert "override the task wording" in p["approved_scope"]
+
+
+def test_spoken_go_ahead_also_carries_prior_corrections(monkeypatch):
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    job = {"id": "j9", "goal": "book dinner at 8pm",
+           "status": "awaiting_confirm",
+           "params": json.dumps({"corrections": {"time": "6pm"}}),
+           "created": "2999-01-01 00:00:00"}
+    patched = _pb(monkeypatch, coremod, job)
+    a.hear("Okay let's do it.")
+    p = json.loads(patched["params"])
+    assert "They changed: time: 6pm" in p["approved_scope"]
+
+
 # ---------------------------------------------------------------- failure 2
 
 def test_resume_drops_a_code_the_owner_never_gave(monkeypatch):
@@ -119,6 +148,23 @@ def test_resume_drops_a_code_the_owner_never_gave(monkeypatch):
     out = _conv()._amend("j1", {"verification_code": "6"},
                          owner_text="I told you to make it 6 dammit")
     assert out is None  # nothing resumed on a fabricated code
+
+
+def test_a_non_answer_amendment_never_requeues_a_parked_run(monkeypatch):
+    # Live re-verify (2026-08-12): "make it 6" reached the OTP-parked job as
+    # {"time": "6"} — the code was rightly dropped, but the modify still
+    # requeued the run, which burned a browser attempt only to re-park on the
+    # same question. An amendment that does not supply the named need is
+    # noted on the job and the job stays parked.
+    job = {"id": "j1", "goal": "book dinner", "status": "needs_user",
+           "result": "I need the 6-digit verification code",
+           "params": json.dumps({"authorized": True,
+                                 "approved_scope": "Task: book dinner."})}
+    patched = _pb(monkeypatch, convmod, job)
+    out = _conv()._amend("j1", {"time": "6"}, owner_text="make it 6")
+    assert out == "amended:j1"
+    assert patched.get("status") != "queued"
+    assert json.loads(patched["params"])["time"] == "6"
 
 
 def test_resume_keeps_the_code_actually_texted(monkeypatch):

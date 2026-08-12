@@ -1159,9 +1159,17 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             ).strip()
         if changes:
             changes = self._drop_unquoted_codes(changes, owner_text)
+        # Corrections that arrived EARLIER ("make it 6pm instead", then "go
+        # ahead" as its own text) live in params["corrections"] — invisible in
+        # the goal wording the agent reads. Fold them into the authority now,
+        # or the browser confirms 6pm in words and books 8pm in deeds.
+        corrections = dict(params.get("corrections") or {})
         if changes:
             params.update(changes)
-            corrected = "; ".join(f"{k}: {v}" for k, v in changes.items())
+            corrections.update(changes)
+        if corrections:
+            params["corrections"] = corrections
+            corrected = "; ".join(f"{k}: {v}" for k, v in corrections.items())
             # The agent reads its authority from approved_scope, and the goal
             # wording still carries the OLD value — so the correction must
             # outrank it there, or the browser executes the retracted plan.
@@ -1203,19 +1211,38 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             params = json.loads(job.get("params") or "{}")
         except Exception:
             params = {}
+        need = (job.get("result") or params.get("needed") or "").strip()
         if job.get("status") == "needs_user":
             changes = self._drop_unquoted_codes(changes, owner_text)
             if not changes:
                 return None
+            # A parked run stopped for a NAMED thing. An amendment that does
+            # not supply that thing ("make it 6" against "I need the 6-digit
+            # verification code") is noted on the job but must not requeue it
+            # — each empty-handed resume burns a browser run that ends parked
+            # on the same question.
+            supplied = self._answers_need(changes, need) or any(
+                len(str(v).strip()) >= 3 and str(v).strip().lower()
+                in need.lower() for v in changes.values())
+            if need and not supplied:
+                params.update(changes)
+                corrections = dict(params.get("corrections") or {})
+                corrections.update(changes)
+                params["corrections"] = corrections
+                return self._flip(job["id"],
+                                  {"params": json.dumps(params)}, "amended")
         params.update(changes)
+        if job.get("status") == "awaiting_confirm":
+            corrections = dict(params.get("corrections") or {})
+            corrections.update(changes)
+            params["corrections"] = corrections
         if job.get("status") == "needs_user":
-            need = (job.get("result") or "").strip()
             if need and not params.get("needed"):
                 params["needed"] = need[:300]
             if params.get("approved_scope"):
                 answer = (owner_text or "").strip() or json.dumps(changes)
                 params["approved_scope"] += (
-                    f' You stopped and asked: "{(need or params.get("needed") or "").strip()}". '
+                    f' You stopped and asked: "{need}". '
                     f'They answered: "{answer}" — that answer is final; act on it.')
             return self._flip(job["id"],
                               {"status": "queued", "params": json.dumps(params)},

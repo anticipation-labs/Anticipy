@@ -490,6 +490,15 @@ class Anticipy:
                 f"Task: {job.get('goal', '')}. "
                 f'They said: "{line.strip()}". '
                 f"Heard originally: {params.get('source', '')}").strip()
+            # Corrections that arrived while the card was held outrank the
+            # stale goal wording — the agent reads its authority from here.
+            corrections = params.get("corrections") or {}
+            if corrections:
+                corrected = "; ".join(
+                    f"{k}: {v}" for k, v in corrections.items())
+                params["approved_scope"] += (
+                    f" They changed: {corrected} — these corrected values "
+                    "override the task wording and anything heard earlier.")
             pr = pb.patch(
                 f"{self.backend_url}/api/collections/jobs/records/{job['id']}",
                 json={"status": "queued", "params": json.dumps(params)},
