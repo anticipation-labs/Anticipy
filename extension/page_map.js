@@ -132,7 +132,22 @@
         const t = (el.type || "").toLowerCase();
         const fmt = t === "date" ? "YYYY-MM-DD" : t === "month" ? "YYYY-MM"
           : t === "time" ? "HH:MM" : "YYYY-MM-DDTHH:MM";
-        extra = ` (${t} field — use select action with option in the exact format ${fmt}${el.value ? `; currently "${el.value}"` : ""})`;
+        // A readonly one is its picker's display, not a field, and telling it
+        // to "use select" is advice the site will refuse. This branch used to
+        // give that advice unconditionally — a native date/time input returns
+        // here before the readonly hint further down is ever appended — so
+        // the map sent the model at a field that snaps back, and the only way
+        // to learn the truth was to spend a step being refused. On a booking
+        // page that is the step that reads, to whoever is watching, as "it
+        // just keeps retyping the date".
+        //
+        // Appending the warning was not enough: measured on 2026-08-11 the
+        // model read the select instruction first and tried it anyway. Two
+        // instructions in one line means the wrong one can win, so the
+        // readonly case REPLACES the advice rather than arguing with it.
+        extra = el.readOnly
+          ? ` (${t} field, readonly — its own picker sets it; click it to open the picker and choose${el.value ? `; currently "${el.value}"` : ""})`
+          : ` (${t} field — use select action with option in the exact format ${fmt}${el.value ? `; currently "${el.value}"` : ""})`;
       } else if ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && "value" in el) {
         // What the field currently holds. Without this a filled field looks
         // identical to an empty one and the model re-types it forever.

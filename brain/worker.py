@@ -318,8 +318,17 @@ STALL_MINUTES = 10        # queued this long with nothing to run it is stuck
 AGENT_FRESH_SECONDS = 90  # the extension heartbeats far more often than this
 
 
-def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> None:
+def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> bool:
     """Text him what she found — her words, varied every time, one text.
+
+    Returns whether the text actually went out. That return value is not
+    bookkeeping: "held for morning" and "delivered" used to be the same
+    silent None, so the caller marked a held FYI as delivered and the
+    morning never came. Quiet hours are ten hours long, so every overheard
+    lookup that finished overnight was destroyed rather than deferred —
+    exactly the "I'll text you what I find" that never arrives. A caller
+    that gets False must leave the finding undelivered so a later sweep
+    can send it.
 
     Overheard FYIs ("caught this earlier, looked into it") respect the same
     quiet hours as every other uninvited text; an answer he asked for out
@@ -328,12 +337,12 @@ def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> None:
     is only ever reached for a fresh result."""
     trimmed = (result or "").strip()
     if not trimmed:
-        return
+        return False
     if overheard:
         hour = datetime.now(CLOCK_TZ).hour
         if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
             print(f"fyi held for morning (quiet hours): {goal[:50]}")
-            return
+            return False
     if len(trimmed) > 320:
         trimmed = trimmed[:317] + "…"
     try:
@@ -351,6 +360,13 @@ def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> None:
         anticipy.notify_owner(say)
     except Exception as e:
         print(f"fyi text failed (feed still has it): {e}")
+    # Attempted and concluded. Only a quiet-hours HOLD (above) reports False:
+    # that is a deferral with a morning to come, and it is the one case the
+    # caller must not record as delivered. A send that was tried and failed
+    # keeps its existing behaviour — the feed carries it — because retrying a
+    # hard failure on every two-second sweep is a different decision than the
+    # bug being fixed here.
+    return True
 
 
 def ambient_job(job: dict) -> bool:
@@ -563,7 +579,25 @@ def report_finished_jobs(anticipy) -> None:
             # result goes into the feed for whenever he looks, and a failure
             # of work he never asked for is not news at all.
             if ambient_job(job):
+                # Nothing overheard can go out during quiet hours, so leave
+                # the whole finding untouched and look again after they end.
+                # Checked BEFORE already_raised on purpose: that call is a
+                # round trip, and re-asking it about every held job on every
+                # two-second sweep would run all night for an answer that
+                # cannot change until 08:00.
+                hour = datetime.now(CLOCK_TZ).hour
+                if result and not failed and (CLOCK_QUIET_START <= hour
+                                              or hour < CLOCK_QUIET_END):
+                    continue
                 if result and not failed and not already_raised(goal, decision="done"):
+                    # A held FYI is not a delivered one. Recording the feed
+                    # event and marking the job reported are what make this
+                    # finding "already raised" forever, so both must wait
+                    # until the text has actually gone out — otherwise every
+                    # overheard lookup that finished between 22:00 and 08:00
+                    # was silently destroyed instead of held.
+                    if not deliver_fyi(anticipy, goal, result, overheard=True):
+                        continue
                     # Rule change 2026-08-05, Omar's call: quiet work is no
                     # longer INVISIBLE work. He watched her research Paris
                     # flights and dinner spots, saw only "Noted — nothing
@@ -573,7 +607,6 @@ def report_finished_jobs(anticipy) -> None:
                     # silent — a dead end on work he never asked for is not
                     # news. Text first, then the durable feed record (the
                     # record is what dedupes, so it must land second).
-                    deliver_fyi(anticipy, goal, result, overheard=True)
                     post_event("anticipy_says", result, decision="done", goal=goal)
                 REPORTED.add(job["id"])
                 print(f"ambient job {job['id']} finished — fyi'd and on the feed")

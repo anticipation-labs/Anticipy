@@ -49,6 +49,30 @@ def test_a_meta_wording_never_overwrites_the_real_goal(monkeypatch):
     assert "booked now" in params["source"]
 
 
+def test_a_re_mention_that_names_the_venue_lands_on_the_card(monkeypatch):
+    """Measured on his own 2026-08-04 dinner, 3 runs in 5.
+
+    The card read "Confirm dinner reservation for 2 people tomorrow at 7 PM"
+    and he then named the place. Judging the re-mention only by what it ERASES
+    (confirm, reservation, people — three of seven, 0.43, over the third)
+    refused the wording that carried the venue. The card kept no venue, she
+    texted "what restaurant?" about a restaurant he had just said out loud,
+    and a browser run released from that card had nowhere to go.
+
+    What it ADDS is half the question, and here it is the deciding half.
+    """
+    patches = []
+    job = _Job("Confirm dinner reservation for 2 people tomorrow at 7 PM",
+               {"source": "let's go out tomorrow"})
+    a = _core(monkeypatch, job, patches)
+    named = "Book dinner for 2 at Cactus Club Park location tomorrow at 7 PM"
+    a._merge_into("job1", job.rec, named, {"source": "cactus club park"})
+    fields = patches[-1]
+    assert fields.get("goal") == named, \
+        "the wording that names the venue must become the card"
+    assert "Cactus Club" in fields["goal"]
+
+
 def test_a_genuinely_richer_wording_does_replace(monkeypatch):
     patches = []
     job = _Job("Book dinner at Earls tomorrow", {"source": "dinner at Earls"})

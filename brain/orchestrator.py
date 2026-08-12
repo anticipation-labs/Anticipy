@@ -277,10 +277,25 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         # Judgment is a classification, not prose: sampled at 0 so the same
         # words get the same verdict every time, instead of a plan being
         # caught on two runs out of three.
-        res = self.llm.chat(TRIAGE_SYSTEM, transcript_line, temperature=0.0)
-        try:
-            raw = json.loads(_extract_json(res.text))
-        except Exception:
+        #
+        # And a reply we cannot parse becomes "ignore", which means the line
+        # is dropped and he is told nothing at all — the most expensive
+        # outcome in the system, spent on the cheapest possible cause. Unlike
+        # the browser agent, this call does not constrain the model to JSON
+        # (the same client writes her texts, which are prose), so a stray
+        # sentence around the object is the whole failure. Ask once more
+        # before throwing his plan away; only a second bad reply falls back.
+        raw = None
+        for attempt in range(2):
+            res = self.llm.chat(TRIAGE_SYSTEM, transcript_line, temperature=0.0)
+            try:
+                raw = json.loads(_extract_json(res.text))
+                break
+            except Exception:
+                if attempt:
+                    print("triage: unparseable model output twice — ignoring the line")
+                raw = None
+        if raw is None:
             raw = {"decision": "ignore", "goal": None, "reason": "unparseable model output"}
         decision = raw.get("decision", "ignore")
         goal = raw.get("goal")

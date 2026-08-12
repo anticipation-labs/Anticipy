@@ -1786,8 +1786,29 @@ class Anticipy:
         fields = {}
         have = goal_tokens(cur_goal)
         want = goal_tokens(goal)
-        erased = len(have - want) / len(have) if have else 0
-        if erased <= 1 / 3:
+        erased = have - want
+        gained = want - have
+        ratio = len(erased) / len(have) if have else 0
+        # Counting only what a re-mention ERASES asks half the question, and
+        # the missing half is the one that decides a real conversation.
+        #
+        # Measured on his own 2026-08-04 dinner: the card read "Confirm dinner
+        # reservation for 2 people tomorrow at 7 PM" and he then named the
+        # place — "Book dinner for 2 at Cactus Club Park location tomorrow at
+        # 7 PM". That drops three near-synonyms (confirm, reservation, people)
+        # and ADDS the venue, which is the single fact a booking cannot be
+        # carried out without. Three of seven is 0.43, over the third, so the
+        # better goal was refused and the card kept its venue-less wording:
+        # she then texted him "what restaurant?" about a restaurant he had
+        # just said out loud, and any browser run released from that card
+        # would go looking for a venue nobody had told it.
+        #
+        # So weigh both sides. A wording that brings more than it takes is an
+        # enrichment and must land. The bleaching this guard exists to stop
+        # looks the opposite way round — "Confirm Earls West Van tomorrow at
+        # 7 PM" over "Book a table for 2 at Earls in West Vancouver for
+        # tomorrow evening" erases five and adds two — and is still refused.
+        if ratio <= 1 / 3 or len(gained) > len(erased):
             fields["goal"] = goal          # richer or corrected: new wins
         else:
             merged["update"] = goal        # both hold detail: lose neither

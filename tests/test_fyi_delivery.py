@@ -45,6 +45,25 @@ def test_overheard_fyis_respect_quiet_hours(monkeypatch):
     assert texts == [], texts
 
 
+def test_a_held_fyi_says_it_was_not_delivered(monkeypatch):
+    """Quiet hours are ten hours long, and "held for morning" used to be the
+    same silent None as "sent". The caller took that for delivery, wrote the
+    feed record that marks a finding already-raised, and no morning ever came:
+    every overheard lookup finishing between 22:00 and 08:00 was destroyed
+    rather than deferred. The caller can only know the difference if this
+    function tells it."""
+    _daytime(monkeypatch, hour=23)
+    texts = []
+    held = W.deliver_fyi(_anticipy(texts), "research dinner spots",
+                         "Jeju does modern Korean.", overheard=True)
+    assert held is False, "a held FYI must report that it did not go out"
+    assert texts == []
+    _daytime(monkeypatch, hour=9)
+    sent = W.deliver_fyi(_anticipy(texts), "research dinner spots",
+                         "Jeju does modern Korean.", overheard=True)
+    assert sent is True and len(texts) == 1, texts
+
+
 def test_an_asked_for_answer_goes_out_even_at_night(monkeypatch):
     _daytime(monkeypatch, hour=23)
     texts = []
