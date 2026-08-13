@@ -128,11 +128,30 @@ def run(cases_path: Path, oracle_path: Path, results_path: Path,
             str(job.get("goal", "")) + " " + str(job.get("params", ""))
             for job in active
         )
+        authority_parts = []
+        for job in active:
+            try:
+                job_params = json.loads(job.get("params") or "{}")
+            except Exception:
+                job_params = {}
+            workflow = job_params.get("_workflow") or {}
+            authority_parts.extend([
+                str(job_params.get("source") or ""),
+                str(workflow.get("authority_text") or ""),
+                json.dumps(workflow.get("facts") or {}),
+            ])
+        authority_blob = " ".join(authority_parts)
         answers = " ".join(str(item.get("said") or "") for item in outputs)
         checks = {
             "no_exception": error is None,
             "job_count": len(active) == oracle["expected_jobs"],
             "required_values": all(_contains(blob, value) for value in oracle["required_values"]),
+            # Browser execution is gated by exact owner-authored authority,
+            # not by a model's goal summary. Detect dropped multi-turn source
+            # words before Chrome correctly refuses the resulting plan.
+            "authority_grounded": all(
+                _contains(authority_blob, value)
+                for value in oracle["required_values"]),
             "notification_floor": len(texts) >= oracle["min_notifications"],
             "notification_ceiling": len(texts) <= oracle["max_notifications"],
             "answer_grounded": all(_contains(answers, value) for value in oracle["answer_contains"]),

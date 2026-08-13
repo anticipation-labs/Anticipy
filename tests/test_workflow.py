@@ -71,6 +71,18 @@ def test_exact_owner_source_is_bound_into_approval_scope():
     assert from_params(put_in_params({}, sourced)) == sourced
 
 
+def test_split_instruction_retains_every_source_event_once():
+    sourced = new_plan(
+        owner_ref="owner-a", lineage_key="conversation-1",
+        goal="book Pepper for a vaccination",
+        authority_text="first half … then: second half",
+        consequence=Consequence.CONSEQUENTIAL,
+        source_event_id="event-2",
+        source_event_ids=("event-1", "event-2", "event-1"),
+        plan_id="plan-1", now=NOW)
+    assert sourced.source_event_ids == ("event-1", "event-2")
+
+
 def test_changing_exact_owner_source_invalidates_old_authority():
     sourced = new_plan(
         owner_ref="owner-a", lineage_key="conversation-1", goal="book Pepper",

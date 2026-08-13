@@ -358,6 +358,7 @@ def from_params(params: Mapping[str, Any]) -> Optional[Plan]:
 def new_plan(*, owner_ref: str, lineage_key: str, goal: str,
              consequence: Consequence,
              source_event_id: str,
+             source_event_ids: Iterable[str] = (),
              authority_text: str = "",
              facts: Optional[Mapping[str, Any]] = None,
              required: Iterable[str] = (),
@@ -366,6 +367,9 @@ def new_plan(*, owner_ref: str, lineage_key: str, goal: str,
     at = _at(now)
     state = (PlanState.QUEUED if consequence == Consequence.READ_ONLY
              else PlanState.AWAITING_APPROVAL)
+    events = list(dict.fromkeys(
+        [str(value).strip() for value in source_event_ids if str(value).strip()]
+        + ([source_event_id.strip()] if source_event_id.strip() else [])))
     plan = Plan(
         plan_id=plan_id or str(uuid.uuid4()),
         owner_ref=owner_ref.strip(),
@@ -378,7 +382,7 @@ def new_plan(*, owner_ref: str, lineage_key: str, goal: str,
         facts=_clean_facts(facts),
         required=tuple(dict.fromkeys(str(x).strip() for x in required
                                      if str(x).strip())),
-        source_event_ids=(source_event_id.strip(),) if source_event_id.strip() else (),
+        source_event_ids=tuple(events),
         created_at=at,
         updated_at=at,
     )

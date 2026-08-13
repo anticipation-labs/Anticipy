@@ -129,5 +129,5 @@ def test_filled_answers_reach_the_job_params_in_both_lanes():
         os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
     assert src.count("for k, v in filled.items():") == 1          # ambient lane
     assert '_memory_filled' in src                                 # direct lane
-    i = src.index('params = {"source": line, "now": self._now_line()}')
+    i = src.index('params = {"source": authority_source, "now": self._now_line()}')
     assert "_memory_filled" in src[i:i + 500]

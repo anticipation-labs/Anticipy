@@ -763,7 +763,11 @@ class Anticipy:
             if last_heard and heard_at - last_heard[1] < CONVERSATION_WINDOW
             else ((context or [])[-1] if context else None)
         )
-        self._last_heard = (line, heard_at)
+        stitch_prev_event_id = (
+            str(last_heard[2] or "").strip()
+            if last_heard and len(last_heard) > 2 else ""
+        )
+        self._last_heard = (line, heard_at, self._source_event_id)
         # Unmistakable dictation is known before anything can answer or act:
         # a line the owner voice-typed at another machine must not be
         # answered from memory as if he had asked HER. Explicit lines (he
@@ -933,6 +937,17 @@ class Anticipy:
                 reason="consequential command continued after recognizer split",
                 needs_confirmation=True,
                 addressee="person", owes="owner")
+        # A recognizer split is one owner-authored instruction in two audio
+        # events. The workflow authority must retain the actual words from
+        # BOTH halves; otherwise the browser safety wall correctly refuses
+        # concrete facts that appeared only in the first half.
+        authority_source = line
+        authority_event_ids = [self._source_event_id] if self._source_event_id else []
+        if stitched_goal and stitch_prev_line:
+            authority_source = f"{stitch_prev_line} … then: {line}"
+            authority_event_ids = [event for event in
+                                   (stitch_prev_event_id, self._source_event_id)
+                                   if event]
         # The EFFECTIVE addressee — the one her behaviour actually keys on,
         # written back so the event record shows what was applied. An
         # explicit line (he texted/typed it AT her) is assistant by
@@ -1124,9 +1139,11 @@ class Anticipy:
                     decision.assumption = (
                         (decision.assumption + " — " if decision.assumption
                          else "") + f"from what I know about you: {picked}")
-                params = {"source": line, "now": self._now_line(), "lane": "desk"}
+                params = {"source": authority_source, "now": self._now_line(),
+                          "lane": "desk"}
                 if stitched_goal:
                     params["recognizer_continuation"] = True
+                    params["source_event_ids"] = authority_event_ids
                 for k, v in filled.items():
                     key = re.sub(r"\W+", " ", k).strip().lower()[:48]
                     if key:
@@ -1386,9 +1403,10 @@ class Anticipy:
         if decision.decision == "act" and decision.goal:
             # The executor needs temporal ground truth: a job run today with
             # no "now" produced an OpenTable result dated a YEAR in the past.
-            params = {"source": line, "now": self._now_line()}
+            params = {"source": authority_source, "now": self._now_line()}
             if stitched_goal:
                 params["recognizer_continuation"] = True
+                params["source_event_ids"] = authority_event_ids
             if channel:
                 params["channel"] = channel
             for k, v in (getattr(self, "_memory_filled", None) or {}).items():
@@ -1930,6 +1948,9 @@ class Anticipy:
                          else Consequence.READ_ONLY),
             source_event_id=str(params.get("source_event_id")
                                 or self._source_event_id or ""),
+            source_event_ids=tuple(str(value) for value in
+                                   (params.get("source_event_ids") or [])
+                                   if str(value)),
             authority_text=str(params.get("source") or ""),
         )
         params = put_in_params(params, workflow)
@@ -2104,8 +2125,13 @@ class Anticipy:
         cur_src = (cur_params.get("source") or "").strip()
         new_src = (params.get("source") or "").strip()
         merged = dict(cur_params, **params)
-        if cur_src and new_src and new_src not in cur_src:
-            merged["source"] = f"{cur_src} … then: {new_src}"
+        if cur_src and new_src:
+            if new_src in cur_src:
+                merged["source"] = cur_src
+            elif cur_src in new_src:
+                merged["source"] = new_src
+            else:
+                merged["source"] = f"{cur_src} … then: {new_src}"
         elif cur_src:
             merged["source"] = cur_src
         fields = {}

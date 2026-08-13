@@ -240,8 +240,9 @@ def test_progressive_split_keeps_raw_line_after_partial_action(monkeypatch):
              "policy AUTO-33365: highway stone caused a 20")
     second = ("yeah, agreed — cm crack in Coquitlam on next Tuesday; use "
               "Speedy Glass for repair")
-    assert a.hear(first, speaker="owner")["decision"].decision == "act"
-    result = a.hear(second, context=[first], speaker="owner")
+    assert a.hear(first, speaker="owner", source_event_id="event-1")["decision"].decision == "act"
+    result = a.hear(second, context=[first], speaker="owner",
+                    source_event_id="event-2")
 
     exact = ("Open a windshield claim on policy AUTO-33365: highway stone "
              "caused a 20 cm crack in Coquitlam on next Tuesday; use Speedy "
@@ -249,6 +250,9 @@ def test_progressive_split_keeps_raw_line_after_partial_action(monkeypatch):
     assert result["decision"].goal == exact
     assert calls[-1][0] == exact
     assert calls[-1][1]["recognizer_continuation"] is True
+    assert first in calls[-1][1]["source"]
+    assert second in calls[-1][1]["source"]
+    assert calls[-1][1]["source_event_ids"] == ["event-1", "event-2"]
 
 
 def test_proven_recognizer_continuation_replaces_partial_paraphrase(monkeypatch):
