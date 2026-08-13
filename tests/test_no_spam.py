@@ -130,8 +130,10 @@ def test_the_guard_runs_before_the_message_is_written():
     block = src[src.index("def ask_about_stuck_jobs"):]
     block = block[:block.index("\ndef ", 10)]
     guard = block.index('asked_about_recently(job.get("goal", "")')
+    durable = block.index('need_already_asked(job.get("goal", ""), blocker)')
     compose = block.index("said = anticipy._voice({")
     assert guard < compose, "the cheap guard must come before the model call"
+    assert durable < compose, "the durable guard must survive deploys without burning a model call"
 
 
 def test_a_NEW_thing_to_say_is_never_swallowed_by_the_cooldown():

@@ -785,6 +785,26 @@ export function unquotedCode(text, fieldAttrs, goal, scope, facts) {
   return `refused: this is a one-time/verification code field and "${v}" is not a code the owner actually gave — codes are never guessed, derived or padded out. Stop with needs_user and ask for the exact code.`;
 }
 
+/// Passwords and payment-card details are the owner's hands, never ours.
+/// Keep this outside the model: a prompt is advice, while this function is a
+/// mechanical stop applied before either CDP typing or native value setting.
+export function protectedInput(meta = {}) {
+  const type = String(meta.type || "").trim().toLowerCase();
+  const autocomplete = String(meta.autocomplete || "").trim().toLowerCase();
+  const attrs = String(meta.attrs || "");
+  if (type === "password") {
+    return "refused: this is a password field — only the owner can fill it";
+  }
+  if (autocomplete.startsWith("cc-")) {
+    return "refused: this is a payment-card field — only the owner can fill it";
+  }
+  const cardField = /\b(?:credit|debit|payment)\s*card\b|\bcard\s*(?:number|no\.?|holder|expiry|expiration|security\s*code)\b|\b(?:cvv|cvc|ccv)\b/i;
+  if (cardField.test(attrs)) {
+    return "refused: this is a payment-card field — only the owner can fill it";
+  }
+  return null;
+}
+
 export function isAuthored(text, goal, scope) {
   const w = String(text || "").trim().split(/\s+/).filter(Boolean);
   if (w.length < AUTHORED_WORDS) return false;
@@ -819,6 +839,22 @@ async function fieldRejects(tabId, index) {
       (i) => window.__anticipyValidity && window.__anticipyValidity(i))) || null;
   } catch (e) {
     return null;                 // cannot ask -> behave exactly as before
+  }
+}
+
+async function inputMeta(tabId, index) {
+  try {
+    return await inFrame(tabId, index, (i) => {
+      const el = window.__anticipyMap[i];
+      if (!el || el.tagName !== "INPUT") return {};
+      const attrs = [el.name, el.id, el.autocomplete, el.placeholder,
+        el.getAttribute && el.getAttribute("aria-label"),
+        (el.labels && el.labels[0] && el.labels[0].textContent) || ""]
+        .filter(Boolean).join(" ");
+      return { type: el.type || "text", autocomplete: el.autocomplete || "", attrs };
+    });
+  } catch (_) {
+    return {};
   }
 }
 
@@ -1288,6 +1324,10 @@ export async function runAgentGoal(goal, opts) {
         // "navigated everything fine but couldn't pick from the dropdown /
         // change the date" failure. Set the value directly and fire the
         // events frameworks listen for.
+        const protectedStop = protectedInput(await inputMeta(tab.id, decision.index));
+        if (protectedStop) {
+          return (handBack = true) && { status: "needs_user", result: protectedStop, tabId: tab.id };
+        }
         let out;
         try {
           const res = await chrome.scripting.executeScript({
@@ -1423,18 +1463,12 @@ export async function runAgentGoal(goal, opts) {
         if (decision.action === "type") {
           // Code fields get the mechanical check BEFORE anything is typed:
           // by the time a wrong code is in the field, one Enter commits it.
-          let attrs = "";
-          try {
-            attrs = await inFrame(tab.id, decision.index, (i) => {
-              const el = window.__anticipyMap[i];
-              if (!el) return "";
-              return [el.name, el.id, el.autocomplete, el.placeholder,
-                el.getAttribute && el.getAttribute("aria-label"),
-                (el.labels && el.labels[0] && el.labels[0].textContent) || ""]
-                .filter(Boolean).join(" ");
-            });
-          } catch (e) { /* unmappable — the guard fails open */ }
-          const codeStop = unquotedCode(decision.text, attrs, goal, scope, factsText);
+          const meta = await inputMeta(tab.id, decision.index);
+          const protectedStop = protectedInput(meta);
+          if (protectedStop) {
+            return (handBack = true) && { status: "needs_user", result: protectedStop, tabId: tab.id };
+          }
+          const codeStop = unquotedCode(decision.text, meta.attrs, goal, scope, factsText);
           if (codeStop) {
             stuckStreak++;
             history.push(`step ${step}: ${codeStop}`);

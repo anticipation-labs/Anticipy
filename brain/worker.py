@@ -1503,6 +1503,12 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                     and asked_about_recently(job.get("goal", ""))):
                 print(f"stuck job {job['id']}: same thing again moments ago, staying quiet")
                 continue
+            # The durable record survives restarts and deploys. Check it before
+            # composing: production once spent a model call every three seconds
+            # rewriting a question this exact guard then threw away.
+            if need_already_asked(job.get("goal", ""), blocker):
+                print(f"stuck job {job['id']}: already asked for this, staying quiet")
+                continue
             said = anticipy._voice({
                 "situation": "you got most of the way through a task in their browser "
                              "and need one thing from them to finish. Carry the facts "
@@ -1523,9 +1529,6 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             said = said or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
             # What she actually sent is the durable record — a set in memory
             # would forget across a redeploy and re-ask for his name and email.
-            if need_already_asked(job.get("goal", ""), blocker):
-                print(f"stuck job {job['id']}: already asked for this, staying quiet")
-                continue
             # Only record it if it actually left the building. notify_owner
             # swallows transport failures and returns None; recording anyway
             # turned a refused send into 24 hours of silence about that task,

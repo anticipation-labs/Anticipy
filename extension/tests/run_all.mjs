@@ -11,6 +11,7 @@ const suites = [
   "test_planner.mjs",
   "test_resume_tab.mjs",
   "test_code_guard.mjs",
+  "test_protected_input.mjs",
   "test_verification_fail_closed.mjs",
   "test_exact_fact_verification.mjs",
   "test_workflow_state.mjs",

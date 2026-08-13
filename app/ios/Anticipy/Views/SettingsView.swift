@@ -327,9 +327,12 @@ struct SettingsView: View {
                     }
                     .foregroundStyle(Theme.champagne)
                 }
-                Text("There's no separate privacy page yet. This section is it, and it's the whole truth.")
-                    .font(.caption)
-                    .foregroundStyle(Theme.gray)
+                if let privacy = URL(string: "https://backend-production-61e0a.up.railway.app/privacy.html") {
+                    Link(destination: privacy) {
+                        Label("Read the privacy policy", systemImage: "hand.raised")
+                    }
+                    .foregroundStyle(Theme.champagne)
+                }
             }
             .listRowBackground(Theme.card)
 

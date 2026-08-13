@@ -248,7 +248,6 @@ const ACTIONS = {
     `&details=${encodeURIComponent(p.details || "Scheduled by Anticipy")}`,
   research_and_report: (p) =>
     p.url || `https://www.google.com/search?q=${encodeURIComponent(p.query || "")}`,
-  form_submit_demo: () => "https://the-internet.herokuapp.com/login",
 };
 
 async function claimJob() {
@@ -691,36 +690,12 @@ async function runJobInner(job, params) {
     // tab groups unavailable (e.g. incognito) — continue in a plain background tab
   }
 
-  if (job.goal === "form_submit_demo") {
-    // Demonstrates in-page acting: fill and submit a real form, read the result.
-    await new Promise((res) => setTimeout(res, 3000));
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        document.querySelector("#username").value = "tomsmith";
-        document.querySelector("#password").value = "SuperSecretPassword!";
-        document.querySelector("button[type=submit]").click();
-        return "submitted";
-      },
-    });
-    await new Promise((res) => setTimeout(res, 2500));
-    const [{ result: banner }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => (document.querySelector("#flash") || {}).innerText || "no banner",
-    });
-    await updateJob(job.id, { status: "done", result: `form ${result}; site said: ${banner.trim().split("\n")[0]}` });
-    await setCurrentJob({ status: "done", result: `The site said: ${banner.trim().split("\n")[0]}` });
-    // Nothing for a human to look at — close it. Leaving working tabs open is
-    // how fifty of them piled up in the owner's window.
-    try { await chrome.tabs.remove(tab.id); } catch (e) { /* gone */ }
-  } else {
-    // Prefill flows: the page IS the thing the owner acts on, so it stays —
-    // but in the background (§9), never surfacing itself. The badge and
-    // notification are how they find it; their click is what opens it.
-    await surfaceHandBack(tab.id, jobLine(job, params), "confirm");
-    await updateJob(job.id, { status: "awaiting_confirm", result: `opened ${job.goal} page in tab ${tab.id}` });
-    await setCurrentJob({ status: "awaiting_confirm", result: "It's filled in and waiting quietly in my tab group — click my notification (or Open below) to see it." });
-  }
+  // Prefill flows: the page IS the thing the owner acts on, so it stays —
+  // but in the background (§9), never surfacing itself. The badge and
+  // notification are how they find it; their click is what opens it.
+  await surfaceHandBack(tab.id, jobLine(job, params), "confirm");
+  await updateJob(job.id, { status: "awaiting_confirm", result: `opened ${job.goal} page in tab ${tab.id}` });
+  await setCurrentJob({ status: "awaiting_confirm", result: "It's filled in and waiting quietly in my tab group — click my notification (or Open below) to see it." });
 }
 
 // Only one poll cycle at a time — SSE events, alarms, and worker wake can all

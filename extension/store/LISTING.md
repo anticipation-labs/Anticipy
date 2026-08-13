@@ -1,6 +1,6 @@
 # Chrome Web Store — Anticipy listing package
 
-Status: PREPARED, ONE BLOCKER LEFT. Every claim below is written against code
+Status: PREPARED FOR FINAL STORE ASSET REVIEW. Every claim below is written against code
 I opened and read, and carries the file and the thing in it I checked. Upload
 is one submission at https://chrome.google.com/webstore/devconsole ($5 one-time
 fee, review typically 1–3 days). Expect extra scrutiny for `debugger` — the
@@ -11,22 +11,13 @@ verified, not a line number. `extension/agent_loop.js` and `background.js` are
 being edited by other work in parallel and line numbers drift under you; a
 symbol name still finds it.*
 
-## The one thing still blocking submission
+## Privacy policy
 
-**The privacy policy page does not exist.** The listing needs a policy URL, and
-the URL I have been carrying —
-`https://backend-production-61e0a.up.railway.app/privacy.html` — returns 404.
-`ls backend/pb_public/` holds exactly two files: `setup.html` and
-`anticipy-extension.zip`. There is no policy page to link to, and I can't
-create one from the front end: PocketBase serves that directory statically, so
-publishing it means deploying the backend service.
-
-I can't submit without it. Chrome asks for a policy URL on any listing that
-handles user data, and this one does. Exactly what has to be on that page is
-written out under "What the privacy policy has to say" at the bottom — drawn
-from the code, so it can be written once and be true.
-
-Everything else in this file is ready.
+The codebase now includes the public policy at `backend/pb_public/privacy.html`.
+The release gate is a live HTTP 200 at
+`https://backend-production-61e0a.up.railway.app/privacy.html` after the backend
+deployment. Its disclosures are checked against the iPhone, extension, backend,
+OpenRouter, Twilio, Apple speech-recognition, and deletion paths below.
 
 ---
 
@@ -141,15 +132,18 @@ Productivity / Tools
 - **`alarms`**: polls the user's own job queue every 5 s and heartbeats every
   10 s while paired (`POLL_SECONDS`, `HEARTBEAT_SECONDS`, `anticipy-poll`,
   `anticipy-heartbeat`).
+- **`notifications`**: tells the owner when a task needs login, CAPTCHA,
+  confirmation, or another hand-back. Only the owner's click opens that tab;
+  the background worker never steals focus (`surfaceHandBack()` and the
+  `chrome.notifications.onClicked` listener in `background.js`).
 - **`<all_urls>`**: tasks are open-ended user requests ("book a table at…"), so
   the destination cannot be known in advance. Banking and brokerage domains
   are refused in code regardless.
 
-Honest caveat I would rather the reviewer heard from me: "never fills passwords
-or payment fields" is enforced as a model instruction, not as a code-level
-field filter. What *is* enforced in code is the blocked-domain list, the
-CAPTCHA hand-back, and the refusal of `file` and `range` inputs
-(`refused: I don't operate ${type} inputs`).
+Password and payment-card fields fail closed in code before either CDP typing
+or native value setting (`protectedInput()` in `agent_loop.js`). The same hard
+layer blocks protected financial domains, invented verification codes,
+CAPTCHAs, and `file`/`range` inputs.
 
 ## Privacy disclosures (data-use form)
 
@@ -173,8 +167,7 @@ CAPTCHA hand-back, and the refusal of `file` and `range` inputs
   to `google/gemini-2.5-flash`. The extension fetches that bundle the moment
   pairing lands (`ensureLLMKey()` in `background.js`) and passes the model
   straight into the run. Users never supply, choose, or see a key or a model.
-- **Privacy policy URL:** *not yet published — this is the blocker at the top
-  of this file.* Intended home:
+- **Privacy policy URL:**
   `https://backend-production-61e0a.up.railway.app/privacy.html`.
 
 ---
@@ -286,22 +279,10 @@ await fetch(`${BASE}/api/collections/jobs/records/PASTE_JOB_ID`, {
 
 Closing the tab, or removing the extension, also ends it immediately.
 
-**Optional smoke test with no AI involved.**
-`await anticipyTask("form_submit_demo", {})` runs a fixed built-in routine: it
-opens `the-internet.herokuapp.com/login`, fills the demo username and password
-that site publishes on its own page, submits, reads the green banner back, and
-closes the tab (`ACTIONS.form_submit_demo` and the `form_submit_demo` branch in
-`background.js`). It is a self-test for the tab and scripting path — no AI
-model, no real account. Worth knowing when you read the source: those two
-hard-coded strings are that test site's own public fixtures, not a credential,
-and this is the only code path in the extension that types into a password
-field at all.
-
----
-
 ## Before you upload
 
-- [ ] **Publish the privacy policy** (below). Nothing else can proceed.
+- [x] **Author the privacy policy.** Publishing is part of the backend release
+      gate and must return HTTP 200 before store submission.
 - [ ] **Confirm `OPENROUTER_API_KEY` is set and funded on the backend.** Without
       it `/agent/key` returns 503 (`agent_key.pb.js:19`) and the first task a
       reviewer queues fails with "no LLM key". The test instructions above are
@@ -316,18 +297,15 @@ field at all.
       Both functions, the option plumbing in `background.js`, and the solver
       branch are gone; `grep -rn capsolver extension/` returns nothing. A CAPTCHA
       now does exactly one thing: stop and hand back to the person.
-- [ ] **Decide whether `form_submit_demo` ships.** It's development scaffolding
-      that hard-codes a login-form fill. Harmless and public, but it is the one
-      place the extension types into a password field, and it will be read as
-      one.
-- [ ] **Confirm the packaged manifest requests exactly:** `storage`, `tabs`,
-      `tabGroups`, `scripting`, `alarms`, `debugger`, and `<all_urls>`. The
-      `notifications` permission and its justification are gone from this
-      document — there was never a `chrome.notifications` call to justify. If
-      the uploaded package still asks for it, this listing is wrong again.
-- [ ] **Rebuild `backend/pb_public/anticipy-extension.zip` from the final
+- [x] **Remove `form_submit_demo`.** Production contains no built-in password
+      filler; `protectedInput()` now mechanically refuses password/card fields.
+- [x] **Confirm the packaged manifest requests exactly:** `storage`, `tabs`,
+      `tabGroups`, `scripting`, `alarms`, `debugger`, `notifications`, and
+      `<all_urls>`. Notifications surface a stopped task without stealing focus.
+- [x] **Rebuild `backend/pb_public/anticipy-extension.zip` from the final
       `extension/` folder** so the sideload path and the store package are the
-      same software.
+      same software. `build-zip.sh` is reproducible and the release manifest
+      records the SHA-256.
 - [ ] **Click through the popup on a clean profile before submitting.** A
       reviewer opens it first, and a popup that says the product is broken
       reads as a broken product.
