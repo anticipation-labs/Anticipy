@@ -149,6 +149,14 @@ check(/if \(!researched\)/.test(loopSrc),
       "it researches before giving up");
 check(/researched = true;/.test(loopSrc),
       "and researches only once per run");
+check(/FORM VALUES: answer each field's LABEL/.test(loopSrc)
+      && /CURRENT FORM VALUES:/.test(loopSrc),
+      "field values are grounded in the exact authority and shown before submit");
+check(/const boundedPayload/.test(loopSrc) && /Math\.min\(2048/.test(loopSrc),
+      "every model call has a bounded output budget");
+const submitBlock = loopSrc.indexOf("PRE-SUBMIT BLOCK — these visible values");
+check(submitBlock > 0 && loopSrc.indexOf("delete actionCounts[sig]", submitBlock) > submitBlock,
+      "a safety-blocked submit is not counted as a dead page click");
 
 
 // ------------------------------ words she wrote vs facts he gave

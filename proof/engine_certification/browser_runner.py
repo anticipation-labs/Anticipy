@@ -91,9 +91,10 @@ def prepare(cases_path: Path, oracle_path: Path, brain_results_path: Path,
                 "slug": slug,
                 "title": f"{spec['title']} · {case['id']}",
                 "task": task,
+                "authority_text": source or goal,
                 # Product evidence, never hidden oracle: the concise model
                 # goal plus the exact source retained on the brain job.
-                "approved_scope": task,
+                "approved_scope": source or goal,
                 # Critical hidden-oracle invariant: expected field values are
                 # used by the site verifier, never copied into workflow facts.
                 "agent_facts": {},

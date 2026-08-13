@@ -393,7 +393,8 @@ def queue_case(case, identity):
     plan = new_plan(owner_ref=identity["owner_ref"],
                     lineage_key=f"day-zero:{case['slug']}:{uuid.uuid4()}",
                     goal=case["task"], consequence=Consequence.CONSEQUENTIAL,
-                    source_event_id=f"scenario:{case['slug']}", facts=facts)
+                    source_event_id=f"scenario:{case['slug']}", facts=facts,
+                    authority_text=case.get("authority_text") or approved_scope)
     plan = approve(plan, expected_version=plan.version,
                    owner_words=f"Run the {case['slug']} day-zero proof")
     params = {"task": case["task"], "start_url": f"{SITE}/case/{case['slug']}",

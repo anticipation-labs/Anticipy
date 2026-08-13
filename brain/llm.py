@@ -1,6 +1,7 @@
 """LLM client for Anticipy's brain.
 
-Uses OpenRouter (OpenAI-compatible) when OPENROUTER_API_KEY is set.
+Uses Google Gemini when GEMINI_API_KEY is set, or OpenRouter when only its
+credential is present.
 Falls back to a deterministic heuristic engine when no key is present, so the
 whole pipeline is provable end-to-end without secrets. The real key only
 swaps the reasoning core; the plumbing is identical.
@@ -18,6 +19,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 # Cheap, fast triage model per the product spec (Omar picked these).
 DEFAULT_MODEL = os.environ.get("ANTICIPY_MODEL", "deepseek/deepseek-v3.2")
 
@@ -81,7 +83,7 @@ def now_line(tz_name: Optional[str] = None) -> str:
 class LLMResult:
     text: str
     used_model: str
-    mode: str  # "openrouter" or "heuristic"
+    mode: str  # "gemini", "openrouter", or "heuristic"
 
 
 class LLM:
@@ -91,12 +93,17 @@ class LLM:
         # to the server default and say nothing about place — exactly the
         # behaviour that existed before this was per-owner.
         self.owner_zone = owner_zone
+        self.gemini_api_key = os.environ.get("GEMINI_API_KEY")
+        # Passing an API key explicitly preserves the historical meaning:
+        # callers asking for one OpenRouter client do not silently use an
+        # unrelated process credential instead.
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
         self.model = model
+        self.gemini_model = os.environ.get("ANTICIPY_GEMINI_MODEL", "gemini-2.5-flash")
 
     @property
     def live(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.gemini_api_key or self.api_key)
 
     def chat(self, system: str, user: str, temperature: float = 0.1) -> LLMResult:
         # Grounded at the client so EVERY caller — triage, replies, voice,
@@ -110,9 +117,42 @@ class LLM:
         system = f"{now_line(self.owner_zone)}\n\n{system}"
         if where:
             system = f"{where}\n{system}"
+        if self.gemini_api_key:
+            return self._gemini(system, user, temperature)
         if self.live:
             return self._openrouter(system, user, temperature)
         return LLMResult(text=self._heuristic(system, user), used_model="heuristic", mode="heuristic")
+
+    def _gemini(self, system: str, user: str, temperature: float) -> LLMResult:
+        """Call Gemini directly without exposing its credential downstream."""
+        payload = {
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                # Anticipy's model replies are deliberately short structured
+                # judgments. A hard bound prevents surprise cost and latency.
+                "maxOutputTokens": 2048,
+                # Gemini 2.5 Flash otherwise defaults to dynamic thinking,
+                # whose private tokens consume the same output allowance and
+                # can truncate a tiny JSON judgment mid-key.
+                "thinkingConfig": {"thinkingBudget": 0},
+            },
+        }
+        headers = {
+            "x-goog-api-key": self.gemini_api_key,
+            "Content-Type": "application/json",
+        }
+        url = GEMINI_URL.format(model=self.gemini_model)
+        with httpx.Client(timeout=60) as c:
+            r = c.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            data = r.json()
+        parts = (((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
+        text = "".join(str(part.get("text") or "") for part in parts if isinstance(part, dict))
+        if not text:
+            raise ValueError("Gemini returned no text")
+        return LLMResult(text=text, used_model=self.gemini_model, mode="gemini")
 
     def _openrouter(self, system: str, user: str, temperature: float) -> LLMResult:
         headers = {

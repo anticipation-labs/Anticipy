@@ -593,7 +593,12 @@ async function runJobInner(job, params) {
         authorized: params.authorized === true,
         // Exactly what the owner agreed to, in their own words plus what
         // she told them — the only thing an action is measured against.
-        scope: params.approved_scope || params.say || params.source || "",
+        // The model's goal is navigation guidance; the owner's retained words
+        // are the authority for exact form values.  A paraphrased goal once
+        // turned "battery will not charge" into "battery not charging" and
+        // still passed the old combined-scope guard.
+        scope: params._workflow?.authority_text
+          || params.approved_scope || params.say || params.source || "",
         // Every concrete detail already on the job record (time, party size,
         // an address, an answer he texted) — so the agent SETS them instead
         // of asking for them. Bookkeeping keys are not facts.

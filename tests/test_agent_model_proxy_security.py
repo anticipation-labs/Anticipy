@@ -11,6 +11,7 @@ def test_agent_key_route_never_returns_server_credentials():
     assert "openrouter_key" not in key_route.lower()
     assert "service_token" not in key_route.lower()
     assert '"Authorization": "Bearer "' not in key_route
+    assert "GEMINI_API_KEY" in key_route
 
 
 def test_model_proxy_requires_private_agent_credential_and_allowlist():
@@ -20,7 +21,17 @@ def test_model_proxy_requires_private_agent_credential_and_allowlist():
     assert "X-Anticipy-Agent-Token" in proxy
     assert "paired = true" in proxy
     assert "model is not enabled for browser agents" in proxy
-    assert '"Authorization": "Bearer " + key' in proxy
+    assert '"Authorization": "Bearer " + openrouterKey' in proxy
+    assert '"x-goog-api-key": geminiKey' in proxy
+    assert "generateContent" in proxy
+    assert "systemInstruction" in proxy
+    assert "inlineData" in proxy
+    assert 'provider: "google"' in proxy
+    assert "max_tokens: boundedMax" in proxy
+    assert "Math.min(2048" in proxy
+    assert "maxOutputTokens: boundedMax" in proxy
+    assert "thinkingConfig: { thinkingBudget: 0 }" in proxy
+    assert 'responseMimeType = "application/json"' in proxy
 
 
 def test_extension_uses_opaque_proxy_marker_for_production_calls():
@@ -31,6 +42,18 @@ def test_extension_uses_opaque_proxy_marker_for_production_calls():
     assert "fetch(`${base}/agent/llm`" in loop
     assert "X-Anticipy-Agent-Token" in loop
     assert loop.count("await modelFetch(") >= 5
+    assert "const boundedPayload" in loop
+    assert "max_tokens: 384" in loop
+
+
+def test_browser_certification_keeps_model_goal_out_of_exact_authority():
+    runner = (ROOT / "proof/engine_certification/browser_runner.py").read_text()
+    rig = (ROOT / "proof/day_zero_20.py").read_text()
+    background = (ROOT / "extension/background.js").read_text()
+    assert '"authority_text": source or goal' in runner
+    assert '"approved_scope": source or goal' in runner
+    assert 'authority_text=case.get("authority_text") or approved_scope' in rig
+    assert "params._workflow?.authority_text" in background
 
 
 def test_browser_certification_uses_the_paired_backend_proxy_too():

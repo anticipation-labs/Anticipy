@@ -10,12 +10,23 @@ const BACKEND_LLM = "backend-proxy";
 const DEFAULT_LLM_BASE = "https://backend-production-61e0a.up.railway.app";
 
 async function modelFetch(apiKey, payload, signal = undefined) {
+  // Every browser response is a tiny JSON decision.  Without an explicit
+  // cap, OpenRouter prices/checks the request against the model's full
+  // 65,535-token output window; a live run exhausted its apparent budget
+  // after 70 actions even though replies were only tens of tokens.  Bound it
+  // on both transports, and let callers request less when appropriate.
+  const requested = Number(payload && payload.max_tokens);
+  const boundedPayload = {
+    ...payload,
+    max_tokens: Math.min(2048, Math.max(64,
+      Number.isFinite(requested) ? Math.floor(requested) : 512)),
+  };
   if (apiKey !== BACKEND_LLM) {
     return fetch(OPENROUTER_URL, {
       signal, method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
                  "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy Codex Version" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(boundedPayload),
     });
   }
   const { backendUrl, agentId, agentToken } = await chrome.storage.local.get(
@@ -26,7 +37,7 @@ async function modelFetch(apiKey, payload, signal = undefined) {
     signal, method: "POST",
     headers: { "Content-Type": "application/json", "X-Anticipy-Agent-ID": agentId,
                "X-Anticipy-Agent-Token": agentToken },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(boundedPayload),
   });
 }
 
@@ -58,6 +69,7 @@ The mirror rule: a choice the task NEVER gave you is not yours to make. If the s
 SEARCH BOXES take a search-shaped query — the few words that identify the thing ("Earls West Vancouver"), never the owner's whole spoken sentence.
 AUTOCOMPLETE (airport/city/address boxes): type with enter:false, then on the NEXT step a "SUGGESTIONS" list appears — CLICK the option that matches. Never re-type into a box that already has your text; pick a suggestion or move on.
 DATES: in an ordinary text field, copy the owner's relative wording exactly (for example "next Tuesday" or "tomorrow"). Do not recalculate or normalize it. Convert to YYYY-MM-DD only when the page map explicitly identifies a native date field and tells you to use the select action.
+FORM VALUES: answer each field's LABEL with the shortest exact value from WHAT THEY AGREED TO. Copy free-text descriptions verbatim, including small words; never paraphrase, reorder, summarize, or fuse a portal/service name with the actual field value. A field gets the value itself, not the surrounding sentence. When the owner contrasts X with not-Y, a Resolution/Choice field gets X. Re-read CURRENT FORM VALUES before the final button and correct every drift first.
 Never repeat an action that already failed twice (check HISTORY). If a site's own search box ignores your typing, navigate to https://www.bing.com and research the answer from search results instead.`;
 
 /// A picture of the page, for the moments a text list cannot express what a
@@ -136,7 +148,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
           : "";
         const body = `${authLine}${who}${factsBlock}${planBlock(plan)}\n\nGOAL: ${goal}\n\nHISTORY:\n${history.join("\n") || "(first step)"}\n\nURL: ${state.url}\nTITLE: ${state.title}` +
           (state.overlay ? "\nNOTE: a dialog/picker is open — the elements below are ITS contents, which is what the user is looking at." : "") +
-          `\nELEMENTS:\n${state.elements}\n\nPAGE TEXT:\n${state.text}`;
+          `\nELEMENTS:\n${state.elements}\n\nCURRENT FORM VALUES:\n${JSON.stringify(state.fields || []).slice(0, 6000)}\n\nPAGE TEXT:\n${state.text}`;
         // With an image the content becomes multipart; text-only stays a
         // plain string so nothing changes for the normal path.
         return image
@@ -154,6 +166,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
     // output after retry"), which read to the owner as a browser failure
     // when it was really our parser being brittle.
     { model: image ? (visionModel || model) : model, messages, temperature: 0,
+      max_tokens: 384,
       response_format: { type: "json_object" } }, ctl.signal).finally(() => clearTimeout(kill));
   // Name the real cause. An expired/rotated/out-of-credit key used to surface
   // as "unparseable model output" — the owner would go hunting the page.
@@ -180,6 +193,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
     ]);
     try {
       const r2 = await modelFetch(apiKey, { model, messages: nudge, temperature: 0,
+        max_tokens: 384,
         response_format: { type: "json_object" } });
       if (r2.ok) {
         const fixed = extractAction((await r2.json()).choices?.[0]?.message?.content ?? "");
@@ -321,6 +335,16 @@ function containsTokenSequence(haystack, needle) {
   return false;
 }
 
+function containsOrderedTokens(haystack, needle) {
+  if (!needle.length) return false;
+  let at = 0;
+  for (const token of haystack) {
+    if (token === needle[at]) at++;
+    if (at === needle.length) return true;
+  }
+  return false;
+}
+
 function approvedDateValue(value, approvedText) {
   const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return false;
@@ -370,6 +394,14 @@ function approvedBoolean(field, approvedText) {
   return verdicts.some(Boolean);
 }
 
+function compactChoiceField(field) {
+  // Some portals render a short choice as a plain text box instead of a
+  // <select>. Identify the semantic kind from the field itself, never from a
+  // site/domain recipe. Descriptions and notes deliberately do not qualify.
+  const identity = wordTokens(`${field?.name || ""} ${field?.label || ""}`).join(" ");
+  return /\b(when|effective|timing|service|preference|resolution|workspace|plan|priority|category|status|type|choice|method|term|speed|risk|remedy|format|track|program|facility|dealer|shop)\b/.test(identity);
+}
+
 // Mechanical authorization boundary for form contents. The model can decide
 // which control represents a request, but it cannot submit a visible value
 // that appears nowhere in the owner's approved words, remembered profile, or
@@ -388,10 +420,129 @@ export function unsupportedScopeFields(scope, currentState, ownerProfile = null,
     }
     const valueTokens = wordTokens(value);
     if (containsTokenSequence(approvedTokens, valueTokens)) return false;
+    // Short categorical values often remove the page's own redundant
+    // context: "mail-in warranty repair" on a Warranty page becomes the
+    // Service value "Mail-in repair".  All words must still come from the
+    // owner, in order.  Longer free-text descriptions remain exact so
+    // "sink leaking under the cabinet" cannot lose "the" unnoticed.
+    if (valueTokens.length <= 3
+        && containsOrderedTokens(approvedTokens, valueTokens)) return false;
+    // A short text-rendered choice may omit a determiner from the owner's
+    // surrounding phrase ("at the end of THE current billing period" ->
+    // "End of current billing period"). This does not relax descriptions:
+    // only choice-shaped labels qualify, and every value token must still be
+    // present in the owner's words in order.
+    if (valueTokens.length <= 6 && compactChoiceField(field)
+        && containsOrderedTokens(approvedTokens, valueTokens)) return false;
     if (approvedDateValue(value, approvedText)) return false;
     if (approvedTimeValue(value, approvedText)) return false;
     return true;
   }).map((field) => String(field?.name || field?.label || "unnamed field"));
+}
+
+const FORM_ALIGNMENT_SYSTEM = `You are a strict pre-submit form auditor.
+You receive the owner's exact words, the task goal, and the form's CURRENT
+field values. Return corrections only where the current value does not answer
+that field's label precisely.
+
+Rules:
+- The owner's exact words are the sole authority. The task goal is a lossy
+  model summary and may have fused or dropped nouns; never use it to override
+  the owner's syntax.
+- Derive values only from the owner's exact words. Never invent a fact.
+- For a free-text description, copy the owner's wording verbatim, including
+  small words and punctuation. Never paraphrase or reorder it.
+- For a short categorical field (Workspace, Service, Resolution, Plan,
+  Effective, etc.), return only the minimal label-sized answer, not the
+  surrounding sentence, portal name, contrast, or redundant page context.
+- Distinguish the object being changed from the service/site where it lives.
+  In "change the Atlas workspace on CloudDesk", Workspace is "Atlas";
+  CloudDesk is where the change happens, not part of the Workspace value.
+- If the owner says X rather than/not Y, a single-choice field gets X.
+- Do not alter checkboxes, radio buttons, native dates/times, selects,
+  passwords, payment fields, or a value that already answers its label.
+
+Reply only with compact JSON:
+{"corrections":[{"index":1,"value":"exact corrected value","reason":"brief"}]}`;
+
+export function groundedFormCorrections(proposed, fields, authority) {
+  const allowed = new Map((Array.isArray(fields) ? fields : [])
+    .filter((field) => Number.isFinite(Number(field?.index)))
+    .map((field) => [Number(field.index), field]));
+  const pool = wordTokens(authority);
+  const rows = Array.isArray(proposed?.corrections) ? proposed.corrections : [];
+  const out = [];
+  for (const row of rows) {
+    const index = Number(row?.index);
+    const field = allowed.get(index);
+    const value = typeof row?.value === "string" ? row.value.trim() : "";
+    if (!field || !value || value.length > 300
+        || evidenceToken(value) === evidenceToken(field.value)) continue;
+    const tokens = wordTokens(value);
+    // The auditor may shorten/recombine the owner's phrase for a labelled
+    // categorical field, but every token still has to be the owner's.  This
+    // is the mechanical wall between semantic alignment and invention.
+    if (!tokens.length || tokens.some((token) => !pool.includes(token))) continue;
+    out.push({ index, value, reason: String(row.reason || "").slice(0, 120) });
+  }
+  return out;
+}
+
+async function auditFormAlignment(apiKey, model, goal, scope, state) {
+  const fields = (Array.isArray(state?.fields) ? state.fields : []).filter((field) => {
+    const type = String(field?.type || "text").toLowerCase();
+    return Number.isFinite(Number(field?.index))
+      && !["checkbox", "radio", "select", "select-one", "date", "time",
+           "datetime-local", "password", "hidden", "file"].includes(type)
+      && field?.readOnly !== true && field?.disabled !== true;
+  }).map((field) => ({
+    index: Number(field.index), name: String(field.name || ""),
+    label: String(field.label || ""), type: String(field.type || "text"),
+    value: String(field.value ?? "").slice(0, 500),
+  }));
+  if (!fields.length || !(scope || goal)) return [];
+  const messages = [
+    { role: "system", content: FORM_ALIGNMENT_SYSTEM },
+    { role: "user", content: `OWNER'S EXACT WORDS:\n${scope || goal}\n\nTASK GOAL:\n${goal}\n\nCURRENT FIELDS:\n${JSON.stringify(fields)}` },
+  ];
+  try {
+    const ctl = new AbortController();
+    const kill = setTimeout(() => ctl.abort(), 45000);
+    const response = await modelFetch(apiKey, {
+      model, messages, temperature: 0, max_tokens: 512,
+      response_format: { type: "json_object" },
+    }, ctl.signal).finally(() => clearTimeout(kill));
+    if (!response.ok) return [];
+    const raw = (await response.json())?.choices?.[0]?.message?.content || "";
+    const start = raw.indexOf("{"), end = raw.lastIndexOf("}");
+    if (start < 0 || end <= start) return [];
+    return groundedFormCorrections(
+      JSON.parse(raw.slice(start, end + 1)), fields, scope || goal);
+  } catch (_) {
+    return [];                         // audit failure never invents a block
+  }
+}
+
+async function applyFormCorrections(tabId, corrections) {
+  const applied = [];
+  for (const correction of corrections) {
+    try {
+      const meta = await inputMeta(tabId, correction.index);
+      if (protectedInput(meta)) continue;
+      const center = await elementCenter(tabId, correction.index);
+      if (!center) continue;
+      if (center.inFrameOnly) await frameClick(tabId, correction.index);
+      else await trustedClick(tabId, center.x, center.y);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      try { await inFrame(tabId, correction.index,
+        (index) => window.__anticipyFocus(index)); } catch (_) {}
+      await trustedType(tabId, correction.value, correction.index);
+      if (!(await fieldRejects(tabId, correction.index))) {
+        applied.push(`${correction.index}=${JSON.stringify(correction.value)}`);
+      }
+    } catch (_) { /* one uneditable field cannot prevent auditing the rest */ }
+  }
+  return applied;
 }
 
 // Remove only optional, editable, non-boolean defaults that the authorization
@@ -471,7 +622,9 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
   try {
     const ctl = new AbortController();
     const kill = setTimeout(() => ctl.abort(), 45000);
-    const r = await modelFetch(apiKey, { model, messages, temperature: 0 }, ctl.signal)
+    const r = await modelFetch(apiKey, {
+      model, messages, temperature: 0, max_tokens: 256,
+    }, ctl.signal)
       .finally(() => clearTimeout(kill));
     const data = await r.json();
     const m = (data.choices?.[0]?.message?.content ?? "").match(/\{[\s\S]*\}/);
@@ -856,7 +1009,7 @@ export async function planRun(apiKey, model, goal, ownerProfile, scope) {
 
   try {
     const r = await modelFetch(apiKey, {
-        model, temperature: 0,
+        model, temperature: 0, max_tokens: 768,
         messages: [{ role: "system", content: PLAN_SYSTEM }, { role: "user", content: user }],
     });
     if (!r.ok) return null;
@@ -1070,7 +1223,7 @@ async function researchStuck(apiKey, model, goal, url, title, history) {
     + `\n\nWHAT IT HAS TRIED (most recent last):\n${history.slice(-14).join("\n") || "(nothing recorded)"}`;
   try {
     const r = await modelFetch(apiKey, {
-        model, temperature: 0,
+        model, temperature: 0, max_tokens: 512,
         messages: [{ role: "system", content: RESEARCH_SYSTEM }, { role: "user", content: user }],
     });
     if (!r.ok) return null;
@@ -1628,6 +1781,15 @@ export async function runAgentGoal(goal, opts) {
               result: "The form is ready, but the owner has not approved its external effect.",
               tabId: tab.id };
           }
+          const corrections = await auditFormAlignment(
+            apiKey, model, goal, scope || goal, state);
+          const applied = await applyFormCorrections(tab.id, corrections);
+          if (applied.length) {
+            history.push(`step ${step}: PRE-SUBMIT ALIGNMENT corrected exact field values: ${applied.join(", ")}. Re-read the form before submitting.`);
+            delete actionCounts[sig];
+            stuckStreak = 0;
+            continue;
+          }
           let unsupportedScope = unsupportedScopeFields(scope || goal, state, ownerProfile, facts);
           if (unsupportedScope.length) {
             const cleared = await clearUnsupportedOptionalFields(
@@ -1643,12 +1805,17 @@ export async function runAgentGoal(goal, opts) {
           }
           if (unsupportedScope.length) {
             history.push(`step ${step}: PRE-SUBMIT BLOCK — these visible values are not supported by what the owner approved: ${unsupportedScope.join(", ")}. Replace or clear them before pressing the final control.`);
+            // The page did not ignore this click: Anticipy's own safety gate
+            // stopped it before dispatch.  Counting it as a dead page click
+            // removed the submit control and caused a false needs_user loop.
+            delete actionCounts[sig];
             stuckStreak++;
             continue;
           }
           const unsupported = unsupportedApprovedFacts(facts, state, state);
           if (unsupported.length) {
             history.push(`step ${step}: PRE-SUBMIT BLOCK — these approved facts are not set: ${unsupported.join(", ")}. Correct the fields before pressing the final control.`);
+            delete actionCounts[sig];
             stuckStreak++;
             continue;
           }
@@ -1739,6 +1906,15 @@ export async function runAgentGoal(goal, opts) {
                 history.push(`step ${step}: PRE-SUBMIT BLOCK — the final form state could not be read.`);
                 continue;
               }
+              const corrections = await auditFormAlignment(
+                apiKey, model, goal, scope || goal, beforeEnter);
+              const applied = await applyFormCorrections(tab.id, corrections);
+              if (applied.length) {
+                history.push(`step ${step}: PRE-SUBMIT ALIGNMENT corrected exact field values: ${applied.join(", ")}. Re-read the form before submitting.`);
+                delete actionCounts[sig];
+                stuckStreak = 0;
+                continue;
+              }
               let unsupportedScope = unsupportedScopeFields(scope || goal, beforeEnter, ownerProfile, facts);
               if (unsupportedScope.length) {
                 const cleared = await clearUnsupportedOptionalFields(
@@ -1753,12 +1929,14 @@ export async function runAgentGoal(goal, opts) {
               }
               if (unsupportedScope.length) {
                 history.push(`step ${step}: PRE-SUBMIT BLOCK — these visible values are not supported by what the owner approved: ${unsupportedScope.join(", ")}. Replace or clear them before submitting.`);
+                delete actionCounts[sig];
                 stuckStreak++;
                 continue;
               }
               const unsupported = unsupportedApprovedFacts(facts, beforeEnter, beforeEnter);
               if (unsupported.length) {
                 history.push(`step ${step}: PRE-SUBMIT BLOCK — these approved facts are not set: ${unsupported.join(", ")}. Correct the fields before submitting.`);
+                delete actionCounts[sig];
                 stuckStreak++;
                 continue;
               }

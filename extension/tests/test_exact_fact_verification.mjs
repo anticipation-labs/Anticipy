@@ -13,7 +13,8 @@ globalThis.chrome = globalThis.chrome || {
   runtime: {}, debugger: {}, tabGroups: {}, notifications: {}, alarms: {},
 };
 
-const { completionContradiction, unsupportedApprovedFacts, unsupportedScopeFields } =
+const { completionContradiction, groundedFormCorrections,
+        unsupportedApprovedFacts, unsupportedScopeFields } =
   await import(join(here, "..", "agent_loop.js"));
 const source = readFileSync(join(here, "..", "agent_loop.js"), "utf8");
 
@@ -71,6 +72,29 @@ check(unsupportedScopeFields(disputeScope, { fields: [
   { name: "account", value: "NG-96999" }, { name: "charged", value: "353.32" },
   { name: "usual", value: "79.95" }, { name: "resolution", value: "Corrected bill" },
 ] }).length === 0, "exact submitted values are supported without oracle facts");
+check(unsupportedScopeFields("Open a mail-in warranty repair", { fields: [
+  { name: "service", label: "Service", value: "Mail-in repair" },
+] }).length === 0, "short categorical values may remove redundant page context");
+check(unsupportedScopeFields(
+  "Cancel at the end of the current billing period", { fields: [
+    { name: "effective", label: "When", value: "End of current billing period" },
+  ] }).length === 0,
+  "text-rendered choices may omit surrounding determiners without leaving scope");
+check(unsupportedScopeFields("sink leaking under the cabinet", { fields: [
+  { name: "issue", label: "Issue", value: "sink leaking under cabinet" },
+] }).includes("issue"), "long descriptions may not silently lose the owner's words");
+const aligned = groundedFormCorrections({ corrections: [
+  { index: 1, value: "Anticipy" },
+  { index: 2, value: "At renewal" },
+  { index: 3, value: "invented enterprise plan" },
+] }, [
+  { index: 1, name: "workspace", value: "NorthGrid" },
+  { index: 2, name: "effective", value: "renewal" },
+  { index: 3, name: "plan", value: "Pro" },
+], "Reduce the Anticipy workspace on NorthGrid at renewal and keep the Pro plan");
+check(aligned.length === 2 && aligned[0].value === "Anticipy"
+      && aligned[1].value === "At renewal",
+  "the semantic auditor may reshape owner words but cannot invent a value");
 check(JSON.stringify(unsupportedScopeFields(
   "Submit an urgent request and allow entry if nobody is home", { fields: [
     { name: "urgent", label: "Urgent", value: false },
@@ -111,6 +135,9 @@ check(/if \(!authorized\)[\s\S]*owner has not approved its external effect/.test
   "an unapproved final control is mechanically stopped");
 check(/cleared unapproved optional defaults/.test(source),
   "unsupported optional defaults are cleared before the final control");
+check(/PRE-SUBMIT ALIGNMENT corrected exact field values/.test(source)
+      && /await auditFormAlignment/.test(source),
+  "label-sized authority alignment runs before the final control");
 check(source.includes("if (decision.enter === true)"),
   "typing cannot submit a form unless Enter was explicit");
 check(!source.includes("if (decision.enter !== false)"),

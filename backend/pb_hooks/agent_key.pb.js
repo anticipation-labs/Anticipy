@@ -21,7 +21,7 @@ routerAdd("GET", "/agent/key", (e) => {
   if (!ownerRef) {
     return e.json(409, { error: "paired agent has no canonical owner; pair it again from the signed-in app" });
   }
-  if (!$os.getenv("OPENROUTER_API_KEY")) {
+  if (!$os.getenv("GEMINI_API_KEY") && !$os.getenv("OPENROUTER_API_KEY")) {
     return e.json(503, { error: "backend has no model configured" });
   }
   // The browser click-loop's brain is server-controlled: raising quality for
@@ -76,8 +76,11 @@ routerAdd("POST", "/agent/llm", (e) => {
     return e.json(403, { error: "not a paired agent" });
   }
 
-  const key = $os.getenv("OPENROUTER_API_KEY") || "";
-  if (!key) return e.json(503, { error: "backend has no model configured" });
+  const geminiKey = $os.getenv("GEMINI_API_KEY") || "";
+  const openrouterKey = $os.getenv("OPENROUTER_API_KEY") || "";
+  if (!geminiKey && !openrouterKey) {
+    return e.json(503, { error: "backend has no model configured" });
+  }
   let body = {};
   try { body = e.requestInfo().body || {}; } catch (_) {
     return e.json(400, { error: "valid JSON required" });
@@ -98,7 +101,14 @@ routerAdd("POST", "/agent/llm", (e) => {
   if (messages.some((message) => !["system", "user", "assistant"].includes(message.role))) {
     return e.json(400, { error: "unsupported message role" });
   }
-  const payload = { model: model, messages: messages, temperature: 0 };
+  // Browser responses are compact JSON. Never let an omitted client cap turn
+  // into the provider's 65k-token maximum: OpenRouter performs an
+  // affordability check against that maximum before generating anything.
+  const requestedMax = Number(body.max_tokens || 512);
+  const boundedMax = Math.min(2048, Math.max(64,
+    isFinite(requestedMax) ? Math.floor(requestedMax) : 512));
+  const payload = { model: model, messages: messages, temperature: 0,
+                    max_tokens: boundedMax };
   if (body.response_format && body.response_format.type === "json_object") {
     payload.response_format = { type: "json_object" };
   }
@@ -106,11 +116,76 @@ routerAdd("POST", "/agent/llm", (e) => {
   if (serialized.length > 900000) return e.json(413, { error: "model request too large" });
 
   try {
+    // Prefer the directly billed provider when configured. OpenRouter remains
+    // a deployment fallback, not a client-visible secret or browser concern.
+    if (geminiKey) {
+      let systemText = "";
+      const contents = [];
+      for (const message of messages) {
+        if (message.role === "system") {
+          if (typeof message.content === "string") systemText += (systemText ? "\n\n" : "") + message.content;
+          continue;
+        }
+        const parts = [];
+        if (typeof message.content === "string") {
+          parts.push({ text: message.content });
+        } else if (Array.isArray(message.content)) {
+          for (const part of message.content) {
+            if (part && part.type === "text" && typeof part.text === "string") {
+              parts.push({ text: part.text });
+            } else if (part && part.type === "image_url" && part.image_url &&
+                       typeof part.image_url.url === "string") {
+              const match = part.image_url.url.match(/^data:([^;,]+);base64,(.+)$/);
+              if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+            }
+          }
+        }
+        if (parts.length) contents.push({ role: message.role === "assistant" ? "model" : "user", parts: parts });
+      }
+      if (!contents.length) return e.json(400, { error: "messages contain no usable content" });
+      const generationConfig = {
+        temperature: 0,
+        maxOutputTokens: boundedMax,
+        // Browser actions are compact JSON. Dynamic thinking would spend the
+        // same small allowance on hidden reasoning and truncate the action.
+        thinkingConfig: { thinkingBudget: 0 },
+      };
+      if (body.response_format && body.response_format.type === "json_object") {
+        generationConfig.responseMimeType = "application/json";
+      }
+      const geminiPayload = { contents: contents, generationConfig: generationConfig };
+      if (systemText) geminiPayload.systemInstruction = { parts: [{ text: systemText }] };
+      const geminiSerialized = JSON.stringify(geminiPayload);
+      if (geminiSerialized.length > 900000) return e.json(413, { error: "model request too large" });
+      const response = $http.send({
+        url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        method: "POST",
+        headers: {
+          "x-goog-api-key": geminiKey,
+          "Content-Type": "application/json",
+        },
+        body: geminiSerialized,
+        timeout: 95,
+      });
+      if (!response.json) return e.json(502, { error: "model returned no JSON" });
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return e.json(response.statusCode, { error: "model provider rejected request" });
+      }
+      const candidates = response.json.candidates || [];
+      const parts = candidates[0] && candidates[0].content && candidates[0].content.parts || [];
+      const text = parts.map((part) => String(part && part.text || "")).join("");
+      if (!text) return e.json(502, { error: "model returned no text" });
+      return e.json(200, {
+        choices: [{ message: { content: text } }],
+        model: "gemini-2.5-flash",
+        provider: "google",
+      });
+    }
     const response = $http.send({
       url: "https://openrouter.ai/api/v1/chat/completions",
       method: "POST",
       headers: {
-        "Authorization": "Bearer " + key,
+        "Authorization": "Bearer " + openrouterKey,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://anticipy.ai",
         "X-Title": "Anticipy Codex Version",
