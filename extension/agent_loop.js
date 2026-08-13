@@ -454,6 +454,8 @@ Rules:
 - Derive values only from the owner's exact words. Never invent a fact.
 - For a free-text description, copy the owner's wording verbatim, including
   small words and punctuation. Never paraphrase or reorder it.
+- Keep each answer inside its own field. A later clause that answers another
+  visible field, checkbox, or selector must never be appended to this field.
 - For a short categorical field (Workspace, Service, Resolution, Plan,
   Effective, etc.), return only the minimal label-sized answer, not the
   surrounding sentence, portal name, contrast, or redundant page context.
@@ -469,10 +471,29 @@ Rules:
 - Do not alter checkboxes, radio buttons, native dates/times, selects,
   passwords, payment fields, or a value that already answers its label.
 
-Reply only with compact JSON. Include one row for every CURRENT field:
+Reply only with compact JSON. Include one row for every EDITABLE TEXT field:
 {"values":[{"index":1,"value":"exact reconstructed value","reason":"brief"}]}`;
 
-export function groundedFormCorrections(proposed, fields, authority) {
+function introducesOtherFieldLabel(value, currentValue, field, allFields) {
+  const proposedTokens = wordTokens(value);
+  const currentTokens = new Set(wordTokens(currentValue));
+  const stop = new Set(["a", "an", "and", "at", "for", "i", "is", "of", "the", "to"]);
+  return (Array.isArray(allFields) ? allFields : []).some((other) => {
+    if (Number(other?.index) === Number(field?.index)) return false;
+    const labelTokens = wordTokens(other?.label || "")
+      .filter((token) => token.length > 2 && !stop.has(token));
+    if (!labelTokens.length) return false;
+    // A correction may share ordinary vocabulary with another control. It
+    // may not newly absorb that control's complete visible label. This is a
+    // schema-level boundary, not a domain recipe: it works for Allow entry,
+    // Contact email, Renewal term, and any other separately labelled answer.
+    return labelTokens.every((token) => proposedTokens.includes(token))
+      && labelTokens.some((token) => !currentTokens.has(token));
+  });
+}
+
+export function groundedFormCorrections(proposed, fields, authority,
+                                         allFields = fields) {
   const allowed = new Map((Array.isArray(fields) ? fields : [])
     .filter((field) => Number.isFinite(Number(field?.index)))
     .map((field) => [Number(field.index), field]));
@@ -486,6 +507,7 @@ export function groundedFormCorrections(proposed, fields, authority) {
     const value = typeof row?.value === "string" ? row.value.trim() : "";
     if (!field || !value || value.length > 300
         || evidenceToken(value) === evidenceToken(field.value)) continue;
+    if (introducesOtherFieldLabel(value, field.value, field, allFields)) continue;
     const tokens = wordTokens(value);
     // The auditor may shorten/recombine the owner's phrase for a labelled
     // categorical field, but every token still has to be the owner's.  This
@@ -497,21 +519,24 @@ export function groundedFormCorrections(proposed, fields, authority) {
 }
 
 async function auditFormAlignment(apiKey, model, goal, scope, state) {
-  const fields = (Array.isArray(state?.fields) ? state.fields : []).filter((field) => {
+  const allFields = (Array.isArray(state?.fields) ? state.fields : []).map((field) => ({
+    index: Number(field.index), name: String(field.name || ""),
+    label: String(field.label || ""), type: String(field.type || "text"),
+    value: typeof field.value === "boolean" ? field.value
+      : String(field.value ?? "").slice(0, 500),
+    readOnly: field?.readOnly === true, disabled: field?.disabled === true,
+  }));
+  const fields = allFields.filter((field) => {
     const type = String(field?.type || "text").toLowerCase();
     return Number.isFinite(Number(field?.index))
       && !["checkbox", "radio", "select", "select-one", "date", "time",
            "datetime-local", "password", "hidden", "file"].includes(type)
       && field?.readOnly !== true && field?.disabled !== true;
-  }).map((field) => ({
-    index: Number(field.index), name: String(field.name || ""),
-    label: String(field.label || ""), type: String(field.type || "text"),
-    value: String(field.value ?? "").slice(0, 500),
-  }));
+  });
   if (!fields.length || !(scope || goal)) return [];
   const messages = [
     { role: "system", content: FORM_ALIGNMENT_SYSTEM },
-    { role: "user", content: `OWNER'S EXACT WORDS:\n${scope || goal}\n\nTASK GOAL:\n${goal}\n\nCURRENT FIELDS:\n${JSON.stringify(fields)}` },
+    { role: "user", content: `OWNER'S EXACT WORDS:\n${scope || goal}\n\nTASK GOAL:\n${goal}\n\nALL FORM FIELDS (use these labels to keep answers separate):\n${JSON.stringify(allFields)}\n\nEDITABLE TEXT FIELDS TO RECONSTRUCT:\n${JSON.stringify(fields)}` },
   ];
   try {
     const ctl = new AbortController();
@@ -525,7 +550,7 @@ async function auditFormAlignment(apiKey, model, goal, scope, state) {
     const start = raw.indexOf("{"), end = raw.lastIndexOf("}");
     if (start < 0 || end <= start) return [];
     return groundedFormCorrections(
-      JSON.parse(raw.slice(start, end + 1)), fields, scope || goal);
+      JSON.parse(raw.slice(start, end + 1)), fields, scope || goal, allFields);
   } catch (_) {
     return [];                         // audit failure never invents a block
   }

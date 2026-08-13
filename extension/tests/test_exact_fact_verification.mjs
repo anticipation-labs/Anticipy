@@ -106,6 +106,18 @@ check(reconstructed.length === 2
       && reconstructed[0].value === "Arrived damaged"
       && reconstructed[1].value === "Mail-in repair",
   "a full field reconstruction may remove sentence and task context");
+const bounded = groundedFormCorrections({ values: [
+  { index: 1, value: "bedroom outlet sparking; allow entry if nobody is home" },
+] }, [
+  { index: 1, name: "issue", label: "Problem", type: "textarea",
+    value: "bedroom outlet sparking" },
+], "Submit an urgent request: bedroom outlet sparking; allow entry if nobody is home", [
+  { index: 1, name: "issue", label: "Problem", type: "textarea",
+    value: "bedroom outlet sparking" },
+  { index: 2, name: "entry", label: "Allow entry", type: "checkbox", value: true },
+]);
+check(bounded.length === 0,
+  "a text correction cannot absorb the answer to another visible field");
 check(JSON.stringify(unsupportedScopeFields(
   "Submit an urgent request and allow entry if nobody is home", { fields: [
     { name: "urgent", label: "Urgent", value: false },
