@@ -14,10 +14,18 @@ import brain.conversation as convmod
 from brain.anticipy_core import Anticipy
 from brain.conversation import Conversation
 from brain.memory import Memory
+from brain.workflow import (Consequence, approve, claim, from_params,
+                            needs_user, new_plan, put_in_params)
 
 
 def _conv():
     a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    return Conversation(a, llm=None)
+
+
+def _scoped_conv():
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t",
+                 owner_ref="owner-a")
     return Conversation(a, llm=None)
 
 
@@ -88,6 +96,61 @@ def test_release_still_refuses_dead_jobs(monkeypatch):
            "params": json.dumps({})}
     _pb(monkeypatch, job)
     assert _conv()._release("j3", None, owner_text="do it") is None
+
+
+def test_learned_answer_resumes_strict_workflow_with_exact_owner_words(monkeypatch):
+    plan = new_plan(owner_ref="owner-a", lineage_key="lineage-a",
+                    goal="Submit warranty repair request",
+                    consequence=Consequence.CONSEQUENTIAL,
+                    source_event_id="event-a", required=("email_address",))
+    # The original approval had the required value.  The browser then parked
+    # on a newly discovered request; model the parked plan without smuggling
+    # an answer into it.
+    plan = approve(plan, expected_version=plan.version,
+                   owner_words="send the warranty request",
+                   changes={"email_address": "old@example.test"})
+    plan = claim(plan, expected_version=plan.version, actor_id="browser-a",
+                 token="lease-a")
+    plan = needs_user(plan, lease_token="lease-a",
+                      reason="I need your current email address")
+    params = put_in_params({"authorized": True,
+                            "approved_scope": "Task: submit warranty request."},
+                           plan)
+    job = {"id": "j4", "goal": plan.goal, "status": "needs_user",
+           "owner_ref": "owner-a", "result": plan.reason,
+           "params": json.dumps(params)}
+    patched = _pb(monkeypatch, job)
+
+    out = _scoped_conv()._resume_stuck(
+        {"email_address": "new@example.test"},
+        owner_text="Use new@example.test")
+
+    assert out == "resumed:j4"
+    stored = json.loads(patched["params"])
+    resumed = from_params(stored)
+    assert resumed is not None
+    assert resumed.state.value == "queued"
+    assert resumed.facts["email_address"] == "new@example.test"
+    assert resumed.approval.owner_words == "Use new@example.test"
+    assert stored["email_address"] == "new@example.test"
+    assert "Use new@example.test" in stored["approved_scope"]
+
+
+def test_strict_workflow_never_resumes_without_owner_words(monkeypatch):
+    plan = new_plan(owner_ref="owner-a", lineage_key="lineage-a",
+                    goal="Submit repair request",
+                    consequence=Consequence.READ_ONLY,
+                    source_event_id="event-a")
+    plan = claim(plan, expected_version=plan.version, actor_id="browser-a",
+                 token="lease-a")
+    plan = needs_user(plan, lease_token="lease-a", reason="I need the model")
+    job = {"id": "j5", "goal": plan.goal, "status": "needs_user",
+           "owner_ref": "owner-a", "result": plan.reason,
+           "params": json.dumps(put_in_params({}, plan))}
+    patched = _pb(monkeypatch, job)
+
+    assert _scoped_conv()._requeue(job, {"model": "X1"}) is None
+    assert patched == {}
 
 
 def test_paraphrase_that_mangles_facts_is_replaced():

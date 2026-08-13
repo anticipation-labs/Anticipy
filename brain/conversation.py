@@ -36,6 +36,9 @@ from . import pb
 
 from .anticipy_core import TEXTING_STYLE
 from .llm import LLM
+from .workflow import (approve as approve_plan, cancel as cancel_plan,
+                       from_params as workflow_from_params,
+                       merge as merge_plan, put_in_params)
 
 REPLY_SYSTEM = """You are Anticipy, a warm, sharp personal assistant who lives
 in the owner's pendant and texts like a trusted friend — brief, natural, no
@@ -215,6 +218,28 @@ class Conversation:
         self.llm = llm or anticipy.llm
         self.threads: dict[str, list[Turn]] = {}
 
+    def _owner_filter(self) -> str:
+        """Canonical tenant boundary, with legacy compatibility for tests.
+
+        The worker still carries the old pendant owner id during the staged
+        migration, but an authenticated account id is the only durable owner
+        identity.  Prefer it everywhere and never silently fall back when it
+        exists.
+        """
+        owner_ref = str(getattr(self.anticipy, "owner_ref", "") or "").strip()
+        if owner_ref:
+            return f'owner_ref="{owner_ref}"'
+        owner_id = str(getattr(self.anticipy, "owner_id", "") or "").strip()
+        return f'owner="{owner_id}"' if owner_id else ""
+
+    def _belongs_to_owner(self, record: dict) -> bool:
+        owner_ref = str(getattr(self.anticipy, "owner_ref", "") or "").strip()
+        if owner_ref:
+            return str(record.get("owner_ref") or "") == owner_ref
+        owner_id = str(getattr(self.anticipy, "owner_id", "") or "").strip()
+        legacy = str(record.get("owner") or "")
+        return not owner_id or not legacy or legacy == owner_id
+
     # ------------------------------------------------------------ outbound
 
     def say(self, phone: str, body: str) -> dict:
@@ -269,7 +294,7 @@ class Conversation:
         if intent != "decline":
             learned = self._remember_about_owner(text)
             if learned:
-                resumed = self._resume_stuck(learned)
+                resumed = self._resume_stuck(learned, owner_text=text)
 
         # The MODEL is the understander — there are no command words. It may
         # name several items at once ("scrap both", "do everything except
@@ -513,8 +538,9 @@ Use {"facts": {}} when there is nothing durable."""
         and dies with the process; this does not."""
         try:
             filt = 'status="needs_user"'
-            if self.anticipy.owner_id:
-                filt += f' && owner="{self.anticipy.owner_id}"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
             r = pb.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
             if not r.ok:
@@ -548,8 +574,9 @@ Use {"facts": {}} when there is nothing durable."""
                       ).strftime("%Y-%m-%d %H:%M:%S")
             filt = (f'updated>="{cutoff}" && (status="failed" || '
                     f'status="done" || status="cancelled")')
-            if self.anticipy.owner_id:
-                filt += f' && owner="{self.anticipy.owner_id}"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
             r = pb.get(f"{self.anticipy.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 5, "sort": "-updated"},
                        timeout=10)
@@ -598,8 +625,12 @@ Use {"facts": {}} when there is nothing durable."""
             if not isinstance(facts, dict) or not facts:
                 return {}
             base = self.anticipy.backend_url
+            owner_filter = self._owner_filter()
+            if not owner_filter:
+                return {}
             r = pb.get(f"{base}/api/collections/owner_profile/records",
-                       params={"perPage": 1, "sort": "-updated"}, timeout=10)
+                       params={"filter": owner_filter, "perPage": 1,
+                               "sort": "-updated"}, timeout=10)
             items = r.json().get("items", []) if r.ok else []
             if not items:
                 return {}
@@ -651,7 +682,8 @@ Use {"facts": {}} when there is nothing durable."""
                 return True
         return False
 
-    def _resume_stuck(self, learned: Optional[dict] = None) -> Optional[str]:
+    def _resume_stuck(self, learned: Optional[dict] = None,
+                      owner_text: str = "") -> Optional[str]:
         """Put a task that stopped for a missing detail back to work.
 
         Resumes the task whose stated need his answer actually covers. The
@@ -665,8 +697,9 @@ Use {"facts": {}} when there is nothing durable."""
         try:
             base = self.anticipy.backend_url
             filt = 'status="needs_user"'
-            if self.anticipy.owner_id:
-                filt += f' && owner="{self.anticipy.owner_id}"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
             r = pb.get(f"{base}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 10, "sort": "-updated"}, timeout=10)
             items = r.json().get("items", []) if r.ok else []
@@ -690,13 +723,15 @@ Use {"facts": {}} when there is nothing durable."""
                 matched = items
             if not matched:
                 return None
-            resumed = [self._requeue(j) for j in matched]
+            resumed = [self._requeue(j, learned=learned,
+                                     owner_text=owner_text) for j in matched]
             resumed = [rid for rid in resumed if rid]
             return f"resumed:{resumed[0]}" if resumed else None
         except Exception:
             return None
 
-    def _requeue(self, job: dict) -> Optional[str]:
+    def _requeue(self, job: dict, learned: Optional[dict] = None,
+                 owner_text: str = "") -> Optional[str]:
         try:
             base = self.anticipy.backend_url
             try:
@@ -710,8 +745,34 @@ Use {"facts": {}} when there is nothing durable."""
             need = (job.get("result") or "").strip()
             if need and not params.get("needed"):
                 params["needed"] = need[:300]
+            fields = {"status": "queued", "params": json.dumps(params)}
+            workflow = workflow_from_params(params)
+            if workflow:
+                # A workflow parked in needs_user may move only when the
+                # owner's actual answer is retained and approved against the
+                # exact parked version.  Never manufacture words here.
+                if not owner_text.strip():
+                    return None
+                clean = self._drop_unquoted_codes(learned or {}, owner_text)
+                try:
+                    workflow = approve_plan(
+                        workflow, expected_version=workflow.version,
+                        owner_words=owner_text, changes=clean or None)
+                except Exception:
+                    return None
+                if clean:
+                    params.update(clean)
+                answer = owner_text.strip()
+                asked = (job.get("result") or params.get("needed") or "").strip()
+                if params.get("approved_scope"):
+                    params["approved_scope"] += (
+                        f' You stopped and asked: "{asked}". '
+                        f'They answered: "{answer}" — that answer is final; act on it.')
+                params = put_in_params(params, workflow)
+                fields.update(workflow.job_fields())
+                fields["params"] = json.dumps(params)
             pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
-                     json={"status": "queued", "params": json.dumps(params)}, timeout=10)
+                     json=fields, timeout=10)
             return job["id"]
         except Exception:
             return None
@@ -804,10 +865,14 @@ Use {"facts": {}} when there is nothing durable."""
         "after about three messages she forgets" was partly this: the worker
         redeployed mid-conversation and her own questions were gone."""
         try:
+            owner_filter = self._owner_filter()
+            if not owner_filter:
+                return []
+            kind_filter = ('(kind="anticipy_says" || kind="sms_reply"'
+                           ' || kind="anticipy_text")')
             r = pb.get(
                 f"{self.anticipy.backend_url}/api/collections/events/records",
-                params={"filter": ('kind="anticipy_says" || kind="sms_reply"'
-                                   ' || kind="anticipy_text"'),
+                params={"filter": f"{kind_filter} && {owner_filter}",
                         "perPage": limit, "sort": "-created"},
                 timeout=10,
             )
@@ -829,8 +894,9 @@ Use {"facts": {}} when there is nothing durable."""
     def _pending(self) -> list[dict]:
         try:
             filt = 'status="awaiting_confirm"'
-            if self.anticipy.owner_id:
-                filt += f' && owner="{self.anticipy.owner_id}"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
             r = pb.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records",
                 params={"filter": filt, "perPage": 5, "sort": "-created"},
@@ -1069,7 +1135,10 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             r = pb.get(
                 f"{self.anticipy.backend_url}/api/collections/jobs/records/{job_id}",
                 timeout=10)
-            return r.json() if r.ok else None
+            if not r.ok:
+                return None
+            record = r.json()
+            return record if self._belongs_to_owner(record) else None
         except Exception:
             return None
 
@@ -1169,6 +1238,18 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 f" They changed: {corrected} — these corrected values "
                 "override the task wording and anything heard earlier.")
         fields = {"status": "queued", "params": json.dumps(params)}
+        workflow = workflow_from_params(params)
+        if workflow:
+            try:
+                workflow = approve_plan(
+                    workflow, expected_version=workflow.version,
+                    owner_words=owner_text,
+                    changes=changes or None)
+            except Exception:
+                return None
+            params = put_in_params(params, workflow)
+            fields.update(workflow.job_fields())
+            fields["params"] = json.dumps(params)
         return self._flip(job["id"], fields, "released")
 
     def _cancel(self, job_id: Optional[str], owner_text: str = "") -> Optional[str]:
@@ -1177,7 +1258,22 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             return "ambiguous"
         if not job:
             return None
-        out = self._flip(job["id"], {"status": "cancelled"}, "cancelled")
+        fields = {"status": "cancelled"}
+        try:
+            params = json.loads(job.get("params") or "{}")
+        except Exception:
+            params = {}
+        workflow = workflow_from_params(params)
+        if workflow:
+            try:
+                workflow = cancel_plan(
+                    workflow, reason=owner_text or "cancelled by owner")
+            except Exception:
+                return None
+            params = put_in_params(params, workflow)
+            fields.update(workflow.job_fields())
+            fields["params"] = json.dumps(params)
+        out = self._flip(job["id"], fields, "cancelled")
         if out.startswith("cancelled:"):
             # The promise behind the job dies with it — a cancelled plan
             # left "open" in memory becomes a clock follow-up days later.
@@ -1208,6 +1304,15 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             if not changes:
                 return None
         params.update(changes)
+        workflow = workflow_from_params(params)
+        if workflow and job.get("status") != "needs_user":
+            try:
+                workflow = merge_plan(
+                    workflow, expected_version=workflow.version,
+                    facts=changes)
+                params = put_in_params(params, workflow)
+            except Exception:
+                return None
         if job.get("status") == "needs_user":
             need = (job.get("result") or "").strip()
             if need and not params.get("needed"):
@@ -1217,10 +1322,23 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 params["approved_scope"] += (
                     f' You stopped and asked: "{(need or params.get("needed") or "").strip()}". '
                     f'They answered: "{answer}" — that answer is final; act on it.')
-            return self._flip(job["id"],
-                              {"status": "queued", "params": json.dumps(params)},
-                              "resumed")
-        return self._flip(job["id"], {"params": json.dumps(params)}, "amended")
+            fields = {"status": "queued", "params": json.dumps(params)}
+            if workflow:
+                try:
+                    workflow = approve_plan(
+                        workflow, expected_version=workflow.version,
+                        owner_words=owner_text, changes=changes)
+                except Exception:
+                    return None
+                params = put_in_params(params, workflow)
+                fields.update(workflow.job_fields())
+                fields["params"] = json.dumps(params)
+            return self._flip(job["id"], fields, "resumed")
+        fields = {"params": json.dumps(params)}
+        if workflow:
+            fields.update(workflow.job_fields())
+            fields["params"] = json.dumps(params)
+        return self._flip(job["id"], fields, "amended")
 
     @staticmethod
     def _drop_unquoted_codes(changes: Optional[dict],

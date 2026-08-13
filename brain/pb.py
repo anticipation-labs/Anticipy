@@ -27,13 +27,25 @@ def headers() -> dict:
     return h
 
 
+def _headers(extra=None) -> dict:
+    out = headers()
+    out.update(extra or {})
+    return out
+
+
 def get(url: str, **kw):
-    return requests.get(url, headers=headers(), timeout=kw.pop("timeout", TIMEOUT), **kw)
+    extra = kw.pop("headers", None)
+    return requests.get(url, headers=_headers(extra),
+                        timeout=kw.pop("timeout", TIMEOUT), **kw)
 
 
 def post(url: str, **kw):
-    return requests.post(url, headers=headers(), timeout=kw.pop("timeout", TIMEOUT), **kw)
+    extra = kw.pop("headers", None)
+    return requests.post(url, headers=_headers(extra),
+                         timeout=kw.pop("timeout", TIMEOUT), **kw)
 
 
 def patch(url: str, **kw):
-    return requests.patch(url, headers=headers(), timeout=kw.pop("timeout", TIMEOUT), **kw)
+    extra = kw.pop("headers", None)
+    return requests.patch(url, headers=_headers(extra),
+                          timeout=kw.pop("timeout", TIMEOUT), **kw)

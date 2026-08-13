@@ -259,15 +259,23 @@ def segment_all(turns: list[dict]) -> list[list[dict]]:
 class SegmentStore:
     """The thin PocketBase layer. Everything above is pure."""
 
-    def __init__(self, backend_url: str, owner: str = ""):
+    def __init__(self, backend_url: str, owner: str = "",
+                 owner_ref: str = ""):
         self.base = backend_url.rstrip("/")
         self.owner = owner
+        self.owner_ref = owner_ref
+
+    def _owner_filter(self) -> str:
+        if self.owner_ref:
+            return f'owner_ref="{self.owner_ref}"'
+        return f'owner="{self.owner}"' if self.owner else ""
 
     def open_segment(self) -> Optional[dict]:
         try:
             filt = 'status="open"'
-            if self.owner:
-                filt += f' && owner="{self.owner}"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
             r = pb.get(f"{self.base}/api/collections/segments/records",
                        params={"filter": filt, "sort": "-last_speech_at", "perPage": 1})
             items = r.json().get("items", []) if r.ok else []
@@ -278,8 +286,9 @@ class SegmentStore:
     def last_closed(self) -> Optional[dict]:
         try:
             filt = 'status="closed"'
-            if self.owner:
-                filt += f' && owner="{self.owner}"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
             r = pb.get(f"{self.base}/api/collections/segments/records",
                        params={"filter": filt, "sort": "-ended_at", "perPage": 1})
             items = r.json().get("items", []) if r.ok else []
@@ -291,8 +300,12 @@ class SegmentStore:
         """What was already said in this conversation — the context a question
         needs. 'What time is the demo day Monday' means nothing alone."""
         try:
+            filt = f'segment="{segment_id}" && kind="transcript"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
             r = pb.get(f"{self.base}/api/collections/events/records",
-                       params={"filter": f'segment="{segment_id}" && kind="transcript"',
+                       params={"filter": filt,
                                "sort": "-created", "perPage": limit})
             items = r.json().get("items", []) if r.ok else []
             return [i.get("text", "") for i in reversed(items) if i.get("text")]
@@ -301,13 +314,17 @@ class SegmentStore:
 
     def create(self, started: datetime, parent: Optional[str] = None) -> Optional[dict]:
         try:
-            r = pb.post(f"{self.base}/api/collections/segments/records", json={
+            body = {
                 "owner": self.owner, "status": "open",
                 "started_at": iso(started), "last_speech_at": iso(started),
                 "turn_count": 0, "word_count": 0,
                 "parent_segment": parent or "", "entities": "[]",
                 "triaged_through_seq": 0, "dirty": False,
-            })
+            }
+            if self.owner_ref:
+                body["owner_ref"] = self.owner_ref
+            r = pb.post(f"{self.base}/api/collections/segments/records",
+                        json=body)
             return r.json() if r.ok else None
         except Exception:
             return None

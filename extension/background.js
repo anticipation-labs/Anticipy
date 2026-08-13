@@ -5,6 +5,13 @@
 // (or the phone app) to confirm.
 
 import { runAgentGoal } from "./agent_loop.js";
+import {
+  heartbeatPatch,
+  isWorkflowJob,
+  markEffectUncertainPatch,
+  parseJobParams,
+  workflowPatch,
+} from "./workflow_state.js";
 
 // Production backend; override via chrome.storage.local `backendUrl` for dev.
 const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
@@ -20,15 +27,23 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Every write carries the service token when the backend has one; the guard
 // hook ignores it until enforcement is switched on, so this is safe to ship
 // ahead of the flip.
-async function writeHeaders() {
-  const { serviceToken } = await chrome.storage.local.get(["serviceToken"]);
+async function writeHeaders(leaseToken = "") {
+  const { serviceToken, agentId, agentToken } = await chrome.storage.local.get(
+    ["serviceToken", "agentId", "agentToken"]);
   const h = { "Content-Type": "application/json" };
+  // serviceToken is read only for the one-release migration that lets an
+  // already-paired install add its private credential. /agent/key clears it;
+  // normal job traffic authenticates as this one agent, never as the server.
   if (serviceToken) h["X-Anticipy-Token"] = serviceToken;
+  if (agentId) h["X-Anticipy-Agent-ID"] = agentId;
+  if (agentToken) h["X-Anticipy-Agent-Token"] = agentToken;
+  if (leaseToken) h["X-Anticipy-Lease"] = leaseToken;
   return h;
 }
 
 const POLL_SECONDS = 5;
 const HEARTBEAT_SECONDS = 10;
+const LEASE_MS = 2 * 60 * 1000;
 // A real task takes minutes: a booking, a spreadsheet, anything spanning two
 // sites. Two minutes declared live work abandoned and handed it to the next
 // sweep while it was still going. The heartbeat is meant to prevent that, but
@@ -46,17 +61,31 @@ const MAX_ATTEMPTS = 3;
 // that owner's jobs and reports a heartbeat the app turns into "last seen Ns".
 
 async function ensureRegistered() {
-  let { agentId, recordId } = await chrome.storage.local.get(["agentId", "recordId"]);
-  if (recordId) return { agentId, recordId };
+  let { agentId, agentToken, recordId, agentCredentialInstalled } =
+    await chrome.storage.local.get(
+      ["agentId", "agentToken", "recordId", "agentCredentialInstalled"]);
   agentId = agentId || crypto.randomUUID();
-  const pairCode = String(Math.floor(100000 + Math.random() * 900000));
-  const r = await fetch(`${BASE}/api/collections/agents/records`, {
+  await chrome.storage.local.set({ agentId });
+  if (recordId) {
+    if (agentCredentialInstalled && agentToken) return { agentId, agentToken, recordId };
+    // Existing installs predate per-agent credentials. Their cached service
+    // token authorizes this one migration write; the next key fetch erases it.
+    const r = await fetch(`${BASE}/agent/upgrade-credential`, {
+      method: "POST", headers: await writeHeaders(),
+      body: JSON.stringify({ record_id: recordId, agent_id: agentId }),
+    });
+    if (!r.ok) return null;
+    const upgraded = await r.json();
+    agentToken = upgraded.agent_token || "";
+    if (!agentToken) return null;
+    await chrome.storage.local.set({ agentToken, agentCredentialInstalled: true });
+    return { agentId, agentToken, recordId };
+  }
+  const r = await fetch(`${BASE}/agent/register`, {
     method: "POST",
-    headers: await writeHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       agent_id: agentId,
-      pair_code: pairCode,
-      paired: false,
       // The extension version rides along in this existing field so nobody has
       // to guess which build is actually installed. An unpacked extension does
       // not auto-update, so "did you reload it?" has been unanswerable — and it
@@ -67,13 +96,18 @@ async function ensureRegistered() {
   });
   if (!r.ok) return null;
   const rec = await r.json();
-  await chrome.storage.local.set({ agentId, recordId: rec.id, pairCode });
-  return { agentId, recordId: rec.id };
+  agentToken = rec.agent_token || "";
+  const pairCode = rec.pair_code || "";
+  if (!agentToken || !pairCode) return null;
+  await chrome.storage.local.set({
+    agentId, agentToken, recordId: rec.id, pairCode, agentCredentialInstalled: true,
+  });
+  return { agentId, agentToken, recordId: rec.id };
 }
 
 // Jobs this worker is actively running — their claims get refreshed on every
 // heartbeat so the stale-requeue sweep never eats a live job.
-const activeJobs = new Set();
+const activeJobs = new Map();
 
 // ------------------------------------------------------------- LLM key
 // Consumers never paste API keys: once paired, the agent fetches its key from
@@ -90,19 +124,23 @@ async function ensureLLMKey(force = false) {
   if (!force && complete && fresh) return openrouterKey;
   if (!agentId) return openrouterKey || null;
   try {
-    const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`);
+    const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`,
+      { headers: await writeHeaders() });
     // A refresh that fails must never LOSE a key we already hold — a stale
     // bundle plus one backend hiccup would otherwise fail every job with
     // "no LLM key" while a perfectly good key sits in storage.
     if (!r.ok) return openrouterKey || null;
-    const { openrouter_key, model, vision_model, service_token, owner } = await r.json();
+    const { openrouter_key, model, vision_model, service_token, owner, owner_ref } = await r.json();
     if (openrouter_key) {
       await chrome.storage.local.set({
         openrouterKey: openrouter_key,
         agentModel: model || "",
         visionModel: vision_model || "",
+        // The server no longer returns its master credential. Saving an empty
+        // value also erases the migration token on upgraded installations.
         serviceToken: service_token || "",
         ownerProfile: owner || null,
+        ownerRef: owner_ref || "",
         keyFetchedAt: Date.now(),
       });
       return openrouter_key;
@@ -114,8 +152,16 @@ async function ensureLLMKey(force = false) {
 async function heartbeat() {
   const reg = await ensureRegistered();
   if (!reg) return null;
-  for (const id of activeJobs) {
-    await updateJob(id, { claimed_at: new Date().toISOString() });
+  for (const [id, active] of activeJobs) {
+    try {
+      const until = new Date(Date.now() + LEASE_MS);
+      const patch = isWorkflowJob(active.job)
+        ? heartbeatPatch(active.job, { leaseToken: active.leaseToken, leaseUntil: until })
+        : { claimed_at: new Date().toISOString() };
+      active.job = await updateJob(id, patch, active.leaseToken);
+    } catch (e) {
+      console.warn(`Anticipy: could not renew lease for ${id}: ${String(e).slice(0, 160)}`);
+    }
   }
   const r = await fetch(`${BASE}/api/collections/agents/records/${reg.recordId}`, {
     method: "PATCH",
@@ -131,7 +177,11 @@ async function heartbeat() {
   });
   if (!r.ok) return null;
   const rec = await r.json();
-  await chrome.storage.local.set({ owner: rec.owner || "", paired: !!rec.paired });
+  await chrome.storage.local.set({
+    owner: rec.owner || "",
+    ownerRef: rec.owner_ref || "",
+    paired: !!rec.paired,
+  });
   // The moment pairing lands, pull the LLM key so the first job never
   // fails on a missing key.
   if (rec.paired) ensureLLMKey();
@@ -143,9 +193,9 @@ async function heartbeat() {
 async function requeueStaleJobs() {
   // Owner-scoped: an unrelated install (a second Chrome profile, someone
   // else entirely) must never rewrite this owner's job rows.
-  const { owner } = await chrome.storage.local.get(["owner"]);
-  if (!owner) return;
-  const filter = encodeURIComponent(`status="running" && owner="${owner}"`);
+  const { ownerRef } = await chrome.storage.local.get(["ownerRef"]);
+  if (!ownerRef) return;
+  const filter = encodeURIComponent(`status="running" && owner_ref="${ownerRef}" && workflow_id!=""`);
   const r = await fetch(`${BASE}/api/collections/jobs/records?filter=${filter}&perPage=20&sort=claimed_at`,
     { headers: await writeHeaders() });
   if (!r.ok) return;
@@ -153,19 +203,34 @@ async function requeueStaleJobs() {
   const now = Date.now();
   for (const j of items || []) {
     if (activeJobs.has(j.id)) continue; // this worker is running it right now
+    const expires = j.lease_until ? Date.parse(j.lease_until) : 0;
     const claimed = j.claimed_at ? Date.parse(j.claimed_at) : Date.parse(j.updated);
-    if (now - claimed <= STALE_JOB_MS) continue;
+    if (expires ? now <= expires : now - claimed <= STALE_JOB_MS) continue;
     const tries = Number(j.attempts) || 0;
+    if (isWorkflowJob(j) && j.effect_uncertain) {
+      await updateJob(j.id, workflowPatch(j, "needs_user", {
+        reason: "The browser stopped after a possible external action. Check the site before trying again.",
+        effectUncertain: true,
+      }), j.lease_token);
+      continue;
+    }
     if (tries >= MAX_ATTEMPTS) {
       // Say so once, plainly, and stop. Leaving it queued would mean the next
       // sweep picks it up again and we are back where we started.
-      await updateJob(j.id, {
-        status: "failed", claimed_by: "", claimed_at: null,
-        result: `I tried this ${tries} times and could not get it done. I have stopped rather than keep going.`,
-      });
+      const result = `I tried this ${tries} times and could not get it done. I have stopped rather than keep going.`;
+      const patch = isWorkflowJob(j)
+        ? { ...workflowPatch(j, "failed", { reason: result }), result }
+        : { status: "failed", claimed_by: "", claimed_at: null, result };
+      await updateJob(j.id, patch, j.lease_token);
       continue;
     }
-    await updateJob(j.id, { status: "queued", claimed_by: "", claimed_at: null });
+    const patch = isWorkflowJob(j)
+      ? workflowPatch(j, "queued", {
+          reason: "executor lease expired before a confirmed external effect",
+          effectUncertain: false,
+        })
+      : { status: "queued", claimed_by: "", claimed_at: null };
+    await updateJob(j.id, patch, j.lease_token);
   }
 }
 
@@ -189,20 +254,16 @@ const ACTIONS = {
 async function claimJob() {
   // Owner-scoped: a paired agent takes its owner's jobs (or legacy unowned
   // ones); an unpaired agent only takes unowned jobs.
-  const { owner, agentId } = await chrome.storage.local.get(["owner", "agentId"]);
+  const { ownerRef, agentId } = await chrome.storage.local.get(["ownerRef", "agentId"]);
   // An UNPAIRED agent must not claim anything: it cannot fetch a key, so it
   // would claim the job and then fail it forever — a second Chrome profile
   // silently killing the owner's work.
-  if (!owner) return null;
-  // A PAIRED agent still takes unowned jobs: if the brain ever queues one
-  // without an owner stamp, dropping this clause would leave it queued
-  // forever with nothing reporting a problem. Silent dead-queue is worse
-  // than the narrow case this clause admits.
+  if (!ownerRef) return null;
   // The research lane is NOT ours: read-only goals run server-side in the
   // worker (roadmap §6) — his browser is only for work that needs his
   // logged-in sessions. The backend's research_lane hook enforces the same
   // exclusion for extensions older than this line.
-  const cond = `status="queued" && (owner="${owner}" || owner="") && lane!="research"`;
+  const cond = `status="queued" && owner_ref="${ownerRef}" && workflow_id!="" && lane!="research"`;
   const poll = async () => fetch(
     `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`,
     { headers: await writeHeaders() }
@@ -229,6 +290,10 @@ async function claimJob() {
   if (!items || !items.length) return null;
   const job = items[0];
   if (activeJobs.has(job.id)) return null;
+  if (!isWorkflowJob(job)) {
+    console.warn(`Anticipy: refusing job ${job.id} without canonical workflow metadata`);
+    return null;
+  }
   // Nothing executes while Chrome is shut, so a job can sit for days. Opening
   // the laptop on Monday should NOT silently fire Friday's errand — the world
   // has moved on. Hand it back and let the owner say whether it still stands.
@@ -252,7 +317,9 @@ async function claimJob() {
     // answer against, so the task could never be resumed by answering again.
     const had = (job.result || "").trim();
     await updateJob(job.id, {
-      status: "needs_user",
+      ...workflowPatch(job, "needs_user", {
+        reason: `Still queued after ${hrs} hours without running. Does it still stand?`,
+      }),
       result: (had ? had + "\n\n" : "") +
         `Still queued after ${hrs} hours without running. Does it still stand?`,
     });
@@ -268,17 +335,21 @@ async function claimJob() {
   const tries = (Number(job.attempts) || 0) + 1;
   if (tries > MAX_ATTEMPTS) {
     await updateJob(job.id, {
-      status: "failed", claimed_by: "", claimed_at: null,
+      ...workflowPatch(job, "cancelled", {
+        reason: `stopped after ${tries - 1} attempts`,
+      }),
       result: `I tried this ${tries - 1} times and could not get it done. I have stopped rather than keep going.`,
     });
     return null;
   }
-  await updateJob(job.id, { status: "running", claimed_by: me, attempts: tries, claimed_at: new Date().toISOString() });
-  const check = await fetch(`${BASE}/api/collections/jobs/records/${job.id}`,
-    { headers: await writeHeaders() });
-  if (!check.ok) return null;
-  const fresh = await check.json();
-  if (fresh.claimed_by !== me || fresh.status !== "running") return null;
+  const leaseToken = crypto.randomUUID();
+  const fresh = await updateJob(job.id, workflowPatch(job, "running", {
+    actorId: me,
+    leaseToken,
+    leaseUntil: new Date(Date.now() + LEASE_MS),
+    attempt: tries,
+  }));
+  if (fresh.claimed_by !== me || fresh.status !== "running" || fresh.lease_token !== leaseToken) return null;
   return fresh;
 }
 
@@ -386,31 +457,44 @@ function jobLine(job, params) {
   return String(t).replace(/\s+/g, " ").trim().slice(0, 140);
 }
 
-async function updateJob(id, fields) {
+async function fetchJob(id) {
+  const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`,
+    { headers: await writeHeaders() });
+  if (r.status === 404) throw new Error("job gone");
+  if (!r.ok) throw new Error(`job read failed (${r.status})`);
+  return r.json();
+}
+
+async function updateJob(id, fields, leaseToken = "") {
   const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`, {
     method: "PATCH",
-    headers: await writeHeaders(),
+    headers: await writeHeaders(leaseToken),
     body: JSON.stringify(fields),
   });
   // A silently-swallowed write meant a job deleted server-side ran to
   // completion while every status update vanished into the void.
   if (!r.ok) {
     if (r.status === 404) { activeJobs.delete(id); throw new Error("job gone"); }
-    console.warn(`Anticipy: job ${id} update failed (${r.status})`);
+    let detail = "";
+    try { detail = String((await r.json()).detail || ""); } catch (_) {}
+    throw new Error(`job update failed (${r.status})${detail ? `: ${detail}` : ""}`);
   }
-  return r;
+  return r.json();
 }
 
 /// Is this job still ours to run? The owner can cancel from the app or by
 /// text while the loop is mid-flight; without this the run continued and
 /// then RESURRECTED the cancelled job as done/failed.
-async function jobStillLive(id) {
+async function jobStillLive(id, leaseToken = "") {
   try {
     const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`,
       { headers: await writeHeaders() });
     if (r.status === 404) return false;
     if (!r.ok) return true;   // transient: don't abandon real work
     const j = await r.json();
+    if (isWorkflowJob(j)) {
+      return j.workflow_state === "running" && j.lease_token === leaseToken;
+    }
     return j.status === "running" || j.status === "queued";
   } catch (_) {
     return true;
@@ -418,8 +502,8 @@ async function jobStillLive(id) {
 }
 
 async function runJob(job) {
-  const params = job.params ? JSON.parse(job.params) : {};
-  activeJobs.add(job.id);
+  const params = parseJobParams(job);
+  activeJobs.set(job.id, { job, leaseToken: job.lease_token || "" });
   await setCurrentJob({ id: job.id, status: "running", doing: jobLine(job, params), result: "" });
   try {
     await runJobInner(job, params);
@@ -437,12 +521,26 @@ async function runJob(job) {
 
 async function runJobInner(job, params) {
 
+  // Canonical plans all use the same adaptive browser executor.  The old
+  // ACTIONS table remains only for draining pre-workflow rows; a production
+  // plan must not bypass verification merely because its goal string happens
+  // to match a historical template.
+  if (isWorkflowJob(job) && job.goal !== "agent_goal") {
+    const task = params.task || (params.source
+      ? `${job.goal} (context: heard "${params.source}")` : job.goal);
+    return runJobInner({ ...job, goal: "agent_goal" }, { ...params, task });
+  }
+
   if (job.goal === "agent_goal") {
     // Autonomous mode: LLM click-loop via chrome.debugger in a background
     // Anticipy tab group (same mechanics as Claude in Chrome / Codex).
     const openrouterKey = await ensureLLMKey();
     if (!openrouterKey) {
-      await updateJob(job.id, { status: "failed", result: "no LLM key: not paired yet, or the backend has none configured" });
+      const result = "no LLM key: not paired yet, or the backend has none configured";
+      const patch = isWorkflowJob(job)
+        ? { ...workflowPatch(job, "failed", { reason: result }), result }
+        : { status: "failed", result };
+      await updateJob(job.id, patch, job.lease_token);
       await setCurrentJob({ status: "failed", result: "I couldn't start: this browser isn't paired to your phone yet." });
       return;
     }
@@ -454,7 +552,8 @@ async function runJobInner(job, params) {
       // identity: he can add his name and retry in the same minute.
       let ownerProfile = cachedProfile;
       try {
-        const pr = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(myId || "")}`);
+        const pr = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(myId || "")}`,
+          { headers: await writeHeaders() });
         if (pr.ok) {
           const fresh = (await pr.json()).owner;
           if (fresh) { ownerProfile = fresh; await chrome.storage.local.set({ ownerProfile: fresh }); }
@@ -466,7 +565,7 @@ async function runJobInner(job, params) {
         // A resumed job goes back to its own parked tab — session, filled
         // form and all — instead of starting the world over in a fresh one.
         resumeTabId: params.resume_tab != null ? params.resume_tab : null,
-        stillLive: () => jobStillLive(job.id),
+        stillLive: () => jobStillLive(job.id, job.lease_token),
         ...(agentModel ? { model: agentModel } : {}),
         ...(visionModel ? { visionModel } : {}),
         ownerProfile,
@@ -496,9 +595,17 @@ async function runJobInner(job, params) {
             const now = Date.now();
             if (!final && now - last < 4000) return;
             last = now;
-            await updateJob(job.id, { trace: history.slice(-80).join("\n").slice(-14000) });
+            job = await updateJob(job.id,
+              { trace: history.slice(-80).join("\n").slice(-14000) }, job.lease_token);
+            const active = activeJobs.get(job.id);
+            if (active) active.job = job;
           };
         })(),
+        onBeforeExternalEffect: isWorkflowJob(job) ? async () => {
+          job = await updateJob(job.id, markEffectUncertainPatch(job), job.lease_token);
+          const active = activeJobs.get(job.id);
+          if (active) active.job = job;
+        } : null,
       });
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.
@@ -511,25 +618,57 @@ async function runJobInner(job, params) {
       // free-form "yes" re-release a stuck job instead of the intended one.
       const status = out.status === "done" ? "done"
         : out.status === "needs_user" ? "needs_user" : "failed";
+      const canonicalState = status === "done" ? "succeeded"
+        : status === "needs_user" || job.effect_uncertain ? "needs_user" : "failed";
+      const result = status === "failed" && job.effect_uncertain
+        ? "The browser stopped after a possible external action. Check the site before trying again."
+        : (out.result || "");
       // §9: a kept-back tab never surfaces itself — badge + notification, and
       // the owner's click is what focuses it (openHandBack). Surfaced before
       // the job write so a deleted job row can't strand a hidden tab.
-      if (status === "needs_user" && out.tabId != null) {
-        await surfaceHandBack(out.tabId, out.result, "needs_user");
-        // Remember WHERE it parked, so the resume lands back in this tab.
-        await updateJob(job.id, { status, result: out.result,
-          params: JSON.stringify({ ...params, resume_tab: out.tabId }) });
-      } else {
-        await updateJob(job.id, { status, result: out.result });
+      if (canonicalState === "needs_user" && out.tabId != null) {
+        await surfaceHandBack(out.tabId, result, "needs_user");
       }
+      const transition = isWorkflowJob(job)
+        ? workflowPatch(job, canonicalState, {
+            reason: result || (canonicalState === "failed"
+              ? "browser execution failed" : "the browser needs the owner"),
+            effectUncertain: !!job.effect_uncertain,
+            ...(out.tabId != null && canonicalState === "needs_user"
+              ? { paramsPatch: { resume_tab: out.tabId } } : {}),
+            ...(canonicalState === "succeeded" ? {
+              summary: result || "completed",
+              verified: out.receipt?.verified === true,
+              evidence: out.receipt?.evidence || [],
+            } : {}),
+          })
+        : {
+            status, result,
+            ...(out.tabId != null && status === "needs_user"
+              ? { params: JSON.stringify({ ...params, resume_tab: out.tabId }) } : {}),
+          };
+      job = await updateJob(job.id, { ...transition, result }, job.lease_token);
       // The job row keeps needs_user (the phone offers Try again on it), but
       // in Chrome the honest word for "you cancelled the debugging bar" is
       // stopped, not "I need you".
-      await setCurrentJob({ status: out.stoppedInChrome ? "stopped" : status, result: out.result || "" });
+      await setCurrentJob({
+        status: out.stoppedInChrome ? "stopped"
+          : canonicalState === "needs_user" ? "needs_user" : status,
+        result,
+      });
     } catch (e) {
       if (String(e).includes("job gone")) throw e;
-      await updateJob(job.id, { status: "failed", result: String(e) });
-      await setCurrentJob({ status: "failed", result: "Something went wrong partway through. Nothing was sent." });
+      const uncertain = !!job.effect_uncertain;
+      const result = uncertain
+        ? "The browser stopped after a possible external action. Check the site before trying again."
+        : String(e);
+      const patch = isWorkflowJob(job)
+        ? { ...workflowPatch(job, uncertain ? "needs_user" : "failed", {
+            reason: result, effectUncertain: uncertain,
+          }), result }
+        : { status: "failed", result };
+      await updateJob(job.id, patch, job.lease_token);
+      await setCurrentJob({ status: uncertain ? "needs_user" : "failed", result });
     }
     return;
   }
@@ -600,29 +739,28 @@ async function poll() {
   }
 }
 
-// Realtime push: subscribe to job creations over PocketBase SSE so new work
-// starts in ~0s instead of on the next poll. Alarms remain as the safety net
-// (MV3 service workers sleep; the alarm re-fires poll and re-opens the stream).
-let realtimeOpen = false;
-async function openRealtime() {
-  if (realtimeOpen) return;
-  realtimeOpen = true;
-  try {
-    const es = new EventSource(`${BASE}/api/realtime`);
-    let clientId = null;
-    es.addEventListener("PB_CONNECT", async (e) => {
-      clientId = JSON.parse(e.data).clientId;
-      await fetch(`${BASE}/api/realtime`, {
-        method: "POST",
-        headers: await writeHeaders(),
-        body: JSON.stringify({ clientId, subscriptions: ["jobs"] }),
-      });
-    });
-    es.addEventListener("jobs", () => poll());
-    es.onerror = () => { es.close(); realtimeOpen = false; };
-  } catch (e) {
-    realtimeOpen = false;
+async function stopJob(id) {
+  const job = await fetchJob(id);
+  const active = activeJobs.get(id);
+  const fields = isWorkflowJob(job)
+    ? { ...workflowPatch(job, "cancelled", { reason: "you stopped this from Chrome" }),
+        result: "you stopped this from Chrome" }
+    : { status: "cancelled", result: "you stopped this from Chrome" };
+  return updateJob(id, fields, active?.leaseToken || job.lease_token || "");
+}
+
+async function retryJob(id) {
+  const job = await fetchJob(id);
+  if (!isWorkflowJob(job)) {
+    return updateJob(id, { status: "queued", claimed_by: "", claimed_at: null });
   }
+  if (job.effect_uncertain) {
+    throw new Error("check the site before retrying a possible external effect");
+  }
+  return updateJob(id, workflowPatch(job, "queued", {
+    reason: "the owner asked Chrome to try this approved version again",
+    effectUncertain: false,
+  }));
 }
 
 // The popup's two controls. Both go through updateJob — the same write path
@@ -632,14 +770,14 @@ async function openRealtime() {
 chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   if (!msg || !msg.type) return;
   if (msg.type === "anticipy-stop" && msg.id) {
-    updateJob(msg.id, { status: "cancelled", result: "you stopped this from Chrome" })
+    stopJob(msg.id)
       .then(() => setCurrentJob({ status: "stopped", result: "You stopped this. Nothing more was done." }))
       .catch(() => {})
       .finally(() => respond({ ok: true }));
     return true;
   }
   if (msg.type === "anticipy-again" && msg.id) {
-    updateJob(msg.id, { status: "queued", claimed_by: "", claimed_at: null })
+    retryJob(msg.id)
       .then(() => setCurrentJob({ status: "queued", result: "" }))
       .catch(() => {})
       .finally(() => respond({ ok: true }));
@@ -655,7 +793,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   // A pair code that can never be replaced is a dead end. Drop this install's
   // identity and run the same registration POST first install runs.
   if (msg.type === "anticipy-newcode") {
-    chrome.storage.local.remove(["recordId", "pairCode", "agentId"])
+    chrome.storage.local.remove(["recordId", "pairCode", "agentId", "agentToken", "agentCredentialInstalled"])
       .then(() => ensureRegistered())
       .then((reg) => respond({ ok: !!reg }))
       .catch(() => respond({ ok: false }));
@@ -675,7 +813,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 chrome.alarms.onAlarm.addListener((a) => {
-  if (a.name === "anticipy-poll") { poll(); openRealtime(); }
+  if (a.name === "anticipy-poll") poll();
   // A network blip during a beat is routine, not an error worth logging —
   // the next alarm retries anyway.
   if (a.name === "anticipy-heartbeat") heartbeat().catch(() => {});
@@ -683,5 +821,4 @@ chrome.alarms.onAlarm.addListener((a) => {
 // Also poll immediately on worker wake, and re-assert the badge — it is
 // derived state, and a restarted browser comes up with it blank.
 poll();
-openRealtime();
 refreshBadge();

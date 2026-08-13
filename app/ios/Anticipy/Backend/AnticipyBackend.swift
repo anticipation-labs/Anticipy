@@ -9,6 +9,31 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     let status: String // queued | running | awaiting_confirm | done | failed | cancelled
     let result: String?
     let created: String
+    let workflow_id: String?
+    let workflow_version: Int?
+    let workflow_state: String?
+    let consequence: String?
+    let approval: String?
+    let scope_digest: String?
+    let effect_key: String?
+    let effect_uncertain: Bool?
+    let reconciliation: String?
+
+    init(id: String, goal: String, params: String, status: String,
+         result: String?, created: String, workflow_id: String? = nil,
+         workflow_version: Int? = nil, workflow_state: String? = nil,
+         consequence: String? = nil, approval: String? = nil,
+         scope_digest: String? = nil, effect_key: String? = nil,
+         effect_uncertain: Bool? = nil,
+         reconciliation: String? = nil) {
+        self.id = id; self.goal = goal; self.params = params; self.status = status
+        self.result = result; self.created = created; self.workflow_id = workflow_id
+        self.workflow_version = workflow_version; self.workflow_state = workflow_state
+        self.consequence = consequence; self.approval = approval
+        self.scope_digest = scope_digest; self.effect_key = effect_key
+        self.effect_uncertain = effect_uncertain
+        self.reconciliation = reconciliation
+    }
 }
 
 /// A registered browser-agent (Chrome extension install). `lastSeen` is its
@@ -17,6 +42,7 @@ struct BrowserAgent: Decodable, Equatable {
     let id: String
     let agent_id: String
     let owner: String?
+    let owner_ref: String?
     let paired: Bool?
     let last_seen: String?
     let browser: String?
@@ -44,28 +70,20 @@ struct BrainEvent: Decodable, Identifiable, Equatable {
 final class AnticipyBackend {
     var baseURL: URL
     let deviceID: String
-    /// Shared write token, fetched after pairing. Empty until then; the
-    /// backend guard ignores the header until enforcement is switched on.
-    var serviceToken: String
     /// The signed-in person's session token, when there is one.
     var authToken: String
 
-    init(baseURL: URL, deviceID: String, serviceToken: String = "",
-         authToken: String = "", accountID: String = "") {
+    init(baseURL: URL, deviceID: String, authToken: String = "",
+         accountID: String = "") {
         self.baseURL = baseURL
         self.deviceID = deviceID
-        self.serviceToken = serviceToken
         self.authToken = authToken
         self.accountID = accountID
     }
 
-    /// Attach whatever credentials we have. Both may be present during the
-    /// move onto accounts; the account token is the one that will outlive the
-    /// shared secret.
+    /// Customer devices authenticate only as the signed-in owner. The
+    /// server-wide worker credential is never present in the app.
     private func authorize(_ r: inout URLRequest) {
-        if !serviceToken.isEmpty {
-            r.setValue(serviceToken, forHTTPHeaderField: "X-Anticipy-Token")
-        }
         if !authToken.isEmpty {
             r.setValue(authToken, forHTTPHeaderField: "Authorization")
         }
@@ -119,8 +137,11 @@ final class AnticipyBackend {
     func upsertOwner(ownerID: String, fields: [String: String]) async -> Bool {
         let listURL = baseURL.appendingPathComponent("api/collections/owner_profile/records")
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
-        let filter = "owner_id=\"\(ownerID)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
-        comps.percentEncodedQuery = "filter=\(filter)&perPage=1"
+        let filter = accountID.isEmpty
+            ? "owner_id=\"\(ownerID)\""
+            : "owner_ref=\"\(accountID)\""
+        let encodedFilter = filter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
+        comps.percentEncodedQuery = "filter=\(encodedFilter)&perPage=1"
         var existingID: String?
         if let url = comps.url,
            let data = try? await readData(from: url),
@@ -129,6 +150,7 @@ final class AnticipyBackend {
             existingID = items.first?["id"] as? String
         }
         var body: [String: Any] = ["owner_id": ownerID]
+        if !accountID.isEmpty { body["owner_ref"] = accountID }
         for (k, v) in fields where !v.isEmpty { body[k] = v }
         var req: URLRequest
         if let id = existingID {
@@ -233,19 +255,6 @@ final class AnticipyBackend {
         }
     }
 
-    /// The paired agent's key bundle also carries this phone's write token.
-    func fetchServiceToken(agentID: String) async -> String? {
-        var comps = URLComponents(url: baseURL.appendingPathComponent("agent/key"),
-                                  resolvingAgainstBaseURL: false)!
-        comps.queryItems = [URLQueryItem(name: "agent_id", value: agentID)]
-        guard let url = comps.url,
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        let token = root["service_token"] as? String
-        return (token?.isEmpty == false) ? token : nil
-    }
-
     /// Pair this app to a pendant using the short code the pendant registered.
     func pair(code: String, owner: String) async throws -> Bool {
         let filter = "pair_code=\"\(code)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
@@ -258,7 +267,10 @@ final class AnticipyBackend {
               let id = items.first?["id"] as? String else { return false }
 
         var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
-        patch.httpBody = try JSONSerialization.data(withJSONObject: ["owner": owner, "paired": true])
+        guard !accountID.isEmpty else { throw BackendError(status: 401) }
+        patch.httpBody = try JSONSerialization.data(withJSONObject: [
+            "owner": owner, "owner_ref": accountID, "paired": true,
+        ])
         try await send(patch)
         return true
     }
@@ -282,7 +294,10 @@ final class AnticipyBackend {
               let id = items.first?["id"] as? String else { return false }
 
         var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
-        patch.httpBody = try JSONSerialization.data(withJSONObject: ["owner": owner, "paired": true])
+        guard !accountID.isEmpty else { throw BackendError(status: 401) }
+        patch.httpBody = try JSONSerialization.data(withJSONObject: [
+            "owner": owner, "owner_ref": accountID, "paired": true,
+        ])
         try await send(patch)
         return true
     }
@@ -300,7 +315,10 @@ final class AnticipyBackend {
     func unpairAgent(owner: String) async {
         guard !owner.isEmpty else { return }
         let listURL = baseURL.appendingPathComponent("api/collections/agents/records")
-        let filter = "owner=\"\(owner)\"".addingPercentEncoding(
+        let rawFilter = accountID.isEmpty
+            ? "owner=\"\(owner)\""
+            : "owner_ref=\"\(accountID)\""
+        let filter = rawFilter.addingPercentEncoding(
             withAllowedCharacters: .urlQueryAllowed)!
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         comps.percentEncodedQuery = "filter=\(filter)&perPage=20"
@@ -311,8 +329,9 @@ final class AnticipyBackend {
         for item in items {
             guard let id = item["id"] as? String else { continue }
             var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
-            patch.httpBody = try? JSONSerialization.data(
-                withJSONObject: ["owner": "", "paired": false])
+            var body: [String: Any] = ["owner": "", "paired": false]
+            if !accountID.isEmpty { body["owner_ref"] = "" }
+            patch.httpBody = try? JSONSerialization.data(withJSONObject: body)
             _ = try? await send(patch)
         }
     }
@@ -320,7 +339,10 @@ final class AnticipyBackend {
     /// The agent paired to this owner (if any), with its latest heartbeat.
     func fetchAgent(owner: String) async throws -> BrowserAgent? {
         let listURL = baseURL.appendingPathComponent("api/collections/agents/records")
-        let filter = "owner=\"\(owner)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
+        let rawFilter = accountID.isEmpty
+            ? "owner=\"\(owner)\""
+            : "owner_ref=\"\(accountID)\""
+        let filter = rawFilter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         comps.percentEncodedQuery = "filter=\(filter)&sort=-updated&perPage=1"
         let data = try await readData(from: comps.url!)
@@ -332,7 +354,8 @@ final class AnticipyBackend {
     var accountID: String = ""
 
     func pushEvent(kind: String, text: String, decision: String? = nil,
-                   goal: String? = nil, speaker: String? = nil) async throws {
+                   goal: String? = nil, speaker: String? = nil,
+                   explicit: Bool = false) async throws {
         var body: [String: Any] = [
             "device_id": deviceID, "kind": kind, "text": text,
             "decision": decision ?? "", "goal": goal ?? "",
@@ -356,6 +379,7 @@ final class AnticipyBackend {
         // who spoke ("owner", "other:v2", "other:Sarah"). The voiceprint it
         // came from never leaves the phone, and neither does the audio.
         if let speaker, !speaker.isEmpty { body["speaker"] = speaker }
+        if explicit { body["explicit"] = true }
         // Say whose words these are. Until today `events` had no owner column
         // at all, which is why a brand-new account opened the app to a stranger's
         // transcripts — seen for real in the simulator against production.
@@ -365,9 +389,11 @@ final class AnticipyBackend {
 
     func queueJob(goal: String, params: [String: String]) async throws {
         let paramsJSON = String(data: try JSONSerialization.data(withJSONObject: params), encoding: .utf8) ?? "{}"
-        try await post("api/collections/jobs/records", body: [
+        var body: [String: Any] = [
             "goal": goal, "params": paramsJSON, "status": "queued", "device_id": deviceID,
-        ])
+        ]
+        if !accountID.isEmpty { body["owner_ref"] = accountID }
+        try await post("api/collections/jobs/records", body: body)
     }
 
     /// Latest brain events, newest first — heard lines + what Anticipy said.
@@ -400,8 +426,8 @@ final class AnticipyBackend {
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         var items = [URLQueryItem(name: "perPage", value: String(limit)),
                      URLQueryItem(name: "sort", value: "-created")]
-        if !owner.isEmpty {
-            items.append(URLQueryItem(name: "filter", value: "owner=\"\(owner)\""))
+        if !accountID.isEmpty {
+            items.append(URLQueryItem(name: "filter", value: "owner_ref=\"\(accountID)\""))
         }
         comps.queryItems = items
         let data = try await readData(from: comps.url!)
@@ -410,14 +436,12 @@ final class AnticipyBackend {
     }
 
     /// Release a held job (in-app "Send it") or cancel it ("Not now").
-    func setJobStatus(id: String, status: String, params: String? = nil) async throws {
+    func setJobFields(id: String, fields: [String: Any]) async throws {
         let url = baseURL
             .appendingPathComponent("api/collections/jobs/records")
             .appendingPathComponent(id)
         var patch = writeRequest(url, method: "PATCH")
-        var body: [String: Any] = ["status": status]
-        if let params { body["params"] = params }
-        patch.httpBody = try JSONSerialization.data(withJSONObject: body)
+        patch.httpBody = try JSONSerialization.data(withJSONObject: fields)
         // "Send it" and "Not now" land here. This used to discard the response,
         // so a 403 buzzed success and left the card sitting there — which reads
         // as a UI glitch, so people tap it again.

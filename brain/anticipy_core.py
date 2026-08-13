@@ -28,6 +28,9 @@ from . import pb
 
 from .llm import LLM, now_line
 from .memory import Memory
+from .workflow import (Consequence, approve as approve_plan,
+                       cancel as cancel_plan, from_params as workflow_from_params,
+                       merge as merge_plan, new_plan, put_in_params)
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
                            NOT_HIS, check_sufficiency, fill_gaps_from_memory,
@@ -400,6 +403,7 @@ class Anticipy:
         voice=None,
         owner_phone: Optional[str] = None,
         owner_id: str = "",
+        owner_ref: str = "",
         conversation=None,
     ):
         self.llm = llm
@@ -409,6 +413,9 @@ class Anticipy:
         self.voice = voice
         self.owner_phone = owner_phone
         self.owner_id = owner_id
+        # Canonical PocketBase owners-record id. owner_id is the legacy device
+        # UUID retained only while old extensions drain.
+        self.owner_ref = owner_ref
         self.conversation = conversation
         self.loops: list[LoopRecord] = []
         # Gaps memory answered for the goal being decided right now; consumed
@@ -421,6 +428,8 @@ class Anticipy:
         # classification rides along as context and the model needs positive
         # evidence to switch. Same recency window as the split-thought carry.
         self._last_addressee: Optional[tuple[str, float]] = None
+        self._source_event_id = ""
+        self._lineage_key = ""
         # The one plan this conversation is currently circling: (job id, ts).
         # A dinner gets agreed over five turns — "we should get dinner", "how
         # about seven", "Cactus Club", "the park one", "just the two of us" —
@@ -432,6 +441,12 @@ class Anticipy:
         # (job id, when, the goal it was raised with). The GOAL is what makes
         # "is this the same plan?" answerable here, without a backend read.
         self._open_plan: Optional[tuple[str, float, str]] = None
+
+    def _owner_filter(self) -> str:
+        """Return the strongest available tenant filter for PocketBase."""
+        if self.owner_ref:
+            return f'owner_ref="{self.owner_ref}"'
+        return f'owner="{self.owner_id}"' if self.owner_id else ""
 
     # ------------------------------------------------------------ hearing
 
@@ -463,8 +478,9 @@ class Anticipy:
         hour later is about something else and stays with triage."""
         try:
             filt = 'status="awaiting_confirm"'
-            if self.owner_id:
-                filt += f' && owner="{self.owner_id}"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
             r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 1, "sort": "-created"},
                        timeout=10)
@@ -490,9 +506,18 @@ class Anticipy:
                 f"Task: {job.get('goal', '')}. "
                 f'They said: "{line.strip()}". '
                 f"Heard originally: {params.get('source', '')}").strip()
+            fields = {"status": "queued", "params": json.dumps(params)}
+            workflow = workflow_from_params(params)
+            if workflow:
+                workflow = approve_plan(
+                    workflow, expected_version=workflow.version,
+                    owner_words=line.strip())
+                params = put_in_params(params, workflow)
+                fields.update(workflow.job_fields())
+                fields["params"] = json.dumps(params)
             pr = pb.patch(
                 f"{self.backend_url}/api/collections/jobs/records/{job['id']}",
-                json={"status": "queued", "params": json.dumps(params)},
+                json=fields,
                 timeout=10)
             return (job.get("goal") or None) if getattr(pr, "ok", False) else None
         except Exception:
@@ -521,7 +546,8 @@ class Anticipy:
     def hear(self, line: str, context: Optional[list[str]] = None,
              may_say=None, explicit: bool = False, channel: str = "",
              speaker: Optional[str] = None,
-             link_candidates: Optional[list[str]] = None) -> dict:
+             link_candidates: Optional[list[str]] = None,
+             source_event_id: str = "", lineage_key: str = "") -> dict:
         """One transcript line in; memory, decision, and delegation out.
 
         channel names where the line arrived from ("sms" when he texted it).
@@ -550,6 +576,8 @@ class Anticipy:
         # two goals read WITH the lunch being planned around them are plainly
         # one plan. Refreshed every line, so it is always this conversation.
         self._last_convo = [c for c in (context or []) if c][-6:]
+        self._source_event_id = (source_event_id or "").strip()
+        self._lineage_key = (lineage_key or source_event_id or "").strip()
         # Unmistakable dictation is known before anything can answer or act:
         # a line the owner voice-typed at another machine must not be
         # answered from memory as if he had asked HER. Explicit lines (he
@@ -1528,8 +1556,23 @@ class Anticipy:
         if not job_id:
             return False
         try:
+            fields = {"status": "cancelled", "result": why}
+            try:
+                got = pb.get(
+                    f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+                    timeout=10)
+                job = got.json() if getattr(got, "ok", False) else {}
+                params = json.loads(job.get("params") or "{}")
+                workflow = workflow_from_params(params)
+                if workflow:
+                    workflow = cancel_plan(workflow, reason=why)
+                    params = put_in_params(params, workflow)
+                    fields.update(workflow.job_fields())
+                    fields["params"] = json.dumps(params)
+            except Exception:
+                pass
             pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
-                     json={"status": "cancelled", "result": why}, timeout=10)
+                     json=fields, timeout=10)
             return True
         except Exception as e:
             print(f"could not cancel {job_id}: {e}")
@@ -1613,16 +1656,32 @@ class Anticipy:
         # keeps the browser lane rather than queueing for an executor that
         # does not exist — graceful fallback, never a dead queue.
         lane = job_lane(goal, params) if os.environ.get("BRAVE_API_KEY") else ""
+        consequential = bool(hold or goal in IRREVERSIBLE
+                             or is_consequential(goal, params, explicit=explicit))
+        owner_for_workflow = self.owner_ref or self.owner_id or "local-unowned"
+        lineage = (params.get("lineage_key") or self._lineage_key
+                   or self._source_event_id
+                   or f"direct:{owner_for_workflow}:{time.time_ns()}")
+        workflow = new_plan(
+            owner_ref=owner_for_workflow,
+            lineage_key=str(lineage),
+            goal=goal,
+            consequence=(Consequence.CONSEQUENTIAL if consequential
+                         else Consequence.READ_ONLY),
+            source_event_id=str(params.get("source_event_id")
+                                or self._source_event_id or ""),
+        )
+        params = put_in_params(params, workflow)
+        workflow_fields = workflow.job_fields()
         try:
+            body = {"goal": goal, "params": json.dumps(params),
+                    "device_id": "anticipy", "owner": self.owner_id,
+                    "lane": lane, **workflow_fields}
+            if self.owner_ref:
+                body["owner_ref"] = self.owner_ref
             r = pb.post(
                 f"{self.backend_url}/api/collections/jobs/records",
-                json={"goal": goal, "params": json.dumps(params),
-                      "status": "awaiting_confirm"
-                      if (hold or goal in IRREVERSIBLE
-                          or is_consequential(goal, params, explicit=explicit))
-                      else "queued",
-                      "device_id": "anticipy", "owner": self.owner_id,
-                      "lane": lane},
+                json=body,
                 timeout=10,
             )
             r.raise_for_status()
@@ -1814,6 +1873,21 @@ class Anticipy:
             merged["update"] = goal        # both hold detail: lose neither
             if merged.get("source"):
                 merged["source"] += f" (update: {goal})"
+        workflow = workflow_from_params(cur_params)
+        if workflow:
+            try:
+                workflow = merge_plan(
+                    workflow,
+                    expected_version=workflow.version,
+                    goal=fields.get("goal", cur_goal),
+                    source_event_id=str(params.get("source_event_id")
+                                        or self._source_event_id or ""),
+                )
+                merged = put_in_params(merged, workflow)
+                fields.update(workflow.job_fields())
+            except Exception as e:
+                print(f"workflow merge refused for {job_id}: {e}")
+                return
         fields["params"] = json.dumps(merged)
         try:
             pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
@@ -1969,8 +2043,9 @@ class Anticipy:
         """Everything still waiting — queued or held for his yes."""
         try:
             filt = 'status="awaiting_confirm" || status="queued"'
-            if self.owner_id:
-                filt = f'({filt}) && owner="{self.owner_id}"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt = f"({filt}) && {owner_filter}"
             r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 20, "sort": "-created"},
                        timeout=10)

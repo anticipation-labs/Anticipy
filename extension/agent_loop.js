@@ -224,10 +224,10 @@ function extractAction(text) {
 // Second-opinion check on a done claim, against a FRESH page snapshot with no
 // step history to anchor on. Research goals verify by result content; action
 // goals (forms, submissions) verify by what the page actually shows.
-async function verifyDone(apiKey, model, goal, result, tabId) {
+export async function verifyDone(apiKey, model, goal, result, tabId) {
   let state;
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
-  catch { return { verified: true, reason: "page unreadable; claim accepted unverified" }; }
+  catch { return { verified: false, reason: "page unreadable; completion is unverified", evidence: [] }; }
   const messages = [
     { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible); but verify=false if ANY statement in the claimed result is contradicted by the page (e.g. claiming a product is unreleased while the page shows its official price). The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done — verified=false with reason "goal state not reached yet". Likewise a research result that admits the requested information was NOT found ("not directly listed", "one would need to visit...") is NOT done — verified=false with reason "requested info not found". Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
     // The auditor is told to demand "correctly-filled fields" as evidence, so
@@ -247,11 +247,22 @@ async function verifyDone(apiKey, model, goal, result, tabId) {
     }).finally(() => clearTimeout(kill));
     const data = await r.json();
     const m = (data.choices?.[0]?.message?.content ?? "").match(/\{[\s\S]*\}/);
-    if (!m) return { verified: true, reason: "unparseable verdict; claim accepted unverified" };
+    if (!m) return { verified: false, reason: "unparseable verifier response", evidence: [] };
     const v = JSON.parse(m[0]);
-    return { verified: !!v.verified, reason: v.reason || "" };
+    const verified = !!v.verified;
+    return {
+      verified,
+      reason: v.reason || "",
+      // Evidence is deliberately compact and non-secret: where the result
+      // was observed plus a fingerprint proving which page state was audited.
+      evidence: verified ? [
+        `url:${String(state.url || "").slice(0, 500)}`,
+        `title:${String(state.title || "").slice(0, 200)}`,
+        `page:${pageFingerprint(state)}`,
+      ] : [],
+    };
   } catch {
-    return { verified: true, reason: "verifier error; claim accepted unverified" };
+    return { verified: false, reason: "verifier error; completion is unverified", evidence: [] };
   }
 }
 
@@ -368,10 +379,11 @@ async function pressEnter(tabId) {
 // A single hung CDP/script/LLM call must never wedge the whole worker
 // (poll() awaits the job, so a wedge freezes claiming forever).
 function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms)),
-  ]);
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
 // Spawn prevention at the source (runs every step, before any click): a
@@ -814,7 +826,7 @@ export function planBlock(plan) {
 export async function runAgentGoal(goal, opts) {
   // Default to a scriptable search page: about:blank can't be script-injected,
   // so mapPage would fail every step and the run would die without acting.
-  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true, facts = "", onTrace = null, resumeTabId = null } = opts;
+  const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true, facts = "", onTrace = null, onBeforeExternalEffect = null, resumeTabId = null } = opts;
 
   // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
   // itself about operating a financial account never even starts — the
@@ -1136,7 +1148,8 @@ export async function runAgentGoal(goal, opts) {
           await new Promise((r) => setTimeout(r, 5000));
           verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
         }
-        if (verdict.verified) return { status: "done", result: decision.result, tabId: tab.id };
+        if (verdict.verified) return { status: "done", result: decision.result, tabId: tab.id,
+          receipt: { verified: true, evidence: verdict.evidence || [] } };
         lastDoneClaim = decision.result;
         history.push(`step ${step}: done claim rejected (${verdict.reason})`);
         continue;
@@ -1283,7 +1296,8 @@ export async function runAgentGoal(goal, opts) {
             // re-audit that claim instead of burning the rest of the budget.
             if (lastDoneClaim) {
               const verdict = await verifyDone(apiKey, model, goal, lastDoneClaim, tab.id);
-              if (verdict.verified) return { status: "done", result: lastDoneClaim, tabId: tab.id };
+              if (verdict.verified) return { status: "done", result: lastDoneClaim, tabId: tab.id,
+                receipt: { verified: true, evidence: verdict.evidence || [] } };
             }
             history.push(`step ${step}: BLOCKED — you already did ${sig}; do something DIFFERENT`);
           }
@@ -1314,6 +1328,15 @@ export async function runAgentGoal(goal, opts) {
         try { c = await withTimeout(elementCenter(tab.id, decision.index), 15000, "elementCenter"); }
         catch (e) { history.push(`step ${step}: element lookup failed (${String(e).slice(0, 100)})`); continue; }
         if (!c) { stuckStreak++; history.push(`step ${step}: element ${decision.index} not found`); continue; }
+        // A crash after a consequential submit but before the receipt is the
+        // classic duplicate-effect window. Persist uncertainty BEFORE the
+        // trusted action; a dead executor will then park for verification
+        // instead of blindly clicking the same thing again.
+        if (authorized && onBeforeExternalEffect
+            && (decision.action === "click"
+                || (decision.action === "type" && decision.enter !== false))) {
+          await onBeforeExternalEffect(decision, state);
+        }
         if (c.inFrameOnly) await frameClick(tab.id, decision.index);
         else await trustedClick(tab.id, c.x, c.y);
         if (decision.action === "click" && actionCounts[sig] === 2) {

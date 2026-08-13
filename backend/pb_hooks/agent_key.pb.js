@@ -7,14 +7,21 @@
 // the production-hardening task (locked rules + per-agent tokens).
 routerAdd("GET", "/agent/key", (e) => {
   const agentId = e.request.url.query().get("agent_id") || "";
-  if (!agentId) return e.json(400, { error: "agent_id required" });
+  const agentToken = e.request.header.get("X-Anticipy-Agent-Token") || "";
+  if (!agentId || agentToken.length < 40) return e.json(400, { error: "agent credentials required" });
   let rec;
   try {
-    rec = e.app.findFirstRecordByFilter("agents", "agent_id = {:id} && paired = true", { id: agentId });
+    rec = e.app.findFirstRecordByFilter(
+      "agents", "agent_id = {:id} && agent_token = {:token} && paired = true",
+      { id: agentId, token: agentToken });
   } catch (_) {
     return e.json(403, { error: "not a paired agent" });
   }
   if (!rec) return e.json(403, { error: "not a paired agent" });
+  const ownerRef = rec.getString("owner_ref");
+  if (!ownerRef) {
+    return e.json(409, { error: "paired agent has no canonical owner; pair it again from the signed-in app" });
+  }
   const key = $os.getenv("OPENROUTER_API_KEY");
   if (!key) return e.json(503, { error: "backend has no key configured" });
   // The browser click-loop's brain is server-controlled: raising quality for
@@ -29,7 +36,8 @@ routerAdd("GET", "/agent/key", (e) => {
   // per-site problem to solve one site at a time.
   let owner = null;
   try {
-    const p = e.app.findFirstRecordByFilter("owner_profile", "id != ''", {});
+    const p = e.app.findFirstRecordByFilter(
+      "owner_profile", "owner_ref = {:owner}", { owner: ownerRef });
     if (p) {
       owner = {
         first_name: p.getString("first_name"),
@@ -43,10 +51,10 @@ routerAdd("GET", "/agent/key", (e) => {
   } catch (_) { owner = null; }
   return e.json(200, {
     openrouter_key: key,
+    owner_ref: ownerRef,
     owner: owner,
     model: model,
     // Used only when the text map is not enough and a screenshot is sent.
     vision_model: $os.getenv("ANTICIPY_VISION_MODEL") || "google/gemini-2.5-flash",
-    service_token: $os.getenv("ANTICIPY_SERVICE_TOKEN") || "",
   });
 });

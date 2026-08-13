@@ -11,13 +11,42 @@ routerAdd("POST", "/sms/inbound", (e) => {
   const info = e.requestInfo();
   const from = (info.body["From"] || "").toString();
   const body = (info.body["Body"] || "").toString().trim();
-  // Defense in depth with the worker's own check: the token proves the caller
-  // is Twilio, never who texted. Anyone who knows the number could otherwise
-  // steer the owner's job queue by texting "yes".
-  const owner = ($os.getenv("ANTICIPY_OWNER_PHONE") || "").replace(/\D/g, "");
-  const sender = from.replace(/\D/g, "");
-  const ownerOnly = owner.length >= 7 && sender.slice(-10) === owner.slice(-10);
-  if (from && body && ownerOnly) {
+  const messageSid = (info.body["MessageSid"] || info.body["SmsSid"] || "").toString();
+
+  // A phone number is a routing address, not an identity. Resolve it to one
+  // and only one signed-in account, then stamp that canonical owner on the
+  // event. Shared/recycled/ambiguous numbers fail closed; an SMS must never
+  // choose which person's browser to control.
+  const ownerRefs = {};
+  try {
+    const profiles = e.app.findRecordsByFilter(
+      "owner_profile", "phone = {:phone}", "-updated", 3, 0, { phone: from });
+    for (const profile of profiles) {
+      const ref = profile.getString("owner_ref");
+      if (ref) ownerRefs[ref] = true;
+    }
+  } catch (_) {}
+  if (Object.keys(ownerRefs).length === 0) {
+    try {
+      const owners = e.app.findRecordsByFilter(
+        "owners", "phone = {:phone}", "-updated", 3, 0, { phone: from });
+      for (const owner of owners) ownerRefs[owner.id] = true;
+    } catch (_) {}
+  }
+  const matches = Object.keys(ownerRefs);
+
+  // Twilio retries webhooks. Persisting MessageSid before the worker sees the
+  // row makes those retries one command, not two.
+  let duplicate = false;
+  if (messageSid) {
+    try {
+      e.app.findFirstRecordByFilter(
+        "events", "external_event_id = {:sid}", { sid: messageSid });
+      duplicate = true;
+    } catch (_) {}
+  }
+
+  if (from && body && messageSid && !duplicate && matches.length === 1) {
     const collection = e.app.findCollectionByNameOrId("events");
     const record = new Record(collection);
     record.set("device_id", "sms");
@@ -25,6 +54,8 @@ routerAdd("POST", "/sms/inbound", (e) => {
     record.set("text", body);
     record.set("decision", "");
     record.set("goal", from); // sender phone; the worker replies to it
+    record.set("owner_ref", matches[0]);
+    record.set("external_event_id", messageSid);
     e.app.save(record);
   }
   e.response.header().set("Content-Type", "application/xml");

@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import SwiftUI
 
 @main
@@ -80,17 +81,30 @@ final class AnticipySession: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var bag = Set<AnyCancellable>()
     private var seenDoneJobIDs = Set<String>()
-    /// When we last threw away a refused key, so recovery retries at a sane
-    /// pace rather than on every 3-second poll.
-    private var lastTokenRecovery = Date.distantPast
     let listener = PhoneListener()
 
     /// Words spoken with no network used to live in a plain in-memory array.
     /// If iOS reclaimed the app before it reconnected, they were gone — from a
     /// product whose whole promise is remembering. Now they survive a relaunch.
+    private struct BufferedLine: Codable {
+        let text: String
+        let explicit: Bool
+        let speaker: String?
+    }
     @AppStorage("unsentLines") private var unsentStore = ""
-    private var unsent: [String] {
-        get { unsentStore.isEmpty ? [] : (try? JSONDecoder().decode([String].self, from: Data(unsentStore.utf8))) ?? [] }
+    private var unsent: [BufferedLine] {
+        get {
+            guard !unsentStore.isEmpty else { return [] }
+            let data = Data(unsentStore.utf8)
+            if let current = try? JSONDecoder().decode([BufferedLine].self, from: data) {
+                return current
+            }
+            // One-release migration from the old string-only queue. Those
+            // rows were microphone speech because typed intent did not yet
+            // survive buffering.
+            return ((try? JSONDecoder().decode([String].self, from: data)) ?? [])
+                .map { BufferedLine(text: $0, explicit: false, speaker: nil) }
+        }
         set {
             unsentStore = (try? JSONEncoder().encode(newValue))
                 .flatMap { String(data: $0, encoding: .utf8) } ?? ""
@@ -98,7 +112,6 @@ final class AnticipySession: ObservableObject {
         }
     }
 
-    @AppStorage("serviceToken") private var serviceToken = ""
     @AppStorage("ownerPhone") var ownerPhone = ""
     @AppStorage("ownerFirstName") var ownerFirstName = ""
     @AppStorage("ownerLastName") var ownerLastName = ""
@@ -111,7 +124,6 @@ final class AnticipySession: ObservableObject {
             // Build-stamped so production events reveal WHICH build spoke —
             // "are you sure it's updated?" gets answered by the data.
             deviceID: "iphone-b\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")",
-            serviceToken: serviceToken,
             // A real signed-in session outranks the shared secret, and the
             // guard accepts either — which is what lets the app move onto
             // accounts without a flag day.
@@ -153,7 +165,8 @@ final class AnticipySession: ObservableObject {
     /// people he talks to) — all of it local to this phone.
     let speakerTagger = SpeakerTagger()
 
-    func heard(_ line: String, speaker: String? = nil) async {
+    func heard(_ line: String, speaker: String? = nil,
+               explicit: Bool = false) async {
         // A typed line deserves an instant felt ack. Ambient listening does
         // NOT — buzzing on every finalized utterance all day is a phone that
         // won't stop twitching; the meaningful buzz is the act-verdict one.
@@ -162,12 +175,13 @@ final class AnticipySession: ObservableObject {
         transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line, decision: nil))
         do {
             try await backend.pushEvent(kind: "transcript", text: line,
-                                        speaker: speaker)
+                                        speaker: speaker, explicit: explicit)
         } catch {
             // A dropped push used to vanish into try? — the line then sat at
             // the top of the feed saying "Thinking…" forever while the brain
             // had never seen it. Queue it (on disk) and keep trying.
-            unsent = unsent + [line]
+            unsent = unsent + [BufferedLine(text: line, explicit: explicit,
+                                            speaker: speaker)]
         }
     }
 
@@ -177,9 +191,13 @@ final class AnticipySession: ObservableObject {
         guard backendReachable, !unsent.isEmpty else { return }
         let queue = unsent
         unsent = []
-        var failed: [String] = []
+        var failed: [BufferedLine] = []
         for line in queue {
-            do { try await backend.pushEvent(kind: "transcript", text: line) }
+            do {
+                try await backend.pushEvent(kind: "transcript", text: line.text,
+                                            speaker: line.speaker,
+                                            explicit: line.explicit)
+            }
             catch { failed.append(line) }
         }
         if !failed.isEmpty { unsent = failed + unsent }
@@ -225,13 +243,6 @@ final class AnticipySession: ObservableObject {
             connection = .ready
         } catch let e as AnticipyBackend.BackendError {
             connection = .refused(e.status)
-            // Being turned away is RECOVERABLE, and the app used to have no way
-            // to recover: the key was fetched only `if serviceToken.isEmpty`, so
-            // a key that was stale, rotated on the server, or saved wrong could
-            // never be replaced. Every read 403'd forever and the only fix was
-            // deleting the app. Throw the bad key away so the fetch below can
-            // get a fresh one — rate-limited, so a genuinely rejected key
-            // retries occasionally instead of hammering every 3 seconds.
             if e.status == 401 || e.status == 403 {
                 // A signed-in session that is being refused is over — the
                 // account was deleted, or the token expired (PocketBase issues
@@ -242,10 +253,6 @@ final class AnticipySession: ObservableObject {
                 if !authToken.isEmpty {
                     signOut()
                     return
-                }
-                if Date().timeIntervalSince(lastTokenRecovery) > 60 {
-                    lastTokenRecovery = Date()
-                    serviceToken = ""
                 }
             }
         } catch {
@@ -300,12 +307,6 @@ final class AnticipySession: ObservableObject {
         // Connection health from the extension's heartbeat, not guesswork.
         if let agent = try? await b.fetchAgent(owner: ownerID) {
             agentPaired = agent.paired ?? false
-            // Pick up the shared write token once paired, so this phone keeps
-            // writing when backend enforcement is switched on.
-            if agentPaired, serviceToken.isEmpty,
-               let t = await b.fetchServiceToken(agentID: agent.agent_id) {
-                serviceToken = t
-            }
             if let seen = agent.last_seen, let date = Self.parsePBDate(seen) {
                 let secs = max(0, Int(Date().timeIntervalSince(date)))
                 agentLastSeenSeconds = secs
@@ -535,24 +536,191 @@ final class AnticipySession: ObservableObject {
     /// looks like it did nothing can't be tapped again into a double send.
     @Published var inFlight: Set<String> = []
 
-    @discardableResult
-    func confirm(_ job: AgentJob) async -> Bool {
-        // Record the yes ON the job: the browser agent reads it and finishes
-        // the task, instead of stopping at the final button to ask again.
+    private enum WorkflowWriteError: Error { case malformed, unsafeRetry }
+
+    private func jsonString(_ value: Any) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw WorkflowWriteError.malformed
+        }
+        return text
+    }
+
+    private func workflowDigest(_ value: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: value,
+                                              options: [.sortedKeys])
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Build the complete, version-bound approval patch. The model never gets
+    /// to turn a button tap into authority: the app binds the owner's actual
+    /// gesture to the exact digest the brain placed on this immutable version.
+    private func approvalFields(for job: AgentJob,
+                                ownerAnswer: String? = nil) throws -> [String: Any]? {
+        guard let planID = job.workflow_id, !planID.isEmpty else { return nil }
+        guard job.workflow_state == "awaiting_approval" || job.workflow_state == "needs_user"
+        else { throw WorkflowWriteError.unsafeRetry }
         var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
             as? [String: Any] ?? [:]
-        params["authorized"] = true
-        let json = (try? JSONSerialization.data(withJSONObject: params))
-            .flatMap { String(data: $0, encoding: .utf8) }
-        return await write(job) {
-            try await self.backend.setJobStatus(id: job.id, status: "queued", params: json)
+        guard var workflow = params["_workflow"] as? [String: Any],
+              workflow["plan_id"] as? String == planID,
+              let version = job.workflow_version,
+              (workflow["version"] as? Int) == version,
+              let scope = job.scope_digest, !scope.isEmpty,
+              workflow["scope_digest"] as? String == scope
+        else { throw WorkflowWriteError.malformed }
+
+        let now = ISO8601DateFormatter.anticipyUTC.string(from: Date())
+        let answer = ownerAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let ownerWords = job.effect_uncertain == true
+            ? "I checked the site; the action did not happen. Try again."
+            : (job.status == "needs_user" ? answer : "Tapped “Send it”.")
+        if job.status == "needs_user" && job.effect_uncertain != true && ownerWords.isEmpty {
+            throw WorkflowWriteError.malformed
         }
+
+        var approvedVersion = version
+        var approvedScope = scope
+        var approvedEffect = job.effect_key ?? ""
+        if job.status == "needs_user" && job.effect_uncertain != true {
+            approvedVersion += 1
+            var facts = workflow["facts"] as? [String: Any] ?? [:]
+            facts["owner_answer"] = ownerWords
+            workflow["facts"] = facts
+            workflow["version"] = approvedVersion
+            let consequence = workflow["consequence"] as? String ?? "consequential"
+            let goal = workflow["goal"] as? String ?? job.goal
+            approvedScope = try workflowDigest([
+                "plan_id": planID, "version": approvedVersion,
+                "goal": goal, "facts": facts, "consequence": consequence,
+            ])
+            let ownerRef = workflow["owner_ref"] as? String ?? ""
+            approvedEffect = try workflowDigest([
+                "owner_ref": ownerRef, "plan_id": planID,
+                "version": approvedVersion, "goal": goal,
+                "facts": facts, "consequence": consequence,
+            ])
+            workflow["scope_digest"] = approvedScope
+            workflow["effect_key"] = approvedEffect
+            params["owner_answer"] = ownerWords
+            let asked = job.result ?? ""
+            let oldScope = params["approved_scope"] as? String ?? goal
+            params["approved_scope"] = oldScope
+                + " You stopped and asked: \"\(asked)\". They answered: \"\(ownerWords)\"."
+        }
+        let approval: [String: Any] = [
+            "plan_id": planID,
+            "plan_version": approvedVersion,
+            "scope_digest": approvedScope,
+            "owner_words": ownerWords,
+            "approved_at": now,
+        ]
+        workflow["approval"] = approval
+        workflow["state"] = "queued"
+        workflow["reason"] = "approved by owner"
+        workflow["updated_at"] = now
+        workflow["lease"] = NSNull()
+        workflow["receipt"] = NSNull()
+        params["_workflow"] = workflow
+        params["authorized"] = true
+        if job.status != "needs_user" || params["approved_scope"] == nil {
+            params["approved_scope"] = workflow["goal"] as? String ?? ""
+        }
+        var fields: [String: Any] = [
+            "status": "queued",
+            "workflow_state": "queued",
+            "workflow_version": approvedVersion,
+            "scope_digest": approvedScope,
+            "effect_key": approvedEffect,
+            "approval": try jsonString(approval),
+            "params": try jsonString(params),
+            "lease_token": "",
+            "lease_until": "",
+            "receipt": "",
+            "effect_uncertain": false,
+        ]
+        if job.effect_uncertain == true {
+            guard let effectKey = job.effect_key, !effectKey.isEmpty else {
+                throw WorkflowWriteError.malformed
+            }
+            let reconciliation: [String: Any] = [
+                "effect_key": effectKey,
+                "conclusion": "not_applied",
+                "verified": true,
+                "owner_words": ownerWords,
+                "evidence": ["owner explicitly checked the destination before retry"],
+                "recorded_at": now,
+            ]
+            fields["reconciliation"] = try jsonString(reconciliation)
+        } else {
+            fields["reconciliation"] = ""
+        }
+        return fields
+    }
+
+    private func cancellationFields(for job: AgentJob) throws -> [String: Any]? {
+        guard let planID = job.workflow_id, !planID.isEmpty else { return nil }
+        var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
+            as? [String: Any] ?? [:]
+        guard var workflow = params["_workflow"] as? [String: Any],
+              workflow["plan_id"] as? String == planID
+        else { throw WorkflowWriteError.malformed }
+        let now = ISO8601DateFormatter.anticipyUTC.string(from: Date())
+        workflow["state"] = "cancelled"
+        workflow["reason"] = "cancelled by owner"
+        workflow["updated_at"] = now
+        workflow["approval"] = NSNull()
+        workflow["lease"] = NSNull()
+        workflow["receipt"] = NSNull()
+        params["_workflow"] = workflow
+        return [
+            "status": "cancelled",
+            "workflow_state": "cancelled",
+            "approval": "",
+            "receipt": "",
+            "lease_token": "",
+            "lease_until": "",
+            "effect_uncertain": false,
+            "params": try jsonString(params),
+        ]
+    }
+
+    @discardableResult
+    func confirm(_ job: AgentJob, ownerAnswer: String? = nil) async -> Bool {
+        // Record the yes ON the job: the browser agent reads it and finishes
+        // the task, instead of stopping at the final button to ask again.
+        return await write(job) {
+            if let fields = try self.approvalFields(for: job,
+                                                    ownerAnswer: ownerAnswer) {
+                try await self.backend.setJobFields(id: job.id, fields: fields)
+            } else {
+                var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
+                    as? [String: Any] ?? [:]
+                params["authorized"] = true
+                try await self.backend.setJobFields(id: job.id, fields: [
+                    "status": "queued", "params": try self.jsonString(params),
+                ])
+            }
+        }
+    }
+
+    /// A failed workflow is immutable evidence. A retry is a new request and
+    /// therefore becomes a fresh plan/card instead of rewriting history.
+    func requestFreshRetry(_ job: AgentJob) async {
+        inFlight.insert(job.id)
+        defer { inFlight.remove(job.id) }
+        await heard("Try this again as a fresh attempt: \(job.humanGoal)",
+                    explicit: true)
     }
 
     @discardableResult
     func decline(_ job: AgentJob) async -> Bool {
         await write(job) {
-            try await self.backend.setJobStatus(id: job.id, status: "cancelled")
+            if let fields = try self.cancellationFields(for: job) {
+                try await self.backend.setJobFields(id: job.id, fields: fields)
+            } else {
+                try await self.backend.setJobFields(id: job.id, fields: ["status": "cancelled"])
+            }
         }
     }
 

@@ -28,6 +28,9 @@ from .segmenter import SegmentStore, place_turn
 from .conversation import Conversation, MockTransport, TwilioTransport
 from .llm import LLM, TZ as TZ_FALLBACK
 from .voice_arm import VoiceArm
+from .workflow import (claim as claim_plan, fail as fail_plan,
+                       from_params as workflow_from_params,
+                       put_in_params, succeed as succeed_plan)
 
 PB = os.environ.get("ANTICIPY_PB", "http://127.0.0.1:8090")
 POLL_SECONDS = 2
@@ -46,6 +49,15 @@ CLOCK_STATE = os.environ.get("ANTICIPY_CLOCK_STATE", "/data/clock_state.json")
 CONSOLIDATE_MIN_GAP_SECONDS = 20 * 3600
 CONSOLIDATE_MAX_BATCHES = 10          # bounds one night's model spend
 CONSOLIDATE_RETRY_SECONDS = 30 * 60   # a failing model retries gently, not per tick
+
+
+def owner_filter(anticipy) -> str:
+    """Canonical account scope for every worker-side collection query."""
+    owner_ref = str(getattr(anticipy, "owner_ref", "") or "").strip()
+    if owner_ref:
+        return f'owner_ref="{owner_ref}"'
+    owner_id = str(getattr(anticipy, "owner_id", "") or "").strip()
+    return f'owner="{owner_id}"' if owner_id else ""
 
 
 def run_nightly_consolidation(memory, now: float | None = None) -> None:
@@ -429,8 +441,9 @@ def report_stalled_work(anticipy) -> None:
         # a false alarm about work she is about to do herself.
         filt = (f'(status="queued" || status="running") && updated<="{since}"'
                 f' && lane!="research"')
-        if anticipy.owner_id:
-            filt = f'({filt}) && owner="{anticipy.owner_id}"'
+        scope = owner_filter(anticipy)
+        if scope:
+            filt = f"({filt}) && {scope}"
         r = pb.get(f"{PB}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "updated"},
                    timeout=10)
@@ -483,8 +496,9 @@ def run_research_jobs(anticipy, runner=None) -> None:
     try:
         base = anticipy.backend_url
         filt = 'status="queued" && lane="research"'
-        if anticipy.owner_id:
-            filt = f'({filt}) && owner="{anticipy.owner_id}"'
+        scope = owner_filter(anticipy)
+        if scope:
+            filt = f"({filt}) && {scope}"
         r = pb.get(f"{base}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "created"},
                    timeout=10)
@@ -508,11 +522,29 @@ def run_research_jobs(anticipy, runner=None) -> None:
                 print(f"research: no BRAVE_API_KEY — {job['id']} handed to "
                       "the browser lane")
                 continue
+            try:
+                params = json.loads(job.get("params") or "{}") or {}
+            except Exception:
+                params = {}
+            workflow = workflow_from_params(params)
+            lease_token = ""
+            claim_body = {"status": "running", "claimed_by": RESEARCH_CLAIMANT,
+                          "claimed_at": datetime.now(timezone.utc)
+                          .strftime("%Y-%m-%d %H:%M:%S")}
+            if workflow:
+                try:
+                    workflow = claim_plan(
+                        workflow, expected_version=workflow.version,
+                        actor_id=RESEARCH_CLAIMANT)
+                except Exception:
+                    continue
+                lease_token = workflow.lease.token
+                params = put_in_params(params, workflow)
+                claim_body.update(workflow.job_fields())
+                claim_body["params"] = json.dumps(params)
             claim = pb.patch(
                 f"{base}/api/collections/jobs/records/{job['id']}",
-                json={"status": "running", "claimed_by": RESEARCH_CLAIMANT,
-                      "claimed_at": datetime.now(timezone.utc)
-                      .strftime("%Y-%m-%d %H:%M:%S")},
+                json=claim_body,
                 timeout=10)
             if not getattr(claim, "ok", False):
                 continue
@@ -522,19 +554,42 @@ def run_research_jobs(anticipy, runner=None) -> None:
                 continue
             fresh = check.json()
             if fresh.get("claimed_by") != RESEARCH_CLAIMANT \
-                    or fresh.get("status") != "running":
+                    or fresh.get("status") != "running" \
+                    or (lease_token and fresh.get("lease_token") != lease_token):
                 continue
-            try:
-                params = json.loads(job.get("params") or "{}") or {}
-            except Exception:
-                params = {}
             out = (runner or research.run_research)(
                 job.get("goal", ""), params, llm=anticipy.llm, api_key=api_key)
             ok = bool(out.get("ok"))
-            pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
-                     json={"status": "done" if ok else "failed",
-                           "result": (out.get("result") or "")[:6000]},
-                     timeout=10)
+            result = (out.get("result") or "")[:6000]
+            finish_body = {"status": "done" if ok else "failed",
+                           "result": result}
+            finish_headers = None
+            if workflow:
+                # A cited URL is independently inspectable evidence.  An
+                # executor saying "ok" without one is not proof of research.
+                evidence = [u.rstrip(".,);]") for u in
+                            re.findall(r"https?://[^\s]+", result)]
+                try:
+                    if ok and evidence:
+                        workflow = succeed_plan(
+                            workflow, lease_token=lease_token,
+                            summary=result, evidence=evidence, verified=True)
+                    else:
+                        workflow = fail_plan(
+                            workflow, lease_token=lease_token,
+                            reason=(result or "research produced no verifiable source"))
+                        ok = False
+                    params = put_in_params(params, workflow)
+                    finish_body.update(workflow.job_fields())
+                    finish_body["params"] = json.dumps(params)
+                    finish_headers = {"X-Anticipy-Lease": lease_token}
+                except Exception:
+                    continue
+            finished = pb.patch(
+                f"{base}/api/collections/jobs/records/{job['id']}",
+                json=finish_body, headers=finish_headers, timeout=10)
+            if not getattr(finished, "ok", False):
+                continue
             # Delivery is report_finished_jobs' job: a desk card by default,
             # an in-thread text only when the ask came in over SMS.
             print(f"research: {job['id']} {'done' if ok else 'failed'} — "
@@ -558,8 +613,9 @@ def report_finished_jobs(anticipy) -> None:
     but "I couldn't get it" is a real one."""
     try:
         filt = '(status="done" || status="failed")'
-        if anticipy.owner_id:
-            filt = f'({filt}) && owner="{anticipy.owner_id}"'
+        scope = owner_filter(anticipy)
+        if scope:
+            filt = f"({filt}) && {scope}"
         # Only recent work: this must never blast a backlog on first deploy.
         since = (datetime.now(timezone.utc) - timedelta(hours=12)
                  ).strftime("%Y-%m-%d %H:%M:%S")
@@ -1169,10 +1225,33 @@ def capture_key(ev: dict) -> float:
     return spoken
 
 
-def fetch_unprocessed(kind: str = "transcript") -> list[dict]:
+def resolve_owner_ref(legacy_owner: str = "") -> str:
+    """Map the pre-account device UUID to the canonical owners record id."""
+    configured = os.environ.get("ANTICIPY_OWNER_REF", "").strip()
+    if configured:
+        return configured
+    if not legacy_owner:
+        return ""
+    try:
+        escaped = legacy_owner.replace('"', '\\"')
+        r = pb.get(f"{PB}/api/collections/owners/records",
+                   params={"filter": f'legacy_uuid="{escaped}"',
+                           "perPage": 2}, timeout=10)
+        items = r.json().get("items", []) if r.ok else []
+        return items[0].get("id", "") if len(items) == 1 else ""
+    except Exception:
+        return ""
+
+
+def fetch_unprocessed(kind: str = "transcript", owner_ref: str = "") -> list[dict]:
+    if not owner_ref:
+        # Fail closed. The former unscoped poll could hear every person's
+        # transcript in the shared database as one owner's life.
+        return []
     r = pb.get(
         f"{PB}/api/collections/events/records",
-        params={"filter": f'kind="{kind}" && decision=""',
+        params={"filter": (f'kind="{kind}" && decision="" '
+                           f'&& owner_ref="{owner_ref}"'),
                 "perPage": PAGE, "sort": "created"},
         timeout=10,
     )
@@ -1329,8 +1408,9 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
     and the job resumes — so nothing has to be pre-programmed per field."""
     try:
         filt = 'status="needs_user"'
-        if anticipy.owner_id:
-            filt += f' && owner="{anticipy.owner_id}"'
+        scope = owner_filter(anticipy)
+        if scope:
+            filt += f" && {scope}"
         r = pb.get(f"{PB}/api/collections/jobs/records",
                    params={"filter": filt, "perPage": 5, "sort": "-updated"}, timeout=10)
         if not r.ok:
@@ -1408,9 +1488,11 @@ def main() -> None:
     llm = LLM(owner_zone=fetch_owner_timezone())
     mem_db = os.environ.get("ANTICIPY_MEMORY_DB", ":memory:")
     memory = Memory(path=mem_db, llm=llm if llm.live else None)
+    legacy_owner = os.environ.get("ANTICIPY_OWNER_ID", "")
+    owner_ref = resolve_owner_ref(legacy_owner)
     anticipy = Anticipy(llm=llm if llm.live else None, memory=memory, backend_url=PB,
                         owner_phone=os.environ.get("ANTICIPY_OWNER_PHONE", "owner"),
-                        owner_id=os.environ.get("ANTICIPY_OWNER_ID", ""))
+                        owner_id=legacy_owner, owner_ref=owner_ref)
     # Live texting when Twilio credentials are present; mock otherwise.
     live_sms = all(os.environ.get(k) for k in
                    ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"))
@@ -1420,7 +1502,8 @@ def main() -> None:
     convo = Conversation(anticipy, transport=TwilioTransport(voice) if voice else MockTransport())
     anticipy.conversation = convo
     # Observation only in step 1; a failure here must never touch hearing.
-    segments = SegmentStore(PB, owner=anticipy.owner_id) \
+    segments = SegmentStore(PB, owner=anticipy.owner_id,
+                            owner_ref=anticipy.owner_ref) \
         if os.environ.get("ANTICIPY_SEGMENTS", "1") == "1" else None
     # A fingerprint of the brain that is ACTUALLY running, printed at startup.
     #
@@ -1437,6 +1520,9 @@ def main() -> None:
         # would sit queued forever with nothing reporting a problem.
         print("WARNING: ANTICIPY_OWNER_ID is unset — queued jobs will carry no "
               "owner and NO browser agent will ever claim them.")
+    if not anticipy.owner_ref:
+        print("ERROR: canonical owner_ref is unresolved — hearing is paused "
+              "rather than reading another person's transcripts")
     if not same_phone(anticipy.owner_phone, anticipy.owner_phone):
         print("WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — "
               "every inbound text will be ignored as non-owner.")
@@ -1492,7 +1578,7 @@ def main() -> None:
                         post_event("anticipy_says", out["say"], decision="clock",
                                    goal=out.get("goal") or "")
                         print(f"clock: initiated -> {out['say']!r}")
-            for ev in fetch_unprocessed():
+            for ev in fetch_unprocessed(owner_ref=anticipy.owner_ref):
                 line = ev.get("text", "").strip()
                 if not line:
                     mark_processed(ev["id"], "ignore")
@@ -1519,6 +1605,7 @@ def main() -> None:
                 # What was already said in this conversation, so a question
                 # never arrives stripped of what it was about.
                 convo_context = []
+                open_seg = None
                 if segments is not None:
                     try:
                         open_seg = segments.open_segment()
@@ -1539,13 +1626,18 @@ def main() -> None:
                     # app stamped one (owner|other); absent on old builds.
                     out = anticipy.hear(line, context=convo_context,
                                         may_say=SPEAK_ONCE,
+                                        explicit=bool(ev.get("explicit")),
                                         speaker=(ev.get("speaker") or None),
                                         link_candidates=[t for _, t in cands]
-                                        or None)
+                                        or None,
+                                        source_event_id=ev["id"],
+                                        lineage_key=(open_seg.get("id")
+                                                     if open_seg else ev["id"]))
                 except TypeError:
                     # An older core without the speaker kwarg keeps hearing.
                     out = anticipy.hear(line, context=convo_context,
-                                        may_say=SPEAK_ONCE)
+                                        may_say=SPEAK_ONCE,
+                                        explicit=bool(ev.get("explicit")))
                 except Exception as e:
                     mark_processed(ev["id"], "error")
                     print(f"heard: {line!r} -> error: {e}")
@@ -1591,7 +1683,7 @@ def main() -> None:
             # Inbound texts (Twilio webhook -> pb_hooks -> events) flow through
             # the same conversation the pendant path uses; the reply goes back
             # out over the live transport.
-            for ev in fetch_unprocessed("sms_reply"):
+            for ev in fetch_unprocessed("sms_reply", anticipy.owner_ref):
                 text = ev.get("text", "").strip()
                 phone = ev.get("goal", "").strip() or anticipy.owner_phone
                 if not text:

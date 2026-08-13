@@ -28,6 +28,56 @@ routerUse((e) => {
 
   if (e.request.header.get("X-Anticipy-Token") === token) return e.next();
 
+  const agentsBase = "/api/collections/agents/records";
+  const pendantsBase = "/api/collections/pendants/records";
+
+  const body = () => {
+    try { return e.requestInfo().body || {}; } catch (_) { return {}; }
+  };
+  const ownedList = (ownerRef) => {
+    const filter = e.request.url.query().get("filter") || "";
+    // `&&` can only narrow the owner set. `||` can widen it back out and is
+    // never needed by the phone or extension.
+    return filter.indexOf(`owner_ref="${ownerRef}"`) >= 0 && filter.indexOf("||") < 0;
+  };
+  const recordOwner = (collection, id) => {
+    try { return e.app.findRecordById(collection, id).getString("owner_ref"); }
+    catch (_) { return ""; }
+  };
+
+  // A Chrome install authenticates as one hidden random credential and may
+  // touch only its own agent row and its owner's jobs. It never receives the
+  // server-wide service token.
+  const agentId = e.request.header.get("X-Anticipy-Agent-ID") || "";
+  const agentToken = e.request.header.get("X-Anticipy-Agent-Token") || "";
+  if (agentId && agentToken.length >= 40) {
+    let agent = null;
+    try {
+      agent = e.app.findFirstRecordByFilter(
+        "agents", "agent_id = {:id} && agent_token = {:token}",
+        { id: agentId, token: agentToken });
+    } catch (_) {}
+    if (agent) {
+      const ownerRef = agent.getString("owner_ref");
+      if (path === agentsBase + "/" + agent.id && method === "PATCH") {
+        const allowed = { agent_token: 1, last_seen: 1, browser: 1 };
+        if (Object.keys(body()).every((k) => allowed[k])) return e.next();
+      }
+      const jobsBase = "/api/collections/jobs/records";
+      if (ownerRef && path === jobsBase && method === "GET" && ownedList(ownerRef)) {
+        return e.next();
+      }
+      if (ownerRef && path.startsWith(jobsBase + "/")) {
+        const id = path.split("/").pop();
+        if (recordOwner("jobs", id) === ownerRef && (method === "GET" || method === "PATCH")) {
+          const b = body();
+          if (!b.owner_ref || b.owner_ref === ownerRef) return e.next();
+        }
+      }
+      return e.json(403, { error: "agent is not allowed to access that record" });
+    }
+  }
+
   // ---- the front door ----
   // The auth endpoints live UNDER /api/collections/, so the guard was gating
   // login itself: every attempt to sign in came back as this hook's own
@@ -56,7 +106,39 @@ routerUse((e) => {
   // working, and it is what lets clients migrate off the shared token one at a
   // time instead of all at once on a single terrifying afternoon.
   try {
-    if (e.auth) return e.next();
+    if (e.auth) {
+      const authId = e.auth.id;
+      // Auth collection operations on the person's own account.
+      const ownersBase = "/api/collections/owners/records";
+      if (path === ownersBase + "/" + authId) return e.next();
+
+      const match = path.match(/^\/api\/collections\/(jobs|events|owner_profile|segments|agents|pendants)\/records(?:\/([^/]+))?$/);
+      if (!match) return e.json(403, { error: "account is not allowed to access that collection" });
+      const collection = match[1];
+      const recordId = match[2] || "";
+      const b = body();
+
+      // Pair-code lookup is deliberately pre-owner. The subsequent claim is
+      // allowed only onto the signed-in account and only while still unpaired.
+      if (!recordId && method === "GET" && (collection === "agents" || collection === "pendants")) {
+        const filter = e.request.url.query().get("filter") || "";
+        if (/^\s*pair_code\s*=\s*"\d{6}"\s*$/.test(filter)) return e.next();
+      }
+      if (recordId && method === "PATCH" && (collection === "agents" || collection === "pendants")) {
+        let rec = null;
+        try { rec = e.app.findRecordById(collection, recordId); } catch (_) {}
+        if (rec && !rec.getBool("paired") && b.paired === true && b.owner_ref === authId) {
+          return e.next();
+        }
+      }
+
+      if (!recordId && method === "GET" && ownedList(authId)) return e.next();
+      if (!recordId && method === "POST" && b.owner_ref === authId) return e.next();
+      if (recordId && recordOwner(collection, recordId) === authId) {
+        if (!b.owner_ref || b.owner_ref === authId) return e.next();
+      }
+      return e.json(403, { error: "record belongs to a different owner" });
+    }
   } catch (_) {}
 
   // The dashboard and any properly authenticated superuser session.
@@ -68,9 +150,6 @@ routerUse((e) => {
   if (path.startsWith("/api/collections/_superusers/")) return e.next();
 
   // ---- pairing bootstrap (tokenless by necessity) ----
-  const agentsBase = "/api/collections/agents/records";
-  const pendantsBase = "/api/collections/pendants/records";
-
   // 1. Agent self-registration: a brand-new record, never born paired/owned.
   if (method === "POST" && path === agentsBase) {
     const b = e.requestInfo().body || {};

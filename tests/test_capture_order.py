@@ -187,11 +187,24 @@ def test_fetch_unprocessed_sorts_and_slices(monkeypatch):
         return R()
 
     monkeypatch.setattr(W.pb, "get", fake_get)
-    out = W.fetch_unprocessed()
+    out = W.fetch_unprocessed(owner_ref="owner-record-a")
 
     assert seen["perPage"] == W.PAGE, "must read wider than it returns"
+    assert 'owner_ref="owner-record-a"' in seen["filter"]
     assert len(out) == W.BATCH, "must hand the loop one batch"
     keys = [W.capture_key(r) for r in out]
     assert keys == sorted(keys), "returned out of speech order"
     # The earliest-SPOKEN line was delivered LAST; it must still come first.
     assert out[0]["id"] == f"n{W.PAGE - 1}"
+
+
+def test_fetch_unprocessed_fails_closed_without_an_owner(monkeypatch):
+    called = False
+
+    def fake_get(*args, **kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(W.pb, "get", fake_get)
+    assert W.fetch_unprocessed() == []
+    assert not called

@@ -26,5 +26,8 @@ venv/
 # Editor / OS noise
 .DS_Store
 
+# Disposable verification rigs and local build products.
+/work/
+
 # local speaker-recognition models + the owner's voice profile — never in git
 .speaker-models/

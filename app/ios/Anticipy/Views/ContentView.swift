@@ -530,7 +530,7 @@ struct HomeView: View {
         guard !line.isEmpty else { return }
         // heard() owns the haptic — a second tap here reads as a stutter-bug.
         typedLine = ""
-        Task { await session.heard(line) }
+        Task { await session.heard(line, explicit: true) }
     }
 
     /// Anticipy speaks first: a first-person briefing of what she heard and
@@ -923,8 +923,10 @@ struct HomeView: View {
 struct ConfirmJobCard: View {
     let job: AgentJob
     @EnvironmentObject var session: AnticipySession
+    @State private var answer = ""
 
     private var stuck: Bool { job.status == "needs_user" }
+    private var uncertain: Bool { job.effect_uncertain == true }
     private var sending: Bool { session.inFlight.contains(job.id) }
     private var failed: Bool { session.failedWrites.contains(job.id) }
 
@@ -940,6 +942,23 @@ struct ConfirmJobCard: View {
             if let r = job.result, !r.isEmpty {
                 Text(r).font(.footnote).foregroundStyle(Theme.sand)
             }
+            if uncertain {
+                Text("First check the site or app where this was happening. Only continue if the action did not happen.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.sand)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if stuck && !uncertain {
+                TextField("Type what I need — or say you handled it", text: $answer,
+                          axis: .vertical)
+                    .lineLimit(1...4)
+                    .font(.callout)
+                    .foregroundStyle(Theme.ivory)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
+                    .accessibilityLabel("Your answer for this task")
+            }
             // The write failed and the card is still sitting here. Without
             // this row that reads as a UI glitch, and the natural next move
             // is to tap Send again — which is how one email goes twice.
@@ -954,7 +973,7 @@ struct ConfirmJobCard: View {
                     // No haptic here: confirm() buzzes only after the server
                     // has actually accepted it. This one used to buzz success
                     // before the request had even left the phone.
-                    Task { await session.confirm(job) }
+                    Task { await session.confirm(job, ownerAnswer: answer) }
                 } label: {
                     Group {
                         if sending {
@@ -963,7 +982,8 @@ struct ConfirmJobCard: View {
                                 Text("Sending…")
                             }
                         } else {
-                            Text(failed ? "Try again" : (stuck ? "Try again" : "Send it"))
+                            Text(uncertain ? "I checked — try again"
+                                 : (failed ? "Try again" : (stuck ? "Send answer" : "Send it")))
                         }
                     }
                     .font(.callout.weight(.semibold))
@@ -973,7 +993,8 @@ struct ConfirmJobCard: View {
                     .foregroundStyle(Theme.ink)
                 }
                 .buttonStyle(.pressable)
-                .disabled(sending)
+                .disabled(sending || (stuck && !uncertain
+                           && answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 Button {
                     Haptics.tap()
                     Task { await session.decline(job) }
@@ -1159,11 +1180,11 @@ struct DoneCard: View {
                             .foregroundStyle(Theme.gray)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    HStack(spacing: 10) {
-                        // Failure was the one outcome in the whole app with no
-                        // way forward. This puts it back in the queue.
+                    VStack(alignment: .leading, spacing: 8) {
+                        // A terminal attempt stays immutable. Retrying starts
+                        // a new request rather than rewriting a failed record.
                         Button {
-                            Task { await session.confirm(job) }
+                            Task { await session.requestFreshRetry(job) }
                         } label: {
                             Group {
                                 if retrying {
@@ -1172,7 +1193,7 @@ struct DoneCard: View {
                                         Text("Queueing…")
                                     }
                                 } else {
-                                    Text("Try again")
+                                    Text("Start a fresh attempt")
                                 }
                             }
                             .font(.caption.weight(.semibold))
@@ -1183,18 +1204,10 @@ struct DoneCard: View {
                         }
                         .buttonStyle(.pressable)
                         .disabled(retrying)
-                        Button {
-                            Task { await session.decline(job) }
-                        } label: {
-                            Text("Let it go")
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Capsule().strokeBorder(Theme.stroke))
-                                .foregroundStyle(Theme.sand)
-                        }
-                        .buttonStyle(.pressable)
-                        .disabled(retrying)
+                        Text("This failed attempt stays in history; the retry gets its own approval and result.")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.gray)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .opacity(retrying ? 0.7 : 1)
                     // The raw string is a JavaScript exception. It stays

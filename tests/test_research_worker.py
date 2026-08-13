@@ -10,6 +10,7 @@ import types
 import pytest
 
 import brain.worker as W
+from brain.workflow import (Consequence, from_params, new_plan, put_in_params)
 
 
 @pytest.fixture(autouse=True)
@@ -31,9 +32,10 @@ class Resp:
         pass
 
 
-def make_anticipy(notified):
+def make_anticipy(notified, owner_ref=""):
     return types.SimpleNamespace(
-        owner_id="own1", backend_url="http://pb", llm=None,
+        owner_id="own1", owner_ref=owner_ref,
+        backend_url="http://pb", llm=None,
         _voice=lambda ctx: None,
         notify_owner=lambda msg, channel="sms": (notified.append(msg), {"ok": 1})[1])
 
@@ -125,6 +127,56 @@ def test_a_failed_run_is_written_as_failed(monkeypatch):
                         runner=lambda *a, **k: {"ok": False, "result": "Found nothing."})
     assert patches[1]["status"] == "failed"
     assert patches[1]["result"] == "Found nothing."
+
+
+def test_modern_research_uses_lease_and_verified_receipt(monkeypatch):
+    plan = new_plan(owner_ref="owner-a", lineage_key="conversation-a",
+                    goal="research: aquarium hours",
+                    consequence=Consequence.READ_ONLY,
+                    source_event_id="event-a")
+    modern = dict(
+        QUEUED, owner_ref="owner-a", goal=plan.goal,
+        params=json.dumps(put_in_params({"source": "test"}, plan)))
+    patches, posts = [], []
+    fake_get = wire(monkeypatch, modern, patches, posts)
+
+    W.run_research_jobs(
+        make_anticipy([], owner_ref="owner-a"),
+        runner=lambda *a, **k: {
+            "ok": True,
+            "result": "Open daily [1].\n\nSources:\n[1] Hours — https://example.test/hours",
+        })
+
+    assert 'owner_ref="owner-a"' in fake_get.filters[0]
+    running = from_params(json.loads(patches[0]["params"]))
+    assert running.state.value == "running"
+    assert running.lease and patches[0]["lease_token"] == running.lease.token
+    succeeded = from_params(json.loads(patches[1]["params"]))
+    assert succeeded.state.value == "succeeded"
+    assert succeeded.receipt and succeeded.receipt.verified
+    assert succeeded.receipt.evidence == ("https://example.test/hours",)
+    assert patches[1]["receipt"]
+
+
+def test_modern_research_cannot_call_uncited_output_done(monkeypatch):
+    plan = new_plan(owner_ref="owner-a", lineage_key="conversation-a",
+                    goal="research: aquarium hours",
+                    consequence=Consequence.READ_ONLY,
+                    source_event_id="event-a")
+    modern = dict(
+        QUEUED, owner_ref="owner-a", goal=plan.goal,
+        params=json.dumps(put_in_params({}, plan)))
+    patches, posts = [], []
+    wire(monkeypatch, modern, patches, posts)
+
+    W.run_research_jobs(
+        make_anticipy([], owner_ref="owner-a"),
+        runner=lambda *a, **k: {"ok": True, "result": "Open daily."})
+
+    failed = from_params(json.loads(patches[1]["params"]))
+    assert patches[1]["status"] == "failed"
+    assert failed.state.value == "failed"
+    assert not failed.receipt
 
 
 DONE = {"id": "r1", "goal": "research: opening hours of the aquarium",
