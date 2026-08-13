@@ -308,11 +308,11 @@ WEBHOOK_CHECK_EVERY_SECONDS = 10 * 60
 def ensure_inbound_webhook() -> None:
     sid = os.environ.get("TWILIO_ACCOUNT_SID")
     auth = os.environ.get("TWILIO_AUTH_TOKEN")
-    smstok = os.environ.get("ANTICIPY_SMS_TOKEN")
     number = os.environ.get("TWILIO_PHONE_NUMBER") or os.environ.get("TWILIO_FROM")
-    if not (sid and auth and smstok and number):
+    if not (sid and auth and number):
         return          # not our job to guess; stay quiet
-    ours = f"{PB}/sms/inbound?token={smstok}"
+    ours = (os.environ.get("ANTICIPY_TWILIO_WEBHOOK_URL") or
+            f"{PB.rstrip('/')}/sms/inbound")
     try:
         r = requests.get(
             f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers.json",

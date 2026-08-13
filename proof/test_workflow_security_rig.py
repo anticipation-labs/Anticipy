@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+import base64
+import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -33,6 +36,10 @@ from brain.workflow import (
 
 BASE = os.getenv("PB_BASE", "http://127.0.0.1:18091").rstrip("/")
 SERVICE = os.getenv("RIG_SERVICE_TOKEN", "rig-worker-secret")
+TWILIO_AUTH = os.getenv("RIG_TWILIO_AUTH_TOKEN", "rig-twilio-auth")
+TWILIO_ACCOUNT = os.getenv("RIG_TWILIO_ACCOUNT_SID", "AC" + "1" * 32)
+TWILIO_NUMBER = os.getenv("RIG_TWILIO_NUMBER", "+15550001111")
+TWILIO_WEBHOOK = os.getenv("RIG_TWILIO_WEBHOOK_URL", f"{BASE}/sms/inbound")
 
 
 def expect(response: requests.Response, status: int, label: str) -> requests.Response:
@@ -61,6 +68,13 @@ def agent_headers(agent_id: str, token: str, lease: str = "") -> dict[str, str]:
 
 def service_headers() -> dict[str, str]:
     return {"X-Anticipy-Token": SERVICE, "Content-Type": "application/json"}
+
+
+def twilio_headers(form: dict[str, str]) -> dict[str, str]:
+    payload = TWILIO_WEBHOOK + "".join(key + form[key] for key in sorted(form))
+    signature = base64.b64encode(hmac.new(
+        TWILIO_AUTH.encode(), payload.encode(), hashlib.sha1).digest()).decode()
+    return {"X-Twilio-Signature": signature}
 
 
 def create_owner(label: str) -> tuple[str, str, str]:
@@ -141,10 +155,15 @@ def main() -> None:
     profile_b = create_profile(owner_b, auth_b, legacy_b, "Beta")
 
     sms_sid = "SM" + uuid.uuid4().hex
-    sms_form = {"From": phone_a, "Body": "send the warranty request",
-                "MessageSid": sms_sid}
+    sms_form = {"From": phone_a, "To": TWILIO_NUMBER,
+                "AccountSid": TWILIO_ACCOUNT,
+                "Body": "send the warranty request", "MessageSid": sms_sid}
     expect(requests.post(
-        f"{BASE}/sms/inbound?token=rig-sms-secret", data=sms_form, timeout=10,
+        TWILIO_WEBHOOK, data=sms_form,
+        headers={"X-Twilio-Signature": "forged"}, timeout=10,
+    ), 403, "forged SMS signature is rejected")
+    expect(requests.post(
+        TWILIO_WEBHOOK, data=sms_form, headers=twilio_headers(sms_form), timeout=10,
     ), 200, "SMS from one canonical owner is accepted")
     sms_list = expect(requests.get(
         f"{BASE}/api/collections/events/records",
@@ -154,7 +173,7 @@ def main() -> None:
     ), 200, "owner sees their routed SMS").json()["items"]
     assert len(sms_list) == 1 and sms_list[0]["text"] == sms_form["Body"]
     expect(requests.post(
-        f"{BASE}/sms/inbound?token=rig-sms-secret", data=sms_form, timeout=10,
+        TWILIO_WEBHOOK, data=sms_form, headers=twilio_headers(sms_form), timeout=10,
     ), 200, "Twilio retry receives an idempotent response")
     sms_list = requests.get(
         f"{BASE}/api/collections/events/records",
@@ -169,9 +188,12 @@ def main() -> None:
         headers=auth_headers(auth_b), json={"phone": phone_a}, timeout=10,
     ), 200, "second account can share the routing number")
     ambiguous_sid = "SM" + uuid.uuid4().hex
+    ambiguous_form = {"From": phone_a, "To": TWILIO_NUMBER,
+                      "AccountSid": TWILIO_ACCOUNT,
+                      "Body": "yes", "MessageSid": ambiguous_sid}
     expect(requests.post(
-        f"{BASE}/sms/inbound?token=rig-sms-secret",
-        data={"From": phone_a, "Body": "yes", "MessageSid": ambiguous_sid},
+        TWILIO_WEBHOOK, data=ambiguous_form,
+        headers=twilio_headers(ambiguous_form),
         timeout=10,
     ), 200, "ambiguous SMS fails closed without leaking account state")
     ambiguous = requests.get(

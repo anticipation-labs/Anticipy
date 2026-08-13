@@ -4,14 +4,33 @@
 // the record it creates is picked up by the brain worker, which understands
 // the reply and texts back over the live Twilio transport.
 routerAdd("POST", "/sms/inbound", (e) => {
-  const token = $os.getenv("ANTICIPY_SMS_TOKEN");
-  if (!token || e.request.url.query().get("token") !== token) {
-    return e.string(403, "forbidden");
+  const authToken = $os.getenv("TWILIO_AUTH_TOKEN") || "";
+  const webhookUrl = $os.getenv("ANTICIPY_TWILIO_WEBHOOK_URL") || "";
+  const signature = e.request.header.get("X-Twilio-Signature") || "";
+  const contentType = (e.request.header.get("Content-Type") || "").toLowerCase();
+  if (!authToken || !webhookUrl) {
+    return e.string(503, "sms webhook is not configured");
+  }
+  if (contentType.indexOf("application/x-www-form-urlencoded") !== 0) {
+    return e.string(415, "unsupported content type");
   }
   const info = e.requestInfo();
+  const validator = require(`${__hooks}/twilio_signature.js`);
+  if (!signature || !validator.validate(authToken, webhookUrl, info.body, signature)) {
+    return e.string(403, "forbidden");
+  }
   const from = (info.body["From"] || "").toString();
   const body = (info.body["Body"] || "").toString().trim();
   const messageSid = (info.body["MessageSid"] || info.body["SmsSid"] || "").toString();
+  const accountSid = (info.body["AccountSid"] || "").toString();
+  const to = (info.body["To"] || "").toString();
+  const expectedAccount = $os.getenv("TWILIO_ACCOUNT_SID") || "";
+  const expectedNumber = $os.getenv("TWILIO_PHONE_NUMBER") || $os.getenv("TWILIO_FROM") || "";
+  if ((expectedAccount && accountSid !== expectedAccount) ||
+      (expectedNumber && to !== expectedNumber) ||
+      !/^SM[a-fA-F0-9]{32}$/.test(messageSid)) {
+    return e.string(403, "forbidden");
+  }
 
   // A phone number is a routing address, not an identity. Resolve it to one
   // and only one signed-in account, then stamp that canonical owner on the
