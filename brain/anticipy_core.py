@@ -1852,6 +1852,8 @@ class Anticipy:
         # errand raised in the same breath.
         declared_new_task = explicitly_new_task(
             str((params or {}).get("source") or ""))
+        explicit_correction = bool(_EXPLICIT_CORRECTION_RE.search(
+            str((params or {}).get("source") or "")))
         if not declared_new_task and self._RETRACT_RE.match(goal or ""):
             retracted = self._retract_pending(goal)
             # An overheard "scratch that" ends here either way. If she held
@@ -1895,7 +1897,13 @@ class Anticipy:
                             and not self._covered_by(goal, current_goal) \
                             and not self._covered_by(current_goal, goal):
                         merge_goal = f"{current_goal}; then {goal}"
-                    if not self._covered_by(merge_goal, current_goal):
+                    # Token normalization deliberately drops some common
+                    # person-name tokens to make harmless paraphrases merge.
+                    # That makes a real replacement such as "Theo Reyes to
+                    # Priya Kim" look covered by the old goal. The owner's
+                    # explicit correction syntax outranks that lossy set.
+                    if explicit_correction or not self._covered_by(
+                            merge_goal, current_goal):
                         self._merge_into(job_id, current, merge_goal, params)
                     self._open_plan = (job_id, time.time(), goal)
                     return job_id
@@ -1909,8 +1917,8 @@ class Anticipy:
             try:
                 current = next((j for j in self._pending_jobs()
                                 if j.get("id") == existing), None)
-                if current and not self._covered_by(
-                        goal, current.get("goal") or ""):
+                if current and (explicit_correction or not self._covered_by(
+                        goal, current.get("goal") or "")):
                     self._merge_into(existing, current, goal, params)
             except Exception:
                 pass

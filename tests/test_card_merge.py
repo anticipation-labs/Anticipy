@@ -297,6 +297,27 @@ def test_explicit_reschedule_correction_amends_one_card_and_keeps_both_sources(
     assert correction_source in merged["source"]
 
 
+def test_explicit_person_correction_outranks_lossy_goal_tokens(monkeypatch):
+    """Common-name normalization cannot hide a named field replacement."""
+    patches = []
+    original = ("Give permission for Theo Reyes to attend the Science Centre "
+                "trip on August 18; emergency contact Priya Reyes")
+    corrected = ("Give permission for Priya Kim to attend the Science Centre "
+                 "trip on August 18; emergency contact Priya Reyes")
+    job = _Job(original, {"source": original})
+    a = _core(monkeypatch, job, patches)
+    a._open_plan = ("job1", __import__("time").time(), original)
+
+    assert a._queue_job(corrected, {
+        "source": ("Actually change Theo Reyes to Priya Kim; keep everything "
+                   "else the same."),
+    }, explicit=True) == "job1"
+    assert patches[-1]["goal"] == corrected
+    merged = json.loads(patches[-1]["params"])
+    assert "Theo Reyes" in merged["source"]
+    assert "Priya Kim" in merged["source"]
+
+
 def test_discussion_fragment_is_not_promoted_to_an_action():
     assert progressive_action_continuation(
         "we should talk about this: sending messages is stressful",
