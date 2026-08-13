@@ -63,6 +63,32 @@ def test_service_method_may_omit_the_redundant_repair_noun():
     assert differences(field, "on-site")
 
 
+def test_compact_category_may_include_only_grounded_sentence_context():
+    case = {
+        "authority_text": "Request a replacement because it arrived damaged",
+        "fields": [{"name": "problem", "label": "Problem", "kind": "text",
+                    "value": "Arrived damaged"}],
+    }
+    assert values_match(case, {"problem": "it arrived damaged"}, today=TODAY) == []
+    assert values_match(case, {"problem": "parcel arrived damaged"}, today=TODAY)
+
+    case = {
+        "authority_text": "Open a mail-in warranty repair",
+        "fields": [{"name": "service", "label": "Service method", "kind": "text",
+                    "value": "Mail-in repair"}],
+    }
+    assert values_match(case, {"service": "mail-in warranty repair"}, today=TODAY) == []
+
+
+def test_identity_fields_remain_exact_even_when_extra_words_are_grounded():
+    case = {
+        "authority_text": "Reduce the Anticipy workspace on CloudLedger",
+        "fields": [{"name": "workspace", "label": "Workspace", "kind": "text",
+                    "value": "Anticipy"}],
+    }
+    assert values_match(case, {"workspace": "Anticipy CloudLedger"}, today=TODAY)
+
+
 def test_free_text_may_repeat_other_form_values_but_not_add_an_outcome():
     case = {"fields": [
         {"name": "invoice", "value": "INV-52192", "kind": "text"},

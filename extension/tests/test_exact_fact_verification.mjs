@@ -95,6 +95,17 @@ const aligned = groundedFormCorrections({ corrections: [
 check(aligned.length === 2 && aligned[0].value === "Anticipy"
       && aligned[1].value === "At renewal",
   "the semantic auditor may reshape owner words but cannot invent a value");
+const reconstructed = groundedFormCorrections({ values: [
+  { index: 1, value: "Arrived damaged" },
+  { index: 2, value: "Mail-in repair" },
+] }, [
+  { index: 1, name: "problem", value: "it arrived damaged" },
+  { index: 2, name: "service", value: "mail-in warranty repair" },
+], "Request a replacement because it arrived damaged; open a mail-in warranty repair");
+check(reconstructed.length === 2
+      && reconstructed[0].value === "Arrived damaged"
+      && reconstructed[1].value === "Mail-in repair",
+  "a full field reconstruction may remove sentence and task context");
 check(JSON.stringify(unsupportedScopeFields(
   "Submit an urgent request and allow entry if nobody is home", { fields: [
     { name: "urgent", label: "Urgent", value: false },

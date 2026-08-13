@@ -442,8 +442,10 @@ export function unsupportedScopeFields(scope, currentState, ownerProfile = null,
 
 const FORM_ALIGNMENT_SYSTEM = `You are a strict pre-submit form auditor.
 You receive the owner's exact words, the task goal, and the form's CURRENT
-field values. Return corrections only where the current value does not answer
-that field's label precisely.
+field values. Reconstruct the value for EVERY listed field independently, as
+if the form were blank. Do not merely decide whether the current value is
+"close enough": the current values were written by a fallible agent and are
+shown only so your reconstructed values can be compared against them.
 
 Rules:
 - The owner's exact words are the sole authority. The task goal is a lossy
@@ -455,6 +457,11 @@ Rules:
 - For a short categorical field (Workspace, Service, Resolution, Plan,
   Effective, etc.), return only the minimal label-sized answer, not the
   surrounding sentence, portal name, contrast, or redundant page context.
+- A compact categorical value must not carry a subject pronoun or causal
+  wrapper from the sentence. For example, "because the device stopped
+  working" answers Problem with "Stopped working", not "the device stopped
+  working"; "open an on-site warranty inspection" answers Service Method
+  with "On-site inspection", not "on-site warranty inspection".
 - Distinguish the object being changed from the service/site where it lives.
   In "change the Atlas workspace on CloudDesk", Workspace is "Atlas";
   CloudDesk is where the change happens, not part of the Workspace value.
@@ -462,15 +469,16 @@ Rules:
 - Do not alter checkboxes, radio buttons, native dates/times, selects,
   passwords, payment fields, or a value that already answers its label.
 
-Reply only with compact JSON:
-{"corrections":[{"index":1,"value":"exact corrected value","reason":"brief"}]}`;
+Reply only with compact JSON. Include one row for every CURRENT field:
+{"values":[{"index":1,"value":"exact reconstructed value","reason":"brief"}]}`;
 
 export function groundedFormCorrections(proposed, fields, authority) {
   const allowed = new Map((Array.isArray(fields) ? fields : [])
     .filter((field) => Number.isFinite(Number(field?.index)))
     .map((field) => [Number(field.index), field]));
   const pool = wordTokens(authority);
-  const rows = Array.isArray(proposed?.corrections) ? proposed.corrections : [];
+  const rows = Array.isArray(proposed?.values) ? proposed.values
+    : (Array.isArray(proposed?.corrections) ? proposed.corrections : []);
   const out = [];
   for (const row of rows) {
     const index = Number(row?.index);

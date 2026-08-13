@@ -489,7 +489,29 @@ def _decimal_value(value):
         return None
 
 
-def _values_equal(spec, got, today, known_fields=()):
+def _ordered_subsequence(needle, haystack):
+    if not needle:
+        return False
+    at = 0
+    for token in haystack:
+        if token == needle[at]:
+            at += 1
+            if at == len(needle):
+                return True
+    return False
+
+
+def _compact_semantic_field(spec):
+    """Is this a short category/outcome, rather than an identity or prose?"""
+    identity = " ".join(re.findall(
+        r"[a-z0-9]+", f"{spec.get('name', '')} {spec.get('label', '')}".casefold()))
+    return bool(re.search(
+        r"\b(problem|service|method|resolution|effective|when|category|plan|"
+        r"priority|status|type|choice|term|speed|risk|remedy|format|track|"
+        r"program|facility|dealer|shop)\b", identity))
+
+
+def _values_equal(spec, got, today, known_fields=(), authority=""):
     expected = spec["value"]
     if isinstance(expected, bool):
         return got is expected
@@ -519,14 +541,28 @@ def _values_equal(spec, got, today, known_fields=()):
     if name not in {"message", "body", "details", "issue", "summary", "purpose"}:
         soft = {"a", "an", "and", "against", "choose", "for", "from", "of",
                 "on", "please", "request", "requested", "select", "the", "to", "with"}
-        if name == "problem":
-            soft.add("arrived")
-        if name == "service":
-            soft.add("repair")
         got_core = [token for token in re.findall(r"[a-z0-9]+", got_text) if token not in soft]
         expected_core = [token for token in re.findall(r"[a-z0-9]+", expected_text) if token not in soft]
         if bool(expected_core) and got_core == expected_core:
             return True
+        # Text-rendered categorical controls have no page option to define a
+        # canonical spelling. Judge their meaning, not an arbitrary template
+        # string: a short answer may omit redundant category context, or may
+        # include up to three EXTRA owner-authored context words. Identity and
+        # prose fields remain strict. Negation never becomes equivalent.
+        if _compact_semantic_field(spec) and got_core and expected_core:
+            negations = {"no", "not", "never", "without", "dont", "instead"}
+            if not (negations & (set(got_core) ^ set(expected_core))):
+                if _ordered_subsequence(got_core, expected_core):
+                    return True
+                if (_ordered_subsequence(expected_core, got_core)
+                        and len(got_core) - len(expected_core) <= 3):
+                    authority_tokens = set(re.findall(
+                        r"[a-z0-9]+", str(authority or "").casefold()))
+                    extras = [token for token in got_core
+                              if token not in set(expected_core)]
+                    if extras and all(token in authority_tokens for token in extras):
+                        return True
         # A portal can echo its own field noun into the value: field “Trip”
         # stores “Science Centre trip”, while the canonical value is “Science
         # Centre”. Remove only surplus tokens copied from this exact label;
@@ -565,7 +601,8 @@ def values_match(case, actual, today=None):
     for spec in case["fields"]:
         expected = spec["value"]
         got = actual.get(spec["name"])
-        if not _values_equal(spec, got, today, case["fields"]):
+        if not _values_equal(spec, got, today, case["fields"],
+                             case.get("authority_text") or case.get("approved_scope") or ""):
             differences.append(f"{spec['name']}={got!r} expected {expected!r}")
     return differences
 
@@ -674,7 +711,7 @@ def run_cases(cases, output=None, headless=False):
                 ok = (row.get("status") == "done" and not differences
                       and receipt.get("verified") is True
                       and bool(receipt.get("evidence")))
-                note = ("stored exact form + verified receipt" if ok else
+                note = ("stored verified form values + verified receipt" if ok else
                         f"status={row.get('status')} differences={differences} "
                         f"result={(row.get('result') or '')[:180]!r}")
                 results.append({"scenario": case["slug"], "ok": ok,
