@@ -39,8 +39,13 @@ for f in $FILES; do
   cp -R "$SRC/$f" "$TMP/pkg/"
 done
 
+# A release artifact must be identifiable by its bytes, not by the minute the
+# build happened. Normalize archive timestamps and entry order so identical
+# source always produces the same SHA-256 (including on a fresh checkout).
+find "$TMP/pkg" -exec touch -t 198001010000 {} +
+
 rm -f "$OUT"
-(cd "$TMP/pkg" && zip -qr "$OUT" .)
+(cd "$TMP/pkg" && find . -type f | LC_ALL=C sort | zip -X -q "$OUT" -@)
 
 # Prove the artifact matches the source rather than assuming it.
 PACKED=$(unzip -p "$OUT" manifest.json | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])")
