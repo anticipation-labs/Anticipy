@@ -309,7 +309,7 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         # evidence made explicit.  Ambient audio never gets this privilege,
         # and a second ignore remains an ignore, so chatter and facts are not
         # mechanically promoted into work.
-        if explicit and decision == "ignore" and not goal:
+        if explicit and decision in ("ignore", "ask") and not goal:
             retry_line = (
                 f"{transcript_line}\n(Channel check: the OWNER deliberately "
                 "sent this line directly to this assistant. If it plainly "
