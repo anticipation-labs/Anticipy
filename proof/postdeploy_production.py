@@ -12,6 +12,7 @@ import hmac
 import json
 import os
 from pathlib import Path
+import re
 import uuid
 
 import requests
@@ -47,8 +48,11 @@ def main() -> None:
 
     require(requests.get(f"{BASE}/api/health", timeout=20), 200, "PocketBase health")
     setup = require(requests.get(f"{BASE}/setup.html", timeout=20), 200, "browser setup")
-    if "Download Anticipy for Chrome" not in setup.text:
-        raise RuntimeError("browser setup: download action missing")
+    expected_download = "/anticipy-codex-version-extension.zip"
+    if not re.search(
+        r'href=["\']' + re.escape(expected_download) + r'["\']', setup.text
+    ) or "Download Anticipy Codex Version for Chrome" not in setup.text:
+        raise RuntimeError("browser setup: branded download action missing")
 
     privacy = require(requests.get(f"{BASE}/privacy.html", timeout=20), 200, "privacy policy")
     for phrase in ("OpenRouter", "Twilio", "Apple speech recognition", "delete"):
@@ -56,10 +60,10 @@ def main() -> None:
             raise RuntimeError(f"privacy policy: missing disclosure {phrase!r}")
 
     package = require(
-        requests.get(f"{BASE}/anticipy-extension.zip", timeout=30),
+        requests.get(f"{BASE}{expected_download}", timeout=30),
         200, "extension package")
     local_digest = hashlib.sha256(
-        (ROOT / "backend/pb_public/anticipy-extension.zip").read_bytes()).hexdigest()
+        (ROOT / "backend/pb_public/anticipy-codex-version-extension.zip").read_bytes()).hexdigest()
     remote_digest = hashlib.sha256(package.content).hexdigest()
     if remote_digest != local_digest:
         raise RuntimeError(

@@ -53,7 +53,9 @@
       <li><strong>What Anticipy Codex Version hears:</strong> the finalized text transcript is sent
         to Anticipy Codex Version's backend. When on-device speech recognition is available, raw
         microphone audio stays on the phone. Otherwise iOS may send audio to Apple's
-        speech-recognition service to produce that text.</li>
+        speech-recognition service to produce that text. If you use an Anticipy pendant,
+        its Opus audio is sent to Deepgram for live transcription; the finalized text
+        then follows the same Anticipy Codex Version backend path.</li>
       <li><strong>Work and memory:</strong> requests, approvals, task state, results,
         and the text memories needed to answer later questions.</li>
     </ul>
@@ -74,7 +76,7 @@
         approved facts, result, and evidence needed to prevent a guessed completion or
         an unsafe automatic retry.</li>
     </ul>
-    <p>The extension also keeps its pairing identity, model credential, current task,
+    <p>The extension also keeps its pairing identity, an opaque backend model-routing marker, current task,
       and owned tab identifiers in Chrome's local extension storage on that computer.</p>
   </section>
 
@@ -89,6 +91,9 @@
       <li><strong>Twilio</strong> carries text messages between Anticipy Codex Version and your phone.</li>
       <li><strong>Apple speech recognition</strong> may process microphone audio only
         when this iPhone cannot perform the recognition on-device.</li>
+      <li><strong>Deepgram</strong> processes live audio from a paired Anticipy pendant
+        to produce transcript text. The app receives a short-lived access token; the
+        long-lived Deepgram key remains on Anticipy Codex Version's backend.</li>
     </ul>
     <p>These processors receive data only to deliver their part of Anticipy Codex Version. Their own
       retention and security terms also apply to the data they process.</p>

@@ -9,8 +9,11 @@ the browser agent read "Confirm …" as "send a confirmation" and opened Gmail.
 
 import json
 
-from brain.anticipy_core import Anticipy
+from brain.anticipy_core import (Anticipy, exact_message_continuation,
+                                progressive_action_continuation,
+                                progressive_continuation)
 from brain.memory import Memory
+from brain.orchestrator import Decision
 
 
 class _Job:
@@ -83,3 +86,137 @@ def test_a_genuinely_richer_wording_does_replace(monkeypatch):
     assert fields.get("goal") == richer
     params = json.loads(fields["params"])
     assert "dinner at Earls" in params["source"]
+
+
+def test_agreement_marker_plus_shared_plan_repairs_a_recognizer_split():
+    first = "Open windshield claim on policy AUTO-33365 for highway stone damage"
+    second = ("Schedule windshield repair for AUTO-33365 with Speedy Glass "
+              "in Coquitlam next Tuesday")
+    assert progressive_continuation(
+        "yeah, agreed — cm crack in Coquitlam; use Speedy Glass", second, first)
+
+
+def test_a_declared_separate_task_never_uses_progressive_merge():
+    first = "Dispute invoice INV-49219 against PO-1173"
+    second = "Send invoice INV-49219 to the finance team"
+    assert not progressive_continuation(
+        "Separate task, also send it to finance", second, first)
+
+
+def test_exact_message_split_at_colon_is_reassembled_verbatim():
+    assert exact_message_continuation(
+        "we should get this sorted: Send Jonah Singh this exact message:",
+        "yeah, agreed — I can meet after 3 PM tomorrow.") == (
+            "Send Jonah Singh this exact message: I can meet after 3 PM tomorrow.")
+
+
+def test_exact_message_split_survives_two_model_ignores(monkeypatch):
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    monkeypatch.setattr(a, "_decide", lambda *_args, **_kwargs: Decision(
+        decision="ignore", goal=None, reason="model missed fragment",
+        addressee="self", owes="nobody"))
+    queued, notified = [], []
+    monkeypatch.setattr(a, "_pending_jobs", lambda: [])
+    monkeypatch.setattr(a, "_queue_job", lambda goal, params, **kwargs:
+                        queued.append((goal, params, kwargs)) or "job1")
+    a.notify_owner = lambda message, channel="sms": notified.append(message) or {"sent": True}
+
+    first = "we should actually get this sorted: Send Jonah Singh this exact message:"
+    second = "yeah, agreed — I can meet after 3 PM tomorrow."
+    assert a.hear(first, speaker="owner")["decision"].decision == "ignore"
+    result = a.hear(second, context=[first], speaker="owner")
+
+    assert result["decision"].decision == "act"
+    assert queued[0][0] == "Send Jonah Singh this exact message: I can meet after 3 PM tomorrow."
+    assert len(notified) == 1
+
+
+def test_exact_message_dialogue_outranks_a_false_dictation_guess(monkeypatch):
+    import brain.anticipy_core as core
+
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    monkeypatch.setattr(core, "looks_like_dictation", lambda _line: True)
+    monkeypatch.setattr(a, "_decide", lambda *_args, **_kwargs: Decision(
+        decision="ignore", goal="", reason="mistaken for voice typing",
+        addressee="dictation", owes="machine"))
+    queued = []
+    monkeypatch.setattr(a, "_pending_jobs", lambda: [])
+    monkeypatch.setattr(a, "_queue_job", lambda goal, params, **kwargs:
+                        queued.append((goal, kwargs)) or "job1")
+    a.notify_owner = lambda *_args, **_kwargs: {"sent": True}
+
+    first = "we should actually get this sorted: Send Malik Martin this exact message:"
+    second = "yeah, agreed — The revised numbers are ready for review."
+    a.hear(first, speaker="owner")
+    result = a.hear(second, context=[first], speaker="owner")
+
+    assert result["decision"].decision == "act"
+    assert result["decision"].addressee == "person"
+    assert queued == [("Send Malik Martin this exact message: "
+                       "The revised numbers are ready for review.", {"hold": True})]
+
+
+def test_generic_progressive_split_preserves_every_raw_detail():
+    assert progressive_action_continuation(
+        "we should actually get this sorted: Book Luna, a dog, for a rabies vaccination at",
+        "yeah, agreed — North Shore Pet Hospital on Saturday at 4:20 PM") == (
+            "Book Luna, a dog, for a rabies vaccination at North Shore Pet Hospital "
+            "on Saturday at 4:20 PM")
+
+
+def test_progressive_split_keeps_raw_line_after_partial_action(monkeypatch):
+    """Acting on chunk one must not erase it from recognizer repair."""
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    calls = []
+    decisions = iter([
+        Decision(decision="act", goal=(
+            "Open a windshield claim on policy AUTO-33365 for highway stone damage"),
+            reason="partial action", addressee="self", owes="owner",
+            needs_confirmation=True),
+        Decision(decision="act", goal=(
+            "Schedule repair with Speedy Glass in Coquitlam next Tuesday"),
+            reason="partial action", addressee="self", owes="owner",
+            needs_confirmation=True),
+    ])
+    monkeypatch.setattr(a, "_decide", lambda *_args, **_kwargs: next(decisions))
+    monkeypatch.setattr(a, "_pending_jobs", lambda: [])
+    monkeypatch.setattr(a, "_queue_job", lambda goal, params, **kwargs:
+                        calls.append((goal, params, kwargs)) or f"job{len(calls)}")
+    a.notify_owner = lambda *_args, **_kwargs: {"sent": True}
+
+    first = ("we should actually get this sorted: Open a windshield claim on "
+             "policy AUTO-33365: highway stone caused a 20")
+    second = ("yeah, agreed — cm crack in Coquitlam on next Tuesday; use "
+              "Speedy Glass for repair")
+    assert a.hear(first, speaker="owner")["decision"].decision == "act"
+    result = a.hear(second, context=[first], speaker="owner")
+
+    exact = ("Open a windshield claim on policy AUTO-33365: highway stone "
+             "caused a 20 cm crack in Coquitlam on next Tuesday; use Speedy "
+             "Glass for repair")
+    assert result["decision"].goal == exact
+    assert calls[-1][0] == exact
+    assert calls[-1][1]["recognizer_continuation"] is True
+
+
+def test_proven_recognizer_continuation_replaces_partial_paraphrase(monkeypatch):
+    patches = []
+    partial = "Open windshield claim AUTO-33365 for highway stone damage"
+    job = _Job(partial, {"source": "highway stone caused a 20"})
+    a = _core(monkeypatch, job, patches)
+    a._open_plan = ("job1", __import__("time").time(), partial)
+    exact = ("Open a windshield claim on policy AUTO-33365: highway stone "
+             "caused a 20 cm crack in Coquitlam next Tuesday")
+
+    assert a._queue_job(exact, {
+        "source": "yeah, agreed — cm crack in Coquitlam next Tuesday",
+        "recognizer_continuation": True,
+    }, hold=True) == "job1"
+    assert patches[-1]["goal"] == exact
+    assert "; then" not in patches[-1]["goal"]
+
+
+def test_discussion_fragment_is_not_promoted_to_an_action():
+    assert progressive_action_continuation(
+        "we should talk about this: sending messages is stressful",
+        "yeah, agreed — especially after work") is None

@@ -9,13 +9,27 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 
-	<!-- What actually leaves the phone. Audio never does: it is turned into
-	     text on device and only the words are sent. -->
+	<!-- Phone-microphone audio follows Apple's recognition path. When a paired
+	     pendant is used, its Opus audio is sent to Deepgram for live
+	     transcription, so audio is declared explicitly rather than hidden
+	     behind the broader user-content category. -->
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeAudioData</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

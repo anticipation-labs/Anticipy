@@ -90,7 +90,9 @@ Requires the Anticipy Codex Version iPhone app and an Anticipy Codex Version acc
   element map is built by `page_map.js` (injected by `agent_loop.js` via
   `files: ["page_map.js"]`), the screenshot by `screenshot()` in
   `agent_loop.js`, which is called on every step ("ALWAYS look"). Both are
-  posted to `OPENROUTER_URL`, `https://openrouter.ai/api/v1/chat/completions`.
+  posted to the authenticated `/agent/llm` backend proxy, which forwards only
+  to the server-selected OpenRouter models. The vendor credential never enters
+  Chrome (`modelFetch()` and `backend/pb_hooks/agent_key.pb.js`).
 - **"your name, email and phone when a form asks"** —
   `backend/pb_hooks/agent_key.pb.js:30-43` returns the saved owner profile,
   `background.js` re-reads it at the start of every run, and `agent_loop.js`
@@ -127,7 +129,7 @@ Productivity / Tools
   can name what to click (`page_map.js`), and sets values that CDP typing
   can't reach, such as a native `<select>` option. No third-party code is
   injected.
-- **`storage`**: holds the pairing identity, the model credentials fetched
+- **`storage`**: holds the pairing identity, the model-routing configuration fetched
   after pairing, and the ids of the tabs a run owns (`agentTabs`).
 - **`alarms`**: polls the user's own job queue every 5 s and heartbeats every
   10 s while paired (`POLL_SECONDS`, `HEARTBEAT_SECONDS`, `anticipy-poll`,
@@ -149,7 +151,8 @@ CAPTCHAs, and `file`/`range` inputs.
 
 - **What leaves the browser, and where it goes.** For each step of a task: the
   text and element map of the page being worked on, plus a downscaled JPEG
-  screenshot of that one tab, go to OpenRouter. When a form asks for identity,
+  screenshot of that one tab go through the Anticipy Codex Version backend to
+  OpenRouter. When a form asks for identity,
   the user's own saved first name, last name, email, phone, date of birth and
   any facts they told Anticipy Codex Version go in the same request
   (`agent_key.pb.js:30-43` → the `THE OWNER` block in `agent_loop.js`). Task
@@ -160,9 +163,10 @@ CAPTCHAs, and `file`/`range` inputs.
 - **Whose API key and whose model — corrected.** An earlier draft of this file
   told the reviewer that page text goes "to the AI model chosen by the user's
   own account." That is not true and I have removed it. The key is mine, held
-  server-side: `backend/pb_hooks/agent_key.pb.js:18` returns a single
-  `OPENROUTER_API_KEY` env var to any paired agent. The model is mine too:
-  `agent_key.pb.js:24` returns `ANTICIPY_BROWSER_MODEL` or defaults to
+  server-side: `/agent/key` returns only an opaque `llm_proxy` marker and model
+  names; `/agent/llm` injects the `OPENROUTER_API_KEY` after authenticating the
+  private per-agent credential and enforcing the model allowlist. The model is
+  mine too: `agent_key.pb.js` returns `ANTICIPY_BROWSER_MODEL` or defaults to
   `anthropic/claude-sonnet-4.6`, and `:49` returns the vision model, defaulting
   to `google/gemini-2.5-flash`. The extension fetches that bundle the moment
   pairing lands (`ensureLLMKey()` in `background.js`) and passes the model
@@ -221,7 +225,7 @@ for those fields — once claimed, it can never be re-claimed or re-read
 **4 — Watch it go live.**
 Return to the welcome tab. Within about half a minute it changes to "Paired",
 because the worker's heartbeat reads the record back and stores the result. At
-that moment it also fetches its model credentials, which the server refuses to
+that moment it also fetches its model-routing configuration, which the server refuses to
 anything unpaired (`agent_key.pb.js:13`).
 To skip the wait: `chrome://extensions` → Anticipy Codex Version → click **service worker**.
 Opening it wakes the worker, which polls immediately.
@@ -284,7 +288,7 @@ Closing the tab, or removing the extension, also ends it immediately.
 - [x] **Author the privacy policy.** Publishing is part of the backend release
       gate and must return HTTP 200 before store submission.
 - [ ] **Confirm `OPENROUTER_API_KEY` is set and funded on the backend.** Without
-      it `/agent/key` returns 503 (`agent_key.pb.js:19`) and the first task a
+  it `/agent/key` returns 503 and the first task a
       reviewer queues fails with "no LLM key". The test instructions above are
       worthless if that env var is empty.
 - [x] **CapSolver: removed, 2026-08-03.** `solveCaptcha()`/`detectCaptcha()` in
@@ -331,7 +335,7 @@ It has to say, at minimum:
 2. **What is stored, where, and for how long.** Job rows and agent rows live in
    the Anticipy Codex Version backend (`backend/pb_migrations/1700000001_jobs.js`,
    `1700000002_agents.js`); locally the extension keeps the pairing identity
-   and model credentials in `chrome.storage.local`. Name a retention period.
+   and model-routing configuration in `chrome.storage.local`. Name a retention period.
 3. **What it is never used for:** no advertising, no sale, no sharing with
    third parties beyond the model provider named above, no analytics — true
    today, and it needs to stay true.

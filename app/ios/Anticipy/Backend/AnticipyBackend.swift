@@ -126,6 +126,21 @@ final class AnticipyBackend {
         return r
     }
 
+    /// Exchange the signed-in owner session for a short-lived Deepgram JWT.
+    /// The long-lived vendor key remains server-side and never enters iOS.
+    func transcriptionToken() async throws -> String {
+        var request = writeRequest(
+            baseURL.appendingPathComponent("transcription/token"), method: "POST")
+        request.httpBody = Data("{}".utf8)
+        let data = try await send(request)
+        guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let token = body["access_token"] as? String,
+              !token.isEmpty else {
+            throw BackendError(status: -1)
+        }
+        return token
+    }
+
     /// Store the owner's number where the brain reads it. Updates the
     /// existing row for this owner rather than piling up duplicates.
     func upsertOwnerPhone(ownerID: String, phone: String) async -> Bool {

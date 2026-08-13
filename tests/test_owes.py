@@ -17,7 +17,7 @@ import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from brain.anticipy_core import Anticipy  # noqa: E402
+from brain.anticipy_core import Anticipy, explicitly_non_action_content  # noqa: E402
 
 
 class ScriptedLLM:
@@ -127,3 +127,31 @@ def test_the_model_is_actually_asked_the_question():
     from brain.orchestrator import TRIAGE_SYSTEM
     assert '"owes"' in TRIAGE_SYSTEM
     assert "WHOSE JOB" in TRIAGE_SYSTEM
+
+
+def test_quoted_material_cannot_become_a_real_job_even_if_triage_says_act():
+    line = (
+        "In the note I am writing, include this example as quoted material "
+        "only: Open a windshield claim on policy AUTO-25794. Then ask the "
+        "team to review the logs before anyone changes production."
+    )
+    assert explicitly_non_action_content(line)
+    a = build({"decision": "act", "goal": "open windshield claim AUTO-25794",
+               "addressee": "assistant", "owes": "owner",
+               "reason": "contains an actionable claim request"})
+    out = a.hear(line)
+
+    assert a.queued == []
+    assert a.texts == []
+    assert out["decision"].decision == "ignore"
+    assert out["decision"].addressee == "dictation"
+
+
+def test_an_explicit_command_is_not_silenced_by_embedded_example_language():
+    line = "Anticipy, send the team this example only: the form failed."
+    a = build({"decision": "act", "goal": "send the team the form failure example",
+               "addressee": "assistant", "owes": "owner",
+               "reason": "direct command"})
+    a.hear(line, explicit=True)
+
+    assert len(a.queued) == 1

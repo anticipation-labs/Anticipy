@@ -104,6 +104,13 @@ struct SettingsView: View {
                             .foregroundStyle(Theme.gray)
                     }
                 }
+                if pendant.state == .connected {
+                    Text(session.pendantCapturing
+                         ? "Pendant audio goes to Deepgram for live transcription; finalized text then follows the same Anticipy path as phone speech."
+                         : "The pendant is connected, but its transcription stream is not live yet.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
+                }
                 if pendant.hasPairedPendant {
                     Button("Forget this pendant", role: .destructive) {
                         pendant.forgetPendant()
@@ -274,6 +281,9 @@ struct SettingsView: View {
                     .font(.callout)
                     .foregroundStyle(Theme.sand)
                 Text("The words — the text, not the sound — go to my server. That's how I know what you need.")
+                    .font(.callout)
+                    .foregroundStyle(Theme.sand)
+                Text("If you use a pendant, its Opus audio goes to Deepgram to become text. My backend gives this phone a short-lived token; the Deepgram account key stays on the server.")
                     .font(.callout)
                     .foregroundStyle(Theme.sand)
                 Text("Anyone near you is heard too, and they haven't agreed to any of this. Please tell them, or stop me while they're around.")

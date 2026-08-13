@@ -5,8 +5,8 @@ options:
     iOS: "16.0"
 settings:
   base:
-    MARKETING_VERSION: "1.0.3"
-    CURRENT_PROJECT_VERSION: "51"
+    MARKETING_VERSION: "1.0.4"
+    CURRENT_PROJECT_VERSION: "52"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -23,8 +23,8 @@ targets:
       properties:
         CFBundleDisplayName: Anticipy Codex Version
         CFBundleIconName: AppIcon
-        CFBundleShortVersionString: "1.0.3"
-        CFBundleVersion: "51"
+        CFBundleShortVersionString: "1.0.4"
+        CFBundleVersion: "52"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -36,7 +36,7 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - audio
-        NSBluetoothAlwaysUsageDescription: Anticipy Codex Version connects to your Anticipy Codex Version pendant over Bluetooth. Only needed if you have one.
+        NSBluetoothAlwaysUsageDescription: Anticipy Codex Version connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.
         # These describe what actually happens: capture continues in the
         # background, and the resulting TEXT is sent to Anticipy's server so she
         # can act on it. The old strings promised "on-device transcription" and

@@ -8,6 +8,7 @@ const suites = [
   "check_never_foreground.mjs",
   "test_agent_loop_focus.mjs",
   "test_background_handback.mjs",
+  "test_registration_singleflight.mjs",
   "test_planner.mjs",
   "test_resume_tab.mjs",
   "test_code_guard.mjs",

@@ -36,7 +36,14 @@ struct AnticipyApp: App {
             // Only once signed in: there is no profile to write to before
             // that. Costs no permission prompt and no typing.
             .task(id: session.isSignedIn) {
-                if session.isSignedIn { await session.reportTimeZone() }
+                if session.isSignedIn { await session.resumeSignedInAccount() }
+            }
+            .task(id: session.isSignedIn ? pendant.state.rawValue : "signed-out") {
+                if session.isSignedIn && pendant.state == .connected {
+                    await session.startPendantTranscription(pendant)
+                } else {
+                    session.stopPendantTranscription(pendant)
+                }
             }
         }
     }
@@ -54,6 +61,7 @@ final class AnticipySession: ObservableObject {
     @Published var agentOnline = false
     @Published var agentLastSeenSeconds: Int?   // nil = never seen
     @Published var agentPaired = false
+    @Published var pendantCapturing = false
 
     /// What the screen is allowed to claim. Before this, "still loading",
     /// "you're offline", "the server refused me" and "you genuinely have
@@ -82,6 +90,9 @@ final class AnticipySession: ObservableObject {
     private var bag = Set<AnyCancellable>()
     private var seenDoneJobIDs = Set<String>()
     let listener = PhoneListener()
+    private let pendantTranscriber = TranscriberClient()
+    private var pendantTokenInFlight = false
+    private var pendantRetryTask: Task<Void, Never>?
 
     /// Words spoken with no network used to live in a plain in-memory array.
     /// If iOS reclaimed the app before it reconnected, they were gone — from a
@@ -148,6 +159,12 @@ final class AnticipySession: ObservableObject {
         listener.speaker = speakerTagger
         listener.onSpeaker = { [weak self] line, tag in
             Task { await self?.heard(line, speaker: tag) }
+        }
+        pendantTranscriber.onTranscript = { [weak self] line in
+            Task { await self?.heard(line) }
+        }
+        pendantTranscriber.onConnection = { [weak self] connected in
+            self?.pendantCapturing = connected
         }
         // Re-render views observing the session when the listener changes.
         listener.objectWillChange
@@ -352,6 +369,19 @@ final class AnticipySession: ObservableObject {
         _ = await backend.upsertOwner(ownerID: ownerID, fields: ["timezone": zone])
     }
 
+    /// Reconcile account state on every signed-in launch, not only inside the
+    /// sign-in button. A phone already signed in before an app update never
+    /// calls `signIn` again, so its legacy jobs stayed permanently unclaimed:
+    /// production contained 33 rows whose legacy UUID exactly matched the
+    /// account, while the account-scoped feed could see zero of them. The
+    /// claim endpoint is idempotent; repeating it is the recovery mechanism.
+    func resumeSignedInAccount() async {
+        guard isSignedIn else { return }
+        await backend.claimLegacy(legacyUUID: ownerID)
+        await reportTimeZone()
+        await refresh()
+    }
+
     /// Save the owner's number where the brain can read it, so texting works
     /// without anyone hand-editing a server variable.
     func saveOwnerPhone(_ raw: String) async -> Bool {
@@ -383,6 +413,51 @@ final class AnticipySession: ObservableObject {
         // listening", so every foreground re-fired a start iOS instantly denies.
         listener.start()
         keepListening = true
+    }
+
+    /// Pendant frames follow a separate, honest path: BLE Opus -> Deepgram
+    /// websocket -> finalized text -> the same durable brain event as phone
+    /// speech. The app receives only a 60-second JWT, never the vendor key.
+    func startPendantTranscription(_ pendant: PendantManager) async {
+        guard isSignedIn, pendant.state == .connected,
+              !pendantTokenInFlight, !pendantCapturing else { return }
+        pendantRetryTask?.cancel()
+        let transcriber = pendantTranscriber
+        pendant.onOpusFrame = { frame in transcriber.send(opusFrame: frame) }
+        pendantTranscriber.onNeedsReconnect = { [weak self, weak pendant] in
+            guard let self, let pendant else { return }
+            self.schedulePendantRetry(pendant)
+        }
+        pendantTokenInFlight = true
+        defer { pendantTokenInFlight = false }
+        do {
+            let token = try await backend.transcriptionToken()
+            guard pendant.state == .connected, isSignedIn else { return }
+            pendantTranscriber.connect(accessToken: token)
+        } catch {
+            pendantCapturing = false
+            schedulePendantRetry(pendant)
+        }
+    }
+
+    func stopPendantTranscription(_ pendant: PendantManager) {
+        pendantRetryTask?.cancel()
+        pendantRetryTask = nil
+        pendant.onOpusFrame = nil
+        pendantTranscriber.onNeedsReconnect = nil
+        pendantTranscriber.disconnect()
+        pendantTokenInFlight = false
+        pendantCapturing = false
+    }
+
+    private func schedulePendantRetry(_ pendant: PendantManager) {
+        guard isSignedIn, pendant.state == .connected else { return }
+        pendantRetryTask?.cancel()
+        pendantRetryTask = Task { [weak self, weak pendant] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled, let self, let pendant else { return }
+            await self.startPendantTranscription(pendant)
+        }
     }
 
     /// True when iOS has already been told no and will not ask again — the app
@@ -557,6 +632,16 @@ final class AnticipySession: ObservableObject {
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
+    private func humanApprovalScope(_ workflow: [String: Any],
+                                    fallbackGoal: String) -> String {
+        let goal = (workflow["goal"] as? String ?? fallbackGoal)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = (workflow["authority_text"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else { return goal }
+        return "Task: \(goal)\nYour exact words: \(source)"
+    }
+
     /// Build the complete, version-bound approval patch. The model never gets
     /// to turn a button tap into authority: the app binds the owner's actual
     /// gesture to the exact digest the brain placed on this immutable version.
@@ -595,21 +680,28 @@ final class AnticipySession: ObservableObject {
             workflow["version"] = approvedVersion
             let consequence = workflow["consequence"] as? String ?? "consequential"
             let goal = workflow["goal"] as? String ?? job.goal
-            approvedScope = try workflowDigest([
+            var scopePayload: [String: Any] = [
                 "plan_id": planID, "version": approvedVersion,
                 "goal": goal, "facts": facts, "consequence": consequence,
-            ])
+            ]
+            if let authority = workflow["authority_text"] as? String,
+               !authority.isEmpty { scopePayload["authority_text"] = authority }
+            approvedScope = try workflowDigest(scopePayload)
             let ownerRef = workflow["owner_ref"] as? String ?? ""
-            approvedEffect = try workflowDigest([
+            var effectPayload: [String: Any] = [
                 "owner_ref": ownerRef, "plan_id": planID,
                 "version": approvedVersion, "goal": goal,
                 "facts": facts, "consequence": consequence,
-            ])
+            ]
+            if let authority = workflow["authority_text"] as? String,
+               !authority.isEmpty { effectPayload["authority_text"] = authority }
+            approvedEffect = try workflowDigest(effectPayload)
             workflow["scope_digest"] = approvedScope
             workflow["effect_key"] = approvedEffect
             params["owner_answer"] = ownerWords
             let asked = job.result ?? ""
-            let oldScope = params["approved_scope"] as? String ?? goal
+            let oldScope = params["approved_scope"] as? String
+                ?? humanApprovalScope(workflow, fallbackGoal: goal)
             params["approved_scope"] = oldScope
                 + " You stopped and asked: \"\(asked)\". They answered: \"\(ownerWords)\"."
         }
@@ -629,7 +721,8 @@ final class AnticipySession: ObservableObject {
         params["_workflow"] = workflow
         params["authorized"] = true
         if job.status != "needs_user" || params["approved_scope"] == nil {
-            params["approved_scope"] = workflow["goal"] as? String ?? ""
+            params["approved_scope"] = humanApprovalScope(
+                workflow, fallbackGoal: job.goal)
         }
         var fields: [String: Any] = [
             "status": "queued",

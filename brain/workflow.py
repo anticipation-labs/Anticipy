@@ -131,6 +131,10 @@ class Plan:
     goal: str
     consequence: Consequence
     state: PlanState
+    # Exact owner-authored wording that grants the plan its concrete detail.
+    # Models may shorten `goal`; this text is never model-owned and is bound
+    # into the signed scope/effect payload whenever it exists.
+    authority_text: str = ""
     facts: Mapping[str, Any] = field(default_factory=dict)
     required: tuple[str, ...] = ()
     source_event_ids: tuple[str, ...] = ()
@@ -149,24 +153,31 @@ class Plan:
 
     @property
     def effect_key(self) -> str:
-        return _digest({
+        payload = {
             "owner_ref": self.owner_ref,
             "plan_id": self.plan_id,
             "version": self.version,
             "goal": self.goal,
             "facts": dict(self.facts),
             "consequence": self.consequence.value,
-        })
+        }
+        # Conditional preserves legacy digests while binding new sourced work.
+        if self.authority_text:
+            payload["authority_text"] = self.authority_text
+        return _digest(payload)
 
     @property
     def scope_digest(self) -> str:
-        return _digest({
+        payload = {
             "plan_id": self.plan_id,
             "version": self.version,
             "goal": self.goal,
             "facts": dict(self.facts),
             "consequence": self.consequence.value,
-        })
+        }
+        if self.authority_text:
+            payload["authority_text"] = self.authority_text
+        return _digest(payload)
 
     @property
     def approved_for_current_version(self) -> bool:
@@ -213,6 +224,7 @@ class Plan:
             "lineage_key": self.lineage_key,
             "version": self.version,
             "goal": self.goal,
+            "authority_text": self.authority_text,
             "consequence": self.consequence.value,
             "state": self.state.value,
             "scope_digest": self.scope_digest,
@@ -288,6 +300,7 @@ class Plan:
             goal=str(value.get("goal") or ""),
             consequence=Consequence(str(value.get("consequence") or "")),
             state=PlanState(str(value.get("state") or "")),
+            authority_text=str(value.get("authority_text") or "").strip(),
             facts=_clean_facts(value.get("facts") or {}),
             required=tuple(str(x) for x in (value.get("required") or []) if str(x)),
             source_event_ids=tuple(str(x) for x in
@@ -345,6 +358,7 @@ def from_params(params: Mapping[str, Any]) -> Optional[Plan]:
 def new_plan(*, owner_ref: str, lineage_key: str, goal: str,
              consequence: Consequence,
              source_event_id: str,
+             authority_text: str = "",
              facts: Optional[Mapping[str, Any]] = None,
              required: Iterable[str] = (),
              plan_id: Optional[str] = None,
@@ -360,6 +374,7 @@ def new_plan(*, owner_ref: str, lineage_key: str, goal: str,
         goal=goal.strip(),
         consequence=consequence,
         state=state,
+        authority_text=authority_text.strip(),
         facts=_clean_facts(facts),
         required=tuple(dict.fromkeys(str(x).strip() for x in required
                                      if str(x).strip())),
@@ -376,6 +391,7 @@ def new_plan(*, owner_ref: str, lineage_key: str, goal: str,
 
 def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
           facts: Optional[Mapping[str, Any]] = None,
+          authority_text: Optional[str] = None,
           source_event_id: str = "", now: Optional[datetime] = None) -> Plan:
     """Atomically improve/correct one plan and invalidate stale authority."""
     plan.assert_valid()
@@ -389,6 +405,8 @@ def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
     next_facts = dict(plan.facts)
     next_facts.update(_clean_facts(facts))
     next_goal = (goal or plan.goal).strip()
+    next_authority = (plan.authority_text if authority_text is None
+                      else authority_text.strip())
     events = list(plan.source_event_ids)
     if source_event_id.strip() and source_event_id.strip() not in events:
         events.append(source_event_id.strip())
@@ -401,6 +419,7 @@ def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
         plan,
         version=plan.version + 1,
         goal=next_goal,
+        authority_text=next_authority,
         facts=next_facts,
         source_event_ids=tuple(events),
         state=next_state,

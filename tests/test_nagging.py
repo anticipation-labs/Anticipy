@@ -196,6 +196,10 @@ def test_a_fresh_overheard_plan_is_never_nagging(monkeypatch):
     spoke is work HE started; her one text about it is a receipt, not a nag.
     The 24-hour same-plan guard is what stops a repeated mention texting twice.
     """
+    # This test is about nag dedupe, not the separate nighttime deferral gate.
+    # Pin waking hours so it passes identically at noon and in a 2 a.m. CI run.
+    monkeypatch.setattr(W, "CLOCK_QUIET_START", 24)
+    monkeypatch.setattr(W, "CLOCK_QUIET_END", 0)
     monkeypatch.setattr(W.pb, "get", backend(says(THE_FIVE, days_ago=3))[0])
     assert W.SPEAK_ONCE("Caught your plan — dinner at Earls tomorrow at 7.",
                         goal="Book dinner for tomorrow at Earls in West Van",
@@ -215,6 +219,8 @@ def test_a_new_card_speaks_even_when_yesterdays_plan_rhymed_with_it(monkeypatch)
     (test_a_repeat_of_a_card_he_already_knows_about_is_left_alone) — so a
     goal that DOES reach it is a genuinely new card, and a new card speaks.
     """
+    monkeypatch.setattr(W, "CLOCK_QUIET_START", 24)
+    monkeypatch.setattr(W, "CLOCK_QUIET_END", 0)
     monkeypatch.setattr(W.pb, "get", backend(says(
         ["Caught your plan — dinner at Earls in West Van tomorrow."],
         goal="Book dinner for tomorrow at Earls in West Van",

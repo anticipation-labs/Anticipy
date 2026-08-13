@@ -6,6 +6,29 @@
 // jobs; the confirmation gate lives in the backend queue, outside the model.
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const BACKEND_LLM = "backend-proxy";
+const DEFAULT_LLM_BASE = "https://backend-production-61e0a.up.railway.app";
+
+async function modelFetch(apiKey, payload, signal = undefined) {
+  if (apiKey !== BACKEND_LLM) {
+    return fetch(OPENROUTER_URL, {
+      signal, method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
+                 "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy Codex Version" },
+      body: JSON.stringify(payload),
+    });
+  }
+  const { backendUrl, agentId, agentToken } = await chrome.storage.local.get(
+    ["backendUrl", "agentId", "agentToken"]);
+  if (!agentId || !agentToken) throw new Error("paired agent credentials are missing");
+  const base = String(backendUrl || DEFAULT_LLM_BASE).replace(/\/$/, "");
+  return fetch(`${base}/agent/llm`, {
+    signal, method: "POST",
+    headers: { "Content-Type": "application/json", "X-Anticipy-Agent-ID": agentId,
+               "X-Anticipy-Agent-Token": agentToken },
+    body: JSON.stringify(payload),
+  });
+}
 
 // Grounded per-run: a model with no clock hallucinated "this coming Sunday,
 // July 28th" (the past) in a live scheduling thread. Dates in goals
@@ -14,7 +37,7 @@ const AGENT_SYSTEM = `You are Anticipy's browser agent operating the user's own 
 Each step you receive the page URL, title, an indexed list of interactive elements, and visible text.
 Reply with EXACTLY one JSON object, nothing else:
 {"action":"click","index":N} - click element N
-{"action":"type","index":N,"text":"...","enter":true} - click element N, type text char-by-char, then press Enter (set enter:false to leave it unsubmitted, e.g. an autocomplete box where you must pick a suggestion)
+{"action":"type","index":N,"text":"...","enter":false} - click element N and type text char-by-char. Use enter:false for ordinary form fields and autocomplete. Use enter:true ONLY when Enter is deliberately meant to run a search or submit the field.
 {"action":"select","index":N,"option":"..."} - set a native dropdown (<combobox> with an options list) to the option whose text or value matches, or set a date/time field (option "YYYY-MM-DD" for dates, "HH:MM" for times). Clicking can NEVER open a native dropdown — its menu lives outside the page. Always use select for them.
 {"action":"navigate","url":"https://..."} - go to a URL
 {"action":"scroll","dy":600} - scroll down (negative = up)
@@ -34,6 +57,7 @@ Never ask the owner for a fact that is already in WHAT THEY AGREED TO, FACTS ALR
 The mirror rule: a choice the task NEVER gave you is not yours to make. If the site asks which of several locations/branches/options and the task names none, do not pick one — stop with needs_user listing the nearest few so they can choose. Wandering between options you were never told to choose burns their money and books the wrong thing.
 SEARCH BOXES take a search-shaped query — the few words that identify the thing ("Earls West Vancouver"), never the owner's whole spoken sentence.
 AUTOCOMPLETE (airport/city/address boxes): type with enter:false, then on the NEXT step a "SUGGESTIONS" list appears — CLICK the option that matches. Never re-type into a box that already has your text; pick a suggestion or move on.
+DATES: in an ordinary text field, copy the owner's relative wording exactly (for example "next Tuesday" or "tomorrow"). Do not recalculate or normalize it. Convert to YYYY-MM-DD only when the page map explicitly identifies a native date field and tells you to use the select action.
 Never repeat an action that already failed twice (check HISTORY). If a site's own search box ignores your typing, navigate to https://www.bing.com and research the answer from search results instead.`;
 
 /// A picture of the page, for the moments a text list cannot express what a
@@ -124,22 +148,13 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
   ];
   const ctl = new AbortController();
   const kill = setTimeout(() => ctl.abort(), 60000);
-  const r = await fetch(OPENROUTER_URL, {
-    signal: ctl.signal,
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://anticipy.ai",
-      "X-Title": "Anticipy Codex Version",
-    },
+  const r = await modelFetch(apiKey,
     // Ask the provider to CONSTRAIN the output to a JSON object. One
     // malformed reply used to strand the whole task ("unparseable model
     // output after retry"), which read to the owner as a browser failure
     // when it was really our parser being brittle.
-    body: JSON.stringify({ model: image ? (visionModel || model) : model, messages, temperature: 0,
-                           response_format: { type: "json_object" } }),
-  }).finally(() => clearTimeout(kill));
+    { model: image ? (visionModel || model) : model, messages, temperature: 0,
+      response_format: { type: "json_object" } }, ctl.signal).finally(() => clearTimeout(kill));
   // Name the real cause. An expired/rotated/out-of-credit key used to surface
   // as "unparseable model output" — the owner would go hunting the page.
   if (!r.ok) {
@@ -164,13 +179,8 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
       { role: "user", content: "That was not a single JSON object. Reply with ONLY the JSON object for the next action — no prose, no code fence." },
     ]);
     try {
-      const r2 = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
-                   "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy Codex Version" },
-        body: JSON.stringify({ model, messages: nudge, temperature: 0,
-                               response_format: { type: "json_object" } }),
-      });
+      const r2 = await modelFetch(apiKey, { model, messages: nudge, temperature: 0,
+        response_format: { type: "json_object" } });
       if (r2.ok) {
         const fixed = extractAction((await r2.json()).choices?.[0]?.message?.content ?? "");
         if (fixed) return fixed;
@@ -292,6 +302,134 @@ export function unsupportedApprovedFacts(facts, currentState, effectState = null
   }).map(([key]) => String(key));
 }
 
+function wordTokens(value) {
+  const numberWords = {
+    zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5",
+    six: "6", seven: "7", eight: "8", nine: "9", ten: "10",
+    eleven: "11", twelve: "12",
+  };
+  const tokens = String(value ?? "").normalize("NFKD").toLowerCase()
+    .replace(/[‐‑‒–—―]/g, "-").match(/[a-z0-9]+/g) || [];
+  return tokens.map((token) => numberWords[token] || token);
+}
+
+function containsTokenSequence(haystack, needle) {
+  if (!needle.length) return false;
+  for (let start = 0; start <= haystack.length - needle.length; start++) {
+    if (needle.every((token, offset) => haystack[start + offset] === token)) return true;
+  }
+  return false;
+}
+
+function approvedDateValue(value, approvedText) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const target = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((target - today) / 86400000);
+  const lower = String(approvedText || "").toLowerCase();
+  if (days === 1 && /\btomorrow\b/.test(lower)) return true;
+  const weekday = target.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+  if (days >= 1 && days <= 7 && new RegExp(`\\b(?:next )?${weekday}\\b`).test(lower)) return true;
+  const monthDay = target.toLocaleDateString("en-US", { month: "long", day: "numeric" }).toLowerCase();
+  return lower.includes(monthDay);
+}
+
+function approvedTimeValue(value, approvedText) {
+  const native = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!native) return false;
+  const target = Number(native[1]) * 60 + Number(native[2]);
+  const spoken = /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/g;
+  for (const match of String(approvedText || "").toLowerCase().matchAll(spoken)) {
+    let hour = Number(match[1]) % 12;
+    if (match[3].startsWith("p")) hour += 12;
+    if (hour * 60 + Number(match[2] || 0) === target) return true;
+  }
+  return false;
+}
+
+function profileText(ownerProfile) {
+  if (!ownerProfile || typeof ownerProfile !== "object") return "";
+  return Object.values(ownerProfile).filter((value) =>
+    value !== null && value !== undefined && typeof value !== "object").join(" ");
+}
+
+function approvedBoolean(field, approvedText) {
+  const stop = new Set(["a", "an", "and", "at", "for", "i", "is", "of", "the", "to"]);
+  const identity = wordTokens(`${field?.name || ""} ${field?.label || ""}`)
+    .filter((token) => token.length > 2 && !stop.has(token));
+  const approved = wordTokens(approvedText);
+  const verdicts = [];
+  for (let index = 0; index < approved.length; index++) {
+    if (!identity.includes(approved[index])) continue;
+    const before = approved.slice(Math.max(0, index - 3), index);
+    verdicts.push(!before.some((token) => ["no", "not", "without", "never", "dont"].includes(token)));
+  }
+  if (!verdicts.length) return null;
+  return verdicts.some(Boolean);
+}
+
+// Mechanical authorization boundary for form contents. The model can decide
+// which control represents a request, but it cannot submit a visible value
+// that appears nowhere in the owner's approved words, remembered profile, or
+// structured facts. This catches hostile/stale defaults without knowing a
+// site's schema and without receiving the evaluator's hidden oracle.
+export function unsupportedScopeFields(scope, currentState, ownerProfile = null, facts = "") {
+  const fields = Array.isArray(currentState?.fields) ? currentState.fields : [];
+  const approvedText = `${scope || ""} ${factsForPrompt(facts)} ${profileText(ownerProfile)}`;
+  const approvedTokens = wordTokens(approvedText);
+  return fields.filter((field) => {
+    const value = field?.value;
+    if (value === null || value === undefined || String(value).trim() === "") return false;
+    if (value === true || value === false) {
+      const wanted = approvedBoolean(field, approvedText);
+      return value === true ? wanted !== true : wanted === true;
+    }
+    const valueTokens = wordTokens(value);
+    if (containsTokenSequence(approvedTokens, valueTokens)) return false;
+    if (approvedDateValue(value, approvedText)) return false;
+    if (approvedTimeValue(value, approvedText)) return false;
+    return true;
+  }).map((field) => String(field?.name || field?.label || "unnamed field"));
+}
+
+// Remove only optional, editable, non-boolean defaults that the authorization
+// guard has already proven are outside the owner's scope. Required choices
+// and every external effect remain blocked until deliberately resolved.
+async function clearUnsupportedOptionalFields(tabId, scope, currentState,
+                                                ownerProfile, facts) {
+  const blocked = new Set(unsupportedScopeFields(
+    scope, currentState, ownerProfile, facts));
+  const fields = (Array.isArray(currentState?.fields) ? currentState.fields : [])
+    .filter((field) => blocked.has(String(field?.name || field?.label || "unnamed field"))
+      && field?.required !== true && field?.readOnly !== true
+      && !["checkbox", "radio"].includes(String(field?.type || "").toLowerCase())
+      && Number.isFinite(Number(field?.index)));
+  const cleared = [];
+  for (const field of fields) {
+    try {
+      const ok = await inFrame(tabId, Number(field.index), (i) => {
+        const el = window.__anticipyMap[i];
+        if (!el || el.required || el.readOnly || !("value" in el)) return false;
+        el.value = "";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        return String(el.value || "") === "";
+      });
+      if (ok) cleared.push(String(field.name || field.label || "unnamed field"));
+    } catch (_) { /* the ordinary pre-submit block remains */ }
+  }
+  return cleared;
+}
+
+export function completionContradiction(result) {
+  const text = String(result || "");
+  const action = "submitted|sent|booked|scheduled|registered|filed|created|completed|done|granted|renewed|cancelled|canceled|updated|changed|saved|placed|reflected";
+  return new RegExp(`\\b(?:has|have|was|were|is|are)\\s+not\\s+(?:been\\s+)?(?:correctly\\s+)?(?:${action})\\b`, "i").test(text)
+    || new RegExp(`\\b(?:could not|couldn't|did not|didn't|unable to|failed to)\\s+(?:submit|send|book|schedule|register|file|create|complete|grant|renew|cancel|update|change|save|place)\\b`, "i").test(text);
+}
+
 function factsForPrompt(facts) {
   return factPairs(facts).map(([key, value]) => `  ${key}: ${value}`).join("\n");
 }
@@ -300,7 +438,11 @@ function factsForPrompt(facts) {
 // step history to anchor on. Research goals verify by result content; action
 // goals (forms, submissions) verify by what the page actually shows.
 export async function verifyDone(apiKey, model, goal, result, tabId,
-                                 { scope = "", facts = "", effectState = null } = {}) {
+                                 { scope = "", facts = "", effectState = null,
+                                   ownerProfile = null } = {}) {
+  if (completionContradiction(result)) {
+    return { verified: false, reason: "the claimed result says the action did not complete", evidence: [] };
+  }
   let state;
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
   catch { return { verified: false, reason: "page unreadable; completion is unverified", evidence: [] }; }
@@ -308,6 +450,13 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
   if (unsupported.length) {
     return { verified: false,
       reason: `approved facts are not evidenced: ${unsupported.join(", ")}`,
+      evidence: [] };
+  }
+  const unsupportedScope = effectState
+    ? unsupportedScopeFields(scope || goal, effectState, ownerProfile, facts) : [];
+  if (unsupportedScope.length) {
+    return { verified: false,
+      reason: `submitted values are outside the approved scope: ${unsupportedScope.join(", ")}`,
       evidence: [] };
   }
   const factsBlock = factsForPrompt(facts);
@@ -322,12 +471,8 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
   try {
     const ctl = new AbortController();
     const kill = setTimeout(() => ctl.abort(), 45000);
-    const r = await fetch(OPENROUTER_URL, {
-      signal: ctl.signal,
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy Codex Version" },
-      body: JSON.stringify({ model, messages, temperature: 0 }),
-    }).finally(() => clearTimeout(kill));
+    const r = await modelFetch(apiKey, { model, messages, temperature: 0 }, ctl.signal)
+      .finally(() => clearTimeout(kill));
     const data = await r.json();
     const m = (data.choices?.[0]?.message?.content ?? "").match(/\{[\s\S]*\}/);
     if (!m) return { verified: false, reason: "unparseable verifier response", evidence: [] };
@@ -592,7 +737,9 @@ async function mapPage(tabId, _retry = 0) {
     elements += `\n--- EMBEDDED WIDGET (${url.slice(0, 100)}) — these controls work like any other ---\n`
       + withSugg(f.result, slot * 1000);
     if (f.result.text) text = (text + "\n" + f.result.text).slice(0, 2500);
-    if (Array.isArray(f.result.fields)) fields.push(...f.result.fields);
+    if (Array.isArray(f.result.fields)) fields.push(...f.result.fields.map((field) => ({
+      ...field, index: slot * 1000 + Number(field.index || 0),
+    })));
   }
   return { url: main.url, title: main.title, elements, text, fields,
            overlay: main.overlay || subs.length > 0 };
@@ -708,13 +855,9 @@ export async function planRun(apiKey, model, goal, ownerProfile, scope) {
     + `\n\nRight now it is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}.`;
 
   try {
-    const r = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
+    const r = await modelFetch(apiKey, {
         model, temperature: 0,
         messages: [{ role: "system", content: PLAN_SYSTEM }, { role: "user", content: user }],
-      }),
     });
     if (!r.ok) return null;
     const raw = (await r.json())?.choices?.[0]?.message?.content || "";
@@ -926,13 +1069,9 @@ async function researchStuck(apiKey, model, goal, url, title, history) {
   const user = `GOAL: ${goal}\n\nSTUCK ON: ${url}\nPAGE TITLE: ${title}`
     + `\n\nWHAT IT HAS TRIED (most recent last):\n${history.slice(-14).join("\n") || "(nothing recorded)"}`;
   try {
-    const r = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
+    const r = await modelFetch(apiKey, {
         model, temperature: 0,
         messages: [{ role: "system", content: RESEARCH_SYSTEM }, { role: "user", content: user }],
-      }),
     });
     if (!r.ok) return null;
     const raw = (await r.json())?.choices?.[0]?.message?.content || "";
@@ -1292,13 +1431,13 @@ export async function runAgentGoal(goal, opts) {
         // A done claim is verified against the live page before it's trusted:
         // a mistyped form or an unsubmitted page must never report success.
         let verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id,
-          { scope, facts, effectState });
+          { scope, facts, effectState, ownerProfile });
         if (!verdict.verified && /load|spinner|progress|wait/i.test(verdict.reason || "")) {
           // The page was mid-load, not wrong — give it a moment and re-check
           // once before rejecting.
           await new Promise((r) => setTimeout(r, 5000));
           verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id,
-            { scope, facts, effectState });
+            { scope, facts, effectState, ownerProfile });
         }
         if (verdict.verified) return { status: "done", result: decision.result, tabId: tab.id,
           receipt: { verified: true, evidence: verdict.evidence || [] } };
@@ -1452,7 +1591,7 @@ export async function runAgentGoal(goal, opts) {
             // re-audit that claim instead of burning the rest of the budget.
             if (lastDoneClaim) {
               const verdict = await verifyDone(apiKey, model, goal, lastDoneClaim, tab.id,
-                { scope, facts, effectState });
+                { scope, facts, effectState, ownerProfile });
               if (verdict.verified) return { status: "done", result: lastDoneClaim, tabId: tab.id,
                 receipt: { verified: true, evidence: verdict.evidence || [] } };
             }
@@ -1488,6 +1627,24 @@ export async function runAgentGoal(goal, opts) {
             return (handBack = true) && { status: "needs_user",
               result: "The form is ready, but the owner has not approved its external effect.",
               tabId: tab.id };
+          }
+          let unsupportedScope = unsupportedScopeFields(scope || goal, state, ownerProfile, facts);
+          if (unsupportedScope.length) {
+            const cleared = await clearUnsupportedOptionalFields(
+              tab.id, scope || goal, state, ownerProfile, facts);
+            if (cleared.length) {
+              history.push(`step ${step}: cleared unapproved optional defaults: ${cleared.join(", ")}`);
+              state = await withTimeout(mapPage(tab.id), 20000, "post-clear mapPage");
+              c = await withTimeout(elementCenter(tab.id, decision.index), 15000,
+                                    "post-clear elementCenter");
+              unsupportedScope = unsupportedScopeFields(
+                scope || goal, state, ownerProfile, facts);
+            }
+          }
+          if (unsupportedScope.length) {
+            history.push(`step ${step}: PRE-SUBMIT BLOCK — these visible values are not supported by what the owner approved: ${unsupportedScope.join(", ")}. Replace or clear them before pressing the final control.`);
+            stuckStreak++;
+            continue;
           }
           const unsupported = unsupportedApprovedFacts(facts, state, state);
           if (unsupported.length) {
@@ -1564,7 +1721,11 @@ export async function runAgentGoal(goal, opts) {
               tabId: tab.id,
             };
           }
-          if (decision.enter !== false) {
+          // Enter can submit an entire form. Omission is therefore the safe
+          // no-op: the model must explicitly ask for Enter, just as it must
+          // explicitly ask for the final click. Older code treated an omitted
+          // flag as true, so filling the first field attempted submission.
+          if (decision.enter === true) {
             const externalEnter = await commitControl(tab.id, decision.index, true);
             if (externalEnter) {
               if (!authorized) {
@@ -1576,6 +1737,23 @@ export async function runAgentGoal(goal, opts) {
               try { beforeEnter = await withTimeout(mapPage(tab.id), 20000, "pre-submit mapPage"); }
               catch (_) {
                 history.push(`step ${step}: PRE-SUBMIT BLOCK — the final form state could not be read.`);
+                continue;
+              }
+              let unsupportedScope = unsupportedScopeFields(scope || goal, beforeEnter, ownerProfile, facts);
+              if (unsupportedScope.length) {
+                const cleared = await clearUnsupportedOptionalFields(
+                  tab.id, scope || goal, beforeEnter, ownerProfile, facts);
+                if (cleared.length) {
+                  history.push(`step ${step}: cleared unapproved optional defaults: ${cleared.join(", ")}`);
+                  beforeEnter = await withTimeout(mapPage(tab.id), 20000,
+                                                   "post-clear mapPage");
+                  unsupportedScope = unsupportedScopeFields(
+                    scope || goal, beforeEnter, ownerProfile, facts);
+                }
+              }
+              if (unsupportedScope.length) {
+                history.push(`step ${step}: PRE-SUBMIT BLOCK — these visible values are not supported by what the owner approved: ${unsupportedScope.join(", ")}. Replace or clear them before submitting.`);
+                stuckStreak++;
                 continue;
               }
               const unsupported = unsupportedApprovedFacts(facts, beforeEnter, beforeEnter);

@@ -39,7 +39,7 @@ final class PendantManager: NSObject, ObservableObject {
 
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
-    private var frameBuffer = Data()
+    private var frameAssembler = OpusFrameAssembler()
     private var manuallyDisconnected = false
     private var rssiTimer: Timer?
 
@@ -79,6 +79,7 @@ final class PendantManager: NSObject, ObservableObject {
     func disconnect() {
         manuallyDisconnected = true
         stopRssiKeepAlive()
+        frameAssembler.discardCurrentFrame()
         if let p = peripheral { central?.cancelPeripheralConnection(p) }
         state = .off
     }
@@ -170,6 +171,7 @@ extension PendantManager: CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect p: CBPeripheral) {
+        frameAssembler.discardCurrentFrame()
         state = .connected
         rememberPendant(p)
         p.delegate = self
@@ -187,6 +189,7 @@ extension PendantManager: CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral p: CBPeripheral, error: Error?) {
         stopRssiKeepAlive()
+        frameAssembler.discardCurrentFrame()
         guard !manuallyDisconnected else { return }
         state = .reconnecting
         // Re-issue immediately: iOS holds the request at the chipset level and
@@ -222,17 +225,9 @@ extension PendantManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         guard let data = c.value else { return }
         switch c.uuid {
         case Self.audioUUID:
-            guard data.count > 3 else { return }
-            let intraFrameCounter = data[2]
-            let payload = data.subdata(in: 3 ..< data.count)
-            if intraFrameCounter == 0 {
-                if !frameBuffer.isEmpty { onOpusFrame?(frameBuffer) }
-                frameBuffer = payload
-            } else {
-                frameBuffer.append(payload)
-            }
+            if let frame = frameAssembler.accept(data) { onOpusFrame?(frame) }
         case Self.batteryLevelUUID:
-            battery = Int(data[0])
+            if let level = data.first { battery = Int(level) }
         default:
             break
         }

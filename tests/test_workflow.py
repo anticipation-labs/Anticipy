@@ -54,6 +54,37 @@ def test_consequential_work_waits_for_approval():
     assert plan().state == PlanState.AWAITING_APPROVAL
 
 
+def test_exact_owner_source_is_bound_into_approval_scope():
+    plain = new_plan(
+        owner_ref="owner-a", lineage_key="conversation-1",
+        goal="book Pepper for a vaccination",
+        consequence=Consequence.CONSEQUENTIAL,
+        source_event_id="event-1", plan_id="plan-1", now=NOW)
+    sourced = new_plan(
+        owner_ref="owner-a", lineage_key="conversation-1",
+        goal="book Pepper for a vaccination",
+        authority_text="Book Pepper, a dog, for a rabies vaccination",
+        consequence=Consequence.CONSEQUENTIAL,
+        source_event_id="event-1", plan_id="plan-1", now=NOW)
+    assert sourced.authority_text.endswith("rabies vaccination")
+    assert sourced.scope_digest != plain.scope_digest
+    assert from_params(put_in_params({}, sourced)) == sourced
+
+
+def test_changing_exact_owner_source_invalidates_old_authority():
+    sourced = new_plan(
+        owner_ref="owner-a", lineage_key="conversation-1", goal="book Pepper",
+        authority_text="Book Pepper, a dog", consequence=Consequence.CONSEQUENTIAL,
+        source_event_id="event-1", plan_id="plan-1", now=NOW)
+    approved = approve(sourced, expected_version=1, owner_words="yes", now=NOW)
+    amended = merge(approved, expected_version=1,
+                    authority_text="Book Pepper, a cat",
+                    source_event_id="event-2", now=NOW)
+    assert amended.version == 2
+    assert amended.approval is None
+    assert amended.state == PlanState.AWAITING_APPROVAL
+
+
 def test_missing_fact_keeps_plan_in_draft():
     p = plan(required=("serial_number",))
     assert p.state == PlanState.DRAFT

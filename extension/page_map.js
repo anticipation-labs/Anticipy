@@ -130,9 +130,12 @@
           value = option ? String(option.textContent || option.value).trim() : String(el.value || "");
         }
         fields.push({
+          index: idx,
           name: String(el.name || el.id || "").slice(0, 100),
           label: label(el).slice(0, 160),
           type,
+          required: !!el.required,
+          readOnly: !!el.readOnly,
           value: typeof value === "boolean" ? value : String(value || "").slice(0, 1000),
         });
       }

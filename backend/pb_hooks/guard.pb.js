@@ -2,9 +2,10 @@
 
 // The production lock on the data API. With ANTICIPY_SERVICE_TOKEN set, every
 // collection read/write (and realtime subscription) requires the shared
-// service token — the worker sends it from its env, and the extension and the
-// phone receive it through /agent/key once their agent is paired. Without the
-// env var nothing changes (local dev stays open).
+// service token — the worker sends it from its env. Phones use account auth;
+// browsers use a private per-agent credential. Neither client receives this
+// server-wide secret. Without the env var nothing changes (local dev stays
+// open).
 //
 // The one unauthenticated surface left is the pairing bootstrap, because a
 // fresh device has no token yet:
@@ -159,7 +160,7 @@ routerUse((e) => {
 
   // 2. Pair-code lookup: a LIST that names the code it is looking for.
   //    (Without a pair_code filter the list would leak agent ids, and a
-  //    paired agent id is what /agent/key trusts.)
+  //    paired agent id was historically part of /agent/key's lookup.)
   //
   //    THE FILTER MUST MATCH WHOLE. This was `.test()` against the raw filter,
   //    which matches a SUBSTRING — so appending anything to a legal-looking
@@ -167,9 +168,10 @@ routerUse((e) => {
   //      ?filter=pair_code="000000" || id!=""&perPage=500
   //    That returned every agent row, paired ones included, to an anonymous
   //    caller — proven live against production on 2026-08-03. A paired
-  //    agent_id is the ONLY thing /agent/key checks, and it answers with the
-  //    service token, the OpenRouter key and the owner's name, email, phone
-  //    and birthday. Anchored, the injection has nowhere to live.
+  //    Older builds let that leaked id reach /agent/key. The current route
+  //    also requires the private per-agent token and returns model config,
+  //    never the service token or OpenRouter credential. Anchoring remains a
+  //    required independent defence against anonymous bulk enumeration.
   if (method === "GET" && (path === agentsBase || path === pendantsBase)) {
     const filter = e.request.url.query().get("filter") || "";
     // Page size is capped too: these branches exist to look ONE record up, so

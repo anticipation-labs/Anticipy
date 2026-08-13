@@ -89,6 +89,28 @@ def test_an_overheard_cancel_of_mere_talk_stays_inert(monkeypatch):
     assert JOBS == []
 
 
+def test_refining_a_real_world_cancellation_does_not_cancel_its_own_card(monkeypatch):
+    a = _rig(monkeypatch)
+    JOBS.append({"id": "job1",
+                 "goal": "Cancel CloudLedger membership MBR-63068 at the end of the current term",
+                 "status": "awaiting_confirm"})
+    out = a._queue_job(
+        "Cancel membership MBR-63068 at CloudLedger at the end of the current billing period and request written confirmation",
+        {"source": "yeah, agreed — of the current billing period and request written confirmation"},
+        hold=True)
+    assert out == "job1"
+    assert JOBS[0]["status"] == "awaiting_confirm"
+    assert "written confirmation" in JOBS[0]["goal"]
+
+
+def test_unambiguous_call_off_still_retracts_a_cancellation_task(monkeypatch):
+    a = _rig(monkeypatch)
+    JOBS.append({"id": "job1", "goal": "Cancel CloudLedger membership MBR-63068",
+                 "status": "awaiting_confirm"})
+    assert a._queue_job("call off the CloudLedger membership cancellation", {}) is None
+    assert JOBS[0]["status"] == "cancelled"
+
+
 def test_without_a_model_the_cancellation_errand_survives(monkeypatch):
     a = _rig(monkeypatch)
     out = a._queue_job("cancel gym with Marcus Saturday", {}, hold=True)

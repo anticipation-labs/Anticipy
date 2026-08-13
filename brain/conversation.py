@@ -1309,7 +1309,9 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             try:
                 workflow = merge_plan(
                     workflow, expected_version=workflow.version,
-                    facts=changes)
+                    facts=changes,
+                    authority_text=str(params.get("source")
+                                       or workflow.authority_text or ""))
                 params = put_in_params(params, workflow)
             except Exception:
                 return None

@@ -10,6 +10,24 @@ extension AgentJob {
         return first.uppercased() + s.dropFirst()
     }
 
+    /// The exact owner-authored words bound into this plan's approval. The
+    /// concise goal is model-written; this is shown whenever the model left
+    /// anything out, so “Send it” never approves invisible context.
+    var approvalSource: String? {
+        guard let root = try? JSONSerialization.jsonObject(with: Data(params.utf8))
+                as? [String: Any] else { return nil }
+        let workflow = root["_workflow"] as? [String: Any]
+        let raw = (workflow?["authority_text"] as? String)
+            ?? (root["source"] as? String) ?? ""
+        let source = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else { return nil }
+        let normalize: (String) -> String = { value in
+            value.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .joined(separator: " ")
+        }
+        return normalize(source) == normalize(goal) ? nil : source
+    }
+
     /// What actually went wrong, said the way a person would say it.
     ///
     /// A failed job used to render one fixed shrug ("Couldn't finish this
@@ -307,13 +325,12 @@ struct HomeView: View {
         return "Chrome is linked, but it isn't open. Anything I've queued waits there until you open it."
     }
 
-    /// The pendant connects, and then nothing happens to what it hears — the
-    /// audio frames are reassembled and dropped, because there is no
-    /// transcription path behind them yet. Saying "Listening" here was the
-    /// single most confident untrue thing on the screen.
     private var pendantLabel: String {
         switch pendant.state {
-        case .connected: return "Pendant · not capturing"
+        case .connected:
+            return session.pendantCapturing
+                ? "Pendant · listening"
+                : "Pendant · starting transcription"
         case .connecting: return "Pendant connecting"
         case .reconnecting: return "Pendant reconnecting"
         case .searching: return "Looking for pendant"
@@ -324,7 +341,10 @@ struct HomeView: View {
 
     private var pendantNote: String {
         switch pendant.state {
-        case .connected: return "Your pendant is connected, but I can't turn what it hears into words yet. Use Listen with phone and I'll hear you that way."
+        case .connected:
+            return session.pendantCapturing
+                ? "Your pendant audio is being securely transcribed by Deepgram. Finalized words come back to Anticipy Codex Version; the long-lived provider key never enters this phone."
+                : "Your pendant is connected and I'm opening its secure transcription stream. If that service is unavailable, I say so here instead of dropping audio behind a Listening label."
         case .connecting, .reconnecting, .searching: return "I'm looking for your pendant. Listen with phone works right now either way."
         case .unavailable: return "Bluetooth is off, so I can't see the pendant."
         case .off: return pendant.hasPairedPendant
@@ -939,6 +959,17 @@ struct ConfirmJobCard: View {
             Text(job.humanGoal)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Theme.ivory)
+            if let source = job.approvalSource {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Your exact words")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.gray)
+                    Text(source)
+                        .font(.footnote)
+                        .foregroundStyle(Theme.sand)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             if let r = job.result, !r.isEmpty {
                 Text(r).font(.footnote).foregroundStyle(Theme.sand)
             }

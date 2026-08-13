@@ -57,7 +57,16 @@ _VERBS = (
     r"repl(?:y|ies|ying)|messag\w*|text\w*|call\w*|cancel(?:s|led|ling|ed|ing)?|delet\w*|"
     r"unsubscrib\w*|transfer\w*|schedul\w*|invit(?:e|es|ed|ing)|rsvp|"
     r"shar\w*|forward\w*|respond\w*|confirm(?:s|ed|ing)?|appl(?:y|ies|ying)|"
-    r"wire|venmo|e-?transfer|donat(?:e|es|ed|ing)|checkout|check\s*out|upload\w*|deposit\w*"
+    r"wire|venmo|e-?transfer|donat(?:e|es|ed|ing)|checkout|check\s*out|upload\w*|deposit\w*|"
+    # Generic portal actions that alter an account or submit a case. These
+    # were missing from the world-change policy, so the exact same invoice
+    # plan could be classified as two unrelated read-only jobs merely because
+    # the model said "dispute" and then "request" instead of "submit".
+    r"request\w*|disput\w*|renew\w*|file\w*|enrol\w*|consent\w*|"
+    r"grant\s+(?:my\s+)?permission|give\s+permission|"
+    r"reduc\w*|chang\w*|updat\w*|mov\w*|"
+    r"open\s+(?:an?\s+|the\s+)?(?:[a-z][\w-]*\s+){0,3}"
+    r"(?:claim|case|ticket|warranty|repair)\b"
 )
 # Only in ACTION position — the start of the goal, or after and/then/to/&/comma.
 # A verb buried in a noun phrase is not an action: "noise CANCELLING
@@ -110,6 +119,32 @@ _DICTATION_INSTRUCT_RE = re.compile(
     r"it should|that should|this should|so that|"
     r"(?:add|change|update|fix|remove|create|write|use|rename|delete|keep)\s+"
     r"(?:a|an|the|that|this|it)\b)", re.IGNORECASE)
+
+# A speaker can put a perfectly actionable sentence inside a document,
+# example, test case, or quotation while explicitly denying that it is an
+# instruction. The embedded imperative is adversarial input to triage: if the
+# model sees "open a claim" more strongly than "quoted material only", speech
+# written for somewhere else becomes a real Anticipy job. This narrow boundary
+# uses only the speaker's explicit non-action words; it never guesses from
+# topic or tone, and direct messages to Anticipy remain authoritative.
+_NON_ACTION_CONTENT_RE = re.compile(
+    r"\b(?:quoted\s+material|(?:a\s+)?quote|(?:an?\s+)?example|"
+    r"(?:a\s+)?hypothetical|sample\s+(?:text|instruction))\s+only\b|"
+    r"\bfor\s+(?:reference|illustration)\s+only\b|"
+    r"\bdo\s+not\s+(?:act\s+on|execute|carry\s+out|start|treat\s+as\s+"
+    r"(?:a\s+)?(?:request|task|instruction))\b",
+    re.IGNORECASE,
+)
+
+# Declarative facts deliberately offered for later recall are memory input,
+# not browser work. Keep this narrow: a leading "for later/reference" plus a
+# copular fact. "Remember to call the dentist" is intentionally excluded; it
+# is a real commitment, not a value to store.
+_MEMORY_ONLY_RE = re.compile(
+    r"^\s*for\s+(?:later|reference)\s*[,;:\-]\s+.+\b"
+    r"(?:is|are|was|were|equals?|means?)\b",
+    re.IGNORECASE,
+)
 
 
 # ONE SIDE OF A CONVERSATION.
@@ -210,6 +245,16 @@ def looks_like_dictation(line: str) -> bool:
     return len(_DICTATION_INSTRUCT_RE.findall(text)) >= 2
 
 
+def explicitly_non_action_content(line: str) -> bool:
+    """Did the speaker explicitly label embedded commands as non-actions?"""
+    return _NON_ACTION_CONTENT_RE.search(line or "") is not None
+
+
+def explicitly_for_memory(line: str) -> bool:
+    """Did the speaker frame this declarative value as a fact for later?"""
+    return _MEMORY_ONLY_RE.search(line or "") is not None
+
+
 def is_consequential(goal: str, params: dict | None = None,
                      explicit: bool = False) -> bool:
     """Does this goal change the world? Judged on the GOAL only — params carry
@@ -285,6 +330,80 @@ CONVERSATION_WINDOW = 120
 # improves. Safe to be generous, because reaching the open plan never merges
 # by itself: _same_plan (words first, then meaning) still has to agree.
 OPEN_PLAN_WINDOW = 600
+
+# A finalized recognizer line can cut a sentence at exactly the wrong place:
+# "... caused a 20" / "yeah, agreed — cm crack ...". The second line's
+# agreement marker is explicit discourse evidence that it continues the plan.
+# Combine that evidence with shared plan vocabulary; neither is enough alone.
+_PROGRESSIVE_CONTINUATION_RE = re.compile(
+    r"^\s*(?:yeah|yes|right|exactly)(?:\s*[,;:\-—]\s*|\s+)"
+    r"(?:agreed(?:\s*[,;:\-—]\s*|\s+))?",
+    re.IGNORECASE,
+)
+
+_EXACT_MESSAGE_STEM_RE = re.compile(
+    r"(?:^|:\s*)(?:send|text|message|email)\s+(.{1,120}?)\s+"
+    r"(?:this\s+)?exact\s+(?:message|text|email)\s*:\s*$",
+    re.IGNORECASE,
+)
+
+_PROGRESSIVE_ACTION_STEM_RE = re.compile(
+    r"^\s*(?:we\s+(?:should|need\s+to|have\s+to)|let'?s)\b[^:]{0,160}:\s*(.+?)\s*$",
+    re.IGNORECASE,
+)
+_PROGRESSIVE_ACTION_HEAD_RE = re.compile(
+    r"^\s*(?:send|email|book|reserve|buy|purchase|order|pay|sign|register|"
+    r"submit|post|reply|message|text|call|cancel|transfer|schedule|request|"
+    r"dispute|renew|file|enroll|give|grant|reduce|change|update|move|open|"
+    r"apply|upload)\b",
+    re.IGNORECASE,
+)
+
+
+def exact_message_continuation(previous: str, current: str) -> Optional[str]:
+    """Reassemble an exact-message command cut at the colon.
+
+    This is syntax, not intent inference: a complete action stem ending in
+    ``exact message:`` plus an explicit agreement continuation. The quoted
+    body is preserved byte-for-byte apart from surrounding whitespace.
+    """
+    stem = _EXACT_MESSAGE_STEM_RE.search(previous or "")
+    marker = _PROGRESSIVE_CONTINUATION_RE.match(current or "")
+    if not stem or not marker:
+        return None
+    recipient = stem.group(1).strip(" \t,;:-—")
+    body = (current or "")[marker.end():].strip()
+    if not recipient or not body:
+        return None
+    return f"Send {recipient} this exact message: {body}"
+
+
+def progressive_action_continuation(previous: str, current: str) -> Optional[str]:
+    """Compose a consequential plan split across two recognizer finals."""
+    stem = _PROGRESSIVE_ACTION_STEM_RE.match(previous or "")
+    marker = _PROGRESSIVE_CONTINUATION_RE.match(current or "")
+    if not stem or not marker:
+        return None
+    first = stem.group(1).strip()
+    second = (current or "")[marker.end():].strip()
+    combined = f"{first} {second}".strip()
+    if not first or not second or not _PROGRESSIVE_ACTION_HEAD_RE.match(combined) \
+            or not is_consequential(combined):
+        return None
+    return combined
+
+
+def progressive_continuation(source: str, new_goal: str,
+                             pending_goal: str) -> bool:
+    if not _PROGRESSIVE_CONTINUATION_RE.search(source or ""):
+        return False
+    new_tokens = goal_tokens(new_goal)
+    pending_tokens = goal_tokens(pending_goal)
+    if not new_tokens or not pending_tokens:
+        return False
+    overlap = len(new_tokens & pending_tokens) / min(
+        len(new_tokens), len(pending_tokens))
+    return overlap >= 0.25
 
 
 # The browser as a TARGET is a navigational construction — "in my browser",
@@ -593,6 +712,22 @@ class Anticipy:
         self._last_convo = [c for c in (context or []) if c][-6:]
         self._source_event_id = (source_event_id or "").strip()
         self._lineage_key = (lineage_key or source_event_id or "").strip()
+        # Keep one separate raw-line cursor for recognizer repair. `_prev` is
+        # intentionally cleared after an acted line so the model cannot turn
+        # that action into a duplicate on the next turn. That same clearing
+        # must not erase the audio evidence needed to reassemble a sentence
+        # finalized at the wrong byte boundary ("... a 20" / "cm crack ...").
+        # This cursor is never sent back to triage; it is used only by the two
+        # deterministic continuation grammars below. Context is the fallback
+        # for callers that reconstruct an Anticipy instance between chunks.
+        heard_at = time.time()
+        last_heard = getattr(self, "_last_heard", None)
+        stitch_prev_line = (
+            last_heard[0]
+            if last_heard and heard_at - last_heard[1] < CONVERSATION_WINDOW
+            else ((context or [])[-1] if context else None)
+        )
+        self._last_heard = (line, heard_at)
         # Unmistakable dictation is known before anything can answer or act:
         # a line the owner voice-typed at another machine must not be
         # answered from memory as if he had asked HER. Explicit lines (he
@@ -604,8 +739,21 @@ class Anticipy:
         # and it missed all three. read_into_a_machine only spends a model call
         # when the line carries mechanical evidence, so ordinary speech costs
         # nothing and never reaches it.
+        non_action_content = not explicit and explicitly_non_action_content(line)
         dictated = not explicit and (looks_like_dictation(line)
+                                     or non_action_content
                                      or read_into_a_machine(self.llm, line))
+        # This is stronger than ordinary dictation. The owner explicitly said
+        # the embedded imperative is quotation/example material only, so even
+        # quiet research would violate their words. Remember the line, expose
+        # the boundary in the audit verdict, and do not send it to triage.
+        if non_action_content:
+            mem = self.memory.ingest(line)
+            return {"memory": mem, "decision": Decision(
+                decision="ignore", goal="",
+                reason="explicitly labelled quotation/example, not an action",
+                addressee="dictation", owes="machine"),
+                "anticipy_says": None}
         # Owner questions are answered, not triaged: a briefing request goes
         # to the briefing engine, and a memory question is answered straight
         # from the graph. Neither should ever spawn a browser job.
@@ -619,15 +767,32 @@ class Anticipy:
             return {"memory": mem, "decision": Decision(
                 decision="answer", goal=None, reason="briefing request"),
                 "anticipy_says": said}
-        if not dictated and self._RECALL_RE.match(line) \
-                and not self._IMPERATIVE_RE.match(line):
-            answer = self._answer_from_memory(line)
+        # A wake word is addressing, not grammar. "Anticipy, what was the
+        # code?" is the same memory question as "what was the code?". The
+        # anchored question gate used to see only the leading product name,
+        # miss the question entirely, and send "retrieve the code" to the
+        # browser. In a fresh hidden-oracle run it then hallucinated a
+        # different six-digit code in its spoken reply. Strip only our name
+        # at the beginning; nothing else is rewritten or guessed.
+        recall_line = re.sub(
+            rf"^\s*(?:hey\s+)?{re.escape(NAME)}\s*[,;:\-]?\s*",
+            "", line, count=1, flags=re.IGNORECASE)
+        if not dictated and self._RECALL_RE.match(recall_line) \
+                and not self._IMPERATIVE_RE.match(recall_line):
+            answer = self._answer_from_memory(recall_line)
             if answer:
                 mem = self.memory.ingest(line)
                 return {"memory": mem, "decision": Decision(
                     decision="answer", goal=None, reason="memory recall"),
                     "anticipy_says": answer}
         mem = self.memory.ingest(line)
+        if not explicit and explicitly_for_memory(line):
+            self._prev = (line, time.time())
+            return {"memory": mem, "decision": Decision(
+                decision="ignore", goal="",
+                reason="declarative fact supplied for later recall",
+                addressee="self", owes="nobody"),
+                "anticipy_says": None}
         # A stray fragment ("Tomorrow", "Okay") carries no intent of its own,
         # but related memories injected as context can make triage hallucinate
         # one — live incident: the single word "Tomorrow" plus a stale memory
@@ -712,6 +877,26 @@ class Anticipy:
                                 speaker=speaker, speaker_name=speaker_name,
                                 link_candidates=link_candidates,
                                 mid_conversation=in_conversation(context))
+        # A speech recognizer commonly finalizes at punctuation: "Send Jonah
+        # this exact message:" arrives first, then the quoted body after the
+        # speaker's agreement marker. The model can classify both fragments as
+        # nothing, losing an explicit task. Reassemble only this grammatical
+        # shape; the quoted body is never paraphrased or inferred.
+        stitched_goal = None if speaker == "other" else (
+            exact_message_continuation(stitch_prev_line or "", line)
+            or progressive_action_continuation(stitch_prev_line or "", line))
+        if stitched_goal:
+            # The agreement marker plus a complete action stem is stronger
+            # evidence of two-person dialogue than the broad dictation
+            # detector's prose-shape guess. Without this, both halves of
+            # “Send X this exact message:” / “yeah, agreed — body” were filed
+            # as voice typing and the explicit task vanished completely.
+            dictated = False
+            decision = Decision(
+                decision="act", goal=stitched_goal,
+                reason="consequential command continued after recognizer split",
+                needs_confirmation=True,
+                addressee="person", owes="owner")
         # The EFFECTIVE addressee — the one her behaviour actually keys on,
         # written back so the event record shows what was applied. An
         # explicit line (he texted/typed it AT her) is assistant by
@@ -904,6 +1089,8 @@ class Anticipy:
                         (decision.assumption + " — " if decision.assumption
                          else "") + f"from what I know about you: {picked}")
                 params = {"source": line, "now": self._now_line(), "lane": "desk"}
+                if stitched_goal:
+                    params["recognizer_continuation"] = True
                 for k, v in filled.items():
                     key = re.sub(r"\W+", " ", k).strip().lower()[:48]
                     if key:
@@ -1163,6 +1350,8 @@ class Anticipy:
             # The executor needs temporal ground truth: a job run today with
             # no "now" produced an OpenTable result dated a YEAR in the past.
             params = {"source": line, "now": self._now_line()}
+            if stitched_goal:
+                params["recognizer_continuation"] = True
             if channel:
                 params["channel"] = channel
             for k, v in (getattr(self, "_memory_filled", None) or {}).items():
@@ -1629,11 +1818,27 @@ class Anticipy:
                                 if j.get("id") == job_id), None)
                 if current is None:
                     self._open_plan = None
-                elif self._same_plan(goal, current.get("goal") or ""):
+                else:
+                    current_goal = current.get("goal") or ""
+                    continued = progressive_continuation(
+                        str(params.get("source") or ""), goal, current_goal)
+                    same = self._same_plan(goal, current_goal)
+                    if not (same or continued):
+                        current = None
+                if current is not None:
                     # The richer wording wins, whichever order they arrived
-                    # in — a card must only ever get better.
-                    if not self._covered_by(goal, current.get("goal") or ""):
-                        self._merge_into(job_id, current, goal, params)
+                    # in — a card must only ever get better. When a recognizer
+                    # split is proven by an agreement marker, retain BOTH
+                    # complementary halves rather than choosing whichever one
+                    # happened to contain more tokens.
+                    current_goal = current.get("goal") or ""
+                    merge_goal = goal
+                    if continued and not params.get("recognizer_continuation") \
+                            and not self._covered_by(goal, current_goal) \
+                            and not self._covered_by(current_goal, goal):
+                        merge_goal = f"{current_goal}; then {goal}"
+                    if not self._covered_by(merge_goal, current_goal):
+                        self._merge_into(job_id, current, merge_goal, params)
                     self._open_plan = (job_id, time.time(), goal)
                     return job_id
 
@@ -1685,6 +1890,7 @@ class Anticipy:
                          else Consequence.READ_ONLY),
             source_event_id=str(params.get("source_event_id")
                                 or self._source_event_id or ""),
+            authority_text=str(params.get("source") or ""),
         )
         params = put_in_params(params, workflow)
         workflow_fields = workflow.job_fields()
@@ -1900,6 +2106,7 @@ class Anticipy:
                     workflow,
                     expected_version=workflow.version,
                     goal=fields.get("goal", cur_goal),
+                    authority_text=str(merged.get("source") or ""),
                     source_event_id=str(params.get("source_event_id")
                                         or self._source_event_id or ""),
                 )
@@ -1949,10 +2156,22 @@ class Anticipy:
         want = goal_tokens(what)
         if not want:
             return False
+        # "Cancel membership MBR-…" can itself be the real-world task. When
+        # a later line refines that same cancellation, both goals start with
+        # cancel; treating the second as a retraction deletes the task after
+        # we have just told the owner it is ready. Demonstrative cancellation
+        # ("cancel that/this cancellation") remains a retraction, as do the
+        # unambiguous call-off/scrap/drop/abandon/undo verbs.
+        repeated_external_cancel = bool(re.match(r"^\s*cancel\b", goal, re.I)) \
+            and not bool(re.match(
+                r"^\s*cancel\s+(?:that|this|it|the\s+(?:plan|task|cancellation))\b",
+                goal, re.I))
         hit = False
         try:
             for j in self._pending_jobs():
                 other = j.get("goal") or ""
+                if repeated_external_cancel and re.match(r"^\s*cancel\b", other, re.I):
+                    continue
                 have = goal_tokens(other)
                 if not have:
                     continue

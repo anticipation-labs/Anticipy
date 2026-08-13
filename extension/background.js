@@ -15,6 +15,7 @@ import {
 
 // Production backend; override via chrome.storage.local `backendUrl` for dev.
 const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
+const BACKEND_LLM = "backend-proxy";
 let BASE = DEFAULT_BASE;
 chrome.storage.local.get("backendUrl").then(({ backendUrl }) => {
   if (backendUrl) BASE = backendUrl.replace(/\/$/, "");
@@ -60,7 +61,7 @@ const MAX_ATTEMPTS = 3;
 // claims the code and writes `owner`; from then on this agent only takes
 // that owner's jobs and reports a heartbeat the app turns into "last seen Ns".
 
-async function ensureRegistered() {
+async function ensureRegisteredOnce() {
   let { agentId, agentToken, recordId, agentCredentialInstalled } =
     await chrome.storage.local.get(
       ["agentId", "agentToken", "recordId", "agentCredentialInstalled"]);
@@ -105,6 +106,22 @@ async function ensureRegistered() {
   return { agentId, agentToken, recordId: rec.id };
 }
 
+// First install wakes this worker through more than one path: onInstalled and
+// the immediate poll both need an identity. Without a single-flight guard they
+// can register the same fresh browser twice and race while replacing its local
+// record/token. Every caller shares one attempt and a later alarm may retry
+// cleanly after that attempt has settled.
+let registrationInFlight = null;
+export async function ensureRegistered() {
+  if (registrationInFlight) return registrationInFlight;
+  registrationInFlight = ensureRegisteredOnce();
+  try {
+    return await registrationInFlight;
+  } finally {
+    registrationInFlight = null;
+  }
+}
+
 // Jobs this worker is actively running — their claims get refreshed on every
 // heartbeat so the stale-requeue sweep never eats a live job.
 const activeJobs = new Map();
@@ -119,21 +136,24 @@ async function ensureLLMKey(force = false) {
   // key. An install that cached only a key would otherwise never learn the
   // service token, and switching backend enforcement on would permanently
   // brick it with no way back except a manual reinstall.
-  const complete = openrouterKey && agentModel !== undefined && serviceToken !== undefined;
+  const complete = openrouterKey === BACKEND_LLM
+    && agentModel !== undefined && serviceToken !== undefined;
   const fresh = Date.now() - (keyFetchedAt || 0) < 6 * 3600 * 1000;
   if (!force && complete && fresh) return openrouterKey;
-  if (!agentId) return openrouterKey || null;
+  if (!agentId) return complete ? openrouterKey : null;
   try {
     const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`,
       { headers: await writeHeaders() });
     // A refresh that fails must never LOSE a key we already hold — a stale
     // bundle plus one backend hiccup would otherwise fail every job with
     // "no LLM key" while a perfectly good key sits in storage.
-    if (!r.ok) return openrouterKey || null;
-    const { openrouter_key, model, vision_model, service_token, owner, owner_ref } = await r.json();
-    if (openrouter_key) {
+    if (!r.ok) return complete ? openrouterKey : null;
+    const { llm_proxy, model, vision_model, service_token, owner, owner_ref } = await r.json();
+    if (llm_proxy) {
       await chrome.storage.local.set({
-        openrouterKey: openrouter_key,
+        // An opaque routing marker, not a vendor credential. This overwrites
+        // and removes any long-lived key cached by an older build.
+        openrouterKey: BACKEND_LLM,
         agentModel: model || "",
         visionModel: vision_model || "",
         // The server no longer returns its master credential. Saving an empty
@@ -143,10 +163,10 @@ async function ensureLLMKey(force = false) {
         ownerRef: owner_ref || "",
         keyFetchedAt: Date.now(),
       });
-      return openrouter_key;
+      return BACKEND_LLM;
     }
   } catch (_) { /* backend unreachable; keep whatever we already had */ }
-  return openrouterKey || null;
+  return complete ? openrouterKey : null;
 }
 
 async function heartbeat() {
