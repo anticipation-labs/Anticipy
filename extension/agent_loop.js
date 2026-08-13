@@ -131,7 +131,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer": "https://anticipy.ai",
-      "X-Title": "Anticipy",
+      "X-Title": "Anticipy Codex Version",
     },
     // Ask the provider to CONSTRAIN the output to a JSON object. One
     // malformed reply used to strand the whole task ("unparseable model
@@ -167,7 +167,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
       const r2 = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
-                   "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy" },
+                   "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy Codex Version" },
         body: JSON.stringify({ model, messages: nudge, temperature: 0,
                                response_format: { type: "json_object" } }),
       });
@@ -325,7 +325,7 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
     const r = await fetch(OPENROUTER_URL, {
       signal: ctl.signal,
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy" },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy Codex Version" },
       body: JSON.stringify({ model, messages, temperature: 0 }),
     }).finally(() => clearTimeout(kill));
     const data = await r.json();
@@ -414,7 +414,7 @@ async function cdp(tabId, method, params) {
       await chrome.debugger.sendCommand({ tabId }, "Emulation.setFocusEmulationEnabled", { enabled: true });
     } catch (re) {
       if (!String(re).includes("already attached")) {
-        throw new Error("automation session cancelled — the 'Anticipy started debugging' bar must stay up while I work");
+        throw new Error("automation session cancelled — the 'Anticipy Codex Version started debugging' bar must stay up while I work");
       }
     }
     return chrome.debugger.sendCommand({ tabId }, method, params || {});
@@ -1061,7 +1061,7 @@ export async function runAgentGoal(goal, opts) {
     // One colour for one name: two differently-coloured groups both called
     // "Anticipy" (this one and the prefill path in background.js) read as two
     // different things in the exact surface meant to make her legible.
-    await chrome.tabGroups.update(group, { title: "Anticipy", color: "yellow", collapsed: true });
+    await chrome.tabGroups.update(group, { title: "Anticipy Codex Version", color: "yellow", collapsed: true });
   } catch (e) { /* tab groups unavailable (e.g. incognito) */ }
 
   // Attach can race a just-created tab, and the "started debugging" bar being
@@ -1144,7 +1144,7 @@ export async function runAgentGoal(goal, opts) {
             history.push(`step ${step}: automation session re-attached`);
             continue;
           }
-          return (handBack = true) && { status: "needs_user", result: "the automation session was cancelled — the 'Anticipy started debugging' bar has to stay up while I work. Send it again and leave the bar alone.", tabId: tab.id };
+          return (handBack = true) && { status: "needs_user", result: "the automation session was cancelled — the 'Anticipy Codex Version started debugging' bar has to stay up while I work. Send it again and leave the bar alone.", tabId: tab.id };
         }
         // A closed tab never becomes scriptable — retrying to maxSteps just
         // burns the budget and reports "max steps reached" for what is

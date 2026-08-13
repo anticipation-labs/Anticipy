@@ -317,7 +317,7 @@ struct OnboardingView: View {
     @State private var welcomeStage = 0
 
     private static let welcomeLine =
-        "I'm Anticipy. I listen, I remember what matters, and I quietly do the work."
+        "I'm Anticipy Codex Version. I listen, I remember what matters, and I quietly do the work."
 
     private var welcome: some View {
         stepBody(spacing: 22) {
@@ -329,7 +329,7 @@ struct OnboardingView: View {
                     .accessibilityHidden(true)
             }
             .frame(height: 130)
-            Text("Anticipy")
+            Text("Anticipy Codex Version")
                 .font(Theme.display(40))
                 .tracking(-1.0)
                 .foregroundStyle(Theme.ivory)
@@ -388,7 +388,7 @@ struct OnboardingView: View {
                      text: "I set things up in Chrome on your computer, using accounts you're already signed in to. I ask you here first — nothing goes out until you say yes.")
                 .opacity(cardsShown >= 3 ? 1 : 0)
                 .offset(y: cardsShown >= 3 ? 0 : 14)
-            Text("If you ever have an Anticipy pendant, you can pair it in Settings. You don't need one — your phone is enough.")
+            Text("If you ever have an Anticipy Codex Version pendant, you can pair it in Settings. You don't need one — your phone is enough.")
                 .font(.system(size: 15))
                 .lineSpacing(2)
                 .foregroundStyle(Theme.sand)
@@ -702,14 +702,14 @@ struct OnboardingView: View {
                 // code — so people retyped a code that was right all along.
                 switch pairOutcome {
                 case .noMatch:
-                    Text("That code didn't match. It's the six digits on the Anticipy page in Chrome.")
+                    Text("That code didn't match. It's the six digits on the Anticipy Codex Version page in Chrome.")
                         .font(.system(size: 15))
                         .lineSpacing(2)
                         .foregroundStyle(Theme.alarm)
                         .onAppear { Haptics.warning() }
                 case .unreachable:
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("I can't reach Anticipy right now, so I couldn't check that code. It's probably the connection, not you.")
+                        Text("I can't reach Anticipy Codex Version right now, so I couldn't check that code. It's probably the connection, not you.")
                             .font(.footnote)
                             .foregroundStyle(Theme.sand)
                         Button {

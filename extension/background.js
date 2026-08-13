@@ -245,7 +245,7 @@ const ACTIONS = {
     `https://calendar.google.com/calendar/render?action=TEMPLATE` +
     `&text=${encodeURIComponent(p.title || "Meeting")}` +
     `&dates=${encodeURIComponent(p.dates || "")}` +
-    `&details=${encodeURIComponent(p.details || "Scheduled by Anticipy")}`,
+    `&details=${encodeURIComponent(p.details || "Scheduled by Anticipy Codex Version")}`,
   research_and_report: (p) =>
     p.url || `https://www.google.com/search?q=${encodeURIComponent(p.query || "")}`,
 };
@@ -393,7 +393,7 @@ export async function surfaceHandBack(tabId, detail, kind) {
     await chrome.notifications.create(`${HANDBACK_NOTIF}${tabId}`, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-      title: "Anticipy",
+      title: "Anticipy Codex Version",
       message: kind === "confirm"
         ? `Ready for your OK on ${site} — click to open.`
         : `I need you on ${site} — click to open.`,
@@ -685,7 +685,7 @@ async function runJobInner(job, params) {
   const tab = await chrome.tabs.create({ url: build(params), active: false });
   try {
     const group = await chrome.tabs.group({ tabIds: tab.id });
-    await chrome.tabGroups.update(group, { title: "Anticipy", color: "yellow", collapsed: true });
+    await chrome.tabGroups.update(group, { title: "Anticipy Codex Version", color: "yellow", collapsed: true });
   } catch (e) {
     // tab groups unavailable (e.g. incognito) — continue in a plain background tab
   }

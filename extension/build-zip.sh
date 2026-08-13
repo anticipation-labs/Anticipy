@@ -22,7 +22,8 @@
 set -e
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
-OUT="$SRC/../backend/pb_public/anticipy-extension.zip"
+OUT="$SRC/../backend/pb_public/anticipy-codex-version-extension.zip"
+LEGACY_OUT="$SRC/../backend/pb_public/anticipy-extension.zip"
 
 # Exactly what the extension needs at runtime — no tests, no store metadata,
 # no build scripts. Keep this list in step with what Chrome actually loads.
@@ -44,12 +45,14 @@ done
 # source always produces the same SHA-256 (including on a fresh checkout).
 find "$TMP/pkg" -exec touch -t 198001010000 {} +
 
-rm -f "$OUT"
+rm -f "$OUT" "$LEGACY_OUT"
 (cd "$TMP/pkg" && find . -type f | LC_ALL=C sort | zip -X -q "$OUT" -@)
+cp "$OUT" "$LEGACY_OUT"
 
 # Prove the artifact matches the source rather than assuming it.
 PACKED=$(unzip -p "$OUT" manifest.json | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])")
 [ "$PACKED" = "$VERSION" ] || { echo "build-zip: packed $PACKED != source $VERSION" >&2; exit 1; }
 
 echo "built $OUT  version $PACKED  ($(wc -c < "$OUT" | tr -d ' ') bytes)"
+echo "legacy alias $LEGACY_OUT has the same bytes"
 echo "now: commit it, then deploy the backend so users actually get it."

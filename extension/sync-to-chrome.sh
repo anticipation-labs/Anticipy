@@ -36,7 +36,7 @@ PY
 ) || { echo "Could not read Chrome's profile — is Chrome installed for this user?"; exit 1; }
 
 if [ -z "$DEST" ]; then
-  echo "Anticipy is not loaded as an unpacked extension in the Default profile."
+  echo "Anticipy Codex Version is not loaded as an unpacked extension in the Default profile."
   echo "Load it once via chrome://extensions -> Load unpacked, then re-run this."
   exit 1
 fi
@@ -56,4 +56,4 @@ LIVE_V=$(python3 -c "import json;print(json.load(open('$DEST/manifest.json'))['v
 echo
 echo "synced $REPO_V -> Chrome now has $LIVE_V"
 [ "$REPO_V" = "$LIVE_V" ] || { echo "MISMATCH — the copy did not take"; exit 1; }
-echo "Now press Reload on the Anticipy card in chrome://extensions."
+echo "Now press Reload on the Anticipy Codex Version card in chrome://extensions."

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Anticipy</string>
+	<string>Anticipy Codex Version</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconName</key>
@@ -19,9 +19,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.2</string>
+	<string>1.0.3</string>
 	<key>CFBundleVersion</key>
-	<string>50</string>
+	<string>51</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>
@@ -30,11 +30,11 @@
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Anticipy connects to your Anticipy pendant over Bluetooth. Only needed if you have one.</string>
+	<string>Anticipy Codex Version connects to your Anticipy Codex Version pendant over Bluetooth. Only needed if you have one.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Anticipy listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy so she can act on them. You control when she is listening.</string>
+	<string>Anticipy Codex Version listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy Codex Version so she can act on them. You control when she is listening.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Anticipy turns what she hears into text on your phone, then sends that text to Anticipy so she can remember it and act on it.</string>
+	<string>Anticipy Codex Version turns what she hears into text on your phone, then sends that text to Anticipy Codex Version so she can remember it and act on it.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

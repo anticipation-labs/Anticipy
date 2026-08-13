@@ -34,11 +34,11 @@ async function refresh() {
     const r = await fetch(`${await base()}/api/health`);
     if (!r.ok) throw new Error("unhealthy");
     dot.classList.add("on");
-    say("backendText", "Connected to Anticipy.");
+    say("backendText", "Connected to Anticipy Codex Version.");
   } catch (e) {
     dot.classList.remove("on");
     // Nobody reading this runs a backend. Say what's true and what happens next.
-    say("backendText", "I can't reach Anticipy from here yet — I'll keep trying. Your code appears the moment I'm through.");
+    say("backendText", "I can't reach Anticipy Codex Version from here yet — I'll keep trying. Your code appears the moment I'm through.");
   }
 
   const { pairCode, paired } = await chrome.storage.local.get(["pairCode", "paired"]);
@@ -61,13 +61,13 @@ async function refresh() {
     return;
   }
 
-  say("codeHead", "Type this code into the Anticipy app on your iPhone");
+  say("codeHead", "Type this code into the Anticipy Codex Version app on your iPhone");
   say("codeBody", "It's in the app's setup screen, or in Settings if you've already been through setup. This links your phone to this browser.");
   code.classList.remove("done");
   el("codeCard").classList.add("hero");
   code.disabled = !pairCode;
   code.textContent = pairCode || "······";
-  hint(pairCode ? "Click the code to copy it." : "Your code appears here as soon as I reach Anticipy.", 0);
+  hint(pairCode ? "Click the code to copy it." : "Your code appears here as soon as I reach Anticipy Codex Version.", 0);
   show("newcode", !!pairCode);
   show("noapp", true);
   say("liveHead", "Waiting for your phone…");
