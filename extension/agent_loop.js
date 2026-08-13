@@ -221,20 +221,103 @@ function extractAction(text) {
   return null;
 }
 
+function factPairs(facts) {
+  if (facts && typeof facts === "object" && !Array.isArray(facts)) {
+    return Object.entries(facts).filter(([, value]) =>
+      value !== null && value !== undefined && typeof value !== "object");
+  }
+  return String(facts || "").split("\n").map((line) => {
+    const match = line.match(/^\s*([^:]+):\s*(.+?)\s*$/);
+    return match ? [match[1].trim(), match[2].trim()] : null;
+  }).filter(Boolean);
+}
+
+function evidenceToken(value) {
+  return String(value ?? "").normalize("NFKD").toLowerCase()
+    .replace(/[‐‑‒–—―]/g, "-").replace(/[^a-z0-9]+/g, "");
+}
+
+function selectedOrFilled(elements, expected) {
+  const want = evidenceToken(expected);
+  if (!want) return false;
+  return String(elements || "").split("\n").some((line) => {
+    const selected = line.match(/"([^"]+)"\*/g) || [];
+    const filled = [...line.matchAll(/(?:\[contains|currently) "([^"]+)"/g)]
+      .map((match) => match[1]);
+    const direct = [...line.matchAll(/\bvalue=([^\]\s)]+)/g)]
+      .map((match) => match[1]);
+    return [...selected.map((item) => item.slice(1, -2)), ...filled, ...direct]
+      .some((item) => evidenceToken(item) === want);
+  });
+}
+
+// Mechanical half of completion verification. The model may explain what a
+// page means, but it may not waive an approved fact. A value must be visible
+// on the receipt/current page or must have been the selected/filled value in
+// the last snapshot immediately before the external effect. Unselected menu
+// options do not count as evidence.
+export function unsupportedApprovedFacts(facts, currentState, effectState = null) {
+  const currentText = evidenceToken(currentState?.text || "");
+  const currentElements = currentState?.elements || "";
+  const effectElements = effectState?.elements || "";
+  const fields = [
+    ...(Array.isArray(currentState?.fields) ? currentState.fields : []),
+    ...(Array.isArray(effectState?.fields) ? effectState.fields : []),
+  ];
+  return factPairs(facts).filter(([key, value]) => {
+    const expected = evidenceToken(value);
+    if (!expected) return false;
+    const keyToken = evidenceToken(key);
+    const exactFields = fields.filter((field) => evidenceToken(field?.name) === keyToken);
+    const relatedFields = exactFields.length ? exactFields : fields.filter((field) => {
+      const identity = evidenceToken(`${field?.name || ""} ${field?.label || ""}`);
+      return keyToken && (identity.includes(keyToken) || keyToken.includes(identity));
+    });
+    if (relatedFields.length) {
+      return !relatedFields.some((field) => evidenceToken(field?.value) === expected);
+    }
+    if (fields.some((field) => evidenceToken(field?.value) === expected)) return false;
+    if (typeof value === "boolean") {
+      const stateToken = value ? "checked" : "unchecked";
+      if (currentText.includes(`${keyToken}${expected}`)) return false;
+      const lines = `${currentElements}\n${effectElements}`.split("\n");
+      if (lines.some((line) => evidenceToken(line).includes(keyToken)
+          && evidenceToken(line).includes(stateToken))) return false;
+      return true;
+    }
+    if (currentText.includes(expected)) return false;
+    if (selectedOrFilled(currentElements, value)
+        || selectedOrFilled(effectElements, value)) return false;
+    return true;
+  }).map(([key]) => String(key));
+}
+
+function factsForPrompt(facts) {
+  return factPairs(facts).map(([key, value]) => `  ${key}: ${value}`).join("\n");
+}
+
 // Second-opinion check on a done claim, against a FRESH page snapshot with no
 // step history to anchor on. Research goals verify by result content; action
 // goals (forms, submissions) verify by what the page actually shows.
-export async function verifyDone(apiKey, model, goal, result, tabId) {
+export async function verifyDone(apiKey, model, goal, result, tabId,
+                                 { scope = "", facts = "", effectState = null } = {}) {
   let state;
   try { state = await withTimeout(mapPage(tabId), 20000, "verify mapPage"); }
   catch { return { verified: false, reason: "page unreadable; completion is unverified", evidence: [] }; }
+  const unsupported = unsupportedApprovedFacts(facts, state, effectState);
+  if (unsupported.length) {
+    return { verified: false,
+      reason: `approved facts are not evidenced: ${unsupported.join(", ")}`,
+      evidence: [] };
+  }
+  const factsBlock = factsForPrompt(facts);
   const messages = [
-    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, the claimed result, and the CURRENT page, decide if the claim is actually supported. For form/submission goals, the page must show evidence (confirmation text, correctly-filled fields, a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible); but verify=false if ANY statement in the claimed result is contradicted by the page (e.g. claiming a product is unreleased while the page shows its official price). The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done — verified=false with reason "goal state not reached yet". Likewise a research result that admits the requested information was NOT found ("not directly listed", "one would need to visit...") is NOT done — verified=false with reason "requested info not found". Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
+    { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, exact approved scope and facts, the claimed result, the page immediately before the external effect, and the CURRENT page, decide if the claim is actually supported. Every approved fact must agree with the evidence; a default, different option, amount, date, person, address, or resolution is a contradiction even when the page says success. For form/submission goals, the current page must also show terminal evidence (confirmation text or a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible); but verify=false if ANY statement in the claimed result is contradicted by the page. The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done — verified=false with reason "goal state not reached yet". Likewise a research result that admits the requested information was NOT found ("not directly listed", "one would need to visit...") is NOT done — verified=false with reason "requested info not found". Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
     // The auditor is told to demand "correctly-filled fields" as evidence, so
     // it must actually SEE the fields: page text alone (capped at 1500 chars,
     // usually nav and menus) made it reject correct completions, the run
     // ground to maxSteps, and the owner was told a finished task had failed.
-    { role: "user", content: `GOAL: ${goal}\nCLAIMED RESULT: ${result}\n\nURL: ${state.url}\nTITLE: ${state.title}\nFORM STATE:\n${(state.elements || "").slice(0, 3000)}\n\nPAGE TEXT:\n${(state.text || "").slice(0, 4000)}` },
+    { role: "user", content: `GOAL: ${goal}\nAPPROVED SCOPE: ${scope || goal}\nAPPROVED FACTS:\n${factsBlock || "(none)"}\nCLAIMED RESULT: ${result}\n\nBEFORE EXTERNAL EFFECT — FORM VALUES:\n${JSON.stringify(effectState?.fields || []).slice(0, 6000)}\nBEFORE EXTERNAL EFFECT — FORM MAP:\n${(effectState?.elements || "").slice(0, 4000)}\n\nCURRENT URL: ${state.url}\nCURRENT TITLE: ${state.title}\nCURRENT FORM VALUES:\n${JSON.stringify(state.fields || []).slice(0, 6000)}\nCURRENT FORM MAP:\n${(state.elements || "").slice(0, 4000)}\n\nCURRENT PAGE TEXT:\n${(state.text || "").slice(0, 5000)}` },
   ];
   try {
     const ctl = new AbortController();
@@ -259,6 +342,7 @@ export async function verifyDone(apiKey, model, goal, result, tabId) {
         `url:${String(state.url || "").slice(0, 500)}`,
         `title:${String(state.title || "").slice(0, 200)}`,
         `page:${pageFingerprint(state)}`,
+        `facts:${factPairs(facts).map(([key]) => key).join(",").slice(0, 500)}`,
       ] : [],
     };
   } catch {
@@ -495,6 +579,7 @@ async function mapPage(tabId, _retry = 0) {
   }
   let elements = withSugg(main, 0);
   let text = main.text || "";
+  let fields = Array.isArray(main.fields) ? [...main.fields] : [];
   for (const f of subs) {
     const slot = frameSlots.length;
     frameSlots.push(f.frameId);
@@ -507,8 +592,9 @@ async function mapPage(tabId, _retry = 0) {
     elements += `\n--- EMBEDDED WIDGET (${url.slice(0, 100)}) — these controls work like any other ---\n`
       + withSugg(f.result, slot * 1000);
     if (f.result.text) text = (text + "\n" + f.result.text).slice(0, 2500);
+    if (Array.isArray(f.result.fields)) fields.push(...f.result.fields);
   }
-  return { url: main.url, title: main.title, elements, text,
+  return { url: main.url, title: main.title, elements, text, fields,
            overlay: main.overlay || subs.length > 0 };
 }
 
@@ -736,6 +822,32 @@ async function fieldRejects(tabId, index) {
   }
 }
 
+// Is this control capable of creating an external effect? Navigation,
+// dropdowns and "Next" steps are reversible; submit/send/book/etc. are not.
+// This is deliberately derived from the live DOM instead of a site recipe.
+async function commitControl(tabId, index, viaEnter = false) {
+  try {
+    return !!(await inFrame(tabId, index, (i, enter) => {
+      const source = window.__anticipyMap[i];
+      if (!source) return false;
+      const controls = enter && source.form
+        ? [...source.form.querySelectorAll('button,input[type="submit"],input[type="button"],[role="button"]')]
+        : [source];
+      const commit = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|accept|agree|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b/i;
+      const reversible = /^\s*(search|find|filter|look\s*up|next|continue|back|previous|cancel|close)\s*$/i;
+      return controls.some((el) => {
+        const label = String(el.innerText || el.value || el.getAttribute("aria-label") || "").trim();
+        if (reversible.test(label)) return false;
+        const type = String(el.type || "").toLowerCase();
+        const explicitSubmit = type === "submit" || (el.tagName === "BUTTON" && (!type || type === "submit"));
+        return commit.test(label) || explicitSubmit;
+      });
+    }, [viaEnter]));
+  } catch (_) {
+    return false;
+  }
+}
+
 // WHEN IT GETS STUCK, GO FIND OUT HOW — do not just stop.
 //
 // The loop gave up flatly after 18 steps on one page. That is the right
@@ -827,6 +939,8 @@ export async function runAgentGoal(goal, opts) {
   // Default to a scriptable search page: about:blank can't be script-injected,
   // so mapPage would fail every step and the run would die without acting.
   const { apiKey, model = "deepseek/deepseek-v3.2", maxSteps = 60, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "google/gemini-2.5-flash", authorized = false, scope = "", ownerProfile = null, planning = true, facts = "", onTrace = null, onBeforeExternalEffect = null, resumeTabId = null } = opts;
+  const factsText = factsForPrompt(facts);
+  let effectState = null;
 
   // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
   // itself about operating a financial account never even starts — the
@@ -1114,7 +1228,7 @@ export async function runAgentGoal(goal, opts) {
       // to describe; a picture generalises to every widget that will ever
       // exist. Per-widget special cases are a treadmill.
       const eyes = await screenshot(tab.id);
-      try { decision = await withTimeout(llmStep(apiKey, model, goal, state, history, 0, eyes, visionModel, authorized, scope, ownerProfile, plan, facts), 90000, "llmStep"); }
+      try { decision = await withTimeout(llmStep(apiKey, model, goal, state, history, 0, eyes, visionModel, authorized, scope, ownerProfile, plan, factsText), 90000, "llmStep"); }
       catch (e) {
         // A dead/rotated/out-of-credit key or a rate limit used to be retried
         // for all 32 steps in ~90 seconds and then reported as a browsing
@@ -1141,12 +1255,14 @@ export async function runAgentGoal(goal, opts) {
       if (decision.action === "done") {
         // A done claim is verified against the live page before it's trusted:
         // a mistyped form or an unsubmitted page must never report success.
-        let verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
+        let verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id,
+          { scope, facts, effectState });
         if (!verdict.verified && /load|spinner|progress|wait/i.test(verdict.reason || "")) {
           // The page was mid-load, not wrong — give it a moment and re-check
           // once before rejecting.
           await new Promise((r) => setTimeout(r, 5000));
-          verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id);
+          verdict = await verifyDone(apiKey, model, goal, decision.result, tab.id,
+            { scope, facts, effectState });
         }
         if (verdict.verified) return { status: "done", result: decision.result, tabId: tab.id,
           receipt: { verified: true, evidence: verdict.evidence || [] } };
@@ -1295,7 +1411,8 @@ export async function runAgentGoal(goal, opts) {
             // that was rejected mid-load, the page has long since settled —
             // re-audit that claim instead of burning the rest of the budget.
             if (lastDoneClaim) {
-              const verdict = await verifyDone(apiKey, model, goal, lastDoneClaim, tab.id);
+              const verdict = await verifyDone(apiKey, model, goal, lastDoneClaim, tab.id,
+                { scope, facts, effectState });
               if (verdict.verified) return { status: "done", result: lastDoneClaim, tabId: tab.id,
                 receipt: { verified: true, evidence: verdict.evidence || [] } };
             }
@@ -1317,7 +1434,7 @@ export async function runAgentGoal(goal, opts) {
                 .filter(Boolean).join(" ");
             });
           } catch (e) { /* unmappable — the guard fails open */ }
-          const codeStop = unquotedCode(decision.text, attrs, goal, scope, facts);
+          const codeStop = unquotedCode(decision.text, attrs, goal, scope, factsText);
           if (codeStop) {
             stuckStreak++;
             history.push(`step ${step}: ${codeStop}`);
@@ -1328,18 +1445,31 @@ export async function runAgentGoal(goal, opts) {
         try { c = await withTimeout(elementCenter(tab.id, decision.index), 15000, "elementCenter"); }
         catch (e) { history.push(`step ${step}: element lookup failed (${String(e).slice(0, 100)})`); continue; }
         if (!c) { stuckStreak++; history.push(`step ${step}: element ${decision.index} not found`); continue; }
-        // A crash after a consequential submit but before the receipt is the
-        // classic duplicate-effect window. Persist uncertainty BEFORE the
-        // trusted action; a dead executor will then park for verification
-        // instead of blindly clicking the same thing again.
-        if (authorized && onBeforeExternalEffect
-            && (decision.action === "click"
-                || (decision.action === "type" && decision.enter !== false))) {
-          await onBeforeExternalEffect(decision, state);
+        let externalClick = false;
+        if (decision.action === "click") {
+          externalClick = await commitControl(tab.id, decision.index);
+        }
+        if (externalClick) {
+          if (!authorized) {
+            return (handBack = true) && { status: "needs_user",
+              result: "The form is ready, but the owner has not approved its external effect.",
+              tabId: tab.id };
+          }
+          const unsupported = unsupportedApprovedFacts(facts, state, state);
+          if (unsupported.length) {
+            history.push(`step ${step}: PRE-SUBMIT BLOCK — these approved facts are not set: ${unsupported.join(", ")}. Correct the fields before pressing the final control.`);
+            stuckStreak++;
+            continue;
+          }
+          // A crash after a consequential submit but before the receipt is
+          // the classic duplicate-effect window. Persist uncertainty BEFORE
+          // the trusted action so recovery never blindly submits twice.
+          effectState = state;
+          if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, state);
         }
         if (c.inFrameOnly) await frameClick(tab.id, decision.index);
         else await trustedClick(tab.id, c.x, c.y);
-        if (decision.action === "click" && actionCounts[sig] === 2) {
+        if (decision.action === "click" && !externalClick && actionCounts[sig] === 2) {
           // Second attempt at the same click: the coordinate click likely
           // missed (overlay buttons re-render/move). Fire the element's own
           // click handler as a fallback.
@@ -1401,6 +1531,28 @@ export async function runAgentGoal(goal, opts) {
             };
           }
           if (decision.enter !== false) {
+            const externalEnter = await commitControl(tab.id, decision.index, true);
+            if (externalEnter) {
+              if (!authorized) {
+                return (handBack = true) && { status: "needs_user",
+                  result: "The form is ready, but the owner has not approved its external effect.",
+                  tabId: tab.id };
+              }
+              let beforeEnter;
+              try { beforeEnter = await withTimeout(mapPage(tab.id), 20000, "pre-submit mapPage"); }
+              catch (_) {
+                history.push(`step ${step}: PRE-SUBMIT BLOCK — the final form state could not be read.`);
+                continue;
+              }
+              const unsupported = unsupportedApprovedFacts(facts, beforeEnter, beforeEnter);
+              if (unsupported.length) {
+                history.push(`step ${step}: PRE-SUBMIT BLOCK — these approved facts are not set: ${unsupported.join(", ")}. Correct the fields before submitting.`);
+                stuckStreak++;
+                continue;
+              }
+              effectState = beforeEnter;
+              if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, beforeEnter);
+            }
             await new Promise((r) => setTimeout(r, 200));
             await pressEnter(tab.id);
           }

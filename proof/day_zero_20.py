@@ -138,7 +138,8 @@ CASES = [
      "fields": [field("student", "Student name", "Maya Ebrahim"),
                 field("trip", "Trip", "Science World", "select", ["Museum of Anthropology", "Science World", "Aquarium"]),
                 field("date", "Trip date", "2026-09-04", "date"),
-                field("contact", "Emergency contact", "Omar Ebrahim — +1 604 555 0142"),
+                field("contact_name", "Emergency contact name", "Omar Ebrahim"),
+                field("contact_phone", "Emergency contact phone", "+1 604 555 0142", "tel"),
                 field("consent", "I give permission for this trip", True, "checkbox")]},
     {"slug": "pet", "title": "Companion Vet — Vaccination",
      "task": "Book Luna, a dog, for a rabies vaccination at Companion Vet on August 20, 2026 at 10:30 AM.",
@@ -218,15 +219,17 @@ label{{display:grid;gap:6px;margin:16px 0}} input,select,textarea{{font:inherit;
 input[type=checkbox]{{width:22px;height:22px}} button{{font:600 16px system-ui;padding:12px 18px;border:0;border-radius:10px;background:#153a63;color:white}}
 #receipt{{margin-top:20px;padding:16px;background:#e8f6ec;border-radius:10px;font-weight:650}}
 </style></head><body><main><p>Secure customer portal</p><h1>{html.escape(case['title'])}</h1>
-<form id="request">{controls}<button id="submit" type="submit">{submit}</button></form>
+<form id="scenario-form">{controls}<button id="submit" type="submit">{submit}</button></form>
 <div id="receipt" role="status" hidden></div></main><script>
-request.addEventListener('submit', async (event) => {{
+const scenarioForm = document.getElementById('scenario-form');
+const receiptElement = document.getElementById('receipt');
+scenarioForm.addEventListener('submit', async (event) => {{
  event.preventDefault(); const payload = {{}};
- for (const el of request.elements) {{ if (!el.name) continue; payload[el.name] = el.type === 'checkbox' ? el.checked : el.value; }}
+ for (const el of scenarioForm.elements) {{ if (!el.name) continue; payload[el.name] = el.type === 'checkbox' ? el.checked : el.value; }}
  const response = await fetch('/complete/{slug}', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify(payload)}});
- const result = await response.json(); request.hidden = true; receipt.hidden = false;
+ const result = await response.json(); scenarioForm.hidden = true; receiptElement.hidden = false;
  const evidence = Object.entries(payload).map(([key, value]) => key + ': ' + String(value)).join(' · ');
- receipt.textContent = result.ok ? 'Submitted successfully. Confirmation #' + result.reference + '. ' + evidence : 'Please correct the highlighted fields.';
+ receiptElement.textContent = result.ok ? 'Submitted successfully. Confirmation #' + result.reference + '. ' + evidence : 'Please correct the highlighted fields.';
 }});
 </script></body></html>"""
 

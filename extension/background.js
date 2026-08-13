@@ -578,14 +578,16 @@ async function runJobInner(job, params) {
         // Every concrete detail already on the job record (time, party size,
         // an address, an answer he texted) — so the agent SETS them instead
         // of asking for them. Bookkeeping keys are not facts.
-        facts: Object.entries(params)
-          .filter(([k, v]) => !["source", "say", "now", "lane", "missing",
-                                "authorized", "approved_scope", "needed",
-                                "start_url", "task", "assumption", "note",
-                                "resume_tab"].includes(k)
-                              && (typeof v === "string" || typeof v === "number")
-                              && String(v).length < 200)
-          .map(([k, v]) => `  ${k.replace(/_/g, " ")}: ${v}`).join("\n"),
+        facts: (params._workflow?.facts && typeof params._workflow.facts === "object")
+          ? params._workflow.facts
+          : Object.fromEntries(Object.entries(params)
+              .filter(([k, v]) => !["source", "say", "now", "lane", "missing",
+                                    "authorized", "approved_scope", "needed",
+                                    "start_url", "task", "assumption", "note",
+                                    "resume_tab"].includes(k)
+                                  && (typeof v === "string" || typeof v === "number"
+                                      || typeof v === "boolean")
+                                  && String(v).length < 200)),
         // The step-by-step trace lands on the job row as the agent works, so
         // a run is auditable after the fact. Throttled: at most one write
         // every few seconds, always carrying the latest tail.

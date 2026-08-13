@@ -86,7 +86,10 @@
       || el.getAttribute("data-disabled") === "true"
       || getComputedStyle(el).pointerEvents === "none";
     if (disabled) bits.push("UNAVAILABLE");
-    if (el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-checked") === "true"
+    const nativeCheck = el instanceof HTMLInputElement
+      && ["checkbox", "radio"].includes((el.type || "").toLowerCase());
+    if (nativeCheck) bits.push(el.checked ? "checked" : "unchecked");
+    else if (el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-checked") === "true"
         || el.getAttribute("aria-current") === "date") bits.push("selected");
     for (const attr of ["data-date", "data-day", "data-time", "data-value", "datetime", "value"]) {
       const v = el.getAttribute && el.getAttribute(attr);
@@ -99,6 +102,7 @@
     window.__anticipyMap = {};
     counter = 0;
     const lines = [];
+    const fields = [];
     const sel = "a[href], button, input, select, textarea, [role=button], [role=link], " +
       "[role=option], [role=gridcell], [role=menuitem], [role=tab], [onclick], [tabindex]";
     // Scope to the open dialog/calendar when there is one, so the budget is
@@ -117,6 +121,21 @@
       window.__anticipyMap[idx] = el;
       const r = el.getBoundingClientRect();
       let extra = "";
+      if (!isSensitive(el) && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) {
+        const type = String(el.type || el.tagName).toLowerCase();
+        let value = el.value;
+        if (type === "checkbox" || type === "radio") value = !!el.checked;
+        else if (el.tagName === "SELECT") {
+          const option = el.options[el.selectedIndex];
+          value = option ? String(option.textContent || option.value).trim() : String(el.value || "");
+        }
+        fields.push({
+          name: String(el.name || el.id || "").slice(0, 100),
+          label: label(el).slice(0, 160),
+          type,
+          value: typeof value === "boolean" ? value : String(value || "").slice(0, 1000),
+        });
+      }
       // Sensitivity FIRST: label() redacts these, and dumping their options
       // or current value here would leak exactly what it protects — a saved
       // card expiry or date of birth would reach the model on the same line.
@@ -164,7 +183,7 @@
     }
     const title = document.title;
     const bodyText = ((overlay || document.body).innerText || "").replace(/\s+/g, " ").slice(0, 1500);
-    return { url: location.href, title, elements: lines.join("\n"), text: bodyText,
+    return { url: location.href, title, elements: lines.join("\n"), text: bodyText, fields,
              overlay: !!overlay };
   };
 
