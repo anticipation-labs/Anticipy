@@ -10,6 +10,7 @@ the browser agent read "Confirm …" as "send a confirmation" and opened Gmail.
 import json
 
 from brain.anticipy_core import (Anticipy, exact_message_continuation,
+                                explicitly_new_task,
                                 progressive_action_continuation,
                                 progressive_continuation)
 from brain.memory import Memory
@@ -31,6 +32,19 @@ def _core(monkeypatch, job, patches):
         @staticmethod
         def patch(url, json=None, timeout=10):
             patches.append(json)
+
+        @staticmethod
+        def post(url, json=None, timeout=10):
+            class Response:
+                @staticmethod
+                def raise_for_status():
+                    return None
+
+                @staticmethod
+                def json():
+                    return {"id": "job2", "status": "awaiting_confirm"}
+
+            return Response()
     monkeypatch.setattr(C, "pb", FakePB)
     return a
 
@@ -101,6 +115,44 @@ def test_a_declared_separate_task_never_uses_progressive_merge():
     second = "Send invoice INV-49219 to the finance team"
     assert not progressive_continuation(
         "Separate task, also send it to finance", second, first)
+
+
+def test_explicit_new_task_language_is_a_hard_discourse_boundary():
+    for line in (
+        "Separate task, also submit the expense",
+        "Another errand: book a second table",
+        "On a separate note, send Maya the invoice",
+        "Separately, renew the license",
+        "This is a separate request: cancel the subscription",
+    ):
+        assert explicitly_new_task(line), line
+    assert not explicitly_new_task("This is not a separate task; amend the first one")
+    assert not explicitly_new_task("Keep working on the same task")
+
+
+def test_explicit_second_task_cannot_be_merged_deduped_or_refined(monkeypatch):
+    patches = []
+    first = ("Submit Sofia Chen's talk Ambient AI Without Surprises to the "
+             "Applied AI track as a 30-minute session")
+    second = ("Submit a $100.06 client-meal expense from Lighthouse Table "
+              "dated Saturday, category Meals, purpose investor product review")
+    job = _Job(first, {"source": "submit the conference talk"})
+    a = _core(monkeypatch, job, patches)
+    a._open_plan = ("job1", __import__("time").time(), first)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("an explicit new task must bypass every merge judge")
+
+    monkeypatch.setattr(a, "_same_plan", forbidden)
+    monkeypatch.setattr(a, "_same_pending", forbidden)
+    monkeypatch.setattr(a, "_refines_pending", forbidden)
+    assert a._queue_job(
+        second,
+        {"source": "Separate task, also " + second},
+        explicit=True,
+    ) == "job2"
+    assert patches == []
+    assert a._open_plan[0] == "job2"
 
 
 def test_exact_message_split_at_colon_is_reassembled_verbatim():

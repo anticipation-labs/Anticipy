@@ -111,6 +111,25 @@ _EXPLICIT_CORRECTION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# The owner can close the semantic question himself.  If he says this is a
+# separate/new/another task, no model similarity verdict may fold it into the
+# card already being discussed.  This is intentionally about discourse, not
+# any task domain; it protects two bookings just as it protects a conference
+# submission followed by an expense report.
+_EXPLICIT_NEW_TASK_RE = re.compile(
+    r"^\s*(?:(?:a\s+)?(?:separate|different|new|another)\s+"
+    r"(?:task|errand|request|thing)\b|"
+    r"(?:on\s+)?(?:a\s+)?separate\s+note\b|separately\b)|"
+    r"\b(?:this|that)\s+is\s+(?:a\s+)?separate\s+"
+    r"(?:task|errand|request|thing)\b",
+    re.IGNORECASE,
+)
+
+
+def explicitly_new_task(line: str) -> bool:
+    """Did the speaker explicitly declare a fresh, independent errand?"""
+    return _EXPLICIT_NEW_TASK_RE.search(line or "") is not None
+
 
 # Addressee pre-filter OUTSIDE the model (roadmap §7.1). The obvious case is
 # decided deterministically: a very long, fluent run of instruction-like
@@ -1290,7 +1309,8 @@ class Anticipy:
         # tests are goal-specific and answer a question about THIS work; a bare
         # open plan answers a question about some other work.
         already = None
-        if decision.decision == "act" and decision.goal:
+        if (decision.decision == "act" and decision.goal
+                and not explicitly_new_task(line)):
             try:
                 already = (self._same_pending(decision.goal)
                            or self._refines_pending(decision.goal))
@@ -1812,7 +1832,9 @@ class Anticipy:
         # share not one word — only the fact that he is still talking about
         # it, plus a meaning check that it IS the same plan and not a second
         # errand raised in the same breath.
-        if self._RETRACT_RE.match(goal or ""):
+        declared_new_task = explicitly_new_task(
+            str((params or {}).get("source") or ""))
+        if not declared_new_task and self._RETRACT_RE.match(goal or ""):
             retracted = self._retract_pending(goal)
             # An overheard "scratch that" ends here either way. If she held
             # the plan, it is now cancelled; if she never held it, there is
@@ -1825,7 +1847,8 @@ class Anticipy:
                 return None
             if not explicit and self._retracting_mere_talk(goal):
                 return None
-        if is_consequential(goal, params, explicit=explicit):
+        if (not declared_new_task
+                and is_consequential(goal, params, explicit=explicit)):
             open_plan = self._open_plan
             if open_plan and time.time() - open_plan[1] < OPEN_PLAN_WINDOW:
                 job_id = open_plan[0]
@@ -1859,7 +1882,7 @@ class Anticipy:
                     self._open_plan = (job_id, time.time(), goal)
                     return job_id
 
-        existing = self._same_pending(goal)
+        existing = None if declared_new_task else self._same_pending(goal)
         if existing:
             # Same card — but a correction ("make it 7 not 8") arrives as the
             # same plan with a changed detail, and returning without writing
@@ -1881,7 +1904,7 @@ class Anticipy:
         # is half the length), so his desk filled up with one card per turn of
         # the conversation. When the new goal contains the pending one, she
         # has simply learned more: improve that card in place.
-        refined = self._refines_pending(goal)
+        refined = None if declared_new_task else self._refines_pending(goal)
         if refined:
             current = next((j for j in self._pending_jobs()
                             if j.get("id") == refined), None)
