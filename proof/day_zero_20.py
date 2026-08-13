@@ -501,6 +501,17 @@ def _ordered_subsequence(needle, haystack):
     return False
 
 
+def _number_tokens(tokens):
+    """Normalize spoken small numbers only for compact semantic controls."""
+    number_words = {
+        "zero": "0", "one": "1", "two": "2", "three": "3",
+        "four": "4", "five": "5", "six": "6", "seven": "7",
+        "eight": "8", "nine": "9", "ten": "10", "eleven": "11",
+        "twelve": "12",
+    }
+    return [number_words.get(token, token) for token in tokens]
+
+
 def _compact_semantic_field(spec):
     """Is this a short category/outcome, rather than an identity or prose?"""
     identity = " ".join(re.findall(
@@ -552,15 +563,17 @@ def _values_equal(spec, got, today, known_fields=(), authority=""):
         # prose fields remain strict. Negation never becomes equivalent.
         if _compact_semantic_field(spec) and got_core and expected_core:
             negations = {"no", "not", "never", "without", "dont", "instead"}
-            if not (negations & (set(got_core) ^ set(expected_core))):
-                if _ordered_subsequence(got_core, expected_core):
+            semantic_got = _number_tokens(got_core)
+            semantic_expected = _number_tokens(expected_core)
+            if not (negations & (set(semantic_got) ^ set(semantic_expected))):
+                if _ordered_subsequence(semantic_got, semantic_expected):
                     return True
-                if (_ordered_subsequence(expected_core, got_core)
-                        and len(got_core) - len(expected_core) <= 3):
-                    authority_tokens = set(re.findall(
-                        r"[a-z0-9]+", str(authority or "").casefold()))
-                    extras = [token for token in got_core
-                              if token not in set(expected_core)]
+                if (_ordered_subsequence(semantic_expected, semantic_got)
+                        and len(semantic_got) - len(semantic_expected) <= 3):
+                    authority_tokens = set(_number_tokens(re.findall(
+                        r"[a-z0-9]+", str(authority or "").casefold())))
+                    extras = [token for token in semantic_got
+                              if token not in set(semantic_expected)]
                     if extras and all(token in authority_tokens for token in extras):
                         return True
         # A portal can echo its own field noun into the value: field “Trip”

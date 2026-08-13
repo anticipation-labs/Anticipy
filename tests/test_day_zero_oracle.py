@@ -1,6 +1,6 @@
 from datetime import date
 
-from proof.day_zero_20 import values_match
+from proof.day_zero_20 import _values_equal, values_match
 
 
 TODAY = date(2026, 8, 12)
@@ -102,3 +102,24 @@ def test_free_text_may_repeat_other_form_values_but_not_add_an_outcome():
     assert values_match(case, actual, today=TODAY) == []
     actual["resolution"] += " and refund"
     assert values_match(case, actual, today=TODAY)
+
+
+def test_compact_term_accepts_spoken_number_equivalence():
+    spec = {"name": "term", "label": "Renewal term",
+            "value": "1 year", "kind": "text"}
+    assert _values_equal(spec, "one year", TODAY,
+                         authority="renew for one year")
+
+
+def test_compact_term_still_rejects_a_different_number():
+    spec = {"name": "term", "label": "Renewal term",
+            "value": "1 year", "kind": "text"}
+    assert not _values_equal(spec, "two years", TODAY,
+                             authority="renew for one year")
+
+
+def test_identity_fields_do_not_normalize_words_into_digits():
+    spec = {"name": "workspace", "label": "Workspace",
+            "value": "Studio 1", "kind": "text"}
+    assert not _values_equal(spec, "Studio One", TODAY,
+                             authority="Studio One and Studio 1")
