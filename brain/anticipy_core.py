@@ -26,7 +26,7 @@ import requests
 
 from . import pb
 
-from .llm import LLM, now_line
+from .llm import LLM, now_line, owner_tz
 from .memory import Memory
 from .workflow import (Consequence, approve as approve_plan,
                        cancel as cancel_plan, from_params as workflow_from_params,
@@ -370,6 +370,18 @@ short, specific, one question at most.
 Reply ONLY with compact JSON:
 {{"initiate":true|false,"say":"<the text, or null>","goal":"<job goal to prepare, or null>","loop_ids":[<ids you are acting on>],"reason":"<8 words>"}}"""
 
+# A clock can remind someone about a fact, but it cannot manufacture a task
+# from that fact.  The model once turned "Remember that my dentist appointment
+# is Friday at 3" into a browser job to "confirm appointment details".  Only
+# the owner's own words expressing an obligation or request authorize the
+# clock to prepare work; everything else remains a reminder with goal=null.
+_CLOCK_ACTION_SOURCE_RE = re.compile(
+    r"\b(?:i\s+(?:need|have|got|ought|plan|intend|promised|said|agreed)\s+to|"
+    r"i(?:'ll|\s+will|\s+should|\s+must|\s+gotta)|"
+    r"remind\s+me\s+to|can\s+you|could\s+you|would\s+you|please\b)",
+    re.IGNORECASE,
+)
+
 
 BRIEFING_SYSTEM = f"""You are {NAME}, the person's personal assistant who lives
 in their Anticipy pendant. You are warm, brief, and competent — a trusted
@@ -447,6 +459,9 @@ class Anticipy:
         if self.owner_ref:
             return f'owner_ref="{self.owner_ref}"'
         return f'owner="{self.owner_id}"' if self.owner_id else ""
+
+    def _now_line(self) -> str:
+        return now_line(getattr(self.llm, "owner_zone", None))
 
     # ------------------------------------------------------------ hearing
 
@@ -762,7 +777,7 @@ class Anticipy:
                     reason=f"not his to do: {reason} — {goal!r}",
                     addressee=addressee, owes=decision.owes),
                     "anticipy_says": None}
-            params = {"source": line, "now": now_line(), "lane": "ambient"}
+            params = {"source": line, "now": self._now_line(), "lane": "ambient"}
             job_id = self._queue_job(goal, params)
             self.loops.append(LoopRecord(
                 commitment_id=mem.get("commitment_id") or -1,
@@ -833,7 +848,7 @@ class Anticipy:
             quiet_research = bool(goal) and not consequential
             if quiet_research:
                 # Free to do, lands on her desk — queued unheld, said nowhere.
-                params = {"source": line, "now": now_line(), "lane": "ambient"}
+                params = {"source": line, "now": self._now_line(), "lane": "ambient"}
                 if decision.assumption:
                     params["assumption"] = decision.assumption
                 job_id = self._queue_job(goal, params)
@@ -888,7 +903,7 @@ class Anticipy:
                     decision.assumption = (
                         (decision.assumption + " — " if decision.assumption
                          else "") + f"from what I know about you: {picked}")
-                params = {"source": line, "now": now_line(), "lane": "desk"}
+                params = {"source": line, "now": self._now_line(), "lane": "desk"}
                 for k, v in filled.items():
                     key = re.sub(r"\W+", " ", k).strip().lower()[:48]
                     if key:
@@ -1147,7 +1162,7 @@ class Anticipy:
         if decision.decision == "act" and decision.goal:
             # The executor needs temporal ground truth: a job run today with
             # no "now" produced an OpenTable result dated a YEAR in the past.
-            params = {"source": line, "now": now_line()}
+            params = {"source": line, "now": self._now_line()}
             if channel:
                 params["channel"] = channel
             for k, v in (getattr(self, "_memory_filled", None) or {}).items():
@@ -1290,7 +1305,7 @@ class Anticipy:
             # The asked-about plan is held — the answer amends it, his
             # go-ahead releases it, and "forget it" kills it.
             if handled and decision.goal:
-                params = {"source": line, "now": now_line()}
+                params = {"source": line, "now": self._now_line()}
                 if channel:
                     params["channel"] = channel
                 if decision.missing:
@@ -1723,12 +1738,13 @@ class Anticipy:
             print(f"clock: not raising {len(mute)} unevidenced loop(s): {mute[:5]}")
         if not fresh:
             return None
-        from .llm import TZ
         from datetime import datetime as _dt
         payload = {
             # Owner-local, not container-UTC — must agree with the grounded
             # now-line every prompt already carries.
-            "local_time": _dt.fromtimestamp(ts, TZ).strftime("%A %H:%M"),
+            "local_time": _dt.fromtimestamp(
+                ts, owner_tz(getattr(self.llm, "owner_zone", None)))
+                .strftime("%A %H:%M"),
             "open_loops": [
                 {"id": l["id"], "what": l["what"],
                  "age_hours": round((ts - l["ts"]) / 3600, 1),
@@ -1750,6 +1766,12 @@ class Anticipy:
         goal = raw.get("goal")
         if goal in ("", "null"):
             goal = None
+        loop_ids = [int(i) for i in raw.get("loop_ids", []) if str(i).isdigit()]
+        selected = [l for l in fresh if not loop_ids or l["id"] in loop_ids]
+        if goal and not any(_CLOCK_ACTION_SOURCE_RE.search(
+                str(loop.get("source") or "")) for loop in selected):
+            print(f"clock: reminder has no owner-authored task — dropping model goal {goal!r}")
+            goal = None
         # The caller owns the durable "have I already brought this up?" check —
         # it needs the record of what actually went out, which lives in the
         # backend, not in this process. It is given the goal as well as the
@@ -1765,11 +1787,10 @@ class Anticipy:
             held = is_consequential(goal)
             job_id = self._queue_job(
                 goal, {"source": "clock initiative", "say": say,
-                       "now": now_line()}, hold=held)
+                       "now": self._now_line()}, hold=held)
             # Without a LoopRecord the job is invisible to status_report() and
             # briefing(): she'd text about a booking, then answer "what's
             # open?" with "nothing".
-            loop_ids = [int(i) for i in raw.get("loop_ids", []) if str(i).isdigit()]
             self.loops.append(LoopRecord(
                 commitment_id=loop_ids[0] if loop_ids else -1,
                 what=goal,
@@ -1777,8 +1798,7 @@ class Anticipy:
                 job_id=job_id,
             ))
         self.notify_owner(say)
-        return {"say": say, "goal": goal,
-                "loop_ids": [int(i) for i in raw.get("loop_ids", []) if str(i).isdigit()]}
+        return {"say": say, "goal": goal, "loop_ids": loop_ids}
 
     def _same_pending(self, goal: str) -> Optional[str]:
         """Is this same thing already waiting on the owner? Compared on

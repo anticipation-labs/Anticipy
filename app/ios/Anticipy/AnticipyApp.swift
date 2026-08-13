@@ -435,6 +435,11 @@ final class AnticipySession: ObservableObject {
             let (token, id) = try await backend.authWithPassword(email: email, password: password)
             authToken = token
             accountID = id
+            // The account email is already a verified fact from the auth
+            // boundary. Carry it straight into onboarding/profile defaults;
+            // otherwise a new customer sees the literal placeholder
+            // "you@example.com" after signing up with their real address.
+            ownerEmail = email.trimmingCharacters(in: .whitespaces).lowercased()
             // Adopt this device's pre-accounts rows onto the account before the
             // first refresh, so the feed is already theirs when it paints.
             await backend.claimLegacy(legacyUUID: ownerID)

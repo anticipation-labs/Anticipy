@@ -25,6 +25,7 @@ struct OnboardingView: View {
     @State private var phoneSaveFailed = false
     @State private var savingPhone = false
     @State private var phoneSkipped = false
+    @State private var detailsSaved = false
     // Her name and email were never asked for anywhere in onboarding, only
     // buried in Settings. That is why she invents them: a booking form wants a
     // name and an email, and with none on file she fills the blank rather than
@@ -222,17 +223,31 @@ struct OnboardingView: View {
             return
         }
 
-        // The number is the one thing she genuinely cannot work out on her own,
-        // so it advances only when the server confirms it landed.
-        if step == Step.phone, !phoneSaved, session.e164(phone) != nil {
+        // This is one profile checkpoint, not three optimistic fields. The
+        // flow advances only after every non-empty fact is durably stored.
+        if step == Step.phone {
             savingPhone = true
-            let ok = await session.saveOwnerPhone(phone)
-            savingPhone = false
-            guard ok else {
-                withAnimation(Theme.spring) { phoneSaveFailed = true }
-                return
+            if !phoneSaved, session.e164(phone) != nil {
+                let ok = await session.saveOwnerPhone(phone)
+                guard ok else {
+                    savingPhone = false
+                    withAnimation(Theme.spring) { phoneSaveFailed = true }
+                    return
+                }
+                phoneSaved = true
             }
-            phoneSaved = true
+            let first = firstName.trimmingCharacters(in: .whitespaces)
+            let mail = email.trimmingCharacters(in: .whitespaces)
+            if !detailsSaved, !first.isEmpty || !mail.isEmpty {
+                let ok = await session.saveOwnerDetails(first: first, last: "", email: mail)
+                guard ok else {
+                    savingPhone = false
+                    withAnimation(Theme.spring) { phoneSaveFailed = true }
+                    return
+                }
+                detailsSaved = true
+            }
+            savingPhone = false
             phoneSaveFailed = false
         }
 
@@ -252,7 +267,10 @@ struct OnboardingView: View {
         let first = firstName.trimmingCharacters(in: .whitespaces)
         let mail = email.trimmingCharacters(in: .whitespaces)
         if !first.isEmpty || !mail.isEmpty {
-            Task { _ = await session.saveOwnerDetails(first: first, last: "", email: mail) }
+            Task {
+                let ok = await session.saveOwnerDetails(first: first, last: "", email: mail)
+                if ok { detailsSaved = true }
+            }
         }
         guard !phoneSaved, !savingPhone, session.e164(phone) != nil else { return }
         Task {
@@ -532,6 +550,7 @@ struct OnboardingView: View {
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
                     .strokeBorder(Theme.stroke, lineWidth: 1))
                 .task { if firstName.isEmpty { firstName = session.ownerFirstName } }
+                .onChange(of: firstName) { _ in detailsSaved = false; phoneSaveFailed = false }
             TextField("you@example.com", text: $email)
                 .keyboardType(.emailAddress)
                 .textContentType(.emailAddress)
@@ -546,6 +565,7 @@ struct OnboardingView: View {
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
                     .strokeBorder(Theme.stroke, lineWidth: 1))
                 .task { if email.isEmpty { email = session.ownerEmail } }
+                .onChange(of: email) { _ in detailsSaved = false; phoneSaveFailed = false }
             TextField("+1 604 555 0123", text: $phone)
                 .keyboardType(.phonePad)
                 .textContentType(.telephoneNumber)
@@ -584,7 +604,7 @@ struct OnboardingView: View {
             }
             if phoneSaveFailed {
                 VStack(spacing: 10) {
-                    Text("I couldn't save that just now — I need a connection to keep it. Your number is still here.")
+                    Text("I couldn't save that just now — I need a connection to keep it. Everything you entered is still here.")
                         .font(.footnote)
                         .foregroundStyle(Theme.sand)
                         .multilineTextAlignment(.center)
@@ -614,6 +634,7 @@ struct OnboardingView: View {
                 .font(Theme.display(30))
                 .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
+                .fixedSize(horizontal: false, vertical: true)
             Text("I work inside your own Chrome, using the accounts you're already signed in to. I never ask for a password.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
@@ -629,7 +650,7 @@ struct OnboardingView: View {
             numbered(2, "Follow it — you'll turn on one Chrome setting to add me")
             numbered(3, "Type the 6-digit code it shows you, here")
 
-            if let setup = URL(string: "https://backend-production-61e0a.up.railway.app/setup.html") {
+            if let setup = URL(string: session.backendURLString)?.appendingPathComponent("setup.html") {
                 ShareLink(item: setup) {
                     Label("Send the guide to my computer", systemImage: "square.and.arrow.up")
                         .font(.callout.weight(.semibold))

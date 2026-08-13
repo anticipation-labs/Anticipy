@@ -172,6 +172,8 @@ def test_only_her_own_messages_count(monkeypatch):
     assert 'kind="anticipy_text"' in seen["filter"]
     assert "transcript" not in seen["filter"], "his own speech must never be the mirror"
     assert "created>=" in seen["filter"], "and only recently"
+    assert "created<=" in seen["filter"], (
+        "a later reply must never make an older replayed transcript look like an echo")
 
 
 # ------------------------------------------------------ the measure itself
@@ -197,6 +199,6 @@ def test_it_runs_before_triage_not_after():
     an echo from ever reaching the part that mints jobs."""
     src = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "brain", "worker.py")).read()
-    echo = src.index("if is_echo_of_her(line):")
+    echo = src.index("if is_echo_of_her(line, before=capture_key(ev)):")
     hear = src.index("out = anticipy.hear(line")
     assert echo < hear, "the echo check must come before hear()"

@@ -4,4 +4,4 @@ WORKDIR /srv
 COPY brain /srv/brain
 RUN pip install --no-cache-dir requests httpx
 ENV PYTHONUNBUFFERED=1
-CMD ["python", "-m", "brain.worker"]
+CMD ["python", "-m", "brain.supervisor"]

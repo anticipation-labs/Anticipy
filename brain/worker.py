@@ -35,6 +35,13 @@ from .workflow import (claim as claim_plan, fail as fail_plan,
 PB = os.environ.get("ANTICIPY_PB", "http://127.0.0.1:8090")
 POLL_SECONDS = 2
 
+# Every production worker process is bound to exactly one account.  Keeping
+# this context process-local is deliberate: Memory, Conversation, the clock,
+# and the model's owner timezone all contain mutable state and therefore must
+# never be shared between people.
+ACTIVE_OWNER_REF = os.environ.get("ANTICIPY_OWNER_REF", "").strip()
+ACTIVE_OWNER_ID = os.environ.get("ANTICIPY_OWNER_ID", "").strip()
+
 # ---- the clock: time-fired proactivity, with guardrails OUTSIDE the model
 CLOCK_EVERY_SECONDS = 30 * 60
 CLOCK_MIN_GAP_SECONDS = 4 * 3600      # at most one unprompted outreach per 4h
@@ -58,6 +65,45 @@ def owner_filter(anticipy) -> str:
         return f'owner_ref="{owner_ref}"'
     owner_id = str(getattr(anticipy, "owner_id", "") or "").strip()
     return f'owner="{owner_id}"' if owner_id else ""
+
+
+def _escaped(value: str) -> str:
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _active_owner_ref(owner_ref: str = "") -> str:
+    return str(owner_ref or ACTIVE_OWNER_REF or "").strip()
+
+
+def _scoped_filter(base: str, owner_ref: str = "") -> str:
+    """Narrow a collection query to this process' account.
+
+    Unit tests for pre-account behaviour intentionally run with no active
+    owner, so an empty context preserves their local fake-query semantics.
+    `main()` itself refuses to poll without a canonical owner, which makes the
+    production path fail closed.
+    """
+    ref = _active_owner_ref(owner_ref)
+    scope = f'owner_ref="{_escaped(ref)}"' if ref else ""
+    if base and scope:
+        return f"({base}) && {scope}"
+    return scope or base
+
+
+def _latest_profile(owner_ref: str = "") -> dict | None:
+    ref = _active_owner_ref(owner_ref)
+    params = {"sort": "-updated", "perPage": 1}
+    if ref:
+        params["filter"] = _scoped_filter("", ref)
+    r = pb.get(
+        f"{PB}/api/collections/owner_profile/records",
+        params=params,
+        timeout=10,
+    )
+    if not r.ok:
+        return None
+    items = r.json().get("items", [])
+    return items[0] if items else None
 
 
 def run_nightly_consolidation(memory, now: float | None = None) -> None:
@@ -99,24 +145,20 @@ def run_nightly_consolidation(memory, now: float | None = None) -> None:
         print(f"consolidation failed (harmless): {e}")
 
 
-def fetch_owner_phone() -> str | None:
+def fetch_owner_phone(owner_ref: str = "") -> str | None:
     """The owner's number as THEY entered it in the app. Falls back to the
     env var so an existing deployment keeps working, but the app is now the
     source of truth — nobody should have to hand-edit a server variable to
     make their own assistant able to text them."""
     try:
-        r = pb.get(f"{PB}/api/collections/owner_profile/records",
-                   params={"sort": "-updated", "perPage": 1}, timeout=10)
-        if not r.ok:
-            return None
-        items = r.json().get("items", [])
-        phone = (items[0].get("phone") or "").strip() if items else ""
+        profile = _latest_profile(owner_ref)
+        phone = (profile.get("phone") or "").strip() if profile else ""
         return phone or None
     except Exception:
         return None
 
 
-def fetch_owner_timezone() -> str | None:
+def fetch_owner_timezone(owner_ref: str = "") -> str | None:
     """The owner's own IANA zone, as their phone reported it.
 
     Before this, the zone was one server-wide env var, so every prompt was
@@ -128,12 +170,8 @@ def fetch_owner_timezone() -> str | None:
     None when unknown, which restores the old behaviour exactly.
     """
     try:
-        r = pb.get(f"{PB}/api/collections/owner_profile/records",
-                   params={"sort": "-updated", "perPage": 1}, timeout=10)
-        if not r.ok:
-            return None
-        items = r.json().get("items", [])
-        tz = (items[0].get("timezone") or "").strip() if items else ""
+        profile = _latest_profile(owner_ref)
+        tz = (profile.get("timezone") or "").strip() if profile else ""
         return tz or None
     except Exception:
         return None
@@ -158,10 +196,9 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
     if not digits or digits in state.get("welcomed_phones", []):
         return False
     try:
-        r = pb.get(f"{PB}/api/collections/owner_profile/records",
-                   params={"sort": "-updated", "perPage": 1}, timeout=10)
-        items = r.json().get("items", []) if r.ok else []
-        created = (items[0].get("created") or "") if items else ""
+        profile = _latest_profile(getattr(anticipy, "owner_ref", ""))
+        items = [profile] if profile else []
+        created = (profile.get("created") or "") if profile else ""
         ts = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() \
             if created else 0
     except Exception:
@@ -188,34 +225,35 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
         return False
     state.setdefault("welcomed_phones", []).append(digits)
     _save_clock_state(state)
-    post_event("anticipy_says", said, decision="welcome", goal="")
+    post_event("anticipy_says", said, decision="welcome", goal="",
+               owner_ref=getattr(anticipy, "owner_ref", ""),
+               owner_id=getattr(anticipy, "owner_id", ""))
     print(f"welcomed new owner …{digits[-4:]}")
     return True
 
 
-def seed_profile_identity(memory, _seen={}) -> None:
+_PROFILE_SEEN: dict[str, str] = {}
+
+
+def seed_profile_identity(memory, _seen=None, owner_ref: str = "") -> None:
     """Day zero: what he TOLD her at onboarding (name, email) becomes profile
     knowledge the moment the worker sees it — she must never have to overhear
     her own owner's name. Idempotent: remember_fact merges restatements, and
     the seen-cache keeps the poll from re-writing unchanged values."""
     try:
-        r = pb.get(f"{PB}/api/collections/owner_profile/records",
-                   params={"sort": "-updated", "perPage": 1}, timeout=10)
-        if not r.ok:
+        seen = _PROFILE_SEEN if _seen is None else _seen
+        p = _latest_profile(owner_ref)
+        if not p:
             return
-        items = r.json().get("items", [])
-        if not items:
-            return
-        p = items[0]
         first = (p.get("first_name") or "").strip()
         last = (p.get("last_name") or "").strip()
         email = (p.get("email") or "").strip()
         name = " ".join(x for x in (first, last) if x)
         for key, fact in (("name", f"Their name is {name}." if name else ""),
                           ("email", f"Their email is {email}." if email else "")):
-            if fact and _seen.get(key) != fact:
+            if fact and seen.get(key) != fact:
                 memory.remember_fact(fact, importance=5, source="interview")
-                _seen[key] = fact
+                seen[key] = fact
                 print(f"profile seeded from onboarding: {key}")
     except Exception as e:
         print(f"profile identity seed failed (harmless): {e}")
@@ -304,11 +342,20 @@ def ensure_inbound_webhook() -> None:
         print(f"webhook check failed (harmless): {e}")
 
 
-def post_event(kind: str, text: str, decision: str = "", goal: str = "") -> None:
-    pb.post(f"{PB}/api/collections/events/records", json={
+def post_event(kind: str, text: str, decision: str = "", goal: str = "",
+               owner_ref: str = "", owner_id: str = "") -> None:
+    ref = _active_owner_ref(owner_ref)
+    legacy = str(owner_id or ACTIVE_OWNER_ID or "").strip()
+    body = {
         "device_id": "anticipy-brain", "kind": kind, "text": text,
         "decision": decision, "goal": goal or "",
-    }, timeout=10)
+    }
+    if ref:
+        body["owner_ref"] = ref
+    if legacy:
+        body["owner"] = legacy
+    response = pb.post(f"{PB}/api/collections/events/records", json=body, timeout=10)
+    response.raise_for_status()
 
 
 _STOPWORDS = {
@@ -396,7 +443,7 @@ def ambient_job(job: dict) -> bool:
     return isinstance(params, dict) and params.get("lane") == "ambient"
 
 
-def browser_reachable() -> bool:
+def browser_reachable(owner_ref: str = "") -> bool:
     """Is his Chrome actually there to do the work?
 
     Nothing in the brain ever asked. A resumed task goes to `queued` and waits
@@ -406,7 +453,7 @@ def browser_reachable() -> bool:
     desk is the normal case, not the edge case."""
     try:
         r = pb.get(f"{PB}/api/collections/agents/records",
-                   params={"filter": "paired=true", "sort": "-updated",
+                   params={"filter": _scoped_filter("paired=true", owner_ref), "sort": "-updated",
                            "perPage": 1}, timeout=10)
         if not r.ok:
             return True          # unknown is not "absent": never invent bad news
@@ -764,7 +811,8 @@ ECHO_RUN = 6
 ECHO_FRACTION = 0.6
 
 
-def is_echo_of_her(line: str, minutes: float = 30.0) -> bool:
+def is_echo_of_her(line: str, minutes: float = 30.0, owner_ref: str = "",
+                   before: float | None = None) -> bool:
     """Is he simply reading back something SHE said?
 
     He does it constantly while testing, and every time she has taken it as a
@@ -780,11 +828,15 @@ def is_echo_of_her(line: str, minutes: float = 30.0) -> bool:
     if len(_words(line)) < ECHO_RUN:
         return False
     try:
-        since = (datetime.now(timezone.utc)
-                 - timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        cutoff = before if before is not None else time.time()
+        since = datetime.fromtimestamp(
+            cutoff - minutes * 60, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        until = datetime.fromtimestamp(
+            cutoff, timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%fZ")
+        filt = (f'(kind="anticipy_says" || kind="anticipy_text")'
+                f' && created>="{since}" && created<="{until}"')
         r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": f'(kind="anticipy_says" || kind="anticipy_text")'
-                                     f' && created>="{since}"',
+                   params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 40, "sort": "-created"}, timeout=10)
         if not r.ok:
             return False
@@ -839,7 +891,8 @@ def carries_facts(said: str, facts: str) -> bool:
     return src <= out
 
 
-def asked_about_recently(goal: str, minutes: float = 45.0) -> bool:
+def asked_about_recently(goal: str, minutes: float = 45.0,
+                         owner_ref: str = "") -> bool:
     """Did she already ask about THIS task a moment ago?
 
     The existing guard compares the browser's words about what it needs
@@ -860,9 +913,10 @@ def asked_about_recently(goal: str, minutes: float = 45.0) -> bool:
     try:
         since = (datetime.now(timezone.utc)
                  - timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
+        filt = (f'kind="anticipy_says" && decision="needs_user"'
+                f' && created>="{since}"')
         r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": f'kind="anticipy_says" && decision="needs_user"'
-                                     f' && created>="{since}"',
+                   params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 50, "sort": "-created"}, timeout=10)
         if not r.ok:
             return False
@@ -874,7 +928,7 @@ def asked_about_recently(goal: str, minutes: float = 45.0) -> bool:
 
 
 def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
-                       covered: float = 0.5) -> bool:
+                       covered: float = 0.5, owner_ref: str = "") -> bool:
     """Has she already told him what THIS task is waiting for?
 
     Keying on the task alone was wrong in a way that only shows up on the
@@ -897,8 +951,9 @@ def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
     try:
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        filt = f'kind="anticipy_says" && created>="{since}"'
         r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": f'kind="anticipy_says" && created>="{since}"',
+                   params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not r.ok:
             return False
@@ -925,7 +980,7 @@ def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
 
 
 def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
-                   decision: str | None = None) -> bool:
+                   decision: str | None = None, owner_ref: str = "") -> bool:
     """Has she already brought THIS up with him?
 
     Keyed on the task, not the sentence. Her wording is generated fresh every
@@ -938,7 +993,8 @@ def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
     Falls back to text comparison only when there is no goal to key on."""
     goal = (goal or "").strip()
     if not goal:
-        return already_said(text, within_hours=within_hours)
+        return already_said(text, within_hours=within_hours,
+                            owner_ref=owner_ref)
     try:
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
@@ -953,7 +1009,8 @@ def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
         elif decision:
             filt += f' && decision="{decision}"'
         r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": filt, "perPage": 100, "sort": "-created"},
+                   params={"filter": _scoped_filter(filt, owner_ref),
+                           "perPage": 100, "sort": "-created"},
                    timeout=10)
         if not r.ok:
             return False
@@ -978,7 +1035,8 @@ def already_raised(goal: str, text: str = "", within_hours: float = 24.0,
         return False
 
 
-def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6) -> bool:
+def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6,
+                 owner_ref: str = "") -> bool:
     """Has she already sent essentially this message recently?
 
     She does not repeat herself. Every unprompted message is checked against
@@ -997,8 +1055,9 @@ def already_said(text: str, within_hours: float = 24.0, overlap: float = 0.6) ->
     try:
         since = (datetime.now(timezone.utc)
                  - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        filt = f'kind="anticipy_says" && created>="{since}"'
         r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": f'kind="anticipy_says" && created>="{since}"',
+                   params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not r.ok:
             return False
@@ -1034,7 +1093,7 @@ NAG_WINDOW_DAYS = 14
 NAG_OVERLAP = 0.34
 
 
-def raised_and_ignored(goal: str, text: str = "") -> bool:
+def raised_and_ignored(goal: str, text: str = "", owner_ref: str = "") -> bool:
     """Has she already put this to him more than once, and got nowhere?
 
     Every existing guard is same-day and keyed on an open loop's ID. A loop
@@ -1061,8 +1120,9 @@ def raised_and_ignored(goal: str, text: str = "") -> bool:
     try:
         since = (datetime.now(timezone.utc)
                  - timedelta(days=NAG_WINDOW_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+        filt = f'kind="anticipy_says" && created>="{since}"'
         r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": f'kind="anticipy_says" && created>="{since}"',
+                   params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 200, "sort": "-created"}, timeout=10)
         if not r.ok:
             return False
@@ -1276,7 +1336,7 @@ LINK_WINDOW = 40
 LINKS_ON = os.environ.get("ANTICIPY_LINKS", "").lower() in ("1", "true", "on")
 
 
-def link_candidates(kind: str = "transcript") -> list[tuple[str, str]]:
+def link_candidates(kind: str = "transcript", owner_ref: str = "") -> list[tuple[str, str]]:
     """Recent heard lines as (id, text), oldest first, for the link question.
 
     Blanks are dropped HERE, where ids and texts leave together, so the two
@@ -1287,7 +1347,8 @@ def link_candidates(kind: str = "transcript") -> list[tuple[str, str]]:
     try:
         r = pb.get(
             f"{PB}/api/collections/events/records",
-            params={"filter": f'kind="{kind}"', "perPage": LINK_WINDOW + 8,
+            params={"filter": _scoped_filter(f'kind="{kind}"', owner_ref),
+                    "perPage": LINK_WINDOW + 8,
                     "sort": "-created"},
             timeout=10,
         )
@@ -1481,15 +1542,28 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
 
 
 def main() -> None:
+    global ACTIVE_OWNER_REF, ACTIVE_OWNER_ID, CLOCK_TZ
+    legacy_owner = os.environ.get("ANTICIPY_OWNER_ID", "").strip()
+    owner_ref = resolve_owner_ref(legacy_owner)
+    if not owner_ref:
+        print("ERROR: canonical owner_ref is unresolved — refusing to start an "
+              "unscoped worker")
+        return
+    ACTIVE_OWNER_REF = owner_ref
+    ACTIVE_OWNER_ID = legacy_owner
     # The owner's own zone, from their profile — so every prompt is grounded in
     # THEIR time of day and THEIR city, not the server's. Read once at startup
     # and refreshed on the same beat as the phone number below; unknown simply
     # means the old server-default behaviour.
-    llm = LLM(owner_zone=fetch_owner_timezone())
+    owner_zone = fetch_owner_timezone(owner_ref)
+    llm = LLM(owner_zone=owner_zone)
+    if owner_zone:
+        try:
+            CLOCK_TZ = ZoneInfo(owner_zone)
+        except Exception:
+            print(f"owner timezone is invalid, using {CLOCK_TZ}: {owner_zone!r}")
     mem_db = os.environ.get("ANTICIPY_MEMORY_DB", ":memory:")
     memory = Memory(path=mem_db, llm=llm if llm.live else None)
-    legacy_owner = os.environ.get("ANTICIPY_OWNER_ID", "")
-    owner_ref = resolve_owner_ref(legacy_owner)
     anticipy = Anticipy(llm=llm if llm.live else None, memory=memory, backend_url=PB,
                         owner_phone=os.environ.get("ANTICIPY_OWNER_PHONE", "owner"),
                         owner_id=legacy_owner, owner_ref=owner_ref)
@@ -1520,14 +1594,10 @@ def main() -> None:
         # would sit queued forever with nothing reporting a problem.
         print("WARNING: ANTICIPY_OWNER_ID is unset — queued jobs will carry no "
               "owner and NO browser agent will ever claim them.")
-    if not anticipy.owner_ref:
-        print("ERROR: canonical owner_ref is unresolved — hearing is paused "
-              "rather than reading another person's transcripts")
     if not same_phone(anticipy.owner_phone, anticipy.owner_phone):
         print("WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — "
               "every inbound text will be ignored as non-owner.")
 
-    sent_seen = 0
     last_clock = 0.0
     last_profile = 0.0
     last_webhook = 0.0
@@ -1537,7 +1607,7 @@ def main() -> None:
             # without a redeploy.
             if time.time() - last_profile > 60:
                 last_profile = time.time()
-                entered = fetch_owner_phone()
+                entered = fetch_owner_phone(anticipy.owner_ref)
                 if entered and entered != anticipy.owner_phone:
                     anticipy.owner_phone = entered
                     print(f"owner phone updated from the app: …{entered[-4:]}")
@@ -1548,16 +1618,22 @@ def main() -> None:
                 # Same beat for the zone: somebody travels, or onboards after
                 # the worker started, and every prompt should follow them
                 # without a redeploy.
-                zone = fetch_owner_timezone()
+                zone = fetch_owner_timezone(anticipy.owner_ref)
                 if zone and zone != llm.owner_zone:
                     llm.owner_zone = zone
+                    try:
+                        CLOCK_TZ = ZoneInfo(zone)
+                    except Exception:
+                        pass
                     print(f"owner timezone updated from the app: {zone}")
                 # What onboarding collected becomes profile knowledge on the
                 # same beat — she should know his name from minute one.
-                seed_profile_identity(memory)
+                seed_profile_identity(memory, owner_ref=anticipy.owner_ref)
             # Is the number still wired to us? Cheap, and the failure it
             # catches is invisible from in here — she simply never hears him.
-            if time.time() - last_webhook > WEBHOOK_CHECK_EVERY_SECONDS:
+            manages_webhook = (os.environ.get("ANTICIPY_SUPERVISED") != "1" or
+                               os.environ.get("ANTICIPY_WEBHOOK_MANAGER") == "1")
+            if manages_webhook and time.time() - last_webhook > WEBHOOK_CHECK_EVERY_SECONDS:
                 last_webhook = time.time()
                 ensure_inbound_webhook()
             # The clock: she reviews her open loops on her own schedule and
@@ -1566,7 +1642,13 @@ def main() -> None:
             if now - last_clock >= CLOCK_EVERY_SECONDS:
                 last_clock = now
                 state = _clock_state()
-                if clock_should_run(now, state):
+                # Hearing wins over initiative.  A transcript that is already
+                # waiting must be interpreted before the clock can speak from
+                # memory; otherwise her brand-new output can precede and then
+                # falsely echo-match the older input on a replay.
+                has_pending_input = bool(fetch_unprocessed(
+                    owner_ref=anticipy.owner_ref))
+                if not has_pending_input and clock_should_run(now, state):
                     out = anticipy.clock_tick(
                         now, already_reached_out=set(state.get("reached_loop_ids", [])),
                         may_say=SPEAK_ONCE)
@@ -1598,7 +1680,7 @@ def main() -> None:
                 # ready to add in the spreadsheet", he said that sentence out
                 # loud, and she minted a second job from it. Checked before
                 # triage, so it costs a cheap read instead of a model call.
-                if is_echo_of_her(line):
+                if is_echo_of_her(line, before=capture_key(ev)):
                     mark_processed(ev["id"], "ignore")
                     print(f"heard: {line!r} -> that is her own message read back, ignoring")
                     continue
@@ -1620,7 +1702,8 @@ def main() -> None:
                 # continue itself and offering it would invite exactly that.
                 cands = []
                 if LINKS_ON:
-                    cands = [c for c in link_candidates() if c[0] != ev["id"]]
+                    cands = [c for c in link_candidates(owner_ref=anticipy.owner_ref)
+                             if c[0] != ev["id"]]
                 try:
                     # The phone's local voice verdict rides along when the
                     # app stamped one (owner|other); absent on old builds.
@@ -1752,13 +1835,6 @@ def main() -> None:
             # profile facts (roadmap §1). Incremental and idempotent — a
             # crash or redeploy resumes at the cursor, never repeats.
             run_nightly_consolidation(memory)
-
-            # Surface anything she "texted" (mock transport) into the feed too.
-            sent = getattr(convo.transport, "sent", None)
-            if sent is not None:
-                for msg in sent[sent_seen:]:
-                    post_event("anticipy_text", msg["body"])
-                sent_seen = len(sent)
 
             anticipy.review_loops()
         except requests.RequestException as e:
