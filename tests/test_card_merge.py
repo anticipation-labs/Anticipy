@@ -216,6 +216,31 @@ def test_proven_recognizer_continuation_replaces_partial_paraphrase(monkeypatch)
     assert "; then" not in patches[-1]["goal"]
 
 
+def test_explicit_reschedule_correction_amends_one_card_and_keeps_both_sources(
+        monkeypatch):
+    """A mutation verb cannot turn a correction into a second read-only job."""
+    patches = []
+    original = ("Schedule recall R23-628 for vehicle VIN 1HGCM82633A19078 at "
+                "OpenRoad Honda for Thursday, August 13, 2026 at 6:45 PM")
+    corrected = ("Reschedule vehicle recall R23-629 for VIN "
+                 "1HGCM82633A19078 at OpenRoad Honda tomorrow at 6:45 PM")
+    first_source = ("Anticipy, schedule recall R23-628 for vehicle VIN "
+                    "1HGCM82633A19078 at OpenRoad Honda tomorrow at 6:45 PM")
+    correction_source = ("Actually change R23-628 to R23-629; keep everything "
+                         "else the same.")
+    job = _Job(original, {"source": first_source})
+    a = _core(monkeypatch, job, patches)
+    a._open_plan = ("job1", __import__("time").time(), original)
+
+    assert a._queue_job(corrected, {"source": correction_source},
+                        explicit=True) == "job1"
+    assert len(patches) == 1
+    assert patches[0]["goal"] == corrected
+    merged = json.loads(patches[0]["params"])
+    assert first_source in merged["source"]
+    assert correction_source in merged["source"]
+
+
 def test_discussion_fragment_is_not_promoted_to_an_action():
     assert progressive_action_continuation(
         "we should talk about this: sending messages is stressful",

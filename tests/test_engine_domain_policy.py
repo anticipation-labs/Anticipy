@@ -12,6 +12,7 @@ WORLD_CHANGING_GOALS = [
     "Request a replacement for order PK-77104",
     "Open a mail-in warranty repair for serial SN-A4421",
     "Schedule vehicle recall R24-118 for August 18",
+    "Reschedule vehicle recall R24-118 for August 19",
     "Reduce the Anticipy workspace from 24 seats to 17",
     "Submit Agents That Earn Trust to the Applied AI track",
     "Register Jordan Lee's vehicle for guest parking",
@@ -42,3 +43,13 @@ def test_all_twenty_day_zero_domains_cross_the_confirmation_boundary(goal):
 ])
 def test_read_only_work_stays_outside_the_confirmation_boundary(goal):
     assert not is_consequential(goal, explicit=True), goal
+
+
+@pytest.mark.parametrize("goal", [
+    "Reschedule the dental appointment for Friday",
+    "Rebook the dinner reservation for 7 PM",
+    "Postpone the maintenance visit until Monday",
+    "Delay the license renewal submission until next week",
+])
+def test_plan_mutations_remain_world_changing(goal):
+    assert is_consequential(goal, explicit=True), goal

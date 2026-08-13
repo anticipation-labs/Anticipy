@@ -55,7 +55,8 @@ _VERBS = (
     r"send\w*|email\w*|book\w*|reserv(?:e|es|ed|ing)|buy\w*|purchas\w*|order\w*|pay\w*|"
     r"sign(?:\s+\w+)?\s*up|sign\w*|register\w*|subscrib\w*|submit\w*|post\w*|publish\w*|"
     r"repl(?:y|ies|ying)|messag\w*|text\w*|call\w*|cancel(?:s|led|ling|ed|ing)?|delet\w*|"
-    r"unsubscrib\w*|transfer\w*|schedul\w*|invit(?:e|es|ed|ing)|rsvp|"
+    r"unsubscrib\w*|transfer\w*|schedul\w*|reschedul\w*|rebook\w*|"
+    r"postpon\w*|delay\w*|invit(?:e|es|ed|ing)|rsvp|"
     r"shar\w*|forward\w*|respond\w*|confirm(?:s|ed|ing)?|appl(?:y|ies|ying)|"
     r"wire|venmo|e-?transfer|donat(?:e|es|ed|ing)|checkout|check\s*out|upload\w*|deposit\w*|"
     # Generic portal actions that alter an account or submit a case. These
@@ -91,6 +92,22 @@ _READ_ONLY_RE = re.compile(
     # whenever the judge blinked he got two cards and two texts for one
     # dinner.
     r"pull\s+up|view|display|tell|plan(?:s|ned|ning)?\b)",
+    re.IGNORECASE,
+)
+
+# A correction is an amendment to the plan already on the owner's desk, not
+# a lossy paraphrase of it.  The normal merge guard deliberately refuses to
+# replace a rich goal with a shorter re-mention.  That is correct for vague
+# lines such as "I'll get that booked now", but wrong when the owner's exact
+# words explicitly replace a value ("change R23-628 to R23-629; keep
+# everything else the same").  Keep this boundary narrow and linguistic: it
+# recognizes correction syntax, never a domain, identifier, venue or date.
+_EXPLICIT_CORRECTION_RE = re.compile(
+    r"\b(?:actually\s+)?(?:change|switch|replace|correct|update)\b.{0,160}"
+    r"\b(?:to|with|instead)\b|"
+    r"\bmake\s+(?:it|that|this)\b.{0,120}\b(?:to|not|instead)\b|"
+    r"\binstead\s+of\b|"
+    r"\bkeep\s+(?:everything|the\s+rest)\b.{0,80}\b(?:the\s+)?same\b",
     re.IGNORECASE,
 )
 
@@ -2074,6 +2091,7 @@ class Anticipy:
         erased = have - want
         gained = want - have
         ratio = len(erased) / len(have) if have else 0
+        explicit_correction = bool(_EXPLICIT_CORRECTION_RE.search(new_src))
         # Counting only what a re-mention ERASES asks half the question, and
         # the missing half is the one that decides a real conversation.
         #
@@ -2093,7 +2111,7 @@ class Anticipy:
         # looks the opposite way round — "Confirm Earls West Van tomorrow at
         # 7 PM" over "Book a table for 2 at Earls in West Vancouver for
         # tomorrow evening" erases five and adds two — and is still refused.
-        if ratio <= 1 / 3 or len(gained) > len(erased):
+        if explicit_correction or ratio <= 1 / 3 or len(gained) > len(erased):
             fields["goal"] = goal          # richer or corrected: new wins
         else:
             merged["update"] = goal        # both hold detail: lose neither
