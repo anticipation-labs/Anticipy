@@ -14,7 +14,9 @@ globalThis.chrome = globalThis.chrome || {
 };
 
 const { completionContradiction, groundedFormCorrections,
-        unsupportedApprovedFacts, unsupportedScopeFields } =
+        normalizedAuthorityText, schemaBoundaryCorrections,
+        terminalReceiptEvidence, unsupportedApprovedFacts,
+        unsupportedScopeFields } =
   await import(join(here, "..", "agent_loop.js"));
 const source = readFileSync(join(here, "..", "agent_loop.js"), "utf8");
 
@@ -146,6 +148,62 @@ check(unsupportedScopeFields("Renew the license for one year", { fields: [
 check(unsupportedScopeFields("Renew the license for two years", { fields: [
   { name: "term", value: "1 year" },
 ] }).includes("term"), "a different number remains outside scope");
+check(normalizedAuthorityText(
+  "highway stone caused a 20 … then: yeah, agreed — cm crack")
+  === "highway stone caused a 20 cm crack",
+"the recognizer join marker is removed only for contiguous authorization");
+check(unsupportedScopeFields(
+  "highway stone caused a 20 … then: yeah, agreed — cm crack", { fields: [
+    { name: "damage", label: "Damage", value: "highway stone caused a 20 cm crack" },
+  ] }).length === 0,
+"an exact value spanning a recognizer join remains authorized");
+check(unsupportedScopeFields(
+  "Schedule Jordan Chen at West Coast Dental", { fields: [
+    { name: "clinic", label: "Clinic", value: "Coast Dental" },
+  ] }).includes("clinic"),
+"a named field cannot silently drop a leading proper-name word");
+check(unsupportedScopeFields(
+  "Cancel membership MBR-80189 at StudioBox", { fields: [
+    { name: "member", label: "Membership", value: "MBR-80189 at StudioBox" },
+  ] }).includes("member"),
+"an identifier field cannot absorb its service or location");
+const schoolScope = "Emergency contact Jordan Kim at +1 604 555 4798";
+const schoolFields = { fields: [
+  { index: 1, name: "contact", label: "Emergency contact", value: "Jordan Kim at +1 604 555 4798" },
+  { index: 2, name: "phone", label: "Phone", value: "+16045550142" },
+] };
+check(JSON.stringify(unsupportedScopeFields(schoolScope, schoolFields,
+  { phone: "+16045550142" })) === JSON.stringify(["contact", "phone"]),
+"task contact data cannot bleed across fields or lose to a saved profile phone");
+const boundaryFixes = schemaBoundaryCorrections(schoolFields.fields, schoolScope,
+  schoolFields.fields);
+check(boundaryFixes.some((row) => row.index === 1 && row.value === "Jordan Kim")
+      && boundaryFixes.some((row) => row.index === 2
+        && row.value === "+1 604 555 4798"),
+"schema boundaries reconstruct separate contact and task-phone values");
+const indexedBoundaryFixes = schemaBoundaryCorrections([
+  { index: 1, name: "member", label: "Membership", value: "MBR-80189 at StudioBox" },
+], "Cancel membership MBR-80189 at StudioBox", [
+  { index: 1, name: "member", label: "Membership", value: "MBR-80189 at StudioBox" },
+]);
+check(indexedBoundaryFixes.length === 1 && indexedBoundaryFixes[0].value === "MBR-80189",
+"schema boundaries repair an identifier contaminated by portal context");
+const windowFixes = schemaBoundaryCorrections([
+  { index: 2, name: "window", label: "Window", value: "OLD-3" },
+], "Register the guest from 6 PM to 11 PM", [
+  { index: 2, name: "window", label: "Window", value: "OLD-3" },
+]);
+check(windowFixes.length === 1 && windowFixes[0].value === "6 PM to 11 PM",
+"schema boundaries reconstruct a complete approved time window");
+check(terminalReceiptEvidence({
+  text: "Submitted successfully. Confirmation #A42", title: "Request Portal",
+}), "a success statement plus a receipt identifier is terminal evidence");
+check(!terminalReceiptEvidence({
+  text: "Click Submit to receive Confirmation #A42", title: "Request Portal",
+}), "a page promising future confirmation is not terminal evidence");
+check(!terminalReceiptEvidence({
+  text: "Submitted successfully.", title: "Request Portal",
+}), "success prose without a receipt identifier is not terminal evidence");
 check(completionContradiction("Permission has NOT been submitted and was not granted."),
   "an explicit non-completion can never become done");
 check(completionContradiction("The amounts were not correctly reflected."),

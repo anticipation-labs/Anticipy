@@ -111,6 +111,39 @@ _EXPLICIT_CORRECTION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# The canonical correction utterance carries more information than a model
+# paraphrase: it names the old value, the new value, and explicitly says that
+# every other byte of the plan stays put.  Apply that instruction directly to
+# the existing goal.  This is deliberately much narrower than
+# _EXPLICIT_CORRECTION_RE; looser phrasings still use the semantic merge, while
+# this exact form gets a lossless single replacement.  Replacing once matters
+# when the same person appears in two roles (student and emergency contact).
+_LOSSLESS_REPLACEMENT_RE = re.compile(
+    r"^\s*(?:actually\s+)?(?:change|replace)\s+(.+?)\s+(?:to|with)\s+(.+?)"
+    r"\s*[;,.]?\s*keep\s+(?:everything|the\s+rest)\s+(?:else\s+)?the\s+same"
+    r"\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _lossless_replacement(goal: str, source: str) -> Optional[str]:
+    """Apply ambiguous repeated OLD -> NEW corrections once.
+
+    With one occurrence, the semantic merge may legitimately preserve useful
+    normalization in the new goal (for example, resolving ``tomorrow`` to a
+    calendar date).  The deterministic path is needed when OLD occurs in
+    multiple roles and a paraphraser cannot know which copy the owner meant.
+    """
+    match = _LOSSLESS_REPLACEMENT_RE.match(source or "")
+    if not match:
+        return None
+    old, new = (part.strip() for part in match.groups())
+    occurrences = list(re.finditer(re.escape(old), goal or "", re.IGNORECASE))
+    if len(occurrences) < 2:
+        return None
+    found = occurrences[0]
+    return f"{goal[:found.start()]}{new}{goal[found.end():]}"
+
 # The owner can close the semantic question himself.  If he says this is a
 # separate/new/another task, no model similarity verdict may fold it into the
 # card already being discussed.  This is intentionally about discourse, not
@@ -2149,6 +2182,7 @@ class Anticipy:
         gained = want - have
         ratio = len(erased) / len(have) if have else 0
         explicit_correction = bool(_EXPLICIT_CORRECTION_RE.search(new_src))
+        lossless_goal = _lossless_replacement(cur_goal, new_src)
         # Counting only what a re-mention ERASES asks half the question, and
         # the missing half is the one that decides a real conversation.
         #
@@ -2168,7 +2202,9 @@ class Anticipy:
         # looks the opposite way round — "Confirm Earls West Van tomorrow at
         # 7 PM" over "Book a table for 2 at Earls in West Vancouver for
         # tomorrow evening" erases five and adds two — and is still refused.
-        if explicit_correction or ratio <= 1 / 3 or len(gained) > len(erased):
+        if lossless_goal is not None:
+            fields["goal"] = lossless_goal
+        elif explicit_correction or ratio <= 1 / 3 or len(gained) > len(erased):
             fields["goal"] = goal          # richer or corrected: new wins
         else:
             merged["update"] = goal        # both hold detail: lose neither

@@ -123,3 +123,23 @@ def test_identity_fields_do_not_normalize_words_into_digits():
             "value": "Studio 1", "kind": "text"}
     assert not _values_equal(spec, "Studio One", TODAY,
                              authority="Studio One and Studio 1")
+
+
+def test_compact_choice_may_retain_only_the_grounded_negated_alternative():
+    field = {"name": "resolution", "label": "Resolution",
+             "value": "Replacement", "kind": "text"}
+    case = {
+        "authority_text": "Request a replacement, not a refund",
+        "fields": [field],
+    }
+    assert values_match(case, {"resolution": "replacement, not a refund"},
+                        today=TODAY) == []
+
+    case["authority_text"] = "Request a replacement, not store credit"
+    assert values_match(case, {"resolution": "replacement, not a refund"},
+                        today=TODAY)
+
+    case["authority_text"] = "Request a replacement, not a refund"
+    field["value"] = "Refund"
+    assert values_match(case, {"resolution": "replacement, not a refund"},
+                        today=TODAY)

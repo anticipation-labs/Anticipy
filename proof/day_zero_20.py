@@ -512,6 +512,29 @@ def _number_tokens(tokens):
     return [number_words.get(token, token) for token in tokens]
 
 
+def _grounded_affirmed_contrast(got, expected, authority, soft):
+    """Accept owner-authored ``X, not Y`` only when X is the expected choice."""
+    negations = {"no", "not", "never", "without", "dont", "instead"}
+    pivots = [index for index, token in enumerate(got) if token in negations]
+    if len(pivots) != 1:
+        return False
+    pivot = pivots[0]
+    before, after = got[:pivot], got[pivot + 1:]
+    if not after or not _ordered_subsequence(expected, before):
+        return False
+    if _ordered_subsequence(expected, after):
+        return False
+    authority_core = _number_tokens([
+        token for token in re.findall(
+            r"[a-z0-9]+", str(authority or "").casefold())
+        if token not in soft
+    ])
+    # Grounding is contiguous so unrelated words from different clauses cannot
+    # be stitched into a convenient contrast by the verifier.
+    return any(authority_core[start:start + len(got)] == got
+               for start in range(len(authority_core) - len(got) + 1))
+
+
 def _compact_semantic_field(spec):
     """Is this a short category/outcome, rather than an identity or prose?"""
     identity = " ".join(re.findall(
@@ -565,6 +588,9 @@ def _values_equal(spec, got, today, known_fields=(), authority=""):
             negations = {"no", "not", "never", "without", "dont", "instead"}
             semantic_got = _number_tokens(got_core)
             semantic_expected = _number_tokens(expected_core)
+            if _grounded_affirmed_contrast(
+                    semantic_got, semantic_expected, authority, soft):
+                return True
             if not (negations & (set(semantic_got) ^ set(semantic_expected))):
                 if _ordered_subsequence(semantic_got, semantic_expected):
                     return True

@@ -318,6 +318,30 @@ def test_explicit_person_correction_outranks_lossy_goal_tokens(monkeypatch):
     assert "Priya Kim" in merged["source"]
 
 
+def test_explicit_person_correction_replaces_only_the_named_role(monkeypatch):
+    """A repeated name in another role is part of 'everything else'."""
+    patches = []
+    original = ("Give permission for Jordan Martin to attend the Science "
+                "Centre trip on September 4; emergency contact Jordan Martin "
+                "at +1 604 555 3973")
+    # Simulate the lossy model output that changed both occurrences.  The
+    # owner's exact correction below, not this paraphrase, is authoritative.
+    lossy = ("Give permission for Nora Patel to attend the Science Centre "
+             "trip on September 4; emergency contact Nora Patel at "
+             "+1 604 555 3973")
+    job = _Job(original, {"source": original})
+    a = _core(monkeypatch, job, patches)
+    a._open_plan = ("job1", __import__("time").time(), original)
+
+    assert a._queue_job(lossy, {
+        "source": ("Actually change Jordan Martin to Nora Patel; keep "
+                   "everything else the same."),
+    }, explicit=True) == "job1"
+    assert patches[-1]["goal"] == (
+        "Give permission for Nora Patel to attend the Science Centre trip on "
+        "September 4; emergency contact Jordan Martin at +1 604 555 3973")
+
+
 def test_discussion_fragment_is_not_promoted_to_an_action():
     assert progressive_action_continuation(
         "we should talk about this: sending messages is stressful",

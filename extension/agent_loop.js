@@ -69,7 +69,7 @@ The mirror rule: a choice the task NEVER gave you is not yours to make. If the s
 SEARCH BOXES take a search-shaped query — the few words that identify the thing ("Earls West Vancouver"), never the owner's whole spoken sentence.
 AUTOCOMPLETE (airport/city/address boxes): type with enter:false, then on the NEXT step a "SUGGESTIONS" list appears — CLICK the option that matches. Never re-type into a box that already has your text; pick a suggestion or move on.
 DATES: in an ordinary text field, copy the owner's relative wording exactly (for example "next Tuesday" or "tomorrow"). Do not recalculate or normalize it. Convert to YYYY-MM-DD only when the page map explicitly identifies a native date field and tells you to use the select action.
-FORM VALUES: answer each field's LABEL with the shortest exact value from WHAT THEY AGREED TO. Copy free-text descriptions verbatim, including small words; never paraphrase, reorder, summarize, or fuse a portal/service name with the actual field value. A field gets the value itself, not the surrounding sentence. When the owner contrasts X with not-Y, a Resolution/Choice field gets X. Re-read CURRENT FORM VALUES before the final button and correct every drift first.
+FORM VALUES: answer each field's LABEL with the shortest COMPLETE exact value from WHAT THEY AGREED TO. Copy free-text descriptions verbatim, including small words; never paraphrase, reorder, summarize, or fuse a portal/service name with the actual field value. Never shorten a person's, clinic's, provider's, venue's, workspace's, or other named value: "West Coast Dental" cannot become "Coast Dental". A field gets the value itself, not the surrounding sentence. An ID/reference/code field gets only its code, never the service or location after it. When separate name/contact and phone fields exist, the name field gets only the name and the phone field gets the task's phone—not a saved profile phone. When the owner contrasts X with not-Y, a Resolution/Choice field gets X. Re-read CURRENT FORM VALUES before the final button and correct every drift first.
 Never repeat an action that already failed twice (check HISTORY). If a site's own search box ignores your typing, navigate to https://www.bing.com and research the answer from search results instead.`;
 
 /// A picture of the page, for the moments a text list cannot express what a
@@ -120,7 +120,7 @@ async function llmStep(apiKey, model, goal, state, history, _retries, image, vis
       role: "user",
       content: (() => {
         const authLine = authorized
-          ? `WHAT THEY AGREED TO (their one answer, already given):\n${scope || goal}\nYou have their authority for all of it, to the end. Only a MATERIAL difference from the above may stop you.`
+          ? `WHAT THEY AGREED TO (their one answer, already given):\n${normalizedAuthorityText(scope || goal)}\nYou have their authority for all of it, to the end. Only a MATERIAL difference from the above may stop you.`
             + `\n\nWORDS YOU WROTE ARE NOT WORDS THEY APPROVED. They approved the TASK. Anything you compose yourself — the body of a message, a subject line, a note, a comment, a description — they have never seen. If you are about to hand authored text of yours to ANOTHER PERSON, stop first with needs_user and put the exact text in the reason so they can read it. That is not asking permission again; they already gave that. It is showing them what is about to go out in their name.\nThis does NOT apply to facts they gave you. Their own name, date, time, party size, address, a link they specified — putting those into a form is carrying out the task, not writing on their behalf. Fill those in and keep going.\nThe test is authorship, not danger: did YOU write it, and is it leaving for someone who is not them.\nAnd the reverse: wording the agreement above QUOTES — a message they dictated, exact words they gave — is THEIR text, already seen and approved. Use it verbatim and do not stop to have it confirmed again.`
           : `NOT YET AGREED. They have not answered yet, so do everything that is reversible — fill the form completely — and then reply needs_user saying it is ready and exactly what pressing the final button would commit them to.`;
         // Who the owner is. Every booking, reservation and signup form asks
@@ -327,6 +327,124 @@ function wordTokens(value) {
   return tokens.map((token) => numberWords[token] || token);
 }
 
+// The brain keeps every utterance verbatim and joins progressive recognizer
+// fragments with this visible audit marker.  Those bookkeeping words were
+// never part of the requested value: "20 … then: yeah, agreed — cm crack"
+// still authorizes the contiguous phrase "20 cm crack".  Remove only this
+// exact internal marker for execution; the stored source remains untouched.
+export function normalizedAuthorityText(value) {
+  return String(value ?? "").replace(
+    /\s*…\s*then:\s*yeah,\s*agreed\s*[—-]\s*/giu, " ");
+}
+
+function fieldIdentity(field) {
+  return wordTokens(`${field?.name || ""} ${field?.label || ""}`).join(" ");
+}
+
+function phoneField(field) {
+  return /\b(phone|telephone|mobile|cell|tel)\b/.test(fieldIdentity(field));
+}
+
+function phoneValues(value) {
+  const found = String(value ?? "").match(/\+?\d[\d\s().-]{5,}\d/g) || [];
+  return found.map((raw) => ({ raw: raw.trim(), digits: raw.replace(/\D/g, "") }))
+    .filter(({ digits }) => digits.length >= 7 && digits.length <= 15);
+}
+
+function identifierField(field) {
+  return /\b(id|identifier|number|code|reference|membership|member|account|invoice|order|policy|serial|vin|plate)\b/
+    .test(fieldIdentity(field));
+}
+
+function codeValues(value) {
+  return [...String(value ?? "").matchAll(
+    /\b(?=[A-Za-z0-9-]*[A-Za-z])(?=[A-Za-z0-9-]*\d)[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+\b/g)]
+    .map((match) => match[0]);
+}
+
+function timeWindowField(field) {
+  return /\b(window|time range|time span|hours|interval)\b/.test(fieldIdentity(field));
+}
+
+function timeWindowValues(value) {
+  return [...String(value ?? "").matchAll(
+    /\bfrom\s+(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))\s+to\s+(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))\b/gi)]
+    .map((match) => `${match[1]} to ${match[2]}`);
+}
+
+function namedIdentityField(field) {
+  return /\b(name|person|patient|student|guest|recipient|attendee|contact|pet|clinic|provider|facility|venue|restaurant|shop|dealer|company|workspace)\b/
+    .test(fieldIdentity(field));
+}
+
+function completeNamedValue(field, value, authority) {
+  if (!namedIdentityField(field)) return true;
+  const words = [...String(authority ?? "").matchAll(/[A-Za-z0-9&'-]+/g)];
+  const needle = wordTokens(value);
+  if (!needle.length) return true;
+  const boundaries = new Set([
+    "anticipy", "at", "book", "cancel", "contact", "for", "from", "give",
+    "in", "open", "register", "request", "schedule", "send", "to", "use", "with",
+  ]);
+  let found = false;
+  for (let start = 0; start <= words.length - needle.length; start++) {
+    const segment = words.slice(start, start + needle.length).map((part) =>
+      wordTokens(part[0])[0]);
+    if (!needle.every((token, offset) => segment[offset] === token)) continue;
+    found = true;
+    const before = words[start - 1]?.[0] || "";
+    const after = words[start + needle.length]?.[0] || "";
+    const beforeLooksLikeMissingName = /^[A-Z][A-Za-z&'-]+$/.test(before)
+      && !boundaries.has(before.toLowerCase());
+    const afterLooksLikeMissingName = /^[A-Z][A-Za-z&'-]+$/.test(after);
+    if (!beforeLooksLikeMissingName && !afterLooksLikeMissingName) return true;
+  }
+  return !found;
+}
+
+export function schemaBoundaryCorrections(fields, authority, allFields) {
+  const taskText = normalizedAuthorityText(authority);
+  const taskPhones = phoneValues(taskText);
+  const uniquePhones = [...new Map(taskPhones.map((item) => [item.digits, item])).values()];
+  const hasPhoneControl = (Array.isArray(allFields) ? allFields : []).some(phoneField);
+  const codes = codeValues(taskText);
+  const windows = timeWindowValues(taskText);
+  const out = [];
+  for (const field of Array.isArray(fields) ? fields : []) {
+    const current = String(field?.value ?? "").trim();
+    if (!current) continue;
+    if (phoneField(field) && uniquePhones.length === 1
+        && phoneValues(current)[0]?.digits !== uniquePhones[0].digits) {
+      out.push({ index: Number(field.index), value: uniquePhones[0].raw,
+        reason: "task-specific phone outranks saved profile" });
+      continue;
+    }
+    if (!phoneField(field) && hasPhoneControl && phoneValues(current).length) {
+      const cleaned = current.replace(/\s*(?:at\s*)?\+?\d[\d\s().-]{5,}\d\s*$/i, "").trim();
+      if (cleaned && containsTokenSequence(wordTokens(taskText), wordTokens(cleaned))) {
+        out.push({ index: Number(field.index), value: cleaned,
+          reason: "separate phone field owns the phone" });
+        continue;
+      }
+    }
+    if (identifierField(field)) {
+      const matching = codes.filter((code) =>
+        evidenceToken(current).includes(evidenceToken(code)));
+      if (matching.length === 1
+          && evidenceToken(current) !== evidenceToken(matching[0])) {
+        out.push({ index: Number(field.index), value: matching[0],
+          reason: "identifier field contains only its code" });
+      }
+    }
+    if (timeWindowField(field) && windows.length === 1
+        && evidenceToken(current) !== evidenceToken(windows[0])) {
+      out.push({ index: Number(field.index), value: windows[0],
+        reason: "time-window field takes the complete approved range" });
+    }
+  }
+  return out;
+}
+
 function containsTokenSequence(haystack, needle) {
   if (!needle.length) return false;
   for (let start = 0; start <= haystack.length - needle.length; start++) {
@@ -409,8 +527,12 @@ function compactChoiceField(field) {
 // site's schema and without receiving the evaluator's hidden oracle.
 export function unsupportedScopeFields(scope, currentState, ownerProfile = null, facts = "") {
   const fields = Array.isArray(currentState?.fields) ? currentState.fields : [];
-  const approvedText = `${scope || ""} ${factsForPrompt(facts)} ${profileText(ownerProfile)}`;
+  const taskText = `${normalizedAuthorityText(scope || "")} ${factsForPrompt(facts)}`;
+  const approvedText = `${taskText} ${profileText(ownerProfile)}`;
   const approvedTokens = wordTokens(approvedText);
+  const taskPhones = phoneValues(taskText).map(({ digits }) => digits);
+  const hasPhoneControl = fields.some(phoneField);
+  const taskCodes = codeValues(taskText);
   return fields.filter((field) => {
     const value = field?.value;
     if (value === null || value === undefined || String(value).trim() === "") return false;
@@ -419,6 +541,18 @@ export function unsupportedScopeFields(scope, currentState, ownerProfile = null,
       return value === true ? wanted !== true : wanted === true;
     }
     const valueTokens = wordTokens(value);
+    if (phoneField(field) && taskPhones.length) {
+      const submittedPhones = phoneValues(value).map(({ digits }) => digits);
+      return submittedPhones.length !== 1 || !taskPhones.includes(submittedPhones[0]);
+    }
+    if (!phoneField(field) && hasPhoneControl && phoneValues(value).length) return true;
+    if (identifierField(field)) {
+      const matching = taskCodes.filter((code) =>
+        evidenceToken(value).includes(evidenceToken(code)));
+      if (matching.length === 1
+          && evidenceToken(value) !== evidenceToken(matching[0])) return true;
+    }
+    if (!completeNamedValue(field, value, taskText)) return true;
     if (containsTokenSequence(approvedTokens, valueTokens)) return false;
     // Short categorical values often remove the page's own redundant
     // context: "mail-in warranty repair" on a Warranty page becomes the
@@ -456,6 +590,16 @@ Rules:
   small words and punctuation. Never paraphrase or reorder it.
 - Keep each answer inside its own field. A later clause that answers another
   visible field, checkbox, or selector must never be appended to this field.
+- Preserve the complete exact value for people, clinics, providers, venues,
+  workspaces, companies, and other named things. A strict substring is wrong:
+  "West Coast Dental" must never become "Coast Dental".
+- An ID/reference/code/number field contains only the identifier token. In
+  "membership MBR-80189 at StudioBox", Membership is "MBR-80189".
+- When separate contact/name and phone fields exist, put only the person's
+  name in the contact/name field and the task's exact phone in Phone. A phone
+  stated for this task outranks a different saved owner-profile phone.
+- A Window/Time range field gets the complete span between the owner's
+  endpoints: "from 6 PM to 11 PM" becomes "6 PM to 11 PM".
 - For a short categorical field (Workspace, Service, Resolution, Plan,
   Effective, etc.), return only the minimal label-sized answer, not the
   surrounding sentence, portal name, contrast, or redundant page context.
@@ -534,9 +678,11 @@ async function auditFormAlignment(apiKey, model, goal, scope, state) {
       && field?.readOnly !== true && field?.disabled !== true;
   });
   if (!fields.length || !(scope || goal)) return [];
+  const authority = normalizedAuthorityText(scope || goal);
+  const mechanical = schemaBoundaryCorrections(fields, authority, allFields);
   const messages = [
     { role: "system", content: FORM_ALIGNMENT_SYSTEM },
-    { role: "user", content: `OWNER'S EXACT WORDS:\n${scope || goal}\n\nTASK GOAL:\n${goal}\n\nALL FORM FIELDS (use these labels to keep answers separate):\n${JSON.stringify(allFields)}\n\nEDITABLE TEXT FIELDS TO RECONSTRUCT:\n${JSON.stringify(fields)}` },
+    { role: "user", content: `OWNER'S EXACT WORDS:\n${authority}\n\nTASK GOAL:\n${goal}\n\nALL FORM FIELDS (use these labels to keep answers separate):\n${JSON.stringify(allFields)}\n\nEDITABLE TEXT FIELDS TO RECONSTRUCT:\n${JSON.stringify(fields)}` },
   ];
   try {
     const ctl = new AbortController();
@@ -545,14 +691,17 @@ async function auditFormAlignment(apiKey, model, goal, scope, state) {
       model, messages, temperature: 0, max_tokens: 512,
       response_format: { type: "json_object" },
     }, ctl.signal).finally(() => clearTimeout(kill));
-    if (!response.ok) return [];
+    if (!response.ok) return mechanical;
     const raw = (await response.json())?.choices?.[0]?.message?.content || "";
     const start = raw.indexOf("{"), end = raw.lastIndexOf("}");
-    if (start < 0 || end <= start) return [];
-    return groundedFormCorrections(
-      JSON.parse(raw.slice(start, end + 1)), fields, scope || goal, allFields);
+    if (start < 0 || end <= start) return mechanical;
+    const semantic = groundedFormCorrections(
+      JSON.parse(raw.slice(start, end + 1)), fields, authority, allFields);
+    const byIndex = new Map(semantic.map((row) => [Number(row.index), row]));
+    for (const row of mechanical) byIndex.set(Number(row.index), row);
+    return [...byIndex.values()];
   } catch (_) {
-    return [];                         // audit failure never invents a block
+    return mechanical;                // schema boundaries do not need the model
   }
 }
 
@@ -614,6 +763,28 @@ export function completionContradiction(result) {
     || new RegExp(`\\b(?:could not|couldn't|did not|didn't|unable to|failed to)\\s+(?:submit|send|book|schedule|register|file|create|complete|grant|renew|cancel|update|change|save|place)\\b`, "i").test(text);
 }
 
+// A fresh terminal receipt is independent first-party evidence, not an agent
+// assertion.  This path is intentionally strict: generic success prose alone
+// is insufficient, and a page merely promising a future confirmation is not
+// terminal.  It is used only after the exact pre-effect fields pass both
+// mechanical authority checks above.
+export function terminalReceiptEvidence(state) {
+  const text = `${state?.title || ""}\n${state?.text || ""}`;
+  const success = /\bsubmitted successfully\b|\bsuccessfully (?:submitted|sent|booked|scheduled|registered|filed|created|completed|updated|changed|saved|placed|cancelled|canceled|renewed)\b|\b(?:booking|reservation|request|application|registration|appointment|order) (?:is |was )?confirmed\b/i;
+  const receipt = /\b(?:confirmation|reference|receipt|tracking|request|case|booking|order)\s*(?:number|no\.?|id|code)?\s*[:#-]\s*[A-Za-z0-9][A-Za-z0-9-]{2,}\b/i;
+  return success.test(text) && receipt.test(text);
+}
+
+function verificationEvidence(state, facts, kind = "page") {
+  return [
+    `url:${String(state?.url || "").slice(0, 500)}`,
+    `title:${String(state?.title || "").slice(0, 200)}`,
+    `page:${pageFingerprint(state || {})}`,
+    `facts:${factPairs(facts).map(([key]) => key).join(",").slice(0, 500)}`,
+    `proof:${kind}`,
+  ];
+}
+
 function factsForPrompt(facts) {
   return factPairs(facts).map(([key, value]) => `  ${key}: ${value}`).join("\n");
 }
@@ -643,6 +814,10 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
       reason: `submitted values are outside the approved scope: ${unsupportedScope.join(", ")}`,
       evidence: [] };
   }
+  if (effectState && terminalReceiptEvidence(state)) {
+    return { verified: true, reason: "", evidence: verificationEvidence(
+      state, facts, "terminal-receipt+approved-pre-effect-fields") };
+  }
   const factsBlock = factsForPrompt(facts);
   const messages = [
     { role: "system", content: `You audit a browser agent's claim of task completion. Given the goal, exact approved scope and facts, the claimed result, the page immediately before the external effect, and the CURRENT page, decide if the claim is actually supported. Every approved fact must agree with the evidence; a default, different option, amount, date, person, address, or resolution is a contradiction even when the page says success. For form/submission goals, the current page must also show terminal evidence (confirmation text or a post-submit page). For research goals, verify=true unless the page clearly CONTRADICTS the claim — search-result snippets, partial views, or a page consistent with the claim all count as support (do not demand the full figure be visible); but verify=false if ANY statement in the claimed result is contradicted by the page. The goal's TERMINAL state must actually be reached: a result saying an action "would lead to" or "is ready to" reach the goal page is NOT done — verified=false with reason "goal state not reached yet". Likewise a research result that admits the requested information was NOT found ("not directly listed", "one would need to visit...") is NOT done — verified=false with reason "requested info not found". Reply EXACTLY {"verified":true} or {"verified":false,"reason":"..."}.` },
@@ -669,12 +844,7 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
       reason: v.reason || "",
       // Evidence is deliberately compact and non-secret: where the result
       // was observed plus a fingerprint proving which page state was audited.
-      evidence: verified ? [
-        `url:${String(state.url || "").slice(0, 500)}`,
-        `title:${String(state.title || "").slice(0, 200)}`,
-        `page:${pageFingerprint(state)}`,
-        `facts:${factPairs(facts).map(([key]) => key).join(",").slice(0, 500)}`,
-      ] : [],
+      evidence: verified ? verificationEvidence(state, facts, "independent-model-audit") : [],
     };
   } catch {
     return { verified: false, reason: "verifier error; completion is unverified", evidence: [] };
