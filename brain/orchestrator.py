@@ -268,7 +268,8 @@ venting, a hypothetical, or a plan he only heard about?
 
 Reply ONLY with compact JSON: {"owner_committed": true|false}"""
 
-    def triage(self, transcript_line: str, candidates: int = 0) -> Decision:
+    def triage(self, transcript_line: str, candidates: int = 0,
+               explicit: bool = False) -> Decision:
         """`candidates` is how many numbered earlier lines the caller showed.
         It is the only thing that makes a "continues" answer meaningful, and
         it is what an out-of-range number is checked against. Left at 0 — the
@@ -301,6 +302,35 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         goal = raw.get("goal")
         if goal in ("null", ""):
             goal = None
+        # A syntactically valid model reply can still miss an unmistakable
+        # request.  That is especially costly on a direct channel: the owner
+        # deliberately sent the line to this assistant, yet a single semantic
+        # wobble silently discards it.  Re-triage exactly once with the channel
+        # evidence made explicit.  Ambient audio never gets this privilege,
+        # and a second ignore remains an ignore, so chatter and facts are not
+        # mechanically promoted into work.
+        if explicit and decision == "ignore" and not goal:
+            retry_line = (
+                f"{transcript_line}\n(Channel check: the OWNER deliberately "
+                "sent this line directly to this assistant. If it plainly "
+                "asks for a finishable task, classify that task as act or "
+                "ask and preserve every stated name, number, date and "
+                "constraint in the goal. Direct delivery is addressee "
+                "evidence, not proof that small talk or a bare fact is a "
+                "task.)")
+            try:
+                retry = self.llm.chat(TRIAGE_SYSTEM, retry_line,
+                                      temperature=0.0)
+                repaired = json.loads(_extract_json(retry.text))
+                repaired_decision = repaired.get("decision")
+                repaired_goal = repaired.get("goal")
+                if (repaired_decision in ("act", "ask")
+                        and repaired_goal not in (None, "", "null")):
+                    raw = repaired
+                    decision = repaired_decision
+                    goal = repaired_goal
+            except Exception:
+                pass
         missing = raw.get("missing") or []
         if not isinstance(missing, list):
             missing = [str(missing)]

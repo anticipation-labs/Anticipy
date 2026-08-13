@@ -949,7 +949,8 @@ class Anticipy:
                                 prev_addressee=prev_addressee, dictated=dictated,
                                 speaker=speaker, speaker_name=speaker_name,
                                 link_candidates=link_candidates,
-                                mid_conversation=in_conversation(context))
+                                mid_conversation=in_conversation(context),
+                                explicit=explicit)
         # A speech recognizer commonly finalizes at punctuation: "Send Jonah
         # this exact message:" arrives first, then the quoted body after the
         # speaker's agreement marker. The model can classify both fragments as
@@ -1611,7 +1612,8 @@ class Anticipy:
                 speaker: Optional[str] = None,
                 speaker_name: Optional[str] = None,
                 link_candidates: Optional[list[str]] = None,
-                mid_conversation: bool = False) -> Decision:
+                mid_conversation: bool = False,
+                explicit: bool = False) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
             prompt = line
@@ -1698,8 +1700,9 @@ class Anticipy:
                 prompt = (f"{prompt}\n(Recent lines, oldest first — say in "
                           f"\"continues\" which ONE this line carries on "
                           f"from, or 0 if it starts something new:\n{shown})")
-                return self.brain.triage(prompt, candidates=len(numbered))
-            return self.brain.triage(prompt)
+                return self.brain.triage(
+                    prompt, candidates=len(numbered), explicit=explicit)
+            return self.brain.triage(prompt, explicit=explicit)
         # Deterministic offline path: a fresh commitment means act.
         if mem.get("commitment"):
             return Decision(decision="act", goal="agent_goal",
