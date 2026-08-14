@@ -725,6 +725,16 @@ def run_cases(cases, output=None, headless=False):
             print("SETUP: packaged extension started", flush=True)
             worker.on("console", lambda message: print(
                 f"EXTENSION {message.type}: {message.text}", flush=True))
+            # A real day-zero customer has the pairing page open in front of
+            # them, and that page's ping is the worker's only reliable wake in
+            # a brand-new profile: Chrome was probed (2026-08-14) creating NO
+            # alarms at all in a fresh install, which left the worker deaf and
+            # every job parked at "queued". The rig holds the same page open a
+            # customer does — this is fidelity, not a cheat.
+            extension_id = worker.url.split("/")[2]
+            context.new_page().goto(
+                f"chrome-extension://{extension_id}/onboarding.html")
+            print("SETUP: pairing page open (worker wake source)", flush=True)
             # Pair the identity Chrome itself created. The disposable build's
             # unique browser marker lets the backend identify this exact fresh
             # install without debugging or mutating its private local storage.

@@ -29,6 +29,11 @@ function hint(text, holdMs) {
 }
 
 async function refresh() {
+  // Wake the service worker. Reading storage from this page does NOT boot it,
+  // and a fresh profile can have no alarms at all (probed live 2026-08-14) —
+  // so while this page is open, this ping is what keeps her ears on: each one
+  // boots the worker, and every boot re-asserts alarms and polls.
+  try { chrome.runtime.sendMessage({ type: "anticipy-ping" }).catch(() => {}); } catch (e) { /* worker context gone */ }
   const dot = el("backendDot");
   try {
     const r = await fetch(`${await base()}/api/health`);
