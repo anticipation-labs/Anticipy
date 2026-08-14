@@ -118,7 +118,7 @@ struct AuthView: View {
 
     private var title: String {
         switch mode {
-        case .signUp: return "I'm Anticipy Codex Version."
+        case .signUp: return "I'm Anticipy Claude Version."
         case .signIn: return "Welcome back."
         case .forgot: return "Let's get you back in."
         case .code:   return "Check your phone."

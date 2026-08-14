@@ -29,7 +29,7 @@ async function checkConnection() {
     say("status", "I'm connected and watching for work.");
     el("dot").classList.add("on");
   } catch (e) {
-    say("status", "I can't reach Anticipy Codex Version from this browser right now. If you're online, this usually clears by itself in a minute.");
+    say("status", "I can't reach Anticipy Claude Version from this browser right now. If you're online, this usually clears by itself in a minute.");
     el("dot").classList.remove("on");
   }
 }

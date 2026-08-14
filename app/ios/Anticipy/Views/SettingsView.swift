@@ -238,11 +238,11 @@ struct SettingsView: View {
                     // code for ten minutes. These are now two different truths.
                     switch pairOutcome {
                     case .noMatch:
-                        Text("That code didn't match — check the Anticipy Codex Version extension popup for the current one.")
+                        Text("That code didn't match — check the Anticipy Claude Version extension popup for the current one.")
                             .font(.caption)
                             .foregroundStyle(.red)
                     case .unreachable:
-                        Text("I can't reach Anticipy Codex Version right now — that's my end, not your code.")
+                        Text("I can't reach Anticipy Claude Version right now — that's my end, not your code.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                         Button("Try again") { pair() }
@@ -424,7 +424,7 @@ struct SettingsView: View {
             } footer: {
                 // The one question that must never be ambiguous again:
                 // "which build am I actually running?"
-                Text("Anticipy Codex Version \(versionString)")
+                Text("Anticipy Claude Version \(versionString)")
                     .font(.footnote.monospaced())
                     .foregroundStyle(Theme.gray)
             }
@@ -568,13 +568,13 @@ struct SettingsView: View {
     }
 
     private var supportMail: URL? {
-        mailto(subject: "Anticipy Codex Version — I need a hand",
-               body: "\n\n—\nMy Anticipy Codex Version ID: \(session.ownerID)\nApp \(versionString)")
+        mailto(subject: "Anticipy Claude Version — I need a hand",
+               body: "\n\n—\nMy Anticipy Claude Version ID: \(session.ownerID)\nApp \(versionString)")
     }
 
     private var deleteMail: URL? {
-        mailto(subject: "Anticipy Codex Version — please delete my data",
-               body: "Please delete everything Anticipy Codex Version has heard for me.\n\nMy Anticipy Codex Version ID: \(session.ownerID)\nApp \(versionString)")
+        mailto(subject: "Anticipy Claude Version — please delete my data",
+               body: "Please delete everything Anticipy Claude Version has heard for me.\n\nMy Anticipy Claude Version ID: \(session.ownerID)\nApp \(versionString)")
     }
 
     /// Lines that never made it off the phone. Deleting these is a real,

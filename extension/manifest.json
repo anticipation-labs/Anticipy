@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Anticipy Codex Version",
-  "version": "0.6.23",
-  "description": "Anticipy Codex Version's hands on your computer: it does tasks you approved in your own logged-in Chrome. Needs the Anticipy Codex Version iPhone app.",
+  "name": "Anticipy Claude Version",
+  "version": "0.7.0",
+  "description": "Anticipy Claude Version's hands on your computer: it does tasks you approved in your own logged-in Chrome. Needs the Anticipy Claude Version iPhone app.",
   "permissions": [
     "storage",
     "tabs",
@@ -26,6 +26,6 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Anticipy Codex Version"
+    "default_title": "Anticipy Claude Version"
   }
 }

@@ -239,7 +239,7 @@ struct HomeView: View {
                     HStack(spacing: 10) {
                         LogoMark(size: 26)
                             .accessibilityHidden(true)
-                        Text("Anticipy Codex Version")
+                        Text("Anticipy Claude Version")
                             .font(Theme.display(24))
                             .foregroundStyle(Theme.ivory)
                     }
@@ -343,7 +343,7 @@ struct HomeView: View {
         switch pendant.state {
         case .connected:
             return session.pendantCapturing
-                ? "Your pendant audio is being securely transcribed by Deepgram. Finalized words come back to Anticipy Codex Version; the long-lived provider key never enters this phone."
+                ? "Your pendant audio is being securely transcribed by Deepgram. Finalized words come back to Anticipy Claude Version; the long-lived provider key never enters this phone."
                 : "Your pendant is connected and I'm opening its secure transcription stream. If that service is unavailable, I say so here instead of dropping audio behind a Listening label."
         case .connecting, .reconnecting, .searching: return "I'm looking for your pendant. Listen with phone works right now either way."
         case .unavailable: return "Bluetooth is off, so I can't see the pendant."
@@ -394,7 +394,7 @@ struct HomeView: View {
             Label("I can't hear you", systemImage: "mic.slash")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.champagne)
-            Text("The microphone is switched off for Anticipy Codex Version, so tapping Listen won't do anything. iOS only asks once — turn it back on and I'll start the moment you come back.")
+            Text("The microphone is switched off for Anticipy Claude Version, so tapping Listen won't do anything. iOS only asks once — turn it back on and I'll start the moment you come back.")
                 .font(.callout)
                 .foregroundStyle(Theme.sand)
                 .fixedSize(horizontal: false, vertical: true)
@@ -409,7 +409,7 @@ struct HomeView: View {
                     .foregroundStyle(Theme.ink)
             }
             .buttonStyle(.pressable)
-            .accessibilityHint("Opens Anticipy Codex Version's page in the iOS Settings app, where Microphone and Speech Recognition can be switched back on.")
+            .accessibilityHint("Opens Anticipy Claude Version's page in the iOS Settings app, where Microphone and Speech Recognition can be switched back on.")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
@@ -510,7 +510,7 @@ struct HomeView: View {
                     .transition(.opacity)
             }
             HStack(spacing: 8) {
-                TextField("Or tell Anticipy Codex Version something…", text: $typedLine)
+                TextField("Or tell Anticipy Claude Version something…", text: $typedLine)
                     .font(.callout)
                     .foregroundStyle(Theme.ivory)
                     .textFieldStyle(.plain)
@@ -787,7 +787,7 @@ struct HomeView: View {
     }
 
     private var offlineBody: String {
-        let base = "Your phone can't get through to Anticipy Codex Version right now — it's almost always the connection. You can keep talking to me either way."
+        let base = "Your phone can't get through to Anticipy Claude Version right now — it's almost always the connection. You can keep talking to me either way."
         guard session.pendingCount > 0 else { return base }
         return base + " I'm holding \(session.pendingCount) thing\(session.pendingCount == 1 ? "" : "s") you said, and I'll send \(session.pendingCount == 1 ? "it" : "them") the moment we're back."
     }
@@ -801,7 +801,7 @@ struct HomeView: View {
                 .foregroundStyle(Theme.champagne)
                 .padding(.top, Theme.Space.hero)
                 .accessibilityHidden(true)
-            Text("Anticipy Codex Version won't let me in.")
+            Text("Anticipy Claude Version won't let me in.")
                 .font(Theme.display(30))
                 .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
@@ -916,8 +916,8 @@ struct HomeView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
                 Text(session.connection == .offline
-                     ? "I can't reach Anticipy Codex Version right now, so this is what I had a moment ago."
-                     : "Anticipy Codex Version turned me away just now, so this is what I had a moment ago.")
+                     ? "I can't reach Anticipy Claude Version right now, so this is what I had a moment ago."
+                     : "Anticipy Claude Version turned me away just now, so this is what I had a moment ago.")
                     .font(.footnote)
                     .foregroundStyle(Theme.sand)
                     .fixedSize(horizontal: false, vertical: true)
@@ -994,7 +994,7 @@ struct ConfirmJobCard: View {
             // this row that reads as a UI glitch, and the natural next move
             // is to tap Send again — which is how one email goes twice.
             if failed {
-                Label("That didn't go through — I couldn't reach Anticipy Codex Version. Nothing was sent.", systemImage: "exclamationmark.triangle")
+                Label("That didn't go through — I couldn't reach Anticipy Claude Version. Nothing was sent.", systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(Theme.sand)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1206,7 +1206,7 @@ struct DoneCard: View {
                         .foregroundStyle(Theme.sand)
                         .fixedSize(horizontal: false, vertical: true)
                     if retryFailed {
-                        Text("I couldn't even queue it back up — I can't reach Anticipy Codex Version.")
+                        Text("I couldn't even queue it back up — I can't reach Anticipy Claude Version.")
                             .font(.caption)
                             .foregroundStyle(Theme.gray)
                             .fixedSize(horizontal: false, vertical: true)

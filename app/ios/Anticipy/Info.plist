@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Anticipy Codex Version</string>
+	<string>Anticipy Claude Version</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconName</key>
@@ -21,7 +21,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.4</string>
 	<key>CFBundleVersion</key>
-	<string>53</string>
+	<string>54</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>
@@ -30,11 +30,11 @@
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Anticipy Codex Version connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.</string>
+	<string>Anticipy Claude Version connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Anticipy Codex Version listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy Codex Version so she can act on them. You control when she is listening.</string>
+	<string>Anticipy Claude Version listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy Claude Version so she can act on them. You control when she is listening.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Anticipy Codex Version turns what she hears into text on your phone, then sends that text to Anticipy Codex Version so she can remember it and act on it.</string>
+	<string>Anticipy Claude Version turns what she hears into text on your phone, then sends that text to Anticipy Claude Version so she can remember it and act on it.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

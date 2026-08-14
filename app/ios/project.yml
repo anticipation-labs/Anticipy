@@ -5,8 +5,8 @@ options:
     iOS: "16.0"
 settings:
   base:
-    MARKETING_VERSION: "1.0.5"
-    CURRENT_PROJECT_VERSION: "53"
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "54"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -21,10 +21,10 @@ targets:
     info:
       path: Anticipy/Info.plist
       properties:
-        CFBundleDisplayName: Anticipy Codex Version
+        CFBundleDisplayName: Anticipy Claude Version
         CFBundleIconName: AppIcon
         CFBundleShortVersionString: "1.0.4"
-        CFBundleVersion: "53"
+        CFBundleVersion: "54"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -36,13 +36,13 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - audio
-        NSBluetoothAlwaysUsageDescription: Anticipy Codex Version connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.
+        NSBluetoothAlwaysUsageDescription: Anticipy Claude Version connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.
         # These describe what actually happens: capture continues in the
         # background, and the resulting TEXT is sent to Anticipy's server so she
         # can act on it. The old strings promised "on-device transcription" and
         # referenced a "Local mode" that gated nothing and appeared nowhere.
-        NSMicrophoneUsageDescription: Anticipy Codex Version listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy Codex Version so she can act on them. You control when she is listening.
-        NSSpeechRecognitionUsageDescription: Anticipy Codex Version turns what she hears into text on your phone, then sends that text to Anticipy Codex Version so she can remember it and act on it.
+        NSMicrophoneUsageDescription: Anticipy Claude Version listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy Claude Version so she can act on them. You control when she is listening.
+        NSSpeechRecognitionUsageDescription: Anticipy Claude Version turns what she hears into text on your phone, then sends that text to Anticipy Claude Version so she can remember it and act on it.
         ITSAppUsesNonExemptEncryption: false
         NSAppTransportSecurity:
           # Arbitrary loads is gone: everything the app talks to is HTTPS. Local

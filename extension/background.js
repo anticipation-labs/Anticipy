@@ -17,7 +17,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.6.23";
+const ENGINE_BUILD = "0.7.0";
 
 // Production backend; override via chrome.storage.local `backendUrl` for dev.
 const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
@@ -275,7 +275,7 @@ const ACTIONS = {
     `https://calendar.google.com/calendar/render?action=TEMPLATE` +
     `&text=${encodeURIComponent(p.title || "Meeting")}` +
     `&dates=${encodeURIComponent(p.dates || "")}` +
-    `&details=${encodeURIComponent(p.details || "Scheduled by Anticipy Codex Version")}`,
+    `&details=${encodeURIComponent(p.details || "Scheduled by Anticipy Claude Version")}`,
   research_and_report: (p) =>
     p.url || `https://www.google.com/search?q=${encodeURIComponent(p.query || "")}`,
 };
@@ -423,7 +423,7 @@ export async function surfaceHandBack(tabId, detail, kind) {
     await chrome.notifications.create(`${HANDBACK_NOTIF}${tabId}`, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-      title: "Anticipy Codex Version",
+      title: "Anticipy Claude Version",
       message: kind === "confirm"
         ? `Ready for your OK on ${site} — click to open.`
         : `I need you on ${site} — click to open.`,
@@ -756,7 +756,7 @@ async function runJobInner(job, params) {
   const tab = await createBackgroundTab(build(params));
   try {
     const group = await chrome.tabs.group({ tabIds: tab.id });
-    await chrome.tabGroups.update(group, { title: "Anticipy Codex Version", color: "yellow", collapsed: true });
+    await chrome.tabGroups.update(group, { title: "Anticipy Claude Version", color: "yellow", collapsed: true });
   } catch (e) {
     // tab groups unavailable (e.g. incognito) — continue in a plain background tab
   }
