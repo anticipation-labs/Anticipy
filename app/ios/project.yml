@@ -23,7 +23,7 @@ targets:
       properties:
         CFBundleDisplayName: Anticipy Claude Version
         CFBundleIconName: AppIcon
-        CFBundleShortVersionString: "1.0.4"
+        CFBundleShortVersionString: "1.1.0"
         CFBundleVersion: "54"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
