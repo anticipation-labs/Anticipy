@@ -756,6 +756,42 @@ final class AnticipySession: ObservableObject {
         return fields
     }
 
+    /// Deterministic, not model-judged: does this answer END the errand?
+    /// Returns the honest result line to store, or nil to proceed normally.
+    /// Bias runs toward ending — a wrongly-ended errand costs a re-ask; a
+    /// wrongly-relaunched one acts on words the owner meant as "stop".
+    static func answerThatEndsTheErrand(_ answer: String) -> String? {
+        let normalized = answer.lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+            .trimmingCharacters(in: .punctuationCharacters.union(.whitespaces))
+        guard !normalized.isEmpty else { return nil }
+        let whole: Set<String> = [
+            "no", "nope", "stop", "cancel", "skip", "skip it", "never mind",
+            "nevermind", "forget it", "drop it", "leave it", "don't bother",
+            "dont bother", "call it off", "not anymore",
+        ]
+        let declines = [
+            "never mind", "nevermind", "forget it", "don't bother",
+            "dont bother", "no longer need", "don't need", "dont need",
+            "do not need", "not needed", "drop it", "skip it", "skip this",
+            "call it off", "don't do it", "dont do it", "cancel it",
+            "cancel that", "cancel this", "stop it", "leave it",
+        ]
+        let handled = [
+            "handled it", "i handled", "did it myself", "took care of it",
+            "already did", "already done", "already handled", "already booked",
+            "already sent", "already ordered", "done it myself",
+            "did that myself", "sorted it", "i did it already",
+        ]
+        if handled.contains(where: normalized.contains) {
+            return "You handled it yourself: \u{201C}\(answer)\u{201D}. I did nothing further."
+        }
+        if whole.contains(normalized) || declines.contains(where: normalized.contains) {
+            return "You called it off: \u{201C}\(answer)\u{201D}. I did nothing further."
+        }
+        return nil
+    }
+
     private func cancellationFields(for job: AgentJob) throws -> [String: Any]? {
         guard let planID = job.workflow_id, !planID.isEmpty else { return nil }
         var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
@@ -785,6 +821,23 @@ final class AnticipySession: ObservableObject {
 
     @discardableResult
     func confirm(_ job: AgentJob, ownerAnswer: String? = nil) async -> Bool {
+        // "Type what I need — or say you handled it." The second half of that
+        // promise was never built: EVERY non-empty answer requeued the errand,
+        // so "skip it, I don't need the batteries anymore" relaunched the run
+        // — which then Bing-searched those exact words and hit a CAPTCHA
+        // (found live, 2026-08-14). An answer that ENDS the errand must end
+        // it here, deterministically, on the same cancellation path as "Not
+        // now" — with the owner's words kept as the honest result.
+        let trimmed = ownerAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if job.status == "needs_user", job.effect_uncertain != true,
+           let ending = Self.answerThatEndsTheErrand(trimmed) {
+            return await write(job) {
+                var fields = try self.cancellationFields(for: job)
+                    ?? ["status": "cancelled"]
+                fields["result"] = ending
+                try await self.backend.setJobFields(id: job.id, fields: fields)
+            }
+        }
         // Record the yes ON the job: the browser agent reads it and finishes
         // the task, instead of stopping at the final button to ask again.
         return await write(job) {

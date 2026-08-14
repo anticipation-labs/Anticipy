@@ -410,10 +410,15 @@ struct OnboardingView: View {
     /// anywhere. Mirrors the recogniser the listener actually uses. On a device
     /// where it's false the sentence below has to change — Apple gets the audio,
     /// and saying otherwise would be a promise the product can't keep.
-    private static let keepsAudioOnDevice: Bool =
+    // Computed live, never cached: on-device speech support FLIPS when iOS
+    // finishes downloading the recognition assets, and a static let froze the
+    // answer at process start — so onboarding said "audio goes to Apple"
+    // while Settings (computing live) said "stays on this iPhone" on the
+    // same device the same night (2026-08-14). The listener follows the live
+    // value, so the live value is the only honest copy.
+    private var keepsAudioOnDevice: Bool {
         SFSpeechRecognizer(locale: Locale(identifier: "en_US"))?.supportsOnDeviceRecognition ?? false
-
-    private var keepsAudioOnDevice: Bool { Self.keepsAudioOnDevice }
+    }
 
     /// One typed line before the OS alerts, so the app conducts the
     /// permission moment instead of being ambushed by iOS mid-sentence.

@@ -252,6 +252,23 @@ struct SettingsView: View {
                     case .paired, .none:
                         EmptyView()
                     }
+                } else {
+                    // The broken-laptop / new-computer journey used to dead-end
+                    // here: a paired phone had no way to let go, the fresh
+                    // extension's code had nowhere to be typed, and the only
+                    // documented fix was reinstalling the app (found live,
+                    // 2026-08-14). Releasing falls back to exactly the
+                    // not-paired ceremony above — the extension mints a fresh
+                    // code, and the code field reappears on its own.
+                    Button(role: .destructive) {
+                        Task {
+                            await session.backend.unpairAgent(owner: session.ownerID)
+                            await session.refresh()
+                        }
+                    } label: {
+                        Label("Release this browser — pair a different one",
+                              systemImage: "laptopcomputer.slash")
+                    }
                 }
                 #if DEBUG
                 // Bound straight to the key every request is built from, and

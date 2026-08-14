@@ -1235,6 +1235,21 @@ function evidenceHasNumber(body, claimed) {
     .some((match) => claimedNumber(match[0]) === wanted);
 }
 
+// A search query is for FINDING PAGES, and three things never help find a
+// page while actively leaking what should stay private: quoted owner speech
+// (answers and corrections ride along inside rewritten goals and scopes),
+// phone-shaped tokens, and email-shaped tokens. Those belong in FORMS, not
+// in search engines. Mechanical, because a prompt rule already failed here.
+export function sanitizedResearchTerms(goal) {
+  return String(goal || "")
+    .replace(/["“][^"”]*["”]/g, " ")
+    .replace(/\+?\d[\d\s().-]{6,}\d/g, " ")
+    .replace(/\S+@\S+\.\S+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 220);
+}
+
 function evidenceHasMonetaryValue(body, claimed) {
   const wanted = claimedNumber(claimed);
   if (!wanted) return false;
@@ -2667,12 +2682,21 @@ export async function runAgentGoal(goal, opts) {
       evidenceToken(compact).includes(evidenceToken(name))) || "";
     const pricingGap = /\b(?:price|pricing|cost|currency|billing|cadence|annual|monthly|fee)\b/i
       .test(`${compact} ${goal}`);
+    // Rejection prose NEVER becomes a search query. It once did: a stuck run
+    // Bing-searched "unparseable verifier response Give permission for Maya
+    // Ebrahim … +1 604 555 0142", and a resumed run searched the owner's own
+    // "Skip it, I do not need the batteries anymore" verbatim — internal
+    // state and personal speech shipped to a search engine (2026-08-14).
     const focus = pricingGap
       ? (completionResearchCount % 2
           ? "official product page plan pricing features"
           : "official price per user billed monthly annual")
-      : compact.slice(0, 180);
-    const query = namedEntity ? `"${namedEntity}" ${focus}` : `${focus} ${goal.slice(0, 220)}`;
+      : "";
+    const safeGoal = sanitizedResearchTerms(goal);
+    const query = (namedEntity
+      ? `"${namedEntity}" ${focus || safeGoal}`
+      : `${focus} ${safeGoal}`).trim();
+    if (!query) return false;
     const next = directMissing
       ? cited
       : `https://www.bing.com/search?q=${encodeURIComponent(query)}`;

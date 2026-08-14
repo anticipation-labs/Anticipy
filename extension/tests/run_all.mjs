@@ -18,6 +18,7 @@ const suites = [
   "test_protected_input.mjs",
   "test_verification_fail_closed.mjs",
   "test_exact_fact_verification.mjs",
+  "test_research_query_hygiene.mjs",
   "test_workflow_state.mjs",
 ];
 let failed = 0;
