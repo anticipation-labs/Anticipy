@@ -355,10 +355,27 @@ def _surface(rng: random.Random, task: dict[str, Any], archetype: str,
         browser_tasks.append(_browser_spec(rng, task))
         if task.get("second_task"):
             browser_tasks.append(_browser_spec(rng, task["second_task"]))
+
+    # The phone's voice verdict only exists after the owner enrolls a
+    # voiceprint, and enrollment is dormant in the shipped build — so half
+    # of all stories run in day-one reality: NO verdict on any line, and the
+    # brain must earn "whose errand is this" from the words alone. The other
+    # half run post-enrollment, where the tagger says "owner" or "other" and
+    # NEVER a name. A named label ("other:Jordan") was the answer key
+    # leaking straight from this generator into the brain — the tester
+    # answering its own exam. Caught by the owner, 2026-08-14.
+    voice_enrolled = rng.random() < 0.5
+    for utterance in utterances:
+        if not voice_enrolled:
+            utterance.pop("speaker", None)
+        elif str(utterance.get("speaker", "")).startswith("other:"):
+            utterance["speaker"] = "other"
+
     case = {
         "id": case_id,
         "archetype": archetype,
         "domain": task["domain"],
+        "voice_enrolled": voice_enrolled,
         "utterances": utterances,
         "browser": browser_tasks[0] if browser_tasks else None,
         "browser_tasks": browser_tasks,
