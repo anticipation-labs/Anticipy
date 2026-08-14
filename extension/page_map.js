@@ -94,7 +94,7 @@
     // A real picker grid nested in an application is still discovered by the
     // role=grid candidate below, then expanded to its application shell.
     const candidates = [...document.querySelectorAll(
-      '[role=dialog],[aria-modal=true],dialog[open],[role=listbox],[role=grid]')]
+      '[role=dialog],[aria-modal=true],dialog[open],[role=grid]')]
       .filter((el) => {
         const r = el.getBoundingClientRect();
         if (r.width < 80 || r.height < 60) return false;
@@ -182,10 +182,44 @@
   // Keep a small orientation prefix, then spend most of the text budget on
   // semantic blocks that intersect the actual viewport. This is generic DOM
   // geometry, with no knowledge of any site or requested field.
+  function joinTypographicMoney(before, raised) {
+    const left = String(before || "").replace(/\s+/g, " ").trim();
+    const cents = String(raised || "").replace(/\s+/g, "").replace(/^\./, "");
+    if (!/^\d{1,2}$/.test(cents)) return "";
+    const match = left.match(/((?:US|CA|AU|NZ)?[$€£¥]\s*\d[\d,]*)$/i);
+    return match ? `${match[1]}.${cents}` : "";
+  }
+  // Exposed for a tiny pure regression test. Some sites render cents as a
+  // raised child ("$14" + <sup>"16"</sup>); innerText fuses that into
+  // "$1416", which is not the number a person sees.
+  window.__anticipyJoinTypographicMoney = joinTypographicMoney;
+
+  function typographicMoneyValues(root) {
+    const values = [];
+    for (const raised of root.querySelectorAll('sup')) {
+      if (!visible(raised) || !raised.parentElement) continue;
+      let before = "";
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(raised.parentElement);
+        range.setEndBefore(raised);
+        before = range.toString().slice(-40);
+      } catch (_) { continue; }
+      const value = joinTypographicMoney(before, raised.textContent);
+      if (value && !values.includes(value)) values.push(value);
+      if (values.length >= 20) break;
+    }
+    return values;
+  }
+
   function pageText(root, overlay) {
     const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
     const full = normalize((overlay || document.body).innerText);
-    if (overlay) return full.slice(0, 6000);
+    const typography = typographicMoneyValues(root);
+    const withTypography = (value) => typography.length
+      ? `${String(value || "").slice(0, 5600)}\nTYPOGRAPHIC VALUES: ${typography.join(" ")}`.slice(0, 6000)
+      : String(value || "").slice(0, 6000);
+    if (overlay) return withTypography(full);
     const vh = window.innerHeight || 800;
     const vw = window.innerWidth || 1200;
     const blocks = [...root.querySelectorAll(
@@ -206,9 +240,9 @@
     }
     const viewport = visible.join(" ").slice(0, 5000);
     const orientation = full.slice(0, 900);
-    return viewport && !orientation.includes(viewport)
-      ? `PAGE START: ${orientation}\nVISIBLE VIEWPORT: ${viewport}`.slice(0, 6000)
-      : full.slice(0, 6000);
+    return withTypography(viewport && !orientation.includes(viewport)
+      ? `PAGE START: ${orientation}\nVISIBLE VIEWPORT: ${viewport}`
+      : full);
   }
 
   window.__anticipyMapPage = () => {
