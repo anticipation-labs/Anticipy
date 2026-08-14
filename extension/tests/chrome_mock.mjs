@@ -19,14 +19,25 @@ export function installChrome() {
   const activationLog = []; // every tab id that ever became active, any cause
   const onRemovedListeners = [];
   const notifClickListeners = [];
+  const startupListeners = [];
+  const installedListeners = [];
+  const alarmListeners = [];
+  const alarms = new Map();
   let windowFocused = true;
+  let currentWindowExists = true;
 
   const harness = {
-    tabs, storageData, notifications, cleared, badge, focusGrants, activationLog,
+    tabs, storageData, notifications, cleared, badge, focusGrants, activationLog, alarms,
     onCdp: null,          // (tabId, method, params) => result | undefined
     mapPage: null,        // (tabId) => {url, title, elements, text}
     activeTabId: () => [...tabs.values()].find((t) => t.active)?.id ?? null,
     windowFocused: () => windowFocused,
+    setCurrentWindowExists: (exists) => { currentWindowExists = !!exists; },
+    fireStartup: () => { for (const fn of startupListeners) fn(); },
+    fireInstalled: (details = { reason: "update" }) => {
+      for (const fn of installedListeners) fn(details);
+    },
+    fireAlarm: (name) => { for (const fn of alarmListeners) fn({ name }); },
   };
 
   function activate(id) {
@@ -63,6 +74,7 @@ export function installChrome() {
       },
       get: async (id) => ({ ...requireTab(id) }),
       create: async (props = {}) => {
+        if (!currentWindowExists) throw new Error("No current window");
         const active = props.active !== false; // Chrome's real default: true
         const t = { id: ++tabSeq, url: props.url || "about:blank", pendingUrl: undefined, active: false, openerTabId: props.openerTabId, windowId: 1, groupId: -1 };
         tabs.set(t.id, t);
@@ -99,6 +111,13 @@ export function installChrome() {
     },
     tabGroups: { update: async () => ({}) },
     windows: {
+      create: async (props = {}) => {
+        currentWindowExists = true;
+        windowFocused = props.focused !== false;
+        const t = harness.addTab({ url: props.url || "about:blank", active: false });
+        if (props.focused === true) focusGrants.push({ windowId: 1 });
+        return { id: 1, focused: windowFocused, state: props.state || "normal", tabs: [{ ...t }] };
+      },
       update: async (windowId, props = {}) => {
         if (props.focused === true) { focusGrants.push({ windowId }); windowFocused = true; }
         return { id: windowId };
@@ -151,9 +170,17 @@ export function installChrome() {
       getURL: (p) => p,
       getManifest: () => ({ version: "0.0.0-test" }),
       onMessage: { addListener: () => {} },
-      onInstalled: { addListener: () => {} },
+      onInstalled: { addListener: (fn) => installedListeners.push(fn) },
+      onStartup: { addListener: (fn) => startupListeners.push(fn) },
     },
-    alarms: { create: () => {}, onAlarm: { addListener: () => {} } },
+    alarms: {
+      get: async (name) => alarms.has(name) ? structuredClone(alarms.get(name)) : undefined,
+      create: async (name, options = {}) => {
+        alarms.set(name, { name, scheduledTime: Date.now(), ...structuredClone(options) });
+      },
+      clear: async (name) => alarms.delete(name),
+      onAlarm: { addListener: (fn) => alarmListeners.push(fn) },
+    },
   };
   return harness;
 }

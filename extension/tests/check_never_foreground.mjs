@@ -11,7 +11,8 @@
 //
 // Also enforced here: node --check on agent_loop.js + background.js as .mjs
 // (the brief's own syntax gate), tabs.create defaulting-to-focused misuse,
-// window creation, tab highlighting, manifest version + notifications perm.
+// any window creation except the one pinned unfocused/minimized recovery path,
+// tab highlighting, manifest version + notifications perm.
 //
 // Run: node extension/tests/check_never_foreground.mjs
 
@@ -73,11 +74,31 @@ for (const f of FILES) {
   });
 }
 
-// 4. No window creation, no tab highlighting, ever.
+// 4. No tab highlighting, ever. Window creation is permitted only for the
+// audited no-current-window recovery path, and it must be both unfocused and
+// minimized. The per-file count is pinned so a second path cannot slip in.
+const ALLOWED_WINDOW_CREATES = { "agent_loop.js": 1 };
 for (const f of FILES) {
   const src = read(f);
-  for (const forbidden of ["chrome.windows.create", "chrome.tabs.highlight"]) {
-    if (src.includes(forbidden)) failures.push(`${f}: uses ${forbidden} — nothing we do may make new windows or highlight tabs`);
+  if (src.includes("chrome.tabs.highlight")) {
+    failures.push(`${f}: uses chrome.tabs.highlight — nothing we do may highlight tabs`);
+  }
+  const lines = src.split("\n");
+  let creates = 0;
+  lines.forEach((line, i) => {
+    if (!line.includes("chrome.windows.create(")) return;
+    creates++;
+    const marker = lines.slice(Math.max(0, i - 3), i + 1).join("\n");
+    const call = lines.slice(i, i + 7).join("\n");
+    if (!/WINDOW-OK\(no-current-window\)/.test(marker)
+        || !/focused\s*:\s*false/.test(call)
+        || !/state\s*:\s*["']minimized["']/.test(call)) {
+      failures.push(`${f}:${i + 1}: window creation is not the audited unfocused/minimized recovery path`);
+    }
+  });
+  const allowed = ALLOWED_WINDOW_CREATES[f] || 0;
+  if (creates !== allowed) {
+    failures.push(`${f}: ${creates} window-creation site(s), audit pinned ${allowed}`);
   }
 }
 

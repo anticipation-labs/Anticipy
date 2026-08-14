@@ -4,7 +4,7 @@
 // no service APIs. Irreversible steps stop at a prefilled page for the user
 // (or the phone app) to confirm.
 
-import { runAgentGoal } from "./agent_loop.js";
+import { createBackgroundTab, runAgentGoal } from "./agent_loop.js";
 import {
   heartbeatPatch,
   isWorkflowJob,
@@ -12,6 +12,12 @@ import {
   parseJobParams,
   workflowPatch,
 } from "./workflow_state.js";
+
+// Keep an engine marker in the service-worker entry file itself. Updating an
+// imported module alone can leave Chrome running a cached worker graph for an
+// unpacked extension; changing this entry file forces a fresh registration,
+// and the same marker is written into every job trace as runtime proof.
+const ENGINE_BUILD = "0.6.18";
 
 // Production backend; override via chrome.storage.local `backendUrl` for dev.
 const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
@@ -42,8 +48,12 @@ async function writeHeaders(leaseToken = "") {
   return h;
 }
 
-const POLL_SECONDS = 5;
-const HEARTBEAT_SECONDS = 10;
+// Chrome only guarantees recurring extension alarms every 30 seconds. Values
+// below that can appear to work in development and then disappear after a
+// service-worker/browser restart. Keep both wake paths at the supported floor
+// and re-assert them whenever this worker boots (see ensureWakeAlarms below).
+const WAKE_PERIOD_MINUTES = 0.5;
+const WAKE_ALARMS = ["anticipy-poll", "anticipy-heartbeat"];
 const LEASE_MS = 2 * 60 * 1000;
 // A real task takes minutes: a booking, a spreadsheet, anything spanning two
 // sites. Two minutes declared live work abandoned and handed it to the next
@@ -495,7 +505,15 @@ async function updateJob(id, fields, leaseToken = "") {
   if (!r.ok) {
     if (r.status === 404) { activeJobs.delete(id); throw new Error("job gone"); }
     let detail = "";
-    try { detail = String((await r.json()).detail || ""); } catch (_) {}
+    try {
+      const error = await r.json();
+      const validation = error?.data && typeof error.data === "object"
+        ? Object.entries(error.data).map(([field, value]) =>
+            `${field}: ${String(value?.message || value || "invalid")}`).join("; ")
+        : "";
+      detail = [error?.detail, error?.message, validation]
+        .map((value) => String(value || "").trim()).filter(Boolean).join("; ");
+    } catch (_) {}
     throw new Error(`job update failed (${r.status})${detail ? `: ${detail}` : ""}`);
   }
   return r.json();
@@ -553,7 +571,9 @@ async function runJobInner(job, params) {
   if (job.goal === "agent_goal") {
     // Autonomous mode: LLM click-loop via chrome.debugger in a background
     // Anticipy tab group (same mechanics as Claude in Chrome / Codex).
-    const openrouterKey = await ensureLLMKey();
+    // Model selection is server-controlled and can change during a recovery.
+    // Refresh once per job; a failed refresh preserves the last good bundle.
+    const openrouterKey = await ensureLLMKey(true);
     if (!openrouterKey) {
       const result = "no LLM key: not paired yet, or the backend has none configured";
       const patch = isWorkflowJob(job)
@@ -590,7 +610,11 @@ async function runJobInner(job, params) {
         ownerProfile,
         // The owner already said yes in the app or by text; the gate lives
         // in the job queue, so the browser must not ask a second time.
-        authorized: params.authorized === true,
+        // A read-only command is already authorized to perform reversible
+        // navigation/search. Its separate readOnly boundary below still
+        // mechanically refuses any genuinely consequential control.
+        authorized: params.authorized === true || job.consequence === "read_only",
+        readOnly: job.consequence === "read_only",
         // Exactly what the owner agreed to, in their own words plus what
         // she told them — the only thing an action is measured against.
         // The model's goal is navigation guidance; the owner's retained words
@@ -612,17 +636,39 @@ async function runJobInner(job, params) {
                                   && (typeof v === "string" || typeof v === "number"
                                       || typeof v === "boolean")
                                   && String(v).length < 200)),
+        // A Manifest V3 worker may be reclaimed during a long research run.
+        // Keep its bounded live-page notebook on the canonical job so a
+        // lease retry resumes with evidence already earned instead of
+        // forgetting two clinics/listings/vendors and starting from zero.
+        initialEvidenceJournal: Array.isArray(params._execution_journal)
+          ? params._execution_journal : [],
         // The step-by-step trace lands on the job row as the agent works, so
         // a run is auditable after the fact. Throttled: at most one write
         // every few seconds, always carrying the latest tail.
         onTrace: (() => {
           let last = 0;
-          return async (history, final = false) => {
+          const priorTrace = String(job.trace || "").trim();
+          const attemptHeader = `=== attempt ${Number(job.attempts) || 1} | engine ${ENGINE_BUILD} ===`;
+          return async (history, final = false, checkpoint = {}) => {
             const now = Date.now();
             if (!final && now - last < 4000) return;
             last = now;
+            const currentTrace = history.slice(-160).join("\n");
+            const trace = [priorTrace, attemptHeader, currentTrace]
+              .filter(Boolean).join("\n").slice(-90000);
+            const journal = (Array.isArray(checkpoint?.evidenceJournal)
+              ? checkpoint.evidenceJournal : []).slice(-18).map((entry) => ({
+                fingerprint: String(entry?.fingerprint || "").slice(0, 200),
+                url: String(entry?.url || "").slice(0, 500),
+                title: String(entry?.title || "").slice(0, 200),
+                text: String(entry?.text || "").slice(0, 2500),
+                elements: String(entry?.elements || "").slice(0, 1000),
+              }));
+            if (journal.length) params = { ...params, _execution_journal: journal };
             job = await updateJob(job.id,
-              { trace: history.slice(-80).join("\n").slice(-14000) }, job.lease_token);
+              { trace, ...(journal.length ? {
+                params: JSON.stringify(params),
+              } : {}) }, job.lease_token);
             const active = activeJobs.get(job.id);
             if (active) active.job = job;
           };
@@ -707,7 +753,7 @@ async function runJobInner(job, params) {
   }
   // Work quietly: background tab inside a collapsed "Anticipy" tab group,
   // same as the agent_goal path — never steals the user's focus.
-  const tab = await chrome.tabs.create({ url: build(params), active: false });
+  const tab = await createBackgroundTab(build(params));
   try {
     const group = await chrome.tabs.group({ tabIds: tab.id });
     await chrome.tabGroups.update(group, { title: "Anticipy Codex Version", color: "yellow", collapsed: true });
@@ -738,6 +784,22 @@ async function poll() {
     // backend not reachable; try again on next alarm
   } finally {
     pollInFlight = false;
+  }
+}
+
+// Alarms usually survive a browser restart, but Chrome explicitly documents
+// that this is not guaranteed. Creating them only in onInstalled left a live
+// Chrome process with no queue consumer. This check is deliberately generic:
+// it repairs the executor clock, not any particular site or task.
+export async function ensureWakeAlarms() {
+  for (const name of WAKE_ALARMS) {
+    const alarm = await chrome.alarms.get(name);
+    if (alarm && Number(alarm.periodInMinutes) === WAKE_PERIOD_MINUTES) continue;
+    await chrome.alarms.create(name, {
+      delayInMinutes: WAKE_PERIOD_MINUTES,
+      periodInMinutes: WAKE_PERIOD_MINUTES,
+      persistAcrossSessions: true,
+    });
   }
 }
 
@@ -804,8 +866,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
 });
 
 chrome.runtime.onInstalled.addListener((details) => {
-  chrome.alarms.create("anticipy-poll", { periodInMinutes: POLL_SECONDS / 60 });
-  chrome.alarms.create("anticipy-heartbeat", { periodInMinutes: HEARTBEAT_SECONDS / 60 });
+  ensureWakeAlarms().catch(() => {});
   ensureRegistered();
   // First-run welcome: a guided setup page, not a paragraph in a README.
   if (details.reason === "install") {
@@ -813,6 +874,14 @@ chrome.runtime.onInstalled.addListener((details) => {
     // action — the pairing page is the one thing allowed to open focused.
     chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html"), active: true });
   }
+});
+chrome.runtime.onStartup.addListener(() => {
+  // Top-level module evaluation normally does this too. Repeating the check on
+  // the explicit browser-start event closes the lifecycle gap without risking
+  // duplicate jobs: poll() has its own single-flight guard.
+  ensureWakeAlarms().catch(() => {});
+  poll();
+  refreshBadge();
 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === "anticipy-poll") poll();
@@ -822,5 +891,6 @@ chrome.alarms.onAlarm.addListener((a) => {
 });
 // Also poll immediately on worker wake, and re-assert the badge — it is
 // derived state, and a restarted browser comes up with it blank.
+ensureWakeAlarms().catch(() => {});
 poll();
 refreshBadge();

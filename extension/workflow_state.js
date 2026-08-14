@@ -109,14 +109,19 @@ export function workflowPatch(job, nextState, options = {}) {
   }
 
   if (nextState === "succeeded") {
+    // The durable receipt is a compact proof index. The complete human result
+    // stays in jobs.result and the complete model exchange stays in the audit
+    // ledger; duplicating both here can exceed PocketBase's text validation
+    // limit and turn a verified browser success into HTTP 400.
     const evidence = Array.isArray(options.evidence)
-      ? options.evidence.map((x) => String(x).trim()).filter(Boolean) : [];
+      ? options.evidence.map((x) => String(x).trim().slice(0, 1000))
+          .filter(Boolean).slice(0, 12) : [];
     if (!options.verified || !evidence.length || !job.effect_key) {
       throw new Error("success requires verified evidence for this effect");
     }
     const receipt = {
       effect_key: job.effect_key,
-      summary: String(options.summary || "").trim(),
+      summary: String(options.summary || "").trim().slice(0, 2000),
       evidence,
       verified: true,
       recorded_at: at,

@@ -84,6 +84,21 @@ function job(state = "queued") {
 }
 
 {
+  const j = job("running");
+  const p = workflowPatch(j, "succeeded", {
+    summary: "s".repeat(7000), verified: true,
+    evidence: Array.from({ length: 20 }, (_, index) =>
+      `page-${index}:` + "e".repeat(2500)),
+    now: "2026-08-12T20:02:30.000Z",
+  });
+  const receipt = JSON.parse(p.receipt);
+  assert.equal(receipt.summary.length, 2000);
+  assert.equal(receipt.evidence.length, 12);
+  assert.ok(receipt.evidence.every((entry) => entry.length <= 1000));
+  console.log("PASS: verified receipts stay bounded while the full result remains separate");
+}
+
+{
   assert.throws(() => workflowPatch(job("failed"), "queued", {}), /illegal workflow transition/);
   assert.throws(() => workflowPatch(job("cancelled"), "running", {}), /illegal workflow transition/);
   console.log("PASS: terminal work cannot be resurrected by the browser");

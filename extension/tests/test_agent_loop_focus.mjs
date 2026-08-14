@@ -13,7 +13,8 @@ function scriptFetch(actions, verdicts = [{ verified: true }]) {
   globalThis.fetch = async (url, opts = {}) => {
     if (!String(url).includes("openrouter")) return { ok: false, status: 0, json: async () => ({}), text: async () => "" };
     const body = JSON.parse(opts.body);
-    const audit = String(body.messages[0].content).startsWith("You audit");
+    const audit = body.messages.some((message) =>
+      String(message.content).startsWith("You audit"));
     const content = JSON.stringify(audit ? (v.shift() || { verified: true }) : (a.shift() || { action: "wait" }));
     return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }] }), text: async () => "" };
   };

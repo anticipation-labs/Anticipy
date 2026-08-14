@@ -28,10 +28,25 @@ def test_model_proxy_requires_private_agent_credential_and_allowlist():
     assert "inlineData" in proxy
     assert 'provider: "google"' in proxy
     assert "max_tokens: boundedMax" in proxy
-    assert "Math.min(2048" in proxy
+    assert "Math.min(4096" in proxy
     assert "maxOutputTokens: boundedMax" in proxy
-    assert "thinkingConfig: { thinkingBudget: 0 }" in proxy
+    assert "const gemini3" in proxy
+    assert "/^gemini-3" in proxy
+    assert 'thinkingLevel: "low"' in proxy
+    assert "thinkingBudget: 0" in proxy
+    assert "if (!gemini3) generationConfig.temperature = 0" in proxy
     assert 'responseMimeType = "application/json"' in proxy
+
+
+def test_model_proxy_routes_the_selected_model_instead_of_the_available_key():
+    source = (ROOT / "backend/pb_hooks/agent_key.pb.js").read_text()
+    proxy = source.split('routerAdd("POST", "/agent/llm"', 1)[1]
+    assert 'model.indexOf("google/") === 0' in proxy
+    assert "if (geminiKey && directGeminiModel)" in proxy
+    assert 'provider_model: directGeminiModel' in proxy
+    assert 'provider_model: model' in proxy
+    assert 'body: serialized' in proxy
+    assert 'if (geminiKey) {' not in proxy
 
 
 def test_extension_uses_opaque_proxy_marker_for_production_calls():
@@ -43,7 +58,7 @@ def test_extension_uses_opaque_proxy_marker_for_production_calls():
     assert "X-Anticipy-Agent-Token" in loop
     assert loop.count("await modelFetch(") >= 5
     assert "const boundedPayload" in loop
-    assert "max_tokens: 384" in loop
+    assert "max_tokens: Math.min(4096" in loop
 
 
 def test_browser_certification_keeps_model_goal_out_of_exact_authority():

@@ -131,6 +131,8 @@ check(pageFingerprint(sheet) === pageFingerprint({ ...sheet }),
       "an unchanged page fingerprints the same (a real stall is still caught)");
 check(pageFingerprint(sheet) !== pageFingerprint({ ...sheet, text: "t".repeat(9001) }),
       "SPREADSHEET: same url, one more character typed, counts as progress");
+check(pageFingerprint(sheet) !== pageFingerprint({ ...sheet, text: "u".repeat(9000) }),
+      "equal-sized but different page text counts as progress");
 check(pageFingerprint(sheet) !== pageFingerprint({ ...sheet, elements: "e".repeat(401) }),
       "same url, a new element appeared (menu/dialog/row), counts as progress");
 check(pageFingerprint(sheet) !== pageFingerprint({ ...sheet, url: sheet.url + "#gid=2" }),
@@ -152,7 +154,7 @@ check(/researched = true;/.test(loopSrc),
 check(/FORM VALUES: answer each field's LABEL/.test(loopSrc)
       && /CURRENT FORM VALUES:/.test(loopSrc),
       "field values are grounded in the exact authority and shown before submit");
-check(/const boundedPayload/.test(loopSrc) && /Math\.min\(2048/.test(loopSrc),
+check(/const boundedPayload/.test(loopSrc) && /Math\.min\(4096/.test(loopSrc),
       "every model call has a bounded output budget");
 const submitBlock = loopSrc.indexOf("PRE-SUBMIT BLOCK — these visible values");
 check(submitBlock > 0 && loopSrc.indexOf("delete actionCounts[sig]", submitBlock) > submitBlock,

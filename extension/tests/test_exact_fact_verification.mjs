@@ -210,7 +210,7 @@ check(completionContradiction("The amounts were not correctly reflected."),
   "an admitted incorrect submission can never become done");
 check(!completionContradiction("Replacement, not a refund, was submitted successfully."),
   "a negated alternative does not erase a successful action");
-check(/if \(externalClick\)[\s\S]*unsupportedApprovedFacts\(facts, state, state\)[\s\S]*PRE-SUBMIT BLOCK[\s\S]*trustedClick/.test(source),
+check(/if \(externalClick\)[\s\S]*unsupportedApprovedFacts\(facts, controlState, controlState\)[\s\S]*PRE-SUBMIT BLOCK[\s\S]*trustedClick/.test(source),
   "the exact-fact guard runs before a final click");
 check(/if \(!authorized\)[\s\S]*owner has not approved its external effect/.test(source),
   "an unapproved final control is mechanically stopped");

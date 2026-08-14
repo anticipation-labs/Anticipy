@@ -56,14 +56,45 @@
     return st.visibility !== "hidden" && st.display !== "none";
   }
 
+  // Web components often expose a labelled host while putting the real
+  // button/input inside an open shadow root. Keep the host as the stable map
+  // identity, but operate the generic interactive descendant a human can
+  // actually click. No component or site names are needed.
+  function actionable(el) {
+    if (!el || !el.shadowRoot) return el;
+    return el.shadowRoot.querySelector(
+      'button,input,select,textarea,a[href],[role="button"],[role="link"],[tabindex]') || el;
+  }
+
+  // Give the planner enough URL identity to distinguish two same-label links
+  // without exposing query strings, fragments, credentials, or tracking
+  // tokens. This is especially useful on result pages where an exact title
+  // can point back to a document that already failed verification.
+  function displayHref(el) {
+    const target = actionable(el);
+    const raw = target?.href || el?.href || "";
+    if (!raw) return "";
+    try {
+      const url = new URL(String(raw), location.href);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+      return `${url.protocol}//${url.host}${url.pathname}`.slice(0, 300);
+    } catch (_) { return ""; }
+  }
+
   /// When a date picker / dialog is open, that IS the page as far as the
   /// person is concerned. Mapping the whole document instead spends the
   /// element budget on the header and nav and can truncate the calendar out
   /// entirely — which is exactly why party size (a plain dropdown) worked and
   /// choosing a date did not.
   function activeOverlay() {
+    // A bare role=application is not an overlay. Video players, maps and
+    // rich document surfaces commonly use it while remaining ordinary page
+    // content. Treating one as a dialog hid the entire surrounding page and
+    // reduced a pricing page to the video's "0 seconds" accessibility text.
+    // A real picker grid nested in an application is still discovered by the
+    // role=grid candidate below, then expanded to its application shell.
     const candidates = [...document.querySelectorAll(
-      '[role=dialog],[aria-modal=true],dialog[open],[role=listbox],[role=grid],[role=application]')]
+      '[role=dialog],[aria-modal=true],dialog[open],[role=listbox],[role=grid]')]
       .filter((el) => {
         const r = el.getBoundingClientRect();
         if (r.width < 80 || r.height < 60) return false;
@@ -72,10 +103,54 @@
       });
     if (!candidates.length) return null;
     // The one on top: deepest in the DOM wins ties.
-    return candidates.sort((a, b) => {
+    const chosen = candidates.sort((a, b) => {
       const za = +getComputedStyle(a).zIndex || 0, zb = +getComputedStyle(b).zIndex || 0;
       return zb - za || (a.contains(b) ? 1 : -1);
     })[0];
+    // A date grid is often nested inside a date-picker shell whose Previous /
+    // Next month controls are siblings. Returning the grid alone makes future
+    // dates literally unreachable. Prefer the smallest enclosing dialog, or
+    // a nearby shell with a semantic month-navigation control.
+    if (chosen.getAttribute("role") === "grid") {
+      const dialog = chosen.closest('[role=dialog],[aria-modal=true],dialog[open],[role=application]');
+      if (dialog) return dialog;
+      let shell = chosen.parentElement;
+      for (let depth = 0; shell && shell !== document.body && depth < 5;
+           depth++, shell = shell.parentElement) {
+        const outsideButtons = [...shell.querySelectorAll('button,[role=button]')]
+          .filter((button) => !chosen.contains(button) && visible(button));
+        if (outsideButtons.some((button) =>
+          /\b(next|previous|prev)\b.*\b(month|calendar)\b|\b(month|calendar)\b.*\b(next|previous|prev)\b/i
+            .test(label(button)))) return shell;
+      }
+    }
+    return chosen;
+  }
+
+  // Recover the missing month context for calendars whose day buttons say
+  // only "17". This uses nearby DOM text/ARIA structure, not a site selector.
+  // The resulting map line says calendar=September 17, allowing both the
+  // model and the mechanical date guard to distinguish identical day numbers.
+  function calendarDateOf(el) {
+    const own = label(el).replace(/\s+\$[\d,.]+.*$/, "").trim();
+    const direct = own.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+([12]?\d|3[01])(?:,?\s+(20\d{2}))?\b/i);
+    if (direct) return `${direct[1]} ${Number(direct[2])}${direct[3] ? `, ${direct[3]}` : ""}`;
+    const day = own.match(/^([12]?\d|3[01])(?:\s|$)/);
+    if (!day || !el.closest('[role=grid],[role=dialog],[aria-modal=true],[class*="calendar" i],[class*="date" i]')) return "";
+    let node = el.parentElement;
+    for (let depth = 0; node && node !== document.body && depth < 8;
+         depth++, node = node.parentElement) {
+      const text = String(node.innerText || node.getAttribute("aria-label") || "")
+        .replace(/\s+/g, " ").trim();
+      if (!text || text.length > 2200) continue;
+      const months = [...text.matchAll(/\b(January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+(20\d{2}))?\b/gi)];
+      const unique = [...new Set(months.map((match) => match[1].toLowerCase()))];
+      if (unique.length !== 1) continue;
+      const month = months[0][1];
+      const year = months.find((match) => match[2])?.[2] || "";
+      return `${month} ${Number(day[1])}${year ? `, ${year}` : ""}`;
+    }
+    return "";
   }
 
   /// State a calendar cell carries but a bare label hides: is this day
@@ -95,7 +170,45 @@
       const v = el.getAttribute && el.getAttribute(attr);
       if (v && v.length <= 32) { bits.push(`${attr}=${v}`); break; }
     }
+    const calendarDate = calendarDateOf(el);
+    if (calendarDate) bits.push(`calendar=${calendarDate}`);
     return bits.length ? ` [${bits.join(" ")}]` : "";
+  }
+
+  // A document's first few thousand characters are usually navigation and
+  // the top of the page. Keeping only that prefix made scrolling useless for
+  // exact-text research: the owner could be looking directly at an hours,
+  // price or availability section while the model still received the header.
+  // Keep a small orientation prefix, then spend most of the text budget on
+  // semantic blocks that intersect the actual viewport. This is generic DOM
+  // geometry, with no knowledge of any site or requested field.
+  function pageText(root, overlay) {
+    const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const full = normalize((overlay || document.body).innerText);
+    if (overlay) return full.slice(0, 6000);
+    const vh = window.innerHeight || 800;
+    const vw = window.innerWidth || 1200;
+    const blocks = [...root.querySelectorAll(
+      'h1,h2,h3,h4,h5,h6,p,li,dt,dd,td,th,pre,blockquote,address,figcaption')];
+    const seen = new Set();
+    const visible = [];
+    for (const block of blocks) {
+      const r = block.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2 || r.bottom <= 0 || r.top >= vh
+          || r.right <= 0 || r.left >= vw) continue;
+      const st = getComputedStyle(block);
+      if (st.visibility === "hidden" || st.display === "none" || st.opacity === "0") continue;
+      const text = normalize(block.innerText || block.textContent);
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      visible.push(text);
+      if (visible.join(" ").length >= 5000) break;
+    }
+    const viewport = visible.join(" ").slice(0, 5000);
+    const orientation = full.slice(0, 900);
+    return viewport && !orientation.includes(viewport)
+      ? `PAGE START: ${orientation}\nVISIBLE VIEWPORT: ${viewport}`.slice(0, 6000)
+      : full.slice(0, 6000);
   }
 
   window.__anticipyMapPage = () => {
@@ -109,7 +222,16 @@
     // spent on what the person is actually looking at.
     const overlay = activeOverlay();
     const root = overlay || document;
-    const found = [...root.querySelectorAll(sel)];
+    const found = [...root.querySelectorAll(sel)].filter((el) => {
+      // Pages often put tabindex=-1 on large structural containers solely so
+      // their own code can focus/scroll them. They are not controls a person
+      // can tab to or click. Mapping one exposed an entire <main> as a button;
+      // its thousands of words happened to contain "Book", so the safety
+      // layer mistook a read-only availability search for a reservation.
+      const raw = el.getAttribute("tabindex");
+      if (raw == null || Number(raw) >= 0) return true;
+      return el.matches('a[href],button,input,select,textarea,[role="button"],[role="link"],[role="option"],[role="gridcell"],[role="menuitem"],[role="tab"],[onclick]');
+    });
     // Elements the user can actually see come first, so a truncation can
     // never hide the thing on screen behind a hundred footer links.
     const vh = window.innerHeight || 800;
@@ -178,6 +300,9 @@
         // A readonly input can only be changed through the widget it fronts —
         // shown here so the model clicks it open instead of writing to it.
         if (el.readOnly) extra += " [readonly — click to open its picker]";
+      } else if (role(el) === "link") {
+        const href = displayHref(el);
+        if (href) extra = ` [href=${href}]`;
       }
       lines.push(`[${idx}] <${role(el)}> ${label(el)}${stateOf(el)}${extra} @(${Math.round(r.x + r.width / 2)},${Math.round(r.y + r.height / 2)})`);
       // 400, not 150: a booking page spends the first hundred on nav and menu
@@ -185,7 +310,12 @@
       if (counter > 400) break;
     }
     const title = document.title;
-    const bodyText = ((overlay || document.body).innerText || "").replace(/\s+/g, " ").slice(0, 1500);
+    // The first 1,500 characters of a commercial/research page are commonly
+    // all navigation. Prices, hours, specifications and source facts then
+    // never reach either the agent or its verifier. Keep a still-bounded but
+    // genuinely useful visible-text window; this is generic DOM evidence,
+    // not a site extraction rule.
+    const bodyText = pageText(root, overlay);
     return { url: location.href, title, elements: lines.join("\n"), text: bodyText, fields,
              overlay: !!overlay };
   };
@@ -206,7 +336,7 @@
     // editable input already has focus, keep it — refocusing the mapped
     // element would send keystrokes to the dead placeholder box.
     if (activeEditable()) return true;
-    const el = window.__anticipyMap[idx];
+    const el = actionable(window.__anticipyMap[idx]);
     if (!el) return false;
     try { el.focus(); } catch (e) { return false; }
     return document.activeElement === el;
@@ -283,7 +413,7 @@
   };
 
   window.__anticipyCenter = (idx) => {
-    const el = window.__anticipyMap[idx];
+    const el = actionable(window.__anticipyMap[idx]);
     if (!el) return null;
     el.scrollIntoView({ block: "center" });
     const r = el.getBoundingClientRect();
