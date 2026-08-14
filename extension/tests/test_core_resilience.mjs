@@ -150,12 +150,23 @@ assert.equal(officialRecordEvidenceGap(
   { url: "https://example.test/pricing/pro", title: "Price", text: "$14.16 USD per user", elements: "" },
   [{ url: "https://example.test/pricing/pro", title: "Plan", text: "Business Pro", elements: "" }]), "",
   "complementary live scroll states on the same official document form one proof");
+assert.equal(officialRecordEvidenceGap(
+  "Compare the current plans on each vendor's official pricing page.",
+  [{ ...officialPricingResult[0], displayed_price: "8.75" }],
+  { url: "https://example.test/pricing/pro", title: "Business Pro", text: "Business Pro $8.75$4.38 USD per user", elements: "" }, []), "",
+  "a leading currency symbol remains a complete money token beside another promotional price");
 assert.match(officialRecordEvidenceGap(
   "Compare the current plans on each vendor's official pricing page.",
   officialPricingResult,
   { url: "https://search.test/?q=example", title: "Search", text: "ExampleCo Business Pro $14.16 USD", elements: "" },
   [{ url: "https://example.test/pricing/pro", title: "Business Pro", text: "Contact sales", elements: "" }]),
   /does not contain claimed displayed_price "14\.16"/);
+assert.match(officialRecordEvidenceGap(
+  "Compare the current plans on each vendor's official pricing page.",
+  [{ ...officialPricingResult[0], displayed_price: "141" }],
+  { url: "https://example.test/pricing/pro", title: "Business Pro", text: "Business Pro $1416/month/user USD", elements: "" }, []),
+  /does not contain claimed displayed_price "141"/,
+  "a substring of a larger money token cannot prove a claimed price");
 assert.equal(officialRecordEvidenceGap(
   "Compare several plans and summarize them.", officialPricingResult,
   { url: "https://search.test", text: "$14.16 USD" }, []), "");
@@ -232,18 +243,34 @@ console.log("PASS 4: picker clicks cannot silently change an explicit date");
 
 const here = dirname(fileURLToPath(import.meta.url));
 const mapSource = readFileSync(join(here, "..", "page_map.js"), "utf8");
+const overlaySource = mapSource.slice(
+  mapSource.indexOf("function activeOverlay"), mapSource.indexOf("function calendarDateOf"));
+globalThis.window = {};
+eval(mapSource);
+assert.equal(globalThis.window.__anticipyJoinTypographicMoney("Zoom Pro $14", "16"), "$14.16");
+assert.equal(globalThis.window.__anticipyJoinTypographicMoney("Video 1 minute", "41"), "");
+delete globalThis.window;
 assert.match(mapSource, /url\.host\}\$\{url\.pathname/,
   "link identity exposes no query strings or fragments");
 assert.match(mapSource, /calendar=\$\{calendarDate\}/,
   "calendar day map includes inferred month/day context");
 assert.match(mapSource, /smallest enclosing dialog/,
   "calendar mapper keeps surrounding month navigation controls");
-assert.doesNotMatch(mapSource,
-  /querySelectorAll\(\s*['"][^'"]*\[role=application\][^'"]*['"]\s*\)/,
+assert.doesNotMatch(overlaySource, /\[role=application\].*querySelectorAll/,
   "an ordinary video/application cannot hide the surrounding page as an overlay");
+assert.doesNotMatch(overlaySource, /\[role=listbox\]/,
+  "a permanent navigation listbox cannot hide the surrounding page as an overlay");
+assert.match(mapSource, /TYPOGRAPHIC VALUES/,
+  "raised cents are exposed as the decimal money value a person sees");
 const loopSource = readFileSync(join(here, "..", "agent_loop.js"), "utf8");
 const backgroundSource = readFileSync(join(here, "..", "background.js"), "utf8");
-assert.match(backgroundSource, /ENGINE_BUILD = "0\.6\.18"/);
+// The marker must always MATCH the manifest, not equal a number this test
+// hardcodes — a hardcoded pin turned every release into a false red.
+const manifestVersion = JSON.parse(
+  readFileSync(join(here, "..", "manifest.json"), "utf8")).version;
+assert.match(backgroundSource,
+  new RegExp(`ENGINE_BUILD = "${manifestVersion.replace(/\./g, "\\.")}"`),
+  "ENGINE_BUILD must equal the manifest version so traces identify the build");
 assert.match(backgroundSource, /attempt .*\| engine \$\{ENGINE_BUILD\}/,
   "every live trace identifies the exact service-worker engine build");
 assert.match(loopSource, /same completion failed verification three times/);

@@ -1235,6 +1235,14 @@ function evidenceHasNumber(body, claimed) {
     .some((match) => claimedNumber(match[0]) === wanted);
 }
 
+function evidenceHasMonetaryValue(body, claimed) {
+  const wanted = claimedNumber(claimed);
+  if (!wanted) return false;
+  const money = /(?:(?:US|CA|AU|NZ)?[$€£¥]\s*-?\d[\d,]*(?:\.\d+)?|\b(?:USD|CAD|EUR|GBP|AUD|NZD|JPY)\s*-?\d[\d,]*(?:\.\d+)?|-?\d[\d,]*(?:\.\d+)?\s*(?:USD|CAD|EUR|GBP|AUD|NZD|JPY|Canadian dollars?))/gi;
+  return [...String(body || "").matchAll(money)]
+    .some((match) => claimedNumber(match[0]) === wanted);
+}
+
 // A model cannot launder a search snippet into first-party evidence. For a
 // structured result that claims an exact official-source price, the exact
 // cited document must itself contain the plan and number. This remains
@@ -1267,11 +1275,14 @@ export function officialRecordEvidenceGap(goal, result, state, journal = []) {
     if (planEntry && !evidenceToken(body).includes(evidenceToken(planEntry[1]))) {
       return `official-source evidence at ${url} does not contain claimed plan "${String(planEntry[1]).slice(0, 120)}"`;
     }
-    if (!evidenceHasNumber(body, priceEntry[1])) {
-      return `official-source evidence at ${url} does not contain claimed ${priceEntry[0]} "${String(priceEntry[1]).slice(0, 120)}"`;
-    }
     const currencyEntry = entries.find(([key, item]) =>
       /currency/i.test(key) && typeof item === "string");
+    const priceShown = currencyEntry
+      ? evidenceHasMonetaryValue(body, priceEntry[1])
+      : evidenceHasNumber(body, priceEntry[1]);
+    if (!priceShown) {
+      return `official-source evidence at ${url} does not contain claimed ${priceEntry[0]} "${String(priceEntry[1]).slice(0, 120)}"`;
+    }
     if (currencyEntry) {
       const currency = String(currencyEntry[1]).trim().toUpperCase();
       const symbols = { USD: "$", CAD: "$", AUD: "$", NZD: "$", EUR: "€", GBP: "£", JPY: "¥" };
