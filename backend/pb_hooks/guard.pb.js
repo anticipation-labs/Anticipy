@@ -128,7 +128,12 @@ routerUse((e) => {
       if (recordId && method === "PATCH" && (collection === "agents" || collection === "pendants")) {
         let rec = null;
         try { rec = e.app.findRecordById(collection, recordId); } catch (_) {}
-        if (rec && !rec.getBool("paired") && b.paired === true && b.owner_ref === authId) {
+        // A claim that names no owner writes a record the extension can never
+        // match a job against — the phone believes it paired while the browser
+        // stays an orphan. That split-brain shipped once (2026-08-14, the
+        // stranger run); blank owners are refused loudly instead.
+        if (rec && !rec.getBool("paired") && b.paired === true && b.owner_ref === authId &&
+            typeof b.owner === "string" && b.owner.trim() !== "") {
           return e.next();
         }
       }
@@ -198,7 +203,13 @@ routerUse((e) => {
   //    claimed nothing could touch a paired record at all, which was false.
   if (method === "PATCH" &&
       (path.startsWith(agentsBase + "/") || path.startsWith(pendantsBase + "/"))) {
-    const allowed = { owner: 1, paired: 1, last_seen: 1, browser: 1 };
+    // `owner_ref` is in the allowed set because the iPhone app has ALWAYS sent
+    // {owner, owner_ref, paired} when it claims a code. Without it, a claim
+    // whose auth header was missing or stale hit this branch and died 403 —
+    // silently, from the customer's point of view: the extension keeps
+    // showing the code, the phone shows nothing, and no one can pair. Found
+    // live on 2026-08-14 during the first real stranger day-zero run.
+    const allowed = { owner: 1, owner_ref: 1, paired: 1, last_seen: 1, browser: 1 };
     const b = e.requestInfo().body || {};
     const keys = Object.keys(b);
     const collection = path.startsWith(agentsBase) ? "agents" : "pendants";
@@ -207,7 +218,10 @@ routerUse((e) => {
     try { rec = e.app.findRecordById(collection, id); } catch (_) {}
     if (rec && keys.length > 0 && keys.every((k) => allowed[k])) {
       const touchesPairing = "owner" in b || "paired" in b;
-      if (!touchesPairing || !rec.getBool("paired")) return e.next();
+      // Same blank-owner ban as the signed-in claim path: a pairing flip that
+      // names no owner creates the phone-paired/browser-orphaned split-brain.
+      const namesOwner = typeof b.owner === "string" && b.owner.trim() !== "";
+      if (!touchesPairing || (!rec.getBool("paired") && namesOwner)) return e.next();
     }
     return e.json(403, { error: "forbidden" });
   }

@@ -27,7 +27,7 @@ LEGACY_OUT="$SRC/../backend/pb_public/anticipy-extension.zip"
 
 # Exactly what the extension needs at runtime — no tests, no store metadata,
 # no build scripts. Keep this list in step with what Chrome actually loads.
-FILES="manifest.json background.js agent_loop.js page_map.js \
+FILES="manifest.json background.js agent_loop.js page_map.js workflow_state.js \
 popup.html popup.js onboarding.html onboarding.js icons"
 
 VERSION=$(python3 -c "import json;print(json.load(open('$SRC/manifest.json'))['version'])")
@@ -52,6 +52,30 @@ cp "$OUT" "$LEGACY_OUT"
 # Prove the artifact matches the source rather than assuming it.
 PACKED=$(unzip -p "$OUT" manifest.json | python3 -c "import json,sys;print(json.load(sys.stdin)['version'])")
 [ "$PACKED" = "$VERSION" ] || { echo "build-zip: packed $PACKED != source $VERSION" >&2; exit 1; }
+
+# Prove the module graph is complete. On 2026-08-13 the zip shipped WITHOUT
+# workflow_state.js — background.js imports it, so the MV3 service worker died
+# at load and every fresh install sat forever with no pair code and no error
+# anywhere. The version check above passed the whole time: a package can match
+# its version and still be missing a limb. So resolve every relative import in
+# every packaged .js file and refuse to emit a zip whose imports point at
+# files the package does not contain.
+python3 - "$TMP/pkg" <<'PYEOF'
+import re, sys
+from pathlib import Path
+pkg = Path(sys.argv[1])
+packaged = {p.name for p in pkg.iterdir()}
+missing = []
+for js in pkg.glob("*.js"):
+    for m in re.finditer(r'''(?:^|\n)\s*(?:import[^"']*|export[^"']*from\s*)["'](\./[^"']+)["']''', js.read_text()):
+        target = m.group(1)[2:]
+        if target not in packaged:
+            missing.append(f"{js.name} imports {m.group(1)} but the package has no {target}")
+if missing:
+    for line in missing:
+        print(f"build-zip: BROKEN MODULE GRAPH: {line}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
 
 echo "built $OUT  version $PACKED  ($(wc -c < "$OUT" | tr -d ' ') bytes)"
 echo "legacy alias $LEGACY_OUT has the same bytes"

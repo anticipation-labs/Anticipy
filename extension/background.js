@@ -17,7 +17,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.6.18";
+const ENGINE_BUILD = "0.6.21";
 
 // Production backend; override via chrome.storage.local `backendUrl` for dev.
 const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";

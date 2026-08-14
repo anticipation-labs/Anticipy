@@ -299,6 +299,11 @@ final class AnticipyBackend {
     /// code is wrong" apart from "I can't reach Anticipy right now". Telling
     /// someone their correct code is wrong is how they give up.
     func pairAgent(code: String, owner: String) async throws -> Bool {
+        // A claim that names no owner would "succeed" into a record the
+        // extension can never match a job against — the phone celebrates, the
+        // browser stays an orphan. The backend now refuses blank owners too;
+        // throwing here keeps the failure loud on this side as well.
+        guard !owner.isEmpty else { throw BackendError(status: 400) }
         let listURL = baseURL.appendingPathComponent("api/collections/agents/records")
         let filter = "pair_code=\"\(code)\"".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
@@ -314,6 +319,17 @@ final class AnticipyBackend {
             "owner": owner, "owner_ref": accountID, "paired": true,
         ])
         try await send(patch)
+
+        // Trust the record, not the status code. On 2026-08-14 a claim was
+        // answered politely while nothing persisted, the UI said nothing, and
+        // the first real stranger sat un-paired with no error anywhere. Same
+        // law as jobs: paired is illegal without evidence. Read it back.
+        let verify = try await readData(from: listURL.appendingPathComponent(id))
+        guard let saved = try JSONSerialization.jsonObject(with: verify) as? [String: Any],
+              saved["owner"] as? String == owner,
+              saved["paired"] as? Bool == true else {
+            throw BackendError(status: 502)
+        }
         return true
     }
 
