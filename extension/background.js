@@ -17,7 +17,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.6.22";
+const ENGINE_BUILD = "0.6.23";
 
 // Production backend; override via chrome.storage.local `backendUrl` for dev.
 const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
@@ -833,13 +833,16 @@ async function retryJob(id) {
 // check picks it up within a poll and stops where it is.
 chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   if (!msg || !msg.type) return;
-  // The cheapest possible wake. Every message BOOTS this worker, and a boot
-  // runs the module top level: ensureWakeAlarms() + poll(). In a brand-new
-  // profile Chrome has been observed to create NO alarms at all — probed
-  // live 2026-08-14, getAll() still empty 95s after install — which left a
-  // fresh install deaf exactly while its owner was pairing. The pairing page
-  // pings while it is open, and each ping is a poll.
+  // The pairing page's pulse. In a brand-new profile Chrome has been observed
+  // to create NO alarms at all (probed live 2026-08-14: getAll() still empty
+  // 95s after install), and a worker kept alive by DevTools/automation never
+  // re-runs its module top level for a message — so relying on the boot path
+  // alone left the battery's worker heartbeating exactly once, pre-pairing,
+  // and then deaf forever. The handler does the work itself: every ping
+  // re-asserts the alarms and IS a poll, whatever the worker's lifecycle.
   if (msg.type === "anticipy-ping") {
+    ensureWakeAlarms().catch(() => {});
+    poll();
     respond({ ok: true });
     return;
   }

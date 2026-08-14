@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Anticipy Codex Version",
-  "version": "0.6.22",
+  "version": "0.6.23",
   "description": "Anticipy Codex Version's hands on your computer: it does tasks you approved in your own logged-in Chrome. Needs the Anticipy Codex Version iPhone app.",
   "permissions": [
     "storage",
