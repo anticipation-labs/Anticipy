@@ -707,6 +707,14 @@ def run_cases(cases, output=None, headless=False):
         with sync_playwright() as playwright:
             executable = browser_executable()
             launch_options = {"executable_path": executable} if executable else {}
+            if headless and not executable:
+                # Playwright ≥1.49 answers headless=True with its
+                # "headless shell" build, which does not run MV3
+                # extensions at all: the worker silently never starts
+                # (observed on Chromium 148, 2026-08-15). channel forces
+                # the FULL Chromium in new-headless mode, where the same
+                # extension starts in under a second.
+                launch_options["channel"] = "chromium"
             context = playwright.chromium.launch_persistent_context(
                 profile_dir, headless=headless, **launch_options,
                 args=[f"--disable-extensions-except={rig_extension_dir}",
