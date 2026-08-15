@@ -132,3 +132,77 @@ def test_webhook_self_heal_compares_full_urls():
 def test_sms_rejections_are_logged():
     sms = (ROOT / "backend/pb_hooks/sms.pb.js").read_text()
     assert "signature mismatch" in sms
+
+
+# ------------------------------------------------- ask-then-run-anyway
+
+def test_an_asked_detail_holds_the_plan_until_answered(monkeypatch):
+    # Cactus, live: "what time and how many people?" went out, was never
+    # answered, and the browser booked toward an invented 7 PM for 2.
+    # An asked-for detail is now a REQUIRED plan fact: the plan parks in
+    # DRAFT (status awaiting_confirm — unclaimable) until the answer fills it.
+    import json as _json
+    import brain.anticipy_core as coremod
+    from brain.anticipy_core import Anticipy, _required_from_missing
+    from brain.memory import Memory
+
+    assert _required_from_missing(["time", "party size"]) == ("time", "party_size")
+    assert _required_from_missing("which Earls location") == ("location",)
+    assert _required_from_missing(["favourite colour"]) == ()  # never wedges
+
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    posted = {}
+
+    class R:
+        ok = True
+        def raise_for_status(self): pass
+        def json(self): return {"id": "j-held", "status": posted.get("status", "")}
+
+    def post(url, **kw):
+        posted.update(kw.get("json") or {})
+        return R()
+
+    monkeypatch.setattr(coremod, "pb", type("PB", (), {
+        "post": staticmethod(post),
+        "get": staticmethod(lambda *a, **k: type("E", (), {
+            "ok": False, "json": lambda self: {"items": []}})()),
+    }))
+    a._queue_job("book dinner at Cactus Club", {
+        "source": "book cactus club west van tomorrow",
+        "missing": ["time", "party size"]}, hold=True)
+    wf = _json.loads(posted["params"])["_workflow"]
+    assert tuple(wf["required"]) == ("time", "party_size")
+    assert posted["status"] == "awaiting_confirm"   # not claimable
+    assert wf["state"] == "draft"
+
+
+def test_the_answer_fills_required_facts_even_with_odd_keys(monkeypatch):
+    import json
+    import brain.conversation as convmod
+    from tests.test_correction_integrity import _conv, _pb
+    from brain.workflow import Consequence, new_plan, put_in_params
+    plan = new_plan(owner_ref="o", lineage_key="dinner", goal="book Earls",
+                    consequence=Consequence.CONSEQUENTIAL,
+                    source_event_id="ev", authority_text="earls tmrw",
+                    required=("location",))
+    assert plan.state.value == "draft"
+    params = put_in_params({}, plan)
+    job = {"id": "j1", "goal": "book Earls",
+           "status": "awaiting_confirm", "params": json.dumps(params)}
+    patched = _pb(monkeypatch, convmod, job)
+    out = _conv()._amend("j1", {"which_location": "West Vancouver"},
+                         owner_text="West van")
+    assert out == "amended:j1"
+    p = json.loads(patched["params"])
+    assert p["_workflow"]["facts"]["location"] == "West Vancouver"
+    assert p["_workflow"]["state"] == "awaiting_approval"  # unparked
+
+
+# ------------------------------------------------- questions reach the owner
+
+def test_needs_user_questions_are_never_swallowed_into_fallback():
+    gate = LOOP.split('decision.action === "needs_user"')[1][:1400]
+    assert "questionShaped" in gate
+    assert "pageFailure" in gate
+    # fallback requires BOTH not-a-question AND an explicit page failure
+    assert "!questionShaped && pageFailure" in gate

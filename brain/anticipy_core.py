@@ -42,6 +42,34 @@ from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
 
 NAME = "Anticipy"
 
+
+def _required_from_missing(missing) -> tuple:
+    """Map free-form missing-detail questions onto canonical fact keys.
+
+    Only details with an unambiguous canonical key may block a plan: the
+    answer arrives through the classifier as {"time": ...}, {"location": ...}
+    etc., so a required name outside this set could never be filled and would
+    wedge the plan in DRAFT forever. Unmappable questions simply don't block.
+    """
+    if not missing:
+        return ()
+    items = missing if isinstance(missing, (list, tuple)) else \
+        [part.strip() for part in str(missing).split(",")]
+    out = []
+    for item in items:
+        low = str(item).lower()
+        if "time" in low or "when" in low:
+            out.append("time")
+        if "location" in low or "where" in low or "which" in low and (
+                "location" in low or "branch" in low or "store" in low):
+            out.append("location")
+        if "how many" in low or "people" in low or "party" in low \
+                or "guests" in low:
+            out.append("party_size")
+        if ("date" in low or "day" in low) and "time" not in low:
+            out.append("date")
+    return tuple(dict.fromkeys(out))
+
 # Policy layer OUTSIDE the model: any goal whose text implies something that
 # leaves the owner's world (sending, booking, buying, signing up, calling,
 # posting, deleting) is held for confirmation regardless of what triage said.
@@ -1995,6 +2023,17 @@ class Anticipy:
         lineage = (params.get("lineage_key") or self._lineage_key
                    or self._source_event_id
                    or f"direct:{owner_for_workflow}:{time.time_ns()}")
+        # A question she is ASKING must also be a fact the plan REQUIRES.
+        # On 2026-08-15 "what time and how many people?" went out, was never
+        # answered, and the browser booked toward an invented 7:00 PM for 2 —
+        # because the plan carried no required facts and ran anyway. Missing
+        # details map onto canonical fact keys; the workflow machinery then
+        # parks the plan in DRAFT until an answer fills them. Unmappable
+        # questions never block (a stuck plan is worse than a naive one).
+        required = _required_from_missing(params.get("missing"))
+        seed_facts = {k: params[k] for k in
+                      ("time", "party_size", "date", "location")
+                      if params.get(k) not in (None, "")}
         workflow = new_plan(
             owner_ref=owner_for_workflow,
             lineage_key=str(lineage),
@@ -2007,6 +2046,8 @@ class Anticipy:
                                    (params.get("source_event_ids") or [])
                                    if str(value)),
             authority_text=str(params.get("source") or ""),
+            facts=seed_facts,
+            required=required if consequential else (),
         )
         params = put_in_params(params, workflow)
         workflow_fields = workflow.job_fields()

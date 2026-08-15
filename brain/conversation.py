@@ -1339,9 +1339,22 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         workflow = workflow_from_params(params)
         if workflow and job.get("status") != "needs_user":
             try:
+                # An answer must be able to FILL the fact the plan is
+                # waiting on even when the classifier picked a different
+                # key shape ("which_location" vs required "location").
+                # A required fact that can never be filled wedges the plan
+                # in DRAFT forever, which is worse than never blocking.
+                merged = dict(changes)
+                for need in workflow.missing:
+                    if need in merged:
+                        continue
+                    for k, v in changes.items():
+                        if need in str(k) or str(k) in need:
+                            merged[need] = v
+                            break
                 workflow = merge_plan(
                     workflow, expected_version=workflow.version,
-                    facts=changes,
+                    facts=merged,
                     authority_text=str(params.get("source")
                                        or workflow.authority_text or ""))
                 params = put_in_params(params, workflow)

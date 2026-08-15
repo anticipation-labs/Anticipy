@@ -3127,8 +3127,19 @@ export async function runAgentGoal(goal, opts) {
       }
       if (decision.action === "needs_user") {
         const reason = String(decision.reason || "");
-        const humanOnly = /captcha|robot|sign[ -]?in|log[ -]?in|password|payment|verification code|one[- ]time|owner (?:must|needs|has to)|need (?:your|the owner's)|human choice/i.test(reason);
-        if (!humanOnly && await advanceFallback(`the page reported: ${reason.slice(0, 120)}`)) continue;
+        // A question belongs to the OWNER. This gate used to divert any
+        // needs_user that missed a narrow human-only regex into fallback
+        // navigation — which swallowed "Which Earls location would you
+        // like?" twice (a 404 visit, then a Bing search) before the owner
+        // ever saw the question (live, 2026-08-15). The default is now
+        // hand-back; fallback fires only for reasons that are unmistakably
+        // page failures and never for anything question-shaped.
+        const questionShaped = reason.includes("?")
+          || /^(which|what|when|where|who|whom|how|should|do you|would you|can you)\b/i.test(reason.trim())
+          || /\b(choose|choice|options?|prefer|pick one|let me know|confirm which)\b/i.test(reason);
+        const pageFailure = /\b(unavailable|not found|404|broken|no results|empty|error|down|blocked|unreachable|closed|sold out|fully booked)\b/i.test(reason);
+        if (!questionShaped && pageFailure
+            && await advanceFallback(`the page reported: ${reason.slice(0, 120)}`)) continue;
         return (handBack = true) && { status: "needs_user", result: reason, tabId: tab.id };
       }
       if (decision.action === "navigate") {
