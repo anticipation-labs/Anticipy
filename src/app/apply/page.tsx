@@ -96,7 +96,8 @@ export default function ApplyHubPage() {
             </p>
             <p style={{ fontSize: 16, lineHeight: 1.7, color: "var(--ink-2)", margin: "16px 0 0" }}>
               I&apos;m hiring four people to build it with me. No cover letter,
-              no resume. I read every application myself.
+              no resume. I read every application myself and reply to the ones
+              I want to talk to.
             </p>
 
             <div className="hub-cta">
@@ -113,6 +114,26 @@ export default function ApplyHubPage() {
           </div>
         </section>
 
+        <section className="who">
+          <h2 className="font-serif">Who I actually need</h2>
+          <p>
+            <strong>Hardware and software engineers first.</strong> The pendant
+            is real hardware with a real factory problem, and the agent that
+            makes it useful is real software — those are the two things holding
+            the product back, and they are what I&apos;m most short of. If you
+            do both, that&apos;s the one I want most of all.
+          </p>
+          <p>
+            Growth matters too, and it&apos;s open — but the engineering roles
+            are the ones I&apos;d drop everything to fill.
+          </p>
+          <p className="who-note">
+            Seniority means you&apos;ve shipped something real, not a title.
+            Vancouver helps for hardware because the units are here; the rest
+            can be remote.
+          </p>
+        </section>
+
         <ol className="role-table">
           {ROLES.map((r) => (
             <li key={r.key} className="role-row">
@@ -121,7 +142,6 @@ export default function ApplyHubPage() {
                 <span className="role-line">{r.tagline}</span>
                 <span className="role-read">Read the role →</span>
               </Link>
-              <span className="role-pay">{r.comp}</span>
               <ApplyButton
                 href={`/apply/start?role=${r.slug}`}
                 label="Apply"
@@ -178,10 +198,16 @@ export default function ApplyHubPage() {
         .hub-hero-body { max-width: 34em; margin-top: 34px; }
         .hub-cta { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 34px; }
 
+        .who { padding: 8px 0 40px; max-width: 40em; }
+        .who h2 { font-size: clamp(22px, 2.8vw, 28px); letter-spacing: -0.02em; color: var(--ink); margin: 0 0 16px; }
+        .who p { font-size: 16.5px; line-height: 1.7; color: var(--ink); margin: 0 0 14px; }
+        .who strong { font-weight: 600; }
+        .who-note { font-size: 15px !important; color: var(--ink-2) !important; }
+
         .role-table { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
         .role-row {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto auto;
+          grid-template-columns: minmax(0, 1fr) auto;
           gap: 32px;
           align-items: center;
           border-bottom: 1px solid var(--rule);
@@ -198,10 +224,6 @@ export default function ApplyHubPage() {
           text-transform: uppercase; color: var(--accent-ink);
         }
         .role-main:hover .role-read { text-decoration: underline; text-underline-offset: 3px; }
-        .role-pay {
-          font-family: var(--mono); font-size: 12.5px;
-          color: var(--accent-ink); white-space: nowrap;
-        }
 
         .ugc-block {
           margin-top: 56px;
@@ -223,11 +245,6 @@ export default function ApplyHubPage() {
           .hub-hero { padding: 52px 0 48px; }
           .role-row { grid-template-columns: 1fr auto; gap: 14px 18px; padding: 20px 4px; }
           .role-main { grid-column: 1 / -1; }
-          .role-pay { align-self: center; }
-        }
-        @media (max-width: 420px) {
-          .role-row { grid-template-columns: 1fr; }
-          .role-pay { grid-column: 1; }
         }
       ` }} />
     </main>

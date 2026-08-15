@@ -51,7 +51,6 @@ const railValue: React.CSSProperties = {
 
 export function RolePage({ role, content }: { role: Role; content: RolePageContent }) {
   const spec: [string, string][] = [
-    ["Base", role.comp],
     ["Location", role.place],
     ["Start", "When you can"],
   ];
@@ -187,7 +186,7 @@ export function RolePage({ role, content }: { role: Role; content: RolePageConte
       </div>
 
       <div className="rp-sticky">
-        <span className="rp-sticky-pay">{role.comp}</span>
+        <span className="rp-sticky-pay">{role.label}</span>
         <ApplyButton
           href={`/apply/start?role=${role.slug}`}
           label="Apply"

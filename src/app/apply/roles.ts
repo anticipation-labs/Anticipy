@@ -18,12 +18,6 @@ export interface Role {
   label: string;
   /** One line on the hub card. */
   tagline: string;
-  /**
-   * The ONLY place equity is mentioned anywhere on the site. Every role shows
-   * exactly this pattern and nothing else about equity — no percentages, no
-   * vesting, no "negotiable", no explanation section.
-   */
-  comp: string;
   /** Second chip: where the role can be done from. */
   place: string;
   /** Growth is a different job; the engineering roles can be combined. */
@@ -36,7 +30,6 @@ export const ROLES: Role[] = [
     slug: "grow",
     label: "Founding Head of Content & Growth",
     tagline: "Make people find out this exists.",
-    comp: "$4–7K/month base + equity",
     place: "Vancouver or remote",
     family: "growth",
   },
@@ -45,7 +38,6 @@ export const ROLES: Role[] = [
     slug: "ship",
     label: "Senior Software Engineer",
     tagline: "Own the agent that actually does the thing.",
-    comp: "$4–7K/month base + equity",
     place: "Vancouver or remote",
     family: "engineering",
   },
@@ -54,7 +46,6 @@ export const ROLES: Role[] = [
     slug: "build",
     label: "Senior Hardware Engineer",
     tagline: "Own the physical pendant, prototype to production.",
-    comp: "$4–7K/month base + equity",
     place: "Vancouver, in person",
     family: "engineering",
   },
@@ -63,7 +54,6 @@ export const ROLES: Role[] = [
     slug: "sync",
     label: "Senior Hardware & Software Engineer",
     tagline: "Own the layer where hardware and software have to agree.",
-    comp: "$5–8K/month base + equity",
     place: "Vancouver preferred",
     family: "engineering",
   },

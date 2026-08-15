@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ease } from "@/lib/animation";
-import { CalendarEmbed } from "@/components/apply/CalendarEmbed";
 import { LocationInput } from "@/components/apply/LocationInput";
 import { VoiceInput } from "@/components/apply/VoiceInput";
 import { Flash } from "@/components/apply/Flash";
@@ -504,11 +503,14 @@ export function ApplyForm() {
             transition={{ duration: 0.55, ease, delay: 0.38 }}
           >
             <p style={{ color: "var(--ink)", fontSize: 17, lineHeight: 1.7, margin: "18px 0 0", maxWidth: 560 }}>
-              Here&apos;s Omar&apos;s personal calendar — the founder, not a
-              recruiter and not a screening round. Take the first slot you can.
-              A copy of your answers is on its way to your inbox.
+              It&apos;s in Omar&apos;s inbox — not a queue, not a recruiter, not
+              a screening tool. He reads every one himself and replies to the
+              ones he wants to talk to.
             </p>
-            <CalendarEmbed />
+            <p style={{ color: "var(--ink-2)", fontSize: 15, lineHeight: 1.7, margin: "16px 0 0", maxWidth: 560 }}>
+              A copy of your answers is on its way to you. Replying to that
+              email reaches him directly.
+            </p>
           </motion.div>
         </div>
       </div>
