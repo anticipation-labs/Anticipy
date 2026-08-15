@@ -21,7 +21,7 @@ const content: RolePageContent = {
     "The pendant hears what you said. You own everything that happens next.",
   intro: [
     "That means browser agents. Someone mentions they'll book the flight, and an agent on their computer goes and books it. When it works, it's the best demo I've ever shown anyone. When it doesn't, it clicks the wrong button and reports success anyway.",
-    "The current answer is running the same task several ways and letting the results vote. It beats one agent trying harder. Making that faster, cheaper, and less wrong isn't a roadmap item. It is the product.",
+    "The current answer is running the same task several ways and letting the results vote. It beats one agent trying harder. Making that faster, cheaper, and less wrong isn't a roadmap item — it is the product, and it is wide open for someone who wants to own it.",
   ],
   sections: [
     {
@@ -41,9 +41,10 @@ const content: RolePageContent = {
     {
       heading: "You'll probably fit if",
       body: [
-        "You've shipped something where being wrong was expensive, and you built the tooling to catch it.",
-        "Evals feel like a normal part of the job to you, not a chore.",
-        "Non-determinism doesn't scare you off.",
+        "You've been building things since before anyone paid you to, and you can show me.",
+        "You'd rather spend an hour reading a trace than five minutes guessing.",
+        "Something you made has been used by people who aren't you. Side project counts.",
+        "You're probably better than your title says. That's the whole point.",
       ],
     },
     {

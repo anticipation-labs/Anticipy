@@ -117,20 +117,26 @@ export default function ApplyHubPage() {
         <section className="who">
           <h2 className="font-serif">Who I actually need</h2>
           <p>
-            <strong>Hardware and software engineers first.</strong> The pendant
-            is real hardware with a real factory problem, and the agent that
-            makes it useful is real software — those are the two things holding
-            the product back, and they are what I&apos;m most short of. If you
-            do both, that&apos;s the one I want most of all.
+            <strong>Hardware and software people first.</strong> The pendant is
+            real hardware with a real factory problem, and the agent that makes
+            it useful is real software. Those are the two things holding the
+            product back. If you do both, you&apos;re the one I want most.
           </p>
           <p>
-            Growth matters too, and it&apos;s open — but the engineering roles
-            are the ones I&apos;d drop everything to fill.
+            I care about what you&apos;ve built, not where you&apos;ve worked.
+            The person I&apos;m looking for has been tinkering since before
+            anyone paid them to, ships without waiting for permission, and is
+            better than their job title says they are.
+          </p>
+          <p>
+            If you&apos;ve been passed over for being young, self-taught, or
+            short on the right logos — that counts for you here, not against
+            you. I&apos;m 15. I&apos;m not going to hold your CV against you.
           </p>
           <p className="who-note">
-            Seniority means you&apos;ve shipped something real, not a title.
-            Vancouver helps for hardware because the units are here; the rest
-            can be remote.
+            Growth is open too, but engineering is what I&apos;d drop
+            everything to fill. Vancouver helps for hardware because the units
+            are physically here; everything else can be remote.
           </p>
         </section>
 

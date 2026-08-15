@@ -40,9 +40,10 @@ const content: RolePageContent = {
     {
       heading: "You'll probably fit if",
       body: [
-        "You've shipped firmware on battery-powered devices that left the building.",
-        "You've built a real update mechanism, not a bench demo.",
+        "You've put firmware on something battery-powered that people other than you used.",
+        "You've built an update mechanism that worked somewhere other than your desk.",
         "You can talk to the hardware person and the software person without mistranslating either one.",
+        "You're the one who ends up fixing the thing nobody wants to own.",
       ],
     },
     {

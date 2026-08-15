@@ -41,9 +41,10 @@ const content: RolePageContent = {
     {
       heading: "You'll probably fit if",
       body: [
-        "You've taken a physical product from prototype into a real production run.",
-        "A batch has come back unusable on you before, and you can tell me what you did next.",
-        "You have opinions about finish and materials that you can defend to a non-engineer.",
+        "You've actually made physical things, not just drawn them on a screen.",
+        "Something has come back from a supplier wrong and you worked out why yourself.",
+        "You have opinions about finish and materials you can defend to a non-engineer.",
+        "You don't need a lab or a team to get started. Neither do I, yet.",
       ],
     },
     {

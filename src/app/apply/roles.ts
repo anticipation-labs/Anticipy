@@ -36,7 +36,7 @@ export const ROLES: Role[] = [
   {
     key: "software",
     slug: "ship",
-    label: "Senior Software Engineer",
+    label: "Founding Software Engineer",
     tagline: "Own the agent that actually does the thing.",
     place: "Vancouver or remote",
     family: "engineering",
@@ -44,7 +44,7 @@ export const ROLES: Role[] = [
   {
     key: "hardware",
     slug: "build",
-    label: "Senior Hardware Engineer",
+    label: "Founding Hardware Engineer",
     tagline: "Own the physical pendant, prototype to production.",
     place: "Vancouver, in person",
     family: "engineering",
@@ -52,7 +52,7 @@ export const ROLES: Role[] = [
   {
     key: "hardware_software",
     slug: "sync",
-    label: "Senior Hardware & Software Engineer",
+    label: "Founding Hardware & Software Engineer",
     tagline: "Own the layer where hardware and software have to agree.",
     place: "Vancouver preferred",
     family: "engineering",
