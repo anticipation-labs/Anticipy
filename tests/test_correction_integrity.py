@@ -269,3 +269,38 @@ def test_a_grounded_failure_answer_survives_rethinking(monkeypatch):
     out = c.on_reply("+1", "why is nothing happening")
     assert not thought["called"]
     assert "failed" in out["reply"]
+
+
+# ------------------------------------------------- the Cactus Club failure
+
+def test_sms_answer_lands_in_plan_facts_for_the_app_release(monkeypatch):
+    # 2026-08-14 live: the brain asked "what time and how many people?", the
+    # answer came by TEXT ("7pm, 3 people"), the release came by APP TAP.
+    # The app rebuilds its approval from params["_workflow"] and never reads
+    # params["corrections"] — so the texted answer must already live in the
+    # plan FACTS, on a bumped version, by the time the tap happens. Otherwise
+    # the browser walks into the reservation form with empty facts.
+    from brain.workflow import Consequence, new_plan, put_in_params
+    plan = new_plan(
+        owner_ref="o1", lineage_key="dinner",
+        goal="book dinner at Cactus Club",
+        consequence=Consequence.CONSEQUENTIAL,
+        source_event_id="ev1",
+        authority_text="book us cactus club tonight")
+    params = put_in_params({}, plan)
+    job = {"id": "j1", "goal": "book dinner at Cactus Club",
+           "status": "awaiting_confirm", "params": json.dumps(params)}
+    patched = _pb(monkeypatch, convmod, job)
+    out = _conv()._amend("j1", {"time": "7pm", "party_size": "3"},
+                         owner_text="7pm, 3 people")
+    assert out == "amended:j1"
+    p = json.loads(patched["params"])
+    facts = p["_workflow"]["facts"]
+    assert facts["time"] == "7pm"
+    assert facts["party_size"] == "3"
+    # The answer invalidates the pre-answer version: the app can only bind
+    # its approval to the plan that already carries the answer.
+    assert p["_workflow"]["version"] == plan.version + 1
+    assert patched["workflow_version"] == plan.version + 1
+    # And the SMS release path still has its own copy to fold into scope.
+    assert p["corrections"] == {"time": "7pm", "party_size": "3"}
