@@ -629,7 +629,15 @@ final class AnticipySession: ObservableObject {
     private func workflowDigest(_ value: [String: Any]) throws -> String {
         let data = try JSONSerialization.data(withJSONObject: value,
                                               options: [.sortedKeys])
-        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        // JSONSerialization escapes "/" as "\/"; Python (ensure_ascii=False,
+        // compact) and JS do not. The digests happened to agree until now
+        // only because no goal contained a slash — the first URL or "24/7"
+        // in a plan would make every app-minted digest diverge from the
+        // brain's recomputation. Normalize to the canonical form.
+        let canonical = String(decoding: data, as: UTF8.self)
+            .replacingOccurrences(of: "\\/", with: "/")
+        return SHA256.hash(data: Data(canonical.utf8))
+            .map { String(format: "%02x", $0) }.joined()
     }
 
     private func humanApprovalScope(_ workflow: [String: Any],
@@ -674,8 +682,35 @@ final class AnticipySession: ObservableObject {
         var approvedEffect = job.effect_key ?? ""
         if job.status == "needs_user" && job.effect_uncertain != true {
             approvedVersion += 1
+            let asked = job.result ?? ""
             var facts = workflow["facts"] as? [String: Any] ?? [:]
-            facts["owner_answer"] = ownerWords
+            // Answers ACCUMULATE, question-scoped. One shared owner_answer
+            // slot destroyed the contact-details answer the moment the next
+            // answer ("No u don't") arrived — live, 2026-08-15.
+            facts["owner_answer_v\(approvedVersion)"] = asked.isEmpty
+                ? ownerWords
+                : "Q: \(String(asked.prefix(120))) A: \(ownerWords)"
+            // Deterministic structuring: contact-shaped tokens become real
+            // fields the hands can type into the matching form inputs —
+            // never the raw sentence.
+            for (key, pattern) in [
+                ("email", "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"),
+                ("phone", "\\+?[0-9][0-9 ().-]{6,}[0-9]"),
+            ] where facts[key] == nil {
+                if let range = ownerWords.range(of: pattern, options: .regularExpression) {
+                    facts[key] = String(ownerWords[range])
+                }
+            }
+            if facts["name"] == nil,
+               let match = ownerWords.range(
+                   of: "(?i)name(?:\\s+is)?[:\\s]+[A-Za-z][A-Za-z'’-]{1,30}",
+                   options: .regularExpression) {
+                let phrase = String(ownerWords[match])
+                if let tail = phrase.range(of: "[A-Za-z][A-Za-z'’-]{1,30}$",
+                                           options: .regularExpression) {
+                    facts["name"] = String(phrase[tail])
+                }
+            }
             workflow["facts"] = facts
             workflow["version"] = approvedVersion
             let consequence = workflow["consequence"] as? String ?? "consequential"
@@ -699,7 +734,6 @@ final class AnticipySession: ObservableObject {
             workflow["scope_digest"] = approvedScope
             workflow["effect_key"] = approvedEffect
             params["owner_answer"] = ownerWords
-            let asked = job.result ?? ""
             let oldScope = params["approved_scope"] as? String
                 ?? humanApprovalScope(workflow, fallbackGoal: goal)
             params["approved_scope"] = oldScope
@@ -718,6 +752,11 @@ final class AnticipySession: ObservableObject {
         workflow["updated_at"] = now
         workflow["lease"] = NSNull()
         workflow["receipt"] = NSNull()
+        // A fresh owner authorization is a fresh execution budget. Without
+        // this, three needs_user question-rounds exhausted the attempt cap
+        // and every later resume minted an approved version the extension
+        // could never claim (live, 2026-08-15: the wedged Earls booking).
+        workflow["attempts"] = 0
         params["_workflow"] = workflow
         params["authorized"] = true
         if job.status != "needs_user" || params["approved_scope"] == nil {
@@ -728,6 +767,7 @@ final class AnticipySession: ObservableObject {
             "status": "queued",
             "workflow_state": "queued",
             "workflow_version": approvedVersion,
+            "attempts": 0,
             "scope_digest": approvedScope,
             "effect_key": approvedEffect,
             "approval": try jsonString(approval),

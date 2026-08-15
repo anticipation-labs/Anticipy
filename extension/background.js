@@ -626,13 +626,20 @@ async function runJobInner(job, params) {
         // Every concrete detail already on the job record (time, party size,
         // an address, an answer he texted) — so the agent SETS them instead
         // of asking for them. Bookkeeping keys are not facts.
+        // owner_answer* is excluded from BOTH branches: the answer's content
+        // already reaches the model inside the approved scope ("They
+        // answered: ..."), where it is authority. Handing the same raw
+        // sentence over as a "fact" is how it got typed verbatim into
+        // OpenTable's Special Requests box (live, 2026-08-15).
         facts: (params._workflow?.facts && typeof params._workflow.facts === "object")
-          ? params._workflow.facts
+          ? Object.fromEntries(Object.entries(params._workflow.facts)
+              .filter(([k]) => !/^owner_answer/i.test(k)))
           : Object.fromEntries(Object.entries(params)
               .filter(([k, v]) => !["source", "say", "now", "lane", "missing",
                                     "authorized", "approved_scope", "needed",
                                     "start_url", "task", "assumption", "note",
                                     "resume_tab"].includes(k)
+                                  && !/^owner_answer/i.test(k)
                                   && (typeof v === "string" || typeof v === "number"
                                       || typeof v === "boolean")
                                   && String(v).length < 200)),
@@ -781,7 +788,11 @@ async function poll() {
     const job = await claimJob();
     if (job) await runJob(job);
   } catch (e) {
-    // backend not reachable; try again on next alarm
+    // Keep polling on the next alarm, but never again silently: this catch
+    // swallowed 23 consecutive claim-path 409s in one live run while the
+    // heartbeat kept the phone showing "Chrome ready". A dead pipe must be
+    // loud in the worker console even when it cannot be fatal.
+    console.warn(`Anticipy: poll cycle failed: ${String(e).slice(0, 300)}`);
   } finally {
     pollInFlight = false;
   }

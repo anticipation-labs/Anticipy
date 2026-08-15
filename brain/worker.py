@@ -328,7 +328,12 @@ def ensure_inbound_webhook() -> None:
         # An application SID silently overrides every sms_* URL, so a matching
         # URL with one set is still not a working inbound binding.
         shadowed = bool(str(n.get("sms_application_sid") or "").strip())
-        if current.split("?")[0] == ours.split("?")[0] and not shadowed:
+        # FULL-string equality. Comparing with the query stripped declared a
+        # stale "?token=..." URL healthy for three days while Twilio's
+        # signature — computed over the full URL including the query — failed
+        # against the clean env URL on every single inbound text (found
+        # 2026-08-15: zero inbound events since Aug 12, all 403).
+        if current == ours and not shadowed:
             return
         print(f"WEBHOOK HIJACK: inbound SMS was pointing at {current.split('?')[0] or '(empty)'}"
               f"{' (shadowed by an application SID)' if shadowed else ''} — pointing it back at us")

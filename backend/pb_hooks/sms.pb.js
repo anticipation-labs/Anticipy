@@ -17,6 +17,13 @@ routerAdd("POST", "/sms/inbound", (e) => {
   const info = e.requestInfo();
   const validator = require(`${__hooks}/twilio_signature.js`);
   if (!signature || !validator.validate(authToken, webhookUrl, info.body, signature)) {
+    // A dead inbound lane must be visible in the logs. This exact rejection
+    // fired silently on every text for three days (2026-08-12→15) while the
+    // only symptom lived on Twilio's side as error 11200.
+    console.log("sms/inbound 403: signature mismatch — Twilio's configured",
+      "URL must equal ANTICIPY_TWILIO_WEBHOOK_URL byte-for-byte; MessageSid=",
+      String(info.body["MessageSid"] || ""), "From=",
+      String(info.body["From"] || "").slice(0, 6) + "…");
     return e.string(403, "forbidden");
   }
   const from = (info.body["From"] || "").toString();

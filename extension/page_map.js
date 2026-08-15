@@ -284,6 +284,16 @@
         else if (el.tagName === "SELECT") {
           const option = el.options[el.selectedIndex];
           value = option ? String(option.textContent || option.value).trim() : String(el.value || "");
+          // A select still sitting on its placeholder has NO value. Reporting
+          // "Select an occasion" as the chosen value made the pre-submit
+          // auditor flag an untouched optional dropdown as an unapproved
+          // entry 7 times in one live run, until the table hold expired.
+          const placeholder = el.selectedIndex <= 0
+            && (String(option?.value ?? "") === ""
+                || /^(select|choose|pick|--|please\b|optional\b|none\b)/i
+                  .test(String(option?.textContent || "").trim())
+                || /\(optional\)/i.test(String(option?.textContent || "")));
+          if (placeholder) value = "";
         }
         fields.push({
           index: idx,

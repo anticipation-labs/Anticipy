@@ -467,8 +467,12 @@ def approve(plan: Plan, *, expected_version: int, owner_words: str,
         owner_words=words,
         approved_at=at,
     )
+    # A fresh owner authorization is a fresh execution budget. Leaving the
+    # old count in place let three legitimate question-rounds exhaust the
+    # attempt cap, after which every re-approval minted a version the
+    # executor could never claim (live, 2026-08-15).
     out = replace(out, approval=approval, state=PlanState.QUEUED,
-                  reason="approved by owner", updated_at=at)
+                  attempts=0, reason="approved by owner", updated_at=at)
     out.assert_valid()
     return out
 

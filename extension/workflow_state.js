@@ -136,8 +136,11 @@ export function workflowPatch(job, nextState, options = {}) {
   }
 
   if (nextState === "cancelled") {
-    next.approval = null;
-    patch.approval = "";
+    // The approval HISTORY survives cancellation. Clearing it here made the
+    // extension's own at-cap cancel a guaranteed 409 — the backend guard
+    // (rightly) forbids an executor touching approval, so the cancel
+    // retried silently every 30s forever while the job sat wedged
+    // (live, 2026-08-15: 23 identical 409s on one Earls booking).
     patch.effect_uncertain = false;
   } else if (options.effectUncertain !== undefined) {
     patch.effect_uncertain = !!options.effectUncertain;
