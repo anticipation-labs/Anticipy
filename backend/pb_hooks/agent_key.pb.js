@@ -347,7 +347,7 @@ routerAdd("POST", "/agent/llm", (e) => {
         "Authorization": "Bearer " + openrouterKey,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://anticipy.ai",
-        "X-Title": "Anticipy Codex Version",
+        "X-Title": "Anticipy Claude Version",
       },
       body: serialized,
       timeout: 95,
