@@ -120,3 +120,47 @@ def test_events_claimed_but_never_finished_are_handed_back():
     loop = src.split("release_stranded_claims(anticipy.owner_ref)", 1)
     assert len(loop) == 2, "the sweep must be wired into the main loop"
     assert "fetch_unprocessed(owner_ref=anticipy.owner_ref)" in loop[1][:400]
+
+
+# ------------------------------------ a transport with nobody to reach
+
+def test_a_missing_phone_is_a_failure_not_a_dev_rig():
+    """Live 2026-08-16: "he didn't text me once during our testing."
+
+    Last night's cross-account fix correctly stopped a supervised worker
+    inheriting the founder's number — but his OWN profile row carried an
+    empty phone (the three rows holding his number are legacy rows with no
+    account attached). owner_phone went empty, and notify_owner fell through
+    to the "no transport" escape, which returns a TRUTHY dict. Every caller
+    then recorded the message as SAID. She composed his questions, stamped
+    them delivered, and sent nothing for ten hours.
+
+    The escape is for rigs with no Twilio at all. A configured transport with
+    no number for this person is a real failure to reach a real person.
+    """
+    from brain.anticipy_core import Anticipy
+    from brain.memory import Memory
+
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    a.owner_phone = ""
+
+    # No transport anywhere: a rig. Silence is honest, and truthy.
+    a.conversation = None
+    a.voice = None
+    assert a.notify_owner("anything") == {"skipped": "no transport"}
+
+    # A transport exists and there is nobody to reach: that is a FAILURE, and
+    # must be falsy so nothing downstream records it as said.
+    a.conversation = object()
+    assert a.notify_owner("which restaurant?") is None
+
+
+def test_the_phone_falls_back_to_the_account_but_never_across_accounts():
+    src = (ROOT / "brain/worker.py").read_text()
+    body = src.split("def fetch_owner_phone", 1)[1][:1600]
+    assert "collections/owners/records/{owner_ref}" in body, (
+        "the account record is the second place a number lives")
+    assert "if not owner_ref:" in body, (
+        "with no account there is nobody to fall back to — never a shared var")
+    assert "ANTICIPY_OWNER_PHONE" not in body, (
+        "the founder's env var must never come back as a fallback")

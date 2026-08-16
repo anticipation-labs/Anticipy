@@ -153,9 +153,32 @@ def fetch_owner_phone(owner_ref: str = "") -> str | None:
     try:
         profile = _latest_profile(owner_ref)
         phone = (profile.get("phone") or "").strip() if profile else ""
-        return phone or None
+        if phone:
+            return phone
     except Exception:
+        pass
+    # The profile is not the only place a number lives: signup writes it onto
+    # the ACCOUNT. His own profile row carried an empty phone while three
+    # legacy rows (owner_ref "") held the real number, so once supervised
+    # workers correctly stopped inheriting the founder's env var, she could
+    # not text him AT ALL — she composed the questions, recorded them, and
+    # sent nothing, for ten hours (2026-08-16).
+    #
+    # This fallback is ACCOUNT-BOUND: it reads the phone belonging to THIS
+    # owner_ref only, so it cannot resurrect the cross-account leak.
+    if not owner_ref:
         return None
+    try:
+        r = pb.get(f"{PB}/api/collections/owners/records/{owner_ref}", timeout=10)
+        if getattr(r, "ok", False):
+            phone = ((r.json() or {}).get("phone") or "").strip()
+            if phone:
+                print("owner phone read from the account record "
+                      "(their profile row carries none)")
+                return phone
+    except Exception:
+        pass
+    return None
 
 
 def fetch_owner_timezone(owner_ref: str = "") -> str | None:

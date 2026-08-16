@@ -1869,6 +1869,20 @@ class Anticipy:
         # A failed text must never abort the hearing loop — the job is already
         # queued and the app still surfaces it under "Needs your OK".
         try:
+            # A TRANSPORT WITH NO NUMBER IS A FAILURE, NOT A DEV RIG.
+            #
+            # With owner_phone empty this fell through to the "no transport"
+            # escape below, which returns a TRUTHY dict — so every caller
+            # recorded the message as SAID. On 2026-08-16 she composed his
+            # questions, stamped them delivered and sent nothing for ten
+            # hours: "he didn't text me once during our testing." The escape
+            # exists for rigs that genuinely have no Twilio; when a transport
+            # IS configured and only the person's number is missing, that is
+            # a real failure to reach a real person and must read as one.
+            if not self.owner_phone and (self.conversation or self.voice):
+                print("NO OWNER PHONE on this account — composed but NOT sent: "
+                      f"{str(message)[:80]!r}")
+                return None
             # Conversational channel first: she opens a real thread, not a
             # "reply YES" wall; replies come back via Conversation.on_reply.
             if self.conversation and self.owner_phone and channel == "sms":
