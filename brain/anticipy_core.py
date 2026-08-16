@@ -1912,6 +1912,29 @@ class Anticipy:
             print(f"could not cancel {job_id}: {e}")
             return False
 
+    def _open_card_in_lineage(self, lineage: str) -> Optional[dict]:
+        """The card this conversation is already holding, if any.
+
+        Asked of the BACKEND rather than of memory: the worker restarts, and
+        an in-memory pointer to the open plan dies with it while the
+        conversation carries on producing lines.
+        """
+        if not lineage:
+            return None
+        try:
+            safe = lineage.replace('"', "")
+            filt = f'status="awaiting_confirm" && lineage_key="{safe}"'
+            if self.owner_ref:
+                filt += f' && owner_ref="{self.owner_ref}"'
+            r = pb.get(
+                f"{self.backend_url}/api/collections/jobs/records",
+                params={"filter": filt, "perPage": 1, "sort": "-created"},
+                timeout=10)
+            items = (r.json() or {}).get("items", [])
+            return items[0] if items else None
+        except Exception:
+            return None
+
     def _queue_job(self, goal: str, params: dict, hold: bool = False,
                    explicit: bool = False) -> Optional[str]:
         # Mentioning the same thing twice must not produce two identical items
@@ -1982,6 +2005,37 @@ class Anticipy:
                         self._merge_into(job_id, current, merge_goal, params)
                     self._open_plan = (job_id, time.time(), goal)
                     return job_id
+
+        # ONE CONVERSATION, ONE CARD.
+        #
+        # Every card minted from the same open segment belongs to the same
+        # conversation — that is what a segment IS. Until now the only thing
+        # asked was whether two GOAL STRINGS looked like the same plan, and a
+        # model comparing wording is exactly the wrong judge: on 2026-08-16 a
+        # single dinner chat produced three cards — "Confirm dinner tomorrow",
+        # "Plan dinner with Jessica tomorrow at Earls at 7:30 PM" and "Plan
+        # dinner for tomorrow at Cactus Club Cafe" — all three carrying the
+        # identical lineage_key k6xjtydqwapvstr. The system knew they were one
+        # conversation and asked an opinion anyway.
+        #
+        # The lineage is recorded, deterministic, and survives a worker
+        # restart, which the in-memory open-plan pointer does not. If this
+        # conversation is already holding a card, refine THAT card.
+        lineage_now = str(params.get("lineage_key") or self._lineage_key or "")
+        if not declared_new_task and lineage_now:
+            sibling = self._open_card_in_lineage(lineage_now)
+            if sibling:
+                sibling_id = sibling.get("id") or ""
+                sibling_goal = sibling.get("goal") or ""
+                if sibling_id:
+                    try:
+                        if explicit_correction or not self._covered_by(
+                                goal, sibling_goal):
+                            self._merge_into(sibling_id, sibling, goal, params)
+                    except Exception:
+                        pass
+                    self._open_plan = (sibling_id, time.time(), goal)
+                    return sibling_id
 
         existing = None if declared_new_task else self._same_pending(goal)
         if existing:

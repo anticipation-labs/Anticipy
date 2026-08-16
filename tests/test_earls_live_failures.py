@@ -206,3 +206,104 @@ def test_needs_user_questions_are_never_swallowed_into_fallback():
     assert "pageFailure" in gate
     # fallback requires BOTH not-a-question AND an explicit page failure
     assert "!questionShaped && pageFailure" in gate
+
+
+# ------------------------------------------- one conversation, one card
+
+def test_one_conversation_never_becomes_three_cards(monkeypatch):
+    # Live 2026-08-16: a single dinner chat with Jessica produced THREE
+    # awaiting_confirm cards — "Confirm dinner tomorrow", "Plan dinner with
+    # Jessica tomorrow at Earls at 7:30 PM" (a venue nobody said), and "Plan
+    # dinner for tomorrow at Cactus Club Cafe" — every one of them carrying
+    # the SAME lineage_key k6xjtydqwapvstr, the segment id of that one
+    # conversation. The system knew and asked a model's opinion on wording
+    # anyway. The lineage is deterministic; it decides now.
+    import brain.anticipy_core as coremod
+    from brain.anticipy_core import Anticipy
+    from brain.memory import Memory
+
+    SEG = "k6xjtydqwapvstr"
+    cards = {}
+    patched = {}
+
+    class R:
+        ok = True
+        def __init__(self, payload): self._p = payload
+        def raise_for_status(self): pass
+        def json(self): return self._p
+
+    def get(url, **kw):
+        flt = (kw.get("params") or {}).get("filter", "")
+        if f'lineage_key="{SEG}"' in flt and 'status="awaiting_confirm"' in flt:
+            return R({"items": list(cards.values())})
+        return R({"items": []})
+
+    def post(url, **kw):
+        body = kw.get("json") or {}
+        jid = f"job{len(cards) + 1}"
+        cards[jid] = {"id": jid, "goal": body.get("goal", ""),
+                      "params": body.get("params", "{}"),
+                      "status": "awaiting_confirm"}
+        return R({**cards[jid]})
+
+    def patch(url, **kw):
+        patched.update(kw.get("json") or {})
+        jid = url.rstrip("/").rsplit("/", 1)[-1]
+        if jid in cards:
+            cards[jid].update(kw.get("json") or {})
+        return R(cards.get(jid, {}))
+
+    monkeypatch.setattr(coremod, "pb", type("PB", (), {
+        "get": staticmethod(get), "post": staticmethod(post),
+        "patch": staticmethod(patch)}))
+
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    a._lineage_key = SEG
+    monkeypatch.setattr(Anticipy, "_covered_by", lambda self, new, old: False)
+
+    first = a._queue_job("Confirm dinner tomorrow",
+                         {"source": "we should have dinner tomorrow",
+                          "lineage_key": SEG}, hold=True)
+    second = a._queue_job("Plan dinner with Jessica tomorrow at Earls at 7:30 PM",
+                          {"source": "Let's do tomorrow", "lineage_key": SEG},
+                          hold=True)
+    third = a._queue_job("Plan dinner tomorrow at Cactus Club Cafe West Van 7:30",
+                         {"source": "at 7:30 in cactus at West Van",
+                          "lineage_key": SEG}, hold=True)
+
+    assert first == second == third, "one conversation must hold ONE card"
+    assert len(cards) == 1, f"minted {len(cards)} cards from one conversation"
+    # and the surviving card carries the latest, richest wording
+    assert "Cactus" in cards[first]["goal"]
+
+
+def test_a_declared_new_task_still_gets_its_own_card(monkeypatch):
+    # The merge must not swallow a genuinely separate errand said in the same
+    # breath — "also, separately, book my haircut" is not the dinner.
+    import brain.anticipy_core as coremod
+    from brain.anticipy_core import Anticipy
+    from brain.memory import Memory
+
+    made = []
+
+    class R:
+        ok = True
+        def __init__(self, p): self._p = p
+        def raise_for_status(self): pass
+        def json(self): return self._p
+
+    monkeypatch.setattr(coremod, "pb", type("PB", (), {
+        "get": staticmethod(lambda *a, **k: R({"items": [
+            {"id": "job1", "goal": "dinner", "status": "awaiting_confirm",
+             "params": "{}"}]})),
+        "post": staticmethod(lambda *a, **k: (
+            made.append((k.get("json") or {}).get("goal")),
+            R({"id": f"new{len(made)}", "status": "awaiting_confirm"}))[1]),
+        "patch": staticmethod(lambda *a, **k: R({}))}))
+
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    a._lineage_key = "seg-1"
+    out = a._queue_job("book a haircut",
+                       {"lineage_key": "seg-1",
+                        "source": "separate thing, book my haircut"}, hold=True)
+    assert out and out.startswith("new"), "a declared new task keeps its own card"
