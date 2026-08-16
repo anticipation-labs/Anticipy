@@ -1527,10 +1527,32 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # 2026-08-10: "showing 6:30 PM, task is tomorrow at noon" was
             # rewritten as "I'm gonna drive at 6:30. I can change it for
             # tomorrow" — word salad about a booking he was waiting on.
-            if said and not carries_facts(said, blocker):
+            # The facts she may use are the blocker's AND the task's: the
+            # model is shown both, so a sentence mentioning the 6 PM from the
+            # goal is not an invention. Judging it against the blocker alone
+            # rejected nearly every natural sentence — which is why he kept
+            # getting the identical canned line and said, correctly, "feel
+            # like it's hard-coded" (2026-08-16).
+            allowed = f"{blocker} {job.get('goal', '')}"
+            if said and not (carries_facts(said, blocker)
+                             or (_fact_tokens(blocker) <= _fact_tokens(said)
+                                 and _fact_tokens(said) <= _fact_tokens(allowed))):
                 print(f"stuck job {job['id']}: paraphrase mangled the facts, "
-                      f"sending them verbatim")
-                said = None
+                      f"asking again with them pinned")
+                said = anticipy._voice({
+                    "situation": "you got most of the way through a task in "
+                                 "their browser and need one thing to finish. "
+                                 "Your reply MUST contain, character for "
+                                 "character, every number, time, date and name "
+                                 "in what_you_need. Write it the way a person "
+                                 "texts, not a status line.",
+                    "task": job.get("goal", ""),
+                    "what_you_need": blocker,
+                })
+                if said and not (carries_facts(said, blocker)
+                                 or (_fact_tokens(blocker) <= _fact_tokens(said)
+                                     and _fact_tokens(said) <= _fact_tokens(allowed))):
+                    said = None
             said = said or f"I'm nearly through {job.get('goal', 'that')} — {blocker}"
             # What she actually sent is the durable record — a set in memory
             # would forget across a redeploy and re-ask for his name and email.

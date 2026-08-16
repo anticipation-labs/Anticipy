@@ -322,3 +322,43 @@ def test_a_declared_new_task_still_gets_its_own_card(monkeypatch):
                        {"lineage_key": "seg-1",
                         "source": "separate thing, book my haircut"}, hold=True)
     assert out and out.startswith("new"), "a declared new task keeps its own card"
+
+
+# ------------------------------------------- "feel like it's hard-coded"
+
+def test_her_own_words_survive_the_fact_guard():
+    # Live 2026-08-16 he received, again and again, the identical robot line
+    # "I'm nearly through Book dinner for 2 at Earls in West Van tomorrow
+    # (Saturday) at 6 PM — ..." and said "feel like it's hard-coded". He was
+    # right, and the cause was a guard, not a template: a paraphrase was
+    # rejected if it contained ANY fact token absent from the blocker text.
+    # The model is shown the TASK too, so mentioning the 6 PM from the goal
+    # counted as an invention and every natural sentence was thrown away.
+    from brain.worker import _fact_tokens, carries_facts
+
+    blocker = "I need your email address"
+    goal = "Book dinner for 2 at Earls in West Van tomorrow at 6 PM"
+    allowed = f"{blocker} {goal}"
+    human = "I'm almost done booking Earls for 6 PM tomorrow — what's your email?"
+
+    def accepted_for(blk, said, task=goal):
+        allow = f"{blk} {task}"
+        return (carries_facts(said, blk)
+                or (_fact_tokens(blk) <= _fact_tokens(said)
+                    and _fact_tokens(said) <= _fact_tokens(allow)))
+
+    def accepted(said):
+        return accepted_for(blocker, said)
+
+    assert not carries_facts(human, blocker), "this is the rejection he hit"
+    assert accepted(human), "a sentence using the task's own facts must survive"
+    # ...but inventing a fact neither the blocker nor the task ever had is
+    # still refused: that is what the guard exists for.
+    assert not accepted("I'm almost done booking Earls for 9 PM — your email?")
+    # and a time the blocker DID name must still survive the rewrite
+    timed = "I need the 7:15 slot confirmed"
+    assert not accepted_for(timed, "I'm nearly done — confirm?"), \
+        "a rewrite that drops the blocker's own time is still refused"
+
+    src = (ROOT / "brain/worker.py").read_text()
+    assert "asking again with them pinned" in src, "one retry before the robot voice"
