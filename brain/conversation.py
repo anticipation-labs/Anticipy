@@ -1283,15 +1283,34 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 f" They changed: {corrected} — these corrected values "
                 "override the task wording and anything heard earlier.")
         fields = {"status": "queued", "params": json.dumps(params)}
-        workflow = workflow_from_params(params)
+        # Reading the embedded plan can itself refuse — a row whose status and
+        # embedded state disagree is exactly the disagreement worth surfacing.
+        try:
+            workflow = workflow_from_params(params)
+        except Exception as e:
+            print(f"release could not read the plan on {job['id']}: {str(e)[:160]}")
+            return f"failed:{job['id']}"
         if workflow:
+            # An approval must carry WORDS. Four callers deliberately pass
+            # owner_text=None to bypass the _references guard — and approve()
+            # rightly refuses empty words, so the release raised, the bare
+            # `except` swallowed it, and the job sat awaiting_confirm forever
+            # while she texted "on it". He answers her own question with "yes
+            # go for it" and nothing happens, silently. Bypassing the guard is
+            # not a reason to lose his consent: fall back to what he actually
+            # said, then to an honest record that he agreed.
+            words = (owner_text or "").strip() or "They gave the go-ahead."
             try:
                 workflow = approve_plan(
                     workflow, expected_version=workflow.version,
-                    owner_words=owner_text,
+                    owner_words=words,
                     changes=changes or None)
-            except Exception:
-                return None
+            except Exception as e:
+                # A refused approval is a FAILURE, not a silent no-op: the
+                # caller must never go on to say "on it" about a job that
+                # never moved.
+                print(f"release refused for {job['id']}: {str(e)[:160]}")
+                return f"failed:{job['id']}"
             params = put_in_params(params, workflow)
             fields.update(workflow.job_fields())
             fields["params"] = json.dumps(params)

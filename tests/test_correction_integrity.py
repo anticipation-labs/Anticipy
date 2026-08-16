@@ -304,3 +304,45 @@ def test_sms_answer_lands_in_plan_facts_for_the_app_release(monkeypatch):
     assert patched["workflow_version"] == plan.version + 1
     # And the SMS release path still has its own copy to fold into scope.
     assert p["corrections"] == {"time": "7pm", "party_size": "3"}
+
+
+def test_a_wordless_yes_still_actually_releases(monkeypatch):
+    # Live-class P0: four callers pass owner_text=None to bypass the
+    # _references guard, and approve() rightly refuses empty words — so the
+    # release raised, a bare `except` swallowed it, and the job sat
+    # awaiting_confirm forever while she texted "on it". She asks "Want me to
+    # book Earls for 7 tomorrow?", he answers "yes go for it", the model names
+    # the id, text_for_guard is None, and nothing happens.
+    from brain.workflow import Consequence, new_plan, put_in_params
+    plan = new_plan(owner_ref="o", lineage_key="dinner", goal="book Earls at 7",
+                    consequence=Consequence.CONSEQUENTIAL,
+                    source_event_id="ev", authority_text="book earls at 7")
+    params = put_in_params({}, plan)
+    job = {"id": "j1", "goal": "book Earls at 7",
+           "status": "awaiting_confirm", "params": json.dumps(params)}
+    patched = _pb(monkeypatch, convmod, job)
+    out = _conv()._release("j1", None, owner_text=None)
+    assert out == "released:j1", f"a wordless yes must still release, got {out!r}"
+    assert patched.get("status") == "queued"
+    p = json.loads(patched["params"])
+    assert p["_workflow"]["approval"]["owner_words"].strip(), \
+        "the approval must record words, never an empty consent"
+
+
+def test_a_refused_release_is_reported_as_failure_not_silence(monkeypatch):
+    # And when approval genuinely cannot be granted, the caller must learn it
+    # rather than go on to say "on it" about a job that never moved.
+    from brain.workflow import Consequence, new_plan, put_in_params
+    plan = new_plan(owner_ref="o", lineage_key="d", goal="book Earls",
+                    consequence=Consequence.CONSEQUENTIAL,
+                    source_event_id="ev", authority_text="book earls")
+    params = put_in_params({}, plan)
+    # A plan already past its owner (queued) cannot be approved again — the
+    # job row still says awaiting_confirm, which is exactly the disagreement
+    # that must surface instead of being swallowed.
+    params["_workflow"]["state"] = "queued"
+    job = {"id": "j2", "goal": "book Earls",
+           "status": "awaiting_confirm", "params": json.dumps(params)}
+    _pb(monkeypatch, convmod, job)
+    out = _conv()._release("j2", None, owner_text="yes")
+    assert out == "failed:j2", f"a refused release must say so, got {out!r}"
