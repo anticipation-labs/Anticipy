@@ -370,7 +370,14 @@
     if (a.isContentEditable) return a;
     const tag = a.tagName;
     if (tag === "TEXTAREA") return a;
-    if (tag === "INPUT" && !["submit", "button", "checkbox", "radio", "hidden", "file"].includes((a.type || "").toLowerCase())) return a;
+    // "password" belongs on this list. Writes resolve to the ACTIVE element
+    // when a click could not move focus (synthetic clicks inside embedded
+    // booking widgets never do), while the safety checks — protectedInput,
+    // the one-time-code guard — are run against the MAPPED index. So a
+    // sign-in dialog that autofocuses its password box could receive the
+    // owner's email or phone, cleared in and typed, with every guard
+    // reporting success about a different element entirely.
+    if (tag === "INPUT" && !["submit", "button", "checkbox", "radio", "hidden", "file", "password"].includes((a.type || "").toLowerCase())) return a;
     return null;
   }
 

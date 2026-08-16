@@ -22,6 +22,7 @@ const suites = [
   "test_workflow_state.mjs",
   "test_poll_deadlock.mjs",
   "test_attach_diagnosis.mjs",
+  "test_hunt_round2.mjs",
 ];
 let failed = 0;
 for (const s of suites) {

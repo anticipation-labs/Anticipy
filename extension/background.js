@@ -236,13 +236,25 @@ async function requeueStaleJobs() {
   // else entirely) must never rewrite this owner's job rows.
   const { ownerRef } = await chrome.storage.local.get(["ownerRef"]);
   if (!ownerRef) return;
-  const filter = encodeURIComponent(`status="running" && owner_ref="${ownerRef}" && workflow_id!=""`);
+  // lane!="research" MUST match claimJob's exclusion. Research runs in the
+  // WORKER on a 120s never-heartbeated lease, so two minutes into every real
+  // research run this sweep saw an expired lease on a row it is forbidden to
+  // touch, PATCHed it back to queued, and the backend answered 403 "research
+  // jobs run in the worker, never in a browser". That throw escaped the whole
+  // poll cycle BEFORE claimJob ever ran — so for the entire duration of any
+  // research job, the browser lane claimed nothing at all while the heartbeat
+  // kept the phone showing "Chrome ready". Another face of the same "it says
+  // connected and nothing happens" the owner has hit all week.
+  const filter = encodeURIComponent(`status="running" && owner_ref="${ownerRef}" && workflow_id!="" && lane!="research"`);
   const r = await fetch(`${BASE}/api/collections/jobs/records?filter=${filter}&perPage=20&sort=claimed_at`,
     { headers: await writeHeaders() });
   if (!r.ok) return;
   const { items } = await r.json();
   const now = Date.now();
   for (const j of items || []) {
+   // One poisoned row must never cost the other nineteen their recovery.
+   // A single refused PATCH used to throw straight out of this loop.
+   try {
     if (activeJobs.has(j.id)) continue; // this worker is running it right now
     const expires = j.lease_until ? Date.parse(j.lease_until) : 0;
     const claimed = j.claimed_at ? Date.parse(j.claimed_at) : Date.parse(j.updated);
@@ -272,6 +284,9 @@ async function requeueStaleJobs() {
         })
       : { status: "queued", claimed_by: "", claimed_at: null };
     await updateJob(j.id, patch, j.lease_token);
+   } catch (e) {
+     console.warn(`Anticipy: could not recover stale job ${j.id}: ${String(e).slice(0, 160)}`);
+   }
   }
 }
 
@@ -827,7 +842,10 @@ async function poll() {
   pollStartedAt = now;
   try {
     await heartbeat();
-    await requeueStaleJobs();
+    // Housekeeping may NEVER decide whether real work gets claimed. This was
+    // awaited bare, so one refused row aborted the cycle before claimJob().
+    await requeueStaleJobs().catch((e) => console.warn(
+      `Anticipy: stale-job sweep failed (continuing to claim): ${String(e).slice(0, 200)}`));
     const job = await claimJob();
     if (job) await runJob(job);
   } catch (e) {
