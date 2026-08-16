@@ -621,8 +621,22 @@ async function runJobInner(job, params) {
         // are the authority for exact form values.  A paraphrased goal once
         // turned "battery will not charge" into "battery not charging" and
         // still passed the old combined-scope guard.
-        scope: params._workflow?.authority_text
-          || params.approved_scope || params.say || params.source || "",
+        // The owner's later ANSWERS and corrections live only in
+        // approved_scope ("You stopped and asked: ... They answered: ...",
+        // "They changed: ..."). authority_text alone shadowed them — the
+        // browser re-asked questions the owner had already answered (hunt
+        // find, 2026-08-15). Verbatim authority stays the base; the Q/A and
+        // correction tails ride along.
+        scope: (() => {
+          const authority = params._workflow?.authority_text || "";
+          const approved = String(params.approved_scope || "");
+          if (!authority) return approved || params.say || params.source || "";
+          const markers = ["You stopped and asked:", "They changed:"];
+          const at = markers.map((m) => approved.indexOf(m))
+            .filter((i) => i >= 0);
+          return at.length
+            ? `${authority} ${approved.slice(Math.min(...at))}` : authority;
+        })(),
         // Every concrete detail already on the job record (time, party size,
         // an address, an answer he texted) — so the agent SETS them instead
         // of asking for them. Bookkeeping keys are not facts.

@@ -2252,8 +2252,11 @@ export function externalControlSemantics({ label = "", explicitSubmit = false,
                                            disclosureLike = false } = {}) {
   const text = String(label || "").trim();
   if (searchLike || calendarLike || cookieLike || choiceLike || disclosureLike) return false;
-  const commit = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b/i;
-  const reversible = /^\s*(?:(?:search|find|filter|look\s*up|next|continue|back|previous|cancel|close)(?:\b|\s)|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
+  // "Cancel" DISMISSES only when it is the whole label. "Cancel
+  // reservation" / "Cancel subscription" is a world-changing commit that
+  // the old prefix-match waved through every gate (hunt find, 2026-08-15).
+  const commit = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b|^\s*cancel\s+\w+/i;
+  const reversible = /^\s*(?:(?:search|find|filter|look\s*up|next|continue|back|previous)(?:\b|\s)|(?:cancel|close|dismiss)\s*$|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
   if (reversible.test(text)) return false;
   return commit.test(text) || !!explicitSubmit;
 }
@@ -2319,8 +2322,8 @@ async function commitControl(tabId, index, viaEnter = false) {
         const cookies = /\bcookies?\b|\bconsent\b/i.test(label);
         const isSearch = /^(?:search|find|filter|look\s*up)(?:\b|\s)/i.test(label);
         if (isSearch || calendar || cookies) return false;
-        const commit = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b/i;
-        const reversible = /^\s*(?:(?:search|find|filter|look\s*up|next|continue|back|previous|cancel|close)(?:\b|\s)|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
+        const commit = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b|^\s*cancel\s+\w+/i;
+        const reversible = /^\s*(?:(?:search|find|filter|look\s*up|next|continue|back|previous)(?:\b|\s)|(?:cancel|close|dismiss)\s*$|(?:see|show|view)\s+[0-9][0-9,.\s]*\s+results?\b|(?:apply|update)\s+(?:filters?|search|results?)\b)/i;
         if (reversible.test(label)) return false;
         return commit.test(label) || explicitSubmit;
       });

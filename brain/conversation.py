@@ -313,7 +313,12 @@ class Conversation:
             if picked and intent in ("confirm", "decline", "answer"):
                 pending_id, text_for_guard = picked, None
                 model_ids = [picked]
-            elif group and intent in ("confirm", "decline", "answer", "chat"):
+            elif (group and intent in ("confirm", "decline", "answer")
+                    and self._just_asked(phone)):
+                # NEVER for chat, and only right after she asked a numbered
+                # question. "it's all good" / "how's everything?" contain
+                # group words, and the old gate released every offered job
+                # off a greeting (hunt find, 2026-08-15).
                 offered = (list(getattr(self, "_offered", []) or [])
                            or self._offered_from_thread())
                 asked_cancel = self._asked_to_cancel()
@@ -477,6 +482,15 @@ class Conversation:
             still = self._blocked()
             if still:
                 parsed["reply"] = self._still_need(still)
+        # A decline that cancelled NOTHING must never read as a cancellation.
+        # "wait, cancel that!" seconds after a release found the queued job
+        # invisible and still texted back "Okay — scrapping it" while the
+        # booking ran (hunt find, 2026-08-15). If the model believed it was
+        # declining something and nothing actually flipped, say so.
+        if (intent == "decline" and model_ids
+                and not (acted or resumed or asked_back)):
+            parsed["reply"] = ("I couldn't stop anything just now — tell me "
+                               "which one you mean and I'll go after it.")
 
         # A wrong-thing correction carries two acts: kill the wrong item
         # (handled above as the decline) and START the right one. Dropping
@@ -891,6 +905,29 @@ Use {"facts": {}} when there is nothing durable."""
         except Exception:
             return []
 
+    def _queued(self) -> list[dict]:
+        """Released but not yet claimed — the thirty seconds where 'wait,
+        cancel that!' must still work. These were invisible to the cancel
+        pool, so the rescind failed silently while the reply said 'Okay —
+        scrapping it' (hunt find, 2026-08-15). Unclaimed queued work is
+        always safe to cancel."""
+        try:
+            filt = 'status="queued"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
+            r = pb.get(
+                f"{self.anticipy.backend_url}/api/collections/jobs/records",
+                params={"filter": filt, "perPage": 5, "sort": "-created"},
+                timeout=10,
+            )
+            return [{"id": j["id"], "goal": j["goal"],
+                     "params": j.get("params", ""),
+                     "status": j.get("status", "")}
+                    for j in r.json().get("items", [])]
+        except Exception:
+            return []
+
     def _pending(self) -> list[dict]:
         try:
             filt = 'status="awaiting_confirm"'
@@ -1150,7 +1187,7 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         so neither could be called off by text while she cheerfully agreed to
         drop them."""
         seen, out = set(), []
-        for job in self._pending() + self._blocked():
+        for job in self._pending() + self._blocked() + self._queued():
             if job["id"] in seen:
                 continue
             seen.add(job["id"])

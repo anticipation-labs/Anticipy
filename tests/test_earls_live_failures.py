@@ -72,7 +72,7 @@ def test_poll_failures_are_loud():
 
 def test_app_answers_accumulate_and_structure():
     assert 'facts["owner_answer"] = ownerWords' not in APP
-    assert 'owner_answer_v\\(approvedVersion)' in APP
+    assert 'String(format: "owner_answer_v%03d", approvedVersion)' in APP
     for key in ('"email"', '"phone"', '"name"'):
         assert key in APP  # deterministic contact structuring
 

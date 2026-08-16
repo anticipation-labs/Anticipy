@@ -687,7 +687,11 @@ final class AnticipySession: ObservableObject {
             // Answers ACCUMULATE, question-scoped. One shared owner_answer
             // slot destroyed the contact-details answer the moment the next
             // answer ("No u don't") arrived — live, 2026-08-15.
-            facts["owner_answer_v\(approvedVersion)"] = asked.isEmpty
+            // Zero-padded so numeric-aware (Darwin .sortedKeys) and
+            // code-point (Python/JS) key ordering agree: at v10+ the keys
+            // owner_answer_v2 / owner_answer_v10 sort differently on the
+            // two sides and every digest diverges (hunt find, 2026-08-15).
+            facts[String(format: "owner_answer_v%03d", approvedVersion)] = asked.isEmpty
                 ? ownerWords
                 : "Q: \(String(asked.prefix(120))) A: \(ownerWords)"
             // Deterministic structuring: contact-shaped tokens become real
