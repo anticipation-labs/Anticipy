@@ -130,7 +130,10 @@ def test_the_guard_runs_before_the_message_is_written():
     block = src[src.index("def ask_about_stuck_jobs"):]
     block = block[:block.index("\ndef ", 10)]
     guard = block.index('asked_about_recently(job.get("goal", "")')
-    durable = block.index('need_already_asked(job.get("goal", ""), blocker)')
+    # Matched on the call's opening, not its full text: the guard now takes
+    # a window and an owner_ref so a still-parked job can get ONE second
+    # chance after three hours instead of a full day of silence.
+    durable = block.index('need_already_asked(job.get("goal", "")')
     compose = block.index("said = anticipy._voice({")
     assert guard < compose, "the cheap guard must come before the model call"
     assert durable < compose, "the durable guard must survive deploys without burning a model call"
@@ -197,3 +200,26 @@ def test_a_new_requirement_on_the_same_task_is_still_raised(monkeypatch):
     monkeypatch.setattr(W.pb, "get", get)
     new_blocker = "the form needs a phone number ending in 4 digits to hold the table"
     assert W.need_already_asked(BOOK, new_blocker) is False
+
+
+def test_a_parked_job_gets_a_second_chance_not_a_day_of_silence():
+    """The loop he named: "why are we always in this infinite stall?"
+
+    The durable guard's window was 24 hours, so ONE question that did not
+    land — missed, or (before 2026-08-16) recorded as sent when the transport
+    had nobody to send to — bought a full day of quiet while the job sat
+    parked. From outside, indistinguishable from the product being broken.
+
+    A still-parked job now gets a second chance after three hours, and then
+    real silence. Not nagging: the six-messages-about-one-email failure is
+    still in living memory.
+    """
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "brain", "worker.py")).read()
+    assert "def asks_for_goal" in src, "the re-ask must be bounded by a count"
+    block = src[src.index("def ask_about_stuck_jobs"):]
+    block = block[:block.index("\ndef ", 10)]
+    assert "window = 24.0 if asks_already >= 2 else 3.0" in block, (
+        "one question, one second chance after three hours, then quiet")
+    assert 'decision="needs_user"' in src.split("def asks_for_goal", 1)[1][:900], (
+        "only real questions count toward the cap, not every remark")

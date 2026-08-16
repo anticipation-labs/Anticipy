@@ -955,6 +955,31 @@ def asked_about_recently(goal: str, minutes: float = 45.0,
         return False
 
 
+def asks_for_goal(goal: str, owner_ref: str = "", within_hours: float = 24.0) -> int:
+    """How many times she has already raised THIS task today.
+
+    The re-ask above is deliberately bounded by this: one question, one
+    second chance, then quiet. Counted from the durable record rather than
+    memory, so a redeploy cannot reset it into nagging.
+    """
+    goal = (goal or "").strip()
+    if not goal:
+        return 0
+    try:
+        since = (datetime.now(timezone.utc)
+                 - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        filt = f'kind="anticipy_says" && decision="needs_user" && created>="{since}"'
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": _scoped_filter(filt, owner_ref),
+                           "perPage": 50, "sort": "-created"}, timeout=10)
+        if not getattr(r, "ok", False):
+            return 0
+        return sum(1 for ev in r.json().get("items", [])
+                   if (ev.get("goal") or "").strip() == goal)
+    except Exception:
+        return 0
+
+
 def need_already_asked(goal: str, blocker: str, within_hours: float = 24.0,
                        covered: float = 0.5, owner_ref: str = "") -> bool:
     """Has she already told him what THIS task is waiting for?
@@ -1595,7 +1620,25 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # The durable record survives restarts and deploys. Check it before
             # composing: production once spent a model call every three seconds
             # rewriting a question this exact guard then threw away.
-            if need_already_asked(job.get("goal", ""), blocker):
+            # SILENCE MUST HAVE A DEADLINE.
+            #
+            # The guard's whole window was 24 hours, so ONE question that did
+            # not land — missed, or (until tonight) recorded as sent when the
+            # transport had nobody to send to — bought a full day of quiet
+            # while the job sat parked. From the outside that is
+            # indistinguishable from the system being broken, and it is the
+            # loop he named: "why are we always in this infinite stall?"
+            #
+            # So a still-parked job gets a SECOND chance after three hours,
+            # and then genuine silence. Not nagging — the six-messages-about
+            # -one-email failure is still in living memory — but a single
+            # honest re-ask, because a question nobody heard is not a
+            # question asked.
+            asks_already = asks_for_goal(job.get("goal", ""), anticipy.owner_ref)
+            window = 24.0 if asks_already >= 2 else 3.0
+            if need_already_asked(job.get("goal", ""), blocker,
+                                  within_hours=window,
+                                  owner_ref=anticipy.owner_ref):
                 print(f"stuck job {job['id']}: already asked for this, staying quiet")
                 continue
             said = anticipy._voice({
