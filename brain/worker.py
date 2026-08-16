@@ -1595,7 +1595,12 @@ def main() -> None:
     mem_db = os.environ.get("ANTICIPY_MEMORY_DB", ":memory:")
     memory = Memory(path=mem_db, llm=llm if llm.live else None)
     anticipy = Anticipy(llm=llm if llm.live else None, memory=memory, backend_url=PB,
-                        owner_phone=os.environ.get("ANTICIPY_OWNER_PHONE", "owner"),
+                        # Second line of defence behind the supervisor's pop():
+                        # a SUPERVISED child never falls back to an inherited
+                        # number. Texting the wrong person is worse in every
+                        # case than not texting at all.
+                        owner_phone=("" if os.environ.get("ANTICIPY_SUPERVISED") == "1"
+                                     else os.environ.get("ANTICIPY_OWNER_PHONE", "owner")),
                         owner_id=legacy_owner, owner_ref=owner_ref)
     # Live texting when Twilio credentials are present; mock otherwise.
     live_sms = all(os.environ.get(k) for k in

@@ -162,6 +162,42 @@ routerAdd("POST", "/agent/llm", (e) => {
   } catch (_) {
     return e.json(403, { error: "not a paired agent" });
   }
+  if (!agentRecord) return e.json(403, { error: "not a paired agent" });
+
+  // A paired agent must belong to a REAL ACCOUNT. Without this, the whole
+  // endpoint was an open LLM proxy billed to us: register (no credential
+  // needed), self-pair, then loop forever. The first symptom would have been
+  // every genuine browser dying on provider 402s with no explanation.
+  const callerOwnerRef = String(agentRecord.getString("owner_ref") || "").trim();
+  if (!callerOwnerRef) {
+    return e.json(403, { error: "this agent is not attached to an account" });
+  }
+
+  // And a real account still may not spend without limit. One runaway loop —
+  // a bug as easily as an abuser — could drain the balance in an hour and
+  // take the product down for everyone.
+  // Generous for a real session — a hard browser run is tens of calls, not
+  // hundreds — and fatal to a loop.
+  const HOURLY_CALL_CEILING = 400;
+  try {
+    const hourNow = new Date().toISOString().slice(0, 13);   // YYYY-MM-DDTHH
+    const storedHour = String(agentRecord.getString("llm_hour") || "");
+    const used = storedHour === hourNow
+      ? (Number(agentRecord.get("llm_calls")) || 0) : 0;
+    if (used >= HOURLY_CALL_CEILING) {
+      console.log("agent/llm: hourly ceiling hit for", agentId, "at", used);
+      return e.json(429, {
+        error: "too many model calls in the last hour",
+        detail: "this browser hit its hourly limit; it resumes at the top of the hour",
+      });
+    }
+    agentRecord.set("llm_hour", hourNow);
+    agentRecord.set("llm_calls", used + 1);
+    e.app.save(agentRecord);
+  } catch (err) {
+    // Never let the meter's own failure block real work.
+    console.log("agent/llm: meter unavailable:", String(err).slice(0, 120));
+  }
 
   const geminiKey = $os.getenv("GEMINI_API_KEY") || "";
   const openrouterKey = $os.getenv("OPENROUTER_API_KEY") || "";

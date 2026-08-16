@@ -209,13 +209,27 @@ routerUse((e) => {
     // silently, from the customer's point of view: the extension keeps
     // showing the code, the phone shows nothing, and no one can pair. Found
     // live on 2026-08-14 during the first real stranger day-zero run.
-    const allowed = { owner: 1, owner_ref: 1, paired: 1, last_seen: 1, browser: 1 };
+    // ...but owner_ref is NOT accepted here, because nothing on this path can
+    // verify it. An unauthenticated caller could register their own agent,
+    // then PATCH it with a VICTIM's owner_ref harvested by walking pair codes
+    // (six digits, no rate limit) — and from that moment their browser is
+    // authorized against the victim's account and receives the victim's jobs.
+    // The signed-in claim above binds owner_ref === authId, which is the only
+    // honest way to accept it; a claim arriving without a usable session must
+    // fail LOUDLY rather than half-pair or, worse, pair to a stranger.
+    const allowed = { owner: 1, paired: 1, last_seen: 1, browser: 1 };
     const b = e.requestInfo().body || {};
     const keys = Object.keys(b);
     const collection = path.startsWith(agentsBase) ? "agents" : "pendants";
     const id = path.split("/").pop();
     let rec = null;
     try { rec = e.app.findRecordById(collection, id); } catch (_) {}
+    if ("owner_ref" in b) {
+      return e.json(403, {
+        error: "pair from the signed-in app",
+        detail: "an owner_ref may only be claimed by the account it belongs to",
+      });
+    }
     if (rec && keys.length > 0 && keys.every((k) => allowed[k])) {
       const touchesPairing = "owner" in b || "paired" in b;
       // Same blank-owner ban as the signed-in claim path: a pairing flip that

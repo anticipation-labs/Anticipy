@@ -82,6 +82,14 @@ def child_environment(owner: dict, base: dict | None = None,
     env["ANTICIPY_CLOCK_STATE"] = (
         old_clock if is_legacy_owner and old_clock else str(owner_dir / "clock_state.json")
     )
+    # The founder's phone number must NOT ride along into someone else's
+    # worker. It was inherited verbatim from the parent environment, and a
+    # phone is optional on a profile — so a second person signing up got a
+    # worker bound to the founder's number: her texts about THEIR errands went
+    # to him, and his replies were read as answers to their tasks. Cross-
+    # account SMS in both directions, from a single missing pop().
+    if not is_legacy_owner:
+        env.pop("ANTICIPY_OWNER_PHONE", None)
     env["ANTICIPY_SUPERVISED"] = "1"
     env["ANTICIPY_WEBHOOK_MANAGER"] = "1" if webhook_manager else "0"
     return env
