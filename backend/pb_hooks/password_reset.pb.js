@@ -52,7 +52,19 @@ routerAdd("POST", "/auth/reset/request", (e) => {
   } catch (_) { return same(); }
   if (!owner) return same();
 
-  const phone = String(owner.getString("phone") || "").trim();
+  let phone = String(owner.getString("phone") || "").trim();
+  if (!phone) {
+    // The account row is not the only place a phone lives: onboarding writes
+    // owner_profile, and a person who signed up without a number (or changed
+    // it in their profile afterwards) has one there and none here. Falling
+    // through to same() made their ONLY recovery route silently do nothing —
+    // a locked-out owner with no error to act on. Found 2026-08-15.
+    try {
+      const profile = e.app.findFirstRecordByFilter(
+        "owner_profile", "owner_ref = {:ref}", { ref: owner.id });
+      if (profile) phone = String(profile.getString("phone") || "").trim();
+    } catch (_) {}
+  }
   if (!phone) return same();   // nothing to text; still say the same thing
 
   const now = new Date();
