@@ -2216,14 +2216,22 @@ async function controlContext(tabId, index) {
         tag: String(target?.tagName || source.tagName || "").toLowerCase(),
         href: String(target?.href || source.href || "").slice(0, 500),
         nearbyText: String(nearby?.innerText || "").trim().replace(/\s+/g, " ").slice(0, 300),
+        // Stable identity for the "have I already done this?" signature.
+        // Page TEXT is not identity: a countdown ticking from 4:32 to 4:12
+        // changed the old fingerprint and let the same commit fire twice.
+        formAction: String(target?.form?.action || "").slice(0, 300),
+        name: String(target?.name || "").slice(0, 120),
+        elementId: String(target?.id || source.id || "").slice(0, 120),
         fieldIndexes,
       };
     });
-    if (!local) return { label: "", tag: "", href: "", nearbyText: "", fieldIndexes: [] };
+    if (!local) return { label: "", tag: "", href: "", nearbyText: "",
+             formAction: "", name: "", elementId: "", fieldIndexes: [] };
     const base = Math.floor(Number(index) / 1000) * 1000;
     return { ...local, fieldIndexes: (local.fieldIndexes || []).map((i) => base + Number(i)) };
   } catch (_) {
-    return { label: "", tag: "", href: "", nearbyText: "", fieldIndexes: [] };
+    return { label: "", tag: "", href: "", nearbyText: "",
+             formAction: "", name: "", elementId: "", fieldIndexes: [] };
   }
 }
 
@@ -3424,7 +3432,21 @@ export async function runAgentGoal(goal, opts) {
               tabId: tab.id };
           }
           const context = await controlContext(tab.id, decision.index);
-          const externalSig = `${evidenceUrlKey(state.url)}|${context.tag}|${evidenceToken(context.label || context.href)}|${evidenceToken(context.nearbyText)}`;
+          // The signature that decides "have I already done this?" must be
+          // built from STABLE identity only. It used to include the button's
+          // live label and up to 300 characters of surrounding text — so on a
+          // reservation page holding a perishable slot, the block reading
+          // "Held for 4:32" became "Held for 4:12" one step later, the
+          // signature changed, and a SECOND Complete Reservation click was
+          // not recognised as the same effect. That is a double booking, on
+          // exactly the pages the system is told to push through.
+          const stableLabel = evidenceToken(
+            String(context.label || context.href || "").replace(/\d+/g, ""));
+          const externalSig = [
+            evidenceUrlKey(state.url), context.tag, stableLabel,
+            context.formAction || "", context.name || "", context.elementId || "",
+            String(decision.index),
+          ].join("|");
           if (performedExternalEffects.has(externalSig)) {
             deadIdx.add(Number(decision.index));
             history.push(`step ${step}: BLOCKED DUPLICATE EFFECT — this same consequential control was already dispatched once. Inspect the current state or use a different reversible action; never repeat it to make sure.`);
@@ -3437,6 +3459,18 @@ export async function runAgentGoal(goal, opts) {
           const applied = await applyFormCorrections(tab.id, corrections);
           if (applied.length) {
             history.push(`step ${step}: PRE-SUBMIT ALIGNMENT corrected exact field values: ${applied.join(", ")}. Re-read the form before submitting.`);
+            delete actionCounts[sig];
+            stuckStreak = 0;
+            continue;
+          }
+          // A correction the FIELD refused still cleared that field first.
+          // With `applied` empty nothing looped back, so every guard below
+          // went on to judge `controlState` — the snapshot taken BEFORE the
+          // corrections were typed — and passed on values no longer present.
+          // The submit then went out with a blanked or invalid field, and
+          // the receipt check later audited a page that never existed.
+          if (corrections && corrections.length && !applied.length) {
+            history.push(`step ${step}: PRE-SUBMIT ALIGNMENT was refused by the field itself (${corrections.length} value(s)); the form was touched, so re-reading it before any submit.`);
             delete actionCounts[sig];
             stuckStreak = 0;
             continue;
@@ -3584,6 +3618,14 @@ export async function runAgentGoal(goal, opts) {
               const applied = await applyFormCorrections(tab.id, corrections);
               if (applied.length) {
                 history.push(`step ${step}: PRE-SUBMIT ALIGNMENT corrected exact field values: ${applied.join(", ")}. Re-read the form before submitting.`);
+                delete actionCounts[sig];
+                stuckStreak = 0;
+                continue;
+              }
+              // Same on the Enter path: a refused correction has already
+              // cleared the field, so the snapshot below is stale.
+              if (corrections && corrections.length && !applied.length) {
+                history.push(`step ${step}: PRE-SUBMIT ALIGNMENT was refused by the field itself (${corrections.length} value(s)); re-reading the form before any submit.`);
                 delete actionCounts[sig];
                 stuckStreak = 0;
                 continue;

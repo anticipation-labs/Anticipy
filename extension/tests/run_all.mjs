@@ -23,6 +23,7 @@ const suites = [
   "test_poll_deadlock.mjs",
   "test_attach_diagnosis.mjs",
   "test_hunt_round2.mjs",
+  "test_commit_integrity.mjs",
 ];
 let failed = 0;
 for (const s of suites) {
