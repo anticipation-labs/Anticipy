@@ -58,6 +58,14 @@ def _required_from_missing(missing) -> tuple:
     out = []
     for item in items:
         low = str(item).lower()
+        # A FIELD NAME, never prose. Triage writes free-form reasoning into
+        # this field — live on 2026-08-16 it held "The current date is
+        # Saturday, August 15, 2026. Tomorrow is Sunday..." and the word
+        # "date" inside that sentence made `date` a required fact, which
+        # parked his dinner card in DRAFT and made Send fail with "didn't go
+        # through". Anything sentence-length is an explanation, not a name.
+        if len(low.split()) > 4:
+            continue
         if "time" in low or "when" in low:
             out.append("time")
         if "location" in low or "where" in low or "which" in low and (
@@ -2101,7 +2109,13 @@ class Anticipy:
                                    if str(value)),
             authority_text=str(params.get("source") or ""),
             facts=seed_facts,
-            required=required if consequential else (),
+            # NEVER on work the owner is about to approve. A card he is being
+            # shown must be approvable: required-but-unfilled facts put the
+            # plan in DRAFT, which the phone refuses to approve, so Send died
+            # with "I couldn't reach Anticipy" and nothing explained why
+            # (live, 2026-08-16). His approval IS the answer to a missing
+            # detail. The hold protects work that runs WITHOUT him.
+            required=() if (consequential or hold) else required,
         )
         params = put_in_params(params, workflow)
         workflow_fields = workflow.job_fields()

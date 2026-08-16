@@ -136,11 +136,21 @@ def test_sms_rejections_are_logged():
 
 # ------------------------------------------------- ask-then-run-anyway
 
-def test_an_asked_detail_holds_the_plan_until_answered(monkeypatch):
-    # Cactus, live: "what time and how many people?" went out, was never
-    # answered, and the browser booked toward an invented 7 PM for 2.
-    # An asked-for detail is now a REQUIRED plan fact: the plan parks in
-    # DRAFT (status awaiting_confirm — unclaimable) until the answer fills it.
+def test_a_card_he_must_approve_is_always_approvable(monkeypatch):
+    # Live 2026-08-16, and this one was MY regression. Asked-for details were
+    # made REQUIRED plan facts, which parks a plan in DRAFT. But the brain
+    # still showed him a card saying "Send it" — and the phone refuses to
+    # approve a draft, so Send failed with "I couldn't reach Anticipy Claude
+    # version" and nothing anywhere explained why. His dinner never queued.
+    #
+    # The rule: a card the owner is being asked to approve must be
+    # approvable. HIS APPROVAL IS THE ANSWER. Holding for missing facts
+    # protects work that runs WITHOUT him, not work he is standing over.
+    #
+    # And triage writes prose into `missing` — that day it held "The current
+    # date is Saturday, August 15, 2026. Tomorrow is Sunday..." and the word
+    # "date" in that sentence became a required fact. A field name is never
+    # a sentence.
     import json as _json
     import brain.anticipy_core as coremod
     from brain.anticipy_core import Anticipy, _required_from_missing
@@ -148,7 +158,12 @@ def test_an_asked_detail_holds_the_plan_until_answered(monkeypatch):
 
     assert _required_from_missing(["time", "party size"]) == ("time", "party_size")
     assert _required_from_missing("which Earls location") == ("location",)
-    assert _required_from_missing(["favourite colour"]) == ()  # never wedges
+    assert _required_from_missing(["favourite colour"]) == ()   # never wedges
+    # the exact prose that froze his card
+    assert _required_from_missing([
+        "The current date is Saturday, August 15, 2026. Tomorrow is Sunday, "
+        "August 16, 2026. The user specified Saturday for tomorrow's booking."
+    ]) == ()
 
     a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
     posted = {}
@@ -171,9 +186,9 @@ def test_an_asked_detail_holds_the_plan_until_answered(monkeypatch):
         "source": "book cactus club west van tomorrow",
         "missing": ["time", "party size"]}, hold=True)
     wf = _json.loads(posted["params"])["_workflow"]
-    assert tuple(wf["required"]) == ("time", "party_size")
-    assert posted["status"] == "awaiting_confirm"   # not claimable
-    assert wf["state"] == "draft"
+    assert wf["state"] == "awaiting_approval", "a held card must be approvable"
+    assert tuple(wf["required"]) == (), "a card he approves holds no required facts"
+    assert posted["workflow_state"] == "awaiting_approval"
 
 
 def test_the_answer_fills_required_facts_even_with_odd_keys(monkeypatch):
