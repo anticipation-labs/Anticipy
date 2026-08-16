@@ -1545,9 +1545,34 @@ function taskAllowsLoopback(...values) {
     .test(String(value || "")));
 }
 
-function looksLikeCaptcha(state) {
+export function looksLikeCaptcha(state) {
   const blob = `${state.url} ${state.title} ${(state.text || "").slice(0, 2000)}`.toLowerCase();
-  return /recaptcha|captcha|are you a robot|unusual traffic|verify you are human|hcaptcha|cf-challenge|one last step|solve the challenge|challenges\.cloudflare|verify you('| a)?re human|checking your browser|just a moment|performing security verification|verif(y|ies) (that )?you('| a)?re not a (ro)?bot/.test(blob);
+  // THE BADGE IS NOT THE WALL.
+  //
+  // Nearly every booking page carries an INVISIBLE reCAPTCHA v3 and its
+  // legally-required disclosure — "this site is protected by reCAPTCHA and
+  // the Google Privacy Policy and Terms of Service apply". Matching the bare
+  // word "recaptcha" therefore declared a challenge on pages that had none.
+  //
+  // Live, 2026-08-16: it parked the Cactus Club booking claiming a CAPTCHA,
+  // texted him about it four times over two hours, and when he replied "I'm
+  // looking at your page there's no captcha, just press submit, enter a date
+  // of birth and press submit" it repeated the claim and then scrapped the
+  // booking. There was never a CAPTCHA — only that badge, and a date field.
+  //
+  // So the disclosure is stripped BEFORE looking, and what remains must name
+  // an actual challenge.
+  const withoutBadge = blob
+    .replace(/(this (site|page) is )?protected by recaptcha[^.]{0,120}\.?/g, " ")
+    .replace(/recaptcha (privacy|terms)[^.]{0,60}\.?/g, " ")
+    .replace(/privacy\s*[-–|]\s*terms/g, " ");
+  const challenge = /are you a robot|unusual traffic|verify you are human|hcaptcha|cf-challenge|solve the challenge|challenges\.cloudflare|verify you('| a)?re human|checking your browser|just a moment|performing security verification|verif(y|ies) (that )?you('| a)?re not a (ro)?bot|i'm not a robot|select all (images|squares)|type the characters|enter the characters you see/;
+  if (challenge.test(withoutBadge)) return true;
+  // A bare "captcha" only counts when the page is ABOUT it: a challenge URL,
+  // or the word surviving next to an instruction to complete something.
+  if (/\/(captcha|challenge|sorry)(\/|\?|$)/.test(state.url || "")) return true;
+  return /(complete|solve|pass|finish)[^.]{0,40}captcha|captcha[^.]{0,40}(to continue|required|below)/
+    .test(withoutBadge);
 }
 
 // A CAPTCHA is a site saying "prove a person is here". Anticipy's answer is

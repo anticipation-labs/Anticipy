@@ -665,6 +665,49 @@ Use {"facts": {}} when there is nothing durable."""
             return {}
 
     @staticmethod
+    def _disputes_or_directs(owner_text: str, need: str) -> bool:
+        """Is he telling her the question itself is wrong, or what to do next?
+
+        A parked job only resumes when the owner supplies the thing it named.
+        That is right for a missing email — and exactly wrong when the thing
+        it named does not exist. Live, 2026-08-16: the browser wrongly saw a
+        CAPTCHA on the Cactus Club page, asked four times over two hours, and
+        when he replied "I'm looking at your page, there's no captcha, just
+        press submit, enter a date of birth and press submit" — the single
+        most useful sentence anyone sent all day — it counted as "not the
+        thing I asked for", stayed parked, and repeated itself. Then his next
+        "no there is none" was read as calling it off.
+
+        Someone LOOKING AT THE SCREEN outranks the agent's own diagnosis.
+        A denial of the premise, or an instruction about the page, resumes the
+        run and rides in as authority."""
+        text = (owner_text or "").strip().lower()
+        if not text:
+            return False
+        # "there's no captcha", "there is none", "that's not what it says"
+        denial = re.search(
+            r"\b(no|not|isn'?t|there'?s no|there is no|aren'?t|none)\b", text)
+        subject = re.search(
+            r"\b(captcha|robot|challenge|login|sign\s?in|password|verification|code|"
+            r"popup|banner|button|field|page|screen)\b", text)
+        if denial and subject:
+            return True
+        # A bare denial of EXISTENCE answers the question without naming it:
+        # "no there is none" said back to "solve the CAPTCHA" means the
+        # CAPTCHA is not there. Note this is deliberately narrower than a
+        # plain "no", which is a refusal and must stay one.
+        if re.search(r"there'?s? (is )?(no|none|nothing)\b|there is none|"
+                     r"isn'?t (any|one|there)|not there|nothing there|"
+                     r"^\s*no,? there'?s? none", text):
+            return True
+        # "press submit", "click continue", "enter a date of birth", "scroll down"
+        if re.search(r"\b(press|click|tap|hit|enter|type|select|choose|scroll|"
+                     r"look at|check)\b[^.]{0,40}\b(submit|continue|next|button|"
+                     r"box|field|date|name|email|page|down|it|that)\b", text):
+            return True
+        return False
+
+    @staticmethod
     def _answers_need(learned: dict, needs: str) -> bool:
         """Does what he just told her cover what this task said it needed?
 
@@ -1373,9 +1416,11 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             # verification code") is noted on the job but must not requeue it
             # — each empty-handed resume burns a browser run that ends parked
             # on the same question.
-            supplied = self._answers_need(changes, need) or any(
-                len(str(v).strip()) >= 3 and str(v).strip().lower()
-                in need.lower() for v in changes.values())
+            supplied = (self._answers_need(changes, need)
+                        or self._disputes_or_directs(owner_text, need)
+                        or any(
+                            len(str(v).strip()) >= 3 and str(v).strip().lower()
+                            in need.lower() for v in changes.values()))
             if need and not supplied:
                 params.update(changes)
                 corrections = dict(params.get("corrections") or {})

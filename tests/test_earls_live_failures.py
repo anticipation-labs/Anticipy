@@ -401,3 +401,49 @@ def test_the_clock_names_the_days_so_nothing_has_to_compute_them():
     line = now_line("America/Vancouver")
     assert "Tomorrow is" in line and "Yesterday was" in line
     assert "Never write a weekday next to a relative day" in line
+
+
+# ---------------------------- the two-hour CAPTCHA that never existed
+
+def test_the_compliance_badge_is_not_a_captcha_wall():
+    """Live 2026-08-16: the Cactus Club booking parked claiming a CAPTCHA and
+    texted him about it four times over two hours. There was no CAPTCHA —
+    only the invisible reCAPTCHA v3 badge every booking page carries, and a
+    date-of-birth field. He was looking straight at it: "there's no captcha,
+    just press submit, enter a date of birth and press submit."
+    """
+    import subprocess
+    out = subprocess.run(["node", "--input-type=module", "-e", """
+import { looksLikeCaptcha } from '%s/extension/agent_loop.js';
+const badge = {url:'https://sevenrooms.com/reservations/cactusclub', title:'Reserve',
+  text:'Complete your reservation. Date of birth. Submit. This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply.'};
+const real = {url:'https://www.google.com/sorry/index', title:'',
+  text:'Our systems have detected unusual traffic from your computer network.'};
+if (looksLikeCaptcha(badge)) throw new Error('a compliance badge is not a wall');
+if (!looksLikeCaptcha(real)) throw new Error('a real challenge must still stop it');
+console.log('ok');
+""" % ROOT], capture_output=True, text=True)
+    assert "ok" in out.stdout, out.stderr
+
+
+def test_someone_looking_at_the_screen_outranks_the_agents_diagnosis():
+    from brain.conversation import Conversation
+    d = Conversation._disputes_or_directs
+    need = "solve the CAPTCHA"
+    # the sentence that should have saved the booking
+    assert d("I'm looking at your page there's no captcha just press submit "
+             "enter a date of birth and press submit", need)
+    assert d("No there is none", need)
+    assert d("press submit", need)
+    # ...but an ordinary answer, or a real refusal, is unchanged
+    assert not d("Ebrahim", "I need your last name and email")
+    assert not d("no", need)
+    assert not d("make it 6", "I need the 6-digit verification code")
+
+
+def test_she_may_not_promise_what_only_a_person_can_do():
+    core = (ROOT / "brain/anticipy_core.py").read_text()
+    low = " ".join(core.split()).lower()
+    assert "never agree to do something you cannot do" in low
+    assert "when they describe the screen, they are right and you are wrong" in low
+    assert "sending the same sentence twice is not a follow-up" in low
