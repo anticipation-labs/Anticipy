@@ -20,6 +20,7 @@ const suites = [
   "test_exact_fact_verification.mjs",
   "test_research_query_hygiene.mjs",
   "test_workflow_state.mjs",
+  "test_poll_deadlock.mjs",
 ];
 let failed = 0;
 for (const s of suites) {

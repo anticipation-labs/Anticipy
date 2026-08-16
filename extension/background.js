@@ -17,7 +17,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.7.1";
+const ENGINE_BUILD = "0.7.2";
 
 // Production backend; override via chrome.storage.local `backendUrl` for dev.
 const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
@@ -183,6 +183,17 @@ async function heartbeat() {
   const reg = await ensureRegistered();
   if (!reg) return null;
   for (const [id, active] of activeJobs) {
+    // A run that outlives the cycle ceiling is hung, and renewing its lease
+    // is how a hung run becomes IMMORTAL: the stale-job sweep only recovers
+    // work whose lease has expired, so a zombie kept beating would hold its
+    // job forever. Stop beating for it and let the sweep hand it back.
+    if (active.startedAt
+        && Date.now() - active.startedAt > POLL_CYCLE_CEILING_MS) {
+      console.warn(`Anticipy: job ${id} has run ${Math.round(
+        (Date.now() - active.startedAt) / 1000)}s — dropping its lease so it can be recovered`);
+      activeJobs.delete(id);
+      continue;
+    }
     try {
       const until = new Date(Date.now() + LEASE_MS);
       const patch = isWorkflowJob(active.job)
@@ -540,7 +551,8 @@ async function jobStillLive(id, leaseToken = "") {
 
 async function runJob(job) {
   const params = parseJobParams(job);
-  activeJobs.set(job.id, { job, leaseToken: job.lease_token || "" });
+  activeJobs.set(job.id, { job, leaseToken: job.lease_token || "",
+                           startedAt: Date.now() });
   await setCurrentJob({ id: job.id, status: "running", doing: jobLine(job, params), result: "" });
   try {
     await runJobInner(job, params);
@@ -792,10 +804,27 @@ async function runJobInner(job, params) {
 
 // Only one poll cycle at a time — SSE events, alarms, and worker wake can all
 // fire poll() concurrently, and overlapping cycles double-claim jobs.
-let pollInFlight = false;
+//
+// The lock is a TIMESTAMP, not a boolean, because a boolean is a permanent
+// deafness bug: poll() awaits the whole job run, so a runJob() that never
+// settles (a page that never resolves, a debugger command with no reply)
+// leaves the flag true forever and every later alarm returns at the guard
+// with no log and no recovery. Certification 2026-08-15 caught it exactly:
+// case 193 hung in `running` and the next 48 cases were never claimed —
+// the same "Chrome says connected but nothing happens" the owner watched
+// live. A cycle older than the ceiling is a dead cycle: take the lock.
+let pollStartedAt = 0;
+// Comfortably longer than the slowest healthy run (certification p100 was
+// ~90s over 313 cases) and shorter than a person's patience.
+const POLL_CYCLE_CEILING_MS = 12 * 60 * 1000;
 async function poll() {
-  if (pollInFlight) return;
-  pollInFlight = true;
+  const now = Date.now();
+  if (pollStartedAt && now - pollStartedAt < POLL_CYCLE_CEILING_MS) return;
+  if (pollStartedAt) {
+    console.warn(`Anticipy: previous poll cycle never finished (${Math.round(
+      (now - pollStartedAt) / 1000)}s) — reclaiming the queue`);
+  }
+  pollStartedAt = now;
   try {
     await heartbeat();
     await requeueStaleJobs();
@@ -808,7 +837,9 @@ async function poll() {
     // loud in the worker console even when it cannot be fatal.
     console.warn(`Anticipy: poll cycle failed: ${String(e).slice(0, 300)}`);
   } finally {
-    pollInFlight = false;
+    // Only the cycle that owns the lock may clear it. A reclaimed-from
+    // cycle finishing later must not unlock the one now running.
+    if (pollStartedAt === now) pollStartedAt = 0;
   }
 }
 
