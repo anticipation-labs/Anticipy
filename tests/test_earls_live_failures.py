@@ -362,3 +362,42 @@ def test_her_own_words_survive_the_fact_guard():
 
     src = (ROOT / "brain/worker.py").read_text()
     assert "asking again with them pinned" in src, "one retry before the robot voice"
+
+
+# ------------------------- asking into a sentence that is still arriving
+
+def test_a_question_waits_for_the_sentence_to_finish():
+    """Live 2026-08-16, and the clearest example of the pattern he named.
+
+    The 8-second flush ceiling cuts continuous speech into fragments. Triage
+    runs per fragment, so "...should grab dinner tomorrow at like 6 PM for"
+    was judged complete on its own and she asked "which restaurant, and for
+    how many people?" — four seconds before the next fragment said "let's do
+    Earls". She asked for something he was in the middle of saying.
+
+    Deferring costs one cycle. The card stays, later fragments merge into it
+    by lineage, and she asks only about what is genuinely still missing.
+    """
+    import brain.worker as w
+
+    w.LAST_HEARD_AT = w.time.time()
+    assert w.SPEAK_ONCE("which restaurant?", "book dinner", "ask") == "defer", (
+        "a question born mid-conversation must wait")
+
+    # Once they have actually stopped, the question goes out.
+    w.LAST_HEARD_AT = w.time.time() - (w.LIVE_CONVERSATION_S + 2)
+    assert w.SPEAK_ONCE("which restaurant?", "book dinner", "ask") is not "defer"
+
+    # The window must outlast the flush ceiling, or the gaps between a
+    # person's OWN fragments read as the end of their turn.
+    assert w.LIVE_CONVERSATION_S > 8
+
+
+def test_the_clock_names_the_days_so_nothing_has_to_compute_them():
+    # Twice in two days a card read "tomorrow (Saturday)" — on Saturday, and
+    # again on Sunday. The clock line gave only "right now", so the model did
+    # the weekday arithmetic itself and got it wrong both times.
+    from brain.llm import now_line
+    line = now_line("America/Vancouver")
+    assert "Tomorrow is" in line and "Yesterday was" in line
+    assert "Never write a weekday next to a relative day" in line

@@ -12,7 +12,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -75,8 +75,21 @@ def now_line(tz_name: Optional[str] = None) -> str:
     Takes the owner's zone when known. Called with nothing, it behaves exactly
     as it did before.
     """
-    return datetime.now(owner_tz(tz_name)).strftime(
-        "Right now it is %A, %B %-d, %Y, %-I:%M %p %Z.")
+    now = datetime.now(owner_tz(tz_name))
+    tomorrow = now + timedelta(days=1)
+    yesterday = now - timedelta(days=1)
+    # Spell out the neighbouring days too. With only "right now" given, the
+    # model kept doing the weekday arithmetic itself and getting it wrong:
+    # on Saturday it wrote "tomorrow (Saturday)", and on Sunday it wrote the
+    # same thing again — a card that contradicts itself in five words, twice
+    # in two days. Nothing here needs computing.
+    return (
+        now.strftime("Right now it is %A, %B %-d, %Y, %-I:%M %p %Z.")
+        + tomorrow.strftime(" Tomorrow is %A, %B %-d, %Y.")
+        + yesterday.strftime(" Yesterday was %A, %B %-d, %Y.")
+        + " Never write a weekday next to a relative day unless it matches"
+          " these; if you name a day, name the date with it."
+    )
 
 
 @dataclass

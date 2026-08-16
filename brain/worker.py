@@ -1151,6 +1151,15 @@ def raised_and_ignored(goal: str, text: str = "", owner_ref: str = "") -> bool:
     return False
 
 
+# When a transcript line was last heard. A question asked INTO a live
+# conversation is a question asked about a sentence that has not finished.
+LAST_HEARD_AT = 0.0
+# How long a conversation stays "still going" after the last line. The flush
+# ceiling cuts speech into pieces every 8 seconds, so anything shorter would
+# call the gaps between a person's own fragments the end of their turn.
+LIVE_CONVERSATION_S = 14.0
+
+
 def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     """May she say this unprompted? Only if she has not already — and, for
     speech born from OVERHEARD plans (kind="ambient_act"), only in waking
@@ -1158,6 +1167,16 @@ def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     the clock; the card is already on his desk either way, and the morning
     clock pass raises anything still waiting. A direct ask keeps texting at
     any hour — answering him is a reply, not an interruption."""
+    # DO NOT ASK INTO A SENTENCE THAT IS STILL ARRIVING. Watched live
+    # 2026-08-16: "...should grab dinner tomorrow at like 6 PM for" triaged on
+    # its own, so she asked "which restaurant, and for how many people?" —
+    # and four seconds later the next fragment said "let's do Earls". She had
+    # asked for something he was in the middle of saying. Deferring costs one
+    # cycle; the card stays, the later fragments merge into it, and she asks
+    # only about what is genuinely still missing.
+    if kind == "ask" and LAST_HEARD_AT:
+        if time.time() - LAST_HEARD_AT < LIVE_CONVERSATION_S:
+            return "defer"
     if kind == "ambient_act":
         hour = datetime.now(CLOCK_TZ).hour
         if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
@@ -1743,6 +1762,10 @@ def main() -> None:
             release_stranded_claims(anticipy.owner_ref)
             for ev in fetch_unprocessed(owner_ref=anticipy.owner_ref):
                 line = ev.get("text", "").strip()
+                # Mark that this person is mid-conversation, so a question
+                # born from one fragment waits for the sentence to finish.
+                global LAST_HEARD_AT
+                LAST_HEARD_AT = time.time()
                 if not line:
                     mark_processed(ev["id"], "ignore")
                     continue
