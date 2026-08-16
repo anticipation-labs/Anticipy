@@ -45,7 +45,15 @@ const CURRENT = new Set(["running", "queued", "awaiting_confirm"]);
 const STOPPABLE = new Set(["running", "queued"]);
 // A job waiting on the owner's OK must not be offered "again" — that would
 // queue a second copy of something already sitting there prefilled.
-const RETRYABLE = new Set(["failed", "needs_user", "stopped"]);
+//
+// Nor may "failed" or "stopped" be offered here. Those are TERMINAL in the
+// workflow contract (deliberately: reviving finished work is the
+// resurrection class an audit flagged), so retryJob's patch threw
+// "illegal workflow transition failed -> queued" before any network call and
+// the click did nothing at all — a button that looked like a way out and
+// was not. Starting terminal work over needs a NEW approved plan, which only
+// the brain may mint; the phone's "Start a fresh attempt" does exactly that.
+const RETRYABLE = new Set(["needs_user"]);
 function renderJob(job) {
   if (!job || !job.status) { show("jobbox", false); return; }
   show("jobbox", true);

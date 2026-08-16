@@ -1621,7 +1621,13 @@ class Anticipy:
                 print(f"self-talk question stays unasked: {handled!r}")
                 handled = None
             elif self._may_say(may_say, handled, decision.goal, "ask"):
-                self.notify_owner(handled)
+                # A failed send must leave NOTHING to post as said. Both
+                # sibling branches already do this; this one discarded the
+                # result, so a dead Twilio call was recorded as a question
+                # asked — and the dedupe guard then kept her quiet about it
+                # forever, waiting for an answer he was never asked for.
+                if not self.notify_owner(handled):
+                    handled = None
             else:
                 print(f"already asked him about {decision.goal!r} — staying quiet")
             # A question with no card behind it is a plan that evaporates:
@@ -1913,8 +1919,17 @@ class Anticipy:
                     fields["params"] = json.dumps(params)
             except Exception:
                 pass
-            pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
-                     json=fields, timeout=10)
+            # TRUST THE WRITE, NOT THE CALL. requests does not raise on 4xx,
+            # so a guard rejection, a rotated service token or a 409 all read
+            # as success — and callers acted on that lie: "scrap the Earls
+            # booking" closed the memory loop and told him it was retracted
+            # while the card sat on his desk, alive.
+            r = pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+                         json=fields, timeout=10)
+            if not getattr(r, "ok", False):
+                print(f"cancel REFUSED for {job_id}: "
+                      f"{getattr(r, 'status_code', '?')}")
+                return False
             return True
         except Exception as e:
             print(f"could not cancel {job_id}: {e}")

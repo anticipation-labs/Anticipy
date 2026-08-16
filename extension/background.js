@@ -17,7 +17,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.7.4";
+const ENGINE_BUILD = "0.7.5";
 
 // Production backend; override via chrome.storage.local `backendUrl` for dev.
 const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
@@ -895,9 +895,16 @@ async function retryJob(id) {
   if (job.effect_uncertain) {
     throw new Error("check the site before retrying a possible external effect");
   }
+  // AN OWNER'S RETRY IS A NEW GRANT. Attempts survive a requeue, and
+  // claimJob cancels anything already at the cap — so pressing "try again"
+  // on a job whose three attempts were eaten by worker deaths cancelled it
+  // instantly, without running, and reported "I tried this 3 times". The
+  // phone-side approval path already resets the budget; this second requeue
+  // path did not.
   return updateJob(id, workflowPatch(job, "queued", {
     reason: "the owner asked Chrome to try this approved version again",
     effectUncertain: false,
+    attempt: 0,
   }));
 }
 

@@ -43,3 +43,27 @@ assert.ok(/corrections && corrections\.length && !applied\.length/.test(src),
   "a refused correction must force a re-read, not fall through");
 
 console.log("test_commit_integrity: all passed");
+
+// --- 3. no button may promise what the contract forbids ---------------------
+// popup offered "Try again" on failed/stopped, but those are terminal in the
+// workflow contract, so the patch threw "illegal workflow transition" before
+// any network call: a way out that did nothing.
+const popup = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../popup.js"), "utf8");
+const retryable = popup.match(/const RETRYABLE = new Set\(\[[^\]]*\]/)[0];
+assert.ok(!/"failed"/.test(retryable) && !/"stopped"/.test(retryable),
+  "terminal states must not be offered a retry the contract will refuse");
+assert.ok(/"needs_user"/.test(retryable),
+  "a job parked on a question is genuinely retryable");
+
+// --- 4. an owner's retry is a NEW grant ------------------------------------
+// Attempts survive a requeue and claimJob cancels anything at the cap, so
+// "try again" on a job whose attempts were eaten by worker deaths cancelled
+// it instantly, without running, and reported "I tried this 3 times".
+const bgSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../background.js"), "utf8");
+const retry = bgSrc.match(/async function retryJob[\s\S]{0,900}/)[0];
+assert.ok(/attempt: 0/.test(retry),
+  "an explicitly requested retry must restore the attempt budget");
+
+console.log("test_commit_integrity: retry honesty checks passed");
