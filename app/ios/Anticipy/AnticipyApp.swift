@@ -853,6 +853,15 @@ final class AnticipySession: ObservableObject {
             "already sent", "already ordered", "done it myself",
             "did that myself", "sorted it", "i did it already",
         ]
+        // A DECLINE IS A SHORT ANSWER, NOT A WORD INSIDE A SENTENCE.
+        // Substring matching anywhere in the text meant an ordinary reply —
+        // or a mouthful of frustration about the assistant itself — could
+        // carry "leave it", "stop it" or "no" inside it and silently kill
+        // work he still wanted. Ending an errand is a decision; it needs the
+        // brevity of one. Anything longer goes to the brain, which reads
+        // meaning rather than characters.
+        let wordCount = normalized.split(separator: " ").count
+        guard wordCount <= 8 else { return nil }
         if handled.contains(where: normalized.contains) {
             return "You handled it yourself: \u{201C}\(answer)\u{201D}. I did nothing further."
         }
@@ -862,7 +871,8 @@ final class AnticipySession: ObservableObject {
         return nil
     }
 
-    private func cancellationFields(for job: AgentJob) throws -> [String: Any]? {
+    private func cancellationFields(for job: AgentJob,
+                                    trigger: String = "unspecified") throws -> [String: Any]? {
         guard let planID = job.workflow_id, !planID.isEmpty else { return nil }
         var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
             as? [String: Any] ?? [:]
@@ -871,7 +881,11 @@ final class AnticipySession: ObservableObject {
         else { throw WorkflowWriteError.malformed }
         let now = ISO8601DateFormatter.anticipyUTC.string(from: Date())
         workflow["state"] = "cancelled"
-        workflow["reason"] = "cancelled by owner"
+        // NAME THE TRIGGER. "cancelled by owner" is what every cancellation
+        // said, so when he insisted he had pressed nothing there was no way
+        // to tell a deliberate "Not now" from an answer misread as a
+        // refusal — the two live on the same line of the same file.
+        workflow["reason"] = "cancelled by owner (\(trigger))"
         workflow["updated_at"] = now
         workflow["approval"] = NSNull()
         workflow["lease"] = NSNull()
@@ -902,7 +916,8 @@ final class AnticipySession: ObservableObject {
         if job.status == "needs_user", job.effect_uncertain != true,
            let ending = Self.answerThatEndsTheErrand(trimmed) {
             return await write(job) {
-                var fields = try self.cancellationFields(for: job)
+                var fields = try self.cancellationFields(
+                    for: job, trigger: "their answer read as ending it")
                     ?? ["status": "cancelled"]
                 fields["result"] = ending
                 try await self.backend.setJobFields(id: job.id, fields: fields)
@@ -937,7 +952,8 @@ final class AnticipySession: ObservableObject {
     @discardableResult
     func decline(_ job: AgentJob) async -> Bool {
         await write(job) {
-            if let fields = try self.cancellationFields(for: job) {
+            if let fields = try self.cancellationFields(
+                for: job, trigger: "tapped Not now") {
                 try await self.backend.setJobFields(id: job.id, fields: fields)
             } else {
                 try await self.backend.setJobFields(id: job.id, fields: ["status": "cancelled"])

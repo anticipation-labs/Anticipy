@@ -57,3 +57,33 @@ def test_the_queue_is_never_flushed_into_someone_elses_account():
     assert "!accountID.isEmpty" in flush, "no owner, no flush"
     assert "line.account == accountID" in flush, (
         "only lines captured by THIS account may be posted to it")
+
+
+# ------------------------- venting is not an instruction
+
+def test_a_decline_must_be_the_message_not_a_word_inside_one():
+    """Live 2026-08-16: the browser asked which Earls location, he never saw
+    it (she could not text), he said out loud how sick of it he was — and the
+    job came back cancelled. He had pressed nothing he remembered pressing.
+
+    The matcher substring-searched for "no", "leave it", "stop it" ANYWHERE
+    in the text, so a mouthful of frustration about the assistant could kill
+    work he still wanted. Ending an errand is a decision and needs the
+    brevity of one; anything longer belongs to the brain, which reads meaning
+    rather than characters.
+    """
+    body = APP.split("static func answerThatEndsTheErrand", 1)[1].split("\n    }", 1)[0]
+    assert "wordCount <= 8" in body, (
+        "a long sentence must never be read as a refusal by substring")
+    # the short forms still work — those are real refusals
+    for phrase in ('"never mind"', '"forget it"', '"skip it"'):
+        assert phrase in body
+
+
+def test_every_cancellation_names_what_triggered_it():
+    """"cancelled by owner" was what BOTH phone paths wrote, so when he said
+    he had pressed nothing there was no way to tell a deliberate "Not now"
+    from an answer misread as a refusal."""
+    assert 'cancelled by owner (\\(trigger))' in APP
+    assert 'trigger: "tapped Not now"' in APP
+    assert 'trigger: "their answer read as ending it"' in APP
