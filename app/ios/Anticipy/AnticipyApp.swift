@@ -101,6 +101,13 @@ final class AnticipySession: ObservableObject {
         let text: String
         let explicit: Bool
         let speaker: String?
+        /// WHOSE words these are. The queue is @AppStorage: it survives
+        /// relaunch AND sign-out by design, while pushEvent stamps owner_ref
+        /// from whoever is signed in AT FLUSH TIME. So one person's private
+        /// speech, buffered while offline or while their token was expiring,
+        /// was posted into the NEXT person's account the moment they signed
+        /// in on the same phone — a path the sign-up flow explicitly allows.
+        var account: String?
     }
     @AppStorage("unsentLines") private var unsentStore = ""
     private var unsent: [BufferedLine] {
@@ -114,7 +121,8 @@ final class AnticipySession: ObservableObject {
             // rows were microphone speech because typed intent did not yet
             // survive buffering.
             return ((try? JSONDecoder().decode([String].self, from: data)) ?? [])
-                .map { BufferedLine(text: $0, explicit: false, speaker: nil) }
+                .map { BufferedLine(text: $0, explicit: false, speaker: nil,
+                                    account: nil) }
         }
         set {
             unsentStore = (try? JSONEncoder().encode(newValue))
@@ -190,6 +198,11 @@ final class AnticipySession: ObservableObject {
         if !listener.isListening { Haptics.tap() }
         sessionLines.append(SessionLine(text: line))
         transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line, decision: nil))
+        // No owner, no capture. A forced sign-out (an expired token 401s and
+        // calls signOut) used to leave the microphone running and every line
+        // pushed, 403'd, and queued — the room transcribed behind a sign-in
+        // door, then posted into whoever signed in next.
+        guard !accountID.isEmpty else { return }
         do {
             try await backend.pushEvent(kind: "transcript", text: line,
                                         speaker: speaker, explicit: explicit)
@@ -198,18 +211,23 @@ final class AnticipySession: ObservableObject {
             // the top of the feed saying "Thinking…" forever while the brain
             // had never seen it. Queue it (on disk) and keep trying.
             unsent = unsent + [BufferedLine(text: line, explicit: explicit,
-                                            speaker: speaker)]
+                                            speaker: speaker,
+                                            account: accountID)]
         }
     }
 
     /// Re-push anything the network ate, oldest first. Whatever still fails
     /// goes straight back to disk rather than evaporating.
     private func flushUnsent() async {
-        guard backendReachable, !unsent.isEmpty else { return }
+        guard backendReachable, !unsent.isEmpty, !accountID.isEmpty else { return }
         let queue = unsent
         unsent = []
         var failed: [BufferedLine] = []
         for line in queue {
+            // Never post one person's words into another person's account.
+            // A line with no recorded owner predates this field and cannot be
+            // attributed, so it is dropped rather than guessed at.
+            guard line.account == accountID else { continue }
             do {
                 try await backend.pushEvent(kind: "transcript", text: line.text,
                                             speaker: line.speaker,
@@ -530,6 +548,14 @@ final class AnticipySession: ObservableObject {
     func signOut() {
         authToken = ""
         accountID = ""
+        // CLOSE THE EARS. signOut cleared the credentials and nothing else:
+        // the AVAudioEngine tap stayed installed and the room kept being
+        // transcribed behind the sign-in door. The views that normally stop
+        // the microphone are torn down the instant isSignedIn flips, so
+        // nothing was left to do it. keepListening stays as the person's
+        // standing preference — it is honoured again when they sign back in.
+        listener.stop()
+        pendingCount = unsent.count
     }
 
     /// Ask for a reset code by text. Deliberately returns nothing to report:
