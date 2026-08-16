@@ -24,20 +24,26 @@ if ! grep -q 'flushPolicy.mustFlushNow' "$listener"; then
     echo "Without the ceiling, a person who does not pause is never transcribed."
     exit 2
 fi
-if ! grep -q 'TranscriptFlushPolicy.source' "$listener"; then
-    echo "PhoneListener.swift takes words from the latest hypothesis only."
-    echo "A collapsed revision will delete speech that was genuinely heard."
+if ! grep -q 'cursor.observe' "$listener"; then
+    echo "PhoneListener never shows the cursor every hypothesis."
+    echo "Without observe(), a discarded decode window takes its words with it."
     exit 2
 fi
-if ! grep -q 'TranscriptFlushPolicy$' "$listener" && ! grep -q 'finalMinNewWords' "$listener"; then
-    echo "PhoneListener.swift still hard-codes the final-result floor."
+if ! grep -q 'update.banked' "$listener"; then
+    echo "PhoneListener ignores the words the cursor banked from a lost window."
+    echo "Those are real speech; dropping them is how sentences disappeared."
     exit 2
 fi
-if ! grep -q 'richestPartial = self.partial' "$listener"; then
-    echo "PhoneListener.swift never records the fullest hypothesis it heard."
+if grep -vE '^[[:space:]]*//' "$listener" | grep -q 'minNewWords'; then
+    echo "PhoneListener still gates a flush on a new-word floor."
+    echo "That marked one- and two-word lines as sent without sending them."
     exit 2
 fi
-echo "PhoneListener is wired to TranscriptFlushPolicy for timing, source and floor"
+if ! grep -q 'cursor.takePending' "$listener"; then
+    echo "PhoneListener does not take pending words all-or-nothing."
+    exit 2
+fi
+echo "PhoneListener observes every hypothesis, banks lost windows, and holds no word floor"
 
 swiftc -O \
     "$app/Audio/TranscriptCursor.swift" \

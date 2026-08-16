@@ -4,8 +4,10 @@ import Foundation
 /// them from.
 ///
 /// This lived inside PhoneListener, tangled with AVFoundation and Speech, so
-/// it could not be tested without a device — and it was wrong in two ways that
-/// only a continuous talker ever hit. It is pure Foundation on purpose: the
+/// it could not be tested without a device — and it was wrong in a way that
+/// only a continuous talker ever hit. (Choosing WHICH hypothesis to read, and
+/// what a final result owes, now belong to TranscriptCursor, which banks the
+/// words a discarded decode window held.) It is pure Foundation on purpose: the
 /// checks in Tests/TranscriptFlushPolicyTests.swift exercise THIS code, not a
 /// re-implementation of it.
 ///
@@ -36,28 +38,5 @@ struct TranscriptFlushPolicy {
     func mustFlushNow(pendingSince: Date?, now: Date = Date()) -> Bool {
         guard let pendingSince else { return false }
         return now.timeIntervalSince(pendingSince) >= maxHold
-    }
-
-    /// Which hypothesis a flush should take its words from.
-    ///
-    /// Apple revises downward as well as upward — PhoneListener's callback
-    /// records a 12-second sentence collapsing to "Of August". Reading only
-    /// the CURRENT text means every word the collapse dropped is gone, because
-    /// the task then resets. Falling back to the fullest hypothesis actually
-    /// heard means a bad revision can no longer delete speech.
-    static func source(latest: String, richest: String) -> String {
-        TranscriptCursor.split(richest).count > TranscriptCursor.split(latest).count
-            ? richest : latest
-    }
-
-    /// How many new words a FINAL result must carry before it is worth sending.
-    ///
-    /// A final usually just polishes wording, and re-sending on that produced
-    /// duplicates and stray fragments — hence the floor. But when the task is
-    /// ending having sent nothing at all, that is not a polish, it is the
-    /// entire utterance, and a floor of three is how a fast talker's words
-    /// reached nobody.
-    static func finalMinNewWords(everEmitted: Bool) -> Int {
-        everEmitted ? 3 : 1
     }
 }

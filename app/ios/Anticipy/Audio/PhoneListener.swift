@@ -101,15 +101,6 @@ final class PhoneListener: NSObject, ObservableObject {
     /// handler, where it decides a polish from a whole unsent monologue.
     private var everEmittedThisTask = false
 
-    /// The richest hypothesis this task has produced, by word count.
-    ///
-    /// Apple revises downward as well as upward — the callback notes a 12s
-    /// sentence collapsing to "Of August". Taking only from the CURRENT text
-    /// means every word the collapse dropped is unrecoverable. Keeping the
-    /// high-water mark lets a flush fall back to the fullest thing actually
-    /// heard, so a bad final can no longer delete speech.
-    private var richestPartial = ""
-
     /// A pause this long ends an utterance. 2.6s, not shorter: people pause
     /// mid-thought ("I'll send the invoice… tomorrow"), and chopping there
     /// splits one intent into fragments. Nothing is closed to achieve this —
@@ -298,7 +289,7 @@ final class PhoneListener: NSObject, ObservableObject {
 
     /// Words heard on the current task that haven't been sent yet.
     private var pendingTail: String {
-        cursor.peek(partial)
+        cursor.pending
     }
 
     private func startRecognition() {
@@ -311,7 +302,6 @@ final class PhoneListener: NSObject, ObservableObject {
         lastResultAt = Date()
         cursor.reset()
         partial = ""
-        richestPartial = ""
         pendingSince = nil
         everEmittedThisTask = false
 
@@ -342,9 +332,17 @@ final class PhoneListener: NSObject, ObservableObject {
                     // recogniser now believes, so a collapse needs no special
                     // case and no magic number.
                     self.partial = result.bestTranscription.formattedString
-                    if TranscriptCursor.split(self.partial).count
-                        > TranscriptCursor.split(self.richestPartial).count {
-                        self.richestPartial = self.partial
+                    // Show the cursor EVERY hypothesis, not just the ones we
+                    // flush on. That is what lets it notice the recognizer
+                    // throwing away a decode window and hand back the words
+                    // that window held (`banked`) before they are gone — the
+                    // 12-second sentence collapsing to "Of August". Nothing
+                    // else in the app remembers unsent speech.
+                    let update = self.cursor.observe(self.partial)
+                    if let banked = update.banked?
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                        !banked.isEmpty, !self.enrolling {
+                        self.deliver(banked)
                     }
                     if result.isFinal {
                         // A final usually just polishes wording, so a couple of
@@ -352,10 +350,9 @@ final class PhoneListener: NSObject, ObservableObject {
                         // with speech never sent at all. That is not a polish,
                         // it is the whole monologue, and gating it away is how
                         // a continuous talker's words reached nobody.
-                        self.flushTail(minNewWords: TranscriptFlushPolicy
-                            .finalMinNewWords(everEmitted: self.everEmittedThisTask))
+                        self.flushTail()
                         self.swapRecognition(flushPending: false)
-                    } else {
+                    } else if update.changed || update.didReset {
                         self.scheduleSilenceFlush()
                     }
                 } else if error != nil {
@@ -369,21 +366,24 @@ final class PhoneListener: NSObject, ObservableObject {
     }
 
     /// Send the words heard but not yet sent, as one line.
-    /// `minNewWords` guards the final-result path: when the recognizer
-    /// finalises an utterance it usually just polishes wording, adding a word
-    /// or none. Re-sending on that produced duplicates and stray fragments,
-    /// so a final only speaks up when the person genuinely said more.
-    private func flushTail(minNewWords: Int = 1) {
+    private func flushTail() {
         silenceFlush?.cancel()
         pendingSince = nil
-        // Take from the fullest hypothesis this task produced, not merely the
-        // latest one. A collapsed revision must never be able to delete words
-        // that were genuinely heard.
-        let source = TranscriptFlushPolicy.source(latest: partial,
-                                                  richest: richestPartial)
-        let line = cursor.take(source, minNewWords: minNewWords)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty else { return }
+        // All-or-nothing: the cursor either hands over everything unsent or
+        // nothing at all. The old take(minNewWords:) advanced its record and
+        // THEN decided a one- or two-word tail was too short to bother with,
+        // which marked those words sent without ever sending them.
+        guard let line = cursor.takePending()?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !line.isEmpty else { return }
+        deliver(line)
+    }
+
+    /// The one way a line leaves this object. Banked words — speech the
+    /// recognizer was about to discard — travel exactly the same path as an
+    /// ordinary flush, so they get the same speaker verdict and the same
+    /// enrollment protection instead of a second, subtly different route.
+    private func deliver(_ line: String) {
         // A voice sample is not something he said. Never emit it.
         guard !enrolling else { return }
         everEmittedThisTask = true
