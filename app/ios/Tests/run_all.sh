@@ -8,5 +8,6 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 
 sh "$HERE/run_cursor_tests.sh"
 sh "$HERE/run_heard_tests.sh"
+sh "$HERE/run_flush_policy_tests.sh"
 
 echo "iOS logic gate: all suites passed"

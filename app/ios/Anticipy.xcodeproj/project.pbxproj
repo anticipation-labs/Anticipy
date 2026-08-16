@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0BB2CC5D62582F4FF458E8ED /* AnticipyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */; };
 		18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0AB97746861DA294983C3B /* AnticipyBackend.swift */; };
+		1C9C98C649D0B723997B9A85 /* TranscriptFlushPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */; };
 		4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00793646933CBDFE4070BF5 /* PendantManager.swift */; };
 		45D9F3C3D9B3BAEDDED3DC28 /* BrainClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E82F42600D1770EAC8F97FD /* BrainClient.swift */; };
 		4F03FCC48BC0DC5F44A9B300 /* OpusFrameAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2EB04173AB9206E285D54 /* OpusFrameAssembler.swift */; };
@@ -55,6 +56,7 @@
 		A935B05F51033496D5EF92C9 /* HapticEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticEngine.swift; sourceTree = "<group>"; };
 		BE0AB97746861DA294983C3B /* AnticipyBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyBackend.swift; sourceTree = "<group>"; };
 		C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundedOpusQueue.swift; sourceTree = "<group>"; };
+		C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptFlushPolicy.swift; sourceTree = "<group>"; };
 		DF9F21774275ABF326AAC99C /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		E0B72B7E633EA125C09A7923 /* ConversationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationCard.swift; sourceTree = "<group>"; };
 		E94C340A3EF64050C750BCD7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -124,6 +126,7 @@
 				10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */,
 				8F3C23460620BAF04806F594 /* TranscriberClient.swift */,
 				9CD1CE1C9359C9DF75AA38DE /* TranscriptCursor.swift */,
+				C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */,
 				207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */,
 			);
 			path = Audio;
@@ -251,6 +254,7 @@
 				6B99B2021748028CD2676754 /* Theme.swift in Sources */,
 				7E48A45EE188911B2EFB7A66 /* TranscriberClient.swift in Sources */,
 				ACABFE3C263343D8760C012E /* TranscriptCursor.swift in Sources */,
+				1C9C98C649D0B723997B9A85 /* TranscriptFlushPolicy.swift in Sources */,
 				559F9FEC6235905176009C57 /* VoiceEnrollView.swift in Sources */,
 				BED64104EF9A77E836CD99FA /* VoiceRoster.swift in Sources */,
 			);
@@ -311,7 +315,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -390,7 +394,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

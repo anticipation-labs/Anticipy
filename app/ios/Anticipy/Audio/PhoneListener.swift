@@ -76,6 +76,40 @@ final class PhoneListener: NSObject, ObservableObject {
     private var requestBornAt = Date()
     private var bufferTick = 0
 
+    /// When the currently-unsent words first appeared, and the ceiling on how
+    /// long they may wait.
+    ///
+    /// The silence flush is a DEBOUNCE: every partial result cancels the
+    /// pending timer and schedules a new one. Someone speaking continuously
+    /// produces partials faster than the gap, so the timer NEVER fires and
+    /// nothing is sent for the whole monologue — until the recognizer hits
+    /// Apple's task limit, finalises (often COLLAPSING its hypothesis, which
+    /// the callback below documents), and the swap resets the cursor. The
+    /// words the collapsed final no longer contains die there.
+    ///
+    /// Watched live 2026-08-16: ~250 words spoken continuously reached the
+    /// backend as three fragments totalling 71 characters — the opening, a
+    /// piece of the middle, and the tail. "Every time I talk for a long
+    /// period and then talk too quickly, the transcript doesn't save."
+    ///
+    /// So: pending words are sent at a pause OR after this ceiling, whichever
+    /// comes first. Long enough not to chop a flowing sentence, short enough
+    /// that a fast talker never outruns it.
+    private var pendingSince: Date?
+    private let flushPolicy = TranscriptFlushPolicy()
+    /// Whether this recognition task has sent anything yet — see the final
+    /// handler, where it decides a polish from a whole unsent monologue.
+    private var everEmittedThisTask = false
+
+    /// The richest hypothesis this task has produced, by word count.
+    ///
+    /// Apple revises downward as well as upward — the callback notes a 12s
+    /// sentence collapsing to "Of August". Taking only from the CURRENT text
+    /// means every word the collapse dropped is unrecoverable. Keeping the
+    /// high-water mark lets a flush fall back to the fullest thing actually
+    /// heard, so a bad final can no longer delete speech.
+    private var richestPartial = ""
+
     /// A pause this long ends an utterance. 2.6s, not shorter: people pause
     /// mid-thought ("I'll send the invoice… tomorrow"), and chopping there
     /// splits one intent into fragments. Nothing is closed to achieve this —
@@ -277,6 +311,9 @@ final class PhoneListener: NSObject, ObservableObject {
         lastResultAt = Date()
         cursor.reset()
         partial = ""
+        richestPartial = ""
+        pendingSince = nil
+        everEmittedThisTask = false
 
         orphanLock.lock()
         request = req
@@ -305,9 +342,18 @@ final class PhoneListener: NSObject, ObservableObject {
                     // recogniser now believes, so a collapse needs no special
                     // case and no magic number.
                     self.partial = result.bestTranscription.formattedString
+                    if TranscriptCursor.split(self.partial).count
+                        > TranscriptCursor.split(self.richestPartial).count {
+                        self.richestPartial = self.partial
+                    }
                     if result.isFinal {
-                        // Only speak up if they actually said more.
-                        self.flushTail(minNewWords: 3)
+                        // A final usually just polishes wording, so a couple of
+                        // new words is noise — EXCEPT when the task is ending
+                        // with speech never sent at all. That is not a polish,
+                        // it is the whole monologue, and gating it away is how
+                        // a continuous talker's words reached nobody.
+                        self.flushTail(minNewWords: TranscriptFlushPolicy
+                            .finalMinNewWords(everEmitted: self.everEmittedThisTask))
                         self.swapRecognition(flushPending: false)
                     } else {
                         self.scheduleSilenceFlush()
@@ -329,11 +375,18 @@ final class PhoneListener: NSObject, ObservableObject {
     /// so a final only speaks up when the person genuinely said more.
     private func flushTail(minNewWords: Int = 1) {
         silenceFlush?.cancel()
-        let line = cursor.take(partial, minNewWords: minNewWords)
+        pendingSince = nil
+        // Take from the fullest hypothesis this task produced, not merely the
+        // latest one. A collapsed revision must never be able to delete words
+        // that were genuinely heard.
+        let source = TranscriptFlushPolicy.source(latest: partial,
+                                                  richest: richestPartial)
+        let line = cursor.take(source, minNewWords: minNewWords)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
         // A voice sample is not something he said. Never emit it.
         guard !enrolling else { return }
+        everEmittedThisTask = true
         // Judge the voice behind THIS line before the window moves on. Done
         // here rather than on the audio thread: embedding takes tens of
         // milliseconds and must never stall capture.
@@ -350,7 +403,19 @@ final class PhoneListener: NSObject, ObservableObject {
     /// and nothing is orphaned.
     private func scheduleSilenceFlush() {
         silenceFlush?.cancel()
-        guard !pendingTail.isEmpty else { return }
+        guard !pendingTail.isEmpty else {
+            pendingSince = nil
+            return
+        }
+        // Start the clock the first time words go unsent.
+        let since = pendingSince ?? Date()
+        pendingSince = since
+        // A continuous talker re-arms this debounce forever. The ceiling is
+        // what makes that survivable: waiting words go out on their own.
+        if flushPolicy.mustFlushNow(pendingSince: since) {
+            flushTail()
+            return
+        }
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.isListening else { return }
             self.flushTail()
