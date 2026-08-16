@@ -2537,19 +2537,37 @@ export async function runAgentGoal(goal, opts) {
   // dismissed detaches us mid-run — both surfaced live as "Debugger is not
   // attached to the tab" killing real jobs. Attach with retries, and re-attach
   // on mid-run drops (see the step loop).
+  let lastAttachError = "";
   async function attachDebugger(tabId) {
     for (let i = 0; i < 3; i++) {
       if (userCancelledTabs.has(tabId)) return false;   // they said no; don't ask three more times
       try { await chrome.debugger.attach({ tabId }, "1.3"); return true; }
       catch (e) {
-        if (String(e).includes("already attached")) return true;
+        const msg = String(e && e.message ? e.message : e);
+        lastAttachError = msg;
+        // "already attached to this target" is OUR session and fine.
+        // "ANOTHER debugger is already attached" is somebody else's — Chrome
+        // allows exactly one, and treating both alike meant we sailed on
+        // believing we were attached and then failed every command.
+        if (/already attached/i.test(msg) && !/another/i.test(msg)) return true;
+        // A session of ours left behind by a killed run blocks the new one.
+        // We can only release our own; a rival extension's we cannot.
+        try { await chrome.debugger.detach({ tabId }); } catch (_) {}
         await new Promise((r) => setTimeout(r, 600));
       }
     }
     return false;
   }
   if (!(await attachDebugger(tab.id))) {
-    return { status: "failed", result: "could not attach the automation session to the tab", tabId: tab.id };
+    // Say what happened and what to do about it. "could not attach the
+    // automation session" told the owner nothing and told the logs nothing,
+    // so a failure he could have cleared in five seconds read as the whole
+    // product being broken (live, 2026-08-16).
+    const rival = /another/i.test(lastAttachError);
+    const detail = rival
+      ? "another extension or an open DevTools window is already controlling that tab — close DevTools, or turn off other browser-control extensions (ChatGPT's \"Control your browser\", Antigravity), then send it again"
+      : `Chrome refused the automation session: ${lastAttachError.slice(0, 160)}`;
+    return { status: "failed", result: `I could not take control of the tab — ${detail}`, tabId: tab.id };
   }
   // The agent tab is a background tab: without focus emulation, dispatched
   // key events are dropped by the renderer and nothing ever types.
