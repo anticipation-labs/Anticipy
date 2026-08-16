@@ -96,3 +96,27 @@ def test_a_supervised_worker_never_falls_back_to_an_inherited_number():
     assert 'ANTICIPY_SUPERVISED") == "1"' in src
     seed = src.split("owner_phone=(")[1][:200]
     assert '""' in seed, "supervised children start with no phone at all"
+
+
+# --------------------------------------- speech stranded by a restart
+
+def test_events_claimed_but_never_finished_are_handed_back():
+    """claim() stamps decision="processing" before any side effect, and
+    fetch_unprocessed only ever selects decision="" — so a restart between
+    the claim and the outcome stranded that event PERMANENTLY. There was no
+    sweep, no lease and no expiry anywhere in the repo, and restarts are
+    routine: every deploy is one. The words a person actually said were
+    simply never understood, and nothing said so.
+    """
+    src = (ROOT / "brain/worker.py").read_text()
+    assert "def release_stranded_claims" in src
+    body = src.split("def release_stranded_claims", 1)[1][:1800]
+    assert 'decision="processing"' in body and 'updated<=' in body, (
+        "only claims older than a cutoff may be reclaimed, never live ones")
+    assert '"decision": ""' in body, "a released event must return to the queue"
+    assert "owner_ref" in body, "the sweep stays scoped to one account"
+    # ...and it must run BEFORE new work is taken, or a deploy still eats
+    # whatever was mid-understanding.
+    loop = src.split("release_stranded_claims(anticipy.owner_ref)", 1)
+    assert len(loop) == 2, "the sweep must be wired into the main loop"
+    assert "fetch_unprocessed(owner_ref=anticipy.owner_ref)" in loop[1][:400]

@@ -1465,6 +1465,48 @@ def claim(event_id: str) -> bool:
     return mark_processed(event_id, "processing")
 
 
+def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -> int:
+    """Give back events claimed by a worker that never finished them.
+
+    claim() stamps decision="processing" before any side effect, and
+    fetch_unprocessed only ever selects decision="" — so a restart between
+    the claim and the outcome stranded that event PERMANENTLY. There was no
+    sweep, no lease and no expiry anywhere, and restarts are routine (every
+    deploy is one). The words a person actually said were simply never
+    understood, and nothing anywhere said so.
+
+    Ten minutes is far longer than a triage cycle and far shorter than a
+    person's patience.
+    """
+    if not owner_ref:
+        return 0
+    cutoff = (datetime.now(timezone.utc)
+              - timedelta(minutes=older_than_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        r = pb.get(
+            f"{PB}/api/collections/events/records",
+            params={"filter": (f'decision="processing" && owner_ref="{owner_ref}" '
+                               f'&& updated<="{cutoff}"'),
+                    "perPage": 100, "sort": "created"},
+            timeout=10)
+        items = (r.json() or {}).get("items", []) if getattr(r, "ok", False) else []
+    except Exception:
+        return 0
+    freed = 0
+    for item in items:
+        try:
+            back = pb.patch(
+                f"{PB}/api/collections/events/records/{item['id']}",
+                json={"decision": ""}, timeout=10)
+            if getattr(back, "ok", False):
+                freed += 1
+        except Exception:
+            continue
+    if freed:
+        print(f"released {freed} event(s) stranded mid-understanding by a restart")
+    return freed
+
+
 def ask_about_stuck_jobs(anticipy, convo) -> None:
     """Text the owner about anything the browser handed back, once each.
 
@@ -1695,6 +1737,10 @@ def main() -> None:
                         post_event("anticipy_says", out["say"], decision="clock",
                                    goal=out.get("goal") or "")
                         print(f"clock: initiated -> {out['say']!r}")
+            # Hand back anything a previous life claimed and never finished,
+            # BEFORE asking for new work — otherwise a deploy silently eats
+            # whatever was mid-understanding at the moment it happened.
+            release_stranded_claims(anticipy.owner_ref)
             for ev in fetch_unprocessed(owner_ref=anticipy.owner_ref):
                 line = ev.get("text", "").strip()
                 if not line:
