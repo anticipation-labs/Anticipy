@@ -31,7 +31,12 @@ assert.ok(returns.filter((r) => /false/.test(r)).length >= 5,
   "no sitekey, unavailable, failed, slow, or thrown must all hand back");
 assert.ok(/handing it to the owner/.test(fn),
   "and must say so in the trace, so a hand-back is never mysterious");
-const site = loop.match(/if \(looksLikeCaptcha\(state\)\)[\s\S]{0,900}/)[0];
+// Window widened from 900: the hand-back MESSAGE grew when it was rewritten
+// for a person ("tick the box and tell me to carry on"), which pushed
+// needs_user past the old cut-off. The assertion below is unchanged — a
+// failed solve must still hand back — only the slice it reads was too small
+// to still contain it.
+const site = loop.match(/if \(looksLikeCaptcha\(state\)\)[\s\S]{0,2400}/)[0];
 assert.ok(/trySolveChallenge/.test(site) && /needs_user/.test(site),
   "the hand-back still follows a failed solve");
 

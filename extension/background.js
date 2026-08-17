@@ -300,7 +300,7 @@ async function requeueStaleJobs() {
     const tries = Number(j.attempts) || 0;
     if (isWorkflowJob(j) && j.effect_uncertain) {
       await updateJob(j.id, workflowPatch(j, "needs_user", {
-        reason: "The browser stopped after a possible external action. Check the site before trying again.",
+        reason: "I may have already sent that before I lost the page — I could not confirm either way. Check the site before I try again, so you don't end up with two.",
         effectUncertain: true,
       }), j.lease_token);
       continue;
@@ -907,7 +907,7 @@ async function runJobInner(job, params) {
       const canonicalState = status === "done" ? "succeeded"
         : status === "needs_user" || job.effect_uncertain ? "needs_user" : "failed";
       const result = status === "failed" && job.effect_uncertain
-        ? "The browser stopped after a possible external action. Check the site before trying again."
+        ? "I may have already sent that before I lost the page — I could not confirm either way. Check the site before I try again, so you don't end up with two."
         : (out.result || "");
       // §9: a kept-back tab never surfaces itself — badge + notification, and
       // the owner's click is what focuses it (openHandBack). Surfaced before
@@ -951,7 +951,7 @@ async function runJobInner(job, params) {
       if (String(e).includes("job gone")) throw e;
       const uncertain = !!job.effect_uncertain;
       const result = uncertain
-        ? "The browser stopped after a possible external action. Check the site before trying again."
+        ? "I may have already sent that before I lost the page — I could not confirm either way. Check the site before I try again, so you don't end up with two."
         : String(e);
       const patch = isWorkflowJob(job)
         ? { ...workflowPatch(job, uncertain ? "needs_user" : "failed", {

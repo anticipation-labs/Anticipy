@@ -725,6 +725,18 @@ class Anticipy:
         r"(let'?s do it|do it|go ahead|go for it|make it happen|i'?m in|"
         r"sounds good|let'?s go|book it|send it)[,!.\s]*$", re.IGNORECASE)
 
+    @staticmethod
+    def _recently_asked(job: dict, window: float = 900.0) -> bool:
+        """Was this card put to him recently enough to be what "do it" means?"""
+        import datetime as _dt
+        try:
+            created = _dt.datetime.strptime(
+                (job.get("created") or "")[:19], "%Y-%m-%d %H:%M:%S"
+            ).replace(tzinfo=_dt.timezone.utc).timestamp()
+        except Exception:
+            return True          # unreadable timestamp: assume it counts
+        return time.time() - created <= window
+
     def _release_freshest_held(self, line: str) -> Optional[str]:
         """Release the plan he was JUST asked about — and only that: the
         newest held card, and only while the asking is minutes old. A yes an
@@ -734,11 +746,24 @@ class Anticipy:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
+            # Fetch MORE THAN ONE on purpose. Asking for a single row made
+            # "yeah do it" spoken aloud release whichever card happened to be
+            # newest, with no test that it was the one he meant — and that
+            # release does a real thing in the world. The same three words
+            # sent over SMS correctly come back "which one, 1) or 2)?",
+            # because that path refuses to guess between candidates. Two lanes
+            # to the same decision must not have different rules about acting
+            # on a guess; the stricter one is right.
             r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
-                       params={"filter": filt, "perPage": 1, "sort": "-created"},
+                       params={"filter": filt, "perPage": 4, "sort": "-created"},
                        timeout=10)
             items = r.json().get("items", []) if r.ok else []
             if not items:
+                return None
+            if len([j for j in items if self._recently_asked(j)]) > 1:
+                # Several live cards, one unqualified "do it". Fall through to
+                # triage, which can ask him which — rather than book one and
+                # find out afterwards.
                 return None
             job = items[0]
             import datetime as _dt
@@ -1400,9 +1425,16 @@ class Anticipy:
                         # brand-new card that he was never told about dies.
                         print(f"not allowed to raise {goal!r} — cancelling the "
                               "card rather than leaving one he never heard of")
-                        self._cancel_job(job_id, "she was not allowed to raise "
-                                                 "this, so it was never his to "
-                                                 "approve")
+                        # He READ THIS IN HIS OWN FEED, about himself, in the
+                        # third person: "she was not allowed to raise this, so
+                        # it was never his to approve". It is an internal note
+                        # about why the card was withdrawn, written for me, and
+                        # it went straight to his screen. What he needs is the
+                        # fact, in the second person.
+                        self._cancel_job(job_id, "I picked this up from the "
+                                                 "room rather than from you, "
+                                                 "so I've dropped it. Say the "
+                                                 "word if you did want it.")
                         for l in self.loops:
                             if getattr(l, "job_id", None) == job_id:
                                 l.status = "cancelled"

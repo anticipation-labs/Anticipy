@@ -652,7 +652,14 @@ struct HomeView: View {
             parts.append("I'm handling \(handling.count) task\(handling.count == 1 ? "" : "s") right now.")
         }
         if needsOK.isEmpty && handling.isEmpty {
-            parts.append(session.listener.isListening ? idleLine : offLine)
+            // EARS ARE EARS, WHICHEVER ONES THEY ARE. This asked only the
+            // phone mic, so with the pendant live and the phone mic off the
+            // screen said "I'm not listening yet — tap Listen with phone"
+            // directly above a status bar reading "Pendant · listening".
+            // Demoing the pendant, the product contradicted itself on one
+            // screen and took the pendant's side away.
+            parts.append(session.listener.isListening || session.pendantCapturing
+                         ? idleLine : offLine)
         }
         return parts.joined(separator: " ")
     }
@@ -686,7 +693,8 @@ struct HomeView: View {
     private var offLine: String {
         micNeedsHelp
             ? "I can't hear anything until the microphone is back on."
-            : "I'm not listening yet — tap Listen with phone and I'll start picking things up."
+            : "I'm not listening yet — tap Listen with phone, or wake your pendant, "
+              + "and I'll start picking things up."
     }
 
     /// What she heard — one card per conversation, newest first.

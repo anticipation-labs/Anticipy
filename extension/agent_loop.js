@@ -2653,6 +2653,11 @@ export function externalControlSemantics({ label = "", explicitSubmit = false,
 // Two hard rules: it names the SITE, never the full URL (query strings carry
 // booking references and personal detail), and it names the FIELD, never what
 // was typed into it. He should be able to hand someone his phone mid-run.
+export function siteOf(url) {
+  try { return new URL(String(url)).hostname.replace(/^www\./, ""); }
+  catch (_) { return "the site"; }
+}
+
 export function humanStep(decision, state) {
   const d = decision || {};
   const site = (() => {
@@ -3265,6 +3270,19 @@ export async function runAgentGoal(goal, opts) {
     catch (_) { return false; }   // can't tell -> don't abandon live work
   };
 
+  // SAY SOMETHING BEFORE THE FIRST DECISION.
+  //
+  // The live line was only produced once the model had chosen an action —
+  // after a page read and a model call. Until then the card showed "I'm
+  // handling it" and nothing else, which is exactly the moment he is
+  // watching hardest: right after he taps Send. One write costs nothing and
+  // fills the gap.
+  doingNow = `Opening ${siteOf(startUrl)}`;
+  if (onTrace) {
+    try { await onTrace(history, false, { evidenceJournal, doing: doingNow }); }
+    catch (e) { /* audit is best-effort */ }
+  }
+
   try {
     for (let step = 0; step < maxSteps; step++) {
       await new Promise((r) => setTimeout(r, 1200));
@@ -3485,7 +3503,22 @@ export async function runAgentGoal(goal, opts) {
           stuckStreak = 0;
           continue;
         }
-        return (handBack = true) && { status: "needs_user", result: `stopped at a CAPTCHA/robot check on ${state.url} — needs a human`, tabId: tab.id };
+        // What he actually got in production, from the model's own mouth,
+        // on a job that then went to CANCELLED: "I am an AI and cannot solve
+        // the CAPTCHA. Please solve the CAPTCHA manually on the screen so I
+        // can finish the reservation." He solves it — and there is nothing
+        // left to finish, because the job is dead.
+        //
+        // The job parks and the tab is held now, so the sentence should say
+        // both of those things: where it is, what to do, and that it will
+        // pick up from exactly there.
+        return (handBack = true) && {
+          status: "needs_user",
+          result: `${siteOf(state.url)} is asking for a "prove you're human" check, `
+            + `which I'm not allowed to click through. I've left the page open on `
+            + `your laptop exactly where it is — tick the box and tell me to carry `
+            + `on, and I'll finish from there. Nothing is lost.`,
+          tabId: tab.id };
       }
 
       // Element indexes only mean anything within one page; on navigation the
