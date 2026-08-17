@@ -1545,6 +1545,154 @@ function taskAllowsLoopback(...values) {
     .test(String(value || "")));
 }
 
+// ------------------------------------------------------------- solving
+// Read the challenge's own parameters off the page. Nothing is guessed: a
+// sitekey is either present in the DOM or this is not a challenge we can
+// hand to a solver, and we fall back to fetching the person.
+
+// One attempt at a challenge, end to end: read its parameters, ask the
+// backend (which holds the key) to solve it, install the token. Every
+// failure path returns false so the caller falls back to fetching the
+// person — the behaviour that shipped before solving existed.
+async function trySolveChallenge(tabId, state, history, step) {
+  let solveAttempts = 0;
+  try {
+    const challenge = await readChallenge(tabId);
+    if (!challenge || !challenge.websiteKey) {
+      history.push(`step ${step}: a challenge is on screen but carries no sitekey — handing it to the owner`);
+      return false;
+    }
+    // Same credentials and base the model proxy uses — the key for solving
+    // lives on the server, exactly as the model key does.
+    const { backendUrl, agentId, agentToken } = await chrome.storage.local.get(
+      ["backendUrl", "agentId", "agentToken"]);
+    if (!agentId || !agentToken) return false;
+    const base = String(backendUrl || DEFAULT_LLM_BASE).replace(/\/$/, "");
+    const headers = { "Content-Type": "application/json",
+                      "X-Anticipy-Agent-ID": agentId,
+                      "X-Anticipy-Agent-Token": agentToken };
+    const started = await fetch(`${base}/agent/solve-captcha`, {
+      method: "POST", headers,
+      body: JSON.stringify({
+        type: challenge.type,
+        websiteURL: state.url,
+        websiteKey: challenge.websiteKey,
+      }),
+    });
+    if (!started.ok) {
+      history.push(`step ${step}: solving unavailable (${started.status}) — handing it to the owner`);
+      return false;
+    }
+    const { taskId } = await started.json();
+    if (!taskId) return false;
+    // ~90 seconds, which is the far end of a normal solve.
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const got = await fetch(`${base}/agent/solve-captcha/result`, {
+        method: "POST", headers, body: JSON.stringify({ taskId }),
+      });
+      if (!got.ok) {
+        history.push(`step ${step}: the solve failed (${got.status}) — handing it to the owner`);
+        return false;
+      }
+      const out = await got.json();
+      if (out.status === "processing") continue;
+      if (!out.token) return false;
+      const placed = await installChallengeToken(tabId, out.token);
+      solveAttempts = placed;
+      history.push(`step ${step}: solved the ${challenge.type} challenge and placed its token in ${placed} field(s); continuing`);
+      return placed > 0;
+    }
+    history.push(`step ${step}: the solve took too long — handing it to the owner`);
+    return false;
+  } catch (e) {
+    history.push(`step ${step}: solving errored (${String(e).slice(0, 80)}) — handing it to the owner`);
+    return false;
+  }
+}
+
+async function readChallenge(tabId) {
+  try {
+    const res = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: () => {
+      const pick = (sel, attr) => {
+        const el = document.querySelector(sel);
+        return el ? (el.getAttribute(attr) || "") : "";
+      };
+      // hCaptcha and Turnstile advertise themselves the same way.
+      const h = pick(".h-captcha", "data-sitekey");
+      if (h) return { type: "hcaptcha", websiteKey: h };
+      const t = pick(".cf-turnstile", "data-sitekey");
+      if (t) return { type: "turnstile", websiteKey: t };
+      // reCAPTCHA v2: a rendered checkbox widget carries the key.
+      const v2 = pick(".g-recaptcha", "data-sitekey")
+        || pick("[data-sitekey]", "data-sitekey");
+      if (v2) {
+        const invisible = (document.querySelector(".g-recaptcha")
+          ?.getAttribute("data-size") || "") === "invisible";
+        return { type: invisible ? "recaptcha_v3" : "recaptcha_v2",
+                 websiteKey: v2 };
+      }
+      // v3 hides its key in the api.js query string.
+      for (const sc of document.querySelectorAll('script[src*="recaptcha"]')) {
+        const m = (sc.src || "").match(/[?&]render=([^&]+)/);
+        if (m && m[1] && m[1] !== "explicit") {
+          return { type: "recaptcha_v3", websiteKey: decodeURIComponent(m[1]) };
+        }
+      }
+        return null;
+      },
+    });
+    return (res || []).map((r) => r && r.result).find(Boolean) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Put the solver's token where the page expects to find it, and nudge the
+// widget's own callback so the site notices. Never submits anything: the
+// ordinary loop does that under the same guards as any other click.
+async function installChallengeToken(tabId, token) {
+  try {
+    const res = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      args: [token],
+      func: (tok) => {
+      let placed = 0;
+      for (const id of ["g-recaptcha-response", "h-captcha-response",
+                        "cf-turnstile-response"]) {
+        for (const el of document.querySelectorAll(`#${id}, [name="${id}"], textarea[id^="${id}"]`)) {
+          el.value = tok;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+          placed += 1;
+        }
+      }
+      try {
+        const c = window.___grecaptcha_cfg && window.___grecaptcha_cfg.clients;
+        for (const key in (c || {})) {
+          const walk = (o, d) => {
+            if (!o || d > 4) return;
+            for (const k in o) {
+              const v = o[k];
+              if (typeof v === "function" && /callback/i.test(k)) {
+                try { v(tok); } catch (_) {}
+              } else if (v && typeof v === "object") walk(v, d + 1);
+            }
+          };
+          walk(c[key], 0);
+        }
+      } catch (_) {}
+        return placed;
+      },
+    });
+    return (res || []).reduce((n, r) => n + (Number(r && r.result) || 0), 0);
+  } catch (_) {
+    return 0;
+  }
+}
+
 export function looksLikeCaptcha(state) {
   const blob = `${state.url} ${state.title} ${(state.text || "").slice(0, 2000)}`.toLowerCase();
   // THE BADGE IS NOT THE WALL.
@@ -2978,6 +3126,16 @@ export async function runAgentGoal(goal, opts) {
         return (handBack = true) && { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
       }
       if (looksLikeCaptcha(state)) {
+        // Ask the backend to solve it. The key lives there, never here — a
+        // published extension is a zip anyone can read. If solving is not
+        // configured, refuses the host, or simply fails, we do exactly what
+        // we did before: stop and fetch the person. Solving is an attempt,
+        // never a requirement.
+        const solved = await trySolveChallenge(tab.id, state, history, step);
+        if (solved) {
+          stuckStreak = 0;
+          continue;
+        }
         return (handBack = true) && { status: "needs_user", result: `stopped at a CAPTCHA/robot check on ${state.url} — needs a human`, tabId: tab.id };
       }
 
