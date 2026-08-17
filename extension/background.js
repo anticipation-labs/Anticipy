@@ -92,11 +92,11 @@ async function ensureRegisteredOnce() {
     await chrome.storage.local.set({ agentToken, agentCredentialInstalled: true });
     return { agentId, agentToken, recordId };
   }
-  const r = await fetch(`${BASE}/agent/register`, {
+  const post = (id) => fetch(`${BASE}/agent/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      agent_id: agentId,
+      agent_id: id,
       // The extension version rides along in this existing field so nobody has
       // to guess which build is actually installed. An unpacked extension does
       // not auto-update, so "did you reload it?" has been unanswerable — and it
@@ -105,6 +105,22 @@ async function ensureRegisteredOnce() {
       last_seen: new Date().toISOString(),
     }),
   });
+  let r = await post(agentId);
+  // 409 means the server already has a row for this agent_id while we hold no
+  // recordId — the worker was torn down (or the reply lost) in the gap between
+  // saving agentId above and saving the registration result below. Re-POSTing
+  // the same id 409s forever, and a null return here is total death: heartbeat
+  // stops at !reg, claimJob has no ownerRef, ensureLLMKey has no token. Worse,
+  // the setup page then says "Connected to Anticipy Claude Version" while
+  // showing ······ and promising a code that can never arrive, and the one
+  // recovery button is hidden because it needs a pair code we never got. A
+  // fresh identity is the way out: the orphaned row was never paired to anyone.
+  if (r.status === 409) {
+    console.warn("Anticipy: this browser's id was already registered without a local record — registering a fresh one");
+    agentId = crypto.randomUUID();
+    await chrome.storage.local.set({ agentId });
+    r = await post(agentId);
+  }
   if (!r.ok) return null;
   const rec = await r.json();
   agentToken = rec.agent_token || "";
@@ -135,6 +151,26 @@ export async function ensureRegistered() {
 // Jobs this worker is actively running — their claims get refreshed on every
 // heartbeat so the stale-requeue sweep never eats a live job.
 const activeJobs = new Map();
+
+// Two writers touch one job at once: the heartbeat alarm renews the lease while
+// the run's own trace writer saves the evidence journal, and BOTH re-serialize
+// the whole params blob. Interleaved, the heartbeat's older snapshot lands last
+// and the row silently reverts to the previous journal — so a worker reclaimed
+// in that window resumes having forgotten the last clinics it visited and goes
+// back to re-open them. Nothing upstream can catch it: every lease and attempt
+// field in that write is perfectly consistent.
+//
+// One chain per job, and the patch is BUILT INSIDE the chain, so each write is
+// computed from what the previous one actually committed.
+const jobWriteChains = new Map();
+export function withJobWrite(id, build) {
+  // The stored tail is always already-caught, so one failed write can never
+  // strand every later write for that job.
+  const prior = jobWriteChains.get(id) || Promise.resolve();
+  const next = prior.then(build);
+  jobWriteChains.set(id, next.catch(() => {}));
+  return next;
+}
 
 // ------------------------------------------------------------- LLM key
 // Consumers never paste API keys: once paired, the agent fetches its key from
@@ -195,11 +231,13 @@ async function heartbeat() {
       continue;
     }
     try {
-      const until = new Date(Date.now() + LEASE_MS);
-      const patch = isWorkflowJob(active.job)
-        ? heartbeatPatch(active.job, { leaseToken: active.leaseToken, leaseUntil: until })
-        : { claimed_at: new Date().toISOString() };
-      active.job = await updateJob(id, patch, active.leaseToken);
+      active.job = await withJobWrite(id, () => {
+        const until = new Date(Date.now() + LEASE_MS);
+        const patch = isWorkflowJob(active.job)
+          ? heartbeatPatch(active.job, { leaseToken: active.leaseToken, leaseUntil: until })
+          : { claimed_at: new Date().toISOString() };
+        return updateJob(id, patch, active.leaseToken);
+      });
     } catch (e) {
       console.warn(`Anticipy: could not renew lease for ${id}: ${String(e).slice(0, 160)}`);
     }
@@ -564,6 +602,101 @@ async function jobStillLive(id, leaseToken = "") {
   }
 }
 
+// ----------------------------------------------------- resuming a parked tab
+// A parked run's tab IS its state: the site's session, the half-filled form,
+// the code the site just sent. So the tab id is written onto the durable job
+// row and a resume reattaches to it instead of starting the world over.
+//
+// But a Chrome tab id is unique only inside ONE browser session and is handed
+// out again from the start after a restart. A job parked on Friday and
+// answered on Monday would reattach to whatever tab now holds id 847 — the
+// owner's banking dashboard, a document they left open — and drive
+// chrome.debugger into it, clicking and typing a booking flow into a page that
+// has nothing to do with the errand. chrome.storage.session is emptied exactly
+// when the browser session ends, so it answers the only question that matters
+// here: is that id still ours?
+async function browserSessionId() {
+  try {
+    const store = chrome.storage.session;
+    // An install too old for session storage cannot prove the id is still
+    // ours, and an unprovable id is a stranger's tab.
+    if (!store) return "";
+    const { browserSession } = await store.get(["browserSession"]);
+    if (browserSession) return browserSession;
+    const fresh = crypto.randomUUID();
+    await store.set({ browserSession: fresh });
+    return fresh;
+  } catch (_) { return ""; }
+}
+
+// The parked tab id, but only when this browser session is the one that parked
+// it. Starting fresh costs a filled form; reattaching to the wrong tab types
+// into the owner's own work.
+export async function resumableTabId(params) {
+  if (!params || params.resume_tab == null) return null;
+  const session = await browserSessionId();
+  if (!session || params.resume_session !== session) return null;
+  return params.resume_tab;
+}
+
+// Did the OWNER stop this, or did we merely lose our claim on it? Only the row
+// knows. A cancelled row is their decision; a row back in the queue (or claimed
+// by another window) is ours to be quiet about.
+async function ownerCancelled(id) {
+  try {
+    const j = await fetchJob(id);
+    return isWorkflowJob(j) ? j.workflow_state === "cancelled" : j.status === "cancelled";
+  } catch (_) {
+    // Deleted, or unreadable right now. A row that is gone was called off.
+    return true;
+  }
+}
+
+// Server state -> the word the popup shows. "cancelled" reads as "stopped"
+// because that is what the owner did and the popup has no other line for it.
+const MIRROR_FOR_STATE = Object.freeze({
+  draft: "awaiting_confirm",
+  awaiting_approval: "awaiting_confirm",
+  awaiting_confirm: "awaiting_confirm",
+  queued: "queued",
+  running: "running",
+  needs_user: "needs_user",
+  succeeded: "done",
+  done: "done",
+  failed: "failed",
+  cancelled: "stopped",
+});
+
+// The popup's mirror is written when a run STARTS and never again if this
+// worker dies mid-job. Quit Chrome during a booking and the mirror freezes at
+// "running": the sweep requeues the row, a retry finishes it, and next morning
+// the popup still says "Working on this: book Earls for 4" about work that
+// ended yesterday — with a Stop button whose write the state machine refuses,
+// because succeeded is terminal. refreshBadge exists precisely because a
+// restarted browser comes up with derived state wrong; the mirror comes up
+// STALE rather than blank, which is worse, and had no equivalent repair.
+export async function reconcileCurrentJob() {
+  try {
+    const { currentJob } = await chrome.storage.local.get(["currentJob"]);
+    if (!currentJob || !currentJob.id) return;
+    if (activeJobs.has(currentJob.id)) return; // this worker is running it now
+    let row;
+    try {
+      row = await fetchJob(currentJob.id);
+    } catch (e) {
+      // Deleted server-side: say so. Any other read failure is transient and
+      // must not be turned into an invented status.
+      if (String(e).includes("job gone")) await setCurrentJob({ status: "removed", result: "" });
+      return;
+    }
+    const state = isWorkflowJob(row)
+      ? String(row.workflow_state || "") : String(row.status || "");
+    const status = MIRROR_FOR_STATE[state];
+    if (!status || status === currentJob.status) return;
+    await setCurrentJob({ status, result: String(row.result || "") });
+  } catch (e) { /* best effort — the mirror must never break a run */ }
+}
+
 async function runJob(job) {
   const params = parseJobParams(job);
   activeJobs.set(job.id, { job, leaseToken: job.lease_token || "",
@@ -580,6 +713,7 @@ async function runJob(job) {
     }
   } finally {
     activeJobs.delete(job.id);
+    jobWriteChains.delete(job.id);
   }
 }
 
@@ -625,12 +759,13 @@ async function runJobInner(job, params) {
           if (fresh) { ownerProfile = fresh; await chrome.storage.local.set({ ownerProfile: fresh }); }
         }
       } catch (_) { /* keep what we had */ }
+      // A resumed job goes back to its own parked tab — session, filled form
+      // and all — but only while that id still means the tab we parked.
+      const resumeTabId = await resumableTabId(params);
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
         startUrl: params.start_url || undefined,
-        // A resumed job goes back to its own parked tab — session, filled
-        // form and all — instead of starting the world over in a fresh one.
-        resumeTabId: params.resume_tab != null ? params.resume_tab : null,
+        resumeTabId,
         stillLive: () => jobStillLive(job.id, job.lease_token),
         ...(agentModel ? { model: agentModel } : {}),
         ...(visionModel ? { visionModel } : {}),
@@ -679,7 +814,7 @@ async function runJobInner(job, params) {
               .filter(([k, v]) => !["source", "say", "now", "lane", "missing",
                                     "authorized", "approved_scope", "needed",
                                     "start_url", "task", "assumption", "note",
-                                    "resume_tab"].includes(k)
+                                    "resume_tab", "resume_session"].includes(k)
                                   && !/^owner_answer/i.test(k)
                                   && (typeof v === "string" || typeof v === "number"
                                       || typeof v === "boolean")
@@ -713,10 +848,24 @@ async function runJobInner(job, params) {
                 elements: String(entry?.elements || "").slice(0, 1000),
               }));
             if (journal.length) params = { ...params, _execution_journal: journal };
-            job = await updateJob(job.id,
-              { trace, ...(journal.length ? {
+            // THE ONE LINE HE ACTUALLY SEES.
+            //
+            // The trace beside it is for whoever debugs this later: it is
+            // written for engineers ("step 12: llm error", raw JSON) and the
+            // phone has never read it. This is the same moment in his own
+            // words, and it rides a write that was already happening every
+            // four seconds — so telling him what is going on costs nothing.
+            //
+            // Without it, a forty-minute run shows the words "On it" and
+            // nothing else, and a run working perfectly is indistinguishable
+            // from one that died twenty minutes ago.
+            const doing = String(checkpoint?.doing || "").slice(0, 120);
+            const doingChanged = !!doing && doing !== params._doing;
+            if (doingChanged) params = { ...params, _doing: doing };
+            job = await withJobWrite(job.id, () => updateJob(job.id,
+              { trace, ...(journal.length || doingChanged ? {
                 params: JSON.stringify(params),
-              } : {}) }, job.lease_token);
+              } : {}) }, job.lease_token));
             const active = activeJobs.get(job.id);
             if (active) active.job = job;
           };
@@ -730,7 +879,24 @@ async function runJobInner(job, params) {
       // A job the owner called off mid-run keeps their decision — writing
       // done/failed over a cancellation resurrects work they stopped.
       if (out.status === "cancelled") {
-        await setCurrentJob({ status: "stopped", result: out.result || "you called this off — I stopped where I was." });
+        // But the loop cannot tell a cancellation from a lost claim: its one
+        // liveness test is "still running AND still my lease token", which is
+        // equally false when the owner cancels, when the lease expires and the
+        // sweep hands the job back, and when a second Chrome profile claims it.
+        // A two-minute wifi drop on a train ended an Earls booking with
+        // "Stopped: you called this off" — the owner had called nothing off,
+        // nothing was written server-side, and that lie was the only record of
+        // what happened. Ask the row which of the two it actually was.
+        const stoppedByOwner = await ownerCancelled(job.id);
+        if (!stoppedByOwner) {
+          console.warn(`Anticipy: job ${job.id} lost its claim mid-run — the row went back to the queue, stopping here`);
+        }
+        await setCurrentJob({
+          status: "stopped",
+          result: stoppedByOwner
+            ? (out.result || "you called this off — I stopped where I was.")
+            : "I lost my hold on this one — my connection dropped or another window picked it up. I stopped where I was and handed it back.",
+        });
         return;
       }
       // needs_user (login wall, CAPTCHA, refused site) is NOT the same state
@@ -749,13 +915,17 @@ async function runJobInner(job, params) {
       if (canonicalState === "needs_user" && out.tabId != null) {
         await surfaceHandBack(out.tabId, result, "needs_user");
       }
+      const parkedSession = canonicalState === "needs_user" && out.tabId != null
+        ? await browserSessionId() : "";
       const transition = isWorkflowJob(job)
         ? workflowPatch(job, canonicalState, {
             reason: result || (canonicalState === "failed"
               ? "browser execution failed" : "the browser needs the owner"),
             effectUncertain: !!job.effect_uncertain,
+            // The session stamp travels with the tab id: it is what lets the
+            // resume prove the id still points at the tab we parked.
             ...(out.tabId != null && canonicalState === "needs_user"
-              ? { paramsPatch: { resume_tab: out.tabId } } : {}),
+              ? { paramsPatch: { resume_tab: out.tabId, resume_session: parkedSession } } : {}),
             ...(canonicalState === "succeeded" ? {
               summary: result || "completed",
               verified: out.receipt?.verified === true,
@@ -765,7 +935,8 @@ async function runJobInner(job, params) {
         : {
             status, result,
             ...(out.tabId != null && status === "needs_user"
-              ? { params: JSON.stringify({ ...params, resume_tab: out.tabId }) } : {}),
+              ? { params: JSON.stringify({
+                  ...params, resume_tab: out.tabId, resume_session: parkedSession }) } : {}),
           };
       job = await updateJob(job.id, { ...transition, result }, job.lease_token);
       // The job row keeps needs_user (the phone offers Try again on it), but
@@ -927,18 +1098,28 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
     respond({ ok: true });
     return;
   }
+  // A refused write must never be answered "ok". Both of these swallowed the
+  // rejection and reported success, so the popup said "Stopping…" and snapped
+  // straight back to "Working on this" — every click, forever, with no error
+  // anywhere. Repairing the mirror from the row is what makes the refusal
+  // visible: it is almost always stale, and the row is the truth.
+  const refused = (what) => async (e) => {
+    console.warn(`Anticipy: ${what} refused for ${msg.id}: ${String(e).slice(0, 200)}`);
+    await reconcileCurrentJob();
+    respond({ ok: false, error: String(e).slice(0, 200) });
+  };
   if (msg.type === "anticipy-stop" && msg.id) {
     stopJob(msg.id)
       .then(() => setCurrentJob({ status: "stopped", result: "You stopped this. Nothing more was done." }))
-      .catch(() => {})
-      .finally(() => respond({ ok: true }));
+      .then(() => respond({ ok: true }))
+      .catch(refused("stop"));
     return true;
   }
   if (msg.type === "anticipy-again" && msg.id) {
     retryJob(msg.id)
       .then(() => setCurrentJob({ status: "queued", result: "" }))
-      .catch(() => {})
-      .finally(() => respond({ ok: true }));
+      .then(() => respond({ ok: true }))
+      .catch(refused("retry"));
     return true;
   }
   // The popup's "Open the page" button: the badge points at the popup, the
@@ -976,6 +1157,7 @@ chrome.runtime.onStartup.addListener(() => {
   ensureWakeAlarms().catch(() => {});
   poll();
   refreshBadge();
+  reconcileCurrentJob();
 });
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === "anticipy-poll") poll();
@@ -984,7 +1166,10 @@ chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === "anticipy-heartbeat") heartbeat().catch(() => {});
 });
 // Also poll immediately on worker wake, and re-assert the badge — it is
-// derived state, and a restarted browser comes up with it blank.
+// derived state, and a restarted browser comes up with it blank. The popup's
+// job mirror is the same kind of derived state and comes up STALE instead of
+// blank, so it gets read back off the row here too.
 ensureWakeAlarms().catch(() => {});
 poll();
 refreshBadge();
+reconcileCurrentJob();

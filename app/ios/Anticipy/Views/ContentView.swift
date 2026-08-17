@@ -1105,6 +1105,27 @@ struct SessionLineRow: View {
 struct HandlingCard: View {
     let job: AgentJob
 
+    /// What it is doing RIGHT NOW, in his words.
+    ///
+    /// The browser writes this to the job every four seconds while it works.
+    /// Until it was shown here, a run that can last forty minutes displayed
+    /// the words "I'm handling it" and nothing else — so a run going
+    /// perfectly and a run that died twenty minutes ago looked exactly the
+    /// same from the sofa. That is the whole "why is it always stalling?"
+    /// feeling, and the information to answer it already existed.
+    ///
+    /// The browser guarantees this line names the site rather than the URL
+    /// and the field rather than what was typed into it, so it is safe on a
+    /// screen someone else can see.
+    private var doingNow: String? {
+        guard job.status == "running",
+              let data = job.params.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let line = obj["_doing"] as? String else { return nil }
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if job.status == "running" {
@@ -1122,6 +1143,15 @@ struct HandlingCard: View {
                     .font(.system(size: 17))
                     .lineSpacing(3)
                     .foregroundStyle(Theme.ivory)
+                if let doingNow {
+                    Text(doingNow)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.sand)
+                        .lineLimit(2)
+                        .transition(.opacity)
+                        .animation(Theme.spring, value: doingNow)
+                        .accessibilityLabel("Currently \(doingNow)")
+                }
             }
             Spacer()
         }

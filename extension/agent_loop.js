@@ -421,10 +421,17 @@ export function unsupportedApprovedFacts(facts, currentState, effectState = null
       const identity = evidenceToken(`${field?.name || ""} ${field?.label || ""}`);
       return keyToken && (identity.includes(keyToken) || keyToken.includes(identity));
     });
+    // A phone the site's input mask reformatted is still the approved phone.
+    // Without this, "phone" was reported as an unevidenced fact for the rest
+    // of the run and no done claim could ever be verified.
+    const wantedPhone = phoneValues(value)[0]?.digits;
+    const evidences = (fieldValue) => evidenceToken(fieldValue) === expected
+      || (!!wantedPhone
+        && samePhoneDigits(wantedPhone, phoneValues(fieldValue)[0]?.digits));
     if (relatedFields.length) {
-      return !relatedFields.some((field) => evidenceToken(field?.value) === expected);
+      return !relatedFields.some((field) => evidences(field?.value));
     }
-    if (fields.some((field) => evidenceToken(field?.value) === expected)) return false;
+    if (fields.some((field) => evidences(field?.value))) return false;
     if (typeof value === "boolean") {
       const stateToken = value ? "checked" : "unchecked";
       if (currentText.includes(`${keyToken}${expected}`)) return false;
@@ -473,6 +480,27 @@ function phoneValues(value) {
   const found = String(value ?? "").match(/\+?\d[\d\s().-]{5,}\d/g) || [];
   return found.map((raw) => ({ raw: raw.trim(), digits: raw.replace(/\D/g, "") }))
     .filter(({ digits }) => digits.length >= 7 && digits.length <= 15);
+}
+
+// The owner says "+1 604 555 0142"; the site's input mask renders it back as
+// "(604) 555-0142". Compared as raw digit strings those are two different
+// phones, so the scope gate flagged the field on every pre-submit audit, the
+// correction retyped the E.164 form, the mask reformatted it again, and the
+// third identical click tripped the cycle guard and abandoned a fully filled
+// form. Worse, "phone" then failed the approved-facts check for the rest of
+// the run, so no completion could ever verify. A country code in front of an
+// otherwise identical national number is the SAME phone, in both directions.
+export function samePhoneDigits(left, right) {
+  const a = String(left || ""), b = String(right || "");
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [longer, shorter] = a.length >= b.length ? [a, b] : [b, a];
+  // Only a country-code-sized prefix may differ, and only off a number long
+  // enough to carry an area code — otherwise "555-0142" would match the same
+  // seven digits behind every area code in the country.
+  const extra = longer.length - shorter.length;
+  return extra >= 1 && extra <= 3 && shorter.length >= 9
+    && longer.endsWith(shorter);
 }
 
 function identifierField(field) {
@@ -538,7 +566,7 @@ export function schemaBoundaryCorrections(fields, authority, allFields) {
     const current = String(field?.value ?? "").trim();
     if (!current) continue;
     if (phoneField(field) && uniquePhones.length === 1
-        && phoneValues(current)[0]?.digits !== uniquePhones[0].digits) {
+        && !samePhoneDigits(phoneValues(current)[0]?.digits, uniquePhones[0].digits)) {
       out.push({ index: Number(field.index), value: uniquePhones[0].raw,
         reason: "task-specific phone outranks saved profile" });
       continue;
@@ -652,10 +680,35 @@ export function unapprovedCalendarClick(decision, state, authority) {
   const match = line.match(/calendar=(January|February|March|April|May|June|July|August|September|October|November|December)\s+([12]?\d|3[01])/i)
     || line.match(/<(?:button|gridcell)>\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+([12]?\d|3[01])/i);
   if (!match) return "";
-  const key = `${MONTH_NUMBER[match[1].toLowerCase()]}-${Number(match[2])}`;
-  const ordinal = MONTH_NUMBER[match[1].toLowerCase()] * 100 + Number(match[2]);
+  const month = MONTH_NUMBER[match[1].toLowerCase()];
+  const key = `${month}-${Number(match[2])}`;
+  const ordinal = month * 100 + Number(match[2]);
   if (approved.has(key) || ranges.some(([start, end]) => ordinal >= start && ordinal <= end)) return "";
+  // A picker cell carries no year and relative wording carries no month, so
+  // resolving the cell against the clock is the only way the two can meet.
+  // "Cancel the August 3 booking and book tomorrow instead" contains one
+  // explicit date — the one being CANCELLED — so this guard blocked the
+  // tomorrow cell and deadIdx removed it from the map, leaving the cancelled
+  // date as the only clickable approved one. The guard was steering the run
+  // into rebooking exactly the date the owner was getting rid of.
+  const concrete = calendarCellDate(month, Number(match[2]));
+  if (concrete && approvedDateValue(concrete, authority)) return "";
   return `${match[1]} ${Number(match[2])} is not one of the explicit dates in the task`;
+}
+
+// The soonest date not in the past matching a picker cell's month and day.
+// A calendar can be showing December while today is January, so "this year"
+// alone resolves the wrong one.
+export function calendarCellDate(month, day) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (const year of [today.getFullYear(), today.getFullYear() + 1]) {
+    const candidate = new Date(year, month - 1, day);
+    if (candidate.getMonth() !== month - 1) continue;   // e.g. February 30
+    if (candidate < today) continue;
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+  return "";
 }
 
 function approvedTimeValue(value, approvedText) {
@@ -718,12 +771,26 @@ export function unsupportedScopeFields(scope, currentState, ownerProfile = null,
     if (value === null || value === undefined || String(value).trim() === "") return false;
     if (value === true || value === false) {
       const wanted = approvedBoolean(field, approvedText);
-      return value === true ? wanted !== true : wanted === true;
+      // A TICKED BOX THE OWNER NEVER MENTIONED IS NOT A SCOPE VIOLATION.
+      //
+      // approvedBoolean returns null for "I agree to the terms" on a task
+      // like "book a table tomorrow at 7:30 for 3" — the owner's words never
+      // contain the word "terms". Flagging that made the required agreement
+      // checkbox — the one AUTHORITY explicitly tells the model to tick —
+      // block the final Book click forever, and clearUnsupportedOptionalFields
+      // skips checkboxes so it could never be cleared: PRE-SUBMIT BLOCK on
+      // every attempt until the cycle guard walked off the page and the table
+      // hold expired. The only mechanical way past was to UNTICK the
+      // agreement, which contradicts the prompt's own AUTHORITY rule.
+      // The real violation is reversing something the owner DID state: ticked
+      // when they said not to, or unticked when they asked for it.
+      return value === true ? wanted === false : wanted === true;
     }
     const valueTokens = wordTokens(value);
     if (phoneField(field) && taskPhones.length) {
       const submittedPhones = phoneValues(value).map(({ digits }) => digits);
-      return submittedPhones.length !== 1 || !taskPhones.includes(submittedPhones[0]);
+      return submittedPhones.length !== 1
+        || !taskPhones.some((digits) => samePhoneDigits(digits, submittedPhones[0]));
     }
     if (!phoneField(field) && hasPhoneControl && phoneValues(value).length) return true;
     if (identifierField(field)) {
@@ -885,6 +952,30 @@ async function auditFormAlignment(apiKey, model, goal, scope, state) {
   }
 }
 
+// Put focus on the MAPPED element and confirm it took. Blurring first is
+// what makes __anticipyFocus actually move: it deliberately keeps an
+// existing editable focus, which is right for a dialog that focuses its own
+// real input and wrong for writing a specific value into a specific field.
+// Shadow hosts retarget, so document.activeElement is the host itself.
+async function focusedMappedField(tabId, index) {
+  try {
+    await inFrame(tabId, index, () => {
+      const active = document.activeElement;
+      if (active && typeof active.blur === "function") active.blur();
+      return true;
+    });
+  } catch (_) { /* nothing focused is exactly the state we want */ }
+  try { await inFrame(tabId, index, (i) => window.__anticipyFocus(i)); }
+  catch (_) { return false; }
+  try {
+    return (await inFrame(tabId, index, (i) => {
+      const el = window.__anticipyMap[i];
+      const active = document.activeElement;
+      return !!el && (active === el || (!!el.contains && el.contains(active)));
+    })) === true;
+  } catch (_) { return false; }
+}
+
 async function applyFormCorrections(tabId, corrections) {
   const applied = [];
   for (const correction of corrections) {
@@ -896,8 +987,17 @@ async function applyFormCorrections(tabId, corrections) {
       if (center.inFrameOnly) await frameClick(tabId, correction.index);
       else await trustedClick(tabId, center.x, center.y);
       await new Promise((resolve) => setTimeout(resolve, 150));
-      try { await inFrame(tabId, correction.index,
-        (index) => window.__anticipyFocus(index)); } catch (_) {}
+      // EVERY WRITE RESOLVES THROUGH THE PAGE'S ACTIVE ELEMENT.
+      //
+      // __anticipyFocus keeps an already-focused editable (a dialog pattern
+      // needs that), and __anticipyClear/__anticipyValidity resolve the same
+      // way. A synthetic frameClick — the only kind available inside an
+      // embedded widget whose position on the top page is unknown — cannot
+      // move focus, so corrections 2..N all landed in whatever field
+      // correction 1 left focused: ONE field cleared and overwritten N times,
+      // and N successes reported. Drop focus first, then require the mapped
+      // element to actually hold it before a single keystroke goes out.
+      if (!(await focusedMappedField(tabId, correction.index))) continue;
       await trustedType(tabId, correction.value, correction.index);
       if (!(await fieldRejects(tabId, correction.index))) {
         applied.push(`${correction.index}=${JSON.stringify(correction.value)}`);
@@ -1544,8 +1644,18 @@ function blockedDomain(url) {
 
 export function loopbackTarget(url) {
   try {
-    const host = new URL(String(url || "")).hostname.toLowerCase();
-    return host === "localhost" || host === "::1" || /^127(?:\.\d{1,3}){3}$/.test(host);
+    // `new URL("http://[::1]:8080/").hostname` is "[::1]" — WHATWG keeps the
+    // brackets — so the old `host === "::1"` arm could never match a real URL
+    // and every IPv6 loopback navigation walked straight past this guard.
+    // A trailing dot ("localhost.") and a subdomain ("app.localhost") are the
+    // same machine and were equally invisible. The numeric short forms
+    // (127.1, 0177.0.0.1, 2130706433) do NOT need handling here: WHATWG
+    // already normalizes all of them to 127.0.0.1 before we see the host.
+    const host = new URL(String(url || "")).hostname
+      .toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+    return host === "localhost" || host.endsWith(".localhost")
+      || host === "::1" || host === "0:0:0:0:0:0:0:1"
+      || host === "0.0.0.0" || /^127(?:\.\d{1,3}){3}$/.test(host);
   } catch (_) { return false; }
 }
 
@@ -1911,6 +2021,20 @@ async function neutralizeSpawners(tabId) {
 let frameSlots = [0];
 let frameOffsets = {};              // frameId -> {x, y} in top-page coords, when known
 const frameOf = (idx) => frameSlots[Math.floor(idx / 1000)] ?? 0;
+// AN INDEX ONLY MEANS SOMETHING AGAINST THE MAP THAT PRODUCED IT.
+//
+// frameSlots is a module-level table rebuilt by EVERY mapPage, and the
+// pre-submit path re-maps AFTER a decision.index was already chosen.
+// mapPage's own documented failure mode makes the danger concrete: a
+// password manager injects a chrome-extension:// iframe the moment a field
+// takes focus — exactly what the alignment pass and the optional-field clear
+// have just done — allFrames injection then throws, useAllFrames flips to
+// false, and the table collapses to [0]. Index 1042 (a field inside the
+// booking widget) silently re-resolves to main-frame element 42, and the
+// trusted click lands THERE, one line after the submit guards passed for a
+// completely different control. A subframe merely shrinking below the 80x60
+// filter shifts every later slot and does the same with no exception at all.
+const frameTableSignature = () => frameSlots.join(",");
 const localOf = (idx) => idx % 1000;
 function frameTarget(tabId, index) {
   const frameId = frameOf(index);
@@ -2261,6 +2385,31 @@ export function pageFingerprint(state) {
   return `${st.url || ""}|${pageContentFingerprint(st)}`;
 }
 
+/// The same question, asked of a page that is COUNTING DOWN.
+///
+/// "You have 4:59 to complete your booking" re-renders every second, so the
+/// fingerprint changed on every single step: stepsOnPage and stuckStreak
+/// reset each iteration and the 18-step wedge detector could never fire,
+/// while the state+action cycle key was never the same twice so the 3-repeat
+/// guard could never fire either. A model alternating two useless actions on
+/// a held reservation — exactly the page AUTHORITY tells it to push through —
+/// burned all 80 steps with nothing left to catch it.
+///
+/// So the STALL question drops clock-shaped and "N minutes" text. Evidence
+/// and receipts keep the exact fingerprint: what a page WAS is a different
+/// question from whether we are getting anywhere on it.
+export function stallFingerprint(state) {
+  const st = state || {};
+  const steady = (value) => String(value || "")
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ")
+    .replace(/\b\d+\s*(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)\b/gi, " ");
+  return pageFingerprint({
+    ...st,
+    text: steady(st.text),
+    elements: steady(st.elements),
+  });
+}
+
 /// Did the agent WRITE this, or is it carrying something the owner gave?
 ///
 /// The distinction that matters before anything leaves for another person.
@@ -2324,6 +2473,19 @@ export function isAuthored(text, goal, scope) {
   if (!known.size) return true;
   const lower = w.map((x) => x.toLowerCase().replace(/[^a-z0-9']/g, ""));
   const fromGoal = lower.filter((x) => x && known.has(x)).length;
+  // REARRANGEMENT IS SAFE UNTIL A "NOT" GOES MISSING.
+  //
+  // "Tell the clinic I will NOT attend at 3pm, ask to move it to Friday"
+  // rearranges into "Hi, I will attend at 3pm Friday" — every token comes
+  // from the owner, the overlap sails past 0.6, no draft is shown, and a
+  // message goes out in their name asserting the opposite of what they said.
+  // A negation the owner used and the composed text dropped is the one
+  // rearrangement that cannot be waved through.
+  const negations = new Set(["not", "no", "never", "cannot", "can't", "won't",
+    "don't", "doesn't", "isn't", "aren't", "without", "unable", "neither", "nor"]);
+  const ownerNegated = [...known].some((token) => negations.has(token));
+  const keptNegation = lower.some((token) => negations.has(token));
+  if (ownerNegated && !keptNegation) return true;
   // Mostly the owner's own words rearranged is not composition.
   return (fromGoal / w.length) < 0.6;
 }
@@ -2426,6 +2588,18 @@ async function controlContext(tabId, index) {
   }
 }
 
+// "Have I already done this?" keys on the control's DOM identity, never on
+// the words around it. A reservation page holding a perishable slot renders
+// "Held for 4:32" and then "Held for 4:12"; a button relabels itself
+// "Processing…"; a cart total changes. Every one of those used to make the
+// SAME Complete Reservation button look like a new effect, and the at-most-
+// once guard waved a second booking through. Digits leave the label for the
+// same reason.
+export function stableControlLabel(context) {
+  return evidenceToken(
+    String(context?.label || context?.href || "").replace(/\d+/g, ""));
+}
+
 function stateForControl(state, context, index) {
   const owned = new Set((context?.fieldIndexes || []).map(Number));
   const wanted = new Set([...owned, Number(index)]);
@@ -2460,6 +2634,61 @@ export function externalControlSemantics({ label = "", explicitSubmit = false,
   return commit.test(text) || !!explicitSubmit;
 }
 
+// WHAT IT IS DOING, IN WORDS HE WOULD USE.
+//
+// The run already writes a trace every four seconds — and every line of it is
+// written for an engineer: "step 12: llm error", "BLOCKED RECOVERY REVERSAL",
+// a raw JSON decision. The phone reads none of it. So for a run that can last
+// forty minutes he sees the words "On it" and nothing else, while the system
+// knows exactly where it is and is writing it down fifteen times a minute.
+//
+// That gap IS the "why is it always stalling?" feeling: a run working
+// perfectly and a run that died look identical from the sofa.
+//
+// So each step also produces ONE plain sentence. Deliberately arithmetic —
+// derived from the action and the page, never a model call, because paying a
+// model to narrate would put a price on telling him what is happening and it
+// would be the first thing cut.
+//
+// Two hard rules: it names the SITE, never the full URL (query strings carry
+// booking references and personal detail), and it names the FIELD, never what
+// was typed into it. He should be able to hand someone his phone mid-run.
+export function humanStep(decision, state) {
+  const d = decision || {};
+  const site = (() => {
+    try { return new URL(String(state?.url || "")).hostname.replace(/^www\./, ""); }
+    catch (_) { return ""; }
+  })();
+  const label = String(d.label || d.text_label || d.name || "").trim().slice(0, 40);
+  const at = site ? ` on ${site}` : "";
+
+  switch (String(d.action || "").toLowerCase()) {
+    case "navigate": case "goto": case "open":
+      return site ? `Opening ${site}` : "Opening a page";
+    case "type": case "fill": case "set":
+      // The LABEL of the field, never the value typed into it.
+      return label ? `Filling in ${label.toLowerCase()}${at}` : `Filling in the form${at}`;
+    case "select": case "choose":
+      return label ? `Choosing ${label}${at}` : `Choosing an option${at}`;
+    case "click": case "press":
+      return label ? `Clicking ${label}${at}` : `Clicking through${at}`;
+    case "enter": case "submit":
+      return `Submitting the form${at}`;
+    case "scroll":
+      return `Looking down the page${at}`;
+    case "wait":
+      return `Waiting for ${site || "the page"} to catch up`;
+    case "back":
+      return `Going back${at}`;
+    case "done": case "finish":
+      return `Checking it actually went through${at}`;
+    case "ask": case "needs_user":
+      return "Stopping to ask you something";
+    default:
+      return site ? `Working on ${site}` : "Working on it";
+  }
+}
+
 async function commitControl(tabId, index, viaEnter = false) {
   try {
     return !!(await inFrame(tabId, index, (i, enter) => {
@@ -2477,9 +2706,18 @@ async function commitControl(tabId, index, viaEnter = false) {
       const navigationLink = source.tagName === "A" && /^https?:/i.test(href)
         && !/(?:^|[/?#&=_-])(?:delete|remove|unsubscribe|logout|purchase|checkout|confirm)(?:$|[/?#&=_-])/i.test(href);
       if (navigationLink) return false;
+      // A kebab/context MENU is where modern apps keep their real commit
+      // verbs: Delete on a mail row, "Delete file", "Cancel order" in an
+      // account menu. Treating everything inside role=menu as a mere choice
+      // sent every one of those straight past the authorization gate, the
+      // pre-submit audit and the at-most-once guard. Picking from a listbox
+      // or a <select> genuinely is a choice; a menu item that NAMES a
+      // mutation is not, so the item's own label decides.
+      const commitVerb = /\b(submit|send|confirm|place\s+order|buy|purchase|book|schedule|request|apply|pay|delete|remove|save|renew|register|file|complete|finish|finalize|create|open\s+(?:a\s+)?claim)\b|^\s*cancel\s+\w+/i;
       const choiceLike = source.tagName === "OPTION"
         || source.getAttribute("role") === "option"
-        || !!source.closest('select,[role="listbox"],[role="menu"]');
+        || !!source.closest('select,[role="listbox"]')
+        || (!!source.closest('[role="menu"]') && !commitVerb.test(sourceLabel));
       // Accordion/disclosure headings only reveal text on the current page.
       // Their labels can contain action-shaped nouns ("Name request",
       // "File forms"), which says nothing about what the click does. Use the
@@ -2643,6 +2881,11 @@ export async function runAgentGoal(goal, opts) {
   const { apiKey, model = "anthropic/claude-sonnet-4.6", maxSteps = 80, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "anthropic/claude-sonnet-4.6", authorized = false, readOnly = false, scope = "", ownerProfile = null, planning = true, facts = "", onTrace = null, onBeforeExternalEffect = null, resumeTabId = null, initialEvidenceJournal = [] } = opts;
   const factsText = factsForPrompt(facts);
   let effectState = null;
+  // Owner-supplied inputs only. Everything downstream that could reach a
+  // local service — the planner's start_url, plan fallbacks, the stuck
+  // researcher's go_to, a cited URL in a rejected result — is model output
+  // and must never be able to widen this.
+  const allowLoopback = taskAllowsLoopback(goal, scope, startUrl);
 
   // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
   // itself about operating a financial account never even starts — the
@@ -2671,6 +2914,15 @@ export async function runAgentGoal(goal, opts) {
     ? await planRun(apiKey, model, goal, ownerProfile, scope)
     : null;
   const openAt = (plan && plan.startUrl) || startUrl;
+  // The planner's start_url is MODEL OUTPUT, and it used to be one of the
+  // values that authorized loopback. A stored owner fact mentioning a local
+  // dev server is enough to make the planner answer
+  // "http://localhost:3000/admin"; taskAllowsLoopback then matched the
+  // planner's own answer and switched the guard off for the whole run, so the
+  // agent could operate any service on the owner's machine with a
+  // fully model-authored justification. Authorization comes from the owner's
+  // words and the caller's explicit start URL — never from a model.
+  const firstUrl = (loopbackTarget(openAt) && !allowLoopback) ? startUrl : openAt;
   if (plan) console.log(`agent: plan -> ${plan.startUrl} (${plan.why})`);
 
   const preexisting = new Set((await chrome.tabs.query({})).map((t) => t.id));
@@ -2693,7 +2945,7 @@ export async function runAgentGoal(goal, opts) {
     }
     await chrome.storage.local.set({ agentTabs: [] });
   } catch (e) { /* best effort */ }
-  let tab = resumeTab || await createBackgroundTab(openAt);
+  let tab = resumeTab || await createBackgroundTab(firstUrl);
   let agentGroupId = -1;
   userCancelledTabs.delete(tab.id);
   // The owner may switch tabs mid-run; keep following where THEY are, so a
@@ -2793,6 +3045,21 @@ export async function runAgentGoal(goal, opts) {
   // How many times a field has thrown our value back. Three is not a typo,
   // it is a task that cannot be completed with what we know.
   let badFields = 0;
+  // ...and this is the counter finally being READ. It was written on every
+  // rejection and read nowhere, so the early hand-back its own comment
+  // promises never once fired: a run whose model kept offering values the
+  // browser's own constraint validation refused just ground on to the
+  // 18-step page cap, or to maxSteps, and the owner was never told which
+  // field the run could not fill or why.
+  const parkOnRepeatedFieldRejections = (bad) => {
+    if (badFields < 3) return null;
+    handBack = true;
+    return { status: "needs_user",
+      result: `This form has refused what I put in three times now — the last one: "${String(bad?.value || "").slice(0, 60)}" ${bad?.why || "was not accepted"}`
+        + (bad?.message ? ` (the page says: ${bad.message})` : "")
+        + `. I don't have a ${bad?.type || "value"} that this field will take. Tell me the exact value to use and I'll finish from here.`,
+      tabId: tab.id };
+  };
   // Whether the owner has already been shown text this run composed.
   let draftShown = false;
   // Last seen shape of the page, for telling real work from flailing.
@@ -2821,12 +3088,13 @@ export async function runAgentGoal(goal, opts) {
   let pendingResearchClick = null;
   let completionFallbackAt = 0;
   const dismissedRejectedOverlays = new Set();
-  const allowLoopback = taskAllowsLoopback(goal, scope, startUrl, openAt);
   // A consequential control is at-most-once within a run. If its first
   // trusted click produced no obvious navigation, the safe response is to
   // inspect current state—not dispatch the same effect again and duplicate
   // an item, message, booking, deletion, or submission.
   const performedExternalEffects = new Set();
+  // The one plain sentence the phone shows while this runs.
+  let doingNow = "Getting started";
   // Multi-page research needs evidence memory. Keep a bounded journal of live
   // DOM snapshots from this run so verification can check a result assembled
   // across several listings/pages instead of pretending only the final
@@ -2842,7 +3110,7 @@ export async function runAgentGoal(goal, opts) {
     }));
   const evidenceFingerprints = new Set(evidenceJournal
     .map((entry) => entry.fingerprint).filter(Boolean));
-  const visitedUrls = new Set([openAt]);
+  const visitedUrls = new Set([firstUrl]);
   // Last-resort research is generated from the owner's exact goal. It is the
   // same for every sector and contains no site workflow or selector; its job
   // is simply to escape a bad planner URL and discover a live source.
@@ -2854,11 +3122,34 @@ export async function runAgentGoal(goal, opts) {
   const fallbackQueue = [...new Set((plan?.fallbacks || [])
     .filter((url) => typeof url === "string" && /^https?:\/\//i.test(url))
     .concat(genericResearchUrl))]
-    .filter((url) => url !== openAt);
+    .filter((url) => url !== firstUrl);
+  // ONE GATE, EVERY NAVIGATION.
+  //
+  // loopbackTarget was consulted on the model's `navigate` action and on an
+  // adopted spawned tab — and nowhere else. Three other paths hand a
+  // model-composed URL straight to the working tab: a plan fallback, the
+  // stuck researcher's go_to, and a URL quoted out of a rejected result. A
+  // stall that produced go_to "http://localhost:8025/" (a mail catcher, an
+  // admin UI) landed there, and the loop mapped it and started clicking.
+  function navigationRefusal(url) {
+    const target = String(url || "");
+    if (!/^https?:\/\//i.test(target)) return "it is not an http(s) address";
+    const banked = blockedDomain(target);
+    if (banked) return `${banked} is a protected financial site`;
+    if (loopbackTarget(target) && !allowLoopback) {
+      return "this task never authorized a local site";
+    }
+    return "";
+  }
   async function advanceFallback(reason) {
     while (fallbackQueue.length) {
       const next = fallbackQueue.shift();
       if (!next || visitedUrls.has(next)) continue;
+      const refusal = navigationRefusal(next);
+      if (refusal) {
+        history.push(`BLOCKED FALLBACK ${String(next).slice(0, 120)} — ${refusal}`);
+        continue;
+      }
       visitedUrls.add(next);
       await navigateWorkingTab(tab.id, next);
       history.push(`FALLBACK after ${reason}: ${next}`);
@@ -2940,6 +3231,14 @@ export async function runAgentGoal(goal, opts) {
     // When evidence aged out of the bounded notebook, revisiting that exact
     // cited page is useful even though its URL appeared earlier in the run.
     if (!directMissing && visitedUrls.has(next)) return false;
+    // `cited` is a URL the MODEL put in its own rejected result. A claim that
+    // its evidence lives at http://127.0.0.1:8090/_/ must not open the
+    // owner's local admin panel.
+    const refusal = navigationRefusal(next);
+    if (refusal) {
+      history.push(`BLOCKED RESEARCH TARGET ${String(next).slice(0, 120)} — ${refusal}`);
+      return false;
+    }
     visitedUrls.add(next);
     await navigateWorkingTab(tab.id, next);
     history.push(`${cited && next === cited ? "OPENING MISSING EVIDENCE" : "RESEARCH after rejected completion"}: ${compact.slice(0, 180)} -> ${next}`);
@@ -3047,6 +3346,9 @@ export async function runAgentGoal(goal, opts) {
       }
 
       mapFailures = 0;
+      // Every index below was chosen against THIS map. Any later re-map that
+      // reshuffles the frame table invalidates them all.
+      const framesAtMap = frameTableSignature();
       if (pendingResearchClick) {
         const sourceKey = researchUrlKey(pendingResearchClick.sourceUrl);
         if (repeatedResearchLanding(pendingResearchClick, state.url)) {
@@ -3088,9 +3390,12 @@ export async function runAgentGoal(goal, opts) {
         };
         rememberEvidenceEntry(evidenceJournal, entry);
       }
-      if (fingerprint !== lastFingerprint) {
+      // Progress is judged on the STEADY fingerprint: a ticking hold timer is
+      // the page counting, not the agent getting somewhere.
+      const stallPrint = stallFingerprint(state);
+      if (stallPrint !== lastFingerprint) {
         stuckStreak = 0; stepsOnPage = 0;   // something actually happened
-        lastFingerprint = fingerprint;
+        lastFingerprint = stallPrint;
       } else if (++stepsOnPage > 18) {
         // Stuck. Before quitting, go and work out what was wrong — ONCE.
         // A person in this position looks up how the thing is done rather
@@ -3104,7 +3409,10 @@ export async function runAgentGoal(goal, opts) {
             console.log(`agent: stuck -> ${found.diagnosis}${found.goTo ? ` -> ${found.goTo}` : ""}`);
             history.push(`RESEARCHED after getting stuck: ${found.diagnosis}`
               + (found.then.length ? ` Now: ${found.then.join(" -> ")}` : ""));
-            if (found.goTo && found.goTo !== state.url) {
+            const goRefusal = found.goTo ? navigationRefusal(found.goTo) : "";
+            if (goRefusal) {
+              history.push(`BLOCKED RESEARCH DESTINATION ${String(found.goTo).slice(0, 120)} — ${goRefusal}`);
+            } else if (found.goTo && found.goTo !== state.url) {
               try {
                 await navigateWorkingTab(tab.id, found.goTo);
                 lastUrl = found.goTo;
@@ -3155,6 +3463,16 @@ export async function runAgentGoal(goal, opts) {
       const banked = blockedDomain(state.url);
       if (banked) {
         return (handBack = true) && { status: "needs_user", result: `refused: ${banked} is a protected financial site — I never operate there autonomously`, tabId: tab.id };
+      }
+      // blockedDomain is re-checked against the LANDED page every step; the
+      // loopback guard was only ever checked against a URL we were about to
+      // request. A redirect, or any navigation path that predates this gate,
+      // could therefore leave the working tab sitting on a local service and
+      // the loop would map it and start clicking.
+      if (loopbackTarget(state.url) && !allowLoopback) {
+        return (handBack = true) && { status: "needs_user",
+          result: `refused: this ended up on ${String(state.url).slice(0, 120)}, a service on your own machine that the task never authorized — I stopped rather than operate it`,
+          tabId: tab.id };
       }
       if (looksLikeCaptcha(state)) {
         // Ask the backend to solve it. The key lives there, never here — a
@@ -3212,11 +3530,13 @@ export async function runAgentGoal(goal, opts) {
         continue;
       }
       history.push(`step ${step}: ${JSON.stringify(decision).slice(0, 160)} @ ${state.url.slice(0, 100)}`);
+      // The same moment, said once for him and once for whoever debugs this.
+      doingNow = humanStep(decision, state);
       // Persist the trace as we go — "what did it actually click?" must be
       // answerable from the job record after the run, not only from a
       // debugger attached at the right moment.
       if (onTrace) {
-        try { await onTrace(history, false, { evidenceJournal }); }
+        try { await onTrace(history, false, { evidenceJournal, doing: doingNow }); }
         catch (e) { /* audit is best-effort */ }
       }
 
@@ -3242,7 +3562,7 @@ export async function runAgentGoal(goal, opts) {
       }
 
       if (decision.action !== "done" && !["wait", "scroll"].includes(decision.action)) {
-        const stateAction = `${fingerprint}|${JSON.stringify({
+        const stateAction = `${stallPrint}|${JSON.stringify({
           action: decision.action, index: decision.index, text: decision.text,
           option: decision.option, url: decision.url,
         })}`;
@@ -3441,9 +3761,33 @@ export async function runAgentGoal(goal, opts) {
         // "navigated everything fine but couldn't pick from the dropdown /
         // change the date" failure. Set the value directly and fire the
         // events frameworks listen for.
-        const protectedStop = protectedInput(await inputMeta(tab.id, decision.index));
+        const selectMeta = await inputMeta(tab.id, decision.index);
+        const protectedStop = protectedInput(selectMeta);
         if (protectedStop) {
           return (handBack = true) && { status: "needs_user", result: protectedStop, tabId: tab.id };
+        }
+        // SELECT IS A SECOND WAY TO WRITE INTO A TEXT FIELD, so it needs the
+        // same mechanical stops the type path has. Only protectedInput was
+        // here, which left a clean bypass: a model parked at an OTP form
+        // whose typed "666666" unquotedCode refused could re-offer it as
+        // {"action":"select","option":"666666"} and the invented code landed
+        // in the field with nothing to stop it.
+        const selectCodeStop = unquotedCode(
+          decision.option, selectMeta.attrs, goal, scope, factsText);
+        if (selectCodeStop) {
+          stuckStreak++;
+          history.push(`step ${step}: ${selectCodeStop}`);
+          continue;
+        }
+        // And the draft stop: a composed message written into a text input
+        // through this path never paused for the owner to read it.
+        if (!draftShown && isAuthored(decision.option, goal, scope)) {
+          draftShown = true;
+          return (handBack = true) && {
+            status: "needs_user",
+            result: `Before this goes out in your name, here is what I wrote:\n\n${String(decision.option).slice(0, 900)}\n\nSay go and I'll send it, or tell me what to change.`,
+            tabId: tab.id,
+          };
         }
         let out;
         try {
@@ -3536,6 +3880,23 @@ export async function runAgentGoal(goal, opts) {
             continue;
           }
         } else stuckStreak = 0;
+        // Ask the field itself, exactly as the type path does. A value set
+        // through the native setter is as committed as a typed one, and an
+        // <input type="email"> holding "Omar Ebrahim" was reaching the final
+        // button unchallenged only because this path never asked.
+        if (!/refused|did not take|no option matching|not found/i.test(out)) {
+          const badSelect = await fieldRejects(tab.id, decision.index);
+          if (badSelect) {
+            badFields++;
+            history.push(`step ${step}: select ${decision.index} "${decision.option}" -> ${out}; then the field REFUSED that value — "${badSelect.value}" ${badSelect.why}`
+              + (badSelect.message ? ` (the page says: ${badSelect.message})` : "")
+              + `. Do NOT submit this form. Either put a real ${badSelect.type} in, or if you do not have one, stop with needs_user and say exactly what you need.`);
+            stuckStreak++;
+            const parked = parkOnRepeatedFieldRejections(badSelect);
+            if (parked) return parked;
+            continue;
+          }
+        }
         history.push(`step ${step}: select ${decision.index} "${decision.option}" -> ${out}`);
         continue;
       }
@@ -3562,8 +3923,12 @@ export async function runAgentGoal(goal, opts) {
           // with nothing to show; an honest hand-back names the wall instead.
           if (actionCounts[sig] >= 5) {
             return (handBack = true) && { status: "needs_user",
-              result: `I got stuck: ${JSON.stringify(decision).slice(0, 120)} on ${state.url.slice(0, 100)} kept doing nothing. `
-                + `The page would not accept it and I won't keep hammering. Tell me how to proceed or what to use instead.`,
+              // He read a raw JSON object here: {"action":"click","index":42...}.
+              // The engineering detail belongs in the trace, which already
+              // has it; what reaches him is the same fact in his own words.
+              result: `I got stuck ${humanStep(decision, state).replace(/^[A-Z]/, (c) => c.toLowerCase())} — `
+                + `the page kept ignoring it and I won't keep hammering at it. `
+                + `Nothing is lost; tell me how to get past this and I'll carry on.`,
               tabId: tab.id };
           }
           if (actionCounts[sig] === 3) {
@@ -3669,10 +4034,9 @@ export async function runAgentGoal(goal, opts) {
           // signature changed, and a SECOND Complete Reservation click was
           // not recognised as the same effect. That is a double booking, on
           // exactly the pages the system is told to push through.
-          const stableLabel = evidenceToken(
-            String(context.label || context.href || "").replace(/\d+/g, ""));
           const externalSig = [
-            evidenceUrlKey(state.url), context.tag, stableLabel,
+            evidenceUrlKey(state.url), "click", context.tag,
+            stableControlLabel(context),
             context.formAction || "", context.name || "", context.elementId || "",
             String(decision.index),
           ].join("|");
@@ -3711,6 +4075,12 @@ export async function runAgentGoal(goal, opts) {
             if (cleared.length) {
               history.push(`step ${step}: cleared unapproved optional defaults: ${cleared.join(", ")}`);
               state = await withTimeout(mapPage(tab.id), 20000, "post-clear mapPage");
+              if (frameTableSignature() !== framesAtMap) {
+                history.push(`step ${step}: PRE-SUBMIT BLOCK — the page's frame layout changed while clearing unapproved defaults, so element ${decision.index} no longer points at the control the guards just approved. Re-reading the page before anything is pressed.`);
+                delete actionCounts[sig];
+                stuckStreak = 0;
+                continue;
+              }
               c = await withTimeout(elementCenter(tab.id, decision.index), 15000,
                                     "post-clear elementCenter");
               const refreshedContext = await controlContext(tab.id, decision.index);
@@ -3808,6 +4178,8 @@ export async function runAgentGoal(goal, opts) {
               + (bad.message ? ` (the page says: ${bad.message})` : "")
               + `. Do NOT submit this form. Either put a real ${bad.type} in, or if you do not have one, stop with needs_user and say exactly what you need.`);
             stuckStreak++;
+            const parked = parkOnRepeatedFieldRejections(bad);
+            if (parked) return parked;
             continue;                       // not submitted, and not our guess to fix
           }
           // The stop. Not "is this button dangerous" — the model cannot be
@@ -3847,8 +4219,23 @@ export async function runAgentGoal(goal, opts) {
                 history.push(`step ${step}: PRE-SUBMIT BLOCK — the final form state could not be read.`);
                 continue;
               }
+              if (frameTableSignature() !== framesAtMap) {
+                history.push(`step ${step}: PRE-SUBMIT BLOCK — the page's frame layout changed since element ${decision.index} was chosen, so it no longer means the same control. Re-reading the page before submitting.`);
+                delete actionCounts[sig];
+                continue;
+              }
               const enterContext = await controlContext(tab.id, decision.index);
-              const enterSig = `${evidenceUrlKey(beforeEnter.url)}|enter|${enterContext.tag}|${evidenceToken(enterContext.label || enterContext.href)}|${evidenceToken(enterContext.nearbyText)}`;
+              // The click path was rebuilt on stable DOM identity after the
+              // double-booking finding; this one was left on the old text
+              // fingerprint, so pressing Enter twice on a held reservation
+              // still submitted twice the moment the countdown ticked or the
+              // button relabelled itself "Processing…".
+              const enterSig = [
+                evidenceUrlKey(beforeEnter.url), "enter", enterContext.tag,
+                stableControlLabel(enterContext),
+                enterContext.formAction || "", enterContext.name || "",
+                enterContext.elementId || "", String(decision.index),
+              ].join("|");
               if (performedExternalEffects.has(enterSig)) {
                 history.push(`step ${step}: BLOCKED DUPLICATE EFFECT — this same consequential form was already submitted once. Inspect the current state instead of pressing Enter again.`);
                 delete actionCounts[sig];
@@ -3880,6 +4267,11 @@ export async function runAgentGoal(goal, opts) {
                   history.push(`step ${step}: cleared unapproved optional defaults: ${cleared.join(", ")}`);
                   beforeEnter = await withTimeout(mapPage(tab.id), 20000,
                                                    "post-clear mapPage");
+                  if (frameTableSignature() !== framesAtMap) {
+                    history.push(`step ${step}: PRE-SUBMIT BLOCK — the page's frame layout changed while clearing unapproved defaults, so element ${decision.index} no longer points at the control the guards just approved. Re-reading the page before submitting.`);
+                    delete actionCounts[sig];
+                    continue;
+                  }
                   const refreshedEnterContext = await controlContext(tab.id, decision.index);
                   enterState = stateForControl(beforeEnter, refreshedEnterContext, decision.index);
                   unsupportedScope = unsupportedScopeFields(
@@ -3977,7 +4369,11 @@ export async function runAgentGoal(goal, opts) {
     if (/timed out after \d+ms/i.test(String(e))) {
       return (handBack = true) && {
         status: "needs_user",
-        result: `Chrome's browser-action API stopped responding, so I stopped this run instead of freezing the whole queue (${String(e).replace(/^Error:\s*/, "").slice(0, 180)}).`,
+        // Was: "Chrome's browser-action API stopped responding ... instead of
+        // freezing the whole queue (Error: ...)". Every noun in that sentence
+        // was mine, not his, and none of it told him what to do next.
+        result: `Chrome stopped responding, so I stopped rather than leave this half-done. `
+          + `Nothing was lost — send it again and I'll pick it up.`,
         tabId: tab.id,
       };
     }
@@ -3986,7 +4382,7 @@ export async function runAgentGoal(goal, opts) {
     // The final trace always lands, including the steps since the last
     // throttled write — the end of a run is the part worth auditing.
     if (onTrace && history.length) {
-      try { await onTrace(history, true, { evidenceJournal }); }
+      try { await onTrace(history, true, { evidenceJournal, doing: doingNow }); }
       catch (e) { /* best-effort */ }
     }
     userCancelledTabs.delete(tab.id);
@@ -4006,15 +4402,26 @@ export async function runAgentGoal(goal, opts) {
       }
     } catch (e) { /* already gone */ }
     // Late-spawned duplicates (target=_blank links) that the in-loop adoption
-    // missed shouldn't pile up in the owner's window. openerTabId alone misses
-    // some spawns, so anything created during the run that isn't the agent tab
-    // gets closed. A stray HOLDING FOCUS is closed only when it is provably
-    // ours (opened by the working tab) — a tab the owner opened themselves
-    // mid-run is theirs to keep — and focus goes back to the owner first.
+    // missed shouldn't pile up in the owner's window. A stray is closed only
+    // when it is provably OURS — descended from the working tab, however many
+    // popups deep — because `!t.active` was never a test of ownership: a run
+    // lasting several minutes is exactly when the owner middle-clicks links
+    // into background tabs, and every one of those is inactive, was not in
+    // `preexisting`, and was silently destroyed at the end of every run. The
+    // comment above this said such a tab "is theirs to keep"; the condition
+    // only ever protected the single active tab per window.
     try {
-      const strays = (await chrome.tabs.query({})).filter(
-        (t) => t.id !== tab.id && !preexisting.has(t.id)
-          && (!t.active || t.openerTabId === tab.id));
+      const open = await chrome.tabs.query({});
+      const ours = new Set([tab.id]);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const t of open) {
+          if (!ours.has(t.id) && ours.has(t.openerTabId)) { ours.add(t.id); grew = true; }
+        }
+      }
+      const strays = open.filter(
+        (t) => t.id !== tab.id && !preexisting.has(t.id) && ours.has(t.id));
       if (strays.some((t) => t.active)) await restoreOwnerFocus();
       for (const t of strays) { try { await chrome.tabs.remove(t.id); } catch (e) { /* gone */ } }
       await assertBackground();

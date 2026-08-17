@@ -23,11 +23,19 @@ const suites = [
   "test_poll_deadlock.mjs",
   "test_attach_diagnosis.mjs",
   "test_hunt_round2.mjs",
+  "test_hunt_round3.mjs",
   "test_commit_integrity.mjs",
   "test_captcha_solving.mjs",
   "test_no_domain_hardcoding.mjs",
   "test_stop_before_submit.mjs",
   "test_park_not_burn.mjs",
+  "test_live_progress.mjs",
+  "test_side_trip.mjs",
+  "test_background_recovery.mjs",
+  "test_side_trip.mjs",
+  "test_guard_superuser_dashboard.mjs",
+  "test_claim_legacy_binding.mjs",
+  "test_backup_volume_footprint.mjs",
 ];
 let failed = 0;
 for (const s of suites) {
