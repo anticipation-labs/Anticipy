@@ -27,17 +27,24 @@ func staleExtension(_ browser: String?) -> String? {
     return nil
 }
 
-// The exact situation he was in: Chrome on 0.7.9, source on 0.8.2.
+// The exact situation he was in: Chrome on 0.7.9, source ahead of it.
 check("the version he was actually stuck on is caught",
       staleExtension("Chrome/128.0.0.0 ext/0.7.9") == "0.7.9",
       String(describing: staleExtension("Chrome/128.0.0.0 ext/0.7.9")))
 check("the shipping-gap version is caught",
       staleExtension("Chrome/128.0.0.0 ext/0.3.3") == "0.3.3")
 check("being up to date says nothing at all",
-      staleExtension("Chrome/128.0.0.0 ext/0.8.2") == nil)
+      staleExtension("Chrome/128.0.0.0 ext/\(expected)") == nil)
 check("being AHEAD says nothing — no nagging a dev build",
-      staleExtension("Chrome/128.0.0.0 ext/0.9.0") == nil)
+      staleExtension("Chrome/128.0.0.0 ext/99.0.0") == nil)
 check("a minor-version gap is caught", staleExtension("Chrome/1 ext/0.8.1") == "0.8.1")
+// SAME NUMBER, DIFFERENT CODE was the real incident: the served zip said
+// 0.8.2 and so did the source, while containing none of that day's work, so
+// this check sat silent. The lesson is not testable here -- it is that the
+// version MUST be bumped whenever the bytes change -- but the immediately
+// previous version being caught is.
+check("the previous version is caught once source moves on",
+      staleExtension("Chrome/1 ext/0.8.2") == "0.8.2")
 check("a major-version gap is caught", staleExtension("Chrome/1 ext/0.10.0") == nil)  // 0.10 > 0.8
 
 // Never invent a warning out of missing or malformed data.
