@@ -12,7 +12,7 @@ func check(_ name: String, _ ok: Bool, _ detail: String = "") {
 var failures = 0
 
 // Mirrors AnticipySession.staleExtension.
-let expected = "0.8.2"
+let expected = "0.8.3"
 func staleExtension(_ browser: String?) -> String? {
     guard let browser, let range = browser.range(of: "ext/") else { return nil }
     let running = String(browser[range.upperBound...]).prefix(while: { $0.isNumber || $0 == "." })

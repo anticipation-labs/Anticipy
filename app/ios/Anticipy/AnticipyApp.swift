@@ -74,7 +74,7 @@ final class AnticipySession: ObservableObject {
 
     /// The extension version this build of the app needs. Bumped with the
     /// extension; a mismatch is a fact, not a guess.
-    static let expectedExtensionVersion = "0.8.2"
+    static let expectedExtensionVersion = "0.8.3"
 
     /// The extension reports itself as "Chrome/128.0.0.0 ext/0.8.2" in the
     /// agent record's browser field. Returns what Chrome is running when it
