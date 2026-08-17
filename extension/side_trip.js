@@ -64,7 +64,14 @@ export function extractCode(text, opts = {}) {
 
   // Pass 1: a labelled code. "Your verification code is 483920", "Code: 8813".
   // The label is the strongest possible evidence, so these outrank everything.
-  const labelled = /\b(?:code|passcode|pin|otp)\b[^\dA-Za-z]{0,20}([0-9]{4,8}|[A-Z0-9]{4,8})\b/gi;
+  // The filler between the label and the code matters more than it looks.
+  // Requiring NON-alphanumeric filler meant "Your code is 483920" — the most
+  // common phrasing there is — never matched as labelled at all. It fell
+  // through to the weak proximity pass, where a number planted elsewhere in
+  // the message could tie with it and the whole read came back "ambiguous".
+  // A handful of connecting words are allowed; anything longer is prose, not
+  // a label, and must not drag an unrelated number in with it.
+  const labelled = /\b(?:code|passcode|pin|otp)\b(?:\s*(?:is|are|was|:|=|-|–|—)\s*){0,2}\s*([0-9]{4,8}|[A-Z0-9]{4,8})\b/gi;
   for (const m of body.matchAll(labelled)) {
     candidates.push({ value: m[1], score: 100, why: "labelled directly" });
   }
