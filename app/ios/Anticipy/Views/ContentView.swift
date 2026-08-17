@@ -207,6 +207,20 @@ struct HomeView: View {
                                         .foregroundStyle(Theme.sand)
                                         .padding(.bottom, Theme.Space.tight)
                                 }
+                                // He has had to ASK whether his extension was
+                                // current — twice — and once a whole retest
+                                // ran against a stale one while everybody
+                                // believed the fixes were live. Chrome already
+                                // reports its version on every heartbeat, so
+                                // the answer was always here to be shown.
+                                if let stale = session.staleExtensionVersion {
+                                    Text("Chrome is running the old extension (\(stale)). "
+                                         + "Open chrome://extensions and press Reload to get \(AnticipySession.expectedExtensionVersion) — "
+                                         + "until then it's working from old instructions.")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.champagne)
+                                        .padding(.bottom, Theme.Space.tight)
+                                }
                                 VStack(spacing: 0) {
                                     ForEach(Array(handling.enumerated()), id: \.element.id) { i, job in
                                         if i > 0 { Rectangle().fill(Theme.stroke).frame(height: 0.5) }

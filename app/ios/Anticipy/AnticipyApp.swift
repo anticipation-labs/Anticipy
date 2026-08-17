@@ -61,6 +61,38 @@ final class AnticipySession: ObservableObject {
     @Published var agentOnline = false
     @Published var agentLastSeenSeconds: Int?   // nil = never seen
     @Published var agentPaired = false
+    /// The extension version Chrome is actually running, when it is older
+    /// than this build expects. He asked "am I on the right version?" twice,
+    /// and a whole retest cycle once ran against a stale extension while
+    /// everyone assumed the fixes were live. The product should answer that
+    /// question itself rather than making him ask a person.
+    @Published var staleExtensionVersion: String? = nil
+
+    /// The extension version this build of the app needs. Bumped with the
+    /// extension; a mismatch is a fact, not a guess.
+    static let expectedExtensionVersion = "0.8.2"
+
+    /// The extension reports itself as "Chrome/128.0.0.0 ext/0.8.2" in the
+    /// agent record's browser field. Returns what Chrome is running when it
+    /// is BEHIND what this app expects, and nil when it is level or ahead —
+    /// nagging someone who is already up to date is its own kind of noise.
+    static func staleExtension(_ browser: String?) -> String? {
+        guard let browser,
+              let range = browser.range(of: "ext/") else { return nil }
+        let running = String(browser[range.upperBound...])
+            .prefix(while: { $0.isNumber || $0 == "." })
+        guard !running.isEmpty else { return nil }
+        func parts(_ v: some StringProtocol) -> [Int] {
+            v.split(separator: ".").map { Int($0) ?? 0 }
+        }
+        let have = parts(running), want = parts(expectedExtensionVersion)
+        for i in 0..<max(have.count, want.count) {
+            let a = i < have.count ? have[i] : 0
+            let b = i < want.count ? want[i] : 0
+            if a != b { return a < b ? String(running) : nil }
+        }
+        return nil
+    }
     @Published var pendantCapturing = false
 
     /// What the screen is allowed to claim. Before this, "still loading",
@@ -159,17 +191,17 @@ final class AnticipySession: ObservableObject {
         // words survived read exactly this number.
         pendingCount = unsent.count
         listener.onLine = { [weak self] line in
-            Task { await self?.heard(line) }
+            Task { await self?.heard(line, from: .phoneMic) }
         }
         // The on-device voice check rides with each line. It only engages
         // when a model is present AND he has enrolled; otherwise every line
         // travels bare, exactly as before.
         listener.speaker = speakerTagger
         listener.onSpeaker = { [weak self] line, tag in
-            Task { await self?.heard(line, speaker: tag) }
+            Task { await self?.heard(line, speaker: tag, from: .phoneMic) }
         }
         pendantTranscriber.onTranscript = { [weak self] line in
-            Task { await self?.heard(line) }
+            Task { await self?.heard(line, from: .pendant) }
         }
         pendantTranscriber.onConnection = { [weak self] connected in
             self?.pendantCapturing = connected
@@ -190,12 +222,22 @@ final class AnticipySession: ObservableObject {
     /// people he talks to) — all of it local to this phone.
     let speakerTagger = SpeakerTagger()
 
+    /// Where a line came from. The ack used to be decided by
+    /// `!listener.isListening` — the PHONE mic's state standing in for "a
+    /// person typed this". It is not the same thing: with a pendant connected
+    /// and the phone mic off, every finalized ambient sentence buzzed the
+    /// phone all day, which is precisely the twitching the ack rule exists to
+    /// prevent; and a line typed while the phone mic was running got no ack at
+    /// all. Every call site already knows which of the three this is.
+    enum LineSource { case typed, phoneMic, pendant }
+
     func heard(_ line: String, speaker: String? = nil,
-               explicit: Bool = false) async {
-        // A typed line deserves an instant felt ack. Ambient listening does
+               explicit: Bool = false,
+               from source: LineSource = .typed) async {
+        // A typed line deserves an instant felt ack. Ambient capture does
         // NOT — buzzing on every finalized utterance all day is a phone that
         // won't stop twitching; the meaningful buzz is the act-verdict one.
-        if !listener.isListening { Haptics.tap() }
+        if source == .typed { Haptics.tap() }
         sessionLines.append(SessionLine(text: line))
         transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line, decision: nil))
         // No owner, no capture. A forced sign-out (an expired token 401s and
@@ -342,6 +384,7 @@ final class AnticipySession: ObservableObject {
         // Connection health from the extension's heartbeat, not guesswork.
         if let agent = try? await b.fetchAgent(owner: ownerID) {
             agentPaired = agent.paired ?? false
+            staleExtensionVersion = Self.staleExtension(agent.browser)
             if let seen = agent.last_seen, let date = Self.parsePBDate(seen) {
                 let secs = max(0, Int(Date().timeIntervalSince(date)))
                 agentLastSeenSeconds = secs
@@ -354,6 +397,7 @@ final class AnticipySession: ObservableObject {
             agentPaired = false
             agentLastSeenSeconds = nil
             agentOnline = false
+            staleExtensionVersion = nil
         }
     }
 
@@ -828,8 +872,15 @@ final class AnticipySession: ObservableObject {
 
     /// Deterministic, not model-judged: does this answer END the errand?
     /// Returns the honest result line to store, or nil to proceed normally.
-    /// Bias runs toward ending — a wrongly-ended errand costs a re-ask; a
-    /// wrongly-relaunched one acts on words the owner meant as "stop".
+    ///
+    /// Ending an errand is not a cheap guess: it writes the job cancelled and
+    /// files the owner's own sentence as the evidence they called it off, so a
+    /// wrong hit puts words in their mouth in the ledger. Returning nil is not
+    /// "act blindly" — the answer rides up as a fact on the plan and the brain
+    /// reads it. So anything short of an unmistakable stop goes there.
+    // ANCHOR: end-of-errand decision. Everything down to the END marker is
+    // compiled and exercised on its own by Tests/run_end_errand_tests.sh, so
+    // it must stay pure Foundation and self-contained.
     static func answerThatEndsTheErrand(_ answer: String) -> String? {
         let normalized = answer.lowercased()
             .replacingOccurrences(of: "’", with: "'")
@@ -853,23 +904,76 @@ final class AnticipySession: ObservableObject {
             "already sent", "already ordered", "done it myself",
             "did that myself", "sorted it", "i did it already",
         ]
-        // A DECLINE IS A SHORT ANSWER, NOT A WORD INSIDE A SENTENCE.
-        // Substring matching anywhere in the text meant an ordinary reply —
-        // or a mouthful of frustration about the assistant itself — could
-        // carry "leave it", "stop it" or "no" inside it and silently kill
-        // work he still wanted. Ending an errand is a decision; it needs the
-        // brevity of one. Anything longer goes to the brain, which reads
-        // meaning rather than characters.
-        let wordCount = normalized.split(separator: " ").count
-        guard wordCount <= 8 else { return nil }
-        if handled.contains(where: normalized.contains) {
+        // A DECLINE IS THE WHOLE ANSWER, NOT A PHRASE BURIED IN ONE.
+        // Substring matching anywhere in the text killed errands the owner
+        // still wanted: "leave it with the concierge" (leave it), "drop it off
+        // at reception after 5" (drop it), "stop it from auto-renewing"
+        // (stop it), and — worst — "it's not already booked yet, go ahead",
+        // where a NEGATED phrase filed the owner's go-ahead as proof they had
+        // done it themselves. Capping the answer at eight words didn't fix any
+        // of those: they are all short. Length was never the condition.
+        //
+        // The condition is position. A stop leads its clause, and nothing but
+        // filler follows it — "ok, forget it", "already sent it, thanks". The
+        // moment real content follows ("with the concierge", "off at
+        // reception", "from auto-renewing"), the sentence is an instruction,
+        // not a stop, and it belongs to the brain. Anchoring at the front is
+        // also what makes the negation case safe for free: "not already
+        // booked" does not start with "already booked".
+        let clauses = normalized
+            .split(whereSeparator: { ",;:!?\n\u{2014}\u{2013}".contains($0) })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        // A CONDITION IS NOT A STOP. "if they're full, skip it" leads a clause
+        // with a decline and means the opposite of one: it hands back a
+        // judgment call, which is the brain's job and not a lookup table's.
+        let spokenWords = Set(normalized
+            .split(whereSeparator: { !$0.isLetter && $0 != "'" })
+            .map(String.init))
+        guard spokenWords.isDisjoint(with: ["if", "unless", "otherwise", "whether"])
+        else { return nil }
+        // What a person puts in FRONT of the real answer, and what can trail it
+        // without changing it. Deliberately short lists of pure filler: every
+        // word that carries meaning has to fall outside them, because a word
+        // that carries meaning is exactly the signal that this is not a stop.
+        let openers: Set<String> = [
+            "ok", "okay", "oh", "well", "so", "and", "but", "then", "actually",
+            "just", "please", "sorry", "yeah", "yea", "yep", "yes", "sure",
+            "no", "nah", "i", "we", "it", "it's", "its", "that", "that's",
+            "thats", "hey", "um", "uh",
+        ]
+        let trailers: Set<String> = [
+            "it", "that", "this", "them", "already", "myself", "please",
+            "thanks", "thank", "you", "now", "for", "anymore", "any", "more",
+            "though", "anyway", "too", "sorry", "then", "ok", "okay",
+        ]
+        func leads(_ clause: String, _ phrases: [String]) -> Bool {
+            var words = clause.split(separator: " ").map(String.init)
+            while !words.isEmpty {
+                let rest = words.joined(separator: " ")
+                for phrase in phrases
+                where rest == phrase || rest.hasPrefix(phrase + " ") {
+                    let tail = rest.dropFirst(phrase.count)
+                        .split(separator: " ").map(String.init)
+                    if tail.allSatisfy(trailers.contains) { return true }
+                }
+                // Only filler may be stepped over. The first word that means
+                // something ends the search, so "don't cancel it" can never
+                // reach the "cancel it" sitting one word inside it.
+                guard openers.contains(words[0]) else { return false }
+                words.removeFirst()
+            }
+            return false
+        }
+        if clauses.contains(where: { leads($0, handled) }) {
             return "You handled it yourself: \u{201C}\(answer)\u{201D}. I did nothing further."
         }
-        if whole.contains(normalized) || declines.contains(where: normalized.contains) {
+        if whole.contains(normalized) || clauses.contains(where: { leads($0, declines) }) {
             return "You called it off: \u{201C}\(answer)\u{201D}. I did nothing further."
         }
         return nil
     }
+    // END ANCHOR: end-of-errand decision
 
     private func cancellationFields(for job: AgentJob,
                                     trigger: String = "unspecified") throws -> [String: Any]? {

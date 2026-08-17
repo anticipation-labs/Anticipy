@@ -113,9 +113,25 @@ final class AnticipyBackend {
     private func send(_ request: URLRequest) async throws -> Data {
         let (data, resp) = try await URLSession.shared.data(for: request)
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw BackendError(status: http.statusCode)
+            throw BackendError(status: http.statusCode,
+                               message: Self.serverMessage(data))
         }
         return data
+    }
+
+    /// The server's own sentence, when it wrote one. The hooks answer refusals
+    /// in real English — "Pick a password with at least 8 characters.",
+    /// "Something went wrong on my end." — and that body was being dropped on
+    /// the floor here, which is why one screen could only ever recite a single
+    /// canned reason for three different failures. Anything that isn't JSON
+    /// with a `message` (an HTML 502 page from the proxy, an empty body) has
+    /// nothing worth showing a person, so it stays nil.
+    private static func serverMessage(_ data: Data) -> String? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let message = (root["message"] as? String)?
+                  .trimmingCharacters(in: .whitespacesAndNewlines),
+              !message.isEmpty else { return nil }
+        return message
     }
 
     private func writeRequest(_ url: URL, method: String) -> URLRequest {
@@ -264,9 +280,17 @@ final class AnticipyBackend {
         do {
             try await send(req)
         } catch let e as BackendError {
-            // The reset routes answer with a human sentence; surface it.
-            _ = e
-            throw MessageError(message: "That code isn't right, or it has expired. Ask for a new one.")
+            // The reset route answers three different refusals with three
+            // different sentences: the genuine bad code, "Pick a password with
+            // at least 8 characters." (400), and "Something went wrong on my
+            // end." (500, when the owners record fails to save). This line used
+            // to recite the bad-code one for all three — so someone holding a
+            // code that arrived seconds ago was told the code was wrong, went
+            // back and asked for another, and after five requests in an hour
+            // the throttle silently stopped texting anything at all. Locked
+            // out, with every screen naming the wrong reason.
+            throw MessageError(message: e.message
+                ?? "That code isn't right, or it has expired. Ask for a new one.")
         }
     }
 
@@ -488,7 +512,14 @@ final class AnticipyBackend {
         return http.statusCode == 200
     }
 
-    struct BackendError: Error { let status: Int }
+    /// A refusal from the backend. `message` carries the server's own sentence
+    /// when it sent one, so a screen can say what actually went wrong instead
+    /// of picking the likeliest-sounding reason. Defaulted to nil so the call
+    /// sites that only ever knew a status code are unchanged.
+    struct BackendError: Error {
+        let status: Int
+        var message: String? = nil
+    }
 
     private func post(_ path: String, body: [String: Any]) async throws {
         var request = writeRequest(baseURL.appendingPathComponent(path), method: "POST")
