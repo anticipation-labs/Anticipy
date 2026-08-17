@@ -662,8 +662,48 @@ Use {"facts": {}} when there is nothing durable."""
             if not clean:
                 return {}
             known.update(clean)
+            # AN ANSWER GIVEN ONCE IS KNOWN FOREVER — and the canonical
+            # identity fields are COLUMNS, not a blob. The browser is handed
+            # first_name/last_name/email/phone by name; anything living only
+            # in `facts` reaches it as loose trivia. On 2026-08-17 his
+            # profile columns were all empty while the blob held
+            # {"name": "Ebrahim", "email": "omar@gmail.com",
+            #  "full_name": "David Moore"} — a surname, a mistyped address,
+            # and SOMEBODY ELSE'S NAME picked up from a conversation in the
+            # room. So every booking asked him for an email he had already
+            # given, and filled forms from junk.
+            #
+            # Promote what is unambiguous into the real columns, and never
+            # let a fact learned from ambient speech overwrite one already
+            # there — a name heard across a table is not his.
+            columns = {}
+            for key, value in clean.items():
+                k = re.sub(r"\W+", "_", str(key).lower()).strip("_")
+                v = str(value).strip()
+                if not v:
+                    continue
+                if k in ("email", "email_address") and "@" in v:
+                    columns["email"] = v
+                elif k in ("phone", "phone_number", "mobile"):
+                    columns["phone"] = v
+                elif k in ("first_name", "firstname", "given_name"):
+                    columns["first_name"] = v
+                elif k in ("last_name", "lastname", "surname", "family_name"):
+                    columns["last_name"] = v
+                elif k in ("full_name", "name") and " " in v:
+                    parts = v.split()
+                    columns.setdefault("first_name", parts[0])
+                    columns.setdefault("last_name", " ".join(parts[1:]))
+            # Never overwrite something already recorded: the first answer he
+            # gave deliberately outranks anything overheard later.
+            columns = {k: v for k, v in columns.items()
+                       if not str(rec.get(k) or "").strip()}
+            payload = {"facts": json.dumps(known)}
+            payload.update(columns)
             pb.patch(f"{base}/api/collections/owner_profile/records/{rec['id']}",
-                     json={"facts": json.dumps(known)}, timeout=10)
+                     json=payload, timeout=10)
+            if columns:
+                print(f"learned about him for good: {sorted(columns)}")
             return clean
         except Exception:
             return {}
