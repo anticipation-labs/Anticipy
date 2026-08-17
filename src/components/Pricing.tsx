@@ -175,7 +175,7 @@ export function Pricing() {
               opacity: 0.5,
             }}
           >
-            Pricing and specifications are preliminary and may change before shipping. Estimated ship date August 2026. Refunds at Anticipation Labs Inc&apos;s sole discretion except where required by applicable law.{" "}
+            Pricing and specifications are preliminary and may change before shipping. Estimated ship date Q2 2027. Refunds at Anticipation Labs Inc&apos;s sole discretion except where required by applicable law.{" "}
             <Link
               href="/pre-orders/agreement"
               className="underline hover:opacity-100"

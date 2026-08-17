@@ -167,7 +167,7 @@ export default function PreOrderAgreementPage() {
             <Section title="4. Estimated ship date.">
               <p>
                 Our current good-faith estimate is that the Product will ship
-                in <Strong>August 2026</Strong>. This is an estimate, not a
+                in <Strong>Q2 2027</Strong>. This is an estimate, not a
                 guarantee. Hardware schedules slip. Suppliers miss dates.
                 Certifications take longer than expected. By placing a
                 pre-order, you acknowledge that the date can move and that
@@ -184,6 +184,51 @@ export default function PreOrderAgreementPage() {
                 customers retain whatever rights those statutes grant. Where
                 local law is more favourable to you than the terms of this
                 Agreement, local law controls.
+              </p>
+            </Section>
+
+            <Section title="4A. British Columbia distance sales rights.">
+              <p>
+                Anticipation Labs Inc. is a British Columbia company and this
+                pre-order is a <Strong>distance sales contract</Strong> under
+                the British Columbia Business Practices and Consumer
+                Protection Act, SBC 2004 c 2. That Act gives you the following
+                rights, which apply regardless of anything else in this
+                Agreement:
+              </p>
+              <p>
+                <Strong>Supply date.</Strong> The supply date for this
+                contract is the estimated ship date stated in section 4.
+              </p>
+              <p>
+                <Strong>Cancellation for late delivery.</Strong> If we have
+                not supplied the Product within <Strong>thirty (30) days</Strong>{" "}
+                after that supply date, you may cancel this contract and
+                receive a full refund. You do not need our agreement and you
+                do not need to give a reason.
+              </p>
+              <p>
+                <Strong>Refund timing.</Strong> If you cancel under the Act,
+                we will refund you within <Strong>fifteen (15) days</Strong>{" "}
+                of the cancellation, in the original form of payment, with no
+                deductions — including all fees, charges and taxes you paid.
+              </p>
+              <p>
+                <Strong>Your copy of this contract.</Strong> We will send you
+                a copy of this Agreement and your order details by email
+                within fifteen (15) days of your order. If we do not, the Act
+                gives you a further right to cancel.
+              </p>
+              <p>
+                To cancel, email{" "}
+                <a
+                  href="mailto:hello@anticipy.ai"
+                  className="text-gold hover:underline"
+                >
+                  hello@anticipy.ai
+                </a>{" "}
+                from the address you ordered with and say you are cancelling.
+                Nothing in section 5 below limits any of these rights.
               </p>
             </Section>
 
@@ -229,9 +274,8 @@ export default function PreOrderAgreementPage() {
                 Quebec consumers a seven (7) day cancellation right from
                 receipt of an internet-contract good); the British Columbia
                 Business Practices and Consumer Protection Act, SBC 2004 c 2,
-                section 49 (which grants BC consumers up to a fourteen (14)
-                day cancellation right on certain future-performance
-                contracts); the Ontario Consumer Protection Act 2002, S.O.
+                sections 46 to 54 governing distance sales contracts
+                (described in full in section 4A above); the Ontario Consumer Protection Act 2002, S.O.
                 2002 c 30; the Alberta Consumer Protection Act, RSA 2000 c
                 C-26.3; the EU Consumer Rights Directive 2011/83/EU and the
                 UK Consumer Contracts Regulations 2013 (each granting a

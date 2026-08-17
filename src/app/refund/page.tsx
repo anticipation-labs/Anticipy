@@ -79,12 +79,20 @@ export default function RefundPolicy() {
                 <Link href="/pre-orders/agreement" className="text-gold hover:underline">
                   Pre-Order Agreement
                 </Link>
-                . In summary, <strong className="text-[var(--text-on-dark)]">pre-order
-                refunds are at the sole discretion of Anticipation Labs Inc. except where
-                required by applicable law</strong>. We do not offer no-questions-asked refunds
-                during the pre-order period. We may grant a refund, or decline one, in our
-                sole discretion, and we will always honour rights granted to you by your local
-                consumer protection statute.
+                . Outside the statutory rights described below, we do not offer
+                no-questions-asked refunds during the pre-order period, and a discretionary
+                refund remains at our discretion.
+              </p>
+              <p className="mt-4">
+                <strong className="text-[var(--text-on-dark)]">If you are in British Columbia,
+                you have rights that are not discretionary.</strong> Anticipation Labs Inc. is a
+                BC company and a pre-order placed online is a distance sales contract under the
+                Business Practices and Consumer Protection Act, SBC 2004 c 2. If we have not
+                shipped within <strong className="text-[var(--text-on-dark)]">30 days</strong> of
+                the estimated ship date shown at checkout, you may cancel and receive a full
+                refund — no reason required and no agreement from us needed. We will refund you
+                within <strong className="text-[var(--text-on-dark)]">15 days</strong>, in your
+                original payment method, with no deductions, including all fees and taxes.
               </p>
               <p className="mt-4">
                 Where the U.S. Federal Trade Commission&apos;s Mail, Internet, or Telephone Order

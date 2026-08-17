@@ -271,7 +271,7 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
           >
             Privacy Policy
           </a>
-          . I understand the estimated ship date is August 2026, that
+          . I understand the estimated ship date is Q2 2027, that
           refunds are at Anticipation Labs Inc&apos;s sole discretion except
           where required by applicable law, and that the Pre-Order Agreement
           contains a binding arbitration clause and class action waiver in

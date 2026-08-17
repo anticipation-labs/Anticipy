@@ -122,7 +122,7 @@ export default async function PreOrderSuccessPage({
             <p className="text-[14px] font-light leading-[1.7]" style={{ color: "var(--text-on-light-muted)" }}>
               <strong style={{ color: "var(--text-on-light)" }}>What is next.</strong>
               {" "}
-              We are targeting shipping for August 2026. As the date approaches we will email{" "}
+              We are targeting shipping for Q2 2027. As the date approaches we will email{" "}
               <strong style={{ color: "var(--text-on-light)" }}>
                 {session?.email ?? "your inbox"}
               </strong>

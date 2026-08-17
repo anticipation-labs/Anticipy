@@ -785,7 +785,7 @@ export default function TermsOfService() {
                 If the dispute cannot be resolved informally, you and Anticipation Labs agree that
                 any dispute, claim, or controversy arising out of or relating to these Terms or the
                 Service shall be resolved by <strong className="text-[var(--text-on-dark)]">binding
-                arbitration</strong> administered in the jurisdiction in which the Company is incorporated,
+                arbitration</strong> administered in Vancouver, British Columbia,
                 in accordance with the rules of a recognized commercial arbitration body mutually agreed
                 upon by the parties. The arbitration shall be conducted in the
                 English language by a single arbitrator. The arbitrator&apos;s decision shall be final
@@ -825,10 +825,11 @@ export default function TermsOfService() {
               </h2>
               <p>
                 These Terms and any dispute arising out of or relating to them or the Service shall be
-                governed by and construed in accordance with the laws of the jurisdiction in which
-                Anticipation Labs Inc. is incorporated, without regard to conflict of law principles.
+                governed by and construed in accordance with the laws of the Province of British
+                Columbia and the federal laws of Canada applicable therein, Anticipation Labs Inc.
+                being incorporated in British Columbia, without regard to conflict of law principles.
                 Subject to the arbitration provisions in Section 12, you irrevocably consent to the
-                exclusive jurisdiction and venue of the courts in that jurisdiction for any action or
+                exclusive jurisdiction and venue of the courts of British Columbia for any action or
                 proceeding arising out of or relating to these Terms.
               </p>
             </section>

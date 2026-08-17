@@ -1080,7 +1080,7 @@ export default function PrivacyPolicy() {
               </h2>
               <p>
                 Your personal information may be processed and stored in
-                the jurisdiction where Anticipation Labs Inc. operates and, to the
+                Canada, where Anticipation Labs Inc. operates, and, to the
                 extent necessary for the operation of the Platform, in other
                 countries where our service providers operate. We take the
                 following measures to ensure adequate protection of personal
@@ -2409,11 +2409,12 @@ export default function PrivacyPolicy() {
               </h2>
               <p>
                 This Policy is governed by and construed in accordance with the
-                laws of the jurisdiction in which Anticipation Labs Inc. is
-                incorporated, without regard to conflict of law principles.
+                laws of the Province of British Columbia and the federal laws
+                of Canada applicable therein, without regard to conflict of law
+                principles.
                 Any dispute arising out of or in connection with this Policy
-                shall be subject to the exclusive jurisdiction of the courts in
-                that jurisdiction, except where applicable privacy law provides
+                shall be subject to the exclusive jurisdiction of the courts of
+                British Columbia, except where applicable privacy law provides
                 otherwise (e.g., GDPR data subjects may bring proceedings in the
                 member state of their habitual residence).
               </p>
