@@ -88,7 +88,7 @@ export function Hero() {
           variants={childVariants}
           className="text-[12px] uppercase tracking-[0.15em] text-[var(--text-on-dark-muted)] mt-6"
         >
-          $50 off retail &middot; Ships Q2 2027 &middot; Free shipping in the US and Canada
+          $50 off retail &middot; Ships Q4 2026 &middot; Free shipping in the US and Canada
         </motion.p>
       </motion.div>
     </section>

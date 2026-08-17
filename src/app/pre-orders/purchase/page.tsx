@@ -186,7 +186,7 @@ export default function PreOrderPurchasePage({
             <div className="grid grid-cols-3 gap-4 mb-8">
               <div className="text-center p-4 rounded-card" style={{ background: "var(--cream-muted)" }}>
                 <div className="text-[11px] uppercase tracking-[0.12em] mb-1" style={{ color: "var(--text-on-light-muted)" }}>Ship date</div>
-                <div className="font-serif text-[16px]" style={{ color: "var(--text-on-light)" }}>Q2 2027</div>
+                <div className="font-serif text-[16px]" style={{ color: "var(--text-on-light)" }}>Q4 2026</div>
               </div>
               <div className="text-center p-4 rounded-card" style={{ background: "var(--cream-muted)" }}>
                 <div className="text-[11px] uppercase tracking-[0.12em] mb-1" style={{ color: "var(--text-on-light-muted)" }}>Shipping</div>
@@ -215,7 +215,7 @@ export default function PreOrderPurchasePage({
           <div className="space-y-8">
             <FAQ
               q="When will my pendant ship?"
-              a="Our current estimate is Q2 2027. We are an early-stage hardware company, so dates can shift. If the date moves and you no longer want to wait, contact us and we will work with you. By US Federal Trade Commission Mail-Order Rule, if we cannot ship within thirty days of the originally promised date and you have not consented to a delay, you have the right to a full refund."
+              a="Our current estimate is Q4 2026. We are an early-stage hardware company, so dates can shift. If the date moves and you no longer want to wait, contact us and we will work with you. By US Federal Trade Commission Mail-Order Rule, if we cannot ship within thirty days of the originally promised date and you have not consented to a delay, you have the right to a full refund."
             />
             <FAQ
               q="Why is the pre-order price lower?"

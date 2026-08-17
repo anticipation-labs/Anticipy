@@ -13,7 +13,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "When does it ship?",
-    a: "Q2 2027. You'll get your order number immediately, build updates as we go, and tracking the moment yours leaves the line.",
+    a: "Q4 2026. You'll get your order number immediately, build updates as we go, and tracking the moment yours leaves the line.",
   },
   {
     q: "What if I change my mind?",

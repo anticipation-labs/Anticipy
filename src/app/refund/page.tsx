@@ -123,54 +123,74 @@ export default function RefundPolicy() {
               </p>
             </section>
 
-            {/* 3. Hardware Returns . 30-Day Satisfaction Guarantee */}
+            {/* 3. Hardware Returns . Final sale after delivery */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                3. Hardware Returns  30-Day Satisfaction Guarantee
+                3. Hardware Returns &mdash; All Sales Final After Delivery
               </h2>
               <p>
-                We offer a <strong className="text-[var(--text-on-dark)]">30-day satisfaction guarantee</strong> on all Anticipy hardware. If you&apos;re not completely happy with your device, you may return it within 30 calendar days of the delivery date for a full refund of the purchase price.
+                <strong className="text-[var(--text-on-dark)]">Once your pendant has been
+                delivered, the sale is final.</strong> We do not accept change-of-mind returns,
+                and we do not offer a trial period. Anticipy is made in small runs by a small
+                team, each unit is built and tested individually, and a returned unit cannot be
+                resold as new.
+              </p>
+              <p className="mt-4">
+                You have a full and unconditional right to change your mind{" "}
+                <strong className="text-[var(--text-on-dark)]">before your unit ships</strong> —
+                one email and we refund you in full, no reason required. That window closes when
+                the unit is handed to the carrier. Please use it if you are unsure.
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                Requirements
+                What is still covered, always
               </h3>
-              <ul className="list-disc pl-6 space-y-2">
+              <p>
+                &ldquo;Final sale&rdquo; means we will not take a working pendant back because
+                you changed your mind. It does not, and legally cannot, take away any of the
+                following:
+              </p>
+              <ul className="list-disc pl-6 space-y-2 mt-4">
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Original packaging:</strong> The device must be returned in its original packaging, including all boxes, inserts, and protective materials.
+                  <strong className="text-[var(--text-on-dark)]">A pendant that is faulty.</strong>{" "}
+                  Covered by the 1-year limited warranty in section 4 below, at your choice of
+                  replacement or refund.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">All included items:</strong> All accessories, cables, documentation, and any bundled items must be included in the return.
+                  <strong className="text-[var(--text-on-dark)]">A pendant that is not what we
+                  described,</strong> is not of merchantable quality, or is not fit for the
+                  purpose we sold it for. In British Columbia these are implied conditions under
+                  the Sale of Goods Act, RSBC 1996 c 410, and section 20(3) makes any attempt to
+                  waive them in a consumer sale void. We are not attempting to.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Working condition:</strong> The device must be in working condition and free from physical damage beyond normal handling during the trial period.
+                  <strong className="text-[var(--text-on-dark)]">Anything that arrives damaged
+                  or never arrives at all.</strong> Tell us and we will make it right.
+                </li>
+                <li>
+                  <strong className="text-[var(--text-on-dark)]">Every right your own consumer
+                  protection law gives you,</strong> including the British Columbia Business
+                  Practices and Consumer Protection Act and the statutes listed in section 6. A
+                  waiver of rights under that Act is void by operation of section 187 of the Act.
+                  Where your local law gives you more than this policy does, your local law wins.
                 </li>
               </ul>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                Return Process
+                Making a claim
               </h3>
-              <ol className="list-decimal pl-6 space-y-2">
-                <li>
-                  <strong className="text-[var(--text-on-dark)]">Initiate your return</strong> by emailing{" "}
-                  <a
-                    href="mailto:hello@anticipy.ai"
-                    className="text-gold hover:underline"
-                  >
-                    hello@anticipy.ai
-                  </a>{" "}
-                  with your order number and reason for return. No justification is required, we simply appreciate the feedback.
-                </li>
-                <li>
-                  <strong className="text-[var(--text-on-dark)]">Receive your prepaid return label.</strong> We will email you a prepaid shipping label within 2 business days of your request. <strong className="text-[var(--text-on-dark)]">We cover all return shipping costs.</strong>
-                </li>
-                <li>
-                  <strong className="text-[var(--text-on-dark)]">Ship the device back</strong> using the provided label. We recommend keeping the tracking number for your records.
-                </li>
-                <li>
-                  <strong className="text-[var(--text-on-dark)]">Refund processed.</strong> Once we receive and inspect the returned device, your full refund will be processed within 5 business days.
-                </li>
-              </ol>
+              <p>
+                Email{" "}
+                <a
+                  href="mailto:hello@anticipy.ai"
+                  className="text-gold hover:underline"
+                >
+                  hello@anticipy.ai
+                </a>{" "}
+                with your order number and what went wrong. We respond within 2 business days,
+                we pay return shipping on anything faulty, and we do not require the original
+                packaging for a warranty claim.
+              </p>
             </section>
 
             {/* 4. Defective Products */}
@@ -179,7 +199,7 @@ export default function RefundPolicy() {
                 4. Defective Products
               </h2>
               <p>
-                If your Anticipy device is defective or malfunctions, we will <strong className="text-[var(--text-on-dark)]">replace it or provide a full refund at any time during the 1-year limited warranty period</strong>, at your choice. Defective products are covered regardless of whether the 30-day return window has passed.
+                If your Anticipy device is defective or malfunctions, we will <strong className="text-[var(--text-on-dark)]">replace it or provide a full refund at any time during the 1-year limited warranty period</strong>, at your choice. Defects are covered for the full warranty period. The final-sale rule in section 3 applies only to change-of-mind returns and never to a faulty unit.
               </p>
               <p className="mt-4">
                 To report a defect, contact us at{" "}
@@ -214,7 +234,7 @@ export default function RefundPolicy() {
                 First Year Included
               </h3>
               <p>
-                Your first year of Anticipy&apos;s AI service is <strong className="text-[var(--text-on-dark)]">included with your hardware purchase</strong> at no additional cost. If you return the hardware within the 30-day satisfaction guarantee period, the included service subscription is automatically cancelled.
+                Your first year of Anticipy&apos;s AI service is <strong className="text-[var(--text-on-dark)]">included with your hardware purchase</strong> at no additional cost. If your order is cancelled before shipping, or if we refund a faulty unit under the warranty, the included service subscription is cancelled with it.
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
@@ -285,14 +305,14 @@ export default function RefundPolicy() {
                 Japan
               </h3>
               <p>
-                Under Japanese consumer protection law, consumers have an 8-day return right if no specific return policy was clearly stated at the time of purchase. As we do state our return policy, our 30-day satisfaction guarantee applies, which exceeds this statutory minimum.
+                Under Japanese consumer protection law, consumers have an 8-day return right if no specific return policy was clearly stated at the time of purchase. Our return policy is stated clearly in section 3 above. We currently ship only to the United States and Canada.
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
                 Canada
               </h3>
               <p>
-                If you are located in Canada, you may benefit from protections under applicable provincial consumer protection legislation, including the <strong className="text-[var(--text-on-dark)]">Business Practices and Consumer Protection Act (BPCPA)</strong> in British Columbia and similar statutes in other provinces. Our 30-day satisfaction guarantee meets or exceeds these requirements.
+                If you are located in Canada, you may benefit from protections under applicable provincial consumer protection legislation, including the <strong className="text-[var(--text-on-dark)]">Business Practices and Consumer Protection Act (BPCPA)</strong> in British Columbia and similar statutes in other provinces. You also benefit from the implied conditions in provincial sale-of-goods legislation. None of those rights are waivable, and the final-sale rule in section 3 does not attempt to waive them — it applies only to change-of-mind returns of a working pendant.
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">

@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       custom_text: {
         terms_of_service_acceptance: {
           message:
-            "By placing this pre-order you agree to the [Pre-Order Agreement](https://www.anticipy.ai/pre-orders/agreement), [Terms of Service](https://www.anticipy.ai/terms), and [Privacy Policy](https://www.anticipy.ai/privacy). Estimated ship: Q2 2027.",
+            "By placing this pre-order you agree to the [Pre-Order Agreement](https://www.anticipy.ai/pre-orders/agreement), [Terms of Service](https://www.anticipy.ai/terms), and [Privacy Policy](https://www.anticipy.ai/privacy). Estimated ship: Q4 2026.",
         },
         submit: {
           message:

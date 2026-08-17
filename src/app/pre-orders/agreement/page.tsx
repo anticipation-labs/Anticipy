@@ -167,7 +167,7 @@ export default function PreOrderAgreementPage() {
             <Section title="4. Estimated ship date.">
               <p>
                 Our current good-faith estimate is that the Product will ship
-                in <Strong>Q2 2027</Strong>. This is an estimate, not a
+                in <Strong>Q4 2026</Strong>. This is an estimate, not a
                 guarantee. Hardware schedules slip. Suppliers miss dates.
                 Certifications take longer than expected. By placing a
                 pre-order, you acknowledge that the date can move and that

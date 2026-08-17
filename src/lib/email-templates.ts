@@ -157,7 +157,7 @@ export function preorderConfirmationHtml(opts: {
           <td style="padding:28px 32px 0 32px;font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:${GOLD};font-weight:600;">What happens next</td>
         </tr>
         ${p(
-          `<strong style="color:${TEXT};">We build.</strong> Manufacturing is targeting Q2 2027.`,
+          `<strong style="color:${TEXT};">We build.</strong> Manufacturing is targeting Q4 2026.`,
           14
         )}
         ${p(
