@@ -24,6 +24,8 @@ const suites = [
   "test_attach_diagnosis.mjs",
   "test_hunt_round2.mjs",
   "test_commit_integrity.mjs",
+  "test_captcha_solving.mjs",
+  "test_no_domain_hardcoding.mjs",
 ];
 let failed = 0;
 for (const s of suites) {
@@ -39,3 +41,18 @@ for (const s of suites) {
 }
 if (failed) { console.error(`run_all: ${failed}/${suites.length} suites failed`); process.exit(1); }
 console.log(`run_all: all ${suites.length} suites passed`);
+
+// EVERY suite in this directory must be listed above.
+//
+// Twice now a test file was written, passed when run by hand, and was never
+// added here — so it protected nothing. The CapSolver checks and the
+// no-hard-coding guarantee both sat unregistered until 2026-08-17. A test
+// nobody runs is worse than no test: it reads like coverage.
+import { readdirSync } from "node:fs";
+const onDisk = readdirSync(new URL(".", import.meta.url))
+  .filter((f) => f.startsWith("test_") && f.endsWith(".mjs"));
+const missing = onDisk.filter((f) => !suites.includes(f));
+if (missing.length) {
+  console.error(`run_all: ${missing.length} suite(s) exist but are NOT registered: ${missing.join(", ")}`);
+  process.exit(1);
+}
