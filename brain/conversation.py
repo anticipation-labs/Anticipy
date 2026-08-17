@@ -575,6 +575,18 @@ Use {"facts": {}} when there is nothing durable."""
                 out.append({"id": j["id"], "goal": j.get("goal", ""),
                             "needs": (needs or kept or "")[:300],
                             "remembered_need": (kept or "")[:300],
+                            # The other two pools carry these; this one did
+                            # not, and _open_work() copies the pool entry
+                            # verbatim. So every PARKED job reached _amend
+                            # with params="" -> {}, the plan blob living in
+                            # params._workflow was silently dropped from the
+                            # write, and the backend guard refused it ("id,
+                            # version, and lineage are required"). What he
+                            # saw was "Hit a snag updating that on my end"
+                            # to every answer he texted, forever — the job
+                            # stayed parked on the same question.
+                            "params": j.get("params", ""),
+                            "status": j.get("status", "needs_user"),
                             # WHEN she asked. Without it a caller cannot tell
                             # a reply from a remark made hours later, and the
                             # spoken-answer router needs exactly that.

@@ -2088,6 +2088,32 @@ class Anticipy:
             addressee="assistant", owes="owner"),
             "anticipy_says": None}
 
+    _SUBJECT_STOP = {
+        "the", "a", "an", "for", "to", "at", "in", "on", "of", "and", "or",
+        "my", "me", "us", "we", "our", "i", "it", "that", "this", "with",
+        "please", "can", "you", "book", "get", "make", "do", "set", "up",
+        "tomorrow", "today", "tonight", "next", "week", "am", "pm", "new",
+        "some", "one", "two", "three", "four", "five", "plan", "confirm",
+    }
+
+    @classmethod
+    def _same_subject(cls, goal: str, other: str) -> bool:
+        """Are these two goals about the same thing?
+
+        Not "are they worded alike" — that question already failed in both
+        directions. This asks whether they share any word that carries the
+        SUBJECT: a venue, a person, a document, a thing being ordered. Two
+        errands raised in one conversation that share none of those are two
+        errands, however close together they were spoken.
+        """
+        def subject_words(text):
+            words = re.findall(r"[a-z0-9']+", (text or "").lower())
+            return {w for w in words if len(w) > 2 and w not in cls._SUBJECT_STOP}
+        a, b = subject_words(goal), subject_words(other)
+        if not a or not b:
+            return True          # nothing to tell them apart: keep old behaviour
+        return bool(a & b)
+
     def _open_card_in_lineage(self, lineage: str) -> Optional[dict]:
         """The card this conversation is already holding, if any.
 
@@ -2200,6 +2226,21 @@ class Anticipy:
         lineage_now = str(params.get("lineage_key") or self._lineage_key or "")
         if not declared_new_task and lineage_now:
             sibling = self._open_card_in_lineage(lineage_now)
+            # ...but ONE CONVERSATION IS NOT ONE ERRAND. The first cut of this
+            # merged any new goal into whatever card the conversation held,
+            # with no same-subject test at all — so "book a table at Earls"
+            # followed by "order running shoes" produced ONE card and the
+            # shoes were never seen again, while the feed cheerfully said
+            # "on it". A person talks about several things in one sitting.
+            #
+            # Deliberately arithmetic, not a model call: two goals belong to
+            # one errand when they are ABOUT the same thing, and sharing no
+            # significant word means they are not. Wording-similarity was
+            # tried and it failed the other way ("Confirm dinner tomorrow" vs
+            # "Plan dinner with Jessica at Earls" read as different plans and
+            # made three cards).
+            if sibling and not self._same_subject(goal, sibling.get("goal") or ""):
+                sibling = None
             if sibling:
                 sibling_id = sibling.get("id") or ""
                 sibling_goal = sibling.get("goal") or ""

@@ -26,6 +26,8 @@ const suites = [
   "test_commit_integrity.mjs",
   "test_captcha_solving.mjs",
   "test_no_domain_hardcoding.mjs",
+  "test_stop_before_submit.mjs",
+  "test_park_not_burn.mjs",
 ];
 let failed = 0;
 for (const s of suites) {

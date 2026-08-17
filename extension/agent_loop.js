@@ -2953,6 +2953,19 @@ export async function runAgentGoal(goal, opts) {
     actionSinceDoneRejection = true;
     return true;
   }
+  // The ONE liveness check used to sit at the top of the step, before a
+  // mapPage (20s), an LLM call, and the action itself. The popup meanwhile
+  // reported "stopped" the instant he tapped it. Everything in between still
+  // ran — so Stop could be honoured AFTER the submit it was meant to prevent.
+  // Consequential actions re-ask here, as late as possible and always before
+  // the uncertainty write, so a stop never leaves a phantom "might have
+  // booked" for recovery to reason about.
+  const stoppedNow = async () => {
+    if (!stillLive) return false;
+    try { return !(await stillLive()); }
+    catch (_) { return false; }   // can't tell -> don't abandon live work
+  };
+
   try {
     for (let step = 0; step < maxSteps; step++) {
       await new Promise((r) => setTimeout(r, 1200));
@@ -3725,6 +3738,9 @@ export async function runAgentGoal(goal, opts) {
           // A crash after a consequential submit but before the receipt is
           // the classic duplicate-effect window. Persist uncertainty BEFORE
           // the trusted action so recovery never blindly submits twice.
+          if (await stoppedNow()) {
+            return { status: "cancelled", result: "you called this off — stopped before submitting", tabId: tab.id };
+          }
           effectState = controlState;
           performedExternalEffects.add(externalSig);
           if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, state);
@@ -3883,6 +3899,9 @@ export async function runAgentGoal(goal, opts) {
                 stuckStreak++;
                 continue;
               }
+              if (await stoppedNow()) {
+                return { status: "cancelled", result: "you called this off — stopped before submitting", tabId: tab.id };
+              }
               effectState = enterState;
               performedExternalEffects.add(enterSig);
               if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, enterState);
@@ -3923,7 +3942,31 @@ export async function runAgentGoal(goal, opts) {
         }
       }
     }
-    return { status: "failed", result: `max steps reached; last steps: ${history.slice(-3).join(" | ").slice(0, 400)}`, tabId: tab.id };
+    // RUNNING OUT OF ROOM IS NOT A FAILURE — IT IS A PLACE TO STOP.
+    //
+    // This returned "failed" with handBack unset, so the teardown below CLOSED
+    // THE WORKING TAB: the filled application, the live session, the page the
+    // run had spent eighty steps reaching — all destroyed, and the owner was
+    // handed the string "max steps reached; last steps: ..." and no question.
+    // That is the exact run he watched die on the last field of an application
+    // form: it didn't ask, it just quit, and the progress went with it.
+    //
+    // A run that has done work and hit its ceiling is in the same position as
+    // one that hit a login wall: it needs a person. So it PARKS — handBack
+    // keeps the tab alive with everything on it, the resume path reattaches to
+    // that same tab (a fresh one would throw the session away), and the owner
+    // gets a question in his own language instead of a counter.
+    const didWork = performedExternalEffects.size > 0
+      || history.some((h) => /\btyped\b|\bfilled\b|\bselected\b|\bclicked\b|\bchose\b/i.test(h));
+    const gotTo = (history.slice(-1)[0] || "").replace(/^step \d+:\s*/, "").slice(0, 200);
+    return (handBack = true) && {
+      status: "needs_user",
+      result: didWork
+        ? `I got as far as: ${gotTo || "the last page I could act on"} — and then ran out of room to keep trying on my own. I've left the page exactly where it is, nothing is lost. Tell me what to do next and I'll pick up from there.`
+        : `I worked through this without getting anywhere useful. The last thing I tried was: ${gotTo || "reading the page"}. I've left the page open — tell me what I'm missing and I'll carry on.`,
+      ranOutOfSteps: true,
+      tabId: tab.id,
+    };
   } catch (e) {
     // A cancelled bar can surface mid-step (a click, a keystroke), not only
     // on the next page map. It is the one error here that is a decision, so
