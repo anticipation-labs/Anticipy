@@ -125,3 +125,38 @@ def test_hear_consults_parked_work_before_triage():
     call = hear[hear.index("_spoken_answer_to_parked_work") - 200:
                 hear.index("_spoken_answer_to_parked_work") + 80]
     assert "not explicit" in call and "not dictated" in call
+
+
+# ------------------------------- a card he already knows about survives
+
+def test_a_repeat_request_is_not_punished_by_cancelling_his_card():
+    """Live 2026-08-17, the demo: every retry of the same Earls booking came
+    back cancelled — "she was not allowed to raise this, so it was never his
+    to approve". Ten out of ten, silently.
+
+    The cancel exists for a card he was NEVER told about, which would be a
+    trap. But the commonest reason she may not speak is that she ALREADY
+    told him — and then he knows, so killing the card punishes him for
+    asking twice.
+    """
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
+    assert "def _told_him_before" in src
+    branch = src.split("elif held and not explicit and self._told_him_before")[1][:1400]
+    assert "keeping the" in branch and "staying quiet" in branch
+    # the cancel still exists for the genuinely-untold case
+    assert "so it was never his to approve" in src
+    # and it may only be reached AFTER the already-told branch
+    told = src.index("_told_him_before(decision.goal)")
+    cancel = src.index("so it was never his to approve")
+    assert told < cancel, "already-told must be checked before cancelling"
+
+
+def test_only_a_delivered_message_counts_as_having_told_him():
+    """A composed-but-unsent message must never buy silence — that mistake
+    cost him ten hours on 2026-08-16."""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "brain", "anticipy_core.py")).read()
+    body = src.split("def _told_him_before", 1)[1][:1400]
+    assert 'kind="anticipy_says"' in body, "read the durable record"
+    assert "owner_ref" in body, "scoped to this account"

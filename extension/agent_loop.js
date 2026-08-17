@@ -3559,7 +3559,22 @@ export async function runAgentGoal(goal, opts) {
         if (decision.action === "type") {
           // Code fields get the mechanical check BEFORE anything is typed:
           // by the time a wrong code is in the field, one Enter commits it.
-          const meta = await inputMeta(tab.id, decision.index);
+          // BOUNDED. This was a bare await into a frame, and a frame that
+          // vanishes mid-call never resolves it — the whole run then hangs
+          // until the lease dies two minutes later and the sweep files it as
+          // "stopped after a possible external action". Watched twice on the
+          // same instruction, 2026-08-17: typing the email into OpenTable's
+          // details frame, which re-renders as you type. No error, no next
+          // step, nothing to tell him why.
+          let meta;
+          try {
+            meta = await withTimeout(inputMeta(tab.id, decision.index),
+                                     10000, "inputMeta");
+          } catch (e) {
+            history.push(`step ${step}: could not read that field in time (${String(e).slice(0, 80)}) — re-reading the page`);
+            stuckStreak++;
+            continue;
+          }
           const protectedStop = protectedInput(meta);
           if (protectedStop) {
             return (handBack = true) && { status: "needs_user", result: protectedStop, tabId: tab.id };
@@ -3721,7 +3736,17 @@ export async function runAgentGoal(goal, opts) {
           try {
             await inFrame(tab.id, decision.index, (i) => window.__anticipyFocus(i));
           } catch (e) { /* best effort */ }
-          await trustedType(tab.id, decision.text || "", decision.index);
+          try {
+            await withTimeout(trustedType(tab.id, decision.text || "", decision.index),
+                              20000, "typing");
+          } catch (e) {
+            // A field that swallowed the keystrokes is not a reason to sit
+            // there forever; re-read the page and let the model see what
+            // actually happened.
+            history.push(`step ${step}: typing did not complete in time (${String(e).slice(0, 80)}) — re-reading the page`);
+            stuckStreak++;
+            continue;
+          }
           // CDP keystrokes land on the focused frame; when the field lives in
           // a subframe, read the value back and — if the keys never arrived —
           // set it through the native setter the framework listens to.

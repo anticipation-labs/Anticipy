@@ -1576,6 +1576,18 @@ class Anticipy:
                     handled = None
             elif held and repeat:
                 print(f"already waiting on him for {decision.goal!r} — not asking twice")
+            elif held and not explicit and self._told_him_before(decision.goal):
+                # ALREADY TOLD IS NOT NEVER TOLD.
+                #
+                # The cancel below exists for a card he was never told about.
+                # But the commonest reason she may not speak is that she
+                # ALREADY DID — which means he knows, and killing the card
+                # punishes him for asking twice. Live 2026-08-17: he retried
+                # the same Earls booking through a demo and every attempt was
+                # cancelled with "she was not allowed to raise this, so it was
+                # never his to approve". Ten out of ten, silently.
+                print(f"already told him about {decision.goal!r} — keeping the "
+                      "card, staying quiet")
             elif held and not explicit:
                 # SILENCE MUST MEAN STILLNESS.
                 #
@@ -1978,6 +1990,36 @@ class Anticipy:
         except Exception as e:
             print(f"could not cancel {job_id}: {e}")
             return False
+
+    def _told_him_before(self, goal: str, within_hours: float = 24.0) -> bool:
+        """Has she actually raised THIS with him already?
+
+        Only a durable record counts — the same rows the speak-once guard
+        reads — because a message that was composed and never sent must not
+        buy silence (that mistake cost him ten hours on 2026-08-16).
+        """
+        goal = (goal or "").strip()
+        if not goal:
+            return False
+        try:
+            import datetime as _dt
+            since = (_dt.datetime.now(_dt.timezone.utc)
+                     - _dt.timedelta(hours=within_hours)
+                     ).strftime("%Y-%m-%d %H:%M:%S")
+            filt = f'kind="anticipy_says" && created>="{since}"'
+            if self.owner_ref:
+                filt += f' && owner_ref="{self.owner_ref}"'
+            r = pb.get(f"{self.backend_url}/api/collections/events/records",
+                       params={"filter": filt, "perPage": 50, "sort": "-created"},
+                       timeout=10)
+            if not getattr(r, "ok", False):
+                return False
+            for ev in (r.json() or {}).get("items", []):
+                if (ev.get("goal") or "").strip() == goal:
+                    return True
+        except Exception:
+            return False
+        return False
 
     def _spoken_answer_to_parked_work(self, line: str) -> Optional[dict]:
         """Route a spoken reply to the one job that is waiting on a question.
