@@ -79,9 +79,10 @@ export default function RefundPolicy() {
                 <Link href="/pre-orders/agreement" className="text-gold hover:underline">
                   Pre-Order Agreement
                 </Link>
-                . Outside the statutory rights described below, we do not offer
-                no-questions-asked refunds during the pre-order period, and a discretionary
-                refund remains at our discretion.
+                . <strong className="text-[var(--text-on-dark)]">You may cancel your pre-order
+                and receive a full refund at any time before your unit ships, no reason
+                required.</strong> Email us from the address you ordered with and we will
+                refund the full amount to your original payment method.
               </p>
               <p className="mt-4">
                 <strong className="text-[var(--text-on-dark)]">If you are in British Columbia,

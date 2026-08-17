@@ -99,7 +99,7 @@ export function Close() {
 
         <p className="close-anim text-[13px] text-[var(--text-on-dark-muted)] mt-5">
           $149.99 now, $199 at launch &middot; Free shipping (US &amp; Canada) &middot;
-          Ships August 2026 &middot; Change your mind? One email, full refund
+          Ships Q2 2027 &middot; Change your mind? One email, full refund
         </p>
 
         <div className="close-anim flex items-center justify-center gap-8 mt-10">

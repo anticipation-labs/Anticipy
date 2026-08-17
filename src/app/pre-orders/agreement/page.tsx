@@ -235,22 +235,20 @@ export default function PreOrderAgreementPage() {
             <Section title="5. Refunds. Read carefully.">
               <p>
                 <Strong>
-                  Refunds on pre-orders are at the sole discretion of
-                  Anticipation Labs Inc., except where applicable law
-                  requires us to issue one.
+                  You may cancel your pre-order and receive a full refund at
+                  any time before your unit ships. No reason required.
                 </Strong>{" "}
-                We do not offer no-questions-asked refunds during the
-                pre-order period. We may, in our sole discretion, grant a
-                refund in cases such as confirmed inability to ship,
-                substantial change in specifications materially adverse to
-                you, hardship, or duplicate orders. We are equally entitled,
-                in our sole discretion, to decline a refund request that does
-                not fall within an applicable legal requirement. Examples
-                where we may decline include but are not limited to: change
-                of mind, change in financial circumstance, finding a
-                competing product, dissatisfaction with the appearance or
-                feature set in late-stage marketing, or any other reason not
-                protected by consumer law in your jurisdiction.
+                Email us from the address you ordered with and we will refund
+                the full amount you paid to your original payment method. This
+                is the same promise made on our home page, and it is stated
+                here so the two cannot disagree: if anything elsewhere in this
+                Agreement appears to narrow it, this paragraph governs.
+              </p>
+              <p>
+                Once your unit has shipped, this pre-order cancellation right
+                ends and the return and warranty terms in the Terms of Service
+                apply instead, along with any rights your local consumer
+                protection law gives you.
               </p>
               <p>
                 <Strong>

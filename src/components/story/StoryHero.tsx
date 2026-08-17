@@ -100,7 +100,7 @@ export function StoryHero() {
             Claim yours &mdash; $149.99
           </a>
           <p className="text-[12px] uppercase tracking-[0.18em] text-[var(--text-on-dark-muted)] mt-4">
-            $199 at launch &middot; Ships August 2026 &middot; Full refund
+            $199 at launch &middot; Ships Q2 2027 &middot; Full refund
             anytime before shipping
           </p>
         </div>

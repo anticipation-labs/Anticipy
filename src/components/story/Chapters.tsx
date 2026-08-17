@@ -193,7 +193,7 @@ export function Chapters() {
             Claim yours &mdash; $149.99
           </a>
           <p className="text-[12px] uppercase tracking-[0.18em] text-[var(--text-on-light-muted)] mt-4">
-            Ships August 2026 &middot; Full refund anytime before shipping
+            Ships Q2 2027 &middot; Full refund anytime before shipping
           </p>
         </div>
       </div>
