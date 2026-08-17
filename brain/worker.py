@@ -30,7 +30,8 @@ from .llm import LLM, TZ as TZ_FALLBACK
 from .voice_arm import VoiceArm
 from .workflow import (claim as claim_plan, fail as fail_plan,
                        from_params as workflow_from_params,
-                       put_in_params, succeed as succeed_plan)
+                       put_in_params, recover_expired as recover_expired_plan,
+                       succeed as succeed_plan)
 
 PB = os.environ.get("ANTICIPY_PB", "http://127.0.0.1:8090")
 POLL_SECONDS = 2
@@ -405,6 +406,42 @@ STALL_MINUTES = 10        # queued this long with nothing to run it is stuck
 AGENT_FRESH_SECONDS = 90  # the extension heartbeats far more often than this
 
 
+# What actually LEFT the building, remembered locally for a short while.
+#
+# Every durable dedupe guard she has reads back the anticipy_says event, and
+# every notification site sends the text FIRST and writes that event second.
+# post_event ends in raise_for_status(), so a PocketBase write outage — a
+# restart, or the nightly backup holding the write lock while reads keep
+# succeeding — means the text went out and nothing recorded it. Two seconds
+# later the same job is re-read, every durable guard says "never mentioned",
+# and the identical text goes out again. And again, every two seconds, for
+# the length of the outage: the fifteen-texts-in-sixty-five-seconds shape
+# arriving through the one door the fix for it never covered.
+#
+# Deliberately short-lived and keyed on the exact thing that was said, not on
+# the job: a job blocking on something NEW still gets its own message, and a
+# still-parked job still gets its three-hour second chance.
+_SENT_RECENTLY: dict = {}
+SEND_SUPPRESS_SECONDS = 45 * 60
+_SENT_RECENTLY_MAX = 500
+
+
+def sent_moments_ago(key: str, within: float = SEND_SUPPRESS_SECONDS,
+                     now: float | None = None) -> bool:
+    """Did this exact message already leave this process a moment ago?"""
+    at = _SENT_RECENTLY.get(key)
+    return bool(at and (now if now is not None else time.time()) - at < within)
+
+
+def mark_sent(key: str, now: float | None = None) -> None:
+    stamp = now if now is not None else time.time()
+    _SENT_RECENTLY[key] = stamp
+    if len(_SENT_RECENTLY) > _SENT_RECENTLY_MAX:
+        cutoff = stamp - SEND_SUPPRESS_SECONDS
+        for stale in [k for k, v in _SENT_RECENTLY.items() if v < cutoff]:
+            _SENT_RECENTLY.pop(stale, None)
+
+
 def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> bool:
     """Text him what she found — her words, varied every time, one text.
 
@@ -534,6 +571,13 @@ def report_stalled_work(anticipy) -> None:
             # generated fresh and comparing it to itself has failed twice now.
             if already_raised(goal, decision="stalled"):
                 continue
+            # ...and the same again when the durable record of it could not be
+            # written. already_raised reads the event post_event writes AFTER
+            # the text has gone out, so a write outage made every pass believe
+            # nothing had been said and re-sent the notice every two seconds.
+            local_key = f'stalled:{job["id"]}:{job.get("status")}'
+            if sent_moments_ago(local_key):
+                continue
             midway = job.get("status") == "running"
             said = anticipy._voice({
                 "situation": ("this stopped partway because their browser "
@@ -550,6 +594,7 @@ def report_stalled_work(anticipy) -> None:
             if not anticipy.notify_owner(said):
                 print(f"stall notice for {job['id']}: send failed, not recording it")
                 continue
+            mark_sent(local_key)
             post_event("anticipy_says", said, decision="stalled", goal=goal)
             print(f"stalled (no browser): {job['id']} — told him")
     except Exception as e:
@@ -557,6 +602,79 @@ def report_stalled_work(anticipy) -> None:
 
 
 RESEARCH_CLAIMANT = "worker-research"
+# One research run is a Brave search, up to three page fetches and an LLM
+# summarize with a 60s timeout and a fallback client. End to end that passes
+# two minutes routinely — and two minutes was the workflow lease's default,
+# never heartbeated. The backend refuses a "done" write from an expired lease
+# ("expired executor may only recover, park, or fail"), so the answer he asked
+# for was computed, refused, and thrown away while the row sat at running.
+RESEARCH_LEASE_SECONDS = 600
+# And when the process dies mid-lookup anyway — a redeploy is a SIGTERM, and
+# the finish PATCH can simply fail — the row stays at running with nobody
+# looking at it: this pass only ever polls status="queued", and
+# report_stalled_work deliberately skips this lane because it never needs his
+# Chrome. The extension's stale-job sweep is browser-lane work and only runs
+# while Chrome is open, which is the one thing this lane exists not to need.
+# So the worker hands its own abandoned claims back. He asked a question out
+# loud, a deploy landed mid-lookup, and the answer never came, with no symptom
+# anywhere.
+RESEARCH_STRANDED_MINUTES = 15
+
+
+def release_stranded_research(anticipy,
+                              older_than_minutes: int = RESEARCH_STRANDED_MINUTES) -> int:
+    """Requeue research jobs this worker claimed and never finished."""
+    base = anticipy.backend_url
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)
+              ).strftime("%Y-%m-%d %H:%M:%S")
+    filt = (f'status="running" && lane="research"'
+            f' && claimed_by="{RESEARCH_CLAIMANT}" && updated<="{cutoff}"')
+    scope = owner_filter(anticipy)
+    if scope:
+        filt = f"({filt}) && {scope}"
+    try:
+        r = pb.get(f"{base}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 20, "sort": "updated"},
+                   timeout=10)
+        if not getattr(r, "ok", False):
+            return 0
+        items = r.json().get("items", [])
+    except Exception as e:
+        print(f"research sweep failed: {e}")
+        return 0
+    freed = 0
+    for job in items:
+        body = {"status": "queued", "claimed_by": "", "claimed_at": ""}
+        headers = None
+        try:
+            params = json.loads(job.get("params") or "{}") or {}
+        except Exception:
+            params = {}
+        workflow = workflow_from_params(params)
+        if workflow:
+            try:
+                # A read-only lookup leaves nothing in the world to reconcile,
+                # so recovery is a plain requeue — until the attempt cap, where
+                # recover_expired fails it instead and he finally hears about
+                # it rather than waiting on a row that retries forever.
+                workflow = recover_expired_plan(workflow)
+            except Exception as e:
+                print(f"research sweep: {job['id']} cannot be recovered: {e}")
+                continue
+            body.update(workflow.job_fields())
+            body["params"] = json.dumps(put_in_params(params, workflow))
+            headers = {"X-Anticipy-Lease": job.get("lease_token") or ""}
+        try:
+            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+                            json=body, headers=headers, timeout=10)
+        except Exception as e:
+            print(f"research sweep: {job['id']} could not be handed back: {e}")
+            continue
+        if getattr(back, "ok", False):
+            freed += 1
+    if freed:
+        print(f"research: handed back {freed} job(s) a dead run left at running")
+    return freed
 
 
 def run_research_jobs(anticipy, runner=None) -> None:
@@ -570,6 +688,10 @@ def run_research_jobs(anticipy, runner=None) -> None:
     other job read this file does."""
     try:
         base = anticipy.backend_url
+        # Before asking for new work, take back what a dead run abandoned —
+        # otherwise the only thing that ever moves a stranded row is a person
+        # hand-editing it.
+        release_stranded_research(anticipy)
         filt = 'status="queued" && lane="research"'
         scope = owner_filter(anticipy)
         if scope:
@@ -610,7 +732,8 @@ def run_research_jobs(anticipy, runner=None) -> None:
                 try:
                     workflow = claim_plan(
                         workflow, expected_version=workflow.version,
-                        actor_id=RESEARCH_CLAIMANT)
+                        actor_id=RESEARCH_CLAIMANT,
+                        lease_seconds=RESEARCH_LEASE_SECONDS)
                 except Exception:
                     continue
                 lease_token = workflow.lease.token
@@ -664,6 +787,14 @@ def run_research_jobs(anticipy, runner=None) -> None:
                 f"{base}/api/collections/jobs/records/{job['id']}",
                 json=finish_body, headers=finish_headers, timeout=10)
             if not getattr(finished, "ok", False):
+                # The answer exists and the row still says running. Say so:
+                # this used to be a bare `continue`, and a silently discarded
+                # result is indistinguishable from her never having looked.
+                # release_stranded_research hands the row back on a later
+                # pass so the lookup is retried rather than lost.
+                print(f"research: {job['id']} finished but the write was "
+                      f"refused ({getattr(finished, 'status_code', '?')}) — "
+                      f"leaving it for the stranded-claim sweep")
                 continue
             # Delivery is report_finished_jobs' job: a desk card by default,
             # an in-thread text only when the ask came in over SMS.
@@ -671,6 +802,78 @@ def run_research_jobs(anticipy, runner=None) -> None:
                   f"{job.get('goal', '')[:60]}")
     except Exception as e:
         print(f"research pass failed: {e}")
+
+
+FINISHED_PER_PAGE = 200
+FINISHED_MAX_PAGES = 10
+
+
+def _finished_jobs(filt: str) -> list[dict]:
+    """Every finished job in the window, oldest first.
+
+    This was one page of the ten NEWEST rows. A finished job's `updated`
+    never moves again, so after a burst of more than ten done/failed jobs —
+    exactly what the 38-job backlog replay produced — every later pass
+    re-read the same ten rows, all already in REPORTED, and jobs 11..N were
+    never fetched at all. Being older they aged out of the 12h window first,
+    so their results were dropped with no text, no feed event and no log
+    line: answers he asked for out loud, and failures he should have heard
+    about, gone.
+    """
+    rows: list[dict] = []
+    page = 1
+    while page <= FINISHED_MAX_PAGES:
+        r = pb.get(f"{PB}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": FINISHED_PER_PAGE,
+                           "page": page, "sort": "updated"},
+                   timeout=10)
+        if not getattr(r, "ok", False):
+            break
+        payload = r.json() or {}
+        rows.extend(payload.get("items", []))
+        if page >= int(payload.get("totalPages") or 1):
+            break
+        page += 1
+    return rows
+
+
+def already_delivered(goal: str, within_hours: float = 24.0,
+                      owner_ref: str = "") -> bool:
+    """Has the answer to THIS job already gone out?
+
+    This used to be already_raised(goal, decision="done"), whose overlap is
+    measured over the SHORTER of the two goals — so a short goal contained in
+    a longer one scores 1.0 and any question that resembles one she answered
+    yesterday is destroyed rather than deferred. "weather in Montreal this
+    Sunday" scores 0.67 against Monday's "look up weather in Montreal": no
+    text, no feed event, nothing — the exact three-silent-weather-questions
+    failure report_finished_jobs was written to end, rebuilt out of fuzzy
+    similarity.
+
+    Fuzzy matching earns its keep for outreach, where the model rephrases an
+    open loop's goal every time it raises it. It earns nothing here: a job's
+    goal is read verbatim off the row, so it is byte-identical every time the
+    same job is re-read, and re-reading the same job is the only repeat this
+    guard exists to stop.
+    """
+    goal = (goal or "").strip()
+    if not goal:
+        return False
+    try:
+        since = (datetime.now(timezone.utc)
+                 - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
+        filt = (f'kind="anticipy_says" && decision="done"'
+                f' && created>="{since}"')
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": _scoped_filter(filt, owner_ref),
+                           "perPage": 200, "sort": "-created"}, timeout=10)
+        if not getattr(r, "ok", False):
+            return False
+        return any((ev.get("goal") or "").strip() == goal
+                   for ev in r.json().get("items", []))
+    except Exception as e:
+        print(f"already_delivered check failed: {e}")
+        return False
 
 
 def report_finished_jobs(anticipy) -> None:
@@ -695,12 +898,7 @@ def report_finished_jobs(anticipy) -> None:
         since = (datetime.now(timezone.utc) - timedelta(hours=12)
                  ).strftime("%Y-%m-%d %H:%M:%S")
         filt += f' && updated>="{since}"'
-        r = pb.get(f"{PB}/api/collections/jobs/records",
-                   params={"filter": filt, "perPage": 10, "sort": "-updated"},
-                   timeout=10)
-        if not r.ok:
-            return
-        for job in r.json().get("items", []):
+        for job in _finished_jobs(filt):
             if job["id"] in REPORTED:
                 continue
             goal = (job.get("goal") or "").strip()
@@ -712,7 +910,7 @@ def report_finished_jobs(anticipy) -> None:
             if ambient_job(job):
                 # Nothing overheard can go out during quiet hours, so leave
                 # the whole finding untouched and look again after they end.
-                # Checked BEFORE already_raised on purpose: that call is a
+                # Checked BEFORE already_delivered on purpose: that call is a
                 # round trip, and re-asking it about every held job on every
                 # two-second sweep would run all night for an answer that
                 # cannot change until 08:00.
@@ -720,7 +918,7 @@ def report_finished_jobs(anticipy) -> None:
                 if result and not failed and (CLOCK_QUIET_START <= hour
                                               or hour < CLOCK_QUIET_END):
                     continue
-                if result and not failed and not already_raised(goal, decision="done"):
+                if result and not failed and not already_delivered(goal):
                     # A held FYI is not a delivered one. Recording the feed
                     # event and marking the job reported are what make this
                     # finding "already raised" forever, so both must wait
@@ -738,14 +936,23 @@ def report_finished_jobs(anticipy) -> None:
                     # silent — a dead end on work he never asked for is not
                     # news. Text first, then the durable feed record (the
                     # record is what dedupes, so it must land second).
+                    #
+                    # Marked reported BEFORE that write, though: post_event
+                    # ends in raise_for_status, and letting it unwind with the
+                    # FYI already sent meant the next two-second pass sent the
+                    # same FYI again, for as long as PocketBase refused
+                    # writes.
+                    REPORTED.add(job["id"])
                     post_event("anticipy_says", result, decision="done", goal=goal)
                 REPORTED.add(job["id"])
                 print(f"ambient job {job['id']} finished — fyi'd and on the feed")
                 continue
-            # Durable: has she already delivered THIS result? Keyed on the goal
-            # and on being a result, so her earlier "want me to?" about the same
-            # task does not silence the answer.
-            if already_raised(goal, decision="done"):
+            # Durable: has she already delivered THIS result? Keyed on the job's
+            # own goal, exactly, and on being a result — so her earlier "want me
+            # to?" about the same task does not silence the answer, and neither
+            # does yesterday's answer to a DIFFERENT question that happens to
+            # share most of its words.
+            if already_delivered(goal):
                 REPORTED.add(job["id"])
                 continue
             # DESK delivery for the research lane (roadmap §3 lane 2): the
@@ -765,8 +972,12 @@ def report_finished_jobs(anticipy) -> None:
                 # hand, not just the feed (same 2026-08-05 rule change).
                 if result and not failed:
                     deliver_fyi(anticipy, goal, result, overheard=False)
-                post_event("anticipy_says", said, decision="done", goal=goal)
+                # Reported first, then the feed write. A refused post_event
+                # raises, and with the text already in his hand that unwound
+                # before anything remembered it — so the same answer went out
+                # again two seconds later, and again, until writes recovered.
                 REPORTED.add(job["id"])
+                post_event("anticipy_says", said, decision="done", goal=goal)
                 print(f"desk: research {job['status']} {job['id']} — {goal[:60]}")
                 continue
             # A finished task with nothing written on it is still finished, and
@@ -790,9 +1001,11 @@ def report_finished_jobs(anticipy) -> None:
             if not anticipy.notify_owner(said):
                 print(f"result for {job['id']}: send failed, not recording it as said")
                 continue
+            # Same order for the same reason: the text has landed, so nothing
+            # a failing feed write does may let this pass send it twice.
+            REPORTED.add(job["id"])
             post_event("anticipy_says", said,
                        decision="done", goal=goal)
-            REPORTED.add(job["id"])
             print(f"reported {job['status']} job {job['id']}: {said[:80]}")
     except Exception as e:
         print(f"result report failed: {e}")
@@ -1617,6 +1830,20 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                     and asked_about_recently(job.get("goal", ""))):
                 print(f"stuck job {job['id']}: same thing again moments ago, staying quiet")
                 continue
+            # Both guards above end at the same durable record, and that
+            # record is written AFTER the text goes out. When the write fails
+            # — a PocketBase restart, the nightly backup holding the write
+            # lock — the text has been sent and nothing knows it, so two
+            # seconds later this reads "never asked" and asks again. This one
+            # asks the process what it actually sent, so an unrecordable
+            # question is asked once instead of every two seconds. Keyed on
+            # the blocker, so a NEW requirement still speaks immediately, and
+            # short enough that the three-hour second chance still happens.
+            local_key = f'stuck:{job["id"]}:{blocker}'
+            if sent_moments_ago(local_key):
+                print(f"stuck job {job['id']}: that exact ask went out moments "
+                      f"ago (its record may not have landed), staying quiet")
+                continue
             # The durable record survives restarts and deploys. Check it before
             # composing: production once spent a model call every three seconds
             # rewriting a question this exact guard then threw away.
@@ -1691,6 +1918,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                 print(f"stuck job {job['id']}: send failed, not recording it as said")
                 continue
             _last_blocker[job["id"]] = blocker
+            mark_sent(local_key)
             post_event("anticipy_says", said, decision="needs_user",
                        goal=job.get("goal", ""))
             print(f"asked about stuck job {job['id']}: {said[:80]}")

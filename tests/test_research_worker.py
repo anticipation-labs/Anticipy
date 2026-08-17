@@ -5,6 +5,7 @@ delivery — an event in the feed, never an SMS, unless the ask itself came
 in over SMS."""
 import inspect
 import json
+import re
 import types
 
 import pytest
@@ -52,7 +53,16 @@ def wire(monkeypatch, job, patches, posts, key="test-key", stamp_survives=True):
         if "/collections/events/" in url:
             return Resp({"items": []})
         if url.endswith("/records"):
-            fake_get.filters.append((kw.get("params") or {}).get("filter", ""))
+            filt = (kw.get("params") or {}).get("filter", "")
+            fake_get.filters.append(filt)
+            # Honour the one clause every one of these tests turns on. The
+            # jobs collection is now read by two passes with opposite
+            # intents — the queued poll and the stranded-claim sweep — so a
+            # fake that answers both with the same row would have the sweep
+            # requeueing a job the poll is about to claim.
+            wanted = re.findall(r'status\s*=\s*"([a-z_]+)"', filt)
+            if wanted and state.get("status") not in wanted:
+                return Resp({"items": []})
             return Resp({"items": [dict(state)]})
         return Resp(dict(state))
     fake_get.filters = []
@@ -90,8 +100,12 @@ def test_claims_like_the_extension_then_writes_the_answer(monkeypatch):
 
     W.run_research_jobs(make_anticipy([]), runner=runner)
     # Owner-scoped, lane-scoped poll — identical scoping to every other job.
-    assert 'lane="research"' in fake_get.filters[0]
-    assert 'owner="own1"' in fake_get.filters[0]
+    # Named explicitly rather than taken positionally: the sweep for stranded
+    # claims reads the same collection first, and pinning filters[0] would
+    # quietly stop checking the poll at all.
+    poll = next(f for f in fake_get.filters if 'status="queued"' in f)
+    assert 'lane="research"' in poll
+    assert 'owner="own1"' in poll
     # Stamp, then the answer on the job row.
     assert patches[0]["status"] == "running"
     assert patches[0]["claimed_by"] == W.RESEARCH_CLAIMANT
@@ -147,7 +161,8 @@ def test_modern_research_uses_lease_and_verified_receipt(monkeypatch):
             "result": "Open daily [1].\n\nSources:\n[1] Hours — https://example.test/hours",
         })
 
-    assert 'owner_ref="owner-a"' in fake_get.filters[0]
+    poll = next(f for f in fake_get.filters if 'status="queued"' in f)
+    assert 'owner_ref="owner-a"' in poll
     running = from_params(json.loads(patches[0]["params"]))
     assert running.state.value == "running"
     assert running.lease and patches[0]["lease_token"] == running.lease.token

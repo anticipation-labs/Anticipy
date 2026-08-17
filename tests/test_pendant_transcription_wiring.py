@@ -26,7 +26,14 @@ def test_pendant_frames_reach_transcriber_and_final_text_reaches_brain():
     assert "onOpusFrame?(frame)" in pendant
     assert "transcriber.send(opusFrame: frame)" in app
     assert "pendantTranscriber.onTranscript" in app
-    assert "await self?.heard(line)" in app
+    # Pinned the exact call text, so tagging the line with WHERE it came from
+    # ("from: .pendant") read as the wiring being torn out. What matters is
+    # that a pendant transcript still reaches heard() — not its argument list.
+    import re
+    assert re.search(r"await self\?\.heard\(line[^)]*\)", app), (
+        "a pendant transcript must still reach heard()")
+    assert "from: .pendant" in app, (
+        "and it must say it came from the pendant, not the phone mic")
 
 
 def test_ui_no_longer_claims_connected_pendant_drops_audio():

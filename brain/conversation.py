@@ -313,18 +313,20 @@ class Conversation:
             if picked and intent in ("confirm", "decline", "answer"):
                 pending_id, text_for_guard = picked, None
                 model_ids = [picked]
+                self._forget_offer()
             elif (group and intent in ("confirm", "decline", "answer")
                     and self._just_asked(phone)):
                 # NEVER for chat, and only right after she asked a numbered
                 # question. "it's all good" / "how's everything?" contain
                 # group words, and the old gate released every offered job
                 # off a greeting (hunt find, 2026-08-15).
-                offered = (list(getattr(self, "_offered", []) or [])
-                           or self._offered_from_thread())
+                offered = (list(self._offered) if self._offer_live()
+                           else self._offered_from_thread())
                 asked_cancel = self._asked_to_cancel()
                 pool = self._open_work() if asked_cancel else self._pending()
                 offered = [o for o in offered if any(p["id"] == o for p in pool)]
                 if offered:
+                    self._forget_offer()
                     if group == "none" and asked_cancel:
                         reply = "Okay — keeping them all."
                         self.say(phone, reply)
@@ -346,21 +348,52 @@ class Conversation:
         # Several items at once — act on each; one text back covering all.
         if len(model_ids) > 1 and intent in ("confirm", "decline"):
             do_cancel = intent == "decline"
-            done_goals = []
+            # A detail he gave belongs to exactly ONE of them. "yes to both,
+            # make the dinner 7pm" used to write time=7pm into the email job
+            # too — into its params AND into its approved_scope as a value
+            # that "overrides the task wording". The email went out under a
+            # number he never said a word about.
+            target = pending_id if pending_id in model_ids else None
+            if changes and target is None and not do_cancel:
+                # And releasing both WITHOUT the detail books the old time
+                # while her reply reads the new one back — the acknowledged-
+                # in-words, ignored-in-deed failure. Neither smear it nor
+                # drop it: ask which one it was for.
+                reply = ("Which one is that change for? Tell me and I'll set "
+                         "it and send them both off.")
+                self.say(phone, reply)
+                return {"intent": "modify", "pending_id": None,
+                        "changes": changes, "acted": None, "reply": reply}
+            done_goals, stalled = [], []
             for jid in model_ids:
+                mine = changes if jid == target else None
                 res = (self._cancel(jid, owner_text=None) if do_cancel
-                       else self._release(jid, changes, owner_text=None))
-                if res and not str(res).startswith("failed") and res != "ambiguous":
-                    job = self._fetch(jid)
-                    done_goals.append((job or {}).get("goal", "that").replace("_", " "))
-            if done_goals:
-                names = " and ".join(done_goals)
-                reply = (parsed.get("reply")
-                         or (f"Done — scrapped {names}." if do_cancel
-                             else f"On it — {names}."))
+                       else self._release(jid, mine, owner_text=None))
+                job = self._fetch(jid)
+                name = ((job or {}).get("goal") or "that").replace("_", " ")
+                (done_goals if res and not str(res).startswith("failed")
+                 and res != "ambiguous" else stalled).append(name)
+            if done_goals or stalled:
+                # NEVER the model's pre-drafted sentence here — it was written
+                # before either write was attempted. One of the two loses the
+                # race often enough (the extension claims it inside the 2.1s
+                # poll window) that "Done — scrapped both." went out while one
+                # of them was still running. Build it from what actually
+                # flipped, and name what did not.
+                reply = ""
+                if done_goals:
+                    names = " and ".join(done_goals)
+                    reply = (f"Done — scrapped {names}." if do_cancel
+                             else f"On it — {names}.")
+                if stalled:
+                    left = " and ".join(stalled)
+                    verb = "stop" if do_cancel else "start"
+                    reply = (f"{reply} I couldn't {verb} {left} — say that one "
+                             "again and I'll go after it.").strip()
                 self.say(phone, reply)
                 return {"intent": intent, "pending_id": None, "changes": changes,
-                        "acted": "multi", "reply": reply}
+                        "acted": "multi" if done_goals else None,
+                        "reply": reply}
         if model_ids:
             pending_id = model_ids[0]
 
@@ -475,10 +508,18 @@ class Conversation:
         # then did nothing, because he had supplied nothing. Saying she is
         # getting on with it while the task is still blocked is the one thing
         # that makes her useless to trust. Enforced here, in code, rather than
-        # asked for in a prompt: if nothing was learned, resumed or acted on,
-        # she does not get to claim progress.
+        # asked for in a prompt: if nothing resumed or moved, she does not get
+        # to claim progress.
+        #
+        # FILING A FACT IS NOT PROGRESS. `learned` used to sit in this
+        # condition and it let the exact incident back through: two tasks
+        # blocked (one on a 6-digit code, one on a phone number), he texts "my
+        # last name is Ebrahim", _remember_about_owner returns
+        # {"last_name": "Ebrahim"}, nothing matches either requirement, and
+        # the truthy dict waved "Perfect — I'll finish that booking now"
+        # straight past the guard while both tasks stayed parked.
         if (intent in ("answer", "confirm", "modify")
-                and not (learned or resumed or acted or asked_back)):
+                and not (resumed or acted or asked_back)):
             still = self._blocked()
             if still:
                 parsed["reply"] = self._still_need(still)
@@ -512,17 +553,28 @@ class Conversation:
                 reply = "Hit a snag updating that on my end — say it again in a minute?"
             else:
                 job = self._fetch(job_id_acted)
-                if job and not self._references(reply, job):
-                    goal = job.get("goal", "that").replace("_", " ")
-                    if verb == "cancelled":
-                        reply = f"Okay — I've scrapped the {goal}."
-                    elif verb == "amended":
-                        # An amendment is NOT a release: saying "it's moving"
-                        # about a still-held job makes the owner stop replying
-                        # and the job waits forever.
-                        reply = f"Updated — {goal} is still waiting on your go-ahead."
-                    else:
-                        reply = f"On it — {goal} is moving."
+                goal = ((job or {}).get("goal") or "").replace("_", " ").strip()
+                # What the queue did is ground truth; the model's sentence is
+                # a draft written before the flip. For the two verbs that mean
+                # "this did NOT start", the sentence is replaced outright —
+                # the old gate ran only when the reply shared no 4-letter word
+                # with the job, and `params` carries the whole transcript, so
+                # any on-topic reply sailed through. "make it 7 instead" ->
+                # amended -> "Perfect — moving the dinner to 7, I'll get it
+                # booked" shares "dinner", kept its claim, and he stopped
+                # replying to a job still holding for his yes.
+                if verb == "amended":
+                    reply = (f"Updated — {goal} is still waiting on your go-ahead."
+                             if goal else
+                             "Updated — that's still waiting on your go-ahead.")
+                elif verb == "cancelled":
+                    reply = (f"Okay — I've scrapped the {goal}." if goal
+                             else "Okay — I've called that off.")
+                elif job and not self._references(reply, job):
+                    # released/resumed genuinely ARE moving, so her own
+                    # wording stands when it names the job — that sentence is
+                    # where the corrected value gets read back to him.
+                    reply = f"On it — {goal or 'that'} is moving."
         if redo_spoken:
             reply = f"{reply} {redo_spoken}".strip()
         self.say(phone, reply)
@@ -764,36 +816,46 @@ Use {"facts": {}} when there is nothing durable."""
         return False
 
     @staticmethod
-    def _answers_need(learned: dict, needs: str) -> bool:
-        """Does what he just told her cover what this task said it needed?
+    def _need_match(learned: dict, needs: str) -> Optional[str]:
+        """How well what he just told her covers what this task said it needed.
 
         The task states its own requirement in words ("I need your first name,
         last name, email address, and phone number"), and the facts she stored
         are keyed by what they are. Matching the two is what lets several
-        tasks be blocked at once without her having to guess between them."""
+        tasks be blocked at once without her having to guess between them.
+
+        Two strengths, because they are not equally trustworthy: "phrase" is
+        the fact's own words appearing in the requirement, "noun" is only its
+        head noun. The caller needs to tell them apart — see _resume_stuck."""
         text = (needs or "").lower()
         if not text:
-            return False
+            return None
         # Words that carry no meaning of their own: a task asking for a
         # "phone" is asking for phone_number, and one asking for an "email"
         # is asking for email_address.
         generic = {"number", "address", "code", "id", "of", "the", "a"}
+        weak = None
         for key in learned:
             phrase = str(key).replace("_", " ").lower().strip()
             if not phrase:
                 continue
             if phrase in text:
-                return True
+                return "phrase"
             parts = [p for p in phrase.split() if p not in generic and len(p) > 2]
             if not parts:
                 continue
             if " ".join(parts) in text:
-                return True
+                return "phrase"
             # The head noun, as a substring so date_of_birth still answers a
             # task that said "birthday".
             if parts[-1] in text:
-                return True
-        return False
+                weak = "noun"
+        return weak
+
+    @staticmethod
+    def _answers_need(learned: dict, needs: str) -> bool:
+        """Does what he just told her cover what this task said it needed?"""
+        return Conversation._need_match(learned, needs) is not None
 
     def _resume_stuck(self, learned: Optional[dict] = None,
                       owner_text: str = "") -> Optional[str]:
@@ -829,7 +891,18 @@ Use {"facts": {}} when there is nothing durable."""
                 except Exception:
                     kept = ""
                 return f'{j.get("result") or ""} {kept}'.strip()
-            matched = [j for j in items if self._answers_need(learned, _need_text(j))]
+            strength = [(j, self._need_match(learned, _need_text(j))) for j in items]
+            matched = [j for j, s in strength if s == "phrase"]
+            if not matched:
+                # A head noun on its own is a coarse match, and coarse is fine
+                # right up until two things want the same noun. "I need your
+                # full name" and "I need the name of the restaurant" both end
+                # in "name": "Omar Ebrahim" resumed BOTH, and the restaurant
+                # booking was handed his own name as an answer stamped "final;
+                # act on it". One weak match is a fair read of the room; two
+                # is a coin toss, so neither moves.
+                weak = [j for j, s in strength if s == "noun"]
+                matched = weak if len(weak) == 1 else []
             if not matched and len(items) == 1 and learned:
                 # Nothing named, but only one thing is waiting and he did tell
                 # her something — the long-standing behaviour, kept.
@@ -858,7 +931,7 @@ Use {"facts": {}} when there is nothing durable."""
             need = (job.get("result") or "").strip()
             if need and not params.get("needed"):
                 params["needed"] = need[:300]
-            fields = {"status": "queued", "params": json.dumps(params)}
+            fields = {"status": "queued"}
             workflow = workflow_from_params(params)
             if workflow:
                 # A workflow parked in needs_user may move only when the
@@ -881,12 +954,21 @@ Use {"facts": {}} when there is nothing durable."""
                     params["approved_scope"] += (
                         f' You stopped and asked: "{asked}". '
                         f'They answered: "{answer}" — that answer is final; act on it.')
+            # His earlier "actually make it 6" is in params["corrections"] and
+            # nowhere the browser reads. Fold it before the plan blob is
+            # written back, exactly as _release does.
+            params = self._fold_corrections(params)
+            if workflow:
                 params = put_in_params(params, workflow)
                 fields.update(workflow.job_fields())
-                fields["params"] = json.dumps(params)
-            pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
-                     json=fields, timeout=10)
-            return job["id"]
+            fields["params"] = json.dumps(params)
+            # Through _flip, never around it: this used to fire the PATCH and
+            # return the id no matter what came back, so a 409 (the guard
+            # refusing an uncertain-effect retry, say) still reported the job
+            # as resumed and she told him it was moving. Nothing had moved.
+            return (job["id"]
+                    if self._flip(job["id"], fields, "resumed").startswith("resumed:")
+                    else None)
         except Exception:
             return None
 
@@ -1100,7 +1182,15 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 return {"intent": "chat", "pending_id": None,
                         "reply": "Nothing's queued up on my end right now — what did you mean?"}
             return {"intent": "confirm", "pending_id": None, "reply": "On it."}
-        if short and re.search(r"\b(no|nope|don'?t|forget it|cancel|stop|scrap it)\b", low):
+        # "no worries", "no rush", "I don't know" are not cancellations. This
+        # path runs on ANY malformed model reply, not just an outage, and a
+        # bare \bno\b inside a pleasantry cancelled his only held booking and
+        # closed the promise behind it — answered with "Okay, scrapped."
+        # Strip the idioms first, then look for a refusal in what is left.
+        refusal = re.sub(r"\bno (worries|worry|rush|problem|pressure|biggie"
+                         r"|stress|sweat)\b|\bdon'?t know\b|\bno idea\b",
+                         " ", low)
+        if short and re.search(r"\b(no|nope|don'?t|forget it|cancel|stop|scrap it)\b", refusal):
             if not has_pending:
                 return {"intent": "chat", "pending_id": None,
                         "reply": "Nothing's queued up on my end right now — what did you mean?"}
@@ -1137,6 +1227,7 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             return "Nothing's waiting on you right now — what do you mean?"
         self._offered = [p["id"] for p in pending]
         self._offered_cancel = cancel
+        self._offered_at = time.time()
         listed = ", ".join(f"{i}) {p['goal'].replace('_', ' ')}"
                            for i, p in enumerate(pending, 1))
         return f"Just to be sure — which one should I {verb}: {listed}?"
@@ -1192,9 +1283,32 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 return turn.text.rstrip().endswith("?")
         return False
 
+    # How long a numbered menu stays answerable. Long enough that he can put
+    # the phone down mid-question, short enough that it is not still standing
+    # over an unrelated conversation an hour later.
+    _OFFER_TTL = 900
+
+    def _offer_live(self) -> bool:
+        """Is the menu she offered still the question on the table?
+
+        `_offered`/`_offered_cancel` were set once and never cleared, so a
+        CALL-OFF menu from any point in the process's life kept answering
+        _asked_to_cancel True. With the model down, "yeah do it all" to her
+        much later "want me to lock in Earls for 7?" resolved "all" against
+        that stale cancel list, flipped the intent to decline, and scrapped
+        every open job in answer to a yes.
+        """
+        if not getattr(self, "_offered", None):
+            return False
+        return time.time() - getattr(self, "_offered_at", 0.0) <= self._OFFER_TTL
+
+    def _forget_offer(self) -> None:
+        """An answered menu is spent — it must not answer the next question."""
+        self._offered, self._offered_cancel, self._offered_at = [], None, 0.0
+
     def _asked_to_cancel(self) -> bool:
         """Whether her last numbered question offered to CALL THINGS OFF."""
-        if getattr(self, "_offered_cancel", None) is not None and getattr(self, "_offered", None):
+        if self._offer_live() and getattr(self, "_offered_cancel", None) is not None:
             return bool(self._offered_cancel)
         for turn in reversed(self._thread_from_record("", limit=10)):
             if turn.role == "anticipy" and "which one" in turn.text.lower():
@@ -1220,7 +1334,7 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 break
         if idx is None:
             return None
-        offered = list(getattr(self, "_offered", []) or [])
+        offered = list(self._offered) if self._offer_live() else []
         if not offered:
             # A redeploy cleared it. Rebuild from the numbered question she
             # actually sent — her own format, parsed back, then matched to
@@ -1230,7 +1344,13 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         if not offered or idx > len(offered):
             return None
         chosen = offered[idx - 1]
-        return chosen if any(p["id"] == chosen for p in self._pending()) else None
+        # Validate against the pool the menu was BUILT from. A call-off menu
+        # lists blocked and queued work too (_open_work), but this only ever
+        # checked _pending() — so "the second one" naming the parked email
+        # resolved to None, the cancel fell back to _freshest_pending, and the
+        # dinner he never mentioned died instead while he was told it had.
+        pool = self._open_work() if self._asked_to_cancel() else self._pending()
+        return chosen if any(p["id"] == chosen for p in pool) else None
 
     def _offered_from_thread(self) -> list[str]:
         """Recover the order from her last numbered question."""
@@ -1240,7 +1360,8 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             goals = re.findall(r"\d\)\s*([^,?]+)", turn.text)
             if not goals:
                 continue
-            pending = self._pending()
+            pending = (self._open_work() if "call off" in turn.text.lower()
+                       else self._pending())
             order = []
             for g in goals:
                 want = {w for w in re.findall(r"[a-z0-9']+", g.lower()) if len(w) > 3}
@@ -1316,6 +1437,32 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             return pending[0]
         return "ambiguous" if pending else None
 
+    @staticmethod
+    def _fold_corrections(params: dict, changes: Optional[dict] = None) -> dict:
+        """Put every value he has retracted-and-replaced into the authority.
+
+        Corrections that arrived EARLIER ("make it 6pm instead" against a
+        parked job, which is only noted) live in params["corrections"] and are
+        invisible in the goal wording the agent reads. approved_scope is the
+        only channel the browser hands read, so unless the correction is
+        folded in there the browser confirms 6pm in words and books 8pm in
+        deeds. _release did this; _requeue and _amend's resume branch did not,
+        so answering the parked question was exactly the path that executed
+        the retracted time.
+        """
+        corrections = dict(params.get("corrections") or {})
+        if changes:
+            corrections.update(changes)
+        if not corrections:
+            return params
+        params["corrections"] = corrections
+        if params.get("approved_scope"):
+            corrected = "; ".join(f"{k}: {v}" for k, v in corrections.items())
+            params["approved_scope"] += (
+                f" They changed: {corrected} — these corrected values "
+                "override the task wording and anything heard earlier.")
+        return params
+
     def _release(self, job_id: Optional[str], changes: Optional[dict],
                  owner_text: str = "") -> Optional[str]:
         job = self._job(job_id, owner_text)
@@ -1364,23 +1511,8 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             ).strip()
         if changes:
             changes = self._drop_unquoted_codes(changes, owner_text)
-        # Corrections that arrived EARLIER ("make it 6pm instead", then "go
-        # ahead" as its own text) live in params["corrections"] — invisible in
-        # the goal wording the agent reads. Fold them into the authority now,
-        # or the browser confirms 6pm in words and books 8pm in deeds.
-        corrections = dict(params.get("corrections") or {})
-        if changes:
             params.update(changes)
-            corrections.update(changes)
-        if corrections:
-            params["corrections"] = corrections
-            corrected = "; ".join(f"{k}: {v}" for k, v in corrections.items())
-            # The agent reads its authority from approved_scope, and the goal
-            # wording still carries the OLD value — so the correction must
-            # outrank it there, or the browser executes the retracted plan.
-            params["approved_scope"] += (
-                f" They changed: {corrected} — these corrected values "
-                "override the task wording and anything heard earlier.")
+        params = self._fold_corrections(params, changes)
         fields = {"status": "queued", "params": json.dumps(params)}
         # Reading the embedded plan can itself refuse — a row whose status and
         # embedded state disagree is exactly the disagreement worth surfacing.
@@ -1525,6 +1657,11 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                 params["approved_scope"] += (
                     f' You stopped and asked: "{need}". '
                     f'They answered: "{answer}" — that answer is final; act on it.')
+            # Everything he corrected while it sat parked — the note-only
+            # branch above stores those and touches nothing else — has to ride
+            # in with the answer, or the resumed run reads 8pm out of the goal
+            # and books 8pm after he moved it to 6.
+            params = self._fold_corrections(params)
             fields = {"status": "queued", "params": json.dumps(params)}
             if workflow:
                 try:
@@ -1543,24 +1680,41 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             fields["params"] = json.dumps(params)
         return self._flip(job["id"], fields, "amended")
 
+    # "code" in a key name does not make it a secret. A postal code, an area
+    # code or a promo code is public, is often shorter than four characters
+    # ("604"), and was being deleted by the secrecy rule below — so she asked
+    # for it again every single time he sent it.
+    _PUBLIC_CODE_KEYS = re.compile(
+        r"(^|_)(postal|post|zip|area|country|dial|promo|discount|coupon"
+        r"|airport|iata)(_|$)")
+
     @staticmethod
     def _drop_unquoted_codes(changes: Optional[dict],
                              owner_text: Optional[str]) -> Optional[dict]:
         """A value bound for a code/PIN field must be the owner's own
-        characters, verbatim. "I told you to make it 6 dammit" once became
+        characters. "I told you to make it 6 dammit" once became
         verification_code="6" and the browser typed a fabricated code into a
         real OTP form — a lockout/fraud-flag risk. A code is never derived,
-        completed or guessed: too short, or not present character-for-character
-        in what they actually texted, and it does not exist."""
+        completed or guessed: too short, or absent from what they actually
+        texted, and it does not exist.
+
+        Compared with spacing, hyphens and case squashed out of BOTH sides.
+        The rule is "his characters, not the model's" — and it was reading as
+        "his formatting too": he texted "code is 428 913", the model tidied it
+        to "428913", the literal substring test failed, and the code he had
+        just pasted was thrown away. He pasted it again. And again."""
         if not changes:
             return changes
+        squash = lambda s: re.sub(r"[^a-z0-9]", "", str(s).lower())
+        typed = squash(owner_text or "")
         out = {}
         for k, v in changes.items():
             key = re.sub(r"\W+", "_", str(k).lower())
-            if re.search(r"(^|_)(code|otp|pin)($|_)", key) \
-                    or "verification" in key:
-                sv = str(v).strip()
-                if len(sv) < 4 or sv not in (owner_text or ""):
+            secret = (re.search(r"(^|_)(code|otp|pin)($|_)", key)
+                      or "verification" in key)
+            if secret and not Conversation._PUBLIC_CODE_KEYS.search(key):
+                sv = squash(v)
+                if len(sv) < 4 or sv not in typed:
                     continue
             out[k] = v
         return out

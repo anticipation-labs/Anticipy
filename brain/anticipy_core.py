@@ -688,6 +688,9 @@ class Anticipy:
         # (job id, when, the goal it was raised with). The GOAL is what makes
         # "is this the same plan?" answerable here, without a backend read.
         self._open_plan: Optional[tuple[str, float, str]] = None
+        # Zero means "never swept", which is what a fresh process is — and a
+        # fresh process is exactly the one whose self.loops lost the mapping.
+        self._last_loop_sweep: float = 0.0
 
     def _owner_filter(self) -> str:
         """Return the strongest available tenant filter for PocketBase."""
@@ -959,8 +962,32 @@ class Anticipy:
         # leaked internal instruction, live 2026-08-11). His yes lands on the
         # freshly held plan; only when nothing is freshly held does the line
         # fall through to triage.
-        if not dictated and speaker != "other" \
-                and self._GO_AHEAD_RE.match(line.strip()):
+        #
+        # A YES SAID TO SOMEBODY ELSE IS NOT A YES TO HER.
+        #
+        # This shortcut releases a consequential card with no confirmation, so
+        # it must only fire on speech that could plausibly be aimed at her.
+        # Two ways it could not be:
+        #
+        #  - He is mid-conversation with a person she cannot hear. "Okay let's
+        #    do it" to the man on the phone is the purest back-channel there
+        #    is, and it is the exact class in_conversation() was built for —
+        #    yet the release ran two lines before that evidence was ever
+        #    consulted, so an investor call within fifteen minutes of a held
+        #    dinner would have booked the dinner. speaker is no protection:
+        #    measured on 200 tagged lines, 97% of them carry no verdict at all.
+        #  - It arrived over SMS. conversation.py owns confirm semantics for
+        #    texts — it decides go/amend against the item it actually asked
+        #    about — and only hands a line to _think() once it has judged it a
+        #    new request or chat. A "sounds good" the SMS lane already
+        #    declined to treat as a confirmation must not come back through
+        #    the ambient door and release the newest card instead.
+        #
+        # Neither case loses the yes: the line falls through to triage with
+        # mid_conversation riding along, which is the honest place to judge it.
+        ambient = (not dictated and speaker != "other" and channel != "sms"
+                   and not in_conversation(context))
+        if ambient and self._GO_AHEAD_RE.match(line.strip()):
             released = self._release_freshest_held(line)
             if released:
                 self._prev = None
@@ -1125,6 +1152,7 @@ class Anticipy:
                     addressee=addressee, owes=decision.owes),
                     "anticipy_says": None}
             params = {"source": line, "now": self._now_line(), "lane": "ambient"}
+            params = self._keeping(params, mem.get("commitment_id"))
             job_id = self._queue_job(goal, params)
             self.loops.append(LoopRecord(
                 commitment_id=mem.get("commitment_id") or -1,
@@ -1196,6 +1224,7 @@ class Anticipy:
             if quiet_research:
                 # Free to do, lands on her desk — queued unheld, said nowhere.
                 params = {"source": line, "now": self._now_line(), "lane": "ambient"}
+                params = self._keeping(params, mem.get("commitment_id"))
                 if decision.assumption:
                     params["assumption"] = decision.assumption
                 job_id = self._queue_job(goal, params)
@@ -1252,6 +1281,7 @@ class Anticipy:
                          else "") + f"from what I know about you: {picked}")
                 params = {"source": authority_source, "now": self._now_line(),
                           "lane": "desk"}
+                params = self._keeping(params, mem.get("commitment_id"))
                 if stitched_goal:
                     params["recognizer_continuation"] = True
                     params["source_event_ids"] = authority_event_ids
@@ -1515,6 +1545,7 @@ class Anticipy:
             # The executor needs temporal ground truth: a job run today with
             # no "now" produced an OpenTable result dated a YEAR in the past.
             params = {"source": authority_source, "now": self._now_line()}
+            params = self._keeping(params, mem.get("commitment_id"))
             if stitched_goal:
                 params["recognizer_continuation"] = True
                 params["source_event_ids"] = authority_event_ids
@@ -1679,6 +1710,7 @@ class Anticipy:
             # go-ahead releases it, and "forget it" kills it.
             if handled and decision.goal:
                 params = {"source": line, "now": self._now_line()}
+                params = self._keeping(params, mem.get("commitment_id"))
                 if channel:
                     params["channel"] = channel
                 if decision.missing:
@@ -2137,8 +2169,40 @@ class Anticipy:
         except Exception:
             return None
 
+    @staticmethod
+    def _keeping(params: dict, commitment_id) -> dict:
+        """Write onto the card WHICH PROMISE it is keeping.
+
+        The loop→job→commitment mapping lived only in self.loops, a plain RAM
+        list rebuilt empty on every process start — so a job approved and
+        finished after a redeploy left its commitment open forever, and the
+        clock kept composing "just confirming our dinner!" about a table that
+        was already booked. Riding in params it survives the restart, gets
+        carried through _merge_into with the rest of them, and lets any
+        process finish the sentence another one started.
+        """
+        try:
+            cid = int(commitment_id)
+        except (TypeError, ValueError):
+            return params
+        if cid > 0:
+            params["commitment_id"] = cid
+        return params
+
     def _queue_job(self, goal: str, params: dict, hold: bool = False,
                    explicit: bool = False) -> Optional[str]:
+        # ONE CANONICAL SPELLING OF THE GOAL, DECIDED HERE.
+        #
+        # The row's `goal` column was written from the model's raw string
+        # while new_plan() stored goal.strip() inside the embedded plan, and
+        # workflow_guard.pb.js compares those two character for character. A
+        # triage reply of {"goal": "Book dinner at Earls tomorrow at 7 \n"} —
+        # a trailing space is all it takes — came back 409 "job fields
+        # disagree with the embedded workflow", raise_for_status raised, the
+        # bare except returned None, and by then hear() had ALREADY texted him
+        # asking about the card. He answered yes to a card that was never
+        # created. Strip once, at the boundary, so the two copies cannot drift.
+        goal = (goal or "").strip()
         # Mentioning the same thing twice must not produce two identical items
         # waiting on the owner. Five copies of "Draft email to Marcus" piled up
         # in production, each one texting him, and every "yes" after that was
@@ -2174,8 +2238,23 @@ class Anticipy:
                 job_id = open_plan[0]
                 # Only while it is still his to approve. Once he has said yes
                 # and it is running, the next thing he says is a NEW errand.
+                #
+                # That was the intent; the liveness check did not enforce it.
+                # _pending_jobs() means "awaiting_confirm OR queued", and
+                # nothing clears _open_plan when the SMS or app lane releases
+                # a card — so for the whole ten-minute window an APPROVED job
+                # still read as his to approve. He says "book dinner at Earls
+                # tonight", taps yes, then two minutes later "also book dinner
+                # at Earls Friday for the team": same plan by every word test,
+                # so the merge rewrote tonight's queued booking to say Friday
+                # and the second dinner never existed. Read the status, not
+                # just the membership.
                 current = next((j for j in self._pending_jobs()
                                 if j.get("id") == job_id), None)
+                if current is not None \
+                        and str(current.get("status") or "") not in (
+                            "", "awaiting_confirm"):
+                    current = None
                 if current is None:
                     self._open_plan = None
                 else:
@@ -2426,8 +2505,10 @@ class Anticipy:
             # everything else — held if consequential, never auto-sent.
             held = is_consequential(goal)
             job_id = self._queue_job(
-                goal, {"source": "clock initiative", "say": say,
-                       "now": self._now_line()}, hold=held)
+                goal, self._keeping(
+                    {"source": "clock initiative", "say": say,
+                     "now": self._now_line()},
+                    loop_ids[0] if loop_ids else -1), hold=held)
             # Without a LoopRecord the job is invisible to status_report() and
             # briefing(): she'd text about a booking, then answer "what's
             # open?" with "nothing".
@@ -2437,7 +2518,20 @@ class Anticipy:
                 status="awaiting_ok" if held else "handling",
                 job_id=job_id,
             ))
-        self.notify_owner(say)
+        # A CLOCK REMINDER THAT DID NOT ARRIVE IS NOT A REMINDER.
+        #
+        # The caller treats any truthy return as delivered: it stamps
+        # last_outreach_ts, writes these loop ids into reached_loop_ids
+        # permanently, and posts an anticipy_says event with decision="clock"
+        # — which is exactly the durable record already_raised reads, so the
+        # goal is immunised against every future SPEAK_ONCE. One transient
+        # Twilio 500 and the reminder is dead forever: he never got it, it can
+        # never fire again, and the four-hour outreach budget was spent on
+        # nothing. Every other send path in worker.py already guards on this
+        # return; the clock was the last one recording without checking.
+        if not self.notify_owner(say):
+            print(f"clock: send failed, not marking as raised -> {say!r}")
+            return None
         return {"say": say, "goal": goal, "loop_ids": loop_ids}
 
     def _same_pending(self, goal: str) -> Optional[str]:
@@ -2490,6 +2584,28 @@ class Anticipy:
         Either way the ORIGINAL conversation is kept — the new params'
         source ("booked now") is a fragment, not a replacement for what was
         actually heard."""
+        # HIS YES ENDS THE EDITING WINDOW.
+        #
+        # merge() demotes a consequential plan back to AWAITING_APPROVAL,
+        # which for a job the owner has already approved means the row must
+        # go queued -> awaiting_confirm — a transition workflow_guard.pb.js
+        # rejects outright. The 409 landed in the bare except below, so the
+        # correction disappeared with no log and no reply: he approved
+        # "dinner at Earls at 7", said "actually make it 8", was told
+        # nothing, and the extension then booked the seven o'clock table he
+        # had just corrected. Refuse here, out loud, rather than writing into
+        # a guard we know will say no. A missing status is no verdict and
+        # changes nothing — the pending pools and the fakes both carry one.
+        status = str(current.get("status") or "")
+        if status and status != "awaiting_confirm":
+            print(f"not amending {job_id}: already {status} — his approval "
+                  f"closed this card to edits: {goal!r}")
+            return
+        # The row's goal column and the goal inside the embedded plan are
+        # compared character for character by the guard, and merge() stores
+        # the stripped form. A goal the model emitted with a trailing newline
+        # would 409 on every amendment.
+        goal = (goal or "").strip()
         try:
             cur_params = json.loads(current.get("params") or "{}")
         except Exception:
@@ -2560,10 +2676,18 @@ class Anticipy:
                 return
         fields["params"] = json.dumps(merged)
         try:
-            pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
-                     json=fields, timeout=10)
-        except Exception:
-            pass
+            r = pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
+                         json=fields, timeout=10)
+            # requests does not raise on 4xx, and this except swallowed the
+            # rest — so a rejected amendment read exactly like an applied one
+            # all the way up. Whoever reads the log must be able to see that
+            # the card on his desk is NOT what he last said.
+            if getattr(r, "ok", True) is False:
+                print(f"amend REFUSED for {job_id}: "
+                      f"{getattr(r, 'status_code', '?')} — the card still "
+                      f"says the old thing, not {goal!r}")
+        except Exception as e:
+            print(f"could not amend {job_id}: {e}")
 
     @staticmethod
     def _covered_by(goal: str, other: str) -> bool:
@@ -2762,8 +2886,71 @@ class Anticipy:
                 return j["id"]
         return None
 
+    # How often the restart-proof sweep below is allowed to ask the backend.
+    # review_loops() runs every worker poll (2s) and the sweep is only ever
+    # catching up on work another process finished, so a few minutes late is
+    # invisible to the owner and 150x cheaper than asking every tick.
+    LOOP_SWEEP_SECONDS = 300
+
+    def _close_loops_finished_elsewhere(self, now: Optional[float] = None) -> int:
+        """Resolve commitments whose job finished in ANOTHER process.
+
+        Live shape: he says "book dinner at Cactus tomorrow", a commitment row
+        goes into memory.db and a card onto his desk. The worker is redeployed
+        (or evicted by the supervisor). He approves, the extension books it,
+        the job goes done — but self.loops is empty in the new process, so
+        review_loops closed nothing and the commitment stayed open forever.
+        Days later the clock selected it, still carrying his own quote, and
+        texted "just confirming our dinner!" about a table already reserved.
+
+        The job row itself carries which promise it was keeping, so any
+        process can read it back. Matched on that id and nothing else — a
+        fuzzy match on goal wording would close the wrong promise, and there
+        is no undoing that.
+
+        Returns how many commitments it closed.
+        """
+        ts = now or time.time()
+        if ts - getattr(self, "_last_loop_sweep", 0.0) < self.LOOP_SWEEP_SECONDS:
+            return 0
+        self._last_loop_sweep = ts
+        try:
+            open_ids = {int(l["id"]) for l in self.memory.open_loops()}
+        except Exception:
+            return 0
+        if not open_ids:
+            return 0
+        try:
+            filt = 'status="done" || status="cancelled"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt = f"({filt}) && {owner_filter}"
+            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 50, "sort": "-updated"},
+                       timeout=10)
+            items = r.json().get("items", []) if getattr(r, "ok", False) else []
+        except Exception:
+            return 0
+        closed = 0
+        for job in items:
+            try:
+                cid = int(json.loads(job.get("params") or "{}")
+                          .get("commitment_id") or 0)
+            except Exception:
+                continue
+            if cid not in open_ids:
+                continue
+            self.memory.resolve(
+                cid, "done" if job.get("status") == "done" else "cancelled")
+            open_ids.discard(cid)
+            closed += 1
+            print(f"loop {cid} closed by job {job.get('id')} "
+                  f"({job.get('status')}) — finished in another process")
+        return closed
+
     def review_loops(self) -> list[dict]:
         """Poll the job queue and close loops whose jobs finished."""
+        self._close_loops_finished_elsewhere()
         out = []
         for loop in self.loops:
             if loop.job_id and loop.status in ("handling", "awaiting_ok"):

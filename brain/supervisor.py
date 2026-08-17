@@ -21,6 +21,7 @@ import time
 from typing import Callable
 
 from . import pb
+from . import worker
 
 
 PB = os.environ.get("ANTICIPY_PB", "http://127.0.0.1:8090")
@@ -31,7 +32,18 @@ _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 
 
 def discover_owners() -> list[dict]:
-    """Return canonical owner ids without exposing account credentials."""
+    """Return canonical owner ids without exposing account credentials.
+
+    EVERY discovered owner is returned; how many workers actually run is
+    capped at spawn time in reconcile_children(). Truncating here made the
+    cap evict people instead of turning them away: PocketBase ids are
+    random, so `rows[:MAX_OWNER_WORKERS]` is an arbitrary set rather than the
+    oldest, and the reconcile reads "not in this set" as "this account was
+    deleted" and SIGTERMs the child. One new signup whose generated id
+    happened to sort low silently stopped a live owner being heard — and the
+    kill landed wherever the process was, so a half-written clock_state.json
+    read back as the permissive default and wiped their outreach limit too.
+    """
     rows: list[dict] = []
     page = 1
     while True:
@@ -54,7 +66,7 @@ def discover_owners() -> list[dict]:
             break
         page += 1
     rows.sort(key=lambda item: item["id"])
-    return rows[:MAX_OWNER_WORKERS]
+    return rows
 
 
 def child_environment(owner: dict, base: dict | None = None,
@@ -91,6 +103,10 @@ def child_environment(owner: dict, base: dict | None = None,
     if not is_legacy_owner:
         env.pop("ANTICIPY_OWNER_PHONE", None)
     env["ANTICIPY_SUPERVISED"] = "1"
+    # Kept for a standalone child started by hand. Nothing the supervisor
+    # spawns is the webhook manager any more: the role is the supervisor's,
+    # because an env var written once at spawn cannot follow a role that has
+    # to move when an owner disappears.
     env["ANTICIPY_WEBHOOK_MANAGER"] = "1" if webhook_manager else "0"
     return env
 
@@ -120,6 +136,47 @@ def stop_child(child) -> None:
         child.wait(timeout=5)
 
 
+def reconcile_children(children: dict, owners: list[dict],
+                       spawn: Callable = spawn_owner) -> list[str]:
+    """Bring the running set into line with discovery. Returns the unserved.
+
+    Its own function because the eviction bug lived in this arithmetic and
+    nothing could reach it: it was inline in an infinite loop, so the only
+    way to learn who had been stopped was to run a fleet and wait for
+    somebody to go quiet.
+    """
+    wanted = {owner["id"]: owner for owner in owners}
+    for ref, child in list(children.items()):
+        if ref not in wanted or child.poll() is not None:
+            if ref not in wanted:
+                stop_child(child)
+            del children[ref]
+    # The cap bounds how many workers we START. It never decides who keeps
+    # running: a person already being heard is not evicted to make room for a
+    # newer signup, and only an account that has genuinely disappeared from
+    # discovery is stopped above.
+    room = MAX_OWNER_WORKERS - len(children)
+    unserved: list[str] = []
+    for ref, owner in wanted.items():
+        if ref in children:
+            continue
+        if room <= 0:
+            unserved.append(ref)
+            continue
+        children[ref] = spawn(owner)
+        room -= 1
+        print(f"owner worker started · owner={ref}")
+    if unserved:
+        # Loudly, every pass. Silently dropping accounts is how a fleet reads
+        # as healthy while somebody gets nothing at all.
+        print(f"AT CAPACITY: {len(children)} workers running "
+              f"(ANTICIPY_MAX_OWNER_WORKERS={MAX_OWNER_WORKERS}) — "
+              f"{len(unserved)} owner(s) have no worker: "
+              f"{', '.join(unserved[:10])}"
+              f"{' …' if len(unserved) > 10 else ''}")
+    return unserved
+
+
 def main() -> None:
     children: dict[str, object] = {}
     stopping = False
@@ -132,21 +189,24 @@ def main() -> None:
     signal.signal(signal.SIGINT, request_stop)
     print(f"supervisor up · pb={PB} · isolated-owner-limit={MAX_OWNER_WORKERS}")
 
+    last_webhook = 0.0
     while not stopping:
+        # The Twilio number must keep pointing at us, and exactly one process
+        # may check. That job used to be handed to the first-sorted owner's
+        # CHILD, baked into its environment at spawn — so when that owner was
+        # removed from discovery the role moved to a child that had already
+        # been started with ANTICIPY_WEBHOOK_MANAGER=0, and NOBODY checked
+        # anywhere until the supervisor itself restarted. The watchdog exists
+        # because the number really was repointed at a stranger's Vercel app
+        # on 2026-08-03 and every text he sent went there for a day; going
+        # dark with nothing in any log saying so is the one failure it may
+        # not have. Outside the try below on purpose: a backend outage must
+        # not take the watchdog down with discovery.
+        if time.time() - last_webhook > worker.WEBHOOK_CHECK_EVERY_SECONDS:
+            last_webhook = time.time()
+            worker.ensure_inbound_webhook()
         try:
-            owners = discover_owners()
-            wanted = {owner["id"]: owner for owner in owners}
-            for ref, child in list(children.items()):
-                if ref not in wanted or child.poll() is not None:
-                    if ref not in wanted:
-                        stop_child(child)
-                    del children[ref]
-            manager_ref = owners[0]["id"] if owners else ""
-            for ref, owner in wanted.items():
-                if ref not in children:
-                    children[ref] = spawn_owner(
-                        owner, webhook_manager=(ref == manager_ref))
-                    print(f"owner worker started · owner={ref}")
+            reconcile_children(children, discover_owners())
         except Exception as exc:
             print(f"owner discovery failed (retrying): {exc}")
 

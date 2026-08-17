@@ -44,6 +44,28 @@ routerAdd("POST", "/auth/claim", (e) => {
   try { body = e.requestInfo().body || {}; } catch (_) {}
   const legacy = String(body.legacy_uuid || "").trim();
 
+  // The uuid has to be the one recorded ON THIS ACCOUNT at sign-up, or the
+  // paragraph above is a lie: it called the uuid evidence "because it was
+  // recorded on the account at sign-up" and then never once read that record.
+  // The value is not a secret either — agents.owner IS the phone's uuid, and
+  // guard.pb.js's deliberately anonymous pair-code lookup hands the whole row
+  // out to anyone who guesses a six-digit code. So the attack was: read a
+  // stranger's uuid off a pair code, sign up a throwaway account, POST it
+  // here, and every legacy row moved — including the owner_profile carrying
+  // that person's first name, last name, email, phone and birthday. It did
+  // not stop at reading, either: sms.pb.js resolves an inbound number through
+  // owner_profile BEFORE owners, so from that moment every "yes, go ahead"
+  // the real owner texted from their own phone was filed under the stranger
+  // and released into the stranger's browser. owners.legacy_uuid is UNIQUE
+  // (idx_owners_legacy, 1700000008) and the app posts back the same value it
+  // registered, so equality against the recorded one is the entire test —
+  // and an account with nothing recorded can claim nothing.
+  const recorded = String(auth.getString("legacy_uuid") || "").trim();
+  if (legacy && legacy !== recorded) {
+    console.log("claim: refused " + legacy + " for " + auth.id + " (not this account's device)");
+    return e.json(403, { ok: false, message: "That device isn't on this account." });
+  }
+
   const claimed = { jobs: 0, owner_profile: 0, segments: 0, agents: 0, events: 0 };
 
   // 1. Rows that can prove they are this person's.

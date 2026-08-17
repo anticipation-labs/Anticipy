@@ -101,6 +101,23 @@ routerUse((e) => {
     return e.next();
   }
 
+  // ---- the dashboard ----
+  // This MUST stay ABOVE the owner branch. In PocketBase 0.30.4 the
+  // load-auth-token middleware fills `e.auth` for ANY auth record, superusers
+  // included (`hasSuperuserAuth()` is literally `e.auth != nil &&
+  // e.auth.isSuperuser()`), so `if (e.auth)` below was true for a superuser
+  // session and this allowance sat downstream of it, unreachable. What that
+  // looked like: create the superuser from the `pbinstal` URL the boot log
+  // prints, sign in fine (that request carries no token, so e.auth is null),
+  // and the Admin UI's very next call — auth-refresh — comes back
+  // {"error":"account is not allowed to access that collection"}, which the
+  // UI reads as a dead session and bounces to the login screen. Provisioning
+  // the missing superuser was never the piece that was missing; this ordering
+  // was, and no amount of re-creating the account would have fixed it.
+  try {
+    if (e.hasSuperuserAuth()) return e.next();
+  } catch (_) {}
+
   // ---- anyone who has actually signed in ----
   // A real account token is a BETTER credential than the shared secret, so it
   // passes here. This is strictly widening: nothing that worked before stops
@@ -147,12 +164,12 @@ routerUse((e) => {
     }
   } catch (_) {}
 
-  // The dashboard and any properly authenticated superuser session.
-  try {
-    if (e.hasSuperuserAuth()) return e.next();
-  } catch (_) {}
-
-  // Superuser login itself must stay reachable or the dashboard locks out.
+  // Superuser LOGIN itself must stay reachable or the dashboard locks out.
+  // Reached only when e.auth is empty — i.e. the sign-in request itself, or a
+  // session whose token has expired. An authenticated superuser was already
+  // let through above; an authenticated OWNER falls to the branch above this
+  // one and is refused there, which is why this line cannot become a way for
+  // an ordinary account to read the _superusers collection.
   if (path.startsWith("/api/collections/_superusers/")) return e.next();
 
   // ---- pairing bootstrap (tokenless by necessity) ----
