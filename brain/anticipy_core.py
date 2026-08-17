@@ -2039,7 +2039,12 @@ class Anticipy:
         if len(blocked) != 1:
             return None
         job = blocked[0]
-        need = str(job.get("result") or "").strip()
+        # THE KEYS _blocked ACTUALLY RETURNS. This read `result`, which that
+        # method has never produced — so this router returned None before it
+        # ever looked at his words, every single time, while its tests passed
+        # 9/9 against a fake whose shape was invented rather than checked.
+        # Caught by the demo-readiness audit, 2026-08-17.
+        need = str(job.get("needs") or job.get("remembered_need") or "").strip()
         if not need:
             return None
         # She must have asked RECENTLY. Hours later this is a new remark

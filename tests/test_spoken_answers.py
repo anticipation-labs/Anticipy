@@ -57,9 +57,12 @@ def _core(convo):
     return a
 
 
+# The shape _blocked ACTUALLY returns. Inventing this is what let the
+# router ship dead: it read a "result" key nobody produces, and these tests
+# passed 9/9 against the invention.
 PARKED = [{"id": "j-earls", "goal": "Book Earls for lunch tomorrow",
-           "result": "which location works best for you?",
-           "params": "{}", "updated": _recent()}]
+           "needs": "which location works best for you?",
+           "remembered_need": "", "updated": _recent()}]
 
 
 def test_the_spoken_answer_reaches_the_job_that_asked():
@@ -100,7 +103,7 @@ def test_a_question_asked_hours_ago_is_not_answered_by_a_passing_remark():
 
 def test_disputing_the_premise_also_lands():
     """The CAPTCHA lesson: "there's no captcha, press submit" is an answer."""
-    parked = [dict(PARKED[0], result="solve the CAPTCHA on the screen")]
+    parked = [dict(PARKED[0], needs="solve the CAPTCHA on the screen")]
     convo = FakeConvo(parked)
     out = _core(convo)._spoken_answer_to_parked_work(
         "there's no captcha just press submit")
@@ -160,3 +163,66 @@ def test_only_a_delivered_message_counts_as_having_told_him():
     body = src.split("def _told_him_before", 1)[1][:1400]
     assert 'kind="anticipy_says"' in body, "read the durable record"
     assert "owner_ref" in body, "scoped to this account"
+
+
+# ----------------------------------------- the contract, not a fake of it
+
+def test_the_router_reads_the_keys_blocked_actually_returns():
+    """This is the test that was missing, and its absence cost a demo.
+
+    _spoken_answer_to_parked_work read job["result"]. _blocked() has never
+    produced that key — it returns id/goal/needs/remembered_need/updated —
+    so the router bailed before looking at his words, every time, while the
+    suite above passed 9/9 against a fake whose shape had been invented.
+
+    Compare the producer and the consumer directly. A rename on either side
+    fails here instead of going quiet in production.
+    """
+    import inspect
+    from brain.conversation import Conversation
+    from brain.anticipy_core import Anticipy
+
+    produced = inspect.getsource(Conversation._blocked)
+    consumed = inspect.getsource(Anticipy._spoken_answer_to_parked_work)
+
+    for key in ("needs", "updated"):
+        assert f'"{key}"' in produced, f"_blocked must still return {key}"
+        assert f'job.get("{key}")' in consumed, f"the router must read {key}"
+    assert 'job.get("result")' not in consumed, (
+        "result is the runner's scratch field and is not in this contract")
+
+
+def test_a_real_blocked_row_flows_through_untouched(monkeypatch):
+    """End to end on the REAL _blocked output, built from a real job row."""
+    import brain.conversation as convmod
+    from brain.conversation import Conversation
+    from brain.anticipy_core import Anticipy
+    from brain.memory import Memory
+
+    row = {"id": "j-real", "goal": "Book Earls for lunch tomorrow",
+           "result": "which location works best for you?",
+           "params": json.dumps({}), "status": "needs_user",
+           "updated": _recent()}
+
+    class R:
+        ok = True
+        def json(self): return {"items": [row]}
+
+    monkeypatch.setattr(convmod, "pb", type("PB", (), {
+        "get": staticmethod(lambda *a, **k: R()),
+        "patch": staticmethod(lambda *a, **k: R())}))
+
+    a = Anticipy(memory=Memory(":memory:"), llm=None, owner_id="t")
+    convo = Conversation(a, llm=None)
+    a.conversation = convo
+    blocked = convo._blocked()
+    assert blocked and blocked[0]["needs"], "the real row must carry a need"
+    assert blocked[0]["updated"], "and a timestamp"
+
+    monkeypatch.setattr(Conversation, "_remember_about_owner",
+                        lambda self, tx: {"location": "West Van"})
+    monkeypatch.setattr(Conversation, "_amend",
+                        lambda self, jid, ch, owner_text="": f"resumed:{jid}")
+    out = a._spoken_answer_to_parked_work("Just do West Van I told you this")
+    assert out is not None, "his spoken answer must reach a REAL parked row"
+    assert out["decision"].decision == "answer"

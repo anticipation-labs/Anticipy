@@ -1916,11 +1916,20 @@ function frameTarget(tabId, index) {
   return frameId ? { tabId, frameIds: [frameId] } : { tabId };
 }
 async function inFrame(tabId, index, func, extraArgs = []) {
-  const res = await chrome.scripting.executeScript({
+  // BOUNDED AT THE SOURCE. A frame that navigates or is torn down mid-call
+  // never settles this promise, and every caller inherited that: the run
+  // simply stopped, with no error and no next trace line, until the lease
+  // died minutes later. Two call sites were wrapped individually on
+  // 2026-08-17; the demo-readiness audit then counted FIFTEEN more, one of
+  // which (the subframe value-readback) fires only for fields inside an
+  // iframe — precisely the OpenTable booking frame that killed the demo
+  // twice. Wrapping the primitive fixes them all at once, and a hang
+  // becomes a thrown error the loop already knows how to report.
+  const res = await withTimeout(chrome.scripting.executeScript({
     target: frameTarget(tabId, index),
     func,
     args: [localOf(index), ...extraArgs],
-  });
+  }), 10000, "frame script");
   return res?.[0]?.result;
 }
 

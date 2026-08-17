@@ -1,5 +1,15 @@
 import SwiftUI
 
+/// "41207s" is a number, not an answer. Anyone who opens the phone before the
+/// laptop saw the raw seconds since the browser last checked in — found by
+/// the demo-readiness audit, 2026-08-17.
+func humanGap(_ seconds: Int) -> String {
+    if seconds < 60 { return "just now" }
+    if seconds < 3600 { return "\(seconds / 60)m ago" }
+    if seconds < 86400 { return "\(seconds / 3600)h ago" }
+    return "\(seconds / 86400)d ago"
+}
+
 extension AgentJob {
     /// Goals are free-form model strings ("prepare Devon invoice email").
     /// Show them as a sentence — capitalize the first word, leave the rest
@@ -293,7 +303,7 @@ struct HomeView: View {
                         icon: "macbook",
                         label: agentLabel,
                         active: session.agentOnline,
-                        detail: session.agentLastSeenSeconds.map { "\($0)s" },
+                        detail: session.agentLastSeenSeconds.map(humanGap),
                         note: agentNote
                     )
                 }

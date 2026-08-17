@@ -91,7 +91,17 @@ struct HeardGroup: Identifiable, Equatable {
 
     /// Lines she has not come back on yet. Independent of weight — a group can
     /// be `.acting` and still have a line in flight.
-    var pending: [AnticipySession.TranscriptLine] { lines.filter { $0.decision == nil } }
+    /// Still being thought about — which INCLUDES "processing".
+    ///
+    /// claim() stamps decision="processing" on an event the moment the brain
+    /// picks it up, in the very column this app reads as her verdict. So the
+    /// "Thinking…" indicator vanished the instant she started thinking, and
+    /// the sentence sat there bare — visually identical to one she had
+    /// ignored — for the five to fifteen seconds she was actually working on
+    /// it. Found by the demo-readiness audit, 2026-08-17.
+    var pending: [AnticipySession.TranscriptLine] {
+        lines.filter { $0.decision == nil || $0.decision == "processing" }
+    }
 
     /// Rung 1 — what she understood this to be about. The first goal in speech
     /// order: the earliest thing she committed to is what the conversation was

@@ -574,7 +574,11 @@ Use {"facts": {}} when there is nothing durable."""
                     kept = None
                 out.append({"id": j["id"], "goal": j.get("goal", ""),
                             "needs": (needs or kept or "")[:300],
-                            "remembered_need": (kept or "")[:300]})
+                            "remembered_need": (kept or "")[:300],
+                            # WHEN she asked. Without it a caller cannot tell
+                            # a reply from a remark made hours later, and the
+                            # spoken-answer router needs exactly that.
+                            "updated": j.get("updated") or j.get("created") or ""})
             return out
         except Exception:
             return []
