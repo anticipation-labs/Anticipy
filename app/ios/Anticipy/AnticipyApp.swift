@@ -57,6 +57,10 @@ final class AnticipySession: ObservableObject {
     @Published var sessionLines: [SessionLine] = []
     @Published var anticipySays: [BrainEvent] = []
     @Published var jobs: [AgentJob] = []
+    /// The only way this product can reach someone whose phone is in their
+    /// pocket. See Notifier — until it existed, a booking waiting on an OK
+    /// reached its owner only if they happened to open the app.
+    let notifier = Notifier()
     @Published var backendReachable = false
     @Published var agentOnline = false
     @Published var agentLastSeenSeconds: Int?   // nil = never seen
@@ -318,6 +322,10 @@ final class AnticipySession: ObservableObject {
         do {
             jobs = try await b.fetchJobs(owner: ownerID)
             connection = .ready
+            // Raised from the poll on purpose: the app keeps running while it
+            // listens (background audio), so a local notification from here
+            // reaches a locked screen without a push server.
+            await notifier.announce(jobs: jobs)
         } catch let e as AnticipyBackend.BackendError {
             connection = .refused(e.status)
             if e.status == 401 || e.status == 403 {
@@ -599,6 +607,10 @@ final class AnticipySession: ObservableObject {
         // nothing was left to do it. keepListening stays as the person's
         // standing preference — it is honoured again when they sign back in.
         listener.stop()
+        // And take their errands off the lock screen with them. A notification
+        // outlives the session that raised it, so without this the next person
+        // to pick up the phone reads what the last one was asked to approve.
+        notifier.clearAll()
         pendingCount = unsent.count
     }
 
@@ -1054,6 +1066,34 @@ final class AnticipySession: ObservableObject {
     }
 
     @discardableResult
+    /// Stop something that is already running, from the phone.
+    ///
+    /// There was no way to do this. HandlingCard had no controls at all, and
+    /// the only stop control in the entire product was a button in the Chrome
+    /// popup — on the laptop. Away from the desk, watching it head somewhere
+    /// wrong, the owner could do precisely nothing about it.
+    ///
+    /// Same write path and same cancellation fields as "Not now", so a stop
+    /// from the phone and a stop from the laptop mean exactly one thing to
+    /// the rest of the system. The browser loop re-reads liveness immediately
+    /// before every irreversible action, so this lands before a submit rather
+    /// than after it.
+    func stopRunning(_ job: AgentJob) async -> Bool {
+        await write(job) {
+            var fields = try self.cancellationFields(
+                for: job, trigger: "tapped Stop on the phone")
+                ?? ["status": "cancelled"]
+            // Never claim more than is known. If the browser had already
+            // committed something when the stop landed, saying "nothing was
+            // done" is the one sentence that could cost him a duplicate
+            // booking he never checks for.
+            fields["result"] = job.effect_uncertain == true
+                ? "You stopped this. It may already have gone through before I stopped — worth a check."
+                : "You stopped this."
+            try await self.backend.setJobFields(id: job.id, fields: fields)
+        }
+    }
+
     func decline(_ job: AgentJob) async -> Bool {
         await write(job) {
             if let fields = try self.cancellationFields(

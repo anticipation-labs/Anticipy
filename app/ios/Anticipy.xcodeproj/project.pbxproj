@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0BB2CC5D62582F4FF458E8ED /* AnticipyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */; };
+		A1N0T1F1E5R0000000000002 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1N0T1F1E5R0000000000001 /* Notifier.swift */; };
 		18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0AB97746861DA294983C3B /* AnticipyBackend.swift */; };
 		1C9C98C649D0B723997B9A85 /* TranscriptFlushPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */; };
 		4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00793646933CBDFE4070BF5 /* PendantManager.swift */; };
@@ -48,6 +49,7 @@
 		5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */ = {isa = PBXFileReference; path = "speaker-embedding.onnx"; sourceTree = "<group>"; };
 		5E82F42600D1770EAC8F97FD /* BrainClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainClient.swift; sourceTree = "<group>"; };
 		70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyApp.swift; sourceTree = "<group>"; };
+		A1N0T1F1E5R0000000000001 /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
 		7686379B8FF9FE21D398381F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		8095C94E5CB8E9048543E8B5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		8E88365017E289B62475F24B /* PhoneListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneListener.swift; sourceTree = "<group>"; };
@@ -77,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */,
+				A1N0T1F1E5R0000000000001 /* Notifier.swift */,
 				11B56391BC84404B937B150F /* Assets.xcassets */,
 				A935B05F51033496D5EF92C9 /* HapticEngine.swift */,
 				46B2C841F09576CCA3A85B50 /* Info.plist */,
@@ -236,6 +239,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0BB2CC5D62582F4FF458E8ED /* AnticipyApp.swift in Sources */,
+				A1N0T1F1E5R0000000000002 /* Notifier.swift in Sources */,
 				18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */,
 				FF9C51D6755044E050520ADE /* AuthView.swift in Sources */,
 				6620D110891CC9F096396E66 /* BoundedOpusQueue.swift in Sources */,

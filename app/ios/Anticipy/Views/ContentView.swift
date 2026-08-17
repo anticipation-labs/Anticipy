@@ -1143,6 +1143,8 @@ struct SessionLineRow: View {
 /// with real data the feed was 30 identical rectangles.
 struct HandlingCard: View {
     let job: AgentJob
+    @EnvironmentObject private var session: AnticipySession
+    @State private var stopping = false
 
     /// What it is doing RIGHT NOW, in his words.
     ///
@@ -1193,6 +1195,28 @@ struct HandlingCard: View {
                 }
             }
             Spacer()
+            // THE ONLY STOP IN THIS PRODUCT WAS ON HIS LAPTOP.
+            // HandlingCard carried no controls at all, so away from the desk,
+            // watching a run head somewhere wrong, he could do nothing about
+            // it. Same cancellation path as "Not now", so a stop from here
+            // and a stop from Chrome mean one thing to the rest of the
+            // system; the browser loop re-reads liveness immediately before
+            // every irreversible action, so this lands before a submit.
+            if job.status == "running" || job.status == "queued" {
+                Button {
+                    stopping = true
+                    Task { _ = await session.stopRunning(job) }
+                } label: {
+                    Text(stopping ? "Stopping…" : "Stop")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(stopping ? Theme.sand : Theme.champagne)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .overlay(Capsule().strokeBorder(Theme.stroke, lineWidth: 1))
+                }
+                .disabled(stopping)
+                .accessibilityLabel(stopping ? "Stopping" : "Stop this task")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Theme.Space.base)
