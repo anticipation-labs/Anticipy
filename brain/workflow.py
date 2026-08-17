@@ -46,6 +46,57 @@ TERMINAL_STATES = {
     PlanState.CANCELLED,
 }
 
+
+# ONE CORRUPT ROW MUST NOT SILENCE HIM FOR THE REST OF THE DAY.
+#
+# These enums raise ValueError on an empty or unrecognised value, and the
+# plan blob is parsed inside hear(). So a single malformed row — a truncated
+# write, an older shape, a hand-edited record — threw out of _queue_job, out
+# of hear(), and the worker marked the EVENT as "error". The event had already
+# been claimed, so it was never retried: every later line that touched that
+# lineage died the same way, and nothing was ever said to him about any of it.
+#
+# Unreadable is not the same as absent, so both defaults are the cautious one:
+# work whose consequence cannot be read is treated as world-changing (it gets
+# every gate), and a plan whose state cannot be read is treated as parked for
+# the owner — visible, unable to act on its own, and still recoverable.
+
+def _consequence_or_safe(value) -> "Consequence":
+    try:
+        return Consequence(str(value or ""))
+    except ValueError:
+        return Consequence.CONSEQUENTIAL
+
+
+def _state_or_safe(value) -> "PlanState":
+    try:
+        return PlanState(str(value or ""))
+    except ValueError:
+        return PlanState.NEEDS_USER
+
+
+def _state_after_unreadable(raw_consequence, raw_state) -> "PlanState":
+    """Park a plan whose consequence could not be read.
+
+    Defaulting the consequence to "world-changing" is right, but on its own
+    it manufactures an ILLEGAL plan: consequential work sitting in QUEUED or
+    RUNNING without version-bound approval is exactly what assert_valid
+    refuses, so the cautious default would have thrown the very exception it
+    was added to prevent. Caught by its own test before it shipped.
+
+    So an unreadable consequence parks the work as well as gating it: we
+    cannot say what this plan would do, so it waits for him. Already-dead
+    states are left alone — there is nothing left to park.
+    """
+    state = _state_or_safe(raw_state)
+    try:
+        Consequence(str(raw_consequence or ""))
+        return state
+    except ValueError:
+        if state in (PlanState.FAILED, PlanState.CANCELLED):
+            return state
+        return PlanState.NEEDS_USER
+
 LEGACY_STATUS = {
     PlanState.DRAFT: "awaiting_confirm",
     PlanState.AWAITING_APPROVAL: "awaiting_confirm",
@@ -298,8 +349,9 @@ class Plan:
             lineage_key=str(value.get("lineage_key") or ""),
             version=int(value.get("version") or 0),
             goal=str(value.get("goal") or ""),
-            consequence=Consequence(str(value.get("consequence") or "")),
-            state=PlanState(str(value.get("state") or "")),
+            consequence=_consequence_or_safe(value.get("consequence")),
+            state=_state_after_unreadable(value.get("consequence"),
+                                          value.get("state")),
             authority_text=str(value.get("authority_text") or "").strip(),
             facts=_clean_facts(value.get("facts") or {}),
             required=tuple(str(x) for x in (value.get("required") or []) if str(x)),
