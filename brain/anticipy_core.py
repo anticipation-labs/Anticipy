@@ -885,6 +885,25 @@ class Anticipy:
                 reason="explicitly labelled quotation/example, not an action",
                 addressee="dictation", owes="machine"),
                 "anticipy_says": None}
+        # SHE ASKED. HE ANSWERED OUT LOUD. THAT MUST COUNT.
+        #
+        # A texted answer reaches a parked job; a SPOKEN one never could —
+        # hear() has never looked at blocked work at all, so every spoken
+        # reply to her own question went to triage, matched no goal, and was
+        # filed as ambient chatter. Watched live 2026-08-17: she texted
+        # "which location works best?", he said "Just do West Van I told you
+        # this" TWICE, both were marked ignore, she asked again, and he
+        # watched a booking die while answering it. On a product whose whole
+        # premise is a pendant, that is the worst possible gap.
+        #
+        # Deliberately narrow, because resuming the WRONG parked job is its
+        # own harm: exactly one job may be waiting, it must have asked
+        # recently, and the line must either supply what it named or dispute
+        # the premise. Anything else goes to triage untouched.
+        if not explicit and not dictated:
+            answered = self._spoken_answer_to_parked_work(line)
+            if answered:
+                return answered
         # Owner questions are answered, not triaged: a briefing request goes
         # to the briefing engine, and a memory question is answered straight
         # from the graph. Neither should ever spawn a browser job.
@@ -1959,6 +1978,68 @@ class Anticipy:
         except Exception as e:
             print(f"could not cancel {job_id}: {e}")
             return False
+
+    def _spoken_answer_to_parked_work(self, line: str) -> Optional[dict]:
+        """Route a spoken reply to the one job that is waiting on a question.
+
+        Returns the ordinary hear() shape when it lands, else None so the
+        line carries on to triage exactly as before.
+        """
+        convo = getattr(self, "conversation", None)
+        if not convo or not (line or "").strip():
+            return None
+        try:
+            blocked = convo._blocked()
+        except Exception:
+            return None
+        # More than one parked job and there is no safe way to pick; a wrong
+        # resume stamps his answer onto somebody else's errand.
+        if len(blocked) != 1:
+            return None
+        job = blocked[0]
+        need = str(job.get("result") or "").strip()
+        if not need:
+            return None
+        # She must have asked RECENTLY. Hours later this is a new remark
+        # about life, not an answer.
+        try:
+            import datetime as _dt
+            asked_at = str(job.get("updated") or job.get("created") or "")
+            when = _dt.datetime.strptime(asked_at[:19], "%Y-%m-%d %H:%M:%S")
+            when = when.replace(tzinfo=_dt.timezone.utc)
+            age = (_dt.datetime.now(_dt.timezone.utc) - when).total_seconds()
+            if age > 1800:
+                return None
+        except Exception:
+            pass
+        # What did he actually give her? The same extraction the texted lane
+        # uses, so a spoken answer and a typed one are worth the same.
+        try:
+            learned = convo._remember_about_owner(line) or {}
+        except Exception:
+            learned = {}
+        supplies = False
+        try:
+            supplies = (convo._answers_need(learned, need)
+                        or convo._disputes_or_directs(line, need))
+        except Exception:
+            supplies = False
+        if not supplies:
+            return None
+        try:
+            acted = convo._amend(job["id"], learned or {"owner_answer": line},
+                                 owner_text=line)
+        except Exception:
+            return None
+        if not acted or str(acted).startswith("failed"):
+            return None
+        print(f"spoken answer reached parked job {job['id']}: {line[:60]!r}")
+        mem = self.memory.ingest(line)
+        return {"memory": mem, "decision": Decision(
+            decision="answer", goal=job.get("goal", ""),
+            reason="answered a question the browser was waiting on",
+            addressee="assistant", owes="owner"),
+            "anticipy_says": None}
 
     def _open_card_in_lineage(self, lineage: str) -> Optional[dict]:
         """The card this conversation is already holding, if any.
