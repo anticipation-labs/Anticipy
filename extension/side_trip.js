@@ -1,0 +1,267 @@
+// GOING TO GET SOMETHING, THEN COMING BACK.
+//
+// The failure this exists for: a run gets to the last field of an application
+// — everything else filled, twenty minutes of work on the page — and the site
+// says "we emailed you a code". The run had no way to go and read it. It
+// parked, or worse, it ran out of steps and the tab was destroyed. Ten demos
+// out of ten died here.
+//
+// A person in that position does not abandon the form. They open a second
+// tab, read the code, come back, and finish. That is all this is: a bounded
+// errand to ONE other place, for ONE value, while the working tab keeps its
+// position, its session and everything already typed into it.
+//
+// Three properties matter more than the feature:
+//
+//   1. IT NEVER GOES WITHOUT BEING SENT. Reading someone's mail is not
+//      covered by "book me a table". The owner authorises this specific trip,
+//      to this specific place, for this specific value, or it does not happen.
+//   2. IT IS READ-ONLY. It may open and read. It may never send, delete,
+//      archive, reply, or click anything that changes the world.
+//   3. THE VALUE COMES BACK; THE CONTENTS DO NOT. A verification code is
+//      returned. The message it came from never enters the trace, the job
+//      record, or the model's context beyond the single step that reads it.
+//
+// This module is deliberately free of Chrome APIs: everything it touches is
+// injected. That keeps it honest under test — the extraction rules below are
+// the part that decides whether a real code or a street number gets typed
+// into a form, and they are tested directly rather than through a browser.
+
+// ---------------------------------------------------------------------------
+// What counts as the thing we were sent for
+// ---------------------------------------------------------------------------
+
+// Words that appear next to a real one-time code, in the wild.
+const CODE_CONTEXT = /\b(verification|verify|confirm(?:ation)?|security|one[-\s]?time|single[-\s]?use|access|login|sign[-\s]?in|auth(?:entication)?|passcode|pin|otp|code)\b/i;
+
+// Things that are digit runs but are NEVER a verification code. Each of these
+// is a real thing that appeared in a real email next to a real code, and any
+// of them being picked instead would put the wrong value in the form.
+const NOT_A_CODE = [
+  /^(?:19|20)\d{2}$/,                    // a year
+  /^\d{5}(?:-\d{4})?$/,                  // US zip
+  /^1?\d{10,11}$/,                       // a phone number
+  /^0+$/,                                // padding
+];
+
+/**
+ * Pull a one-time code out of message text.
+ *
+ * ARITHMETIC FIRST, ON PURPOSE. A model asked "what is the code in this
+ * email?" is right most of the time, and the times it is wrong it is
+ * confidently wrong — it will happily return the year in the footer or the
+ * last four of a card. A code has a shape, and shape is checkable. The model
+ * is the fallback for genuinely odd formats, not the first resort.
+ *
+ * Returns { value, confidence, why } or null.
+ */
+export function extractCode(text, opts = {}) {
+  const { minLen = 4, maxLen = 8 } = opts;
+  const body = String(text || "");
+  if (!body.trim()) return null;
+
+  const candidates = [];
+
+  // Pass 1: a labelled code. "Your verification code is 483920", "Code: 8813".
+  // The label is the strongest possible evidence, so these outrank everything.
+  const labelled = /\b(?:code|passcode|pin|otp)\b[^\dA-Za-z]{0,20}([0-9]{4,8}|[A-Z0-9]{4,8})\b/gi;
+  for (const m of body.matchAll(labelled)) {
+    candidates.push({ value: m[1], score: 100, why: "labelled directly" });
+  }
+
+  // Pass 2: a standalone run of digits on a line of its own, or spaced out
+  // the way services print them ("4 8 3 9 2 0"). Very common in real mail.
+  for (const line of body.split(/\n+/)) {
+    const bare = line.trim();
+    const compact = bare.replace(/[\s-]/g, "");
+    if (/^[0-9]{4,8}$/.test(compact) && /^[0-9\s-]+$/.test(bare)) {
+      candidates.push({ value: compact, score: 80, why: "alone on its own line" });
+    }
+  }
+
+  // Pass 3: a digit run near code words, within the same sentence-ish window.
+  for (const m of body.matchAll(/\b([0-9]{4,8})\b/g)) {
+    const at = m.index || 0;
+    const around = body.slice(Math.max(0, at - 90), at + 40);
+    if (CODE_CONTEXT.test(around)) {
+      candidates.push({ value: m[1], score: 60, why: "next to code wording" });
+    }
+  }
+
+  const seen = new Set();
+  const kept = [];
+  for (const c of candidates.sort((a, b) => b.score - a.score)) {
+    const v = String(c.value).toUpperCase();
+    if (seen.has(v)) continue;
+    if (v.length < minLen || v.length > maxLen) continue;
+    // A CODE CONTAINS A DIGIT. Without this the labelled pattern reads the
+    // next word after "code" as the code itself: "This code expires in 10
+    // minutes" yielded EXPIRES, and a model replying "I could not find a
+    // code, sorry!" yielded SORRY — both scored as confidently as a real
+    // one, and both would have been typed into the form.
+    if (!/[0-9]/.test(v)) continue;
+    // A purely-numeric candidate has to survive the not-a-code list. An
+    // alphanumeric one (A3F9K2) cannot be a year or a zip, so it skips this.
+    if (/^\d+$/.test(v) && NOT_A_CODE.some((re) => re.test(v))) continue;
+    seen.add(v);
+    kept.push({ ...c, value: v });
+  }
+  if (!kept.length) return null;
+
+  // TWO DIFFERENT CANDIDATES WITH THE SAME STRENGTH IS NOT AN ANSWER.
+  // Guessing between them is how the wrong code gets typed, the site locks
+  // the attempt, and the run burns. Ambiguity goes back to the owner.
+  const best = kept[0];
+  const rival = kept.find((c) => c.value !== best.value && c.score === best.score);
+  if (rival) {
+    return { value: null, confidence: "ambiguous", why: `found both ${best.value} and ${rival.value}` };
+  }
+  return {
+    value: best.value,
+    confidence: best.score >= 80 ? "high" : "medium",
+    why: best.why,
+  };
+}
+
+/**
+ * Does this page actually say a code was sent, and where to?
+ *
+ * Used to decide whether to OFFER the trip at all. Being wrong in the
+ * permissive direction here is cheap (we ask a question the owner declines);
+ * being wrong in the restrictive direction is what killed the demo.
+ */
+export function detectsCodeWasSent(pageText) {
+  const t = String(pageText || "");
+  if (!t.trim()) return null;
+  const sent = /\b(we (?:just )?(?:sent|emailed|texted)|has been sent|check your (?:email|inbox|phone|messages)|sent (?:you )?a (?:code|link|verification))\b/i;
+  if (!sent.test(t)) return null;
+
+  // Where did it go? An address in the text is the best evidence; failing
+  // that, the words "email" or "phone" near the sentence.
+  const addr = t.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/);
+  const masked = t.match(/\b([a-z]\*+[a-z0-9]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/i);
+  const phone = /\b(?:phone|text|sms|message)\b/i.test(t);
+  const email = /\b(?:e-?mail|inbox)\b/i.test(t) || !!addr || !!masked;
+
+  return {
+    where: email ? "email" : (phone ? "phone" : "unknown"),
+    address: (addr && addr[1]) || (masked && masked[1]) || null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The trip itself
+// ---------------------------------------------------------------------------
+
+// Places a side trip may never go, no matter who asks. This is deliberately
+// stricter than the main loop's block list: the main loop refuses to OPERATE
+// a bank, and a side trip may not even go and READ one, because the whole
+// point of a side trip is that it happens with less supervision.
+const NEVER_VISIT = /(^|\.)(chase|bankofamerica|wellsfargo|citi(bank)?|rbc|td(bank|canadatrust)?|scotiabank|bmo|cibc|tangerine|schwab|fidelity|vanguard|etrade|robinhood|coinbase|binance|kraken|paypal|wise|revolut)\./i;
+
+export function tripRefusedReason(url, { authorized, purpose } = {}) {
+  if (!authorized) return "the owner has not authorised this trip";
+  let host;
+  try { host = new URL(String(url)).hostname; } catch (_) { return "that is not a real address"; }
+  if (NEVER_VISIT.test(host)) return `${host} holds money — that one stays yours`;
+  if (!purpose) return "a trip has to say what it is for";
+  return null;
+}
+
+/**
+ * Go to one place, read one value, come back.
+ *
+ * `deps` is everything that touches Chrome, injected so this stays testable:
+ *   openTab(url)   -> tabId          open a NEW tab (never reuse the working one)
+ *   readTab(tabId) -> { text, url }  read the visible text
+ *   clickText(tabId, text) -> bool   click a link/row matching visible text
+ *   closeTab(tabId)                  clean up
+ *   askModel(prompt) -> string       fallback extraction only
+ *   note(line)                       trace line; MUST NOT be given message text
+ *
+ * The working tab is never passed in and never touched. That is the point:
+ * the run's position survives the trip.
+ */
+export async function runSideTrip({
+  url, purpose, authorized = false, deps, budget = {},
+} = {}) {
+  const { steps: maxSteps = 6 } = budget;
+  const refusal = tripRefusedReason(url, { authorized, purpose });
+  if (refusal) return { ok: false, reason: refusal, value: null };
+
+  const { openTab, readTab, clickText, closeTab, askModel, note } = deps || {};
+  if (!openTab || !readTab || !closeTab) {
+    return { ok: false, reason: "the trip has no way to open a page", value: null };
+  }
+
+  let tabId = null;
+  try {
+    tabId = await openTab(url);
+    if (note) note(`side trip: opened ${safeHost(url)} to get ${purpose}`);
+
+    for (let step = 0; step < maxSteps; step++) {
+      const page = await readTab(tabId);
+      const text = String(page?.text || "");
+
+      const found = extractCode(text);
+      if (found && found.value) {
+        // ONLY THE VALUE CROSSES BACK. Not the message, not the subject, not
+        // the sender. The trace gets the shape of what was found, never the
+        // thing itself — a code in a log is a code that outlived its minute.
+        if (note) note(`side trip: found a ${found.value.length}-character code (${found.why})`);
+        return { ok: true, value: found.value, confidence: found.confidence, steps: step + 1 };
+      }
+      if (found && found.confidence === "ambiguous") {
+        if (note) note(`side trip: stopped — ${found.why}`);
+        return { ok: false, reason: `I found more than one code and won't guess between them`, value: null, ambiguous: true };
+      }
+
+      // Nothing on this page. The only navigation a side trip is allowed is
+      // opening the newest thing that looks like the message we came for —
+      // it may not wander, and it may not act.
+      if (!clickText) break;
+      const opened = await clickText(tabId, purpose);
+      if (!opened) break;
+      if (note) note(`side trip: opened the newest matching message`);
+    }
+
+    // Arithmetic found nothing. THIS is where a model earns its place: an
+    // unusual format ("your code: four-eight-three") that no regex will hold.
+    // It sees the page once, for one question, and its answer is still
+    // shape-checked before it is believed.
+    if (askModel) {
+      const page = await readTab(tabId);
+      const raw = await askModel(String(page?.text || "").slice(0, 4000));
+      const checked = extractCode(String(raw || ""), { minLen: 4, maxLen: 8 })
+        || extractCode(`code: ${String(raw || "").trim()}`);
+      if (checked && checked.value) {
+        if (note) note(`side trip: found a ${checked.value.length}-character code (read from an unusual format)`);
+        return { ok: true, value: checked.value, confidence: "medium", steps: maxSteps };
+      }
+    }
+
+    return { ok: false, reason: "I could not find the code on that page", value: null };
+  } catch (e) {
+    return { ok: false, reason: `the trip failed: ${String(e).slice(0, 120)}`, value: null };
+  } finally {
+    // The trip's tab always closes. A stray inbox tab left open is both a
+    // mess and a privacy problem.
+    if (tabId != null && closeTab) { try { await closeTab(tabId); } catch (_) { /* gone */ } }
+  }
+}
+
+function safeHost(url) {
+  try { return new URL(String(url)).hostname; } catch (_) { return "that page"; }
+}
+
+/**
+ * The sentence the owner actually sees. He asked for this by name:
+ * "Hey, can I go to your Gmail and get the verification code for you?"
+ */
+export function offerToFetch(detection, { service } = {}) {
+  if (!detection) return null;
+  const where = detection.where === "phone" ? "your phone"
+    : detection.address ? detection.address : "your email";
+  const what = service ? `${service}'s code` : "the code";
+  return `${what} just went to ${where}. Want me to go and read it? I'll keep this page exactly as it is and come straight back — say go and I'll finish this off.`;
+}

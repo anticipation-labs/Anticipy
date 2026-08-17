@@ -266,6 +266,14 @@ himself plainly commit to this plan or errand in the line — agreeing to it,
 sealing it, taking it on — as opposed to it being someone else's promise,
 venting, a hypothetical, or a plan he only heard about?
 
+The line you are shown carries appended context: "(Related memory: ...)",
+"(Earlier in this conversation: ...)", "(Voice check: ...)", "(Pre-check: ...)".
+THAT CONTEXT IS NOT HIM COMMITTING. TRIAGE_SYSTEM says so explicitly and this
+prompt did not, while being handed the same decorated line — so a remembered
+fact, or another person's words quoted in the conversation block, could satisfy
+"the owner plainly commits" and flip an honest "do nothing" into real action he
+never asked for. Judge ONLY the current line's own words, spoken by him.
+
 Reply ONLY with compact JSON: {"owner_committed": true|false}"""
 
     def triage(self, transcript_line: str, candidates: int = 0,
@@ -288,7 +296,24 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         # before throwing his plan away; only a second bad reply falls back.
         raw = None
         for attempt in range(2):
-            res = self.llm.chat(TRIAGE_SYSTEM, transcript_line, temperature=0.0)
+            # THE SECOND ASK HAS TO BE A DIFFERENT ASK.
+            #
+            # This re-sent the identical system prompt and user text at
+            # temperature 0.0, and llm.py pins seed=11 — so the retry was a
+            # deterministic replay of the reply that had just failed to
+            # parse. It could not produce a different answer. All it did was
+            # double the latency and the cost on precisely the path already
+            # failing, and his line was thrown away regardless.
+            if attempt:
+                res = self.llm.chat(
+                    TRIAGE_SYSTEM,
+                    transcript_line + "\n\nYour previous reply could not be "
+                    "parsed as JSON. Reply with ONLY the JSON object — no "
+                    "explanation before or after it, and no code fence.",
+                    temperature=0.2)
+            else:
+                res = self.llm.chat(TRIAGE_SYSTEM, transcript_line,
+                                    temperature=0.0)
             try:
                 raw = json.loads(_extract_json(res.text))
                 break

@@ -424,8 +424,10 @@ class Memory:
         ts = ts or time.time()
         importance = max(1, min(5, int(importance)))
         match = self._find_same_fact(text)
+        changed = self._last_match_changed_detail
         if match is not None:
-            self._merge_fact(match, importance, ts, [])
+            self._merge_fact(match, importance, ts, [],
+                             new_text=text if changed else None)
             self.db.commit()
             return match
         fid = self._insert_fact(text, importance, confidence, source, ts, [])
@@ -489,7 +491,35 @@ class Memory:
         except Exception as e:
             # Nothing advanced: these episodes stay unconsolidated and the
             # next pass re-reads them. A flaky model must not eat a day.
+            #
+            # BUT ONE POISONOUS BATCH MUST NOT EAT EVERY DAY AFTER IT. The
+            # cursor only moves on success, so a batch the model can never
+            # parse was re-read every night forever and NOTHING recorded
+            # after it was ever consolidated again — the profile silently
+            # stopped learning, with one print line as the only sign.
+            # After three consecutive failures on the SAME cursor the batch
+            # is stepped over: losing 200 episodes' facts is bad, losing
+            # every episode after them permanently is unrecoverable.
+            key = f"consolidate_fail_{last}"
+            try:
+                strikes = int(self._state_get(key) or 0) + 1
+            except Exception:
+                strikes = 1
+            self._state_set(key, str(strikes))
+            if strikes >= 3:
+                skipped = rows[-1][0]
+                self._state_set("last_episode_id", str(skipped))
+                self._state_set(key, "0")
+                self.db.commit()
+                print(f"consolidation: SKIPPING episodes {last+1}-{skipped} "
+                      f"after 3 unusable model replies ({e}) — the profile "
+                      f"would otherwise never advance past them")
+                return {"ran": True, "episodes": 0, "new": 0, "merged": 0,
+                        "skipped_batch": [last + 1, skipped],
+                        "remaining": self._episodes_after(skipped)}
+            self.db.commit()
             return {"ran": False, "reason": f"model output unusable: {e}",
+                    "strikes": strikes,
                     "episodes": 0, "new": 0, "merged": 0,
                     "remaining": self._episodes_after(last)}
         valid = {r[0]: r[1] for r in rows}  # id -> ts
@@ -525,8 +555,10 @@ class Memory:
                     continue
                 fact_ts = max(valid[e] for e in eps)
                 match = self._find_same_fact(text)
+                changed = self._last_match_changed_detail
                 if match is not None:
-                    self._merge_fact(match, imp, fact_ts, eps)
+                    self._merge_fact(match, imp, fact_ts, eps,
+                                     new_text=text if changed else None)
                     merged += 1
                 else:
                     self._insert_fact(text, imp, 0.6, "consolidation",
@@ -534,6 +566,7 @@ class Memory:
                     new += 1
             self._state_set("last_episode_id", str(rows[-1][0]))
             self._state_set("last_run_ts", str(now))
+            self._state_set(f"consolidate_fail_{last}", "0")
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -591,25 +624,65 @@ class Memory:
                 })
         return out[:limit]
 
+    # Set by _find_same_fact when the row it matched states the SAME fact
+    # with a DIFFERENT number — the caller must rewrite the wording rather
+    # than keep the stale one.
+    _last_match_changed_detail = False
+
+    def _compare_words(self, text: str) -> set:
+        """Words that decide whether two facts are the same one.
+
+        Short tokens are dropped as noise EXCEPT numbers: "6" and "8" carry
+        the whole meaning of a time, and dropping them made two different
+        dinners look like one.
+        """
+        return {w for w in _fact_tokens(text)
+                if (len(w) > 2 or w.isdigit()) and w not in self._STOP}
+
     def _find_same_fact(self, text: str) -> Optional[int]:
         """The existing profile row that states the same fact, or None.
         Identical-after-normalization needs no model; near matches are
         LLM-judged same-fact; with no model only the deterministic paths
         run, so near-identical wording still merges offline."""
+        self._last_match_changed_detail = False
         norm = " ".join(_fact_tokens(text))
-        cand_words = {w for w in _fact_tokens(text)
-                      if len(w) > 2 and w not in self._STOP}
+        cand_words = self._compare_words(text)
+        cand_nums = _fact_numbers(text)
         near = []
         for rid, fact in self.db.execute(
                 "SELECT id, fact FROM profile_facts").fetchall():
             fnorm = " ".join(_fact_tokens(fact))
             if fnorm == norm:
                 return rid
-            fwords = {w for w in _fact_tokens(fact)
-                      if len(w) > 2 and w not in self._STOP}
+            fwords = self._compare_words(fact)
             if not cand_words or not fwords:
                 continue
             overlap = len(cand_words & fwords) / len(cand_words | fwords)
+            # SAME WORDS, DIFFERENT NUMBER, IS NOT THE SAME FACT.
+            #
+            # The word filter dropped anything of two characters or fewer, so
+            # "dinner with Sarah at 6" and "dinner with Sarah at 8" compared
+            # as IDENTICAL — overlap 1.00 — and merged. _merge_fact keeps the
+            # original wording on purpose, so the 8 was thrown away and the
+            # profile still said 6. The one detail most worth updating was
+            # the one kind guaranteed to be lost, and nothing reported it.
+            #
+            # A changed number is the update, not noise: it is reported so the
+            # caller can rewrite the wording instead of silently keeping the
+            # stale one.
+            if _fact_numbers(fact) != cand_nums:
+                # Compare the SUBJECT only. Counting the differing numbers
+                # here would push the score down by exactly the thing being
+                # tested for — "dinner with Sarah at 6" vs "at 8" scores 0.50
+                # on the full set and would read as two unrelated facts,
+                # which is the opposite error to the one being fixed.
+                subj_a = {w for w in cand_words if not w.isdigit()}
+                subj_b = {w for w in fwords if not w.isdigit()}
+                if subj_a and subj_b and (
+                        len(subj_a & subj_b) / len(subj_a | subj_b)) >= 0.8:
+                    self._last_match_changed_detail = True
+                    return rid
+                continue
             if overlap >= 0.8:
                 return rid          # near-identical wording; no model needed
             if overlap >= 0.4:
@@ -635,7 +708,7 @@ class Memory:
         return cur.lastrowid
 
     def _merge_fact(self, fact_id: int, importance: int, ts: float,
-                    episode_ids: list[int]) -> None:
+                    episode_ids: list[int], new_text: Optional[str] = None) -> None:
         """A restatement is evidence, not a new row: bump confidence, keep
         the higher importance, extend provenance, refresh last_seen. The
         original wording stays — churning the text on every restatement
@@ -645,6 +718,12 @@ class Memory:
             "FROM profile_facts WHERE id=?", (fact_id,)).fetchone()
         if not row:
             return
+        if new_text:
+            # The fact moved (6pm -> 8pm). Keep the row, its provenance and
+            # its history, but say the true thing: an audit trail that
+            # preserves a wrong time is worse than no audit trail.
+            self.db.execute("UPDATE profile_facts SET fact=? WHERE id=?",
+                            (new_text, fact_id))
         try:
             prov = json.loads(row[2] or "[]")
         except Exception:
@@ -736,9 +815,22 @@ class Memory:
                     topics=names("topics"),
                     commitment=one("commitment"),
                     commitment_to=one("commitment_to"),
+                    # ASKED FOR, DECLARED, CONSUMED — AND NEVER PASSED.
+                    # EXTRACT_SYSTEM requests `completed`, the dataclass
+                    # declares it and ingest() acts on it, but this branch
+                    # built the object without it, so with a live model it
+                    # was ALWAYS None. Closing a loop fell back entirely to
+                    # the _DONE_RE verb list, and anything he finished in
+                    # words that list does not contain stayed open forever.
+                    completed=one("completed"),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                # A model returning garbage silently demoted memory to a
+                # regex that finds capitalised words and "I'll ..." clauses.
+                # Nothing anywhere reported the downgrade, so a degraded
+                # brain looked exactly like a quiet day.
+                print(f"memory: extraction model unusable, falling back to "
+                      f"rules ({type(e).__name__}: {str(e)[:120]})")
         return _rule_extract(text)
 
 
@@ -752,6 +844,13 @@ def _fact_tokens(text: str) -> list[str]:
     "partner" must count as the same word or restatements never match."""
     words = re.findall(r"[a-z0-9']+", (text or "").lower())
     return [w[:-2] if w.endswith("'s") else w for w in words]
+
+
+def _fact_numbers(text: str) -> set:
+    """Every number a fact states. Two facts that agree on every word but
+    disagree on a number are not the same fact — they are the same fact
+    updated, and the newer number is the point."""
+    return set(re.findall(r"\d+(?:[.:]\d+)?", (text or "").lower()))
 
 
 _COMMIT_RE = re.compile(
