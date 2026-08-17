@@ -88,10 +88,15 @@ const state = { text: 'Earls Kitchen reservation for 2 at 7:30 PM', elements: ''
 const facts = {
   owner_answer_v4: 'I need a name. Okay Omar. Email is o@x.com. Phone is 604-724-5161.',
   time: '9:45 PM',
+  damage: 'Highway stone caused a 20 cm crack',
 };
 const bad = unsupportedApprovedFacts(facts, state);
 if (bad.includes('owner_answer_v4')) throw new Error('answer blob still demands page evidence');
 if (!bad.includes('time')) throw new Error('short unevidenced facts must still be caught');
+// A DESCRIPTION belongs to the form and must still be verified: waiving
+// anything over six words let a claim go in as "20 cm crack" when he had
+// said "Highway stone caused a 20 cm crack".
+if (!bad.includes('damage')) throw new Error('a shortened description must be caught');
 console.log('ok');
 """ % ROOT], capture_output=True, text=True)
     assert "ok" in out.stdout, out.stderr

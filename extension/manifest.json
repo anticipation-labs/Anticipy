@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Anticipy Claude Version",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "description": "Anticipy Claude Version's hands on your computer: it does tasks you approved in your own logged-in Chrome. Needs the Anticipy Claude Version iPhone app.",
   "permissions": [
     "storage",

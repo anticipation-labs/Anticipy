@@ -402,8 +402,16 @@ export function unsupportedApprovedFacts(facts, currentState, effectState = null
     // "3", "Omar") still must appear on the page.
     if (/^owner_answer/i.test(String(key))) return false;
     const rawValue = String(value ?? "");
-    if (rawValue.length > 48 || rawValue.includes("\n")
-        || rawValue.trim().split(/\s+/).length >= 7) return false;
+    // Exempt CONVERSATION, not merely LENGTH. The first cut of this waived
+    // anything of seven words or more, which also waived legitimate field
+    // values — and a windshield claim went in as "20 cm crack" when the
+    // owner had said "Highway stone caused a 20 cm crack", with nothing left
+    // to catch it (regression caught by case 21 of the demo run, 2026-08-17).
+    // A description belongs to the form and must still be verified; a
+    // message he texted her does not.
+    const looksSpoken = /\S+@\S+\.\S+/.test(rawValue)
+      && /\+?\d[\d\s().-]{6,}\d/.test(rawValue);
+    if (looksSpoken || rawValue.length > 160 || rawValue.includes("\n")) return false;
     const expected = evidenceToken(value);
     if (!expected) return false;
     const keyToken = evidenceToken(key);
