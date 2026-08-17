@@ -97,6 +97,9 @@ final class PhoneListener: NSObject, ObservableObject {
     /// that a fast talker never outruns it.
     private var pendingSince: Date?
     private let flushPolicy = TranscriptFlushPolicy()
+    /// The last line actually handed over, so the same sentence arriving
+    /// again in different words can be recognised as itself.
+    private var lastDelivered: (text: String, at: Date)?
     /// Whether this recognition task has sent anything yet — see the final
     /// handler, where it decides a polish from a whole unsent monologue.
     private var everEmittedThisTask = false
@@ -386,6 +389,19 @@ final class PhoneListener: NSObject, ObservableObject {
     private func deliver(_ line: String) {
         // A voice sample is not something he said. Never emit it.
         guard !enrolling else { return }
+        // ...and neither is the last sentence said a second time. Not losing
+        // words cost this: the recognizer revises, so a ceiling flush and a
+        // banked window can hand over ONE sentence twice in slightly
+        // different words. Live 2026-08-17, two seconds apart: "Yeah I know
+        // where it is" then "Yeah I know it is".
+        if let last = lastDelivered,
+           TranscriptFlushPolicy.isEchoOfPrevious(
+               line, previous: last.text,
+               apart: Date().timeIntervalSince(last.at),
+               window: flushPolicy.echoWindow) {
+            return
+        }
+        lastDelivered = (line, Date())
         everEmittedThisTask = true
         // Judge the voice behind THIS line before the window moves on. Done
         // here rather than on the audio thread: embedding takes tens of

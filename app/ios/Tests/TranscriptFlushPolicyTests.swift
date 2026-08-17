@@ -111,6 +111,30 @@ struct TranscriptFlushPolicyTests {
         check("no spoken word is lost across a collapsing final: \(lost)", lost.isEmpty)
         check("the delivered text is not a 71-character scrap", heard.count > 100)
 
+        // ---------------------------------------------------------------- echoes
+        // Not losing words cost this: one sentence delivered twice in
+        // slightly different words. These are his real pairs, seconds apart.
+        check("the same sentence revised is not said twice",
+              TranscriptFlushPolicy.isEchoOfPrevious("Yeah I know it is", previous: "Yeah I know where it is",
+                   apart: 2, window: 12))
+        check("an exact repeat within the window is an echo",
+              TranscriptFlushPolicy.isEchoOfPrevious("tell me a little bit more about yourself",
+                   previous: "tell me a little bit more about yourself",
+                   apart: 3, window: 12))
+        // ...but a genuinely new sentence must always get through.
+        check("a new thought is never swallowed",
+              !TranscriptFlushPolicy.isEchoOfPrevious("let's do 7pm at Earls in West Van",
+                    previous: "Yeah I know where it is", apart: 2, window: 12))
+        check("saying more about the same thing is not an echo",
+              !TranscriptFlushPolicy.isEchoOfPrevious("I know where it is, it's the one by the water past the bridge",
+                    previous: "Yeah I know where it is", apart: 2, window: 12))
+        check("short natural repetition is left alone",
+              !TranscriptFlushPolicy.isEchoOfPrevious("yeah yeah yeah", previous: "yeah yeah yeah",
+                    apart: 1, window: 12))
+        check("the same words much later are a new sentence",
+              !TranscriptFlushPolicy.isEchoOfPrevious("Yeah I know where it is", previous: "Yeah I know where it is",
+                    apart: 60, window: 12))
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {

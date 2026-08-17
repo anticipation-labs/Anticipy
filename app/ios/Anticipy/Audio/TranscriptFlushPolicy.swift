@@ -39,4 +39,42 @@ struct TranscriptFlushPolicy {
         guard let pendingSince else { return false }
         return now.timeIntervalSince(pendingSince) >= maxHold
     }
+
+    /// How long after a line is sent a near-copy of it is still the same
+    /// sentence rather than a new one.
+    let echoWindow: TimeInterval = 12
+
+    /// Is this line the previous one said again?
+    ///
+    /// Not losing words cost something: the recognizer revises, and a flush
+    /// on the ceiling followed by a banked window can deliver the SAME
+    /// sentence twice in slightly different words. Live 2026-08-17, two
+    /// seconds apart: "Yeah I know where it is" then "Yeah I know it is".
+    /// Nothing was lost — it was said twice, and a transcript that repeats
+    /// itself reads as broken to the person watching it.
+    ///
+    /// Judged on shared words rather than characters, because the difference
+    /// between two hypotheses of one sentence is usually a word appearing or
+    /// vanishing. Deliberately conservative: real repetition ("yeah yeah
+    /// yeah", "no no no") is short and identical, and dropping a genuinely
+    /// new sentence is far worse than letting one echo through.
+    static func isEchoOfPrevious(_ line: String, previous: String,
+                                 apart: TimeInterval,
+                                 window: TimeInterval = 12) -> Bool {
+        if apart > window { return false }
+        let words = { (s: String) -> [String] in
+            s.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map(String.init)
+        }
+        let new = words(line), old = words(previous)
+        // Too short to judge: "yes", "yeah", "ok" repeat naturally and often.
+        if new.count < 4 || old.count < 4 { return false }
+        // A brand-new longer thought that merely begins the same way is not
+        // an echo — only something that says little the last one did not.
+        let oldSet = Set(old)
+        let shared = new.filter { oldSet.contains($0) }.count
+        let novel = new.count - shared
+        if novel > 2 { return false }
+        return Double(shared) / Double(new.count) >= 0.7
+    }
 }
