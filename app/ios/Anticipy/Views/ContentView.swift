@@ -213,6 +213,23 @@ struct HomeView: View {
                                 // believed the fixes were live. Chrome already
                                 // reports its version on every heartbeat, so
                                 // the answer was always here to be shown.
+                                // AN UNREACHABLE CUSTOMER NEVER FINDS OUT
+                                // THEY ARE UNREACHABLE. Sign-up never
+                                // required a number, this app has no
+                                // notifications at all, and a text is the
+                                // only channel there is — so an account with
+                                // no number on file gets asked nothing, ever,
+                                // and its work parks forever in silence.
+                                // Anyone who signed up before the sign-up
+                                // gate is in exactly that state right now.
+                                if session.ownerPhone.isEmpty {
+                                    Text("I have no number for you, so I can't tell you when "
+                                         + "something needs your word — these will just wait. "
+                                         + "Add it in Settings and I'll start reaching you.")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.champagne)
+                                        .padding(.bottom, Theme.Space.tight)
+                                }
                                 if let stale = session.staleExtensionVersion {
                                     Text("Chrome is running the old extension (\(stale)). "
                                          + "Open chrome://extensions and press Reload to get \(AnticipySession.expectedExtensionVersion) — "

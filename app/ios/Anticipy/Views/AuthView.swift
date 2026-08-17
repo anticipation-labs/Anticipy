@@ -146,6 +146,7 @@ struct AuthView: View {
                 // the moment each is satisfied.
                 ruleLine("A real email", satisfied: email.contains("@"))
                 ruleLine("Eight characters or more", satisfied: password.count >= 8)
+                ruleLine("A number I can text", satisfied: Self.looksReachable(phone))
                 Text("Your number is how I reach you when something needs your word — and how you get back in if you forget your password.")
                     .font(.system(size: 15))
                     .lineSpacing(2)
@@ -286,9 +287,35 @@ struct AuthView: View {
         }
     }
 
+    /// Enough of a number to actually deliver a text to.
+    ///
+    /// Deliberately permissive about SHAPE — people type "(604) 555-0142",
+    /// "+1 604 555 0142", "604.555.0142" — and strict about there being a
+    /// real number there at all. Ten digits is the floor for a deliverable
+    /// number in this market; below that it is a typo or an empty field,
+    /// and either one leaves the customer permanently unreachable.
+    static func looksReachable(_ raw: String) -> Bool {
+        let digits = raw.filter(\.isNumber)
+        guard digits.count >= 10, digits.count <= 15 else { return false }
+        return !digits.allSatisfy { $0 == digits.first }   // 0000000000
+    }
+
     private var canGo: Bool {
         switch mode {
-        case .signUp: return email.contains("@") && password.count >= 8
+        // A NUMBER IS NOT OPTIONAL, BECAUSE IT IS THE ONLY WAY OUT.
+        //
+        // This asked for email and password only. A customer could sign up
+        // leaving the number blank — and this app has no notifications at
+        // all, so a text is the ONLY way the product can ever reach them.
+        // notify_owner returns nothing without a number, so every question
+        // it needed to ask went nowhere and their work parked forever, in
+        // silence, with nothing on any screen saying why.
+        //
+        // The copy under this field already promises "your number is how I
+        // reach you when something needs your word". This makes that true.
+        case .signUp:
+            return email.contains("@") && password.count >= 8
+                && Self.looksReachable(phone)
         case .signIn: return email.contains("@") && !password.isEmpty
         case .forgot: return email.contains("@")
         case .code:   return resetCode.count >= 4 && password.count >= 8

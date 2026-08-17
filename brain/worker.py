@@ -442,6 +442,96 @@ def mark_sent(key: str, now: float | None = None) -> None:
             _SENT_RECENTLY.pop(stale, None)
 
 
+# WHAT EARNS AN INTERRUPTION.
+#
+# On 2026-08-05 quiet work stopped being invisible: an overheard lookup began
+# sending one light FYI text instead of landing silently in the feed. That was
+# the right call — he had watched it research Paris flights, seen only "Noted
+# — nothing needed", and reasonably concluded it was dead.
+#
+# The correction then became the problem. His words: "why is it also randomly
+# messaging me after the fact... 90% of the time it's bad". The only gates on
+# an uninvited text were quiet hours and don't-repeat-the-same-goal — nothing
+# asked whether the message was WORTH GETTING. So a lookup that found nothing
+# still buzzed his phone with "The provided sources do not contain information
+# about an Earls restaurant in Vancouver", verbatim, in production.
+#
+# The answer is not to stop speaking; the good 10% is the whole point of the
+# product. It is that an uninvited text has to earn the interruption on three
+# counts, and NONE of these lose the finding — everything still lands in the
+# feed for whenever he looks. The only question here is whether it is worth a
+# buzz in his pocket right now.
+UNINVITED_TEXTS_PER_DAY = 3
+FYI_STALE_AFTER_SECONDS = 45 * 60
+
+# A lookup that came back empty-handed. Texting this is strictly worse than
+# saying nothing: it spends his attention to tell him he learned nothing.
+_NON_ANSWER = re.compile(
+    r"\b(do(es)? not contain|don'?t contain|no information|not (?:able to )?find|"
+    r"could ?n'?t find|couldn't find|unable to|nothing (?:was )?found|no results?|"
+    r"i (?:do ?n'?t|don't) have|no relevant|not available|sources? (?:do not|don't))\b",
+    re.I)
+
+
+def worth_interrupting_him(goal: str, result: str, age_seconds: float,
+                           sent_today: int) -> tuple[bool, str]:
+    """Should this uninvited finding buzz his phone, or just land in the feed?
+
+    Returns (worth_it, reason_if_not). A False here NEVER discards anything —
+    the finding still reaches the feed. It only declines to interrupt.
+    """
+    text = (result or "").strip()
+    if len(text) < 25:
+        return False, "too thin to be worth a buzz"
+    if _NON_ANSWER.search(text):
+        return False, "it found nothing — that is not news"
+    if age_seconds > FYI_STALE_AFTER_SECONDS:
+        return False, (f"the moment has passed "
+                       f"({int(age_seconds // 60)} min since he said it)")
+    if sent_today >= UNINVITED_TEXTS_PER_DAY:
+        return False, f"already sent {sent_today} uninvited texts today"
+    return True, ""
+
+
+def job_age_seconds(job: dict) -> float:
+    """How long ago he said the thing this job came from.
+
+    Measured from the job row rather than now-minus-nothing: a finding that
+    lands three hours after he mentioned something is not "caught this
+    earlier", it is an interruption about a moment that has gone.
+    """
+    raw = (job.get("created") or "")[:19]
+    try:
+        made = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(
+            tzinfo=timezone.utc)
+    except Exception:
+        return 0.0          # unreadable: treat as fresh rather than mute it
+    return max(0.0, (datetime.now(timezone.utc) - made).total_seconds())
+
+
+def uninvited_sent_today(owner_ref: str = "") -> int:
+    """How many uninvited texts have already gone out today.
+
+    Read from the durable record rather than a counter in memory: a redeploy
+    resetting this to zero is how a daily cap quietly becomes no cap at all.
+    """
+    try:
+        since = (datetime.now(CLOCK_TZ).replace(hour=0, minute=0, second=0,
+                                                microsecond=0)
+                 .astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
+        filt = f'kind="anticipy_says" && decision="done" && created>="{since}"'
+        r = pb.get(f"{PB}/api/collections/events/records",
+                   params={"filter": _scoped_filter(filt, owner_ref),
+                           "perPage": 100, "sort": "-created"}, timeout=10)
+        if not getattr(r, "ok", False):
+            return 0
+        return sum(1 for ev in r.json().get("items", [])
+                   if (ev.get("params") or "").find("uninvited") >= 0)
+    except Exception as e:
+        print(f"uninvited count failed: {e}")
+        return 0
+
+
 def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> bool:
     """Text him what she found — her words, varied every time, one text.
 
@@ -919,13 +1009,29 @@ def report_finished_jobs(anticipy) -> None:
                                               or hour < CLOCK_QUIET_END):
                     continue
                 if result and not failed and not already_delivered(goal):
+                    # EARN THE INTERRUPTION. The finding lands in the feed
+                    # either way; this only decides whether it is also worth
+                    # a buzz in his pocket. "Randomly messaging me after the
+                    # fact ... 90% of the time it's bad" — the 90% is empty
+                    # answers, findings that arrive long after the moment
+                    # passed, and a chatty day with no ceiling.
+                    age = job_age_seconds(job)
+                    worth, why = worth_interrupting_him(
+                        goal, result, age, uninvited_sent_today(
+                            job.get("owner_ref") or ""))
+                    if not worth:
+                        print(f"fyi to the feed only ({why}): {goal[:50]}")
+                        deliver_to_feed_only = True
+                    else:
+                        deliver_to_feed_only = False
                     # A held FYI is not a delivered one. Recording the feed
                     # event and marking the job reported are what make this
                     # finding "already raised" forever, so both must wait
                     # until the text has actually gone out — otherwise every
                     # overheard lookup that finished between 22:00 and 08:00
                     # was silently destroyed instead of held.
-                    if not deliver_fyi(anticipy, goal, result, overheard=True):
+                    if not deliver_to_feed_only and not deliver_fyi(
+                            anticipy, goal, result, overheard=True):
                         continue
                     # Rule change 2026-08-05, Omar's call: quiet work is no
                     # longer INVISIBLE work. He watched her research Paris

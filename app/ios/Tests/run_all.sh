@@ -13,5 +13,6 @@ sh "$HERE/run_end_errand_tests.sh"
 sh "$HERE/run_reset_message_tests.sh"
 sh "$HERE/run_line_source_tests.sh"
 sh "$HERE/run_stale_extension_tests.sh"
+sh "$HERE/run_reachable_number_tests.sh"
 
 echo "iOS logic gate: all suites passed"
