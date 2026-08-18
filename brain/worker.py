@@ -462,6 +462,12 @@ def mark_sent(key: str, now: float | None = None) -> None:
 # feed for whenever he looks. The only question here is whether it is worth a
 # buzz in his pocket right now.
 UNINVITED_TEXTS_PER_DAY = 3
+
+# How many times ONE stuck task may ask him for help before it goes quiet and
+# leaves the card to speak for itself. The comment on the re-ask has always
+# said "one question, one second chance, then quiet"; this is what makes that
+# true regardless of how the browser rephrases the obstacle.
+STUCK_ASKS_CEILING = 2
 FYI_STALE_AFTER_SECONDS = 45 * 60
 
 # A lookup that came back empty-handed. Texting this is strictly worse than
@@ -1968,6 +1974,44 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # honest re-ask, because a question nobody heard is not a
             # question asked.
             asks_already = asks_for_goal(job.get("goal", ""), anticipy.owner_ref)
+
+            # THE CEILING THE COMMENT ABOVE ALREADY PROMISES.
+            #
+            # need_already_asked deliberately keys on the BLOCKER rather than
+            # the task, and for a good reason it states: when he answers half
+            # a form and the browser then stops on something genuinely NEW, a
+            # task-keyed guard would stay silent and the job would die quietly.
+            #
+            # But a stuck run describes the SAME obstacle differently every
+            # time it retries — "which location works best", "needs you to
+            # check something on the site", "stalled after what looks like a
+            # pop-up", "got stuck and needs a site check". Every one of those
+            # is a new blocker to the guard, so every retry texted him again.
+            # His actual log: 136 of 200 messages were this one path, 63 in a
+            # single day, the same booking, one every twenty minutes.
+            #
+            # asks_for_goal already counts what it needs — it was only used to
+            # widen a window, which a freshly-worded blocker walks straight
+            # past. Past the ceiling the honest thing is not another text: the
+            # card is in his feed, and he has already been told twice.
+            if asks_already >= STUCK_ASKS_CEILING:
+                print(f"stuck job {job['id']}: asked {asks_already}x about "
+                      f"{job.get('goal','')[:40]!r} already — the feed has it, "
+                      f"staying quiet")
+                continue
+
+            # I ALSO TRIED PUTTING QUIET HOURS ON THIS PATH AND TOOK IT BACK
+            # OUT. He does get 06:59 texts, and that looks wrong — but this
+            # path is not an uninvited finding, it is HIS OWN errand blocked
+            # on one detail, and test_backlog_and_delivery proves the
+            # deliberate decision that a genuinely new requirement speaks AT
+            # ONCE. Deferring a blocked booking nine hours can kill the
+            # errand outright, and his actual complaint was volume, not the
+            # hour. Silencing it would have been the same mistake as the
+            # rules that fire on a proxy instead of the real condition.
+            # Whether a blocked errand should wait until morning is his call
+            # to make, not one to smuggle in beside a volume fix.
+
             window = 24.0 if asks_already >= 2 else 3.0
             if need_already_asked(job.get("goal", ""), blocker,
                                   within_hours=window,
