@@ -1,0 +1,154 @@
+{
+  "schema": 1,
+  "status": "BUILT_AND_VERIFIED_NOT_FLASHED",
+  "built_utc": "2026-07-25T00:37:00Z",
+  "purpose": "First firmware image containing BOTH software routes into the Adafruit nRF52 bootloader.",
+
+  "flash_performed": false,
+  "flash_approved": false,
+  "device_touched": false,
+
+  "build": {
+    "exit_code": 0,
+    "compile_fixes_required": 0,
+    "iterations": 1,
+    "compiler_warnings": 0,
+    "command": [
+      "west", "build", "--pristine", "-b", "xiao_ble_sense",
+      "-d", "/out/anticipy-dual-hatch", "/src", "--",
+      "-DZEPHYR_BASE:PATH=/ncs/zephyr",
+      "-DCONF_FILE:STRING=prj_xiao_ble_sense_devkitv2-adafruit.conf",
+      "-DDTC_OVERLAY_FILE:STRING=overlay/xiao_ble_sense_devkitv2-adafruit_module.overlay"
+    ],
+    "mounts": {
+      "/ncs": "/Users/omarebrahim/anticipation-builds/firmware-local-final/ncs/workspace (read-only)",
+      "/src": "/Users/omarebrahim/anticipation-builds/dual-hatch-20260724/source (read-only)",
+      "/out": "/Users/omarebrahim/anticipation-builds/dual-hatch-20260724/build (read-write)"
+    },
+    "memory_report": {
+      "flash_used_bytes": 254680,
+      "flash_region": "788 KB",
+      "flash_pct": 31.56,
+      "ram_used_bytes": 178760,
+      "ram_region": "256 KB",
+      "ram_pct": 68.19
+    }
+  },
+
+  "toolchain": {
+    "image": "docker.io/nordicplayground/nrfconnect-sdk",
+    "digest": "sha256:f50c51b711bbb3f502496c4b83e88dda778420fb83327d4791f9bc0e34916d01",
+    "platform": "linux/amd64 (Rosetta on arm64 host)",
+    "image_pulled_this_run": false,
+    "note": "Image contains the TOOLCHAIN ONLY (/root/ncs/toolchains/7795df4459). It has no zephyr/ or nrf/ checkout; /ncs is a host bind-mount of the pinned workspace.",
+    "toolchain_bundle_id": "7795df4459",
+    "ncs_toolchain": "2.5.20231017.513615545433",
+    "west": "v1.1.0",
+    "cmake": "3.20.5",
+    "gcc": "arm-zephyr-eabi-gcc (Zephyr SDK 0.16.1) 12.2.0",
+    "zephyr_sdk": "0.16.1",
+    "dtc": "1.4.7"
+  },
+
+  "source_pins_verified": {
+    "zephyr_head": "2e2523efe52a7ac89f0567b8798fd857b1e71ae3",
+    "nrf_head": "1fae141fc6713dd331b797fc96c90dc84552242d",
+    "matches_toolchain_lock_json": true,
+    "workspace_clean_before_and_after": true,
+    "zephyr_version_reported_by_build": "3.4.99"
+  },
+
+  "artifacts": {
+    "zephyr.uf2": {
+      "bytes": 509440,
+      "sha256": "f1c9011a921b67c0ba31cf839ecd5981c167fae6ed9d4ef4a5137d7b369c6937"
+    },
+    "zephyr.bin": {
+      "bytes": 254680,
+      "sha256": "6677b2bc163144bb502151e05c85a98949b66680f306751cad69b53f85b9b5e5"
+    },
+    "zephyr.hex": {
+      "bytes": 716556,
+      "sha256": "d93dc42b4c109c9ca6f3bd80c97326b8e2694f0e42367daa2a31dce9bdf4759c"
+    },
+    "zephyr.elf": {
+      "bytes": 4870848,
+      "sha256": "53af2ada47bd0d34327fb039a787018979b5b27f43c46de6582738d4e537d7b4"
+    }
+  },
+
+  "uf2_header": {
+    "load_address": "0x27000",
+    "family_id": "0xADA52840",
+    "blocks": 995,
+    "payload_bytes": 254720,
+    "matches_parent_candidate_load_and_family": true
+  },
+
+  "hatch_verification": {
+    "method": "little-endian 128-bit UUID byte-scan of the reassembled UF2 payload, plus nm symbol check and objdump of the actual reset paths in the linked ELF",
+    "hatch_1_cable_uf2": {
+      "present": true,
+      "magic": "GPREGRET (0x4000051C) <- 0x57 (DFU_MAGIC_UF2_RESET)",
+      "machine_code_site": "recovery_poll @0x396c6: mov.w r3,#0x40000000 / movs r2,#0x57 / str.w r2,[r3,#0x51c]",
+      "preceded_by": "usb_dc_detach() then watchdog_feed()",
+      "config_proof": {
+        "CONFIG_UART_LINE_CTRL": 1,
+        "CONFIG_USB_DEVICE_STACK": 1,
+        "CONFIG_USB_CDC_ACM": 1,
+        "CONFIG_SERIAL": 1,
+        "CONFIG_USB_DEVICE_INITIALIZE_AT_BOOT": "absent (=n) - usb_enable() happens ONLY inside recovery_usb_start()"
+      }
+    },
+    "hatch_2_wireless_ble_ota": {
+      "present": true,
+      "magic": "GPREGRET (0x4000051C) <- 0xA8 (DFU_MAGIC_OTA_RESET)",
+      "machine_code_site": "enter_ota_bootloader @0x38b84: bl watchdog_feed / movs r2,#0xA8 / str.w r2,[r3,#0x51c] / dsb / SCB->AIRCR=0x05FA0004",
+      "uuid_1530_occurrences_in_uf2_payload": 1,
+      "uuid_1531_occurrences_in_uf2_payload": 1,
+      "handler_encodings_confirmed": "len==1 && buf[0]==0x06 -> immediate; len==2 && buf[0]==0x01 -> notify 0x10, k_sleep flush, then reset"
+    },
+    "control_parent_candidate": {
+      "file": "/Users/omarebrahim/anticipation-builds/firmware-authorized-flash-20260723-07/recoverable-candidate/build/anticipy-v2.0.1/zephyr/zephyr.uf2",
+      "sha256": "36424986bb9a016a930dc31b9509e076262917330248df3e61788f4127a033d7",
+      "uuid_1530_occurrences": 0,
+      "uuid_1531_occurrences": 0,
+      "meaning": "confirms the gap this build closes; parent had the cable hatch only"
+    }
+  },
+
+  "audio_contract_regression_check": {
+    "audio_service_19B10000": "present x1",
+    "audio_data_19B10001": "present x1",
+    "audio_format_19B10002": "present x1",
+    "verdict": "unchanged - DFU restoration was purely additive"
+  },
+
+  "watchdog": {
+    "CONFIG_WATCHDOG": 1,
+    "CONFIG_WDT_NRFX": 1,
+    "CONFIG_NRFX_WDT0": 1,
+    "timeout_ms": 900000,
+    "feed_interval_ms": 1000,
+    "symbols_linked": ["watchdog_start", "watchdog_feed"],
+    "fed_before_both_deliberate_resets": true,
+    "open_decision": "900000 ms is a defensive value chosen because it is unverified whether the installed Adafruit bootloader feeds the watchdog it inherits across a soft reset (the nRF52 WDT cannot be stopped once started). Confirm on hardware before reducing."
+  },
+
+  "main_ordering_fix_verified": "objdump of main() shows bl recovery_usb_start is the FIRST call, ahead of bl led_start - a failing LED can no longer take the cable hatch down with it",
+
+  "build_warnings_all_preexisting_environmental": [
+    "CMake Deprecation: PYTHON_PREFER variable (Zephyr internal)",
+    "Kconfig: SENSOR assigned n but got y (pre-existing app config conflict)",
+    "Kconfig: USB_CDC_ACM_LOG_LEVEL_OFF choice selection (pre-existing)",
+    "CMake Warning: CONFIG_USB_DEVICE_VID default 0x2FE3 (Zephyr test VID)",
+    "CMake Warning: CONFIG_USB_DEVICE_PID default 0x100 (Zephyr test PID)"
+  ],
+
+  "residual_risks": [
+    "USB VID/PID are Zephyr test defaults (0x2FE3/0x100). CDC-ACM still enumerates on macOS via the class driver, so the cable hatch is not blocked, but these are not production identifiers.",
+    "The legacy DFU control point is unauthenticated (BT_GATT_PERM_WRITE) by design in this bridge image: anyone in radio range can force a bootloader entry (denial of service only).",
+    "RAM at 68.19% of 256 KB leaves modest headroom.",
+    "Neither hatch has been exercised on hardware. This receipt proves both are present in the image, not that either works on the device."
+  ]
+}

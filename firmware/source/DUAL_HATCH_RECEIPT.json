@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "status": "SOURCE_ONLY_NOT_BUILT_NOT_FLASH_APPROVED",
+  "artifact_built": false,
+  "flash_performed": false,
+  "physical_hardware_verified": false,
+
+  "note_on_sibling_receipt": "ANTICIPY_SOURCE_RECEIPT.json in this directory was copied verbatim from the parent tree and describes THAT tree, not this one. Its behavior_contract.legacy_dfu_service_enabled=false and its critical_file_sha256 map are both stale here. This file supersedes it for the dual-hatch tree.",
+
+  "parent": {
+    "path": "/Users/omarebrahim/anticipation-builds/firmware-authorized-flash-20260723-07/recoverable-candidate/source/anticipy-v2.0.1",
+    "content_tree_sha256": "0211f9d48e6d4ca1bdde8ac3e7d45ff291918541e6b69a6093d23f3416f674ad",
+    "existing_build_uf2_sha256": "36424986bb9a016a930dc31b9509e076262917330248df3e61788f4127a033d7"
+  },
+
+  "purpose": "Single image carrying BOTH software routes into the Adafruit nRF52 bootloader, for a pendant whose RESET button cannot be pressed.",
+
+  "recovery_surfaces": {
+    "cable_uf2": {
+      "source": "src/recovery_usb.c",
+      "trigger": "USB CDC ACM line coding set to 1200 baud, then DTR deasserted",
+      "gpregret_magic": "0x57",
+      "bootloader_mode": "UF2 mass-storage volume + CDC, self-heals back to the application in about 3 s",
+      "started_from": "main() before any early-return gate"
+    },
+    "wireless_ota": {
+      "source": "src/transport.c",
+      "service_uuid": "00001530-1212-EFDE-1523-785FEABCD123",
+      "control_point_uuid": "00001531-1212-EFDE-1523-785FEABCD123",
+      "control_point_permission": "BT_GATT_PERM_WRITE (deliberately OPEN in this bridge image)",
+      "accepted_writes": ["1 byte 0x06", "2 bytes 0x01 .."],
+      "gpregret_magic": "0xA8",
+      "bootloader_mode": "BLE OTA only, no USB enumeration, no inactivity timeout",
+      "advertised_in": "scan response (BT_DATA_UUID128_ALL)"
+    }
+  },
+
+  "behavior_contract": {
+    "legacy_dfu_service_enabled": true,
+    "legacy_dfu_control_point_encrypted": false,
+    "usb_recovery_started_before_led_init": true,
+    "watchdog_enabled": true,
+    "watchdog_timeout_ms": 900000,
+    "watchdog_feed_interval_ms": 1000,
+    "watchdog_armed_after_all_fallible_init": true,
+    "watchdog_runs_in_cpu_sleep": true,
+    "watchdog_pauses_when_halted_by_debugger": true,
+    "audio_service_uuid": "19B10000-E8F2-537E-4F6C-D104768A1214",
+    "audio_data_uuid": "19B10001-E8F2-537E-4F6C-D104768A1214",
+    "audio_codec_uuid": "19B10002-E8F2-537E-4F6C-D104768A1214",
+    "codec_id": 20,
+    "battery_service_uuid": "0000180F-0000-1000-8000-00805F9B34FB",
+    "battery_level_uuid": "00002A19-0000-1000-8000-00805F9B34FB",
+    "audio_fragment_header_bytes": 3,
+    "audio_gatt_encryption_required": true,
+    "advertised_complete_name": "Anticipy"
+  },
+
+  "changed_files_sha256": {
+    "CMakeLists.txt": "0c36c405b4fb5b299c32704c4378ac5244202324f9d0c411655a1d9db99c41f6",
+    "prj_xiao_ble_sense_devkitv2-adafruit.conf": "e1ebaaf4538e4b55cdc0ff1f26257ff1464d4dfe7768ec39b74cb9aa53dddaa9",
+    "src/main.c": "820c9e721ae8578b685e8dc7b7f666723eb3958b5d69ab793ffb6cdd32e21c9a",
+    "src/transport.c": "a2e2703c2f1da153699bc4c3a0eecda63bcd82725e2cf2e1f14d1e4fd2c489ae",
+    "src/recovery_usb.c": "6aa4b149e646bd0c922336bc656f89541dc707bb0617c510d0e3cf3bdba522a4",
+    "src/watchdog.c": "d20975fe9a1560896c6982df68f57dfdbab74c4a957e0503bd32683b5e13e0a1",
+    "src/watchdog.h": "2ca1d7509dc44884bf53b9d8b9beef69401834e63f797452cfe8dbb89b69af0a"
+  },
+  "content_tree_sha256": "5fe4246cbdbac9793511f1cb77bc4110c9b6cf25b8c9a8ac6d581878dd7d5448",
+
+  "task_item_4_not_actioned": {
+    "claim": "Fix the pusher that ends in a bare k_yield() at the highest ready priority; port the corrected semaphore-blocking version from .build/source/anticipy-fresh/src/transport.c",
+    "finding": "FALSE PREMISE. The parent tree's pusher already blocks on k_sem_take(&tx_data_ready, K_FOREVER) and contains no k_yield(). anticipy-fresh/src/transport.c is BYTE-IDENTICAL to the parent (md5 6d1f92ea14c2964f6c2b65b47b7dc5a1), so there was nothing to port from it. The bare k_yield() exists only in the UPSTREAM Omi file at line 690, which is the image currently running on the device. The busy-spin was already fixed before this task.",
+    "action": "No change made."
+  },
+
+  "open_decisions_before_build_or_flash": [
+    "WATCHDOG_TIMEOUT_MS=900000 (15 min) is chosen defensively because it could not be verified whether the installed Adafruit bootloader feeds the inherited watchdog. The nRF52 WDT survives soft reset and cannot be stopped, so a short timeout risks resetting the SoC mid-flash. Confirm bootloader behaviour on hardware before shortening it.",
+    "The legacy DFU control point is unauthenticated. Anyone in radio range can force the pendant into the bootloader. Acceptable for this bridge image only; gate to BT_GATT_PERM_WRITE_ENCRYPT once bonding and a physically confirmed second route exist.",
+    "This tree has NOT been compiled. Verification so far is source-level plus cross-checks against the pinned Zephyr/nrfx driver sources."
+  ]
+}

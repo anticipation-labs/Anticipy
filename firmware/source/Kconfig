@@ -1,0 +1,15 @@
+source "Kconfig.zephyr"
+
+menu "Friend Configuration"
+config CODEC_OPUS
+    bool "Opus Audio Codec Support"
+    default n
+
+config OFFLINE_STORAGE
+    bool
+    default n
+    help
+      Reserved compatibility symbol. The Anticipy live-stream candidate
+      excludes all disconnected recording and storage source.
+
+endmenu
