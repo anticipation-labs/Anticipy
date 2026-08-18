@@ -21,22 +21,44 @@
 set -e
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
-PROFILE="$HOME/Library/Application Support/Google/Chrome/Default"
-ID=niikpkdfnafpdnfgblglkaemmkkhjbba
 
-DEST=$(python3 - "$PROFILE/Secure Preferences" "$ID" <<'PY'
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-except Exception:
-    sys.exit(1)
-e = ((d.get("extensions") or {}).get("settings") or {}).get(sys.argv[2])
-print((e or {}).get("path", ""))
+# FIND WHERE CHROME IS ACTUALLY READING IT, rather than assuming.
+#
+# This used to hard-code the Default profile and one extension ID. Both were
+# wrong for a real install: an unpacked extension's ID is derived from its
+# PATH, so loading it from a different folder gives a different ID, and Chrome
+# had it in Profile 13 as well as Default. The script then reported "not
+# loaded" and quietly did nothing — while he pressed Reload on old code.
+#
+# So: search every profile for an extension whose name or path says Anticipy,
+# and sync into whichever folder Chrome actually points at. Some installs read
+# straight from a folder on the Desktop; others read Chrome's own private copy.
+# Both work, because we write to the path Chrome itself recorded.
+DEST=$(python3 - <<'PY'
+import json, os, glob
+base = os.path.expanduser("~/Library/Application Support/Google/Chrome")
+best = ""
+for prefs in glob.glob(os.path.join(base, "*", "Secure Preferences")):
+    try:
+        d = json.load(open(prefs))
+    except Exception:
+        continue
+    for ext_id, e in (((d.get("extensions") or {}).get("settings")) or {}).items():
+        if not isinstance(e, dict):
+            continue
+        name = ((e.get("manifest") or {}).get("name") or "")
+        path = e.get("path") or ""
+        if "anticipy" in (name + path).lower() and os.path.isdir(path):
+            best = path
+            break
+    if best:
+        break
+print(best)
 PY
-) || { echo "Could not read Chrome's profile — is Chrome installed for this user?"; exit 1; }
+)
 
 if [ -z "$DEST" ]; then
-  echo "Anticipy Claude Version is not loaded as an unpacked extension in the Default profile."
+  echo "Anticipy is not loaded as an unpacked extension in any Chrome profile."
   echo "Load it once via chrome://extensions -> Load unpacked, then re-run this."
   exit 1
 fi

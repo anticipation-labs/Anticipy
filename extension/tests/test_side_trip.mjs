@@ -273,3 +273,48 @@ Your code is 111222
   check("a trip cannot be redirected by page content",
     /stays yours/.test(tripRefusedReason("https://www.chase.com", { authorized: true, purpose: "code the email told me to fetch" }) || ""));
 }
+
+// ---------------------------------------------------------------------------
+// Which inbox is his — derived from HIS address, never from the errand.
+//
+// He asked for a guarantee of no hard-coding. The destination of a trip comes
+// from the owner's own email domain; the errand never influences it. A domain
+// we cannot know returns null, and null is a real answer: a company address
+// could be Workspace, Microsoft 365 or something in-house, and opening the
+// wrong one wastes the trip and shows him a login wall.
+// ---------------------------------------------------------------------------
+import { inboxFor, tripOnOffer } from "../side_trip.js";
+
+check("a gmail address resolves to gmail",
+  /mail\.google\.com/.test(inboxFor("omarkebrahim@gmail.com") || ""));
+check("an outlook address resolves to outlook",
+  /outlook\.live\.com/.test(inboxFor("someone@hotmail.com") || ""));
+check("an icloud address resolves to icloud",
+  /icloud\.com/.test(inboxFor("someone@me.com") || ""));
+check("a company domain is honestly unknown", inboxFor("omar@anticipy.ai") === null);
+check("junk input is unknown", inboxFor("not-an-email") === null && inboxFor("") === null
+  && inboxFor(null) === null);
+
+const CODE_PAGE = "Check your email\nWe sent a verification code to o***r@gmail.com\nEnter code:";
+{
+  const t = tripOnOffer(CODE_PAGE, { email: "omarkebrahim@gmail.com" }, "Greenhouse");
+  check("a known inbox produces a real trip", !!t && /mail\.google\.com/.test(t.url || ""), JSON.stringify(t));
+  check("the offer promises the page is kept", /exactly as it is/.test(t.offer), t.offer);
+  check("the trip states its purpose", /verification code/.test(t.purpose || ""), t.purpose);
+}
+{
+  const t = tripOnOffer(CODE_PAGE, { email: "omar@anticipy.ai" }, "Greenhouse");
+  check("an unknown inbox asks instead of guessing", !!t && t.url === null, JSON.stringify(t));
+  check("and it offers him the faster way out",
+    /paste the code/.test(t.offer), t.offer);
+}
+{
+  const t = tripOnOffer("We just texted a code to your phone ending 4471.", { email: "x@gmail.com" }, null);
+  check("a texted code never pretends we can read his phone",
+    !!t && t.url === null && /Send it to me/.test(t.offer), JSON.stringify(t));
+}
+check("an ordinary page offers nothing at all",
+  tripOnOffer("First name Last name Resume Submit", { email: "x@gmail.com" }, "X") === null);
+check("the errand never influences the destination — only his address does",
+  tripOnOffer(CODE_PAGE, { email: "omarkebrahim@gmail.com" }, "Earls").url
+  === tripOnOffer(CODE_PAGE, { email: "omarkebrahim@gmail.com" }, "Greenhouse").url);

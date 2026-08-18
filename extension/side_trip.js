@@ -272,3 +272,87 @@ export function offerToFetch(detection, { service } = {}) {
   const what = service ? `${service}'s code` : "the code";
   return `${what} just went to ${where}. Want me to go and read it? I'll keep this page exactly as it is and come straight back — say go and I'll finish this off.`;
 }
+
+// ---------------------------------------------------------------------------
+// Which inbox is his
+// ---------------------------------------------------------------------------
+
+// Where the big providers keep their web mail. This is infrastructure the
+// world already fixed — not task knowledge — so it is a lookup, not a guess.
+// It is deliberately NOT a list of restaurants or job boards: the destination
+// is derived from HIS OWN email address, never from the errand.
+const WEBMAIL = {
+  "gmail.com": "https://mail.google.com/mail/u/0/#search/in%3Aanywhere+newer_than%3A1h",
+  "googlemail.com": "https://mail.google.com/mail/u/0/#search/in%3Aanywhere+newer_than%3A1h",
+  "outlook.com": "https://outlook.live.com/mail/0/",
+  "hotmail.com": "https://outlook.live.com/mail/0/",
+  "live.com": "https://outlook.live.com/mail/0/",
+  "msn.com": "https://outlook.live.com/mail/0/",
+  "yahoo.com": "https://mail.yahoo.com/",
+  "ymail.com": "https://mail.yahoo.com/",
+  "icloud.com": "https://www.icloud.com/mail",
+  "me.com": "https://www.icloud.com/mail",
+  "mac.com": "https://www.icloud.com/mail",
+  "proton.me": "https://mail.proton.me/u/0/inbox",
+  "protonmail.com": "https://mail.proton.me/u/0/inbox",
+  "aol.com": "https://mail.aol.com/",
+  "zoho.com": "https://mail.zoho.com/zm/",
+  "fastmail.com": "https://app.fastmail.com/mail/Inbox",
+};
+
+/**
+ * The web inbox for an address, or null when it cannot be known.
+ *
+ * Null is a real answer and must stay one: a company address on its own
+ * domain could be Google Workspace, Microsoft 365, or something built
+ * in-house, and opening the wrong one wastes a trip and shows him a login
+ * wall. When this returns null the offer asks him where to look instead of
+ * pretending to know.
+ */
+export function inboxFor(email) {
+  const at = String(email || "").trim().toLowerCase().split("@");
+  if (at.length !== 2 || !at[1]) return null;
+  return WEBMAIL[at[1]] || null;
+}
+
+/**
+ * Everything needed to offer the trip, or null if there is nothing to offer.
+ *
+ * Keeps the decision in ONE place: is a code being waited on, do we know
+ * where it went, and can we get there. The loop asks this and either offers
+ * or asks plainly — it never has to work any of it out itself.
+ */
+export function tripOnOffer(pageText, ownerProfile, service) {
+  const sent = detectsCodeWasSent(pageText);
+  if (!sent) return null;
+  if (sent.where === "phone") {
+    // His phone is not ours to read, and it is already the channel we text
+    // him on. Ask; never pretend we can go and look.
+    return { offer: `${service ? service + "'s" : "The"} code went to your phone. `
+      + `Send it to me and I'll finish this off — the page is exactly where I left it.`,
+      url: null, purpose: null };
+  }
+  // Prefer the address the SITE says it used; fall back to the one he gave us.
+  // A MASKED ADDRESS IS NOT AN ADDRESS. Sites print "o***r@gmail.com", and
+  // the plain-address pattern happily matches the tail — "r@gmail.com" —
+  // which looks unmasked, resolves to a real provider, and would send the
+  // trip somewhere chosen by a fragment. Only an address with a local part
+  // that survives intact counts; otherwise fall back to the one HE gave us.
+  const raw = String(sent.address || "");
+  const local = raw.split("@")[0] || "";
+  const looksReal = raw.includes("@") && !/[*•]/.test(raw)
+    && local.length >= 2 && !/^[a-z]$/i.test(local);
+  const addr = looksReal ? raw : ((ownerProfile && ownerProfile.email) || "");
+  const url = inboxFor(addr);
+  if (!url) {
+    return { offer: `${service ? service + "'s" : "The"} code just went to `
+      + `${sent.address || "your email"}. I can go and read it if you tell me where `
+      + `that inbox is — or paste the code and I'll carry on from where I am.`,
+      url: null, purpose: null };
+  }
+  return {
+    offer: offerToFetch(sent, { service }),
+    url,
+    purpose: `${service || "the"} verification code`,
+  };
+}
