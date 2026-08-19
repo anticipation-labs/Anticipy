@@ -16,6 +16,7 @@ BATT    = "200";
 STORAGE = false;
 HAPTIC  = false;
 USB     = false;
+HOLES   = true;   // false = totally clean front; mic gets a 0.5 mm-thin membrane inside
 
 $fn = 72;
 
@@ -94,8 +95,15 @@ module screw_pilots()   // 2x M1.4 self-tapper through side walls into the lid l
 module front_features() {
     bx = cav_x;   // board centered in the cavity footprint (200) or at -X end (500)
     bx2 = side_by_side ? cav_x - cav_l/2 + clr + xiao_l/2 : bx;
-    translate([bx2 - 4, 3.5, -body_t/2 - 1]) cylinder(d = 1.0, h = face_t + 3);   // mic
-    translate([bx2 + 2, 0,   -body_t/2 - 1]) cylinder(d = 1.8, h = face_t + 3);  // LED dot
+    if (HOLES) {
+        translate([bx2 - 4, 3.5, -body_t/2 - 1]) cylinder(d = 1.0, h = face_t + 3);   // mic
+        translate([bx2 + 2, 0,   -body_t/2 - 1]) cylinder(d = 1.8, h = face_t + 3);  // LED dot
+    } else {
+        // clean face: thin the wall to 0.5 mm from the INSIDE over the mic (sound passes)
+        translate([bx2 - 4, 3.5, -body_t/2 + 0.5]) cylinder(d = 4.0, h = face_t);
+        // LED glows through a 0.6 mm skin instead of an open dot
+        translate([bx2 + 2, 0, -body_t/2 + 0.6]) cylinder(d = 3.0, h = face_t);
+    }
 }
 
 module usb_slot()
