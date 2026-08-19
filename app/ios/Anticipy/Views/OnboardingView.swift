@@ -145,7 +145,7 @@ struct OnboardingView: View {
         switch step {
         case Step.mic:
             if session.listener.isListening || session.micBlocked || micAsked { return "Continue" }
-            return "Yes — start listening"
+            return "Yes, start listening"
         case Step.phone:
             return savingPhone ? "Saving…" : "Continue"
         case Step.browser:
@@ -381,14 +381,14 @@ struct OnboardingView: View {
                 .opacity(cardsShown >= 1 ? 1 : 0)
                 .offset(y: cardsShown >= 1 ? 0 : 14)
             stepCard(icon: "sparkles", title: "I remember what matters",
-                     text: "I catch the things you say you'll do — “I'll send that over” — and hold them until they're done.")
+                     text: "I catch the things you say you'll do (“I'll send that over”) and hold them until they're done.")
                 .opacity(cardsShown >= 2 ? 1 : 0)
                 .offset(y: cardsShown >= 2 ? 0 : 14)
             stepCard(icon: "cursorarrow.click.2", title: "I do the work",
-                     text: "I set things up in Chrome on your computer, using accounts you're already signed in to. I ask you here first — nothing goes out until you say yes.")
+                     text: "I set things up in Chrome on your computer, using accounts you're already signed in to. I ask you here first. Nothing goes out until you say yes.")
                 .opacity(cardsShown >= 3 ? 1 : 0)
                 .offset(y: cardsShown >= 3 ? 0 : 14)
-            Text("If you ever have an Anticipy Claude Version pendant, you can pair it in Settings. You don't need one — your phone is enough.")
+            Text("If you ever have an Anticipy Claude Version pendant, you can pair it in Settings. You don't need one. Your phone is enough.")
                 .font(.system(size: 15))
                 .lineSpacing(2)
                 .foregroundStyle(Theme.sand)
@@ -477,7 +477,7 @@ struct OnboardingView: View {
                 .transition(.scale.combined(with: .opacity))
             } else if session.micBlocked {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("iOS has my microphone switched off. I can't ask again from here — it's one tap in Settings, under Microphone and Speech Recognition.")
+                    Text("iOS has my microphone switched off. I can't ask again from here. It's one tap in Settings, under Microphone and Speech Recognition.")
                         .font(.footnote)
                         .foregroundStyle(Theme.sand)
                     Button {
@@ -494,7 +494,7 @@ struct OnboardingView: View {
                 }
                 .anticipyCard()
             } else if !micPriming {
-                Text("When you say yes, iOS asks twice — once for speech, once for the microphone. Both are me.")
+                Text("When you say yes, iOS asks twice, once for speech, once for the microphone. Both are me.")
                     .font(.system(size: 15))
                     .lineSpacing(2)
                     .foregroundStyle(Theme.sand)
@@ -538,7 +538,7 @@ struct OnboardingView: View {
                 .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
                 .multilineTextAlignment(.center)
-            Text("When something needs your word, I'll text you. The rest is what every booking form asks for — so I never have to guess it.")
+            Text("When something needs your word, I'll text you. The rest is what every booking form asks for, so I never have to guess it.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
                 .foregroundStyle(Theme.sand)
@@ -593,7 +593,7 @@ struct OnboardingView: View {
                     phoneSaveFailed = false
                 }
             if phoneSaved {
-                Label("Saved — I'll text you there.", systemImage: "checkmark.circle.fill")
+                Label("Saved. I'll text you there.", systemImage: "checkmark.circle.fill")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Theme.champagne)
             } else if !phone.isEmpty, session.e164(phone) != nil {
@@ -609,7 +609,7 @@ struct OnboardingView: View {
             }
             if phoneSaveFailed {
                 VStack(spacing: 10) {
-                    Text("I couldn't save that just now — I need a connection to keep it. Everything you entered is still here.")
+                    Text("I couldn't save that just now. I need a connection to keep it. Everything you entered is still here.")
                         .font(.footnote)
                         .foregroundStyle(Theme.sand)
                         .multilineTextAlignment(.center)
@@ -652,7 +652,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.sand)
 
             numbered(1, "On your computer, open the guide I send you")
-            numbered(2, "Follow it — you'll turn on one Chrome setting to add me")
+            numbered(2, "Follow it. You'll turn on one Chrome setting to add me")
             numbered(3, "Type the 6-digit code it shows you, here")
 
             if let setup = URL(string: session.backendURLString)?.appendingPathComponent("setup.html") {

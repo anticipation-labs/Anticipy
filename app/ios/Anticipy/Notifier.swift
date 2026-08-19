@@ -110,7 +110,7 @@ final class Notifier {
         if job.status == "awaiting_confirm" {
             return ("Ready when you are", shortGoal.isEmpty
                     ? "Something's ready for your OK."
-                    : "\(shortGoal) — say the word and I'll do it.")
+                    : "\(shortGoal). Say the word and I'll do it.")
         }
         let asked = (job.result ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         // job.result carries the question it stopped on. Prefer his own

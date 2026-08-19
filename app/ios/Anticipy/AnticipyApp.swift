@@ -551,7 +551,7 @@ final class AnticipySession: ObservableObject {
             try await backend.createAccount(email: email, password: password,
                                             phone: e164, legacyUUID: ownerID)
         } catch let err as AnticipyBackend.CreateAccountError where err.phoneTaken {
-            return "That phone number is already on an account. Sign in to it instead — or if you forgot the password, tap \"Text me a code\" below and I'll get you back in."
+            return "That phone number is already on an account. Sign in to it instead, or if you forgot the password, tap \"Text me a code\" below and I'll get you back in."
         } catch let err as AnticipyBackend.CreateAccountError where err.deviceTaken && !err.emailTaken {
             // This device's pre-accounts identity already belongs to an earlier
             // account. A second account from the same phone is still legitimate:
@@ -565,7 +565,7 @@ final class AnticipySession: ObservableObject {
                 return "I couldn't set that up just now. Try again in a moment."
             }
         } catch let err as AnticipyBackend.CreateAccountError where err.emailTaken {
-            return "That email already has an account — sign in instead, or use another address."
+            return "That email already has an account. Sign in instead, or use another address."
         } catch let err as AnticipyBackend.CreateAccountError where (400..<500).contains(err.status) {
             return "Something about those details didn't go through. Check the email and try again."
         } catch {
@@ -1088,7 +1088,7 @@ final class AnticipySession: ObservableObject {
             // done" is the one sentence that could cost him a duplicate
             // booking he never checks for.
             fields["result"] = job.effect_uncertain == true
-                ? "You stopped this. It may already have gone through before I stopped — worth a check."
+                ? "You stopped this. It may already have gone through before I stopped. Worth a check."
                 : "You stopped this."
             try await self.backend.setJobFields(id: job.id, fields: fields)
         }

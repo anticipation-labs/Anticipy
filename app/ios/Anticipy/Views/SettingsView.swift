@@ -47,7 +47,7 @@ struct SettingsView: View {
                     .foregroundStyle(Theme.ivory)
 
                 if session.micBlocked {
-                    Text("iPhone has microphone access switched off for me. It won't ask again — only you can turn it back on.")
+                    Text("iPhone has microphone access switched off for me. It won't ask again. Only you can turn it back on.")
                         .font(.caption)
                         .foregroundStyle(Theme.gray)
                     Button("Open iPhone Settings") { session.openSystemSettings() }
@@ -67,7 +67,7 @@ struct SettingsView: View {
                 } else if let ends = pauseEnds {
                     Button("Start listening now") { startNow() }
                         .foregroundStyle(Theme.champagne)
-                    Button("Keep it off — cancel the timer") { stopNow() }
+                    Button("Keep it off, cancel the timer") { stopNow() }
                     Text("If iPhone closes the app before \(clock(ends)), I'll stay off until you start me again. I'd rather be quiet than come back when you didn't expect me.")
                         .font(.caption)
                         .foregroundStyle(Theme.gray)
@@ -146,7 +146,7 @@ struct SettingsView: View {
                     }
                 }
                 .foregroundStyle(Theme.champagne)
-                Text(detailsSaved ? "Saved — I can fill booking forms myself now."
+                Text(detailsSaved ? "Saved. I can fill booking forms myself now."
                                   : "Every booking and signup form asks for these. Payment details are never stored or filled.")
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
@@ -181,7 +181,7 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(Theme.gray)
                     }
-                    Text("Your voice never leaves this phone — not the recording, not a copy. Only the word \"you\" or \"someone else\" travels.")
+                    Text("Your voice never leaves this phone. Not the recording, not a copy. Only the word \"you\" or \"someone else\" travels.")
                         .font(.caption)
                         .foregroundStyle(Theme.gray)
                 }
@@ -205,7 +205,7 @@ struct SettingsView: View {
                     .foregroundStyle(Theme.champagne)
                     .disabled(phoneField.isEmpty)
                 }
-                Text(phoneSaved ? "Saved — I'll reach you here."
+                Text(phoneSaved ? "Saved. I'll reach you here."
                                 : "Where I text you when something needs your word.")
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
@@ -228,7 +228,7 @@ struct SettingsView: View {
                 if !session.agentPaired {
                     if let setup = URL(string: backendURL + "/setup.html") {
                         Link(destination: setup) {
-                            Label("Set up your browser — step-by-step guide", systemImage: "safari")
+                            Label("Set up your browser, step-by-step guide", systemImage: "safari")
                         }
                     }
                     HStack {
@@ -245,11 +245,11 @@ struct SettingsView: View {
                     // code for ten minutes. These are now two different truths.
                     switch pairOutcome {
                     case .noMatch:
-                        Text("That code didn't match — check the Anticipy Claude Version extension popup for the current one.")
+                        Text("That code didn't match. Check the Anticipy Claude Version extension popup for the current one.")
                             .font(.caption)
                             .foregroundStyle(.red)
                     case .unreachable:
-                        Text("I can't reach Anticipy Claude Version right now — that's my end, not your code.")
+                        Text("I can't reach Anticipy Claude Version right now. That's my end, not your code.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                         Button("Try again") { pair() }
@@ -273,7 +273,7 @@ struct SettingsView: View {
                             await session.refresh()
                         }
                     } label: {
-                        Label("Release this browser — pair a different one",
+                        Label("Release this browser, pair a different one",
                               systemImage: "laptopcomputer.slash")
                     }
                 }
@@ -304,7 +304,7 @@ struct SettingsView: View {
                 Text(voicePath)
                     .font(.callout)
                     .foregroundStyle(Theme.sand)
-                Text("The words — the text, not the sound — go to my server. That's how I know what you need.")
+                Text("The words (the text, not the sound) go to my server. That's how I know what you need.")
                     .font(.callout)
                     .foregroundStyle(Theme.sand)
                 Text("If you use a pendant, its Opus audio goes to Deepgram to become text. My backend gives this phone a short-lived token; the Deepgram account key stays on the server.")
@@ -322,7 +322,7 @@ struct SettingsView: View {
 
                 if let mail = supportMail {
                     Link(destination: mail) {
-                        Label("Ask me anything — hello@anticipationlabs.com", systemImage: "envelope")
+                        Label("Ask me anything, hello@anticipationlabs.com", systemImage: "envelope")
                     }
                     .foregroundStyle(Theme.champagne)
                 }
@@ -352,7 +352,7 @@ struct SettingsView: View {
 
                 // The honest gap, said out loud rather than papered over with a
                 // button that would do nothing.
-                Text("I can't yet delete what's already on my server from in here — I'm building that. Until it exists, ask me and I'll do it myself and write back when it's done.")
+                Text("I can't yet delete what's already on my server from in here. I'm building that. Until it exists, ask me and I'll do it myself and write back when it's done.")
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
                 if let mail = deleteMail {
@@ -371,7 +371,7 @@ struct SettingsView: View {
             .listRowBackground(Theme.card)
 
             #if DEBUG
-            Section("Haptics — find out what's wrong") {
+            Section("Haptics, find out what's wrong") {
                 let r = haptics.report(listening: session.listener.isListening)
 
                 // Two buttons, because the whole question is WHICH path works.
@@ -384,27 +384,27 @@ struct SettingsView: View {
                     haptics.playTest(double: true)
                 }
 
-                Text("Turn Listening OFF, try both. Then turn it ON and try both again. If they buzz only with Listening off, the microphone is what's muting them — that tells me exactly what to fix.")
+                Text("Turn Listening OFF, try both. Then turn it ON and try both again. If they buzz only with Listening off, the microphone is what's muting them, that tells me exactly what to fix.")
                     .font(.footnote).foregroundStyle(Theme.gray)
 
                 if !r.hardware {
-                    Text("This iPhone reports no Taptic Engine — nothing can buzz.")
+                    Text("This iPhone reports no Taptic Engine. Nothing can buzz.")
                         .font(.footnote).foregroundStyle(.red)
                 }
                 if r.lowPowerMode {
                     // The one blocker that IS readable. Stated plainly.
-                    Text("Low Power Mode is ON. iPhone switches haptics off while it is — turn it off in Settings › Battery.")
+                    Text("Low Power Mode is ON. iPhone switches haptics off while it is. Turn it off in Settings › Battery.")
                         .font(.footnote).foregroundStyle(.orange)
                 }
                 if r.listening && !r.allowsHapticsWhileRecording {
                     // The smoking gun, if it ever shows up: build 33 asked for
                     // this and the request was made with try? — so a refusal
                     // was invisible until now.
-                    Text("Found it: the microphone is refusing to let haptics play. That's mine to fix — tell me you saw this.")
+                    Text("Found it: the microphone is refusing to let haptics play. That's mine to fix. Tell me you saw this.")
                         .font(.footnote).foregroundStyle(.red)
                 }
                 if r.hardware && !r.lowPowerMode {
-                    Text("If nothing buzzes either way: iPhone Settings › Sounds & Haptics › System Haptics must be ON. No app is allowed to read or change that switch — only you can.")
+                    Text("If nothing buzzes either way: iPhone Settings › Sounds & Haptics › System Haptics must be ON. No app is allowed to read or change that switch. Only you can.")
                         .font(.footnote).foregroundStyle(Theme.gray)
                 }
 
@@ -426,7 +426,7 @@ struct SettingsView: View {
                         Button("Replay it") { hasOnboarded = false }
                         Button("Not now", role: .cancel) { }
                     } message: {
-                        Text("It's the few screens you saw when you first opened me. Nothing you've set up changes — your number, your details and your pendant all stay exactly as they are.")
+                        Text("It's the few screens you saw when you first opened me. Nothing you've set up changes. Your number, your details and your pendant all stay exactly as they are.")
                     }
             } footer: {
                 // The one question that must never be ambiguous again:
@@ -575,12 +575,12 @@ struct SettingsView: View {
     }
 
     private var supportMail: URL? {
-        mailto(subject: "Anticipy Claude Version — I need a hand",
-               body: "\n\n—\nMy Anticipy Claude Version ID: \(session.ownerID)\nApp \(versionString)")
+        mailto(subject: "Anticipy Claude Version. I need a hand",
+               body: "\n\n, \nMy Anticipy Claude Version ID: \(session.ownerID)\nApp \(versionString)")
     }
 
     private var deleteMail: URL? {
-        mailto(subject: "Anticipy Claude Version — please delete my data",
+        mailto(subject: "Anticipy Claude Version, please delete my data",
                body: "Please delete everything Anticipy Claude Version has heard for me.\n\nMy Anticipy Claude Version ID: \(session.ownerID)\nApp \(versionString)")
     }
 

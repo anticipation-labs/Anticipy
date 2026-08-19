@@ -13,7 +13,7 @@ struct VoiceEnrollView: View {
     private let seconds: Double = 12
     /// Phonetically varied so a few seconds carry a lot of voice. Reading
     /// beats free speech here: everyone stalls when told "just talk".
-    private let script = "Hey — it's me. I'm the one you're listening for. "
+    private let script = "Hey. It's me. I'm the one you're listening for. "
         + "Tomorrow's a long day, so keep an ear out for anything I promise "
         + "someone, and I'll take it from there."
 
@@ -50,7 +50,7 @@ struct VoiceEnrollView: View {
                     .font(Theme.display(30))
                     .foregroundStyle(Theme.ivory)
                 Text("Then I can tell when it's you talking and when it's "
-                     + "someone else — so I never mistake their plans for yours.")
+                     + "someone else, so I never mistake their plans for yours.")
                     .font(.system(size: 17))
                     .foregroundStyle(Theme.sand)
                     .fixedSize(horizontal: false, vertical: true)
@@ -82,7 +82,7 @@ struct VoiceEnrollView: View {
                 Text("I've got you.")
                     .font(Theme.display(30))
                     .foregroundStyle(Theme.ivory)
-                Text("I'll know your voice from now on — and I'll start "
+                Text("I'll know your voice from now on, and I'll start "
                      + "learning the people you talk to most, so I can keep "
                      + "their promises separate from yours.")
                     .font(.system(size: 17))

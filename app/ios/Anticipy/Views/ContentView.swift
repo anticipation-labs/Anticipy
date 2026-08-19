@@ -65,7 +65,7 @@ extension AgentJob {
             return "The page took too long to answer, so I stopped waiting rather than sit there forever."
         }
         if r.contains("net::") || r.contains("failed to fetch") || r.contains("networkerror") || r.contains("err_") || r.contains("offline") {
-            return "The page wouldn't load — that's usually the connection on your computer."
+            return "The page wouldn't load. That's usually the connection on your computer."
         }
         if r.contains("debugger") || r.contains("detached") || r.contains("cancel") {
             return "Chrome cut me off partway through. If you clicked Cancel on the yellow bar, that's what did it."
@@ -231,7 +231,7 @@ struct HomeView: View {
                                 // gate is in exactly that state right now.
                                 if session.ownerPhone.isEmpty {
                                     Text("I have no number for you, so I can't tell you when "
-                                         + "something needs your word — these will just wait. "
+                                         + "something needs your word. These will just wait. "
                                          + "Add it in Settings and I'll start reaching you.")
                                         .font(.system(size: 15))
                                         .foregroundStyle(Theme.champagne)
@@ -239,7 +239,7 @@ struct HomeView: View {
                                 }
                                 if let stale = session.staleExtensionVersion {
                                     Text("Chrome is running the old extension (\(stale)). "
-                                         + "Open chrome://extensions and press Reload to get \(AnticipySession.expectedExtensionVersion) — "
+                                         + "Open chrome://extensions and press Reload to get \(AnticipySession.expectedExtensionVersion)"
                                          + "until then it's working from old instructions.")
                                         .font(.system(size: 15))
                                         .foregroundStyle(Theme.champagne)
@@ -364,7 +364,7 @@ struct HomeView: View {
     /// "Agent unpaired" means nothing to a stranger. This is the same state,
     /// said in words they already own.
     private var agentLabel: String {
-        if !verified { return "Chrome — can't check" }
+        if !verified { return "Chrome, can't check" }
         if !session.agentPaired { return "Chrome not linked" }
         return session.agentOnline ? "Chrome ready" : "Chrome asleep"
     }
@@ -397,12 +397,12 @@ struct HomeView: View {
             return session.pendantCapturing
                 ? "Your pendant audio is being securely transcribed by Deepgram. Finalized words come back to Anticipy Claude Version; the long-lived provider key never enters this phone."
                 : "Your pendant is connected and I'm opening its secure transcription stream. If that service is unavailable, I say so here instead of dropping audio behind a Listening label."
-        case .warmingUp: return "Bluetooth is still waking up. I'll start looking for your pendant the moment it's ready — nothing for you to do."
+        case .warmingUp: return "Bluetooth is still waking up. I'll start looking for your pendant the moment it's ready. Nothing for you to do."
         case .connecting, .reconnecting, .searching: return "I'm looking for your pendant. Listen with phone works right now either way."
         case .unavailable: return "Bluetooth is off, so I can't see the pendant."
         case .off: return pendant.hasPairedPendant
             ? "Your pendant is out of range or switched off."
-            : "You don't have a pendant set up — you don't need one. Your phone is the microphone."
+            : "You don't have a pendant set up. You don't need one. Your phone is the microphone."
         }
     }
 
@@ -447,7 +447,7 @@ struct HomeView: View {
             Label("I can't hear you", systemImage: "mic.slash")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.champagne)
-            Text("The microphone is switched off for Anticipy Claude Version, so tapping Listen won't do anything. iOS only asks once — turn it back on and I'll start the moment you come back.")
+            Text("The microphone is switched off for Anticipy Claude Version, so tapping Listen won't do anything. iOS only asks once. Turn it back on and I'll start the moment you come back.")
                 .font(.callout)
                 .foregroundStyle(Theme.sand)
                 .fixedSize(horizontal: false, vertical: true)
@@ -523,7 +523,7 @@ struct HomeView: View {
             // route change), say so while recovery runs — never glow
             // "Listening" over a dead microphone.
             if session.listener.suspended {
-                Label("Mic interrupted — taking it back…", systemImage: "exclamationmark.triangle")
+                Label("Mic interrupted, taking it back…", systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(Theme.gray)
             }
@@ -675,7 +675,7 @@ struct HomeView: View {
             parts.append("I'm listening.")
         }
         if !needsOK.isEmpty {
-            parts.append("I've got \(needsOK.count) thing\(needsOK.count == 1 ? "" : "s") ready — just say the word.")
+            parts.append("I've got \(needsOK.count) thing\(needsOK.count == 1 ? "" : "s") ready. Just say the word.")
         }
         if !handling.isEmpty {
             parts.append("I'm handling \(handling.count) task\(handling.count == 1 ? "" : "s") right now.")
@@ -709,7 +709,7 @@ struct HomeView: View {
     /// empty-state brand moment, and reads absurd at 2am.
     private var idleLine: String {
         let lines = [
-            "Nothing needs you right now — I've got it covered.",
+            "Nothing needs you right now. I've got it covered.",
             "All quiet on my end. I've got the watch.",
             "Nothing waiting on you. I'll speak up when something matters.",
         ]
@@ -722,7 +722,7 @@ struct HomeView: View {
     private var offLine: String {
         micNeedsHelp
             ? "I can't hear anything until the microphone is back on."
-            : "I'm not listening yet — tap Listen with phone, or wake your pendant, "
+            : "I'm not listening yet, tap Listen with phone, or wake your pendant, "
               + "and I'll start picking things up."
     }
 
@@ -848,7 +848,7 @@ struct HomeView: View {
     }
 
     private var offlineBody: String {
-        let base = "Your phone can't get through to Anticipy Claude Version right now — it's almost always the connection. You can keep talking to me either way."
+        let base = "Your phone can't get through to Anticipy Claude Version right now. It's almost always the connection. You can keep talking to me either way."
         guard session.pendingCount > 0 else { return base }
         return base + " I'm holding \(session.pendingCount) thing\(session.pendingCount == 1 ? "" : "s") you said, and I'll send \(session.pendingCount == 1 ? "it" : "them") the moment we're back."
     }
@@ -867,7 +867,7 @@ struct HomeView: View {
                 .tracking(-0.5)
                 .foregroundStyle(Theme.ivory)
                 .multilineTextAlignment(.center)
-            Text("I reached my server and it turned me away. I'm sorting my own key out — this should clear itself in a moment.")
+            Text("I reached my server and it turned me away. I'm sorting my own key out. This should clear itself in a moment.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
                 .foregroundStyle(Theme.sand)
@@ -901,7 +901,7 @@ struct HomeView: View {
                 .font(Theme.display(40))
                 .tracking(-1.0)
                 .foregroundStyle(Theme.ivory)
-            Text("Live your day. I listen, I understand, and I handle the follow-through — asking before anything is sent.")
+            Text("Live your day. I listen, I understand, and I handle the follow-through, asking before anything is sent.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
                 .foregroundStyle(Theme.sand)
@@ -1013,7 +1013,7 @@ struct ConfirmJobCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(stuck ? "Stuck — I need you" : "Ready — say the word",
+            Label(stuck ? "Stuck. I need you" : "Ready. Say the word",
                   systemImage: stuck ? "hand.raised" : "checkmark.seal")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.champagne)
@@ -1041,7 +1041,7 @@ struct ConfirmJobCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if stuck && !uncertain {
-                TextField("Type what I need — or say you handled it", text: $answer,
+                TextField("Type what I need, or say you handled it", text: $answer,
                           axis: .vertical)
                     .lineLimit(1...4)
                     .font(.callout)
@@ -1055,7 +1055,7 @@ struct ConfirmJobCard: View {
             // this row that reads as a UI glitch, and the natural next move
             // is to tap Send again — which is how one email goes twice.
             if failed {
-                Label("That didn't go through — I couldn't reach Anticipy Claude Version. Nothing was sent.", systemImage: "exclamationmark.triangle")
+                Label("That didn't go through, I couldn't reach Anticipy Claude Version. Nothing was sent.", systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(Theme.sand)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1074,7 +1074,7 @@ struct ConfirmJobCard: View {
                                 Text("Sending…")
                             }
                         } else {
-                            Text(uncertain ? "I checked — try again"
+                            Text(uncertain ? "I checked, try again"
                                  : (failed ? "Try again" : (stuck ? "Send answer" : "Send it")))
                         }
                     }
@@ -1345,7 +1345,7 @@ struct DoneCard: View {
                         .foregroundStyle(Theme.gray)
                         .fixedSize(horizontal: false, vertical: true)
                     if retryFailed {
-                        Text("I couldn't even queue it back up — I can't reach Anticipy Claude Version.")
+                        Text("I couldn't even queue it back up. I can't reach Anticipy Claude Version.")
                             .font(.caption)
                             .foregroundStyle(Theme.gray)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1463,12 +1463,12 @@ struct TranscriptRow: View {
                 if line.goal?.isEmpty == false {
                     HStack(spacing: 5) {
                         Image(systemName: "magnifyingglass").accessibilityHidden(true)
-                        Text("Looking into it — I'll text you what I find")
+                        Text("Looking into it. I'll text you what I find")
                     }
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Theme.champagne.opacity(0.85))
                 } else {
-                    Text("Noted — nothing needed")
+                    Text("Noted. Nothing needed")
                         .font(.caption)
                         .foregroundStyle(Theme.gray)
                 }
@@ -1476,7 +1476,7 @@ struct TranscriptRow: View {
                 if waitedTooLong {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(local
-                             ? "This one is still on your phone — it hasn't reached me yet."
+                             ? "This one is still on your phone, it hasn't reached me yet."
                              : "I have this, but I haven't come back with anything on it.")
                             .font(.caption)
                             .foregroundStyle(Theme.gray)

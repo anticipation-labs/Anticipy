@@ -70,7 +70,7 @@ enum JobReceiptPolicy {
     ///   booking the cardinal sin of the product.
     static func safetyLine(effectUncertain: Bool?) -> String {
         if effectUncertain == true {
-            return "It may already have gone through before it stopped — worth checking the site before I try again, so you don't end up with two."
+            return "It may already have gone through before it stopped. Worth checking the site before I try again, so you don't end up with two."
         }
         return "Nothing you told me was lost. A fresh attempt starts from the beginning rather than changing this record."
     }

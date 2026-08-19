@@ -147,7 +147,7 @@ struct AuthView: View {
                 ruleLine("A real email", satisfied: email.contains("@"))
                 ruleLine("Eight characters or more", satisfied: password.count >= 8)
                 ruleLine("A number I can text", satisfied: Self.looksReachable(phone))
-                Text("Your number is how I reach you when something needs your word — and how you get back in if you forget your password.")
+                Text("Your number is how I reach you when something needs your word, and how you get back in if you forget your password.")
                     .font(.system(size: 15))
                     .lineSpacing(2)
                     .foregroundStyle(Theme.sand)
