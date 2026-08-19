@@ -160,8 +160,60 @@ func runBattery() {
         print("  ok   the dials are ordered")
     }
 }
+
+// ── ex 77 / ex 78: what a finished card leads with, and whether it lies ─────
+
+func runReceipts() {
+    // The receipt leads, verbatim. Never reformatted: ex 126 calls a
+    // paraphrase an invented memory, and ex 44 calls the result evidence.
+    let booked = "Booked: Earls West Van · Thu 7:30 · 4 people · conf #R7K2"
+    let done = JobReceiptPolicy.doneCard(goal: "Book a table for two", result: booked)
+    checkDetail("the receipt leads, untouched", done.lead, booked)
+    checkDetail("the goal drops to context", done.context, "Book a table for two")
+    if done.hasReceipt { print("  ok   a receipt is reported as a receipt") }
+    else { print("  FAIL a receipt is not reported as one"); failures += 1 }
+
+    // Done with nothing to show for it is a claim without a receipt (ex 106:
+    // "Tempted to say 'done.' Only with the receipt in hand."). The old card
+    // silently fell back to the goal, which reads as success.
+    for (name, empty) in [("nil", String?.none), ("blank", ""), ("whitespace", "   \n ")] {
+        let bare = JobReceiptPolicy.doneCard(goal: "Book a table", result: empty)
+        if bare.hasReceipt {
+            print("  FAIL a \(name) result is treated as a receipt"); failures += 1
+        } else if bare.lead == "Book a table" {
+            print("  FAIL a \(name) result silently falls back to the goal"); failures += 1
+        } else {
+            print("  ok   a \(name) result says there is nothing to show")
+        }
+    }
+
+    // ex 78's middle answer. The uncertain case must warn about a duplicate -
+    // ex 36: saying "nothing was done" there "is the sentence that buys a
+    // duplicate booking nobody checks for".
+    let unsure = JobReceiptPolicy.safetyLine(effectUncertain: true)
+    if unsure.lowercased().contains("may already") {
+        print("  ok   an uncertain effect warns before a retry")
+    } else {
+        print("  FAIL an uncertain effect does not warn: \(unsure)"); failures += 1
+    }
+
+    // And the ordinary case must NOT promise a resume, because the retry button
+    // starts a fresh request (ex 108: no confident lies).
+    for flag in [false, Bool?.none] {
+        let safe = JobReceiptPolicy.safetyLine(effectUncertain: flag)
+        let l = safe.lowercased()
+        if l.contains("picks up") || l.contains("where it left off") || l.contains("resume") {
+            print("  FAIL the safety line promises a resume the retry does not do"); failures += 1
+        } else if l.contains("nothing you told me was lost") {
+            print("  ok   the ordinary case reassures without promising a resume")
+        } else {
+            print("  FAIL the ordinary safety line says nothing useful: \(safe)"); failures += 1
+        }
+    }
+}
 runBattery()
-print(failures == 0 ? "\nall pendant radio and battery cases hold"
-                    : "\n\(failures) pendant case(s) came back wrong")
+runReceipts()
+print(failures == 0 ? "\nall pendant and finished-card cases hold"
+                    : "\n\(failures) case(s) came back wrong")
 exit(failures == 0 ? 0 : 1)
 }

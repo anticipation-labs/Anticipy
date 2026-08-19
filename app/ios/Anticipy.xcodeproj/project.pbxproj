@@ -16,6 +16,7 @@
 		559F9FEC6235905176009C57 /* VoiceEnrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */; };
 		57F25F7D221433600AB7BFCE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 11B56391BC84404B937B150F /* Assets.xcassets */; };
 		58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */; };
+		65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1277C9D57923BEE65E84A60 /* JobReceiptPolicy.swift */; };
 		6620D110891CC9F096396E66 /* BoundedOpusQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */; };
 		6B99B2021748028CD2676754 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57259004332BAAB061719DF1 /* Theme.swift */; };
 		732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */; };
@@ -68,6 +69,7 @@
 		E94C340A3EF64050C750BCD7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeardGroup.swift; sourceTree = "<group>"; };
 		F00793646933CBDFE4070BF5 /* PendantManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantManager.swift; sourceTree = "<group>"; };
+		F1277C9D57923BEE65E84A60 /* JobReceiptPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobReceiptPolicy.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -122,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				BE0AB97746861DA294983C3B /* AnticipyBackend.swift */,
+				F1277C9D57923BEE65E84A60 /* JobReceiptPolicy.swift */,
 			);
 			path = Backend;
 			sourceTree = "<group>";
@@ -253,6 +256,7 @@
 				ABAB1EE3B1D325D6B3600473 /* ConversationCard.swift in Sources */,
 				E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */,
 				A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */,
+				65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */,
 				732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */,
 				DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */,
 				58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */,

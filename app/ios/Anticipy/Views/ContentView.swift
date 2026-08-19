@@ -38,6 +38,13 @@ extension AgentJob {
         return normalize(source) == normalize(goal) ? nil : source
     }
 
+    /// docs ex 78's middle answer - is my stuff safe - delegated to a policy
+    /// that can be tested without SwiftUI. `effect_uncertain` is the engine's
+    /// own admission that it could not confirm whether the submit landed.
+    var safetyLine: String {
+        JobReceiptPolicy.safetyLine(effectUncertain: effect_uncertain)
+    }
+
     /// What actually went wrong, said the way a person would say it.
     ///
     /// A failed job used to render one fixed shrug ("Couldn't finish this
@@ -1295,23 +1302,47 @@ struct DoneCard: View {
                 .foregroundStyle(succeeded ? Theme.champagne : Theme.gray)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
-                Text(job.humanGoal)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(Theme.ivory)
                 if succeeded {
-                    if let r = job.result, !r.isEmpty {
-                        Text(r).font(.footnote).foregroundStyle(Theme.gray)
-                            .lineLimit(expanded ? nil : 3)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                Haptics.tap()
-                                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
-                            }
+                    // docs ex 77: the receipt leads. This used to lead with the
+                    // goal in callout weight and put the confirmation number
+                    // underneath in grey footnote with a three-line clamp - the
+                    // one thing the person opened the app for, rendered as the
+                    // small print under a restated question.
+                    let card = JobReceiptPolicy.doneCard(goal: job.humanGoal, result: job.result)
+                    Text(card.lead)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(card.hasReceipt ? Theme.ivory : Theme.sand)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(expanded ? nil : 4)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            Haptics.tap()
+                            withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+                        }
+                    if let context = card.context {
+                        Text(context)
+                            .font(.footnote)
+                            .foregroundStyle(Theme.gray)
                     }
                 } else {
+                    Text(job.humanGoal)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(Theme.ivory)
                     Text(job.failureLine)
                         .font(.footnote)
                         .foregroundStyle(Theme.sand)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // docs ex 78: a failed card must answer THREE things -
+                    // what happened, is my stuff safe, what do I do next.
+                    // failureLine answers the first and the retry button the
+                    // third; the middle one was simply absent, so a person
+                    // reading "I couldn't finish this" had no idea whether
+                    // twenty minutes of filled form was still there. Part 3:
+                    // "Work is never destroyed" - which is worth nothing if
+                    // the person cannot tell.
+                    Text(job.safetyLine)
+                        .font(.caption)
+                        .foregroundStyle(Theme.gray)
                         .fixedSize(horizontal: false, vertical: true)
                     if retryFailed {
                         Text("I couldn't even queue it back up — I can't reach Anticipy Claude Version.")

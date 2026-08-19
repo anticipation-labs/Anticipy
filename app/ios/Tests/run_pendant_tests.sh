@@ -58,6 +58,7 @@ echo "PendantManager routes radio state through PendantRadioPolicy and remembers
 swiftc -O \
     "$app/BLE/PendantRadioPolicy.swift" \
     "$app/BLE/PendantBatteryPolicy.swift" \
+    "$app/Backend/JobReceiptPolicy.swift" \
     "$here/PendantRadioPolicyTests.swift" \
     -o "$out/pendanttests"
 "$out/pendanttests"
