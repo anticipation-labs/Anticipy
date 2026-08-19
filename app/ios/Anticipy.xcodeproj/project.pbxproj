@@ -32,6 +32,7 @@
 		DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F02D4F43DF4322168E31300 /* Notifier.swift */; };
 		E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A935B05F51033496D5EF92C9 /* HapticEngine.swift */; };
 		F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */; };
+		FE3F2EC49604E6841F2D92F4 /* PendantRadioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */; };
 		FF9C51D6755044E050520ADE /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9F21774275ABF326AAC99C /* AuthView.swift */; };
 /* End PBXBuildFile section */
 
@@ -43,6 +44,7 @@
 		2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceEnrollView.swift; sourceTree = "<group>"; };
 		25E2EB04173AB9206E285D54 /* OpusFrameAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusFrameAssembler.swift; sourceTree = "<group>"; };
 		2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTranscriber.swift; sourceTree = "<group>"; };
+		368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantRadioPolicy.swift; sourceTree = "<group>"; };
 		3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		46B2C841F09576CCA3A85B50 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4F02D4F43DF4322168E31300 /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
@@ -100,6 +102,7 @@
 			children = (
 				25E2EB04173AB9206E285D54 /* OpusFrameAssembler.swift */,
 				F00793646933CBDFE4070BF5 /* PendantManager.swift */,
+				368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */,
 			);
 			path = BLE;
 			sourceTree = "<group>";
@@ -252,6 +255,7 @@
 				58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */,
 				4F03FCC48BC0DC5F44A9B300 /* OpusFrameAssembler.swift in Sources */,
 				4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */,
+				FE3F2EC49604E6841F2D92F4 /* PendantRadioPolicy.swift in Sources */,
 				D87272FC45C0E3640E24CA7E /* PhoneListener.swift in Sources */,
 				C4D475F4BA8EF258C2B27C02 /* SettingsView.swift in Sources */,
 				F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */,

@@ -42,6 +42,9 @@ final class PendantManager: NSObject, ObservableObject {
     private var frameAssembler = OpusFrameAssembler()
     private var manuallyDisconnected = false
     private var rssiTimer: Timer?
+    /// Did the owner ask to connect on this launch? Survives the radio warming
+    /// up, which is the whole fix for the dead first tap (PendantRadioPolicy).
+    private var connectRequested = false
 
     override init() {
         super.init()
@@ -69,15 +72,21 @@ final class PendantManager: NSObject, ObservableObject {
 
     func startScan() {
         // The user asked for this, so NOW the Bluetooth prompt is expected.
-        ensureCentral()
-        guard central?.state == .poweredOn else { return }
+        connectRequested = true
         manuallyDisconnected = false
-        state = .searching
-        central?.scanForPeripherals(withServices: [Self.serviceUUID])
+        ensureCentral()
+        // No guard-and-return here. `ensureCentral()` may have just built the
+        // central, in which case its state is `.unknown` for a moment and the
+        // old code silently dropped this request on the floor (docs ex 87).
+        applyRadio()
     }
 
     func disconnect() {
         manuallyDisconnected = true
+        // Disarm the standing request too, or the next radio state callback
+        // would helpfully start scanning again for someone who just asked it
+        // to stop — a Stop that does not stay stopped.
+        connectRequested = false
         stopRssiKeepAlive()
         frameAssembler.discardCurrentFrame()
         if let p = peripheral { central?.cancelPeripheralConnection(p) }
@@ -92,6 +101,43 @@ final class PendantManager: NSObject, ObservableObject {
         deviceName = nil
         battery = nil
     }
+
+    /// Read the radio, ask the policy what that means, and do it.
+    ///
+    /// One funnel for both entry points - the owner's tap and the radio's own
+    /// state callback - so a request made before the radio was ready is acted
+    /// on the moment it becomes ready, instead of being forgotten.
+    private func applyRadio() {
+        let power: PendantRadioPolicy.Power
+        switch central?.state {
+        case .some(.poweredOn): power = .poweredOn
+        case .some(.poweredOff): power = .poweredOff
+        case .some(.unauthorized): power = .unauthorized
+        case .some(.unsupported): power = .unsupported
+        case .some(.resetting): power = .resetting
+        default: power = .unknown
+        }
+
+        switch PendantRadioPolicy.next(power: power,
+                                       connectRequested: connectRequested,
+                                       hasPairedPendant: hasPairedPendant) {
+        case .idle:
+            break
+        case .waitingForRadio:
+            // Searching is the honest word while the radio comes up: the
+            // spinner is already spinning for it, and we are not waiting on
+            // the person for anything.
+            state = .searching
+        case .unavailable:
+            state = .unavailable
+        case .scanNow:
+            state = .searching
+            central?.scanForPeripherals(withServices: [Self.serviceUUID])
+        case .connectSavedNow:
+            connectToSavedPendant()
+        }
+    }
+
 
     // MARK: - Internals
 
@@ -136,13 +182,16 @@ final class PendantManager: NSObject, ObservableObject {
 
 extension PendantManager: CBCentralManagerDelegate, CBPeripheralDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        guard central.state == .poweredOn else {
-            state = .unavailable
-            return
-        }
-        if hasPairedPendant {
-            connectToSavedPendant()
-        }
+        // One funnel, shared with startScan(). This used to be
+        //
+        //     guard central.state == .poweredOn else { state = .unavailable; return }
+        //     if hasPairedPendant { connectToSavedPendant() }
+        //
+        // which had both bugs in four lines: a first-time owner's tap was never
+        // honoured when the radio came up (only remembered pendants were), and
+        // the transient `.unknown`/`.resetting` states on the way up were
+        // reported to the person as "unavailable" (docs ex 87, ex 88).
+        applyRadio()
     }
 
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
