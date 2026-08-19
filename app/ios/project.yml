@@ -6,7 +6,11 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.1.0"
-    CURRENT_PROJECT_VERSION: "62"
+    # docs ex 111: "Bump the version when the bytes change." Five behaviour
+    # commits landed (ex 77, 78, 83, 87, 88, 90), and the brief records build 63
+    # as already shipped while this file still said 62 - so 62 would also have
+    # been refused by App Store Connect as a used build number.
+    CURRENT_PROJECT_VERSION: "64"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

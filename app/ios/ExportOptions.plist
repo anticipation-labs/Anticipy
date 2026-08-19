@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The step between `archive` and `altool` that the onboarding email omits.
+
+  Its upload command reads build/export/Anticipy.ipa, but nothing produces that
+  file: an .xcarchive is not an .ipa, and `xcodebuild -exportArchive` needs this
+  plist to know WHICH kind of export to make. Without `method: app-store` the
+  export re-signs for development, and App Store Connect refuses a development
+  build - which reads as an upload failure rather than a missing config file.
+
+  Committed rather than kept on one laptop, for the same reason the firmware
+  source was committed: a ship path that lives in someone's shell history is a
+  ship path only that person has.
+
+  signingStyle automatic + `-allowProvisioningUpdates` lets the App Store
+  Connect API key mint the distribution certificate and App Store profile. That
+  is the whole reason a team-level key was issued (see the onboarding email):
+  an Individual account cannot grant per-user provisioning rights.
+-->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<!-- "app-store" still works but Xcode 26 warns it is deprecated. -->
+	<string>app-store-connect</string>
+	<key>teamID</key>
+	<string>49T86P9XGW</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<!-- Symbols go up so a crash in TestFlight is readable rather than a hex
+	     dump. docs Part 3: a failure nobody can read is a silent failure. -->
+	<key>uploadSymbols</key>
+	<true/>
+	<!-- Bitcode has been dead since Xcode 14; declaring it false keeps the
+	     export from warning on every run. -->
+	<key>uploadBitcode</key>
+	<false/>
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>
