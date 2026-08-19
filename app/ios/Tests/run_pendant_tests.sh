@@ -39,6 +39,20 @@ if ! grep -q 'connectRequested' "$mgr"; then
     echo "Without it, a tap made before the radio was ready is forgotten."
     exit 2
 fi
+
+# docs ex 83: "no internal vocabulary, no ids ... It must be impossible." The
+# pendant status row rendered `pendant.state.rawValue.capitalized`, which made
+# this enum's spelling the UI copy — adding a case called `warmingUp` put
+# "Warmingup" on the screen. A human string per case lives on the enum now, and
+# nothing in a View may reach for the identifier again.
+views="$app/Views"
+if grep -rn 'state\.rawValue' "$views" --include='*.swift' | grep -vE '^\s*[^:]+:[0-9]+:\s*//'; then
+    echo ""
+    echo "A View renders a ConnectionState identifier instead of words (docs ex 83)."
+    echo "Use PendantManager.ConnectionState.plainWords."
+    exit 2
+fi
+echo "no View renders a connection-state identifier"
 echo "PendantManager routes radio state through PendantRadioPolicy and remembers the request"
 
 swiftc -O \

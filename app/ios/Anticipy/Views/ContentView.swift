@@ -374,6 +374,7 @@ struct HomeView: View {
                 : "Pendant · starting transcription"
         case .connecting: return "Pendant connecting"
         case .reconnecting: return "Pendant reconnecting"
+        case .warmingUp: return "Turning on Bluetooth"
         case .searching: return "Looking for pendant"
         case .unavailable: return "Bluetooth off"
         case .off: return pendant.hasPairedPendant ? "Pendant away" : "No pendant"
@@ -386,6 +387,7 @@ struct HomeView: View {
             return session.pendantCapturing
                 ? "Your pendant audio is being securely transcribed by Deepgram. Finalized words come back to Anticipy Claude Version; the long-lived provider key never enters this phone."
                 : "Your pendant is connected and I'm opening its secure transcription stream. If that service is unavailable, I say so here instead of dropping audio behind a Listening label."
+        case .warmingUp: return "Bluetooth is still waking up. I'll start looking for your pendant the moment it's ready — nothing for you to do."
         case .connecting, .reconnecting, .searching: return "I'm looking for your pendant. Listen with phone works right now either way."
         case .unavailable: return "Bluetooth is off, so I can't see the pendant."
         case .off: return pendant.hasPairedPendant

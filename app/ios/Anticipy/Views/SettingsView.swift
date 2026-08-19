@@ -86,7 +86,10 @@ struct SettingsView: View {
                 HStack {
                     Text("Status")
                     Spacer()
-                    Text(pendant.state.rawValue.capitalized)
+                    // Was `pendant.state.rawValue.capitalized`, which made this
+                    // enum's spelling the UI copy and would have rendered
+                    // "Warmingup" the moment a case was added (docs ex 83).
+                    Text(pendant.state.plainWords)
                         .foregroundStyle(Theme.gray)
                 }
                 if let b = pendant.battery {

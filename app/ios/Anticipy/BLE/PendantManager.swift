@@ -25,7 +25,29 @@ final class PendantManager: NSObject, ObservableObject {
     private static let savedUUIDKey = "anticipy.pendant.uuid"
 
     enum ConnectionState: String {
+        /// The owner asked, and we are waiting for the Bluetooth radio itself to
+        /// finish coming up. Distinct from `.searching` on purpose: "Looking for
+        /// pendant" is not true yet, and docs ex 88 is about the app never
+        /// describing a state it is not actually in.
+        case warmingUp
         case off, unavailable, searching, connecting, connected, reconnecting
+
+        /// What a person may read. `rawValue` is an identifier, not English:
+        /// SettingsView rendered `rawValue.capitalized` straight onto the
+        /// screen, so this enum's spelling was the UI copy - "Warmingup",
+        /// "Reconnecting". docs ex 83: no ids, no status words, no raw strings
+        /// ever rendered, and it must be impossible rather than merely avoided.
+        var plainWords: String {
+            switch self {
+            case .warmingUp: return "Turning on Bluetooth"
+            case .off: return "Not connected"
+            case .unavailable: return "Bluetooth off"
+            case .searching: return "Looking for your pendant"
+            case .connecting: return "Connecting"
+            case .connected: return "Connected"
+            case .reconnecting: return "Reconnecting"
+            }
+        }
     }
 
     @Published var state: ConnectionState = .off
@@ -124,10 +146,11 @@ final class PendantManager: NSObject, ObservableObject {
         case .idle:
             break
         case .waitingForRadio:
-            // Searching is the honest word while the radio comes up: the
-            // spinner is already spinning for it, and we are not waiting on
-            // the person for anything.
-            state = .searching
+            // NOT `.searching` — we have not started looking for a pendant yet,
+            // we are waiting for the radio to finish waking up. Saying "Looking
+            // for pendant" here would be the app describing a state it is not
+            // in, which is the whole of docs ex 88.
+            state = .warmingUp
         case .unavailable:
             state = .unavailable
         case .scanNow:
