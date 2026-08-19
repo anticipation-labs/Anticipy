@@ -92,11 +92,15 @@ struct SettingsView: View {
                     Text(pendant.state.plainWords)
                         .foregroundStyle(Theme.gray)
                 }
-                if let b = pendant.battery {
+                // Same function as the status pill, so the two surfaces cannot
+                // drift into telling the person different things (docs ex 90).
+                if let battery = PendantBatteryPolicy.detail(percent: pendant.battery) {
                     HStack {
                         Text("Battery")
                         Spacer()
-                        Text("\(b)%").foregroundStyle(Theme.gray)
+                        Text(battery)
+                            .foregroundStyle(PendantBatteryPolicy.warning(percent: pendant.battery) == .critical
+                                             ? Theme.sand : Theme.gray)
                     }
                 }
                 if let r = pendant.rssi {

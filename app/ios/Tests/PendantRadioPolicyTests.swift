@@ -94,7 +94,74 @@ check("radio up, no pendant, no request: nothing happens",
                               hasPairedPendant: false),
       .idle)
 
-print(failures == 0 ? "\nall pendant radio cases hold"
-                    : "\n\(failures) pendant radio case(s) came back wrong")
+
+// ── ex 90: a dying pendant must say so before it dies ───────────────────────
+
+func checkBattery(_ name: String, _ got: PendantBatteryPolicy.Warning,
+                  _ want: PendantBatteryPolicy.Warning) {
+    if got == want {
+        print("  ok   \(name)")
+    } else {
+        print("  FAIL \(name): got \(got), want \(want)")
+        failures += 1
+    }
+}
+
+func checkDetail(_ name: String, _ got: String?, _ want: String?) {
+    if got == want {
+        print("  ok   \(name)")
+    } else {
+        print("  FAIL \(name): got \(got ?? "nil"), want \(want ?? "nil")")
+        failures += 1
+    }
+}
+
+func runBattery() {
+    // A level we have never been told is not a level we may warn about. An
+    // invented warning about someone's hardware is the same class of lie as an
+    // invented memory (ex 56 / Part 2·5).
+    checkBattery("an unknown level says nothing",
+                 PendantBatteryPolicy.warning(percent: nil), .none)
+    checkDetail("an unknown level renders no row",
+                PendantBatteryPolicy.detail(percent: nil), nil)
+
+    checkBattery("a healthy level says nothing",
+                 PendantBatteryPolicy.warning(percent: 80), .none)
+
+    // The boundaries, both sides. An off-by-one here is the whole bug: it either
+    // warns a person whose pendant is fine, or stays quiet on one that is dying.
+    let low = PendantBatteryPolicy.lowAtPercent
+    let crit = PendantBatteryPolicy.criticalAtPercent
+    checkBattery("one above the low dial is still quiet",
+                 PendantBatteryPolicy.warning(percent: low + 1), .none)
+    checkBattery("exactly the low dial warns",
+                 PendantBatteryPolicy.warning(percent: low), .low)
+    checkBattery("one above the critical dial is only low",
+                 PendantBatteryPolicy.warning(percent: crit + 1), .low)
+    checkBattery("exactly the critical dial is critical",
+                 PendantBatteryPolicy.warning(percent: crit), .critical)
+    checkBattery("flat is critical",
+                 PendantBatteryPolicy.warning(percent: 0), .critical)
+
+    // The words a person actually reads. No status words, no numbers to
+    // interpret, and the number kept alongside so nothing is hidden (ex 83).
+    checkDetail("a healthy level shows just the number",
+                PendantBatteryPolicy.detail(percent: 80), "80%")
+    checkDetail("a low level says what to do",
+                PendantBatteryPolicy.detail(percent: low), "\(low)% · charge it soon")
+    checkDetail("a dying level says so plainly",
+                PendantBatteryPolicy.detail(percent: crit), "\(crit)% · about to die")
+
+    // The dials must stay ordered, or the ladder is nonsense.
+    if crit >= low {
+        print("  FAIL the critical dial is not below the low dial")
+        failures += 1
+    } else {
+        print("  ok   the dials are ordered")
+    }
+}
+runBattery()
+print(failures == 0 ? "\nall pendant radio and battery cases hold"
+                    : "\n\(failures) pendant case(s) came back wrong")
 exit(failures == 0 ? 0 : 1)
 }

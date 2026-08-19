@@ -22,6 +22,7 @@
 		7E48A45EE188911B2EFB7A66 /* TranscriberClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3C23460620BAF04806F594 /* TranscriberClient.swift */; };
 		946396466F25E501C639DFF1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8095C94E5CB8E9048543E8B5 /* PrivacyInfo.xcprivacy */; };
 		993491F4C18D27922491739D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7686379B8FF9FE21D398381F /* ContentView.swift */; };
+		9D99735C613237B976EDFB95 /* PendantBatteryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C300D8A79FC68733630D6 /* PendantBatteryPolicy.swift */; };
 		A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */; };
 		ABAB1EE3B1D325D6B3600473 /* ConversationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B72B7E633EA125C09A7923 /* ConversationCard.swift */; };
 		ACABFE3C263343D8760C012E /* TranscriptCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD1CE1C9359C9DF75AA38DE /* TranscriptCursor.swift */; };
@@ -38,6 +39,7 @@
 
 /* Begin PBXFileReference section */
 		008EC9F3B3E9368F8EBD22BF /* Anticipy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Anticipy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0B0C300D8A79FC68733630D6 /* PendantBatteryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantBatteryPolicy.swift; sourceTree = "<group>"; };
 		10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakerTagger.swift; sourceTree = "<group>"; };
 		11B56391BC84404B937B150F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRoster.swift; sourceTree = "<group>"; };
@@ -101,6 +103,7 @@
 			isa = PBXGroup;
 			children = (
 				25E2EB04173AB9206E285D54 /* OpusFrameAssembler.swift */,
+				0B0C300D8A79FC68733630D6 /* PendantBatteryPolicy.swift */,
 				F00793646933CBDFE4070BF5 /* PendantManager.swift */,
 				368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */,
 			);
@@ -254,6 +257,7 @@
 				DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */,
 				58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */,
 				4F03FCC48BC0DC5F44A9B300 /* OpusFrameAssembler.swift in Sources */,
+				9D99735C613237B976EDFB95 /* PendantBatteryPolicy.swift in Sources */,
 				4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */,
 				FE3F2EC49604E6841F2D92F4 /* PendantRadioPolicy.swift in Sources */,
 				D87272FC45C0E3640E24CA7E /* PhoneListener.swift in Sources */,

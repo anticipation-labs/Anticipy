@@ -327,7 +327,10 @@ struct HomeView: View {
                         icon: "dot.radiowaves.left.and.right",
                         label: pendantLabel,
                         active: pendant.state == .connected,
-                        detail: pendant.battery.map { "\($0)%" },
+                        // A percentage alone made the person work out what 12%
+                        // means for hardware they have owned a week. The policy
+                        // owns both the threshold and the words (docs ex 90).
+                        detail: PendantBatteryPolicy.detail(percent: pendant.battery),
                         note: pendantNote
                     )
                     statusPill(
