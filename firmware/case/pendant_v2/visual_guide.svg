@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1560" font-family="Helvetica,Arial,sans-serif">
+  <rect width="1200" height="1560" fill="#0c0c0c"/>
+  <text x="600" y="52" fill="#c8a97e" font-size="30" text-anchor="middle" font-weight="bold">Anticipy Pendant — Stupid-Simple Build Guide (Bambu Lab P2S)</text>
+
+  <!-- STEP 1 -->
+  <rect x="40" y="90" width="1120" height="150" rx="14" fill="#161616" stroke="#c8a97e" stroke-width="1.5"/>
+  <circle cx="95" cy="165" r="30" fill="#c8a97e"/><text x="95" y="176" font-size="30" text-anchor="middle" fill="#0c0c0c" font-weight="bold">1</text>
+  <text x="150" y="135" fill="#f5f0eb" font-size="20" font-weight="bold">CLIP THE HEADER PINS OFF THE BOARD (2 minutes, do this first)</text>
+  <text x="150" y="165" fill="#bbb" font-size="15">Flush cutters: snip each gold pin flush with the board, both sides. Board must end up 5 mm thick.</text>
+  <text x="150" y="190" fill="#bbb" font-size="15">Nothing fits with the pins on. This is the single most important step.</text>
+  <text x="150" y="218" fill="#777" font-size="13">Need cutters? amazon.ca → search "flush cutters electronics"</text>
+
+  <!-- STEP 2 -->
+  <rect x="40" y="260" width="1120" height="185" rx="14" fill="#161616" stroke="#c8a97e" stroke-width="1.5"/>
+  <circle cx="95" cy="350" r="30" fill="#c8a97e"/><text x="95" y="361" font-size="30" text-anchor="middle" fill="#0c0c0c" font-weight="bold">2</text>
+  <text x="150" y="303" fill="#f5f0eb" font-size="20" font-weight="bold">PICK YOUR VERSION &amp; PRINT IT (silver PETG, files in firmware/case/pendant_v2/stl/)</text>
+  <text x="150" y="335" fill="#9ad" font-size="15">A  Slim (200 mAh) — shell_200mah + back_200mah — print ≈ 55 min + 25 min</text>
+  <text x="150" y="360" fill="#9ad" font-size="15">C  Workhorse (500 mAh + storage + USB) — shell_500mah_storage_usb + back_500mah_storage — ≈ 1 h 30 + 35 min</text>
+  <text x="150" y="385" fill="#9ad" font-size="15">E  Clean face, zero holes (200 mAh + buzz) — shell_200mah_clean + back_200mah_haptic — ≈ 55 min + 25 min</text>
+  <text x="150" y="415" fill="#bbb" font-size="14">Slicer settings: 0.12 mm layer · 4 walls · 40% infill · outer wall 60 mm/s · front face DOWN on the textured plate · tree supports (build plate only)</text>
+
+  <!-- STEP 3 -->
+  <rect x="40" y="465" width="1120" height="150" rx="14" fill="#161616" stroke="#c8a97e" stroke-width="1.5"/>
+  <circle cx="95" cy="540" r="30" fill="#c8a97e"/><text x="95" y="551" font-size="30" text-anchor="middle" fill="#0c0c0c" font-weight="bold">3</text>
+  <text x="150" y="510" fill="#f5f0eb" font-size="20" font-weight="bold">SOLDER 2 WIRES (that's the whole circuit)</text>
+  <text x="150" y="542" fill="#e74c3c" font-size="15">RED: battery + → BAT+ pad on the back of the board</text>
+  <text x="150" y="567" fill="#eee" font-size="15">BLACK: battery − → BAT− pad. Tape the leads apart while you work. Check polarity with a multimeter before power-on.</text>
+  <text x="150" y="595" fill="#777" font-size="13">Kapton tape over the pads when done. Charging is automatic through USB-C — the charger chip is already on the board.</text>
+
+  <!-- STEP 4 -->
+  <rect x="40" y="635" width="1120" height="130" rx="14" fill="#161616" stroke="#c8a97e" stroke-width="1.5"/>
+  <circle cx="95" cy="700" r="30" fill="#c8a97e"/><text x="95" y="711" font-size="30" text-anchor="middle" fill="#0c0c0c" font-weight="bold">4</text>
+  <text x="150" y="680" fill="#f5f0eb" font-size="20" font-weight="bold">PAD &amp; PLACE</text>
+  <text x="150" y="712" fill="#bbb" font-size="15">Stick 1 mm foam on both faces of the battery. Battery goes in first (bottom), board on top, USB-C facing the bottom edge.</text>
+  <text x="150" y="740" fill="#bbb" font-size="15">Storage version: press the flash board into the pocket inside the back cover before closing.</text>
+
+  <!-- STEP 5 -->
+  <rect x="40" y="785" width="1120" height="130" rx="14" fill="#161616" stroke="#c8a97e" stroke-width="1.5"/>
+  <circle cx="95" cy="850" r="30" fill="#c8a97e"/><text x="95" y="861" font-size="30" text-anchor="middle" fill="#0c0c0c" font-weight="bold">5</text>
+  <text x="150" y="830" fill="#f5f0eb" font-size="20" font-weight="bold">CLOSE IT — press, then 2 screws</text>
+  <text x="150" y="862" fill="#bbb" font-size="15">Press the back cover in (the lip aligns it), then drive one M1.4 screw into each side hole. They self-tap — no nuts, no glue.</text>
+  <text x="150" y="890" fill="#bbb" font-size="15">It cannot pop open. To recharge version A/E: remove 2 screws, pop the back.</text>
+
+  <!-- STEP 6 -->
+  <rect x="40" y="935" width="1120" height="120" rx="14" fill="#161616" stroke="#c8a97e" stroke-width="1.5"/>
+  <circle cx="95" cy="995" r="30" fill="#c8a97e"/><text x="95" y="1006" font-size="30" text-anchor="middle" fill="#0c0c0c" font-weight="bold">6</text>
+  <text x="150" y="978" fill="#f5f0eb" font-size="20" font-weight="bold">CHAIN</text>
+  <text x="150" y="1010" fill="#bbb" font-size="15">Thread a 2.5–3 mm stainless chain straight through the hole in the top of the body. No jump rings, no glued loops, nothing to break.</text>
+  <text x="150" y="1035" fill="#777" font-size="13">amazon.ca → "2.5mm stainless steel necklace chain 60cm"</text>
+
+  <!-- Printer facts -->
+  <rect x="40" y="1075" width="548" height="250" rx="14" fill="#101820" stroke="#3498db" stroke-width="1.5"/>
+  <text x="70" y="1112" fill="#3498db" font-size="19" font-weight="bold">Your printer: P2S speed facts</text>
+  <text x="70" y="1145" fill="#ccc" font-size="14">• Max toolhead speed: 600 mm/s (spec) — never used for real parts</text>
+  <text x="70" y="1170" fill="#ccc" font-size="14">• Bambu PETG default: ~200 mm/s outer wall — too fast, looks sloppy</text>
+  <text x="70" y="1195" fill="#ccc" font-size="14">• For a silver jewelry finish: outer wall 60 mm/s, inner 120 mm/s</text>
+  <text x="70" y="1220" fill="#ccc" font-size="14">• These parts are tiny — the printer is idling either way.</text>
+  <text x="70" y="1245" fill="#ccc" font-size="14">• 0.12 mm "Fine" layers ≈ 2× the time of 0.20 mm, worth it here</text>
+  <text x="70" y="1270" fill="#ccc" font-size="14">• Textured PEI plate, 255 °C nozzle, 70 °C bed, glue stick optional</text>
+  <text x="70" y="1295" fill="#777" font-size="13">Times in Step 2 are at these settings; Bambu Studio shows exact time when you slice.</text>
+
+  <!-- Shopping -->
+  <rect x="612" y="1075" width="548" height="250" rx="14" fill="#1a1410" stroke="#c8a97e" stroke-width="1.5"/>
+  <text x="642" y="1112" fill="#c8a97e" font-size="19" font-weight="bold">Amazon.ca (search, top Prime result)</text>
+  <text x="642" y="1145" fill="#ccc" font-size="14">• "502025 lipo battery 200mah 3.7v" — small battery</text>
+  <text x="642" y="1170" fill="#ccc" font-size="14">• "M1.4 self tapping screws laptop" — case screws</text>
+  <text x="642" y="1195" fill="#ccc" font-size="14">• "W25Q128 spi flash module" — storage board (~$10)</text>
+  <text x="642" y="1220" fill="#ccc" font-size="14">• "10mm coin vibration motor 3v" — haptic buzz</text>
+  <text x="642" y="1245" fill="#ccc" font-size="14">• "28 awg silicone wire kit" + "1mm adhesive eva foam sheet"</text>
+  <text x="642" y="1270" fill="#ccc" font-size="14">• "kapton tape 10mm" + "2.5mm stainless steel necklace chain 60cm"</text>
+  <text x="642" y="1295" fill="#777" font-size="13">You already have: 500 mAh battery, board, solder, PETG.</text>
+
+  <!-- Plan -->
+  <rect x="40" y="1345" width="1120" height="170" rx="14" fill="#14200f" stroke="#7ec850" stroke-width="1.5"/>
+  <text x="70" y="1382" fill="#7ec850" font-size="19" font-weight="bold">Plan for the 27th</text>
+  <text x="70" y="1415" fill="#ccc" font-size="15">Tonight: print Version A (≈ 1 h 20 total). Drop your board + battery in WITHOUT soldering — just check the fit.</text>
+  <text x="70" y="1443" fill="#ccc" font-size="15">Fits? Solder the 2 wires, close it, wear it. Then print Version C for the real demo unit (≈ 2 h).</text>
+  <text x="70" y="1471" fill="#ccc" font-size="15">Doesn't fit? Tell me which part rubs and by how much — it's a one-number fix and a reprint.</text>
+  <text x="70" y="1499" fill="#777" font-size="13">Everything above is in the repo: firmware/case/pendant_v2/ (STLs, CAD source, README).</text>
+</svg>
