@@ -10,6 +10,7 @@ Run:  .venv/bin/python -m brain.worker
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -1857,6 +1858,97 @@ def claim(event_id: str) -> bool:
     return mark_processed(event_id, "processing")
 
 
+def handle_inbound(ev: dict, convo, anticipy) -> str:
+    """Handle ONE answer from the owner, whichever channel it arrived on.
+
+    Extracted from main()'s loop so it can be tested against the real thing.
+    proof/test_never_silent.py used to re-type this logic into its own harness
+    and then grep worker.py for a `print` to confirm the real code still had the
+    guard -- which is a test of a copy plus a test of a string. Anything that
+    drives this function is testing what production runs.
+
+    Returns the decision it recorded, for the log and for tests.
+    """
+    in_app = ev.get("kind") == "app_reply"
+    lane = "app in" if in_app else "sms in"
+    text = ev.get("text", "").strip()
+    # One conversation key for both channels (docs leg 2 "IT WAS ONE
+    # CONVERSATION"). The app sends no phone, so it uses the owner's own number
+    # and lands in the SAME thread his texts do; answering in the app continues
+    # the conversation rather than starting a second one beside it.
+    phone = ev.get("goal", "").strip() or anticipy.owner_phone
+    if in_app:
+        phone = anticipy.owner_phone or f"app:{anticipy.owner_ref}"
+    if not text:
+        mark_processed(ev["id"], "ignore")
+        return "ignore"
+
+    # ONLY the owner may steer the queue, and the two channels prove that
+    # differently -- neither proof substitutes for the other.
+    #
+    # SMS: Twilio's token proves the webhook is Twilio, NOT who texted. Without
+    # this check any stranger (or a wrong number) texting "yes" releases a held
+    # job into the owner's browser, "no" cancels it, and Anticipy replies to
+    # them with the owner's private pending list.
+    #
+    # App: the row could only exist if a signed-in account created it --
+    # backend/pb_hooks/guard.pb.js:159 accepts a POST to `events` only when
+    # `owner_ref === authId`, so an account cannot write a row stamped with
+    # someone else's owner_ref. With fetch_unprocessed()'s owner scoping, the
+    # row IS the proof of who typed it. Demanding same_phone() here as well
+    # would refuse every answer from an owner who has given no phone number,
+    # which is the entire point of answering in the app.
+    if not in_app and not same_phone(phone, anticipy.owner_phone):
+        mark_processed(ev["id"], "ignored_nonowner")
+        print(f"{lane}: from non-owner {phone!r} — ignored")
+        return "ignored_nonowner"
+    if not claim(ev["id"]):
+        print(f"{lane}: could not claim, retrying later")
+        return "unclaimed"
+
+    # An answer typed in the app is answered in the app. This is NOT a ruling on
+    # whether SMS is primary or a backstop -- that question stays open -- only
+    # that a reply belongs on the channel the answer arrived on.
+    deliver = convo.reply_in_app() if in_app else contextlib.nullcontext()
+    with deliver:
+        try:
+            out = convo.on_reply(phone, text)
+        except Exception as e:
+            mark_processed(ev["id"], "error")
+            print(f"{lane}: {text!r} -> error: {e}")
+            # He answered and heard nothing back -- and because the event is
+            # marked processed it will never be retried, so the silence is
+            # permanent. That is exactly what he lived on 2026-08-01: "yea grab
+            # it pls" and "I want to see the Odyssey at Cineplex Park Royal"
+            # both hit an exception and simply vanished. Whatever broke, he
+            # gets an answer.
+            try:
+                reply = anticipy._voice({
+                    "situation": "your own reasoning just failed on their "
+                                 "message and you have no idea what they "
+                                 "wanted — own it briefly and ask them to "
+                                 "say it again",
+                    "their_message": text,
+                }) or ("Something went wrong on my end just then — "
+                       "can you send that again?")
+                convo.say(phone, reply)
+                # The apology has to reach the app too, or answering in the app
+                # and hitting an error is the same silence in a new place.
+                if in_app:
+                    post_event("anticipy_text", reply)
+            except Exception as e2:
+                print(f"{lane}: could not even apologise: {e2}")
+            return "error"
+
+    mark_processed(ev["id"], out["intent"])
+    # How an in-app reply is DELIVERED: the app reads this row. The SMS lane has
+    # already sent by now and records it here too, so both channels leave one
+    # history rather than two (docs leg 2).
+    post_event("anticipy_text", out["reply"])
+    print(f"{lane}: {text!r} -> {out['intent']}")
+    return out["intent"]
+
+
 def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -> int:
     """Give back events claimed by a worker that never finished them.
 
@@ -2311,53 +2403,21 @@ def main() -> None:
                 print(f"heard: {line!r} -> {decision}"
                       f" ({out['decision'].goal or 'no goal'})")
 
-            # Inbound texts (Twilio webhook -> pb_hooks -> events) flow through
-            # the same conversation the pendant path uses; the reply goes back
-            # out over the live transport.
-            for ev in fetch_unprocessed("sms_reply", anticipy.owner_ref):
-                text = ev.get("text", "").strip()
-                phone = ev.get("goal", "").strip() or anticipy.owner_phone
-                if not text:
-                    mark_processed(ev["id"], "ignore")
-                    continue
-                # ONLY the owner may steer the queue. Twilio's token proves the
-                # webhook is Twilio, NOT who texted: without this, any stranger
-                # (or a wrong number) texting "yes" releases a held job into
-                # the owner's browser, "no" cancels it, and Anticipy replies
-                # to them with the owner's private pending list.
-                if not same_phone(phone, anticipy.owner_phone):
-                    mark_processed(ev["id"], "ignored_nonowner")
-                    print(f"sms in: from non-owner {phone!r} — ignored")
-                    continue
-                if not claim(ev["id"]):
-                    print("sms in: could not claim, retrying later")
-                    continue
-                try:
-                    out = convo.on_reply(phone, text)
-                except Exception as e:
-                    mark_processed(ev["id"], "error")
-                    print(f"sms in: {text!r} -> error: {e}")
-                    # He texted and heard nothing back — and because the event
-                    # is marked processed it will never be retried, so the
-                    # silence is permanent. That is exactly what he lived on
-                    # 2026-08-01: "yea grab it pls" and "I want to see the
-                    # Odyssey at Cineplex Park Royal" both hit an exception and
-                    # simply vanished. Whatever broke, he gets an answer.
-                    try:
-                        convo.say(phone, anticipy._voice({
-                            "situation": "your own reasoning just failed on their "
-                                         "message and you have no idea what they "
-                                         "wanted — own it briefly and ask them to "
-                                         "say it again",
-                            "their_message": text,
-                        }) or "Something went wrong on my end just then — "
-                              "can you send that again?")
-                    except Exception as e2:
-                        print(f"sms in: could not even apologise: {e2}")
-                    continue
-                mark_processed(ev["id"], out["intent"])
-                post_event("anticipy_text", out["reply"])
-                print(f"sms in: {text!r} -> {out['intent']}")
+            # THE one answer path. An owner answers a question by text (Twilio
+            # webhook -> pb_hooks -> events) or by typing into the app (the app
+            # writes the row itself), and both arrive at the single `on_reply`
+            # inside handle_inbound().
+            #
+            # Deliberately one path rather than two, because brief ex 120 is
+            # explicit that a second path to a decision this one already owns is
+            # the bug: the 2026-08-02 two-blocked-tasks failure came from an
+            # answer that resolved nothing, and Conversation._resume_stuck is
+            # the only resolution. A parallel in-app implementation would have
+            # to reimplement release, cancel, refinement and the stuck-task
+            # resume, and would drift from this one the first time either moved.
+            for ev in fetch_unprocessed("sms_reply", anticipy.owner_ref) + \
+                    fetch_unprocessed("app_reply", anticipy.owner_ref):
+                handle_inbound(ev, convo, anticipy)
 
             # The research lane runs HERE, in this process. Read-only goals
             # never wait for — or touch — his browser (roadmap §6).

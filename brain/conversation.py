@@ -23,6 +23,7 @@ aren't deployed).
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import time
@@ -210,13 +211,48 @@ class Turn:
 
 
 class Conversation:
-    """One continuous SMS thread between Anticipy and her owner."""
+    """One continuous conversation between Anticipy and her owner.
+
+    Not "one SMS thread" any more, and the distinction is load-bearing. The
+    owner can answer a question by text or by typing into the app, and both
+    must land in the SAME conversation: docs leg 2 is "IT WAS ONE
+    CONVERSATION", and brief ex 120 forbids a second path to a decision this
+    one already owns. So `phone` below is a CONVERSATION KEY and a reply
+    address -- every lookup of jobs, profile and history goes through
+    `_owner_filter()` instead, which is why one function can serve both
+    channels without knowing which it is serving.
+    """
 
     def __init__(self, anticipy, transport=None, llm: Optional[LLM] = None):
         self.anticipy = anticipy
         self.transport = transport or MockTransport()
         self.llm = llm or anticipy.llm
         self.threads: dict[str, list[Turn]] = {}
+        # Set only inside `reply_in_app()`. See say().
+        self._reply_suppressed = False
+
+    @contextlib.contextmanager
+    def reply_in_app(self):
+        """Answer the owner where he answered HER, not by text.
+
+        Whether SMS is the primary channel or a backstop is an open product
+        question (docs Part 5 demotes it; the owner has asked for the
+        opposite), and this deliberately does not settle it. It settles
+        something narrower and uncontroversial: a reply belongs on the channel
+        the answer arrived on. Typing into the app and being texted back is a
+        second conversation about one exchange, which is the split ex 120
+        warns about.
+
+        The pattern is copied rather than invented: the SMS webhook already
+        suppresses the transport while it rides the TwiML response
+        (`backend/sms_server.py` `_SMSTransport.suppress`).
+        """
+        prev = self._reply_suppressed
+        self._reply_suppressed = True
+        try:
+            yield
+        finally:
+            self._reply_suppressed = prev
 
     def _owner_filter(self) -> str:
         """Canonical tenant boundary, with legacy compatibility for tests.
@@ -255,6 +291,12 @@ class Conversation:
                 return {"to": phone, "body": body, "deduped": True}
             break
         thread.append(Turn("anticipy", body))
+        if self._reply_suppressed:
+            # The turn is still recorded, so this is one conversation and the
+            # dedupe above still sees it. Only the SMS leg is skipped: the
+            # caller is delivering this reply on the channel the answer came
+            # in on. See reply_in_app().
+            return {"to": phone, "body": body, "via": "in-app"}
         return self.transport.send(phone, body)
 
     def reach_out(self, phone: str, about: str) -> dict:

@@ -45,43 +45,70 @@ class Resp:
     def raise_for_status(self): pass
 
 
-def run_inbound(text: str, blow_up: bool, voice_works: bool = True):
-    """Drive one inbound message through the worker's handling. Returns what
-    he actually received."""
-    said = []
-    events = [{"id": "e1", "text": text, "goal": "+16047245161", "kind": "sms_reply"}]
+def run_inbound(text: str, blow_up: bool, voice_works: bool = True,
+                kind: str = "sms_reply"):
+    """Drive one inbound message through the worker's REAL handling.
 
-    W.pb.get = lambda url, **kw: Resp(events if "/events/" in url else [])
+    This used to re-type the worker's inbound block here and then grep
+    worker.py for a `print` to check the real code still had the guard -- a test
+    of a copy plus a test of a string, which is why the copy was free to drift.
+    handle_inbound() is now the function main() calls, so this exercises
+    production.
+    """
+    said = []
+    posted = []
+    ev = {"id": "e1", "text": text, "goal": "+16047245161", "kind": kind,
+          "owner_ref": "ref1"}
+    if kind == "app_reply":
+        ev["goal"] = ""
+
+    W.pb.get = lambda url, **kw: Resp([ev] if "/events/" in url else [])
     W.pb.post = lambda url, **kw: Resp()
     W.pb.patch = lambda url, **kw: Resp()
+    W.post_event = lambda kind_, text_, **kw: posted.append(text_)
 
     class Convo:
+        """Faithful to the collaborator handle_inbound actually gets.
+
+        The real Conversation.say() records the turn but SKIPS the transport
+        while reply_in_app() is open (verified: transport sends do not advance
+        inside the block), because the caller delivers that reply on the channel
+        the answer came in on. A stub that texts anyway reports a double
+        delivery that production does not have.
+        """
+
+        def __init__(self):
+            self.suppressed = False
+
         def on_reply(self, phone, t):
             if blow_up:
                 raise AttributeError("'list' object has no attribute 'transport'")
             return {"intent": "confirm", "reply": "On it."}
+
         def say(self, phone, msg):
-            said.append(msg)
+            if not self.suppressed:
+                said.append(msg)
+
+        def reply_in_app(self):
+            import contextlib
+
+            @contextlib.contextmanager
+            def cm():
+                self.suppressed = True
+                try:
+                    yield
+                finally:
+                    self.suppressed = False
+            return cm()
 
     anticipy = types.SimpleNamespace(
-        owner_phone="+16047245161", owner_id="X",
+        owner_phone="+16047245161", owner_ref="ref1", owner_id="X",
         _voice=(lambda ctx: "That one got away from me — say it again?")
                if voice_works else (lambda ctx: None))
 
-    convo = Convo()
-    # The worker's inbound block, exercised directly.
-    try:
-        out = convo.on_reply("+16047245161", text)
-    except Exception:
-        try:
-            convo.say("+16047245161", anticipy._voice({
-                "situation": "your own reasoning just failed", "their_message": text,
-            }) or "Something went wrong on my end just then — can you send that again?")
-        except Exception:
-            pass
-        return said
-    convo.say("+16047245161", out["reply"])
-    return said
+    W.handle_inbound(ev, Convo(), anticipy)
+    # What he received, by either route: a text, or a row the app renders.
+    return said + posted
 
 
 # --- the normal path still works ------------------------------------------
@@ -101,14 +128,26 @@ check("the Cineplex message would not vanish today", len(got) == 1, f"{got}")
 got = run_inbound("yea grab it pls", blow_up=True, voice_works=False)
 check("with the model down he still hears something", len(got) == 1, f"{got}")
 
-# --- the real worker actually has this guard ------------------------------
+# --- the app lane must not reintroduce the silence in a new place ----------
+got = run_inbound("7pm works", blow_up=True, kind="app_reply")
+check("a crash on an in-app answer still answers him", len(got) == 1, f"{got}")
+check("...and it lands where the app can render it",
+      got and "again" in got[0].lower(), f"{got}")
+
+# --- the function under test is the one production calls -------------------
+# The old version of this check grepped worker.py for a print string, which
+# tested a string. What matters is that main() still delegates here: re-inlining
+# the loop would leave handle_inbound orphaned and every test above green while
+# production ran something else.
 import inspect
-src = inspect.getsource(W.main) if hasattr(W, "main") else ""
-if not src:
-    src = open(W.__file__).read()
-after_error = src.split('print(f"sms in: {text!r} -> error')[-1][:600]
-check("the guard is in worker.py, not just in this test",
-      "convo.say(" in after_error, "the except branch does not speak")
+main_src = inspect.getsource(W.main)
+check("main() delegates to the handler these tests drive",
+      "handle_inbound(" in main_src,
+      "main() no longer calls handle_inbound — these tests now prove nothing")
+check("both channels are read into that one handler",
+      'fetch_unprocessed("sms_reply"' in main_src
+      and 'fetch_unprocessed("app_reply"' in main_src,
+      "one of the two answer channels is not being polled")
 
 print(f"\nnever silent: {PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)
