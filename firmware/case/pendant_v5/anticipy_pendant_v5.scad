@@ -57,6 +57,8 @@ cx      = -(tab + 1)/2;           // cavity center x (chain end is +x)
 chain_x = outer_l/2 - 5.8;        // chain hole center (through the faces)
 chain_d = 4.5;
 bx = cx - cav_l/2 + xiao_l/2;     // board center: pressed against USB wall
+screw_x = cx + cav_l/2 + 3.0;     // screws: past the ring groove, clear of the chain hole
+back_t  = back_d + face;          // back half thickness at the seam
 
 echo(str("V5 ", BATT, "mAh pill  ", outer_l, " x ", outer_w, " x ", outer_t));
 
@@ -136,8 +138,8 @@ module front_half()
         usb_slot();
         front_holes();
         translate([0, 0, -0.05]) ring_groove(LID_CLR);
-        for (sy = [-1, 1])   // screw pilots in the solid chain end
-            translate([outer_l/2 - 12.0, sy*4.5, -0.1]) cylinder(d = 1.15, h = 6);
+        for (sy = [-1, 1])   // screw pilots in the solid chain end (beyond the groove)
+            translate([screw_x, sy*4.5, -0.1]) cylinder(d = 1.15, h = 3.0);
     }
 
 module back_half()
@@ -146,11 +148,12 @@ module back_half()
         cavity();
         chain_opening();
         translate([0, 0, -lip_h - 0.05]) ring_groove(0.05);
-        for (sy = [-1, 1]) {  // screw through-holes + head recess
-            translate([outer_l/2 - 12.0, sy*4.5, -outer_t])
+        for (sy = [-1, 1]) {  // screw through-holes + counterbore so an M1.4x4
+                              // leaves 2 mm in the back and bites 2 mm into the front
+            translate([screw_x, sy*4.5, -outer_t])
                 cylinder(d = 1.6, h = 2*outer_t);
-            translate([outer_l/2 - 12.0, sy*4.5, -(outer_t/2 - zc) - 0.01])
-                cylinder(d = 3.0, h = 1.2);
+            translate([screw_x, sy*4.5, -back_t - 0.5])
+                cylinder(d = 3.0, h = back_t - 2.0 + 0.5);
         }
     }
 
