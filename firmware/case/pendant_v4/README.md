@@ -9,12 +9,14 @@ Clip the header pins flush off the XIAO with flush cutters (~2 min, no
 soldering). No pendant-shaped object can contain 9 mm pins.
 
 ## Sizes (OpenSCAD echo)
-- 200 mAh: 49.1 × 27.3 × 18.6 mm
-- 500 mAh: 62.1 × 27.3 × 21.1 mm
+- 200 mAh: 49.1 × 29.3 × 18.6 mm
+- 500 mAh: 62.1 × 29.3 × 21.1 mm
 
 ## Parts per pendant
 - `front_XXXmah.stl` — dome with mic hole (1.2 mm), LED dot (2 mm), USB-C
-  slot in the end wall, board bay + corner posts.
+  slot in the end wall (12.6 × 7.0 mm — sized for a full cable OVERMOLD, not
+  just the metal shell), and a flat open board bay. The board sits pressed
+  against the USB-end wall so the plug reaches the connector.
 - `back_XXXmah.stl` — dome with battery bay.
 - `ring_XXXmah.stl` — seating ring: glue into the BACK half's rim groove,
   it presses into the FRONT half's groove. Two M1.4 screws through the back
@@ -26,8 +28,10 @@ soldering). No pendant-shaped object can contain 9 mm pins.
    slot that still fully seats = set `LID_CLR` in the .scad to that number,
    re-export the front.
 2. ONE `front_200mah.stl` + `back_200mah.stl`. Drop the real board
-   (pins clipped) and battery in. Check: board sits on posts, USB-C cable
-   reaches through the slot, battery + wires close freely.
+   (pins clipped) and battery in. Check: board sits flat against the USB-end
+   wall, a real USB-C cable's overmold passes through the slot and seats
+   fully, battery + wires close freely. A 1 mm foam pad behind the board
+   holds it against the wall.
 3. Only after step 2 passes: ring, screws, second unit, 500 version.
 
 ## Print settings (P2S, silk PLA)

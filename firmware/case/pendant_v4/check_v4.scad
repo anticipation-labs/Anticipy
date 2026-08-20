@@ -8,13 +8,15 @@ use <anticipy_pendant_v4.scad>
 
 xiao_l=21.0; xiao_w=17.8; board_t=1.6; comp_h=3.8;
 b = (BATT=="200") ? [31.0,20.5,6.0] : [44.0,20.5,8.5];
-cx = -5;   // must match cx in the main file (tab/2)
+cx = -5;                       // must match cx in the main file (tab/2)
+cav_l = max(xiao_l, b[0]) + 2.5;
+bx0 = cx - cav_l/2;            // board pressed against the USB-end wall
 
 module mocks() {
-    color("green")  translate([cx - xiao_l/2, -xiao_w/2, 0.2]) cube([xiao_l, xiao_w, board_t]);
-    color("silver") translate([cx - xiao_l/2 - 1.3, -4.5, 0.2 + board_t]) cube([7.3, 9, 3.2]);   // USB-C
-    color("gray")   translate([cx - 2, -1.5, 0.2 + board_t]) cube([6, 6, 2.2]);                  // nRF module
-    color("orange") translate([cx - b[0]/2, -b[1]/2, -0.4 - b[2]]) cube(b);                      // battery
+    color("green")  translate([bx0, -xiao_w/2, 0.2]) cube([xiao_l, xiao_w, board_t]);
+    color("silver") translate([bx0 - 1.3, -4.5, 0.2 + board_t]) cube([7.3, 9, 3.2]);   // USB-C
+    color("gray")   translate([bx0 + xiao_l/2 - 3, -1.5, 0.2 + board_t]) cube([6, 6, 2.2]);  // nRF module
+    color("orange") translate([cx - b[0]/2, -b[1]/2, -0.4 - b[2]]) cube(b);             // battery
 }
 
 module scene() {

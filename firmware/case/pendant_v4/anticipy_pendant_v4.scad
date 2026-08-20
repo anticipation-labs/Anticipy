@@ -24,7 +24,7 @@
 PART    = "both";
 BATT    = "200";     // "200" | "500"
 LID_CLR = 0.25;      // per-side lip clearance from the coupon test
-$fn = $preview ? 32 : 64;
+$fn = $preview ? 32 : 96;
 
 /* ---------- hardware (headers CLIPPED FLUSH) ---------- */
 xiao_l = 21.0;  xiao_w = 17.8;
@@ -44,7 +44,7 @@ back_d  = bat[2] + 0.6;      // cavity depth in the back half (battery)
 face    = 2.4;               // dome apex thickness over the cavity
 
 outer_l = cav_l + 2*wall + 2 + tab;
-outer_w = cav_w + 5.6;
+outer_w = cav_w + 7.6;
 outer_t = front_d + back_d + 2*face;
 zc      = (front_d - back_d)/2;   // outer body vertical center (z=0 = seam)
 cx      = -tab/2;                 // cavity center x (chain tab is on +x)
@@ -52,17 +52,24 @@ cx      = -tab/2;                 // cavity center x (chain tab is on +x)
 lip_t = 1.2;  lip_h = 2.2;        // ring half-height per side
 chain_x = outer_l/2 - 7.5;        // chain opening center
 chain_d = 4.5;
+bx = cx - cav_l/2 + xiao_l/2;     // board center x: board sits AGAINST the
+                                  // USB-end cavity wall (else cable can't reach)
 
 echo(str("V4 ", BATT, "mAh pebble  ", outer_l, " x ", outer_w, " x ", outer_t));
 
 /* ---------- primitives ---------- */
 module rrect(l, w, rr) offset(r=rr) square([l - 2*rr, w - 2*rr], center=true);
 
-module pebble()   // continuous curvature everywhere
+module pebble()   // continuous curvature: domed core + sphere minkowski
     translate([0, 0, zc]) minkowski() {
-        translate([0, 0, -(outer_t/2 - r)])
-            linear_extrude(outer_t - 2*r)
+        hull() {
+            linear_extrude(0.2, center = true)
                 rrect(outer_l - 2*r, outer_w - 2*r, 4);
+            translate([0, 0,  (outer_t/2 - r) - 0.1]) linear_extrude(0.2)
+                rrect(outer_l - 2*r - 7, outer_w - 2*r - 1, 3);
+            translate([0, 0, -(outer_t/2 - r) + 0.1]) linear_extrude(0.2)
+                rrect(outer_l - 2*r - 7, outer_w - 2*r - 1, 3);
+        }
         sphere(r = r);
     }
 
@@ -76,16 +83,16 @@ module cavity() {
 module chain_opening()   // sculpted through-opening in the solid end
     translate([chain_x, 0, -outer_t]) cylinder(d = chain_d, h = 2*outer_t);
 
-module usb_slot() {      // -x end wall, front half, aligned to the board USB
-    usb_w = 10.0; usb_h = 4.6;   // connector sits on top of the PCB: z 1.6..4.8
-    translate([-outer_l/2 - 2, -usb_w/2, 1.3])
+module usb_slot() {      // -x end wall: sized for a real cable OVERMOLD
+    usb_w = 12.6; usb_h = 7.0;   // typical plug overmold 12 x 6.5 + play
+    translate([-outer_l/2 - 2, -usb_w/2, 0])   // floor = seam plane
         cube([(cx - cav_l/2) - (-outer_l/2 - 2) + 2, usb_w, usb_h]);
 }
 
 module front_holes() {   // mic + LED through the front dome, over the board
-    translate([cx - 5.0,  3.0, 0]) cylinder(d = 1.2, h = outer_t);      // mic
-    translate([cx - 5.0,  3.0, front_d - 0.1]) cylinder(d = 4.0, h = 1.0);  // acoustic recess (inside)
-    translate([cx + 4.0, -3.5, 0]) cylinder(d = 2.0, h = outer_t);      // LED
+    translate([bx + 1.5,  3.5, 0]) cylinder(d = 1.2, h = outer_t);      // PDM mic
+    translate([bx + 1.5,  3.5, front_d - 0.1]) cylinder(d = 4.0, h = 1.0);  // acoustic recess (inside)
+    translate([bx - 5.5, -3.5, 0]) cylinder(d = 2.0, h = outer_t);      // user LED
 }
 
 
@@ -101,32 +108,24 @@ module ring_groove(clr)   // groove just outside the cavity wall, at the rim
 module seat_ring()        // the separate glued ring (prints flat, 5 min)
     difference() {
         linear_extrude(2*lip_h - 0.3) ring_section(-0.02);
-        translate([cx - cav_l/2 - 4, -6, lip_h - 0.4])   // USB passage notch
-            cube([6, 12, lip_h + 1.5]);
+        translate([cx - cav_l/2 - 4, -6.5, -0.1])   // USB passage notch
+            cube([6, 13, 2*lip_h + 1]);
     }
-
-module board_posts()     // corner posts locating the board in the front half
-    for (sx = [-1, 1], sy = [-1, 1])
-        translate([cx + sx*(xiao_l/2 + 1.0), sy*(xiao_w/2 + 1.0), 0])
-            cylinder(d = 2.4, h = front_d - 0.4);
 
 /* ---------- halves ---------- */
 module front_half()      // z >= 0, rim at z=0: prints dome-up as modeled
-    union() {
-        difference() {
-            intersection() {
-                pebble();
-                translate([-500, -500, 0]) cube(1000);
-            }
-            cavity();
-            chain_opening();
-            usb_slot();
-            front_holes();
-            translate([0, 0, -0.05]) ring_groove(LID_CLR);   // ring seat, with play
-            for (sy = [-1, 1])   // screw pilots in the solid chain end
-                translate([outer_l/2 - 12.5, sy*4.5, -0.1]) cylinder(d = 1.15, h = 6);
+    difference() {
+        intersection() {
+            pebble();
+            translate([-500, -500, 0]) cube(1000);
         }
-        board_posts();
+        cavity();          // one clean flat-floored bay, nothing inside it
+        chain_opening();
+        usb_slot();
+        front_holes();
+        translate([0, 0, -0.05]) ring_groove(LID_CLR);   // ring seat, with play
+        for (sy = [-1, 1])   // screw pilots in the solid chain end
+            translate([outer_l/2 - 12.5, sy*4.5, -0.1]) cylinder(d = 1.15, h = 6);
     }
 
 module back_half()       // z <= 0
