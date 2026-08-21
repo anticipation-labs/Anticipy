@@ -38,21 +38,28 @@ bat  = (BATT == "200") ? b200 : b500;
 /* ---------- derived ---------- */
 wall    = 1.8;               // outer skin outside the ring groove
 lip_t   = 1.2;  lip_h = 2.2; // seating ring wall / half-height
-tab     = 9;                 // solid material at the chain end (+x)
-re      = 3.2;               // edge radius (slab edge, not a ball)
-dome    = 1.4;               // face dome height
+re      = 2.2;               // edge radius (slab edge, not a ball)
+dome    = 1.0;               // face dome height
+gr      = 4.6;               // ring-groove corner radius
 
 cav_l   = max(xiao_l, bat[0]) + 2.5;
 cav_w   = max(xiao_w, bat[1]) + 1.2;
 front_d = board_stack + 0.6; // board bay depth (front half)
 back_d  = bat[2] + 0.6;      // battery bay depth (back half)
-face    = 2.2;               // face thickness over the cavity
+face    = re + dome;         // face thickness over the cavity: the cavities
+                             // end exactly where the edge radius/dome begins,
+                             // so side walls stay full thickness to the top
 
-outer_l = cav_l + 2*(wall + lip_t) + 1 + tab;
 outer_w = cav_w + 2*(wall + lip_t);
+// End margin: the groove corner-arc centers must coincide with the pill's
+// semicircular end centers, otherwise the rectangular groove/cavity corners
+// punch through the curved ends and the wall collapses to ~0.1 mm
+// (that is exactly what ruined the first print).
+em      = outer_w/2 - (gr - lip_t - LID_CLR);
+outer_l = cav_l + 2*em;
 outer_t = front_d + back_d + 2*face;
 zc      = (front_d - back_d)/2;   // body vertical center (z=0 = seam plane)
-cx      = -(tab + 1)/2;           // cavity center x (chain end is +x)
+cx      = 0;                      // cavity centered: both ends get full em
 
 chain_x = outer_l/2 - 5.8;        // chain hole center (through the faces)
 chain_d = 4.5;
@@ -94,13 +101,8 @@ module cavity() {
         rrect(cav_l, cav_w, 4);                       // board bay (front)
 }
 
-module chain_opening() {  // through the faces, chamfered on both, like hero
+module chain_opening()    // clean through-hole in the solid chain end
     translate([chain_x, 0, -outer_t]) cylinder(d = chain_d, h = 2*outer_t);
-    translate([chain_x, 0,  outer_t/2 + zc - 1.2 + 0.01])
-        cylinder(d1 = chain_d, d2 = chain_d + 2.4, h = 1.2);
-    translate([chain_x, 0, -(outer_t/2 - zc) - 0.01])
-        cylinder(d1 = chain_d + 2.4, d2 = chain_d, h = 1.2);
-}
 
 module usb_slot() {      // -x end wall: sized for a real cable OVERMOLD
     usb_w = 12.6; usb_h = 7.0;   // typical plug overmold 12 x 6.5 + play
@@ -116,7 +118,7 @@ module front_holes() {   // LED dot + mic pinhole, over the board. Nothing else.
 
 module ring_section(grow = 0)
     difference() {
-        translate([cx, 0]) rrect(cav_l + 2*lip_t + 2*grow, cav_w + 2*lip_t + 2*grow, 4.6);
+        translate([cx, 0]) rrect(cav_l + 2*lip_t + 2*grow, cav_w + 2*lip_t + 2*grow, gr);
         translate([cx, 0]) rrect(cav_l - 2*grow, cav_w - 2*grow, 4);
     }
 

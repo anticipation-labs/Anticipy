@@ -6,8 +6,20 @@ hole through the solid top end, one LED dot + one pinhole mic on the front.
 See `v5_side_by_side.png` for the render vs the website product.
 
 ## Sizes (echoed by the CAD)
-- 200 mAh: 49.5 × 27.7 × 18.2 mm
-- 500 mAh: 62.5 × 27.7 × 20.7 mm
+- 200 mAh: 54.9 × 27.7 × 20.2 mm
+- 500 mAh: 67.9 × 27.7 × 22.7 mm
+
+## Post-print-failure fix (wall-thickness root cause)
+The first printed plate failed because the rectangular cavity/ring-groove
+corners punched into the pill's semicircular ends: measured wall thickness
+there collapsed to ~0.04–0.17 mm, so the slicer had nothing to print (the
+"floating regions" warning was real). Fix: the end margin `em` is now
+derived so the groove corner-arc centers coincide with the end-circle
+centers, and the cavities stop below the edge-radius/dome zone
+(`face = re + dome`). Verified by layer-sampled minimum-wall analysis on
+every exported STL: all body walls are now ≥ 0.98 mm (design walls
+1.55–3 mm); the only sub-mm regions are the 1–2 feather layers where the
+chain hole exits the domed face, which is unavoidable and harmless.
 
 ## Verification status — be honest about what is proven
 - CAD/render-verified: silhouette, wall thickness, cavity vs board+battery

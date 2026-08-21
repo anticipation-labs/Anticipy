@@ -8,7 +8,7 @@ use <anticipy_pendant_v5.scad>
 
 xiao_l=21.0; xiao_w=17.8; board_t=1.6;
 b = (BATT=="200") ? [31.0,20.5,6.0] : [44.0,20.5,8.5];
-cx = -5;                       // must match cx in the main file ((tab+1)/2)
+cx = 0;                        // must match cx in the main file (cavity centered)
 cav_l = max(xiao_l, b[0]) + 2.5;
 bx0 = cx - cav_l/2;            // board pressed against the USB-end wall
 
