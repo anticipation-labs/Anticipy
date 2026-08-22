@@ -119,7 +119,7 @@ routerAdd("POST", "/agent/llm", (e) => {
     if (!taskTag) return null;
     try {
       const requestJSON = JSON.stringify(clientRequest);
-      const rec = new Record(app.findCollectionByNameOrId("agent_llm_audit"));
+      const rec = new Record(e.app.findCollectionByNameOrId("agent_llm_audit"));
       rec.set("task_tag", taskTag);
       rec.set("agent_id", id);
       rec.set("owner_ref", ownerRef);
@@ -128,7 +128,7 @@ routerAdd("POST", "/agent/llm", (e) => {
       rec.set("client_request_json", requestJSON);
       rec.set("request_sha256", $security.sha256(requestJSON));
       rec.set("proxy_version", "codex-black-box-v1");
-      app.save(rec);
+      e.app.save(rec);
       return rec;
     } catch (err) {
       console.log("agent audit begin failed:", String(err));
@@ -144,7 +144,7 @@ routerAdd("POST", "/agent/llm", (e) => {
       }
       const response = String(fields && fields.client_response_json || "");
       if (response) rec.set("response_sha256", $security.sha256(response));
-      app.save(rec);
+      e.app.save(rec);
     } catch (err) {
       console.log("agent audit finish failed:", String(err));
     }
@@ -383,7 +383,7 @@ routerAdd("POST", "/agent/llm", (e) => {
         "Authorization": "Bearer " + openrouterKey,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://anticipy.ai",
-        "X-Title": "Anticipy Claude Version",
+        "X-Title": "Anticipy",
       },
       body: serialized,
       timeout: 95,

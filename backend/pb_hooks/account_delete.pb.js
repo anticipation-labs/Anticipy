@@ -37,23 +37,40 @@
 // while still reporting a count. sms.pb.js resolves inbound texts against
 // owner_profile.phone BEFORE owners, so that residue kept routing somebody's
 // texts after they believed they were gone.
-const OWNER_TABLES = [
-  { name: "jobs", legacy: "owner" },
-  { name: "segments", legacy: "owner" },
-  { name: "agents", legacy: "owner" },
-  { name: "owner_profile", legacy: "owner_id" },
-  { name: "pendants", legacy: "owner" },
-  // Audit rows hold up to 1 MB each of verbatim task text, page content and
-  // model responses, and their owner_ref is a TEXT column with no cascade — so
-  // nothing else would ever remove them. audit_retention.pb.js caps the table
-  // at 300 rows globally, which is a disk-space defence, not a privacy control.
-  { name: "agent_llm_audit", legacy: null },
-  { name: "agent_audit_sessions", legacy: null },
-  // Last and largest, so a timeout lands on the cheapest table to retry.
-  { name: "events", legacy: null },
-];
-
+//
+// THE LIST LIVES INSIDE THE HANDLER, and that is not a style choice. A `const`
+// declared at the top of a pb_hooks file is NOT in scope inside a routerAdd
+// callback: the PocketBase JSVM gives each handler its own execution context,
+// so the module body's bindings are gone by the time a request arrives.
+// password_reset.pb.js:23-26 and audit_retention.pb.js:24-27 both warn about
+// this, and this file was written as if they did not.
+//
+// It cost the whole feature. `for (const table of OWNER_TABLES)` threw
+// `ReferenceError: OWNER_TABLES is not defined` on the first real delete, which
+// PocketBase reports as a bare 400 "Something went wrong while processing your
+// request." Nothing in that sentence names a scope, a file or a line, and the
+// route answers 401 and 400 correctly right up until the moment it matters —
+// so every cheap probe passes and only an authenticated delete, with the
+// confirmation, ever reaches the bug. Measured 2026-08-22 against a local
+// PocketBase 0.30.4 with a minimal two-route hook: a const declared outside
+// throws, the identical const declared inside returns 200.
 routerAdd("POST", "/me/delete", (e) => {
+  const OWNER_TABLES = [
+    { name: "jobs", legacy: "owner" },
+    { name: "segments", legacy: "owner" },
+    { name: "agents", legacy: "owner" },
+    { name: "owner_profile", legacy: "owner_id" },
+    { name: "pendants", legacy: "owner" },
+    // Audit rows hold up to 1 MB each of verbatim task text, page content and
+    // model responses, and their owner_ref is a TEXT column with no cascade — so
+    // nothing else would ever remove them. audit_retention.pb.js caps the table
+    // at 300 rows globally, which is a disk-space defence, not a privacy control.
+    { name: "agent_llm_audit", legacy: null },
+    { name: "agent_audit_sessions", legacy: null },
+    // Last and largest, so a timeout lands on the cheapest table to retry.
+    { name: "events", legacy: null },
+  ];
+
   const auth = e.auth;
   if (!auth) return e.json(401, { ok: false, message: "Sign in first." });
 
@@ -104,7 +121,7 @@ routerAdd("POST", "/me/delete", (e) => {
       const value = pair[1];
       let rows = [];
       try {
-        rows = app.findRecordsByFilter(table.name, `${field} = {:id}`, "", 0, 0, { id: value });
+        rows = e.app.findRecordsByFilter(table.name, `${field} = {:id}`, "", 0, 0, { id: value });
       } catch (err) {
         // Now that every column is named explicitly a throw is a REAL failure,
         // not an expected missing column. Swallowing it is what let
@@ -115,7 +132,7 @@ routerAdd("POST", "/me/delete", (e) => {
       }
       for (const row of rows) {
         try {
-          app.delete(row);
+          e.app.delete(row);
           count++;
         } catch (err) {
           if (failed.indexOf(table.name) === -1) failed.push(table.name);
@@ -149,13 +166,13 @@ routerAdd("POST", "/me/delete", (e) => {
   // `legacy_uuid` rides along because the pre-migration founder's memory lives
   // OUTSIDE <state root>/<owner_ref> and the supervisor needs it to find that.
   try {
-    const purges = app.findCollectionByNameOrId("purges");
+    const purges = e.app.findCollectionByNameOrId("purges");
     const row = new Record(purges);
     row.set("owner_ref", ref);
     row.set("legacy_uuid", legacy);
     row.set("memory_purged", false);
     row.set("requested_at", new Date().toISOString());
-    app.save(row);
+    e.app.save(row);
   } catch (err) {
     console.log("delete: could not record the purge request: " + err);
     return e.json(500, {
@@ -174,7 +191,7 @@ routerAdd("POST", "/me/delete", (e) => {
   // somebody believing they had been forgotten while their memory sat on disk
   // with nothing prompting a retry.
   try {
-    app.delete(auth);
+    e.app.delete(auth);
   } catch (err) {
     console.log("DELETE INCOMPLETE: rows cleared but the account survived for "
                 + ref + ": " + err);
