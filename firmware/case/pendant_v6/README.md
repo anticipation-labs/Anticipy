@@ -47,13 +47,20 @@ still sits at the parting plane so the USB opening lines up. Back halves are
 identical between pins/no-pins, so any back mates with either front.
 
 ## Verification done on the exported STLs (not renders)
-- All 13 meshes watertight.
-- Layer-by-layer cross-section audit at 0.12 mm steps: all walls ≥ 1.0 mm.
-  The only sub-mm readings are the chain-hole exit rims through the domed
+- All 19 meshes watertight (13 base + 6 headers-on fronts).
+- Layer-by-layer cross-section audit at 0.12 mm steps: nominal walls ≥ 1.0 mm.
+  Local sub-mm readings exist at the chain-hole exit rims through the domed
   faces — the tangent crescent any through-hole makes exiting a curved surface;
-  identical geometry printed solid in the v5.1 gated print.
+  identical geometry printed solid in the v5.1 gated print. This audit is a
+  mesh check, not physical proof — final confirmation is the printed parts.
 - Magnet pockets verified to clear the groove (0.8 mm wall), the chain hole
   (>0.8 mm), and the exterior (>1.1 mm).
+
+## Plate file
+`plate_v6_all13.3mf` (name is historical) now contains all **19** parts:
+12 base shells + coupon + 6 headers-on fronts, sliced 0.12 mm / 3 walls with
+5 mm outer brims, 65 °C textured-PEI bed, 20 mm/s first layer (silk-PLA
+adhesion fixes after two failed plate attempts).
 
 ## Print settings (Bambu P2S)
 - 0.12 mm layers, 3 walls, 4 top/5 bottom shells, 15 % gyroid infill
