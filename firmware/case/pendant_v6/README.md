@@ -41,6 +41,11 @@ gap at the seam for wire pass-over.
 mech ∈ {friction,magnet,screw}, plus `lip_coupon.stl` (0.15/0.25/0.35 clearance
 slots — press a lip edge in, pick the snug one, set `LID_CLR`).
 
+`front_<batt>_<mech>_pins.stl` — headers-ON variants: the front bay is 9 mm
+deeper so unclipped header pins (pointing up into the dome) clear; the board
+still sits at the parting plane so the USB opening lines up. Back halves are
+identical between pins/no-pins, so any back mates with either front.
+
 ## Verification done on the exported STLs (not renders)
 - All 13 meshes watertight.
 - Layer-by-layer cross-section audit at 0.12 mm steps: all walls ≥ 1.0 mm.

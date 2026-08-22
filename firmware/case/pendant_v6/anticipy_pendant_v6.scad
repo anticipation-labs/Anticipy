@@ -16,7 +16,11 @@
  *    measure up to 13.0 x 7.4 and sit off-center in the molding).
  *  - Pry notch at the bottom end of the seam on every variant.
  *
- * REQUIRED PREP: clip the XIAO header pins flush.
+ * PINS = false: XIAO header pins clipped flush (slim pendant).
+ * PINS = true : headers left ON — the front bay is 9 mm deeper so the pins
+ *               (pointing up into the front dome) clear; board still sits at
+ *               the parting plane so the USB opening lines up. Back halves
+ *               are IDENTICAL between the two, so any back mates with either.
  * Both halves print rim-down / visible face UP: zero supports.
  *
  * PART = "front" | "back" | "both" | "coupon"
@@ -27,13 +31,14 @@
 PART    = "both";
 BATT    = "200";
 MECH    = "friction";
+PINS    = false;
 LID_CLR = 0.25;      // per-side lip clearance from the coupon test
 fit_clr = (MECH == "friction") ? LID_CLR - 0.10 : LID_CLR;  // friction grips tighter
 $fn = $preview ? 48 : 128;
 
 /* ---------- hardware (headers CLIPPED FLUSH) ---------- */
 xiao_l = 21.0;  xiao_w = 17.8;
-board_stack = 6.6;
+board_stack = PINS ? 15.6 : 6.6;   // 6.6 clipped; +9.0 for standing headers
 b200 = [31.0, 20.5, 6.0];
 b500 = [44.0, 20.5, 8.5];
 bat  = (BATT == "200") ? b200 : b500;
