@@ -1,3 +1,9 @@
+// Where the fellowship pages and their API are served from. An env var so a
+// preview deploy can point at a staging backend without a code change, and so
+// moving the backend never means editing a rewrite by hand.
+const FELLOWSHIP_ORIGIN =
+  process.env.FELLOWSHIP_ORIGIN || "https://backend-production-61e0a.up.railway.app";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // PostHog's ingest endpoints are on well-known hostnames that every major
@@ -20,6 +26,16 @@ const nextConfig = {
       { source: "/join", destination: "/apply", permanent: true },
       { source: "/careers", destination: "/apply", permanent: true },
       { source: "/growth", destination: "/grow", permanent: true },
+      // THE UGC CREATOR PROGRAMME IS RETIRED, REPLACED BY THE FELLOWSHIP.
+      //
+      // Not permanent: three people applied under the old terms ($25 a video
+      // past 1,000 views, plus 15% of anything their link sold) and every one
+      // of those signups failed to store, because anticipy_ugc_creators was
+      // never created in Supabase — the notification emails say so in their
+      // own first line. Those three are owed a conversation, not a 301, and a
+      // temporary redirect keeps the door open until they have had one.
+      { source: "/ugc", destination: "/fellowships", permanent: false },
+      { source: "/ugc/apply", destination: "/fellowships", permanent: false },
     ];
   },
   async rewrites() {
@@ -32,6 +48,30 @@ const nextConfig = {
         source: "/ingest/:path*",
         destination: "https://us.i.posthog.com/:path*",
       },
+      // THE FELLOWSHIP, SERVED FROM anticipy.ai.
+      //
+      // The pages and their API live on the PocketBase backend. Rewriting
+      // rather than proxying in an API route means the browser only ever
+      // talks to anticipy.ai, so there is no cross-origin request to permit
+      // and no CORS header to get wrong — the session token stays first
+      // party, and one origin owns the cookie jar.
+      //
+      // The API paths are rewritten too, and they must be: the pages call
+      // /fellows/* relative to wherever they are served from, so without
+      // these lines the pages would load on anticipy.ai and then fail every
+      // single request against a route that does not exist here.
+      { source: "/fellowships", destination: `${FELLOWSHIP_ORIGIN}/fellowships.html` },
+      { source: "/fellowship-growth-learning", destination: `${FELLOWSHIP_ORIGIN}/fellowship-growth-learning.html` },
+      // The .html shapes resolve too, because the two pages link to each
+      // other by filename. One set of pages then works unchanged on both
+      // origins, with no origin-sniffing in the page and no build step.
+      { source: "/fellowships.html", destination: `${FELLOWSHIP_ORIGIN}/fellowships.html` },
+      { source: "/fellowship-growth-learning.html", destination: `${FELLOWSHIP_ORIGIN}/fellowship-growth-learning.html` },
+      { source: "/fellows/:path*", destination: `${FELLOWSHIP_ORIGIN}/fellows/:path*` },
+      // A fellow's minted link. /c/* was the old creator link shape and is
+      // pointed at the same place so anything already posted keeps working.
+      { source: "/r/:code", destination: `${FELLOWSHIP_ORIGIN}/r/:code` },
+      { source: "/c/:code", destination: `${FELLOWSHIP_ORIGIN}/r/:code` },
     ];
   },
   async headers() {
