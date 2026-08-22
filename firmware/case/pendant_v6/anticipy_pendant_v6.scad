@@ -4,9 +4,9 @@
  *  - The separate glued seating ring is GONE. The back half now carries an
  *    integral lip (tongue) that seats into a groove in the front half.
  *    One less part, no glue, self-aligning.
- *  - Three closure mechanisms (MECH):
- *      "snap"   : lip + 0.35 mm snap ridge on both long sides. Tool-free,
- *                 press to close, pry notch to open.
+ *  - Three closure mechanisms (MECH) — no snap ridges, no tiny features:
+ *      "friction": plain lip with a tighter (coupon-tuned) clearance.
+ *                  Clean press-together fit, pry notch to open.
  *      "magnet" : lip for alignment + 2 pairs of 5x2 mm disc magnet pockets
  *                 in the solid chain end. Silent, infinite reopen.
  *                 (Glue magnets in with CA, alternating polarity.)
@@ -21,13 +21,14 @@
  *
  * PART = "front" | "back" | "both" | "coupon"
  * BATT = "200" | "500"
- * MECH = "snap" | "magnet" | "screw"
+ * MECH = "friction" | "magnet" | "screw"
  */
 
 PART    = "both";
 BATT    = "200";
-MECH    = "snap";
+MECH    = "friction";
 LID_CLR = 0.25;      // per-side lip clearance from the coupon test
+fit_clr = (MECH == "friction") ? LID_CLR - 0.10 : LID_CLR;  // friction grips tighter
 $fn = $preview ? 48 : 128;
 
 /* ---------- hardware (headers CLIPPED FLUSH) ---------- */
@@ -63,7 +64,6 @@ bx = cx - cav_l/2 + xiao_l/2;
 anchor_x = cx + cav_l/2 + 3.0;    // screw / magnet center in the solid chain end
 back_t  = back_d + face;
 
-snap_r  = 0.35;                   // snap ridge protrusion
 mag_d   = 5.2;  mag_h = 2.1;      // pocket for a 5 x 2 mm disc magnet
 mag_x   = cav_l/2 + lip_t + LID_CLR + 0.8 + mag_d/2;  // clears groove outer wall
 mag_y   = 6.2;                    // clears the 4.5 mm chain hole by >0.8 mm
@@ -105,8 +105,16 @@ module chain_opening()
 
 module usb_slot() {      // 14 x 8: passes any compliant cable overmold
     usb_w = 14.0; usb_h = 8.0;
+    depth = (cx - cav_l/2) - (-outer_l/2 - 2) + 2;
     translate([-outer_l/2 - 2, -usb_w/2, 0])
-        cube([(cx - cav_l/2) - (-outer_l/2 - 2) + 2, usb_w, usb_h]);
+        cube([depth, usb_w, usb_h]);
+    // chamfered lead-in at the outer face: crisp edge, no fuzzing
+    hull() {
+        translate([-outer_l/2 - 2, -(usb_w + 2.4)/2, -1.2])
+            cube([0.01, usb_w + 2.4, usb_h + 2.4]);
+        translate([-outer_l/2 + 1.2, -usb_w/2, 0])
+            cube([0.01, usb_w, usb_h]);
+    }
 }
 
 module front_holes() {
@@ -128,27 +136,14 @@ module lip_section(grow = 0)
 /* integral lip on the back half (tongue), with USB passage notch */
 module lip_tongue() {
     difference() {
-        union() {
-            linear_extrude(lip_h) lip_section(-0.02);
-            if (MECH == "snap")   // ridge on both straight long sides, near lip top
-                for (sy = [-1, 1])
-                    translate([cx, sy*(cav_w/2 + lip_t - 0.02), lip_h - 0.9])
-                        rotate([45, 0, 0])
-                            cube([cav_l - 14, snap_r*1.4, snap_r*1.4], center = true);
-        }
+        linear_extrude(lip_h) lip_section(-0.02);
         translate([cx - cav_l/2 - 4, -7.5, -0.1]) cube([6, 15, lip_h + 1]);
     }
 }
 
-/* groove in the front half; snap variant gets a matching ridge recess */
-module lip_groove() {
-    linear_extrude(lip_h + 0.05) lip_section(LID_CLR);
-    if (MECH == "snap")
-        for (sy = [-1, 1])
-            translate([cx, sy*(cav_w/2 + lip_t + LID_CLR), lip_h - 0.9])
-                rotate([45, 0, 0])
-                    cube([cav_l - 13, snap_r*1.6, snap_r*1.6], center = true);
-}
+/* groove in the front half — plain, clearance set by mechanism */
+module lip_groove()
+    linear_extrude(lip_h + 0.05) lip_section(fit_clr);
 
 module magnet_pockets(half)   // 2 pockets per half in the solid chain end
     for (sy = [-1, 1])

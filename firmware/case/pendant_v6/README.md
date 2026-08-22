@@ -9,9 +9,9 @@ physically. The separate glued seating ring is gone.
   seats into a matching groove in the front half. No separate ring part, no glue,
   self-aligning in both axes. Clearance `LID_CLR` comes from the printed coupon.
 - **Three closures (MECH)**:
-  - `snap` — 0.35 mm snap ridge on both long sides of the lip + matching recess
-    in the groove. Tool-free: press to close, open with a coin/thumbnail in the
-    pry notch at the USB end.
+  - `friction` — plain lip with a 0.10 mm tighter (coupon-tuned) clearance.
+    Clean press-together fit, no tiny snap features to fuzz or wear; open with
+    a coin/thumbnail in the pry notch at the USB end.
   - `magnet` — lip for alignment + 2 pairs of 5×2 mm disc-magnet pockets in the
     solid chain end (glue in with CA, alternate polarity so it self-aligns).
     Silent, infinite reopen, zero wear.
@@ -19,7 +19,8 @@ physically. The separate glued seating ring is gone.
     end (counterbored, invisible when worn). Most secure.
 - **USB-C opening enlarged to 14.0 × 8.0 mm** (research: real cable overmolds
   measure up to 13.0 × 7.4 mm and are often off-center — the old 12.6 × 7.0 slot
-  could reject some cables).
+  could reject some cables), with a 1.2 mm chamfered lead-in at the outer face
+  so the opening edge prints crisp instead of fuzzing.
 - **Pry notch** at the seam on the USB end of every variant.
 - Chain: NOT printed. A 4.5 mm through-hole in the solid top end takes any
   2.5–3 mm necklace chain.
@@ -37,7 +38,7 @@ gap at the seam for wire pass-over.
 
 ## Files (stl/)
 `front_<batt>_<mech>.stl`, `back_<batt>_<mech>.stl` for batt ∈ {200,500},
-mech ∈ {snap,magnet,screw}, plus `lip_coupon.stl` (0.15/0.25/0.35 clearance
+mech ∈ {friction,magnet,screw}, plus `lip_coupon.stl` (0.15/0.25/0.35 clearance
 slots — press a lip edge in, pick the snug one, set `LID_CLR`).
 
 ## Verification done on the exported STLs (not renders)
@@ -59,7 +60,7 @@ slots — press a lip edge in, pick the snug one, set `LID_CLR`).
 - Silk PLA works; PETG better for daily wear.
 
 ## Still only provable with plastic + real parts
-Exact battery body/tab size, real cable overmold, printer clearance, snap
-engagement force, magnet grip. That is what this comparison plate is for:
+Exact battery body/tab size, real cable overmold, printer clearance, friction
+grip force, magnet grip. That is what this comparison plate is for:
 print, try all three closures with the real board/battery/cable, pick the
 winner.
