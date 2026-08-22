@@ -389,6 +389,25 @@ _READ_SOURCES = ("supervised_mail", "supervised_professional")
 # stranger's subject line over the owner's own instruction.
 READ_FACT_MAX_IMPORTANCE = 4
 
+# HOW MANY FACTS ONE SUPERVISED READ MAY EVER CONTRIBUTE. Matches
+# `extension/supervised_read.js` FACT_CEILING (15), which is design/day-zero.md
+# §3's "5–15 facts per source" — and that is the point: the number is the
+# client's own stated bound, enforced somewhere the client cannot reach.
+#
+# A CLIENT-SIDE CAP IS NOT A CAP. The extension counts its own facts and stops;
+# a build with a broken counter, a replayed event stream, or anything that is
+# not the extension posts as many `read_fact` events as it likes, and every one
+# of them lands in the profile. This is the last deterministic gate before the
+# row exists (CLAUDE-ONBOARDING.md:19-20 — safety gates in code).
+#
+# It does not, and cannot, fix ranking: 15 honest facts still out-rank the
+# owner's older answers on `salience = importance x recency`. That is fixed
+# where the window is taken (`memory._provenance_window`). This bounds VOLUME,
+# which matters on its own because recall here is FTS5 keyword matching with no
+# embeddings (brain/memory.py:9) — fifty facts do not make her smarter, they
+# bury the ten that matter.
+READ_FACTS_PER_JOB = 15
+
 
 def ingest_read_facts(memory, owner_ref: str = "") -> int:
     """Day zero, part three: what a SUPERVISED READ concluded.
@@ -403,8 +422,10 @@ def ingest_read_facts(memory, owner_ref: str = "") -> int:
     distilled fact is something she should KNOW, and a transcript would be
     triaged and could mint an errand off somebody else's mail.
 
-    Returns how many facts were written. Failures are swallowed exactly as
-    the other two seeders swallow them: day zero must never take hearing down.
+    Returns how many facts were written. A fact past `READ_FACTS_PER_JOB` is
+    REFUSED and recorded as such on the event, never counted. Failures are
+    swallowed exactly as the other two seeders swallow them: day zero must
+    never take hearing down.
     """
     written = 0
     try:
@@ -419,6 +440,23 @@ def ingest_read_facts(memory, owner_ref: str = "") -> int:
                 # Skips record nothing; never an empty fact.
                 # (design/briefs/08-day-zero.md:30)
                 mark_processed(event.get("id", ""), "ignore")
+                continue
+            # THE PER-JOB CEILING, checked before anything is written. `goal`
+            # is the supervised_read job this fact came off — the backend
+            # refuses a read_fact whose goal does not name a live job of this
+            # owner (extension/background.js:1016) — so it is the unit a read
+            # is bounded in. An event arriving with no job is not exempted; it
+            # shares one bucket, because a fact that cannot be attributed to a
+            # read is the last thing that should get an unbounded allowance.
+            job = (event.get("goal") or "").strip() or "unattributed"
+            if memory.read_facts_admitted(job) >= READ_FACTS_PER_JOB:
+                # A RECORDED REFUSAL, not a silent drop. The decision lands on
+                # the event row, so an overflowing read is visible in the data
+                # and not only in a log line nobody is tailing — and the mark
+                # is what stops the 2s poll replaying this event forever.
+                mark_processed(event.get("id", ""), "refused_read_fact_ceiling")
+                print(f"read fact REFUSED: job {job} is already at its ceiling "
+                      f"of {READ_FACTS_PER_JOB} facts — {text[:60]}")
                 continue
             # PROVENANCE FROM THE EVENT, defaulting to the fenced mail tag.
             # It has to land in remember_fact, because `source` is the ONLY
@@ -445,7 +483,13 @@ def ingest_read_facts(memory, owner_ref: str = "") -> int:
             # CLAUDE-ONBOARDING.md:19-20 puts safety gates in code — a model
             # asked to pick an importance is not a gate.
             importance = min(READ_FACT_MAX_IMPORTANCE, max(1, importance))
-            memory.remember_fact(text, importance=importance, source=source)
+            landed = memory.remember_fact(text, importance=importance,
+                                          source=source)
+            if landed:
+                # Only a row that exists counts against the ceiling. A vetoed
+                # fact wrote nothing, so it floods nothing — charging it would
+                # let a veto quietly spend the read's allowance.
+                memory.note_read_fact_admitted(job)
             # Mark before counting, exactly like the profile loop: an unmarked
             # event is replayed by the next poll, which is the one failure mode
             # that turns a read into a flood.
@@ -480,7 +524,11 @@ def ingest_read_vetoes(memory, owner_ref: str = "") -> int:
             if not text:
                 mark_processed(event.get("id", ""), "ignore")
                 continue
-            removed = memory.forget_fact(text)
+            # The veto carries the provenance of the thing being vetoed, so a
+            # read cannot delete what the owner told us. Absent source reads as
+            # trusted, which is right: the only other caller is the owner.
+            removed = memory.forget_fact(
+                text, source=str(event.get("source") or ""))
             # Mark before counting, same reason as everywhere else in this file.
             mark_processed(event.get("id", ""), "ignore")
             applied += 1
@@ -1490,18 +1538,24 @@ def report_finished_jobs(anticipy) -> None:
             # set after a send succeeds. But an account with no number will
             # not grow one between two sweeps, so that same retry recomposed
             # this same answer with a fresh model call every two seconds for
-            # hours on 2026-08-22. Attempt it once, record it as handled, and
-            # say so once instead of every cycle.
+            # hours on 2026-08-22.
             #
-            # In RAM only: the durable anticipy_says record is the proof she
-            # SPOKE, and she did not. A number added to the account is picked
-            # up by every job after this one, and by this one after the next
-            # restart — the honest cost of not writing a lie into the feed.
-            if not can_reach_owner(anticipy):
-                REPORTED.add(job["id"])
-                print(f"result for {job['id']} has nowhere to go — no phone on "
-                      f"this account, not composing: {goal[:60]}")
-                continue
+            # THE CHANNEL WAS THE PROBLEM, NEVER THE ANSWER. Stopping the
+            # burn by dropping the result on the floor threw away real work:
+            # on that same account the browser HAD drafted the invoice email
+            # to Devon in his Gmail, and the only sentence that said so was
+            # composed, refused, recomposed and refused again for hours. He
+            # was never told, by anything, that the errand he asked for was
+            # finished. Two failures, and the silent one is the worse one.
+            #
+            # No phone is not unreachable, it is UNTEXTABLE. The feed needs
+            # no number and no Twilio — the app reads these rows, and for the
+            # research lane above the feed write IS the delivery. So compose
+            # ONCE, put the answer where he will actually find it, and record
+            # it as said, because this time it was. That is the difference
+            # from the loop: the loop paid for a sentence aimed at a channel
+            # that did not exist.
+            untextable = not can_reach_owner(anticipy)
             # A finished task with nothing written on it is still finished, and
             # he asked for it. Staying quiet here would mean his table gets
             # booked and he never learns it — the success case of the exact
@@ -1520,6 +1574,18 @@ def report_finished_jobs(anticipy) -> None:
                 "what_you_found": result or "(nothing recorded)",
             }) or (f"Couldn't get there on {goal}." if failed
                    else result or f"That's done: {goal}.")
+            if untextable:
+                # REPORTED first, then the durable write — the same order as
+                # every other delivery in this function, for the same reason:
+                # post_event ends in raise_for_status, and unwinding after the
+                # answer has been delivered is what put the identical message
+                # out again two seconds later, forever.
+                REPORTED.add(job["id"])
+                post_event("anticipy_says", said, decision="done", goal=goal)
+                print(f"result for {job['id']} has nowhere to go by text — no "
+                      f"phone on this account — so it went to the feed "
+                      f"instead of to a text: {said[:80]}")
+                continue
             if not anticipy.notify_owner(said):
                 print(f"result for {job['id']}: send failed, not recording it as said")
                 continue
@@ -2531,6 +2597,31 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # real ask go out at once rather than serve out a suppression it
             # never earned. The key exists only so this lands in the log once
             # instead of every two seconds.
+            #
+            # AND THIS ONE DOES *NOT* FALL BACK TO THE FEED, unlike the
+            # finished-job reporter above. Weighed and rejected, twice over:
+            #
+            #   1. It is already there. A needs_user job carries the blocker
+            #      in its own `result`, and the app renders exactly that —
+            #      popup.js: `needs_user: (e) => "I stopped and I need you:
+            #      ${e}"`, with Start-a-fresh-attempt beside it. An
+            #      anticipy_says row would put the same obstacle on the same
+            #      screen a second time in her voice. A finished job's answer
+            #      is nowhere until she says it; a stuck job's question is
+            #      already on his desk.
+            #   2. It would eat the real ask. These records ARE the durable
+            #      dedup: need_already_asked and asks_for_goal read them back
+            #      as proof she asked. Writing one while nothing was sent
+            #      makes the next 3 hours "already asked" — so a number added
+            #      to the account mid-window would be met with silence, the
+            #      one thing the note above exists to prevent — and three
+            #      parked sweeps would spend the whole STUCK_ASKS_CEILING
+            #      budget without a single question ever reaching him.
+            #
+            # So the answer of a finished job goes to the feed, and the
+            # question of a parked one waits for a channel that can carry a
+            # reply. Duplicating a card in order to lie to a dedup guard is
+            # not delivery.
             if not can_reach_owner(anticipy):
                 nowhere_key = f"unreachable:{local_key}"
                 if not sent_moments_ago(nowhere_key):

@@ -54,6 +54,7 @@ const suites = [
   "test_agent_integration.mjs",
   "test_theme_contract.mjs",
   "test_watch_lease.mjs",
+  "test_owner_profile_needs_owner.mjs",
 ];
 // A suite listed TWICE runs twice and inflates the number in the pass line —
 // and that number is exactly what a person reads to decide whether coverage
