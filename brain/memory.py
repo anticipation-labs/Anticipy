@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS profile_facts (
     fact TEXT NOT NULL,
     importance INTEGER NOT NULL DEFAULT 3,   -- 1-5, model-judged at distillation
     confidence REAL NOT NULL DEFAULT 0.6,    -- grows each time the fact re-appears
-    source TEXT NOT NULL DEFAULT 'consolidation',  -- consolidation | interview | import
+    source TEXT NOT NULL DEFAULT 'consolidation',  -- consolidation | interview | import | supervised_mail
     provenance TEXT NOT NULL DEFAULT '[]',   -- JSON list of episode ids
     first_seen_ts REAL NOT NULL,
     last_seen_ts REAL NOT NULL
@@ -71,6 +71,26 @@ CREATE TABLE IF NOT EXISTS consolidation_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+-- THE VETO. design/day-zero.md §3: "Every fact is vetoable. A tap deletes it
+-- and marks it never-re-derive." Deleting the row alone is not a veto — the
+-- next supervised read reads the same inbox and helpfully puts the same fact
+-- back, so the tap would look broken to the one person it exists for.
+--
+-- This is the smallest honest store: it lives in the SAME per-owner SQLite as
+-- the facts it vetoes (brain/supervisor.py:85-93, mode 0o700), so a veto is
+-- deleted by the same account delete that deletes the fact and can never
+-- outlive it. `CREATE TABLE IF NOT EXISTS` in SCHEMA runs on every Memory()
+-- open, so existing owner databases gain it with no migration.
+--
+-- `fact` is kept verbatim for audit ("why did she stop knowing this?"), `norm`
+-- is the token-normalised form the re-derivation check compares against.
+CREATE TABLE IF NOT EXISTS vetoed_facts (
+    id INTEGER PRIMARY KEY,
+    fact TEXT NOT NULL,
+    norm TEXT NOT NULL,
+    ts REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vetoed_norm ON vetoed_facts(norm);
 """
 
 # Full-text index so recall searches EVERY episode instead of the newest few.
@@ -403,7 +423,12 @@ class Memory:
         heard = self.db.execute(
             "SELECT text FROM episodes WHERE ts>=? ORDER BY ts", (since_ts,)
         ).fetchall()
-        profile = [{"fact": f["fact"], "importance": f["importance"]}
+        # `source` is carried so the briefing prompt can tell what the owner
+        # told us from what was imported off a calendar somebody else wrote.
+        # Projecting it away here silently laundered attacker-controlled text
+        # into a block BRIEFING_SYSTEM reads as established fact.
+        profile = [{"fact": f["fact"], "importance": f["importance"],
+                    "source": f.get("source", "")}
                    for f in self.profile_facts(limit=10)]
         return {"profile": profile,
                 "heard": [h[0] for h in heard],
@@ -417,22 +442,120 @@ class Memory:
         """Seed the profile directly — the day-zero interview (roadmap §8)
         writes what he tells her here, so she is not amnesiac on install.
         Merges into an existing row when it already states the same fact
-        (re-posting an interview answer must not dupe). Returns the row id."""
+        (re-posting an interview answer must not dupe). Returns the row id,
+        or 0 when the fact is under veto and therefore nothing was written."""
         text = (text or "").strip()
         if not text:
             raise ValueError("remember_fact needs actual text")
         ts = ts or time.time()
         importance = max(1, min(5, int(importance)))
+        if source == "interview":
+            # THE OWNER'S OWN THUMBS LIFT THEIR OWN VETO.
+            #
+            # The veto means "stop DERIVING this", not "stop listening to me".
+            # Their tap set it; them typing the fact again is them changing
+            # their mind, and a stale veto silently swallowing their own words
+            # would be the same class of bug as the tap not working — she looks
+            # like she ignored them. Nothing else lifts it: a second supervised
+            # read and a consolidation pass are exactly the re-derivations the
+            # veto exists to stop.
+            self._lift_veto(text)
         match = self._find_same_fact(text)
         changed = self._last_match_changed_detail
         if match is not None:
             self._merge_fact(match, importance, ts, [],
-                             new_text=text if changed else None)
+                             new_text=text if changed else None, source=source)
             self.db.commit()
             return match
         fid = self._insert_fact(text, importance, confidence, source, ts, [])
         self.db.commit()
         return fid
+
+    def forget_fact(self, text: str) -> int:
+        """THE VETO, server half. design/day-zero.md §3: "Every fact is
+        vetoable. A tap deletes it and marks it never-re-derive."
+
+        Two halves, and the second is the one that makes the tap mean
+        anything: delete every profile row that states this fact, AND record
+        the veto. Deleting alone is cosmetic — the next supervised read opens
+        the same inbox, distils the same subject line, and the fact is back
+        within one refresh, which reads as "she ignored me" to the one person
+        the gesture exists for.
+
+        Returns how many rows were deleted. Zero is a normal answer, not a
+        failure: the app can veto a line it is showing before the worker has
+        ingested the event that would have created the row, and the veto still
+        has to stick.
+        """
+        text = (text or "").strip()
+        if not text:
+            return 0
+        norm = " ".join(_fact_tokens(text))
+        removed = 0
+        for rid, fact in self.db.execute(
+                "SELECT id, fact FROM profile_facts").fetchall():
+            if self._same_as(text, fact):
+                self.db.execute("DELETE FROM profile_facts WHERE id=?", (rid,))
+                removed += 1
+        if not self.db.execute("SELECT 1 FROM vetoed_facts WHERE norm=?",
+                               (norm,)).fetchone():
+            self.db.execute(
+                "INSERT INTO vetoed_facts(fact, norm, ts) VALUES (?,?,?)",
+                (text, norm, time.time()))
+        self.db.commit()
+        return removed
+
+    def _same_as(self, a: str, b: str) -> bool:
+        """Do two strings state the same fact? This is the DETERMINISTIC tier
+        of _find_same_fact, factored out because the veto needs exactly this
+        notion of sameness and must hold with no model available: a veto that
+        only catches character-identical text is defeated by a reword on the
+        second read, which is the whole failure it exists to prevent.
+
+        Numbers are NOT decisive here, deliberately unlike _find_same_fact.
+        There a changed number is an UPDATE worth keeping ("dinner at 6" ->
+        "at 8", see the comment at _find_same_fact). Here it is the vetoed
+        fact wearing one new detail ("a proposal is in flight" -> "a $40k
+        proposal is in flight") and the owner said not to keep it. Blocking a
+        bit too much of what they asked her to forget is the safe direction;
+        letting it back is the bug the tap gets reported for.
+        """
+        if " ".join(_fact_tokens(a)) == " ".join(_fact_tokens(b)):
+            return True
+        wa, wb = self._compare_words(a), self._compare_words(b)
+        if not wa or not wb:
+            return False
+        # Compared on the SUBJECT — the same reason _find_same_fact compares
+        # subjects when numbers differ: counting the differing numbers pushes
+        # the score down by exactly the thing being tested for.
+        sa = {w for w in wa if not w.isdigit()}
+        sb = {w for w in wb if not w.isdigit()}
+        if sa and sb and len(sa & sb) / len(sa | sb) >= 0.8:
+            return True
+        return len(wa & wb) / len(wa | wb) >= 0.8
+
+    def _is_vetoed(self, text: str) -> bool:
+        """Has the owner told her never to re-derive this? Asked at the two
+        lowest writers rather than at the public seam, so a caller that
+        reaches _insert_fact or _merge_fact directly — consolidate() does —
+        cannot route around it."""
+        text = (text or "").strip()
+        if not text:
+            return False
+        if self.db.execute("SELECT 1 FROM vetoed_facts WHERE norm=?",
+                           (" ".join(_fact_tokens(text)),)).fetchone():
+            return True
+        for (fact,) in self.db.execute(
+                "SELECT fact FROM vetoed_facts").fetchall():
+            if self._same_as(text, fact):
+                return True
+        return False
+
+    def _lift_veto(self, text: str) -> None:
+        for rid, fact in self.db.execute(
+                "SELECT id, fact FROM vetoed_facts").fetchall():
+            if self._same_as(text, fact):
+                self.db.execute("DELETE FROM vetoed_facts WHERE id=?", (rid,))
 
     def profile_facts(self, limit: Optional[int] = None) -> list[dict]:
         """The distilled profile, most important-and-fresh first. Salience
@@ -558,12 +681,17 @@ class Memory:
                 changed = self._last_match_changed_detail
                 if match is not None:
                     self._merge_fact(match, imp, fact_ts, eps,
-                                     new_text=text if changed else None)
+                                     new_text=text if changed else None,
+                                     source="consolidation")
                     merged += 1
                 else:
-                    self._insert_fact(text, imp, 0.6, "consolidation",
-                                      fact_ts, eps)
-                    new += 1
+                    # Counted only if a row actually landed. _insert_fact
+                    # returns 0 for a vetoed fact, and a pass that reports
+                    # writing facts it refused would make the veto invisible
+                    # in the one number anybody watches.
+                    if self._insert_fact(text, imp, 0.6, "consolidation",
+                                         fact_ts, eps):
+                        new += 1
             self._state_set("last_episode_id", str(rows[-1][0]))
             self._state_set("last_run_ts", str(now))
             self._state_set(f"consolidate_fail_{last}", "0")
@@ -603,6 +731,11 @@ class Memory:
                 "ts": f["last_seen_ts"], "quote": None,
                 "importance": f["importance"],
                 "salience": f["salience"] * rel,
+                # Carried so the caller can tell what the OWNER told us from
+                # what was IMPORTED off a calendar invite somebody else wrote.
+                # Without it every fact reaches the prompt with equal
+                # authority, and a meeting title is attacker-controlled text.
+                "source": f.get("source", ""),
             })
         out.sort(key=lambda f: -f["salience"])
         if len(out) < limit:
@@ -621,6 +754,7 @@ class Memory:
                     "ts": f["last_seen_ts"], "quote": None,
                     "importance": f["importance"],
                     "salience": 0.0,
+                    "source": f.get("source", ""),
                 })
         return out[:limit]
 
@@ -691,7 +825,8 @@ class Memory:
             for _overlap, rid, fact in sorted(near, reverse=True)[:3]:
                 try:
                     res = self.llm.chat(SAME_FACT_SYSTEM,
-                                        json.dumps({"a": fact, "b": text}))
+                                        json.dumps({"a": fact, "b": text}),
+                                        aux=True)
                     if json.loads(_extract_json(res.text)).get("same") is True:
                         return rid
                 except Exception:
@@ -700,6 +835,13 @@ class Memory:
 
     def _insert_fact(self, text: str, importance: int, confidence: float,
                      source: str, ts: float, episode_ids: list[int]) -> int:
+        """Returns the new row id, or 0 when the fact is under veto and no row
+        was written. The check sits HERE, at the lowest writer, because
+        consolidate() inserts without going through remember_fact — a gate at
+        the public seam only would let the nightly pass quietly re-derive
+        exactly what the owner tapped away."""
+        if self._is_vetoed(text):
+            return 0
         cur = self.db.execute(
             "INSERT INTO profile_facts(fact, importance, confidence, source, "
             "provenance, first_seen_ts, last_seen_ts) VALUES (?,?,?,?,?,?,?)",
@@ -708,16 +850,52 @@ class Memory:
         return cur.lastrowid
 
     def _merge_fact(self, fact_id: int, importance: int, ts: float,
-                    episode_ids: list[int], new_text: Optional[str] = None) -> None:
+                    episode_ids: list[int], new_text: Optional[str] = None,
+                    source: str = "") -> None:
         """A restatement is evidence, not a new row: bump confidence, keep
         the higher importance, extend provenance, refresh last_seen. The
         original wording stays — churning the text on every restatement
-        would make the profile impossible to audit."""
+        would make the profile impossible to audit.
+
+        `source` is the provenance of the RESTATEMENT, and it only ever
+        restricts the rewrite — see the two guards below. Both live here
+        rather than in the callers because this is the one place a row's
+        wording can change, and a rewrite is the only way text from one
+        provenance can end up sitting in a row labelled with another."""
         row = self.db.execute(
-            "SELECT importance, confidence, provenance, last_seen_ts "
-            "FROM profile_facts WHERE id=?", (fact_id,)).fetchone()
+            "SELECT importance, confidence, provenance, last_seen_ts, fact, "
+            "source FROM profile_facts WHERE id=?", (fact_id,)).fetchone()
         if not row:
             return
+        if new_text:
+            # GUARD 1 — THE VETO SURVIVES A MERGE.
+            #
+            # Deleting the row and blocking the insert is not enough: a
+            # near-match rewrite would write the vetoed wording INTO a
+            # surviving neighbour, and the fact the owner tapped away is back
+            # in the profile under a different row id. This is the "put the
+            # marking where a later merge cannot miss it" case.
+            #
+            # GUARD 2 — UNTRUSTED TEXT MAY NOT BORROW THE OWNER'S VOICE.
+            #
+            # A merge keeps the row's existing `source`, so rewriting a row
+            # sourced "interview" with text distilled off a mail read leaves
+            # attacker-written words wearing the owner's provenance — after
+            # which every consumer of _UNTRUSTED_SOURCES reads them as the
+            # owner's own, and fill_gaps_from_memory may promote them into an
+            # approved plan value. The rewrite is dropped and the owner's
+            # wording stands; the restatement still counts as evidence
+            # (confidence, last_seen), which is all an untrusted source has
+            # standing to contribute.
+            #
+            # Imported locally: anticipy_core imports this module, so the
+            # module-level import is a cycle. An ImportError propagates to
+            # remember_fact's caller, leaving the row unchanged — fail closed.
+            from .anticipy_core import _UNTRUSTED_SOURCES
+            launders = (str(source or "") in _UNTRUSTED_SOURCES
+                        and str(row[5] or "") not in _UNTRUSTED_SOURCES)
+            if self._is_vetoed(new_text) or launders:
+                new_text = None
         if new_text:
             # The fact moved (6pm -> 8pm). Keep the row, its provenance and
             # its history, but say the true thing: an audit trail that
@@ -790,7 +968,7 @@ class Memory:
     def _extract(self, text: str) -> Extraction:
         if self.llm:
             try:
-                res = self.llm.chat(EXTRACT_SYSTEM, text)
+                res = self.llm.chat(EXTRACT_SYSTEM, text, aux=True)
                 raw = json.loads(_extract_json(res.text))
 
                 def names(key: str) -> list[str]:

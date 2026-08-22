@@ -3,81 +3,370 @@
   <head>
     <meta charset="utf-8" />
     <title>Anticipy Claude Version</title>
+    <!-- Blocking, in <head>, and not a module: it sets the palette before the
+         first frame so nobody watches this popup change colour. See theme.js. -->
+    <script src="theme.js"></script>
+    <!-- Styles are INLINE, not a shared stylesheet, on purpose. build-zip.sh
+         derives what it packages from the manifest and from <script src> and
+         JS imports — it does not resolve <link rel=stylesheet>, so a
+         stylesheet would ship as a page with no design at all and nothing
+         would fail loudly (that is exactly how the zip once shipped without
+         workflow_state.js). theme.js is reachable BECAUSE it is a <script
+         src>; CSS has no such path in. -->
     <style>
+      /* ===== shared: theme + scale + the toggle. Byte-identical in popup.html
+         and onboarding.html — extension/tests/test_theme_contract.mjs fails if
+         these two blocks ever drift apart. Edit both, or neither. ===== */
+
+      /* TWO PALETTES, ONE SET OF ROLES. Every rule past this block reads a
+         ROLE (--bg, --text, --accent), never a colour, so a theme is a value
+         swap rather than a second stylesheet. That matters because the parts
+         of this design that are dark-ONLY are not the colours — they are a
+         white top-lit hairline, a rgba(0,0,0,.55) shadow and grain in
+         plus-lighter, each of which silently does nothing (or something ugly)
+         on paper.
+
+         The dark palette is the iOS app's, token for token
+         (app/ios/Anticipy/Theme.swift): this surface is the app's sibling and
+         may not invent a colour. Light has no counterpart in the app, so it is
+         a WHITE page with near-black letters, and it DARKENS the accent,
+         because champagne #c8a97e measures 2.23:1 on white. In light mode
+         champagne is a fill, never a letter.
+
+         On white there is no tone left above the page, so elevation stops
+         being a lighter fill and becomes the hairline plus the shadow: --card
+         and --raised are both #ffffff on purpose.
+
+         LIGHT IS THE DEFAULT and prefers-color-scheme is deliberately not
+         consulted; theme.js says why. */
+      :root {
+        color-scheme: light;
+        --bg: #ffffff; --surface: #f2f2f0; --card: #ffffff; --raised: #ffffff;
+        --edge: rgba(17, 17, 17, 0.14); --edge-lit: rgba(17, 17, 17, 0.20);
+        /* 18.9:1, 8.5:1 and 5.3:1 on white. --muted is the only thing here
+           allowed under AA (3.3:1), because it dresses a disabled code and a
+           placeholder — neither of which is a sentence. */
+        --text: #111111; --text-2: #4d4d4d; --text-3: #6b6b6b; --muted: #8e8e8e;
+        /* 5.8:1 on --surface, the darkest ground either of these ever sits on. */
+        --accent: #7c5729; --alarm: #a03d28;
+        --dot-off: #d4d4d2;
+        /* "Done" and "not the point any more". On white champagne IS the dim
+           form of the accent — 2.23:1 is exactly the weight a finished step
+           should carry — and on black it is the accent at 45%. */
+        --accent-dim: #c8a97e;
+        --shadow-near: rgba(17, 17, 17, 0.07); --shadow-far: rgba(17, 17, 17, 0.11);
+        /* Same texture, opposite operator: grain must DARKEN paper (tooth) and
+           LIGHTEN ink (film grain). `overlay` collapses to nothing on both,
+           which is how you conclude grain "doesn't work". */
+        --grain-blend: multiply; --grain-opacity: 0.03;
+        --bloom: rgba(200, 169, 126, 0.22); --bloom-lit: rgba(200, 169, 126, 0.48);
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #000000; --surface: #0d0d0d; --card: #141414; --raised: #1c1c1c;
+        --edge: rgba(255, 255, 255, 0.11); --edge-lit: rgba(255, 255, 255, 0.16);
+        /* Dark has two text levels, not three: #8a8a8a is 6.1:1 on black but
+           only 4.9:1 on --raised, so it is kept for placeholders and disabled
+           controls while labels stay sand — size, tracking and case are what
+           make them subordinate. */
+        --text: #f5f0eb; --text-2: #d4cec7; --text-3: #d4cec7; --muted: #8a8a8a;
+        --accent: #c8a97e; --alarm: #c96a5a;
+        --dot-off: #3a3a3a;
+        --accent-dim: rgba(200, 169, 126, 0.45);
+        --shadow-near: rgba(0, 0, 0, 0.70); --shadow-far: rgba(0, 0, 0, 0.50);
+        --grain-blend: plus-lighter; --grain-opacity: 0.035;
+        --bloom: rgba(200, 169, 126, 0.16); --bloom-lit: rgba(200, 169, 126, 0.3);
+      }
+      :root {
+        /* Champagne is the brand's signature and stays a FILL in both themes:
+           #c8a97e carries #000000 at 9.0:1, so a filled button needs no
+           per-theme text colour and the logo dot never changes hue. */
+        --fill: #c8a97e; --on-fill: #000000;
+        /* The bloom's outer stop. A named token, not a literal, so that every
+           colour outside this block is a ROLE — which is what makes the guard
+           in test_theme_contract.mjs able to say "no page hard-codes a
+           colour" and mean it. */
+        --bloom-out: rgba(200, 169, 126, 0);
+        /* One spacing scale (Theme.Space). Space BETWEEN groups is ~2.5x space
+           WITHIN one; that ratio is what makes a layout instead of a list. */
+        --hair: 4px; --tight: 8px; --snug: 12px; --base: 16px; --pad: 20px;
+        --roomy: 24px; --section: 32px;
+        --r-small: 12px; --r-card: 20px;
+        /* Theme.spring (response .35, damping .8) has no overshoot you can
+           see, so its CSS twin is a hard ease-out — never a bounce. */
+        --spring: 240ms cubic-bezier(0.22, 1, 0.36, 1);
+        /* ui-serif is how the web reaches New York, the same way the app
+           reaches it as a font DESIGN: Font.custom("New York") resolves to nil
+           and falls back to SF Pro silently, which is why the brand's voice was
+           absent on device for months. Georgia stays as the non-Apple fallback,
+           but it is a wider, more bookish face — not the app's headline. */
+        --display: ui-serif, "New York", Georgia, "Times New Roman", serif;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+      }
+
+      /* The mark is drawn in role colours rather than the brand hexes it used
+         to hard-code: stroke="#f5f0eb" is an invisible logo on paper. */
+      .mark rect { stroke: var(--text); }
+      .mark-dot { fill: var(--accent); }
+
+      /* The only control on either surface that is not about pairing, so it is
+         the quietest thing on it — a hairline pill that earns an edge on
+         hover. */
+      .themetoggle {
+        display: inline-flex; align-items: center; flex: none;
+        padding: 5px 11px; border-radius: 999px;
+        border: 1px solid var(--edge); background: var(--surface);
+        color: var(--text-3); font-family: var(--sans); font-size: 11px;
+        font-weight: 600; letter-spacing: 0.4px; cursor: pointer;
+        transition: color var(--spring), border-color var(--spring);
+      }
+      .themetoggle:hover { color: var(--text); border-color: var(--accent); }
+      .themetoggle span { display: inline-flex; align-items: center; gap: 6px; }
+      .themetoggle svg { width: 13px; height: 13px; flex: none; }
+      /* Two glyphs, one visible. The label names what the click DOES — a
+         toggle that names its current state reads as a status line. */
+      .themetoggle .ondark, :root[data-theme="dark"] .themetoggle .onlight { display: none; }
+      :root[data-theme="dark"] .themetoggle .ondark { display: inline-flex; }
+      /* ===== end shared ===== */
+
+      * { box-sizing: border-box; }
+      /* Chrome sizes the popup to its content. min() keeps it honest if Chrome
+         ever hands us a narrower viewport instead of overflowing sideways. */
       body {
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        width: 300px; padding: 16px; margin: 0;
-        background: #0c0c0c; color: #f5f0eb;
+        width: min(360px, 100vw); margin: 0; padding: var(--base);
+        background: var(--bg); color: var(--text);
+        font-family: var(--sans); font-size: 14px; line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
       }
       [hidden] { display: none !important; }
-      h1 { font-family: Georgia, serif; font-weight: 400; font-size: 18px; margin: 0; display: flex; align-items: center; gap: 8px; }
-      h2 { font-family: Georgia, serif; font-weight: 400; font-size: 13px; margin: 0 0 6px; color: #d4cec7; }
-      .dot { width: 8px; height: 8px; border-radius: 50%; background: #252525; flex: none; }
-      .dot.on { background: #c8a97e; }
-      p { font-size: 12px; color: #8a8a8a; margin: 10px 0; line-height: 1.5; }
-      a { color: #c8a97e; font-size: 12px; }
-      a:focus-visible, button:focus-visible { outline: 2px solid #c8a97e; outline-offset: 2px; }
-      .panel { background: #161616; border: 1px solid #252525; border-radius: 12px; padding: 12px; margin: 12px 0; }
-      .panel p { margin: 0 0 6px; }
-      .panel p:last-child { margin-bottom: 0; }
+      body > * { position: relative; z-index: 1; }
+
+      /* Flat #000000 is the flattest surface a screen can render and reads as
+         an absence of pixels; flat white reads as a browser default. A whisper
+         of generated grain makes either one a material. Generated by the
+         browser, never a bundled PNG. */
+      .grain {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        opacity: var(--grain-opacity); mix-blend-mode: var(--grain-blend);
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
+      }
+
+      /* ---------------------------------------------------------- type */
+      /* Anything she is SAYING is at reading size in --text. --text-3 never
+         carries a sentence: it is for labels, counts and error codes. */
+      .voice { font-size: 15px; line-height: 1.55; color: var(--text); margin: 0; }
+      .aside { font-size: 13px; line-height: 1.6; color: var(--text-2); margin: 0; }
+      /* Labels, counts, error codes. Size, tracking and case are what make it
+         subordinate — not a colour you have to lean in to read. */
+      .meta {
+        font-size: 11px; font-weight: 600; letter-spacing: 1.1px;
+        text-transform: uppercase; color: var(--text-3); margin: 0;
+      }
+      /* 12px, but never the label colour: both of these carry a real
+         sentence. */
+      .note { font-size: 12px; line-height: 1.6; color: var(--text-2); margin: 0; }
+
+      /* ------------------------------------------------------- masthead */
+      .top { display: flex; align-items: center; gap: var(--tight); }
+      .markwrap { position: relative; display: flex; flex: none; }
+      /* The one eye-anchor on the surface, always behind the mark. Two is
+         wallpaper. */
+      .bloom {
+        position: absolute; left: 50%; top: 50%; width: 120px; height: 120px;
+        transform: translate(-50%, -50%); pointer-events: none;
+        background: radial-gradient(circle, var(--bloom), var(--bloom-out) 70%);
+        filter: blur(12px);
+        transition: opacity var(--spring), transform var(--spring);
+      }
+      h1 {
+        font-family: var(--display); font-weight: 400; font-size: 18px;
+        letter-spacing: -0.2px; margin: 0; flex: 1; min-width: 0;
+      }
+      .pill {
+        display: inline-flex; align-items: center; gap: 6px; flex: none;
+        font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+        color: var(--text-3); background: var(--surface);
+        border: 1px solid var(--edge); border-radius: 999px;
+        padding: 3px 9px 3px 7px;
+      }
+      .pill.on { color: var(--accent); border-color: var(--accent); }
+      .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dot-off); flex: none; }
+      .dot.on { background: var(--accent); }
+      #state { margin: var(--base) 0 0; }
+
+      /* ---------------------------------------------------------- cards */
+      /* A card with an edge you can see and a light source above it. The old
+         border was one flat hairline at 1.09:1, i.e. optically absent on every
+         card that shipped. */
+      .card {
+        margin-top: var(--base); padding: var(--snug) var(--base) var(--base);
+        background: var(--card); border-radius: var(--r-card);
+        border: 1px solid transparent;
+        background-image:
+          linear-gradient(var(--card), var(--card)),
+          linear-gradient(var(--edge), var(--edge));
+        background-origin: border-box;
+        background-clip: padding-box, border-box;
+      }
+      /* Level-2 elevation, and the only mechanism this surface has for saying
+         "this matters more than that". Exactly one card may be lit. */
+      .card.lit {
+        background-image:
+          linear-gradient(var(--raised), var(--raised)),
+          linear-gradient(var(--edge-lit), var(--edge));
+        box-shadow: 0 1px 2px var(--shadow-near), 0 10px 18px var(--shadow-far);
+      }
+      .card > * + * { margin-top: var(--tight); }
+      .card > .meta + * { margin-top: var(--hair); }
+
+      /* ----------------------------------------------------------- code */
+      /* The one thing on this surface a person has to act on, so it is the
+         biggest thing on it. */
       .code {
-        display: block; width: 100%; margin: 4px 0 6px; padding: 8px 0;
-        font-family: Georgia, serif; font-size: 30px; letter-spacing: 8px; text-indent: 8px;
-        color: #c8a97e; background: transparent; border: none; border-radius: 8px;
-        cursor: pointer; text-align: center;
+        display: block; width: 100%; padding: var(--tight) 0 10px;
+        font-family: var(--display); font-size: 34px; line-height: 1.1;
+        letter-spacing: 10px; text-indent: 10px; text-align: center;
+        color: var(--accent); background: transparent;
+        border: none; border-radius: var(--r-small); cursor: pointer;
       }
-      .code:hover { background: #1e1e1e; }
-      .row { display: flex; gap: 8px; margin-top: 10px; }
+      .code:hover { background: var(--surface); }
+      .code[disabled] { cursor: default; color: var(--muted); }
+
+      /* -------------------------------------------------------- actions */
+      .row { display: flex; flex-wrap: wrap; gap: var(--tight); margin-top: var(--snug); }
       button.act {
-        padding: 7px 14px; border-radius: 999px; border: 1px solid #c8a97e;
-        background: transparent; color: #c8a97e; font-size: 12px; font-weight: 600; cursor: pointer;
+        padding: 8px 15px; border-radius: 999px; border: 1px solid var(--accent);
+        background: transparent; color: var(--accent);
+        font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer;
+        transition: transform var(--spring), background var(--spring), filter var(--spring);
       }
-      button.act.filled { background: #c8a97e; color: #0c0c0c; border-color: #c8a97e; }
-      .said { color: #f5f0eb; }
-      .why { color: #8a8a8a; font-size: 11px; border-top: 1px solid #252525; padding-top: 8px; margin-top: 10px; }
+      button.act.filled { background: var(--fill); border-color: var(--fill); color: var(--on-fill); }
+      button.act:hover { filter: brightness(1.08); }
+      /* Every press is acknowledged within a frame; the work can take seconds
+         as long as the touch is not. 0.96 + a brightness lift, because 3% of
+         scale alone sits under the perception threshold. */
+      button.act:active { transform: scale(0.96); }
+      .plain {
+        padding: 0; border: 0; background: none; color: var(--accent);
+        font-family: var(--sans); font-size: 13px; cursor: pointer;
+        text-decoration: underline; text-underline-offset: 3px;
+      }
+      a { color: var(--accent); font-size: 13px; }
+      a:focus-visible, button:focus-visible, summary:focus-visible {
+        outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px;
+      }
+
+      /* --------------------------------------------------------- states */
+      .warn { color: var(--text-2); border-left: 2px solid var(--accent); padding-left: var(--snug); }
+      .bad { border-left-color: var(--alarm); }
+      #jobresult { color: var(--text); }
+      .foot {
+        margin-top: var(--roomy); padding-top: var(--snug);
+        border-top: 1px solid var(--edge); font-size: 12px;
+      }
+      /* The theme control lives down here with the other preferences, so the
+         masthead keeps saying the only thing it is for: whether this browser
+         is hers yet. */
+      .links {
+        display: flex; align-items: center; gap: var(--snug);
+        margin-top: var(--snug);
+      }
+      .links .themetoggle { margin-left: auto; }
+
+      /* ---------------------------------------------------------- motion */
+      /* Three champagne capsules on the 0.8s harmonic — half the 1.6s breath.
+         A working agent shows a waveform, never a spinner: a stock spinner is
+         the most internal-tool pixel available. */
+      .bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 11px; vertical-align: -1px; }
+      .bars i { width: 3px; height: 11px; border-radius: 1.5px; background: var(--accent); transform: scaleY(0.4); }
+      @media (prefers-reduced-motion: no-preference) {
+        .bars i { animation: wave 0.8s ease-in-out infinite; }
+        .bars i:nth-child(2) { animation-delay: 0.13s; }
+        .bars i:nth-child(3) { animation-delay: 0.27s; }
+        /* The heartbeat: a still surface reads as dead, a breathing one is her.
+           1.6s, the same period the app breathes at, so the two feel like one
+           organism when they are side by side on a desk. */
+        .waiting .mark-dot, .waiting .dot.on { animation: breathe 1.6s ease-in-out infinite; }
+      }
+      @keyframes wave { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+      @keyframes breathe { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.16); } }
+      .mark-dot { transform-box: fill-box; transform-origin: center; }
+      /* Nothing here is load-bearing motion, so under reduce it all stops
+         rather than being softened. */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+      }
     </style>
   </head>
   <body>
-    <h1>
-      <svg width="20" height="20" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
-        <rect x="10.5" y="3" width="11" height="26" rx="5.5" stroke="#F5F0EB" stroke-width="2.4"/>
-        <circle cx="16" cy="20" r="2" fill="#C8A97E"/>
-      </svg>
-      Anticipy Claude Version <span class="dot" id="dot" aria-hidden="true"></span>
-    </h1>
+    <div class="grain" aria-hidden="true"></div>
 
-    <p id="status" role="status" aria-live="polite">Checking in…</p>
+    <header class="top">
+      <span class="markwrap">
+        <span class="bloom" aria-hidden="true"></span>
+        <svg class="mark" width="22" height="22" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+          <rect x="10.5" y="3" width="11" height="26" rx="5.5" stroke-width="2.4" />
+          <circle class="mark-dot" cx="16" cy="20" r="2" />
+        </svg>
+      </span>
+      <h1>Anticipy Claude Version</h1>
+      <span class="pill" id="linkpill">
+        <span class="dot" id="linkdot" aria-hidden="true"></span><span id="linktext">Checking&hellip;</span>
+      </span>
+    </header>
 
-    <div class="panel" id="pairbox" hidden>
-      <p>Type this code into the Anticipy Claude Version app on your iPhone:</p>
+    <!-- The one lit sentence: whatever is most true right now. -->
+    <p class="voice" id="state" role="status" aria-live="polite">Checking in&hellip;</p>
+
+    <!-- Registered, not linked yet. The iPhone app's own error copy sends
+         people here for the current code, so this is where it has to be. -->
+    <section class="card lit" id="codebox" hidden aria-labelledby="codehead">
+      <p class="meta" id="codehead">Your code</p>
       <button class="code" id="paircode" type="button" aria-describedby="copyhint"></button>
-      <p id="copyhint">Click the code to copy it.</p>
-    </div>
+      <p class="aside" id="copyhint" role="status" aria-live="polite">Click the code to copy it.</p>
+      <p class="aside">On your iPhone: <b>Anticipy Claude Version</b> &rarr; <b>Settings</b> &rarr;
+      <b>Your computer</b>. Type it into the six-digit field — it links itself
+      the moment the sixth digit lands.</p>
+      <button class="plain" id="getcode" type="button" hidden>Get me a code</button>
+    </section>
 
-    <p id="pairedline" hidden class="said">Paired with your iPhone.</p>
-
-    <section class="panel" id="jobbox" hidden aria-labelledby="jobhead">
-      <h2 id="jobhead">Right now</h2>
-      <p id="jobdoing" class="said" role="status" aria-live="polite"></p>
-      <p id="jobresult" hidden></p>
+    <section class="card" id="jobbox" hidden aria-labelledby="jobhead">
+      <p class="meta" id="jobhead">
+        <span id="jobheadtext">Right now</span>
+        <span class="bars" id="bars" hidden aria-hidden="true"><i></i><i></i><i></i></span>
+      </p>
+      <!-- The live one-liner off the job row, in her words. The trace beside it
+           on the row is written for whoever debugs this ("step 12: llm error",
+           raw JSON) and is never shown to a person. -->
+      <p class="voice" id="jobdoing" role="status" aria-live="polite"></p>
+      <p class="aside" id="joberrand" hidden></p>
+      <p class="aside" id="jobresult" hidden></p>
       <div class="row">
         <button class="act filled" id="openhb" type="button" hidden>Open the page</button>
         <button class="act" id="stop" type="button" hidden>Stop</button>
         <button class="act" id="again" type="button" hidden>Start it again</button>
       </div>
-      <p class="why" id="why" hidden>
-        Chrome is showing “Anticipy Claude Version started debugging this browser”. That bar is
-        Chrome telling you I'm the one clicking — leave it up until I'm done.
-        Cancelling it stops me where I am.
+      <p class="note" id="why" hidden>
+        Chrome is showing “Anticipy Claude Version started debugging this
+        browser”. That bar is Chrome telling you I'm the one clicking — leave it
+        up until I'm done. Cancelling it stops me where I am.
       </p>
     </section>
 
-    <p>Work happens here in an <b>Anticipy Claude Version</b> tab group, in the accounts you're
-    already signed into. You give me your OK once — in the app or by text —
-    before I start; then I carry out exactly that, and come back to you if what
-    I find on the page isn't what you agreed to.</p>
+    <p class="aside warn" id="offline" hidden></p>
 
-    <p><a href="onboarding.html" target="_blank" rel="noopener">How this works</a></p>
-    <script src="popup.js"></script>
+    <p class="note foot">Work happens in a collapsed <b>Anticipy Claude Version</b>
+    tab group, in the accounts you're already signed into. You give me your OK
+    once — in the app or by text — before I start.</p>
+
+    <p class="links">
+      <a href="onboarding.html" target="_blank" rel="noopener">How this works</a>
+      <a href="onboarding.html#advanced" target="_blank" rel="noopener">Setup &amp; advanced</a>
+      <button class="themetoggle" type="button" data-theme-toggle>
+        <span class="onlight"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M13.4 9.6A5.9 5.9 0 0 1 6.4 2.6a5.9 5.9 0 1 0 7 7Z"/></svg>Dark</span>
+        <span class="ondark"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="3.1" fill="currentColor"/><path stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M8 1.1v1.7M8 13.2v1.7M1.1 8h1.7M13.2 8h1.7M3.2 3.2l1.2 1.2M11.6 11.6l1.2 1.2M12.8 3.2l-1.2 1.2M4.4 11.6l-1.2 1.2"/></svg>Light</span>
+      </button>
+    </p>
+    <script type="module" src="popup.js"></script>
   </body>
 </html>

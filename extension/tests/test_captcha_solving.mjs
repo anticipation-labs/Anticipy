@@ -31,14 +31,29 @@ assert.ok(returns.filter((r) => /false/.test(r)).length >= 5,
   "no sitekey, unavailable, failed, slow, or thrown must all hand back");
 assert.ok(/handing it to the owner/.test(fn),
   "and must say so in the trace, so a hand-back is never mysterious");
-// Window widened from 900: the hand-back MESSAGE grew when it was rewritten
-// for a person ("tick the box and tell me to carry on"), which pushed
-// needs_user past the old cut-off. The assertion below is unchanged — a
-// failed solve must still hand back — only the slice it reads was too small
-// to still contain it.
-const site = loop.match(/if \(looksLikeCaptcha\(state\)\)[\s\S]{0,2400}/)[0];
-assert.ok(/trySolveChallenge/.test(site) && /needs_user/.test(site),
-  "the hand-back still follows a failed solve");
+// A failed solve no longer means ONE thing, so this asserts the rule rather
+// than the old blanket claim, and reads to the end of the block instead of a
+// character count. The window had already been widened once (900 -> 2400) and
+// grew stale again the moment the block did; a fixed slice of a live file is a
+// test that breaks for the wrong reason.
+//
+// The rule, added 2026-08-20: a wall on a site the OWNER named is terminal -
+// no other site is his hydro account - so it hands back. A wall on a source the
+// AGENT chose out of a search is one source among many on a read-only run, so
+// it abandons that host and answers from somewhere else. The failure that
+// prompted it: "I forgot to cook for my kids this afternoon" reached doordash,
+// met a human check, and asked HIM to tick a box so she could read a menu.
+const site = loop.slice(loop.indexOf('if (looksLikeCaptcha(state))'));
+const block = site.slice(0, site.indexOf('\n      // A WALL IS NOT A STALL'));
+assert.ok(/trySolveChallenge/.test(block), "solving is still attempted first");
+assert.ok(/needs_user/.test(block),
+  "and a wall the owner pointed us at still hands back");
+assert.ok(/readOnly && !ownerNamedIt/.test(block),
+  "a chosen source is only abandoned on a read-only run");
+assert.ok(/walledSources\.size < 3/.test(block),
+  "abandoning sources must be bounded, or a run could wander forever");
+assert.ok(/do not go back to it/.test(block),
+  "the model must be told the host is dead, or it re-picks the top hit");
 
 // --- bounded, and never on money or identity -------------------------------
 assert.ok(/NEVER_SOLVE/.test(hook), "protected hosts are refused outright");

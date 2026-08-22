@@ -212,8 +212,23 @@ check(!completionContradiction("Replacement, not a refund, was submitted success
   "a negated alternative does not erase a successful action");
 check(/if \(externalClick\)[\s\S]*unsupportedApprovedFacts\(facts, controlState, controlState\)[\s\S]*PRE-SUBMIT BLOCK[\s\S]*trustedClick/.test(source),
   "the exact-fact guard runs before a final click");
-check(/if \(!authorized\)[\s\S]*owner has not approved its external effect/.test(source),
+// The GATE, not the wording. This used to match the literal sentence "owner has
+// not approved its external effect", which made the assertion break the moment
+// that sentence was improved — and a test that fails when a string gets better
+// teaches people to edit tests instead of reading them. What must be true is
+// that an unapproved final control ends the run at needs_user.
+check(/if \(!authorized\) \{\s*return \(handBack = true\) && \{ status: "needs_user"/.test(source),
   "an unapproved final control is mechanically stopped");
+// AND that the person is told what they are being asked to approve. A truncated
+// echo of their own request plus a Yes button is not consent: approvalPreview,
+// amountInControl and controlDescription were written for this sentence and were
+// called from nowhere for their whole life, so both hand-backs said only that
+// "the owner has not approved its external effect" — no control, no site, no
+// amount. Both commit paths must name it.
+check((source.match(/approvalPreview\(/g) || []).length >= 2,
+  "both commit paths (click and Enter) name the control being approved");
+check(/const (preview|enterPreview) = approvalPreview\([\s\S]{0,200}?\);\s*if \(readOnly\)/.test(source),
+  "the preview is computed BEFORE the refusal, so a refusal can name it too");
 check(/cleared unapproved optional defaults/.test(source),
   "unsupported optional defaults are cleared before the final control");
 check(/PRE-SUBMIT ALIGNMENT corrected exact field values/.test(source)

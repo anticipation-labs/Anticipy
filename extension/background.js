@@ -4,7 +4,11 @@
 // no service APIs. Irreversible steps stop at a prefilled page for the user
 // (or the phone app) to confirm.
 
-import { createBackgroundTab, runAgentGoal } from "./agent_loop.js";
+import { createBackgroundTab, modelFetch, runAgentGoal } from "./agent_loop.js";
+import {
+  MAX_STEPS as READ_MAX_STEPS, leaseLapsed, runSupervisedRead,
+} from "./supervised_read.js";
+import { backendBase } from "./config.js";
 import {
   heartbeatPatch,
   isWorkflowJob,
@@ -17,31 +21,20 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.8.3";
+const ENGINE_BUILD = "0.10.0";
 
-// Production backend; override via chrome.storage.local `backendUrl` for dev.
-const DEFAULT_BASE = "https://backend-production-61e0a.up.railway.app";
 const BACKEND_LLM = "backend-proxy";
-let BASE = DEFAULT_BASE;
-chrome.storage.local.get("backendUrl").then(({ backendUrl }) => {
-  if (backendUrl) BASE = backendUrl.replace(/\/$/, "");
-});
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.backendUrl) {
-    BASE = (changes.backendUrl.newValue || DEFAULT_BASE).replace(/\/$/, "");
-  }
-});
-// Every write carries the service token when the backend has one; the guard
-// hook ignores it until enforcement is switched on, so this is safe to ship
-// ahead of the flip.
+// Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier
+// build also attached the server's master `X-Anticipy-Token` here, for the
+// single release that let an already-paired install add its per-agent
+// credential. /agent/key has returned `service_token: ""` since, and the save
+// erases the stored value, so that branch could only ever send an empty
+// header — and a browser carrying the server's master credential at all is
+// worth deleting on its own account.
 async function writeHeaders(leaseToken = "") {
-  const { serviceToken, agentId, agentToken } = await chrome.storage.local.get(
-    ["serviceToken", "agentId", "agentToken"]);
+  const { agentId, agentToken } = await chrome.storage.local.get(
+    ["agentId", "agentToken"]);
   const h = { "Content-Type": "application/json" };
-  // serviceToken is read only for the one-release migration that lets an
-  // already-paired install add its private credential. /agent/key clears it;
-  // normal job traffic authenticates as this one agent, never as the server.
-  if (serviceToken) h["X-Anticipy-Token"] = serviceToken;
   if (agentId) h["X-Anticipy-Agent-ID"] = agentId;
   if (agentToken) h["X-Anticipy-Agent-Token"] = agentToken;
   if (leaseToken) h["X-Anticipy-Lease"] = leaseToken;
@@ -66,6 +59,36 @@ const STALE_JOB_MS = 8 * 60 * 1000; // running w/ no heartbeat -> requeued
 // ran about six times this way, because nothing counted.
 const MAX_ATTEMPTS = 3;
 
+// WHAT COUNTS AS THIS BROWSER'S WORK — one definition, two callers.
+//
+// The claim poll and the stale sweep both have to name the same lanes, and
+// they used to do it with two hand-written copies of the same clause. They
+// drifted, and the way it presented was brutal: research runs in the WORKER
+// on a 120s never-heartbeated lease, so two minutes into every research job
+// the sweep saw an expired lease on a row it is FORBIDDEN to write, PATCHed
+// it, got 403, and that throw escaped the poll cycle before claimJob ever
+// ran. For the whole duration of any research job the browser lane claimed
+// nothing at all — while the heartbeat kept the phone showing "Chrome ready".
+//
+// workflow_id!="" keeps unplanned rows out; lane!="research" keeps out work
+// that belongs to the server (roadmap §6: read-only goals run in the worker,
+// and the backend's research_lane hook refuses a browser claim anyway).
+const BROWSER_LANE = 'workflow_id!="" && lane!="research"';
+const ownerLaneFilter = (status, ownerRef) =>
+  `status="${status}" && owner_ref="${ownerRef}" && ${BROWSER_LANE}`;
+
+// A SUPERVISED READ IS ITS OWN LANE, and it is invisible to the poll above on
+// purpose — twice over. It carries no `workflow_id` (there is no plan to
+// approve: the person is standing there watching), and
+// `backend/pb_hooks/research_lane.pb.js` now appends `lane != "supervised_read"`
+// to any queued poll that does not NAME the lane. That second guard exists
+// because an old extension in the wild would otherwise claim a read and run it
+// through `runAgentGoal` with the full action vocabulary — clicking and typing
+// inside somebody's mailbox, with no narration and nobody watching. So this
+// filter names the lane explicitly, exactly as `noteResearchWaiting` does.
+const supervisedReadFilter = (ownerRef) =>
+  `status="queued" && owner_ref="${ownerRef}" && lane="supervised_read"`;
+
 // ---------------------------------------------------------------- pairing
 // Each install registers itself once with a 6-digit pair code. The phone app
 // claims the code and writes `owner`; from then on this agent only takes
@@ -79,9 +102,15 @@ async function ensureRegisteredOnce() {
   await chrome.storage.local.set({ agentId });
   if (recordId) {
     if (agentCredentialInstalled && agentToken) return { agentId, agentToken, recordId };
-    // Existing installs predate per-agent credentials. Their cached service
-    // token authorizes this one migration write; the next key fetch erases it.
-    const r = await fetch(`${BASE}/agent/upgrade-credential`, {
+    // Existing installs predate per-agent credentials, and this endpoint is
+    // how they were meant to get one. It is authorized by the SERVER's master
+    // token (backend/pb_hooks/agent_auth.pb.js:53), which this browser no
+    // longer holds — see writeHeaders above. So this call has been answered
+    // 403 since that release, and a 403 returns null exactly like any other
+    // failed registration. It stays because the alternative, re-registering a
+    // fresh identity, would drop the owner pairing this row may already carry.
+    // An install stuck here needs a reinstall, not another retry.
+    const r = await fetch(`${await backendBase()}/agent/upgrade-credential`, {
       method: "POST", headers: await writeHeaders(),
       body: JSON.stringify({ record_id: recordId, agent_id: agentId }),
     });
@@ -92,7 +121,7 @@ async function ensureRegisteredOnce() {
     await chrome.storage.local.set({ agentToken, agentCredentialInstalled: true });
     return { agentId, agentToken, recordId };
   }
-  const post = (id) => fetch(`${BASE}/agent/register`, {
+  const post = async (id) => fetch(`${await backendBase()}/agent/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -179,16 +208,18 @@ async function ensureLLMKey(force = false) {
   const { openrouterKey, agentModel, serviceToken, keyFetchedAt, agentId } =
     await chrome.storage.local.get(["openrouterKey", "agentModel", "serviceToken", "keyFetchedAt", "agentId"]);
   // Refresh when ANY piece is missing or the bundle is stale — not just the
-  // key. An install that cached only a key would otherwise never learn the
-  // service token, and switching backend enforcement on would permanently
-  // brick it with no way back except a manual reinstall.
+  // key. `serviceToken !== undefined` is not about sending that token any more
+  // (writeHeaders no longer does); it is the marker that says this install has
+  // been through the CURRENT /agent/key at least once. An install that cached
+  // only a key from an older build would otherwise look complete forever and
+  // never pick up the model or the owner profile that arrive with it.
   const complete = openrouterKey === BACKEND_LLM
     && agentModel !== undefined && serviceToken !== undefined;
   const fresh = Date.now() - (keyFetchedAt || 0) < 6 * 3600 * 1000;
   if (!force && complete && fresh) return openrouterKey;
   if (!agentId) return complete ? openrouterKey : null;
   try {
-    const r = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(agentId)}`,
+    const r = await fetch(`${await backendBase()}/agent/key?agent_id=${encodeURIComponent(agentId)}`,
       { headers: await writeHeaders() });
     // A refresh that fails must never LOSE a key we already hold — a stale
     // bundle plus one backend hiccup would otherwise fail every job with
@@ -202,8 +233,9 @@ async function ensureLLMKey(force = false) {
         openrouterKey: BACKEND_LLM,
         agentModel: model || "",
         visionModel: vision_model || "",
-        // The server no longer returns its master credential. Saving an empty
-        // value also erases the migration token on upgraded installations.
+        // The server no longer returns its master credential, and nothing in
+        // this worker would send it if it did. Writing the empty value is how
+        // an upgraded install ERASES the token an older build cached.
         serviceToken: service_token || "",
         ownerProfile: owner || null,
         ownerRef: owner_ref || "",
@@ -242,7 +274,7 @@ async function heartbeat() {
       console.warn(`Anticipy: could not renew lease for ${id}: ${String(e).slice(0, 160)}`);
     }
   }
-  const r = await fetch(`${BASE}/api/collections/agents/records/${reg.recordId}`, {
+  const r = await fetch(`${await backendBase()}/api/collections/agents/records/${reg.recordId}`, {
     method: "PATCH",
     headers: await writeHeaders(),
     body: JSON.stringify({
@@ -274,17 +306,8 @@ async function requeueStaleJobs() {
   // else entirely) must never rewrite this owner's job rows.
   const { ownerRef } = await chrome.storage.local.get(["ownerRef"]);
   if (!ownerRef) return;
-  // lane!="research" MUST match claimJob's exclusion. Research runs in the
-  // WORKER on a 120s never-heartbeated lease, so two minutes into every real
-  // research run this sweep saw an expired lease on a row it is forbidden to
-  // touch, PATCHed it back to queued, and the backend answered 403 "research
-  // jobs run in the worker, never in a browser". That throw escaped the whole
-  // poll cycle BEFORE claimJob ever ran — so for the entire duration of any
-  // research job, the browser lane claimed nothing at all while the heartbeat
-  // kept the phone showing "Chrome ready". Another face of the same "it says
-  // connected and nothing happens" the owner has hit all week.
-  const filter = encodeURIComponent(`status="running" && owner_ref="${ownerRef}" && workflow_id!="" && lane!="research"`);
-  const r = await fetch(`${BASE}/api/collections/jobs/records?filter=${filter}&perPage=20&sort=claimed_at`,
+  const filter = encodeURIComponent(ownerLaneFilter("running", ownerRef));
+  const r = await fetch(`${await backendBase()}/api/collections/jobs/records?filter=${filter}&perPage=20&sort=claimed_at`,
     { headers: await writeHeaders() });
   if (!r.ok) return;
   const { items } = await r.json();
@@ -328,37 +351,119 @@ async function requeueStaleJobs() {
   }
 }
 
-// Browser-only action templates: everything is a real website the user could
-// have opened themselves. Gmail compose and Calendar templates prefill via URL.
-const ACTIONS = {
-  draft_and_send_document: (p) =>
-    `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(p.to || "")}` +
-    `&su=${encodeURIComponent(p.subject || "Following up")}` +
-    `&body=${encodeURIComponent(p.body || "")}`,
-  create_calendar_event: (p) =>
-    `https://calendar.google.com/calendar/render?action=TEMPLATE` +
-    `&text=${encodeURIComponent(p.title || "Meeting")}` +
-    `&dates=${encodeURIComponent(p.dates || "")}` +
-    `&details=${encodeURIComponent(p.details || "Scheduled by Anticipy Claude Version")}`,
-  research_and_report: (p) =>
-    p.url || `https://www.google.com/search?q=${encodeURIComponent(p.query || "")}`,
-};
+// ----------------------------------------------- saying why nothing happened
+// claimJob returns null on six different refusals, and from the outside every
+// one of them looks the same: nothing happens. Five of them said nothing at
+// all, or said it to the service-worker console — which is not a place a
+// person goes. So each refusal now leaves evidence somewhere findable: on the
+// job row when the row can be written, and otherwise in the popup's mirror.
+//
+// The mirror has ONE slot, so a diagnosis may never displace a live run's
+// line, and it deliberately carries NO job id: an id is what the popup's
+// Stop/Again buttons key off, and what reconcileCurrentJob needs before it
+// will touch the mirror at all.
+async function noteBlocked(status, doing, why) {
+  if (activeJobs.size) return;
+  await setCurrentJob({ id: "", status, doing, result: why, blocked: true });
+}
 
-async function claimJob() {
-  // Owner-scoped: a paired agent takes its owner's jobs (or legacy unowned
-  // ones); an unpaired agent only takes unowned jobs.
-  const { ownerRef, agentId } = await chrome.storage.local.get(["ownerRef", "agentId"]);
+// A diagnosis that outlives its problem is one more lie on the surface, and
+// this one would otherwise sit there until the next job ran.
+async function clearBlocked() {
+  try {
+    const { currentJob } = await chrome.storage.local.get(["currentJob"]);
+    if (currentJob && currentJob.blocked && !currentJob.id) {
+      await chrome.storage.local.set({ currentJob: {} });
+    }
+  } catch (e) { /* best effort */ }
+}
+
+// THE 30-SECOND FLOOR, SAID OUT LOUD. chrome.alarms will not repeat faster
+// than every half minute and there is no push channel, so a job can genuinely
+// sit for ~30s before Chrome starts. The popup showed that as "Picking this
+// up: <errand>" with nothing under it, which reads as a stall — and a stall is
+// what makes people reload the extension mid-handshake. Say the wait instead.
+const QUEUED_SOON = "It's in the queue. I check for new work every half minute, so I'll start "
+  + "within about 30 seconds — and opening this popup nudges me straight away.";
+
+// Rows this worker has already explained, and when. A diagnosis rewritten
+// every 30 seconds is noise, but suppressing it FOREVER is worse: the popup
+// has one slot, so any real work that arrives behind an unrunnable row
+// overwrites the explanation, and without a re-say window the only account of
+// a permanently stuck job would be gone for the life of the browser.
+const explained = new Map();
+const RESAY_MS = 10 * 60 * 1000;
+
+// A job with no canonical plan cannot be run here: workflow_state is the only
+// thing that authorises a step and there is nothing to read. Two shapes, two
+// honest endings.
+async function explainNoPlan(job) {
+  if (Date.now() - (explained.get(job.id) || 0) < RESAY_MS) return;
+  explained.set(job.id, Date.now());
+  console.warn(`Anticipy: refusing job ${job.id} without canonical workflow metadata`);
+  const line = "This arrived without the plan Anticipy attaches to real work, so this browser cannot run it.";
+  if (!job.workflow_id) {
+    // A pre-workflow row is writable — nothing guards it. Ending it is kinder
+    // than leaving it queued forever, where anyone reading the queue sees work
+    // that looks about to happen and never will.
+    try {
+      const had = (job.result || "").trim();
+      await updateJob(job.id, {
+        status: "failed", claimed_by: "", claimed_at: null,
+        result: `${had ? had + "\n\n" : ""}${line} Ask me for it again and I will queue it properly.`,
+      });
+      return;
+    } catch (e) {
+      console.warn(`Anticipy: could not annotate plan-less job ${job.id}: ${String(e).slice(0, 160)}`);
+    }
+  }
+  // workflow_id is set but the embedded plan is missing or unparseable. EVERY
+  // patch to such a row is refused by workflow_guard.pb.js ("canonical
+  // workflow is missing from params"), including one that writes nothing but
+  // `result` — that is the guard working as designed. The popup is the only
+  // place left to say it, so say it there.
+  await noteBlocked("needs_user", `I can't run one of the jobs in your queue (${job.id})`,
+    `${line} Everything else still runs; that one needs to be called off from the app.`);
+}
+
+// A refused read is not "no work". One is a blip; several in a row is a queue
+// nobody is reading, with a heartbeat still telling the phone all is well.
+let pollFailures = 0;
+
+// Exported for the offline test harness: every refusal below has to be
+// provable, and poll() is not something a test can steer.
+export async function claimJob() {
+  // Owner-scoped: a paired agent takes its owner's jobs; an unpaired agent
+  // takes nothing at all.
+  const { ownerRef, agentId, paired } = await chrome.storage.local.get(
+    ["ownerRef", "agentId", "paired"]);
   // An UNPAIRED agent must not claim anything: it cannot fetch a key, so it
   // would claim the job and then fail it forever — a second Chrome profile
   // silently killing the owner's work.
-  if (!ownerRef) return null;
-  // The research lane is NOT ours: read-only goals run server-side in the
-  // worker (roadmap §6) — his browser is only for work that needs his
-  // logged-in sessions. The backend's research_lane hook enforces the same
-  // exclusion for extensions older than this line.
-  const cond = `status="queued" && owner_ref="${ownerRef}" && workflow_id!="" && lane!="research"`;
+  if (!ownerRef) {
+    // An install that was never paired already says so on its own face: the
+    // popup shows "Not linked" and a pair code, which is the whole story, and
+    // a second line about it would just be noise. The dangerous shape is the
+    // OTHER one — paired:true with no owner_ref, which the popup reads as
+    // linked and watching for work while this function refuses everything
+    // forever. That is a pairing made before owner_ref existed; /agent/key
+    // answers it 409 and nothing else ever mentions it.
+    if (paired) {
+      await noteBlocked("needs_user", "this browser is linked, but the link has no owner id",
+        "Nothing can run until it is paired again: open Anticipy on your phone, forget this browser, then enter the code from the setup page.");
+    }
+    return null;
+  }
+  // Same lanes as the sweep, from the same definition — see BROWSER_LANE.
+  const cond = ownerLaneFilter("queued", ownerRef);
+  // TEN ROWS, NOT ONE. This asked for a single row and gave up on it when it
+  // turned out to be unclaimable — so ONE poisoned job at the head of the
+  // queue (no plan attached, or three attempts already spent) froze the whole
+  // browser lane for as long as it sat there, with nothing running and nothing
+  // said anywhere. Read a few, run the first that can be run, and account for
+  // the ones that cannot.
   const poll = async () => fetch(
-    `${BASE}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=1&sort=created`,
+    `${await backendBase()}/api/collections/jobs/records?filter=${encodeURIComponent(cond)}&perPage=10&sort=created`,
     { headers: await writeHeaders() }
   );
   let r = await poll();
@@ -375,75 +480,151 @@ async function claimJob() {
     if (!r.ok) {
       console.warn("Anticipy: still refused after refresh -", r.status,
                    "- reload this extension from the setup page if it persists");
+      // This one never heals on its own: the credential this browser holds is
+      // not one the backend will accept, and the heartbeat keeps saying
+      // "Chrome ready" the entire time.
+      await noteBlocked("needs_user", "I can't read your queue from this browser",
+        `Anticipy refused this browser's credential (${r.status}). Reload the extension from the setup page; if that doesn't clear it, pair this browser again.`);
       return null;
     }
   }
-  if (!r.ok) return null;
-  const items = (await r.json()).items;
-  if (!items || !items.length) return null;
-  const job = items[0];
-  if (activeJobs.has(job.id)) return null;
-  if (!isWorkflowJob(job)) {
-    console.warn(`Anticipy: refusing job ${job.id} without canonical workflow metadata`);
+  if (!r.ok) {
+    pollFailures += 1;
+    if (pollFailures >= 3) {
+      await noteBlocked("needs_user", "I can't reach your queue right now",
+        `Anticipy hasn't answered this browser for ${pollFailures} tries (last: ${r.status}). If you're online, check the backend address under Setup & advanced.`);
+    }
     return null;
   }
-  // Nothing executes while Chrome is shut, so a job can sit for days. Opening
-  // the laptop on Monday should NOT silently fire Friday's errand — the world
-  // has moved on. Hand it back and let the owner say whether it still stands.
-  //
-  // Measured from when it was last QUEUED, not from when the row was created.
-  // `created` is immutable in PocketBase, so reading it meant a task that had
-  // merely EXISTED for 12 hours was bounced — including one the owner had just
-  // this second unblocked by answering. His Cactus booking was created 21h
-  // before he supplied his details; every resume would have been refused,
-  // forever, while she had already told him "I'll finish the booking now".
-  // `updated` is refreshed by the requeue that sets status back to "queued",
-  // so a fresh resume reads as fresh and a genuinely abandoned errand does not.
-  const STALE_HOURS = 12;
-  const queuedAt = Date.parse(job.updated || job.created || "");
-  if (queuedAt && Date.now() - queuedAt > STALE_HOURS * 3600 * 1000) {
-    const hrs = Math.round((Date.now() - queuedAt) / 3600000);
-    // Say only what is observable. The previous wording asserted "my browser
-    // was closed" — written by the browser, while running, at the moment it
-    // wrote it. And it OVERWROTE `result`, destroying the requirement text
-    // ("I need your first name, last name, email…") that the brain matches an
-    // answer against, so the task could never be resumed by answering again.
-    const had = (job.result || "").trim();
-    await updateJob(job.id, {
-      ...workflowPatch(job, "needs_user", {
-        reason: `Still queued after ${hrs} hours without running. Does it still stand?`,
-      }),
-      result: (had ? had + "\n\n" : "") +
-        `Still queued after ${hrs} hours without running. Does it still stand?`,
-    });
-    return null;
-  }
-  // Stamp the claim, then read it back: whoever's stamp survives owns the job.
-  // This closes the race where concurrent poll() calls (SSE + alarm + worker
-  // wake) would each spawn an agent loop for the same job.
+  pollFailures = 0;
+  await clearBlocked();
+  const items = (await r.json()).items || [];
   const me = agentId || "unknown";
-  // Counted at the claim, which is the only place that means "started".
-  // Counting on failure would miss the case that actually bit: a job that
-  // never reaches an ending at all and is swept back to queued forever.
-  const tries = (Number(job.attempts) || 0) + 1;
-  if (tries > MAX_ATTEMPTS) {
-    await updateJob(job.id, {
-      ...workflowPatch(job, "cancelled", {
-        reason: `stopped after ${tries - 1} attempts`,
-      }),
-      result: `I tried this ${tries - 1} times and could not get it done. I have stopped rather than keep going.`,
-    });
-    return null;
+  for (const job of items) {
+    if (activeJobs.has(job.id)) continue;
+    if (!isWorkflowJob(job)) { await explainNoPlan(job); continue; }
+    // Nothing executes while Chrome is shut, so a job can sit for days.
+    // Opening the laptop on Monday should NOT silently fire Friday's errand —
+    // the world has moved on. Hand it back and let the owner say whether it
+    // still stands.
+    //
+    // Measured from when it was last QUEUED, not from when the row was
+    // created. `created` is immutable in PocketBase, so reading it meant a
+    // task that had merely EXISTED for 12 hours was bounced — including one
+    // the owner had just this second unblocked by answering. His Cactus
+    // booking was created 21h before he supplied his details; every resume
+    // would have been refused, forever, while she had already told him "I'll
+    // finish the booking now". `updated` is refreshed by the requeue that sets
+    // status back to "queued", so a fresh resume reads as fresh and a
+    // genuinely abandoned errand does not.
+    const STALE_HOURS = 12;
+    const queuedAt = Date.parse(job.updated || job.created || "");
+    if (queuedAt && Date.now() - queuedAt > STALE_HOURS * 3600 * 1000) {
+      const hrs = Math.round((Date.now() - queuedAt) / 3600000);
+      // Say only what is observable. The previous wording asserted "my browser
+      // was closed" — written by the browser, while running, at the moment it
+      // wrote it. And it OVERWROTE `result`, destroying the requirement text
+      // ("I need your first name, last name, email…") that the brain matches
+      // an answer against, so the task could never be resumed by answering
+      // again.
+      const had = (job.result || "").trim();
+      try {
+        await updateJob(job.id, {
+          ...workflowPatch(job, "needs_user", {
+            reason: `Still queued after ${hrs} hours without running. Does it still stand?`,
+          }),
+          result: (had ? had + "\n\n" : "") +
+            `Still queued after ${hrs} hours without running. Does it still stand?`,
+        });
+      } catch (e) {
+        console.warn(`Anticipy: could not park stale job ${job.id}: ${String(e).slice(0, 160)}`);
+      }
+      continue;
+    }
+    // Counted at the claim, which is the only place that means "started".
+    // Counting on failure would miss the case that actually bit: a job that
+    // never reaches an ending at all and is swept back to queued forever.
+    const tries = (Number(job.attempts) || 0) + 1;
+    if (tries > MAX_ATTEMPTS) {
+      try {
+        await updateJob(job.id, {
+          ...workflowPatch(job, "cancelled", {
+            reason: `stopped after ${tries - 1} attempts`,
+          }),
+          result: `I tried this ${tries - 1} times and could not get it done. I have stopped rather than keep going.`,
+        });
+      } catch (e) {
+        console.warn(`Anticipy: could not close spent job ${job.id}: ${String(e).slice(0, 160)}`);
+      }
+      continue;
+    }
+    // Stamp the claim, then read it back: whoever's stamp survives owns the
+    // job. This closes the race where concurrent poll() calls (a wake alarm,
+    // the popup's anticipy-ping, and this worker booting can all overlap)
+    // would each spawn an agent loop for the same job.
+    //
+    // The popup's mirror is set BEFORE the run starts, because between the
+    // claim and the agent loop's first step there is a model call and a tab to
+    // open, and a person watching a blank panel through that gap concludes it
+    // is broken.
+    await setCurrentJob({ id: job.id, status: "queued",
+                          doing: jobLine(job, parseJobParams(job)),
+                          result: QUEUED_SOON, blocked: false });
+    const leaseToken = crypto.randomUUID();
+    let fresh;
+    try {
+      fresh = await updateJob(job.id, workflowPatch(job, "running", {
+        actorId: me,
+        leaseToken,
+        leaseUntil: new Date(Date.now() + LEASE_MS),
+        attempt: tries,
+      }));
+    } catch (e) {
+      // A refused claim is somebody else's win or a guard rejection. Either
+      // way the NEXT row may still be ours — one bad row must not cost the
+      // rest of the queue its turn.
+      console.warn(`Anticipy: could not claim ${job.id}: ${String(e).slice(0, 200)}`);
+      continue;
+    }
+    if (fresh.claimed_by !== me || fresh.status !== "running" || fresh.lease_token !== leaseToken) continue;
+    return fresh;
   }
-  const leaseToken = crypto.randomUUID();
-  const fresh = await updateJob(job.id, workflowPatch(job, "running", {
-    actorId: me,
-    leaseToken,
-    leaseUntil: new Date(Date.now() + LEASE_MS),
-    attempt: tries,
-  }));
-  if (fresh.claimed_by !== me || fresh.status !== "running" || fresh.lease_token !== leaseToken) return null;
-  return fresh;
+  // Nothing here was runnable. Before going quiet, answer the question the
+  // owner is actually asking when they open the popup.
+  if (!items.length) await noteResearchWaiting(ownerRef);
+  return null;
+}
+
+// "Nothing is queued for this browser" and "something is queued somewhere
+// else" look identical from in here, and the second one is not this browser's
+// fault. A queued RESEARCH job is invisible to the poll above — the server
+// hides that lane from browsers on purpose, because read-only work runs in the
+// worker — so a stalled brain worker presents to the owner as a dead Chrome.
+// One extra read, and only when this browser has nothing of its own to do.
+async function noteResearchWaiting(ownerRef) {
+  try {
+    // Naming `lane` is what keeps research_lane.pb.js from rewriting this
+    // filter (it only appends its exclusion to a queued poll that does not
+    // mention the lane), and naming owner_ref is what guard.pb.js requires of
+    // any list an agent credential is allowed to read.
+    const researchCond = `status="queued" && owner_ref="${ownerRef}" && lane="research"`;
+    const r = await fetch(
+      `${await backendBase()}/api/collections/jobs/records?filter=${encodeURIComponent(researchCond)}&perPage=1&sort=created`,
+      { headers: await writeHeaders() });
+    if (!r.ok) return;
+    const job = ((await r.json()).items || [])[0];
+    if (!job) { await clearBlocked(); return; }
+    const mins = Math.round((Date.now() - Date.parse(job.updated || job.created || "")) / 60000);
+    // The worker normally takes one of these within seconds, so anything
+    // under a couple of minutes is not yet a symptom worth a line on screen.
+    if (!(mins >= 2)) return;
+    // A status the popup has no sentence for on purpose: it renders the line
+    // below verbatim instead of forcing this into "I'm picking this up",
+    // which is exactly what this browser is NOT going to do.
+    await noteBlocked("waiting",
+      `Waiting on Anticipy's own side, not on this browser: ${jobLine(job, parseJobParams(job))}`,
+      `That one is a look-it-up job, so it runs on Anticipy's server rather than in your browser — and it has been waiting ${mins} minutes. Nothing here is broken.`);
+  } catch (e) { /* a diagnosis must never break the poll */ }
 }
 
 // What the popup shows. The job row on the server stays the source of truth;
@@ -551,7 +732,7 @@ function jobLine(job, params) {
 }
 
 async function fetchJob(id) {
-  const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`,
+  const r = await fetch(`${await backendBase()}/api/collections/jobs/records/${id}`,
     { headers: await writeHeaders() });
   if (r.status === 404) throw new Error("job gone");
   if (!r.ok) throw new Error(`job read failed (${r.status})`);
@@ -559,7 +740,7 @@ async function fetchJob(id) {
 }
 
 async function updateJob(id, fields, leaseToken = "") {
-  const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`, {
+  const r = await fetch(`${await backendBase()}/api/collections/jobs/records/${id}`, {
     method: "PATCH",
     headers: await writeHeaders(leaseToken),
     body: JSON.stringify(fields),
@@ -588,7 +769,7 @@ async function updateJob(id, fields, leaseToken = "") {
 /// then RESURRECTED the cancelled job as done/failed.
 async function jobStillLive(id, leaseToken = "") {
   try {
-    const r = await fetch(`${BASE}/api/collections/jobs/records/${id}`,
+    const r = await fetch(`${await backendBase()}/api/collections/jobs/records/${id}`,
       { headers: await writeHeaders() });
     if (r.status === 404) return false;
     if (!r.ok) return true;   // transient: don't abandon real work
@@ -693,15 +874,270 @@ export async function reconcileCurrentJob() {
       ? String(row.workflow_state || "") : String(row.status || "");
     const status = MIRROR_FOR_STATE[state];
     if (!status || status === currentJob.status) return;
-    await setCurrentJob({ status, result: String(row.result || "") });
+    // A row that is queued again (a requeue, a resume, the owner pressing try
+    // again on the phone) has no result of its own yet, and a blank line under
+    // "Picking this up" is indistinguishable from a stall for the half minute
+    // before the next alarm fires. Say what the wait is.
+    const result = String(row.result || "").trim();
+    await setCurrentJob({ status, blocked: false,
+                          result: result || (status === "queued" ? QUEUED_SOON : "") });
   } catch (e) { /* best effort — the mirror must never break a run */ }
+}
+
+// -------------------------------------------------------- the supervised read
+// "You open it. I read it once, in the front window, while you watch."
+//
+// The whole loop lives in `supervised_read.js`, which touches no Chrome API at
+// all; this is the wiring, and it is the only place that decides what Chrome
+// capabilities a read is handed. Three of them are deliberately absent:
+//
+//   * NO chrome.debugger, ever. `trustedClick`/`typeText` in `agent_loop.js`
+//     work by attaching CDP to the tab; without an attach there is physically
+//     no path from this code to a click or a keystroke, whatever any model
+//     replies. The action whitelist is the rule and this is the wall behind it.
+//   * NO `mapPage`. The browser arm's page map indexes every button, link and
+//     field so the loop can operate them. A read has no business learning
+//     where the buttons are, so it reads visible text and nothing else.
+//   * NO focus. The read runs in an unfocused tab
+//     (`PRODUCTION-ROADMAP.md:176-185` §9 — nothing steals focus, ever). The
+//     "front window" in the promise is the phone's: `SupervisedReadView` is
+//     what has to be on screen, and the lease below is what proves it was.
+async function claimSupervisedRead(ownerRef, agentId) {
+  const filter = encodeURIComponent(supervisedReadFilter(ownerRef));
+  let rows;
+  try {
+    const r = await fetch(
+      `${await backendBase()}/api/collections/jobs/records?filter=${filter}&perPage=3&sort=created`,
+      { headers: await writeHeaders() });
+    if (!r.ok) return null;
+    rows = (await r.json()).items || [];
+  } catch (_) { return null; }
+  for (const job of rows) {
+    if (activeJobs.has(job.id)) continue;
+    // THE LEASE DECIDES, NOT THE QUEUE. A read queued four minutes ago is a
+    // read nobody is watching any more, and the check is the same one the
+    // extension will make before every single action — so make it here too
+    // rather than opening a tab to discover it. `watching_until` is written
+    // only by the view that is on screen, so this is not a staleness heuristic
+    // like the 12-hour rule above; it is the supervision itself.
+    if (leaseLapsed(job.watching_until)) continue;
+    try {
+      // The claim is also lease-guarded server-side: PocketBase answers 403
+      // when `watching_until` is missing, unparseable or past. A refusal here
+      // is therefore normal — the person put their phone down between the poll
+      // and the claim — and it is not worth a word to anybody.
+      const fresh = await updateJob(job.id, {
+        status: "running", claimed_by: agentId, claimed_at: new Date().toISOString(),
+      });
+      if (fresh.claimed_by !== agentId || fresh.status !== "running") continue;
+      return fresh;
+    } catch (e) {
+      console.warn(`Anticipy: could not claim supervised read ${job.id}: ${String(e).slice(0, 160)}`);
+      continue;
+    }
+  }
+  return null;
+}
+
+// What a supervised read is allowed to do with Chrome. Deliberately a NARROWER
+// set than `sideTripDeps` (`agent_loop.js:3531`), which may click one link: a
+// read may not click at all, so no clicking dep is passed and none exists.
+function supervisedReadDeps(job, { apiKey, model, ownerRef, agentId }) {
+  // Pages settle before they are read. Same constant idea as the side trip's
+  // STEP_SETTLE_MS: a mailbox that has not finished rendering reads as empty.
+  const settle = () => new Promise((r) => setTimeout(r, 1200));
+  return {
+    openTab: async (url) => (await createBackgroundTab(url)).id,
+    // THE PAGE THE PERSON IS LOOKING AT — the only surface an extract-only
+    // source ever gets. The query deliberately does NOT ask for the active tab
+    // by that property name: `check_never_foreground.mjs` counts every
+    // focus-granting literal in this file and a read must never add one. The
+    // frontmost tab is picked in JS instead, which asks the same question
+    // without asserting focus on anything.
+    currentTab: async () => {
+      const tabs = await chrome.tabs.query({ lastFocusedWindow: true });
+      const front = tabs.find((t) => t.active) || tabs[0];
+      return front ? front.id : null;
+    },
+    readPage: async (tabId) => {
+      await settle();
+      const [hit] = await chrome.scripting.executeScript({
+        target: { tabId },
+        // Visible text and the address, and nothing else. No element index, no
+        // form fields, no hrefs: the read is not allowed to know where the
+        // buttons are, so it is never told.
+        func: () => ({
+          text: String(document.body ? document.body.innerText : "").slice(0, 20000),
+          url: String(location.href),
+        }),
+      });
+      return (hit && hit.result) || { text: "", url: "" };
+    },
+    // Same site only — the module checks that before calling this, and the
+    // update carries no focus property, so the tab stays where it was.
+    navigate: async (tabId, url) => { await chrome.tabs.update(tabId, { url }); await settle(); },
+    scrollPage: async (tabId) => {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        // A fixed fraction of the viewport. The model asks to scroll; it never
+        // says how far, because a number from a model is a number from a page.
+        func: () => window.scrollBy(0, Math.round(window.innerHeight * 0.9)),
+      });
+      await settle();
+    },
+    closeTab: async (tabId) => { try { await chrome.tabs.remove(tabId); } catch (_) { /* gone */ } },
+    // RE-READ FROM THE ROW, EVERY TIME. Not cached, not passed in as a param:
+    // cached supervision is not supervision, and a params flag would mean
+    // "another process decided I may read your inbox" (`side_trip.js:189-198`).
+    // A row that has been deleted throws, and the module reads a throw as
+    // "nobody is watching" — fail closed.
+    leaseUntil: async () => (await fetchJob(job.id)).watching_until,
+    askModel: async (system, user) => {
+      const r = await modelFetch(apiKey, {
+        model, temperature: 0, max_tokens: 1024,
+        response_format: { type: "json_object" },
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+      });
+      if (!r.ok) throw new Error(`read model call failed: ${r.status}`);
+      return (await r.json())?.choices?.[0]?.message?.content || "";
+    },
+    emit: (event) => pushReadEvent(job, ownerRef, agentId, event),
+    // The trace, never the page. `supervised_read.js` is careful to hand this
+    // only conclusions and refusals; keep it that way.
+    note: (line) => console.log(`Anticipy: ${line}`),
+  };
+}
+
+// The narration, on its way to the phone.
+//
+// `goal` carries the job id because that is how `supervisedLines(jobID:)` finds
+// these rows, and because the backend now REQUIRES it: guard.pb.js lets an
+// agent credential create an event only when the kind is exactly read_line or
+// read_fact, `owner_ref` is this agent's owner, and `goal` names a
+// supervised_read job of that owner whose lease is still live. Without the id
+// the write is refused outright, not merely unfilterable.
+//
+// WHAT IS NOT HERE IS THE POINT. No page text, no subject line, no message
+// body, no URL — `design/LOCAL-FIRST.md:9-11`: only conclusions travel.
+// `supervised_read.js` refuses to hand this function anything else, and it
+// checks every line, including the ones it wrote itself.
+async function pushReadEvent(job, ownerRef, agentId, event) {
+  const body = {
+    device_id: `chrome-${agentId || "unknown"}`,
+    kind: event.kind,
+    // 400 IS THE SERVER'S CAP, and it is a privacy bound rather than a column
+    // width: guard.pb.js refuses a narration event outside 1–400 characters
+    // because the shape of breaking promise 4 ("never the mailbox, never a
+    // message, never an attachment") is a read_fact carrying a pasted body,
+    // and the page slice this loop works from is ~5,000 characters. In
+    // practice nothing is ever cut here — `supervised_read.js` already refuses
+    // any line over 140 and any fact over 160 — so this is the belt to that
+    // module's braces, and a 403 from it is never retried.
+    text: String(event.text || "").slice(0, 400),
+    goal: job.id,
+    owner_ref: ownerRef,
+  };
+  // The fence tag, and it must survive the trip: `_UNTRUSTED_SOURCES` in
+  // `brain/anticipy_core.py` is keyed on this exact string, and a fact that
+  // arrives without it is attacker-controlled text handed to a prompt
+  // unfenced. Mail is written by OTHER PEOPLE — anyone can email you.
+  if (event.source) body.source = event.source;
+  if (event.importance) body.importance = event.importance;
+  const r = await fetch(`${await backendBase()}/api/collections/events/records`, {
+    method: "POST", headers: await writeHeaders(), body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`narration refused (${r.status})`);
+}
+
+async function runSupervisedReadJob(job, params) {
+  const source = String(params.source || "");
+  const { ownerRef, agentId, agentModel } = await chrome.storage.local.get(
+    ["ownerRef", "agentId", "agentModel"]);
+  // TWO DETERMINISTIC PRECONDITIONS, BOTH REFUSALS RATHER THAN WARNINGS.
+  //
+  // `consequence` must say read_only. It is the column the rest of the system
+  // already uses to mean "this may not act in the world", and a read whose row
+  // does not say so is a row somebody built by hand or by mistake.
+  if (job.consequence !== "read_only") {
+    const result = "That read didn't arrive marked read-only, so I left it alone.";
+    await updateJob(job.id, { status: "failed", result });
+    await setCurrentJob({ status: "failed", result });
+    return;
+  }
+  const openrouterKey = await ensureLLMKey(true);
+  if (!openrouterKey) {
+    const result = "I couldn't start: this browser isn't paired to your phone yet.";
+    await updateJob(job.id, { status: "failed", result });
+    await setCurrentJob({ status: "failed", result });
+    return;
+  }
+  // A ROW MUST NEVER BE LEFT `running`. The stale sweep above filters on
+  // `workflow_id!=""` and a supervised read carries no workflow, so nothing
+  // would ever come back for this row — and a read stuck at `running` is a
+  // read the person's own app cannot tell from one still in progress. Nothing
+  // can ACT on it (the lease has long lapsed, and every claim is lease-guarded
+  // server-side), so this is about honesty rather than safety. The write is
+  // allowed even with a dead lease because it claims nothing.
+  let status = "failed";
+  let result = "I couldn't read that one.";
+  let trace = `supervised read | source ${source} | engine ${ENGINE_BUILD}`;
+  try {
+    const out = await runSupervisedRead({
+      source,
+      // Where the read begins, when the phone named a place. A read of a source
+      // whose vocabulary has no `navigate` ignores this entirely and reads the
+      // page the person already has open — that check is in the module, where
+      // the vocabulary lives.
+      startUrl: typeof params.start_url === "string" ? params.start_url : "",
+      deps: supervisedReadDeps(job, {
+        apiKey: openrouterKey, model: agentModel || undefined, ownerRef, agentId,
+      }),
+      budget: { steps: READ_MAX_STEPS },
+    });
+    // A LAPSED LEASE IS A CLEAN ENDING, not a failure: the person backgrounded
+    // the app, locked the phone or swiped the view away, and the read stopped
+    // itself. Writing `failed` on that would teach them that looking away
+    // breaks something, which is the opposite of the lesson. The row still ends
+    // terminally — `done` — so nothing is left hanging either way.
+    status = out.ok ? "done" : "failed";
+    result = out.ok
+      ? (out.stopped === "lease"
+          ? "You looked away, so I stopped there. Nothing kept."
+          : `${out.facts.length} thing${out.facts.length === 1 ? "" : "s"} I didn't know about you.`)
+      : (out.reason || "I couldn't read that one.");
+    // The trace is what somebody debugs later: how far the pass got, why it
+    // ended, and every action the whitelist refused. Never what was on the
+    // page.
+    trace = [trace,
+             `steps ${out.steps} | ended: ${out.stopped} | lines ${out.lines.length} | facts ${out.facts.length}`,
+             ...out.refused.map((line) => `refused: ${line}`)].join("\n");
+  } catch (e) {
+    // The module catches its own failures and returns them, so arriving here
+    // means the WIRING broke — a missing Chrome permission, a page that
+    // refused injection. Truncated, because an exception from a page can carry
+    // page text.
+    trace = `${trace}\nthe wiring failed: ${String(e).slice(0, 200)}`;
+    if (String(e).includes("job gone")) throw e;
+  }
+  // STATUS, RESULT, TRACE — AND NOTHING ELSE. Do not "tidy" this into the
+  // release shape used everywhere else in this codebase
+  // (`{status, claimed_by: "", claimed_at: null}` — background.js:322/331,
+  // brain/worker.py:971). The backend's lease guard treats the mere PRESENCE
+  // of a claimed_by key as a claim attempt and 403s it when `watching_until`
+  // has lapsed — which is exactly the moment this line runs on the abort path.
+  // The row would silently stay `running` while the 403 went unread, which is
+  // the whole failure this write exists to prevent. A terminal row's stale
+  // claimed_by bothers nobody.
+  await updateJob(job.id, { status, result, trace: trace.slice(-8000) });
+  await setCurrentJob({ status, result });
 }
 
 async function runJob(job) {
   const params = parseJobParams(job);
   activeJobs.set(job.id, { job, leaseToken: job.lease_token || "",
                            startedAt: Date.now() });
-  await setCurrentJob({ id: job.id, status: "running", doing: jobLine(job, params), result: "" });
+  await setCurrentJob({ id: job.id, status: "running", doing: jobLine(job, params),
+                        result: "", blocked: false });
   try {
     await runJobInner(job, params);
   } catch (e) {
@@ -718,11 +1154,18 @@ async function runJob(job) {
 }
 
 async function runJobInner(job, params) {
+  // THE FIRST BRANCH, ABOVE EVERYTHING. A supervised read may never fall
+  // through into the executor below: the rewrite three lines down turns any
+  // job into `agent_goal`, which is the full click-and-type loop, and running
+  // a read through it would put a model with a keyboard inside somebody's
+  // mailbox. The lane is claimed by its own poll, so nothing should arrive
+  // here by another route — this is the wall that makes "should" irrelevant.
+  if (job.lane === "supervised_read") return runSupervisedReadJob(job, params);
 
-  // Canonical plans all use the same adaptive browser executor.  The old
-  // ACTIONS table remains only for draining pre-workflow rows; a production
+
+  // Canonical plans all use the same adaptive browser executor: a production
   // plan must not bypass verification merely because its goal string happens
-  // to match a historical template.
+  // to match some historical template name.
   if (isWorkflowJob(job) && job.goal !== "agent_goal") {
     const task = params.task || (params.source
       ? `${job.goal} (context: heard "${params.source}")` : job.goal);
@@ -752,7 +1195,7 @@ async function runJobInner(job, params) {
       // identity: he can add his name and retry in the same minute.
       let ownerProfile = cachedProfile;
       try {
-        const pr = await fetch(`${BASE}/agent/key?agent_id=${encodeURIComponent(myId || "")}`,
+        const pr = await fetch(`${await backendBase()}/agent/key?agent_id=${encodeURIComponent(myId || "")}`,
           { headers: await writeHeaders() });
         if (pr.ok) {
           const fresh = (await pr.json()).owner;
@@ -814,11 +1257,30 @@ async function runJobInner(job, params) {
               .filter(([k, v]) => !["source", "say", "now", "lane", "missing",
                                     "authorized", "approved_scope", "needed",
                                     "start_url", "task", "assumption", "note",
+                                    // Background knowledge, NOT a given fact.
+                                    // Without this line a short recollection
+                                    // (<200 chars) falls through into
+                                    // FACTS ALREADY GIVEN, which tells the
+                                    // model to set form fields to it — the
+                                    // exact confusion the separate memory
+                                    // block exists to prevent.
+                                    "memory",
                                     "resume_tab", "resume_session"].includes(k)
                                   && !/^owner_answer/i.test(k)
                                   && (typeof v === "string" || typeof v === "number"
                                       || typeof v === "boolean")
                                   && String(v).length < 200)),
+        // WHAT THE BRAIN REMEMBERED, stamped on the row by
+        // Anticipy._queue_job. A string, already injection-filtered and length
+        // capped brain-side (brain/anticipy_core.py memory_notes) — kept as an
+        // opaque string here on purpose: this worker is not the place to decide
+        // what is safe to replay, and re-deriving that rule in a second
+        // language is how the two copies drift.
+        //
+        // Read from params, NOT from params._workflow: memory is background,
+        // not part of the approved scope, and anything inside _workflow is
+        // covered by the digest his approval is bound to.
+        memory: typeof params.memory === "string" ? params.memory.slice(0, 1200) : "",
         // A Manifest V3 worker may be reclaimed during a long research run.
         // Keep its bounded live-page notebook on the canonical job so a
         // lease retry resumes with evidence already earned instead of
@@ -964,32 +1426,32 @@ async function runJobInner(job, params) {
     return;
   }
 
-  const build = ACTIONS[job.goal];
-  if (!build) {
-    // Free-form goal from the brain: run it autonomously, same as agent_goal.
-    const task = params.source ? `${job.goal} (context: heard "${params.source}")` : job.goal;
-    return runJobInner({ ...job, goal: "agent_goal" }, { ...params, task });
-  }
-  // Work quietly: background tab inside a collapsed "Anticipy" tab group,
-  // same as the agent_goal path — never steals the user's focus.
-  const tab = await createBackgroundTab(build(params));
-  try {
-    const group = await chrome.tabs.group({ tabIds: tab.id });
-    await chrome.tabGroups.update(group, { title: "Anticipy Claude Version", color: "yellow", collapsed: true });
-  } catch (e) {
-    // tab groups unavailable (e.g. incognito) — continue in a plain background tab
-  }
-
-  // Prefill flows: the page IS the thing the owner acts on, so it stays —
-  // but in the background (§9), never surfacing itself. The badge and
-  // notification are how they find it; their click is what opens it.
-  await surfaceHandBack(tab.id, jobLine(job, params), "confirm");
-  await updateJob(job.id, { status: "awaiting_confirm", result: `opened ${job.goal} page in tab ${tab.id}` });
-  await setCurrentJob({ status: "awaiting_confirm", result: "It's filled in and waiting quietly in my tab group — click my notification (or Open below) to see it." });
+  // Nothing reaches this line by any route the system actually uses. A
+  // workflow row whose goal is not agent_goal was rewritten to agent_goal at
+  // the top of this function, and a row WITHOUT workflow metadata is refused
+  // outright at claim. Only a hand-inserted legacy record can arrive here, and
+  // the honest thing to do with one is run it as a free-form task through the
+  // same verified executor as everything else.
+  //
+  // This used to consult an ACTIONS table of prefilled Gmail / Calendar /
+  // Google-search URLs that parked the job at awaiting_confirm. Dead code with
+  // a dangerous shape: it skipped the exact-fact and stop-before-submit checks
+  // the agent_goal path applies, and it did so for whichever goal string
+  // happened to collide with a template name the brain still emits
+  // (brain/llm.py:202 still produces draft_and_send_document).
+  const task = params.source ? `${job.goal} (context: heard "${params.source}")` : job.goal;
+  return runJobInner({ ...job, goal: "agent_goal" }, { ...params, task });
 }
 
-// Only one poll cycle at a time — SSE events, alarms, and worker wake can all
-// fire poll() concurrently, and overlapping cycles double-claim jobs.
+// Only one poll cycle at a time. There is no push channel: grep extension/ for
+// EventSource or WebSocket and you find nothing. The only recurring wake is
+// the 0.5-minute chrome.alarms floor — Chrome refuses anything shorter for an
+// extension — plus the popup's anticipy-ping and this worker booting. Those
+// three still overlap, and overlapping cycles double-claim jobs.
+//
+// Say the consequence out loud, because a reader who assumes a push channel
+// will go looking for one: a job queued a second after a cycle ends waits up
+// to ~30s before Chrome starts on it. That is the floor, not a bug to hunt.
 //
 // The lock is a TIMESTAMP, not a boolean, because a boolean is a permanent
 // deafness bug: poll() awaits the whole job run, so a runJob() that never
@@ -1017,6 +1479,19 @@ async function poll() {
     // awaited bare, so one refused row aborted the cycle before claimJob().
     await requeueStaleJobs().catch((e) => console.warn(
       `Anticipy: stale-job sweep failed (continuing to claim): ${String(e).slice(0, 200)}`));
+    // A SUPERVISED READ GOES FIRST, always. Somebody is holding their phone
+    // with the view open, watching for a line to appear; a queued errand is
+    // not. And the read's own lease is ~30 seconds long, which is shorter than
+    // the 0.5-minute alarm floor this worker is stuck with — so a read that
+    // waits behind a forty-minute booking is a read that expires unrun and
+    // looks, from the phone, exactly like a product that does nothing.
+    const { ownerRef: readOwner, agentId: readAgent } =
+      await chrome.storage.local.get(["ownerRef", "agentId"]);
+    const read = readOwner ? await claimSupervisedRead(readOwner, readAgent) : null;
+    if (read) {
+      await runJob(read);
+      return;
+    }
     const job = await claimJob();
     if (job) await runJob(job);
   } catch (e) {
@@ -1040,11 +1515,32 @@ export async function ensureWakeAlarms() {
   for (const name of WAKE_ALARMS) {
     const alarm = await chrome.alarms.get(name);
     if (alarm && Number(alarm.periodInMinutes) === WAKE_PERIOD_MINUTES) continue;
-    await chrome.alarms.create(name, {
+    const timing = {
       delayInMinutes: WAKE_PERIOD_MINUTES,
       periodInMinutes: WAKE_PERIOD_MINUTES,
-      persistAcrossSessions: true,
-    });
+    };
+    // persistAcrossSessions IS CHROME 150+. Older Chrome does not ignore the
+    // unknown key — it throws
+    //   Error at parameter 'alarmInfo': Unexpected property: 'persistAcrossSessions'
+    // so the alarm is never created AT ALL, and every caller of this function
+    // swallows the rejection with .catch(() => {}). Measured live in Chrome
+    // 148 on 2026-08-19: alarms.getAll() stayed empty forever, a job queued
+    // with no extension page open sat untouched for the full 30s window, and
+    // the same job was claimed 194ms after the popup was opened. That is
+    // exactly "she does nothing until I open the popup" — the whole browser
+    // arm reduced to a manual button, in silence, on every Chrome older than
+    // 150. Ask for persistence; take a working alarm over a persistent one.
+    try {
+      await chrome.alarms.create(name, { ...timing, persistAcrossSessions: true });
+    } catch (e) {
+      console.warn(`Anticipy: this Chrome has no persistent alarms (${String(e).slice(0, 120)}) — using a plain one`);
+      await chrome.alarms.create(name, timing);
+    }
+    // Read it back. A create that quietly did nothing leaves this browser with
+    // no clock, and the only symptom is work that never starts.
+    if (!(await chrome.alarms.get(name))) {
+      console.warn(`Anticipy: Chrome refused the ${name} wake alarm. This browser will only pick up work while an extension page (the popup or the setup page) is open.`);
+    }
   }
 }
 
@@ -1117,7 +1613,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   }
   if (msg.type === "anticipy-again" && msg.id) {
     retryJob(msg.id)
-      .then(() => setCurrentJob({ status: "queued", result: "" }))
+      // Not a blank line: the owner has just pressed a button and the next
+      // alarm may be 30 seconds away, so the panel must say that rather than
+      // sit there looking like the press did nothing.
+      .then(() => setCurrentJob({ status: "queued", result: QUEUED_SOON, blocked: false }))
       .then(() => respond({ ok: true }))
       .catch(refused("retry"));
     return true;

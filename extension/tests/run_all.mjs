@@ -1,5 +1,6 @@
 // Offline suite for brief 03 (never-foreground). Run: node extension/tests/run_all.mjs
 import { execFileSync } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,18 +26,64 @@ const suites = [
   "test_hunt_round2.mjs",
   "test_hunt_round3.mjs",
   "test_commit_integrity.mjs",
+  "test_commit_once.mjs",
+  "test_form_retry_after_rejection.mjs",
   "test_captcha_solving.mjs",
   "test_no_domain_hardcoding.mjs",
   "test_stop_before_submit.mjs",
   "test_park_not_burn.mjs",
   "test_live_progress.mjs",
   "test_side_trip.mjs",
+  "test_supervised_read.mjs",
   "test_background_recovery.mjs",
-  "test_side_trip.mjs",
   "test_guard_superuser_dashboard.mjs",
   "test_claim_legacy_binding.mjs",
   "test_backup_volume_footprint.mjs",
+  "test_log_db_footprint.mjs",
+  "test_memory_context.mjs",
+  "test_memory_in_the_prompt.mjs",
+  "test_config_base.mjs",
+  "test_learn_before_doing.mjs",
+  "test_otp_wall.mjs",
+  "test_vision_cost.mjs",
+  "test_walled_source.mjs",
+  "test_carried_values.mjs",
+  "test_login_wall.mjs",
+  "test_recipes.mjs",
+  "test_claim_evidence.mjs",
+  "test_agent_integration.mjs",
+  "test_theme_contract.mjs",
+  "test_watch_lease.mjs",
 ];
+// A suite listed TWICE runs twice and inflates the number in the pass line —
+// and that number is exactly what a person reads to decide whether coverage
+// grew. test_side_trip.mjs was registered twice and the run reported 33 suites
+// where there were 32. Checked before anything executes: this is a static
+// property of the list, and failing fast beats discovering it after 15s.
+const dupes = [...new Set(suites.filter((s, i) => suites.indexOf(s) !== i))];
+if (dupes.length) {
+  console.error(`run_all: registered more than once: ${dupes.join(", ")}`);
+  process.exit(1);
+}
+
+// EVERY suite in this directory must be listed above.
+//
+// Twice now a test file was written, passed when run by hand, and was never
+// added here — so it protected nothing. The CapSolver checks and the
+// no-hard-coding guarantee both sat unregistered until 2026-08-17. A test
+// nobody runs is worse than no test: it reads like coverage.
+//
+// This check used to sit at the very bottom, AFTER the `failed` exit — so the
+// one situation where an unregistered file is most likely (somebody mid-change,
+// something red) was exactly the situation where it never ran. It asks a static
+// question about the directory; ask it first.
+const onDisk = readdirSync(new URL(".", import.meta.url))
+  .filter((f) => f.startsWith("test_") && f.endsWith(".mjs"));
+const missing = onDisk.filter((f) => !suites.includes(f));
+if (missing.length) {
+  console.error(`run_all: ${missing.length} suite(s) exist but are NOT registered: ${missing.join(", ")}`);
+  process.exit(1);
+}
 let failed = 0;
 for (const s of suites) {
   try {
@@ -51,18 +98,3 @@ for (const s of suites) {
 }
 if (failed) { console.error(`run_all: ${failed}/${suites.length} suites failed`); process.exit(1); }
 console.log(`run_all: all ${suites.length} suites passed`);
-
-// EVERY suite in this directory must be listed above.
-//
-// Twice now a test file was written, passed when run by hand, and was never
-// added here — so it protected nothing. The CapSolver checks and the
-// no-hard-coding guarantee both sat unregistered until 2026-08-17. A test
-// nobody runs is worse than no test: it reads like coverage.
-import { readdirSync } from "node:fs";
-const onDisk = readdirSync(new URL(".", import.meta.url))
-  .filter((f) => f.startsWith("test_") && f.endsWith(".mjs"));
-const missing = onDisk.filter((f) => !suites.includes(f));
-if (missing.length) {
-  console.error(`run_all: ${missing.length} suite(s) exist but are NOT registered: ${missing.join(", ")}`);
-  process.exit(1);
-}

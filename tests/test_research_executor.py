@@ -36,7 +36,7 @@ class FakeLLM:
     def __init__(self):
         self.calls = []
 
-    def chat(self, system, user, temperature=0.1):
+    def chat(self, system, user, temperature=0.1, **kw):
         self.calls.append((system, user))
         return types.SimpleNamespace(text="Open daily 9:30am-5:30pm [1].")
 

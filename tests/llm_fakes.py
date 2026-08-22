@@ -22,7 +22,11 @@ class FakeLLM:
         self.same_verdicts = list(same_verdicts or [])
         self.calls: list[tuple[str, str]] = []
 
-    def chat(self, system: str, user: str, temperature: float = 0.1) -> _Reply:
+    # **kw, not a pinned signature: brain.llm.LLM.chat grew an `aux` flag
+    # for the mechanical calls, and a double that refuses unknown keywords
+    # turns that into a TypeError swallowed by the caller's try/except —
+    # the dedup silently stopped happening and the test said `0 == 1`.
+    def chat(self, system: str, user: str, temperature: float = 0.1, **kw) -> _Reply:
         self.calls.append((system, user))
         if "distill" in system:
             payload = (self.consolidations.pop(0)

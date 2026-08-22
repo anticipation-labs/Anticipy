@@ -15,6 +15,7 @@ import json
 import os
 import re
 import time
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
 
@@ -28,7 +29,7 @@ from .memory import Memory
 from .segmenter import SegmentStore, place_turn
 from .conversation import Conversation, MockTransport, TwilioTransport
 from .llm import LLM, TZ as TZ_FALLBACK
-from .voice_arm import VoiceArm
+from .voice_arm import VoiceArm, has_credentials, rest_credential
 from .workflow import (claim as claim_plan, fail as fail_plan,
                        from_params as workflow_from_params,
                        put_in_params, recover_expired as recover_expired_plan,
@@ -202,6 +203,25 @@ def fetch_owner_timezone(owner_ref: str = "") -> str | None:
         return None
 
 
+def fetch_owner_first_name(owner_ref: str = "") -> str | None:
+    """The owner's own first name, so every prompt knows the person it is
+    writing TO — not just the person it is writing about.
+
+    Same beat and same shape as the zone above, for the same reason: this is a
+    profile column the app already collects, and llm.who_line() needs it to
+    stop the composer using the owner's own name as a third-person subject in
+    a text addressed to him ("what pharmacy does he use?", sent to him).
+
+    None when unknown, which leaves every prompt exactly as it was.
+    """
+    try:
+        profile = _latest_profile(owner_ref)
+        first = (profile.get("first_name") or "").strip() if profile else ""
+        return first or None
+    except Exception:
+        return None
+
+
 def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> bool:
     """Day zero's first proactive touch: the moment a BRAND-NEW owner saves
     their number, she says hello — once, ever, per number.
@@ -284,6 +304,193 @@ def seed_profile_identity(memory, _seen=None, owner_ref: str = "") -> None:
         print(f"profile identity seed failed (harmless): {e}")
 
 
+def ingest_profile_events(memory, owner_ref: str = "") -> int:
+    """Day zero, part two: the facts the PHONE read off its own calendar and
+    address book.
+
+    These arrive as `kind="profile"` events rather than transcripts, and that
+    distinction is the whole reason this function exists. A transcript goes
+    through hear() and gets triaged, so "Dinner with Priya, Thursday 7:30pm"
+    posted as a transcript could mint an errand — she would try to BOOK the
+    dinner that is already booked. A profile event is something she should
+    KNOW, never something she should start doing, so it goes straight to
+    memory and never near the job miner.
+
+    Importance 4, not 5: identity (a name, an email) outranks a diary entry,
+    and recall sorts on importance. Source "import" is already in the schema's
+    enum alongside "interview" and "consolidation" (brain/memory.py:64-65), so
+    provenance survives without a migration.
+
+    Idempotent by two mechanisms, because the poll runs every couple of
+    seconds: the event is marked processed the moment it lands, and
+    remember_fact merges restatements anyway — so the same event replayed after
+    a crash cannot double up.
+
+    Returns how many facts were written. Failures are swallowed the way
+    seed_profile_identity swallows them: seeding must never take hearing down.
+    """
+    written = 0
+    try:
+        for event in fetch_unprocessed(kind="profile", owner_ref=owner_ref):
+            text = (event.get("text") or "").strip()
+            if not text:
+                mark_processed(event.get("id", ""), "ignore")
+                continue
+            # PROVENANCE COMES FROM THE EVENT, not from this line.
+            #
+            # This used to hard-code source="import" for every profile event,
+            # and "import" is not a neutral label — anticipy_core.py's
+            # _UNTRUSTED_SOURCES marks it as attacker-controlled. So the six
+            # answers a person typed with their own thumbs were quarantined
+            # exactly like a meeting title a stranger put on their calendar:
+            # "They asked me never to touch: anything to do with my bank" was
+            # fenced as quoted hostile text instead of obeyed, could never
+            # settle a plan value, and the briefing attributed the owner's own
+            # words to their calendar.
+            #
+            # Anything unrecognised falls back to "import", so the failure mode
+            # is over-fencing rather than trusting text nobody vouched for.
+            claimed = (event.get("source") or "").strip()
+            source = claimed if claimed in ("interview", "import") else "import"
+            # Importance rides on the event too, because the questions are not
+            # equal: a boundary ("never touch my bank") must outrank the thing
+            # it is a boundary on, and recall is ranked on importance x recency.
+            # A missing or absurd value degrades to 4, which is what every
+            # calendar and contacts import is.
+            try:
+                importance = int(event.get("importance") or 4)
+            except (TypeError, ValueError):
+                importance = 4
+            importance = min(5, max(1, importance))
+            memory.remember_fact(text, importance=importance, source=source)
+            # Mark before counting: an unmarked event is replayed by the next
+            # poll, which is the one failure mode that turns a seed into a
+            # flood.
+            mark_processed(event.get("id", ""), "ignore")
+            written += 1
+            print(f"profile fact via {source} (importance {importance}): {text[:60]}")
+    except Exception as e:
+        print(f"profile import failed (harmless): {e}")
+    return written
+
+
+# The two source tags a supervised read may claim. An ALLOW-LIST, not a
+# validation: both are in anticipy_core._UNTRUSTED_SOURCES, so anything
+# unrecognised degrading to the first of them over-fences rather than letting
+# a mangled or invented tag arrive as trusted text. `params.source` on the job
+# is "mail" / "professional"; these are what the derived FACT is labelled.
+_READ_SOURCES = ("supervised_mail", "supervised_professional")
+
+# design/day-zero.md §3, and it is a hard ceiling rather than a default:
+# "importance 5 is reserved for boundaries the owner stated in their own words"
+# ("never touch anything to do with my bank"). Recall ranks on importance x
+# recency and a briefing takes the top ten, so a fact NOBODY TYPED outranking
+# one they did is not a cosmetic ordering bug — it is her leading with a
+# stranger's subject line over the owner's own instruction.
+READ_FACT_MAX_IMPORTANCE = 4
+
+
+def ingest_read_facts(memory, owner_ref: str = "") -> int:
+    """Day zero, part three: what a SUPERVISED READ concluded.
+
+    The extension distils 5-15 facts per source and posts each as its own
+    `kind="read_fact"` event (design/day-zero.md §3). Only the conclusion
+    travels — never the page slice, never a subject line verbatim, never a
+    message body — which is design/LOCAL-FIRST.md:9-11 held at the transport,
+    and it is why this reads `text` and nothing else off the event.
+
+    Same reason as `ingest_profile_events` for not going through hear(): a
+    distilled fact is something she should KNOW, and a transcript would be
+    triaged and could mint an errand off somebody else's mail.
+
+    Returns how many facts were written. Failures are swallowed exactly as
+    the other two seeders swallow them: day zero must never take hearing down.
+    """
+    written = 0
+    try:
+        # VETOES FIRST, within the same poll. If the owner has already tapped
+        # a fact away, processing the facts first would write it and delete it
+        # a moment later — a window in which recall can see it, and a needless
+        # write to a store the veto exists to keep clean.
+        ingest_read_vetoes(memory, owner_ref=owner_ref)
+        for event in fetch_unprocessed(kind="read_fact", owner_ref=owner_ref):
+            text = (event.get("text") or "").strip()
+            if not text:
+                # Skips record nothing; never an empty fact.
+                # (design/briefs/08-day-zero.md:30)
+                mark_processed(event.get("id", ""), "ignore")
+                continue
+            # PROVENANCE FROM THE EVENT, defaulting to the fenced mail tag.
+            # It has to land in remember_fact, because `source` is the ONLY
+            # thing that makes the fence apply downstream: every prompt sink
+            # asks whether this string is in _UNTRUSTED_SOURCES, and a fact
+            # that arrives labelled "interview" is read as the owner's own
+            # words for the rest of its life.
+            claimed = (event.get("source") or "").strip()
+            source = claimed if claimed in _READ_SOURCES else _READ_SOURCES[0]
+            # 3, matching `DEFAULT_READ_IMPORTANCE` in
+            # extension/supervised_read.js, which is what the emitter puts on
+            # a fact whose importance the model did not state. A missing value
+            # here means the field never arrived at all, and a fact whose
+            # importance is unknown must not outrank one whose importance was
+            # actually judged — so the fallback is the lower of the two halves,
+            # not the design note's worked example of 4.
+            try:
+                importance = int(event.get("importance") or 3)
+            except (TypeError, ValueError):
+                importance = 3
+            # Clamped, not trusted. The ceiling is enforced HERE rather than on
+            # the phone or in the extension because this is the last
+            # deterministic gate before the row exists, and
+            # CLAUDE-ONBOARDING.md:19-20 puts safety gates in code — a model
+            # asked to pick an importance is not a gate.
+            importance = min(READ_FACT_MAX_IMPORTANCE, max(1, importance))
+            memory.remember_fact(text, importance=importance, source=source)
+            # Mark before counting, exactly like the profile loop: an unmarked
+            # event is replayed by the next poll, which is the one failure mode
+            # that turns a read into a flood.
+            mark_processed(event.get("id", ""), "ignore")
+            written += 1
+            print(f"read fact via {source} (importance {importance}): {text[:60]}")
+    except Exception as e:
+        print(f"supervised read ingest failed (harmless): {e}")
+    return written
+
+
+def ingest_read_vetoes(memory, owner_ref: str = "") -> int:
+    """The other half of the tap. design/day-zero.md §3: "Every fact is
+    vetoable. A tap deletes it and marks it never-re-derive."
+
+    `kind="read_veto"` carries the vetoed fact text and nothing else.
+    memory.forget_fact() does both halves — delete the row, record the veto —
+    because deleting alone means the next read of the same inbox derives the
+    same fact and hands it back, which reads as her ignoring him.
+
+    The vetoed text NEVER reaches a prompt: it goes into vetoed_facts and is
+    only ever compared against. That matters because a veto's text came off a
+    read like any other, so it is attacker-influenced — it just has no sink.
+
+    Returns how many veto events were applied (not rows deleted: a veto that
+    deleted nothing still has to stick, so the count that matters is vetoes).
+    """
+    applied = 0
+    try:
+        for event in fetch_unprocessed(kind="read_veto", owner_ref=owner_ref):
+            text = (event.get("text") or "").strip()
+            if not text:
+                mark_processed(event.get("id", ""), "ignore")
+                continue
+            removed = memory.forget_fact(text)
+            # Mark before counting, same reason as everywhere else in this file.
+            mark_processed(event.get("id", ""), "ignore")
+            applied += 1
+            print(f"read fact vetoed ({removed} row(s) deleted, never "
+                  f"re-derive): {text[:60]}")
+    except Exception as e:
+        print(f"veto failed (harmless, the fact stays): {e}")
+    return applied
+
+
 def same_phone(a: str, b: str) -> bool:
     """E.164 comparison tolerant of formatting. Empty owner phone never
     matches — an unconfigured owner must not authorize the whole world."""
@@ -328,25 +535,113 @@ def clock_should_run(now: float, state: dict) -> bool:
 # notice. So the brain checks its own ear: if the number stops pointing here,
 # say so loudly and point it back.
 WEBHOOK_CHECK_EVERY_SECONDS = 10 * 60
+WEBHOOK_PATH = "/sms/inbound"
+
+
+def reachable_by_twilio(url: str) -> str:
+    """Empty if Twilio can reach this URL, else why it cannot.
+
+    A LOCAL RIG MUST NOT BE ABLE TO BREAK HIS REAL PHONE NUMBER.
+
+    `ensure_inbound_webhook` rewrites the inbound binding of a LIVE Twilio
+    number. Run once on a laptop with the production credentials in the
+    environment — which is exactly what inheriting a shell's exports does — and
+    it pointed +1 619 658 4447 at http://127.0.0.1:8090/sms/inbound (observed
+    2026-08-19). Twilio cannot reach a loopback address, so every text he sent
+    would have been dropped on the floor, and the only signal was one line of
+    stdout on the laptop.
+
+    Twilio has to be able to REACH the URL for the write to be an improvement,
+    so a URL it demonstrably cannot reach is never an improvement. HTTPS-only
+    for the same reason the token used to ride in the query: the signature is
+    computed over the exact URL Twilio requests.
+    """
+    parsed = urlparse(url or "")
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return "it names no host"
+    if (host in ("localhost", "127.0.0.1", "::1", "0.0.0.0")
+            or host.endswith(".local")
+            or host.startswith(("10.", "192.168.", "169.254."))
+            or re.match(r"^172\.(1[6-9]|2\d|3[01])\.", host) is not None):
+        return f"{host} is only routable from this machine"
+    if parsed.scheme != "https":
+        return f"{parsed.scheme or 'no scheme'} is not https"
+    return ""
+
+
+def webhook_target() -> tuple[str, str]:
+    """THE one URL the owner's number must point at, or ("", why not).
+
+    THE SINGLE CORRECT VALUE is the public https origin of the PocketBase
+    service plus /sms/inbound — that service is the one serving the route
+    (backend/pb_hooks/sms.pb.js), and the hook authenticates whatever URL
+    Twilio actually requested. ANTICIPY_PB *is* that origin: it is the address
+    this process already uses to read and write the database. So the value is
+    DERIVED from something already proven to work, not configured a second
+    time in a second service where it can drift.
+
+    Drift is not hypothetical. ANTICIPY_TWILIO_WEBHOOK_URL had to be identical
+    on the worker (which binds the number) and on PocketBase (which validated
+    against it); on 2026-08-12→15 they disagreed and every inbound text 403ed
+    for three days. The hook no longer needs the variable at all. The worker
+    keeps honouring it as a PIN for the one case derivation cannot cover — a
+    proxy or custom domain whose public origin is not the one the worker talks
+    to — and REFUSES when both are stated, both are plausible and they
+    disagree, because that is the drift, and only one of them can be the
+    service Twilio should reach. Refusing leaves a working binding alone;
+    guessing overwrites one.
+    """
+    pinned = (os.environ.get("ANTICIPY_TWILIO_WEBHOOK_URL") or "").strip()
+    derived = f"{PB.rstrip('/')}{WEBHOOK_PATH}"
+    # Base URLs compared without the query: a legacy "?token=..." pin is the
+    # same service with a secret stapled on, not a different destination.
+    if pinned and reachable_by_twilio(derived) == "" \
+            and pinned.split("?")[0] != derived:
+        return "", (
+            f"ANTICIPY_TWILIO_WEBHOOK_URL pins {pinned.split('?')[0]} but "
+            f"ANTICIPY_PB derives {derived}. TWO SERVICES DISAGREE about where "
+            f"his texts should land, which is the 2026-08-12 outage exactly. "
+            f"Unset the pin to use the derived URL, or point ANTICIPY_PB at "
+            f"the same origin")
+    ours = pinned or derived
+    why = reachable_by_twilio(ours)
+    if why:
+        return "", f"{ours.split('?')[0]} is not a URL Twilio can reach ({why})"
+    return ours, ""
 
 
 def ensure_inbound_webhook() -> None:
     sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    auth = os.environ.get("TWILIO_AUTH_TOKEN")
     number = os.environ.get("TWILIO_PHONE_NUMBER") or os.environ.get("TWILIO_FROM")
-    if not (sid and auth and number):
+    # Reading the number's configuration is a REST call like any other, so it
+    # authenticates with the same preferred-API-key credential as a send. An
+    # inbound signature is the only thing that still needs the auth token
+    # itself, and that check does not live in this service.
+    credential = rest_credential()
+    if not (sid and number and credential):
         return          # not our job to guess; stay quiet
-    ours = (os.environ.get("ANTICIPY_TWILIO_WEBHOOK_URL") or
-            f"{PB.rstrip('/')}/sms/inbound")
+    ours, refusal = webhook_target()
+    if not ours:
+        print(f"NOT repointing inbound SMS: {refusal}. Leaving the existing "
+              f"binding alone.")
+        return
     try:
         r = requests.get(
             f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers.json",
-            auth=(sid, auth), timeout=15)
+            auth=credential.basic(), timeout=15)
         if not r.ok:
+            # Was silent, which made "the credential cannot read this account"
+            # and "the binding is fine" the same observation.
+            print(f"could not read the inbound binding from Twilio: HTTP "
+                  f"{r.status_code} using {credential.describes}")
             return
         rows = [n for n in r.json().get("incoming_phone_numbers", [])
                 if n.get("phone_number") == number]
         if not rows:
+            print(f"TWILIO_PHONE_NUMBER …{str(number)[-4:]} is not on this "
+                  f"account — nothing to point at {ours.split('?')[0]}. Her "
+                  f"inbound texts are going somewhere this worker cannot see.")
             return
         n = rows[0]
         current = n.get("sms_url") or ""
@@ -361,10 +656,34 @@ def ensure_inbound_webhook() -> None:
         if current == ours and not shadowed:
             return
         print(f"WEBHOOK HIJACK: inbound SMS was pointing at {current.split('?')[0] or '(empty)'}"
-              f"{' (shadowed by an application SID)' if shadowed else ''} — pointing it back at us")
+              f"{' (shadowed by an application SID)' if shadowed else ''} — "
+              f"pointing it back at {ours.split('?')[0]}")
+        # THE URL WE ARE ABOUT TO HAND TWILIO HAS TO BE OUR BACKEND.
+        #
+        # Reachability says the URL is routable from the internet; it says
+        # nothing about what answers there. One GET to /api/health on the same
+        # origin turns "the two services agree" from a claim about environment
+        # variables into an observation: if that origin is not a PocketBase
+        # that answers, then whatever the number currently points at is likelier
+        # to be right than a URL serving nothing, and the safe move is to leave
+        # the live binding alone and say so.
+        origin = urlparse(ours)
+        health = f"{origin.scheme}://{origin.netloc}/api/health"
+        try:
+            probe = requests.get(health, timeout=10)
+            answered = bool(getattr(probe, "ok", False))
+            detail = f"HTTP {getattr(probe, 'status_code', '?')}"
+        except Exception as exc:
+            answered, detail = False, str(exc)
+        if not answered:
+            print(f"NOT repointing inbound SMS: {health} is not answering as "
+                  f"our PocketBase ({detail}), so this URL cannot be the one "
+                  f"Twilio should reach. Leaving {current.split('?')[0] or '(empty)'} "
+                  f"in place.")
+            return
         u = requests.post(
             f"https://api.twilio.com/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers/{n['sid']}.json",
-            auth=(sid, auth), timeout=15,
+            auth=credential.basic(), timeout=15,
             data={"SmsUrl": ours, "SmsMethod": "POST", "SmsApplicationSid": ""})
         print("webhook repointed" if u.ok else f"could not repoint the webhook: {u.status_code}")
     except Exception as e:
@@ -373,7 +692,8 @@ def ensure_inbound_webhook() -> None:
 
 
 def post_event(kind: str, text: str, decision: str = "", goal: str = "",
-               owner_ref: str = "", owner_id: str = "") -> None:
+               owner_ref: str = "", owner_id: str = "",
+               source: str = "") -> None:
     ref = _active_owner_ref(owner_ref)
     legacy = str(owner_id or ACTIVE_OWNER_ID or "").strip()
     body = {
@@ -384,6 +704,24 @@ def post_event(kind: str, text: str, decision: str = "", goal: str = "",
         body["owner_ref"] = ref
     if legacy:
         body["owner"] = legacy
+    # WHICH EARS SET THIS OFF, carried onto the row the brain itself writes.
+    #
+    # An anticipy_says row is the only durable record that she spoke, and it
+    # is what every speak-once guard reads back. Until now those rows were
+    # provenance-blind: the transcript line that CAUSED the reply knew it came
+    # from the pendant (events.source, written by the app), and the reply it
+    # produced knew nothing, so "how did the pendant run of this errand go?"
+    # could be answered about the hearing and not about the answering. The
+    # brain passes the causing line's source through so both halves of one
+    # exchange carry the same microphone.
+    #
+    # Omitted rather than blanked when the caller has no provenance to give: a
+    # clock initiative and a welcome message were heard by nobody, and every
+    # one of the 2209 events already in production has an empty source, so an
+    # explicit "" here would be a claim where there is none.
+    provenance = str(source or "").strip()
+    if provenance:
+        body["source"] = provenance
     response = pb.post(f"{PB}/api/collections/events/records", json=body, timeout=10)
     response.raise_for_status()
 
@@ -539,6 +877,12 @@ def uninvited_sent_today(owner_ref: str = "") -> int:
         return 0
 
 
+# One Twilio attempt per finding per two minutes when a send keeps failing.
+# Far longer than the two-second sweep that would otherwise hammer Twilio, far
+# shorter than a person's patience for an answer he asked for out loud.
+FYI_RETRY_SECONDS = 120
+
+
 def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> bool:
     """Text him what she found — her words, varied every time, one text.
 
@@ -549,7 +893,7 @@ def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> bool:
     lookup that finished overnight was destroyed rather than deferred —
     exactly the "I'll text you what I find" that never arrives. A caller
     that gets False must leave the finding undelivered so a later sweep
-    can send it.
+    can send it — a failed SEND is one of those cases, see below.
 
     Overheard FYIs ("caught this earlier, looked into it") respect the same
     quiet hours as every other uninvited text; an answer he asked for out
@@ -566,6 +910,25 @@ def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> bool:
             return False
     if len(trimmed) > 320:
         trimmed = trimmed[:317] + "…"
+    # A HARD SEND FAILURE IS NOT A DELIVERY.
+    #
+    # This used to return True whatever came back, so a Twilio 4xx, an account
+    # with no owner number and the rig guard all read to the caller as "he has
+    # it": the finding was recorded as delivered and never sent again. What
+    # justified that was fear of a retry storm, since the caller re-enters this
+    # on every two-second sweep for as long as it gets False. So the storm is
+    # bounded HERE — one attempt per FYI_RETRY_SECONDS per finding — instead of
+    # by lying about the outcome. Only FAILURES back off; a success leaves no
+    # mark, because the caller's already_raised guard is what stops a second
+    # text of a delivered finding.
+    #
+    # Reporting False is also what every other send in this file does with a
+    # failure (the stall notice, the result text, the stuck-job notice all
+    # `continue` without recording), so a finding that cannot be texted stays
+    # on the books with a log line saying why, on every pass.
+    failed_recently = f"fyi-failed:{goal}"
+    if sent_moments_ago(failed_recently, within=FYI_RETRY_SECONDS):
+        return False
     try:
         say = anticipy._voice({
             "situation": ("you caught something he said to someone earlier, "
@@ -578,15 +941,15 @@ def deliver_fyi(anticipy, goal: str, result: str, overheard: bool) -> bool:
             "goal": goal, "answer": trimmed,
         }) or (f"caught the {goal} thing earlier — fyi: {trimmed}"
                if overheard else trimmed)
-        anticipy.notify_owner(say)
+        if not anticipy.notify_owner(say):
+            mark_sent(failed_recently)
+            print(f"fyi NOT delivered — the send failed, so it stays "
+                  f"undelivered: {goal[:50]}")
+            return False
     except Exception as e:
-        print(f"fyi text failed (feed still has it): {e}")
-    # Attempted and concluded. Only a quiet-hours HOLD (above) reports False:
-    # that is a deferral with a morning to come, and it is the one case the
-    # caller must not record as delivered. A send that was tried and failed
-    # keeps its existing behaviour — the feed carries it — because retrying a
-    # hard failure on every two-second sweep is a different decision than the
-    # bug being fixed here.
+        mark_sent(failed_recently)
+        print(f"fyi text failed (feed still has it), staying undelivered: {e}")
+        return False
     return True
 
 
@@ -973,6 +1336,29 @@ def already_delivered(goal: str, within_hours: float = 24.0,
         return False
 
 
+def can_reach_owner(anticipy) -> bool:
+    """Is there anyone at the other end, before we pay to compose a sentence?
+
+    THE COMPOSE IS THE EXPENSIVE PART. Live, 2026-08-22, on a real account
+    with no phone number on it: a finished job reached the notify path, a
+    fresh model call wrote the sentence, notify_owner refused it for want of
+    a number ("NO OWNER PHONE on this account — composed but NOT sent"), the
+    job was deliberately left out of REPORTED so that a failed send could
+    retry, and two seconds later the whole thing happened again — for hours,
+    one paid model call per sweep, for a message that could never leave.
+
+    Retrying is right; paying for the sentence before knowing anyone can
+    receive it is not. The rule for WHO is reachable is deliberately not
+    copied here — it lives once, beside the send it guards, in
+    Anticipy.can_notify_owner. A core (or a test double) without that method
+    cannot answer cheaply, so this answers yes and the caller behaves exactly
+    as it did before: the wasted call is the old bug, a wrong silence would
+    be a worse new one.
+    """
+    reachable = getattr(anticipy, "can_notify_owner", None)
+    return bool(reachable()) if callable(reachable) else True
+
+
 def report_finished_jobs(anticipy) -> None:
     """Tell him the answer.
 
@@ -1084,6 +1470,11 @@ def report_finished_jobs(anticipy) -> None:
                 # He asked for this one out loud, so the answer goes to his
                 # hand, not just the feed (same 2026-08-05 rule change).
                 if result and not failed:
+                    # Return value deliberately not gating: for this lane the
+                    # FEED write below is the delivery ("never an SMS"), and the
+                    # text is an extra. deliver_fyi logs its own failure, so a
+                    # text that did not go out is visible without holding a job
+                    # open for an answer that has already landed on his desk.
                     deliver_fyi(anticipy, goal, result, overheard=False)
                 # Reported first, then the feed write. A refused post_event
                 # raises, and with the text already in his hand that unwound
@@ -1092,6 +1483,24 @@ def report_finished_jobs(anticipy) -> None:
                 REPORTED.add(job["id"])
                 post_event("anticipy_says", said, decision="done", goal=goal)
                 print(f"desk: research {job['status']} {job['id']} — {goal[:60]}")
+                continue
+            # CANNOT REACH IS NOT FAILED TO SEND, and this is the line where
+            # the difference costs money. A transient failure — Twilio 5xx, a
+            # dropped connection — must retry, which is why REPORTED is only
+            # set after a send succeeds. But an account with no number will
+            # not grow one between two sweeps, so that same retry recomposed
+            # this same answer with a fresh model call every two seconds for
+            # hours on 2026-08-22. Attempt it once, record it as handled, and
+            # say so once instead of every cycle.
+            #
+            # In RAM only: the durable anticipy_says record is the proof she
+            # SPOKE, and she did not. A number added to the account is picked
+            # up by every job after this one, and by this one after the next
+            # restart — the honest cost of not writing a lie into the feed.
+            if not can_reach_owner(anticipy):
+                REPORTED.add(job["id"])
+                print(f"result for {job['id']} has nowhere to go — no phone on "
+                      f"this account, not composing: {goal[:60]}")
                 continue
             # A finished task with nothing written on it is still finished, and
             # he asked for it. Staying quiet here would mean his table gets
@@ -2110,6 +2519,25 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
                                   owner_ref=anticipy.owner_ref):
                 print(f"stuck job {job['id']}: already asked for this, staying quiet")
                 continue
+            # Same distinction as the finished-job reporter, for the same
+            # measured reason: with no number on the account this composed a
+            # fresh ask on every sweep and notify_owner discarded every one of
+            # them ("send failed, not recording it as said", forever). Nothing
+            # here can change until a phone number does, so do not pay for the
+            # sentence.
+            #
+            # Held under its own local key, never under local_key itself:
+            # nothing was sent, so a number arriving mid-window must let the
+            # real ask go out at once rather than serve out a suppression it
+            # never earned. The key exists only so this lands in the log once
+            # instead of every two seconds.
+            if not can_reach_owner(anticipy):
+                nowhere_key = f"unreachable:{local_key}"
+                if not sent_moments_ago(nowhere_key):
+                    mark_sent(nowhere_key)
+                    print(f"stuck job {job['id']}: nowhere to send this — no "
+                          f"phone on this account, not composing")
+                continue
             said = anticipy._voice({
                 "situation": "you got most of the way through a task in their browser "
                              "and need one thing from them to finish. Carry the facts "
@@ -2178,12 +2606,14 @@ def main() -> None:
         return
     ACTIVE_OWNER_REF = owner_ref
     ACTIVE_OWNER_ID = legacy_owner
-    # The owner's own zone, from their profile — so every prompt is grounded in
-    # THEIR time of day and THEIR city, not the server's. Read once at startup
-    # and refreshed on the same beat as the phone number below; unknown simply
-    # means the old server-default behaviour.
+    # The owner's own zone and name, from their profile — so every prompt is
+    # grounded in THEIR time of day, THEIR city, and the fact that THEY are the
+    # one reading whatever gets composed. Read once at startup and refreshed on
+    # the same beat as the phone number below; unknown simply means the old
+    # server-default behaviour.
     owner_zone = fetch_owner_timezone(owner_ref)
-    llm = LLM(owner_zone=owner_zone)
+    llm = LLM(owner_zone=owner_zone,
+              owner_name=fetch_owner_first_name(owner_ref))
     if owner_zone:
         try:
             CLOCK_TZ = ZoneInfo(owner_zone)
@@ -2199,18 +2629,31 @@ def main() -> None:
                         owner_phone=("" if os.environ.get("ANTICIPY_SUPERVISED") == "1"
                                      else os.environ.get("ANTICIPY_OWNER_PHONE", "owner")),
                         owner_id=legacy_owner, owner_ref=owner_ref)
-    # Live texting when Twilio credentials are present; mock otherwise.
-    live_sms = all(os.environ.get(k) for k in
-                   ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"))
+    # Live texting when Twilio credentials are present; mock otherwise. The
+    # credential may be an API key OR the auth token, so the gate asks the one
+    # place that knows (brain/voice_arm.py `has_credentials`) instead of listing
+    # variable names here and drifting from it.
+    live_sms = has_credentials()
     voice = VoiceArm() if live_sms else None
     if voice:
         anticipy.voice = voice
     convo = Conversation(anticipy, transport=TwilioTransport(voice) if voice else MockTransport())
     anticipy.conversation = convo
     # Observation only in step 1; a failure here must never touch hearing.
-    segments = SegmentStore(PB, owner=anticipy.owner_id,
-                            owner_ref=anticipy.owner_ref) \
-        if os.environ.get("ANTICIPY_SEGMENTS", "1") == "1" else None
+    #
+    # OFF means explicitly off, and nothing else does. This read used to be
+    # `== "1"`, which fails silently OPEN in the one direction that matters:
+    # proof/local_rig.sh exported ANTICIPY_SEGMENTS as a FILE PATH (copying the
+    # shape of ANTICIPY_MEMORY_DB and ANTICIPY_CLOCK_STATE, which really are
+    # paths), a path is not "1", and so the whole segment store was None on the
+    # rig. Every local conversation was heard as isolated lines with no context
+    # across them - for a product whose entire premise is understanding ordinary
+    # multi-turn speech - and it logged nothing to say so. Found 2026-08-20 by
+    # the ambient corpus run, after the store had been dark for the whole of
+    # local testing. A stray value must never switch a subsystem off in silence.
+    _seg = os.environ.get("ANTICIPY_SEGMENTS", "1").strip().lower()
+    segments = None if _seg in ("0", "false", "no", "off", "") else \
+        SegmentStore(PB, owner=anticipy.owner_id, owner_ref=anticipy.owner_ref)
     # A fingerprint of the brain that is ACTUALLY running, printed at startup.
     #
     # "Deployed" has meant "Railway said RUNNING" up to now, which is a claim
@@ -2218,8 +2661,15 @@ def main() -> None:
     # mattered. This hashes the source of the two files that decide what she
     # does, so the log proves which build is live instead of implying it.
     print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
-          f" · sms={'live' if live_sms else 'mock'} · pb={PB}"
+          # "sms=live" is load-bearing text, not a nicety: proof/local_rig.sh:180
+          # greps for it and kills a laptop worker that has live credentials. The
+          # credential goes in its own field so that assertion keeps matching —
+          # after a key is minted, the only way to know whether outbound really
+          # moved off the full-access auth token is to read it off the process.
+          f" · sms={'live' if live_sms else 'mock'}"
+          f"{' · auth=' + voice.credential if voice else ''} · pb={PB}"
           f" · where={llm.owner_zone or 'server-default:' + str(TZ_FALLBACK)}"
+          f" · who={llm.owner_name or 'unknown'}"
           f" · brain={_brain_fingerprint()}")
     if not anticipy.owner_id:
         # Paired extensions only claim their owner's jobs, so unstamped jobs
@@ -2229,6 +2679,25 @@ def main() -> None:
     if not same_phone(anticipy.owner_phone, anticipy.owner_phone):
         print("WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — "
               "every inbound text will be ignored as non-owner.")
+    if mem_db == ":memory:":
+        # AMNESIA HAS TO ANNOUNCE ITSELF.
+        #
+        # A supervised worker always gets a real file: supervisor.py:91-93
+        # writes ANTICIPY_MEMORY_DB into every child environment. So this is
+        # the hand-started shape — `python -m brain.worker` in a terminal —
+        # which is how the demos and nearly all live debugging are run. The
+        # default stays as it is on purpose (nothing is created on disk, and
+        # two experiments cannot contaminate each other's memory), but the
+        # process then has NO long-term memory while every other log line
+        # reads perfectly normal: commitments are stored, answered from, and
+        # then evaporate on exit. That shape gets diagnosed as "she forgot the
+        # whole conversation, the graph must be broken" when the actual cause
+        # is one unset environment variable, so it must be impossible to miss
+        # in the log the operator is already reading.
+        print("WARNING: ANTICIPY_MEMORY_DB is unset — long-term memory is in "
+              "RAM ONLY and dies with this process. Nothing she learns will "
+              "survive a restart. Point it at a file path (the supervisor "
+              "does that for every worker it spawns).")
 
     last_clock = 0.0
     last_profile = 0.0
@@ -2258,9 +2727,29 @@ def main() -> None:
                     except Exception:
                         pass
                     print(f"owner timezone updated from the app: {zone}")
+                # And the name, on the same beat and for the same reason: a
+                # worker that started before onboarding finished otherwise
+                # composes for the whole day without knowing who it is
+                # writing to.
+                first = fetch_owner_first_name(anticipy.owner_ref)
+                if first and first != llm.owner_name:
+                    llm.owner_name = first
+                    print(f"owner first name from the app: {first}")
                 # What onboarding collected becomes profile knowledge on the
                 # same beat — she should know his name from minute one.
                 seed_profile_identity(memory, owner_ref=anticipy.owner_ref)
+                # And what the PHONE read off its own calendar and contacts.
+                # Same beat, same swallow-on-failure posture; these arrive as
+                # `profile` events so they reach memory without being triaged
+                # into errands.
+                ingest_profile_events(memory, owner_ref=anticipy.owner_ref)
+                # And what a SUPERVISED READ concluded, plus any fact the owner
+                # tapped away while watching. Same beat and same posture: a
+                # read that fails to land must never take hearing down with it.
+                # ingest_read_facts applies pending vetoes before it writes
+                # anything, so a tap during the read cannot be undone by the
+                # facts arriving a moment behind it.
+                ingest_read_facts(memory, owner_ref=anticipy.owner_ref)
             # Is the number still wired to us? Cheap, and the failure it
             # catches is invisible from in here — she simply never hears him.
             manages_webhook = (os.environ.get("ANTICIPY_SUPERVISED") != "1" or
@@ -2347,9 +2836,19 @@ def main() -> None:
                 try:
                     # The phone's local voice verdict rides along when the
                     # app stamped one (owner|other); absent on old builds.
+                    # capture_source rides along the same way and answers a
+                    # different question: WHICH MICROPHONE produced this line
+                    # (phone_mic | pendant | typed), read straight off the
+                    # event row the app wrote. It is the whole basis of the
+                    # pendant-versus-phone comparison, and it is empty on all
+                    # 2209 historical rows and on any app build that does not
+                    # stamp it. Empty means UNKNOWN, so the core leaves the
+                    # key off the job entirely rather than writing a blank
+                    # that would read like a measured result.
                     out = anticipy.hear(line, context=convo_context,
                                         may_say=SPEAK_ONCE,
                                         explicit=bool(ev.get("explicit")),
+                                        capture_source=(ev.get("source") or ""),
                                         speaker=(ev.get("speaker") or None),
                                         link_candidates=[t for _, t in cands]
                                         or None,
@@ -2357,7 +2856,15 @@ def main() -> None:
                                         lineage_key=(open_seg.get("id")
                                                      if open_seg else ev["id"]))
                 except TypeError:
-                    # An older core without the speaker kwarg keeps hearing.
+                    # An older core keeps hearing. This retry deliberately
+                    # passes ONLY the four kwargs hear() has had since the
+                    # beginning, so it survives a core that lacks ANY of the
+                    # ones added since — speaker, links, lineage, and now
+                    # capture_source. Nothing new may be added to this call:
+                    # its entire value is that it cannot itself raise
+                    # TypeError. The cost is that the fallback line is heard
+                    # with no provenance and no voice verdict, which is the
+                    # correct trade when the alternative is not hearing it.
                     out = anticipy.hear(line, context=convo_context,
                                         may_say=SPEAK_ONCE,
                                         explicit=bool(ev.get("explicit")))
@@ -2399,7 +2906,9 @@ def main() -> None:
                         print(f"segment: skipped ({e})")
                 if out.get("anticipy_says"):
                     post_event("anticipy_says", out["anticipy_says"],
-                               decision=decision, goal=out["decision"].goal or "")
+                               decision=decision,
+                               goal=out["decision"].goal or "",
+                               source=(ev.get("source") or ""))
                 print(f"heard: {line!r} -> {decision}"
                       f" ({out['decision'].goal or 'no goal'})")
 

@@ -35,7 +35,7 @@ import requests
 
 from . import pb
 
-from .anticipy_core import TEXTING_STYLE
+from .anticipy_core import TEXTING_STYLE, memory_notes
 from .llm import LLM
 from .workflow import (approve as approve_plan, cancel as cancel_plan,
                        from_params as workflow_from_params,
@@ -190,13 +190,43 @@ class MockTransport:
         self.sent: list[dict] = []
 
     def send(self, to: str, body: str) -> dict:
-        rec = {"to": to, "body": body, "ts": time.time(), "mock": True}
+        # `delivered` is False for the same reason it exists on a live send: a
+        # record that nobody delivered must not be readable as one that was.
+        # `mock` is what distinguishes "captured" from "Twilio has it, delivery
+        # pending"; both are honest, and neither is "sent".
+        rec = {"to": to, "body": body, "ts": time.time(), "mock": True,
+               "delivered": False}
         self.sent.append(rec)
         return rec
 
 
 class TwilioTransport:
+    """The live lane. Sends through the voice arm and nowhere else.
+
+    Deliberately thin: the guarantee that a rig cannot text a real person is
+    enforced once, in brain/voice_arm.py `_rig_reason`, because the voice arm is
+    the only code in the brain that reaches Twilio. Duplicating the check here
+    would give two places to forget it. What this class owes is the other half —
+    a failed send must never come back looking like a delivered one, so
+    exceptions from the arm propagate untouched to `say()` and up to
+    notify_owner (brain/anticipy_core.py:2153), which is what drops `handled`
+    so the record never claims the owner was told.
+
+    NOTHING IS CAUGHT HERE ON PURPOSE. A 4xx/5xx from Twilio, a status of
+    failed/undelivered on a 201, and a rig refusal all arrive as SendFailed
+    from voice_arm._result; swallowing any of them into a return value would
+    hand the brain a truthy record for a text that does not exist. The record
+    that does come back carries `delivered`, which is False for a queued
+    message: Twilio has accepted it, and no handset has seen it yet.
+    """
+
     def __init__(self, voice_arm):
+        if voice_arm is None:
+            # Worker construction is `TwilioTransport(voice) if voice else
+            # MockTransport()`. A None arm would have made every send raise
+            # AttributeError — safe, but unreadable at 3am.
+            raise ValueError("TwilioTransport needs a VoiceArm; use MockTransport "
+                             "when Twilio is not configured")
         self.voice = voice_arm
 
     def send(self, to: str, body: str) -> dict:
@@ -1197,7 +1227,15 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
 
     def _classify(self, phone: str, text: str) -> dict:
         thread = [{"who": t.role, "text": t.text} for t in self._thread(phone)[-20:]]
-        memory = [f["fact"] for f in self.anticipy.memory.recall(text, limit=6)]
+        # Fenced, not raw. REPLY_SYSTEM tells the model that facts about the
+        # owner's life come ONLY from `memory` and the thread — so this block is
+        # explicitly authoritative, which is the last place attacker-controlled
+        # text may sit unmarked. An imported calendar title is a profile fact
+        # and _profile_recall's backfill will pad it in even when it matched
+        # nothing; the classifier's verdict then drives execution ("confirm"
+        # releases a held job). memory_notes segregates anything imported into a
+        # nonce-delimited quoted block.
+        memory = memory_notes(self.anticipy.memory.recall(text, limit=6))
         payload = json.dumps({"thread": thread, "pending": self._pending(),
                               "blocked": self._blocked(), "memory": memory,
                               "recent_outcomes": self._recent_outcomes(),

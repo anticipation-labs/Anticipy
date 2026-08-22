@@ -91,9 +91,26 @@ routerAdd("POST", "/auth/reset/request", (e) => {
   // Send FIRST. If the text cannot leave the building, do not leave a live code
   // sitting in the database pretending it did.
   const sid = $os.getenv("TWILIO_ACCOUNT_SID");
-  const auth = $os.getenv("TWILIO_AUTH_TOKEN");
   const from = $os.getenv("TWILIO_PHONE_NUMBER") || $os.getenv("TWILIO_FROM");
-  if (!sid || !auth || !from) {
+  // SAME PREFERENCE AS THE BRAIN (brain/voice_arm.py `rest_credential`): a
+  // scoped, revocable API key over the full-access auth token. This is the
+  // second and last outbound Twilio path in the tree, and a half-migrated
+  // migration is how "outbound no longer uses the account token" becomes a
+  // sentence that is only true of one file.
+  //
+  // The account stays in the URL either way — an API key authenticates AS the
+  // account. Both key names or neither: one alone falls back and says so,
+  // rather than 401ing every reset code with nothing but a status number.
+  const keySid = $os.getenv("TWILIO_API_KEY_SID");
+  const keySecret = $os.getenv("TWILIO_API_KEY_SECRET");
+  const auth = $os.getenv("TWILIO_AUTH_TOKEN");
+  if ((keySid && !keySecret) || (!keySid && keySecret)) {
+    console.log("password reset: TWILIO_API_KEY_SID/SECRET is half set — " +
+      "falling back to the account auth token. Set both or neither.");
+  }
+  const user = (keySid && keySecret) ? keySid : sid;
+  const secret = (keySid && keySecret) ? keySecret : auth;
+  if (!sid || !from || !user || !secret) {
     console.log("password reset: Twilio is not configured on this service — no code sent");
     return same();
   }
@@ -121,7 +138,7 @@ routerAdd("POST", "/auth/reset/request", (e) => {
             out += isNaN(c3) ? "=" : A.charAt(c3 & 63);
           }
           return out;
-        })(sid + ":" + auth),
+        })(user + ":" + secret),
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: "From=" + encodeURIComponent(from) +

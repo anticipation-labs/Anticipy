@@ -140,7 +140,18 @@ export function extractCode(text, opts = {}) {
 export function detectsCodeWasSent(pageText) {
   const t = String(pageText || "");
   if (!t.trim()) return null;
-  const sent = /\b(we (?:just )?(?:sent|emailed|texted)|has been sent|check your (?:email|inbox|phone|messages)|sent (?:you )?a (?:code|link|verification))\b/i;
+  // Real pages overwhelmingly say "Code sent to o***r@gmail.com" or "A
+  // verification code was sent to your email" — and NEITHER matched, because the
+  // pattern only knew first-person constructions ("we sent", "check your
+  // email"). So the most common wording on the exact page this feature exists for
+  // detected nothing and offered nothing. Broadened to include the passive and
+  // the bare "sent to".
+  //
+  // Deliberately still requires evidence of SENDING, not merely of a code being
+  // expected: a bare "enter the code" is also true of an authenticator app, and
+  // offering to read somebody's inbox for a code that never went there is a
+  // question that makes the product look like it is guessing.
+  const sent = /\b(we[''\s]?(?:ve|just)?\s?(?:sent|emailed|texted)|has been sent|have been sent|was sent|were sent|been sent to|sent to|check your (?:e-?mail|inbox|phone|messages)|sent (?:you )?a (?:code|link|verification)|code (?:was |has been )?sent|(?:e-?mail|text|sms) (?:with|containing) a? ?(?:code|link))\b/i;
   if (!sent.test(t)) return null;
 
   // Where did it go? An address in the text is the best evidence; failing
@@ -173,6 +184,47 @@ export function tripRefusedReason(url, { authorized, purpose } = {}) {
   if (NEVER_VISIT.test(host)) return `${host} holds money — that one stays yours`;
   if (!purpose) return "a trip has to say what it is for";
   return null;
+}
+
+// WHO SAYS THE AGENT MAY OPEN SOMEBODY'S MAIL? Only that somebody, in their own
+// words.
+//
+// `runSideTrip` takes `authorized` as a boolean and refuses without it, which
+// correctly leaves open the question of where the boolean comes from. It must
+// NOT come from a params flag: a flag is something another process set, and
+// "another process decided I may read your inbox" is exactly the sentence this
+// product cannot afford to be true. So the answer is derived from the approved
+// scope — the owner's verbatim reply, which the brain appends to
+// `approved_scope` as "They answered: ..." when he answers the offer.
+//
+// STRICT ON PURPOSE, and the negatives below are the whole point. "I'll email
+// you the code" mentions email and is NOT permission. "yes" alone is not
+// permission either, because it may be answering some other question entirely;
+// the affirmative and the inbox have to appear together, in his own sentence.
+// A false positive here reads somebody's mail without being asked.
+const INBOX_YES =
+  /\b(yes|yep|yeah|yup|sure|ok|okay|go|go ahead|do it|please do|permission|allowed?)\b/i;
+const INBOX_TARGET =
+  /\b(inbox|e-?mail|mail(box)?|gmail|outlook|webmail)\b/i;
+// Phrases that ARE permission on their own, because they are imperative: there
+// is no separate "yes" to find in "go read my email".
+const INBOX_IMPERATIVE =
+  /\b(?:go\s+)?(?:and\s+)?(?:read|check|open|look\s+in|get|fetch|grab)\s+(?:it\s+)?(?:from\s+)?(?:my|the)\s+(?:inbox|e-?mail|mail(?:box)?|gmail|outlook)\b/i;
+// An explicit refusal must beat any affirmative elsewhere in the same sentence:
+// "no, don't go into my email, here's the code" contains "here" and "code" and
+// would otherwise read as a yes.
+const INBOX_NO =
+  /\b(no|don'?t|do not|never|stay out|not my)\b[^.!?]{0,40}\b(inbox|e-?mail|mail(box)?|gmail|outlook)\b/i;
+
+export function inboxAuthorized(scope) {
+  const text = String(scope || "");
+  if (!text.trim()) return false;
+  if (INBOX_NO.test(text)) return false;
+  if (INBOX_IMPERATIVE.test(text)) return true;
+  // Both halves, and within one sentence — otherwise an unrelated "yes" earlier
+  // in a long approved scope lends its consent to a stray mention of email.
+  return text.split(/[.!?\n]/).some(
+    (sentence) => INBOX_YES.test(sentence) && INBOX_TARGET.test(sentence));
 }
 
 /**

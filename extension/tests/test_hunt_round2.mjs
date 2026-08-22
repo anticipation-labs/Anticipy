@@ -16,12 +16,21 @@ const map = readFileSync(join(here, "../page_map.js"), "utf8");
 // forbidden to write, PATCHed it, got 403, and that throw escaped the poll
 // cycle BEFORE claimJob() — so nothing was claimed for the whole research run
 // while the heartbeat kept the phone showing "Chrome ready".
-const sweep = bg.match(/async function requeueStaleJobs[\s\S]{0,1400}/)[0];
-assert.ok(/lane!="research"/.test(sweep),
-  "the sweep must exclude the lane it is forbidden to write");
-const claim = bg.match(/async function claimJob[\s\S]{0,900}/)[0];
-assert.ok(/lane!="research"/.test(claim),
-  "sweep and claim must agree on which lanes belong to the browser");
+//
+// The invariant is that the two agree, so assert THAT, not two copies of a
+// string. This used to slice 900 characters out of claimJob and grep them,
+// which broke the first time the function grew — the filter was still right
+// and the test could simply no longer see it. One definition, and both
+// callers named against it.
+assert.ok(/const BROWSER_LANE = 'workflow_id!="" && lane!="research"';/.test(bg),
+  "one definition of the lanes this browser may take work from");
+for (const [what, fn] of [["sweep", "requeueStaleJobs"], ["claim", "claimJob"]]) {
+  const body = bg.match(new RegExp(`async function ${fn}\\(\\)[\\s\\S]*?\\n\\}`))[0];
+  assert.ok(/ownerLaneFilter\(/.test(body),
+    `the ${what} must take its lanes from the shared definition, not a second copy`);
+  assert.ok(!/lane\s*!=\s*"research"/.test(body),
+    `a hand-written lane clause inside ${fn} is exactly the drift that silenced the queue`);
+}
 assert.ok(/requeueStaleJobs\(\)\.catch\(/.test(bg),
   "housekeeping must never decide whether real work gets claimed");
 assert.ok(/could not recover stale job/.test(bg),

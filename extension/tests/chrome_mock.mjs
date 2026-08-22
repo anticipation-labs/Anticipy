@@ -30,6 +30,7 @@ export function installChrome() {
     tabs, storageData, notifications, cleared, badge, focusGrants, activationLog, alarms,
     onCdp: null,          // (tabId, method, params) => result | undefined
     mapPage: null,        // (tabId) => {url, title, elements, text}
+    onInject: null,       // (src, target) => result | undefined  (executeScript)
     activeTabId: () => [...tabs.values()].find((t) => t.active)?.id ?? null,
     windowFocused: () => windowFocused,
     setCurrentWindowExists: (exists) => { currentWindowExists = !!exists; },
@@ -145,6 +146,16 @@ export function installChrome() {
         }
         if (src.includes("__anticipySuggestions")) return [{ result: "" }];
         if (src.includes("__anticipyCenter")) return [{ result: { x: 5, y: 5 } }];
+        // Everything else injected into the page. The default is null, which is
+        // what the real API returns for a frame that has gone — and which the
+        // production code must therefore survive. A suite that needs a specific
+        // reading (the shape of an input, say) supplies it here rather than
+        // teaching this file about every injected helper; same escape hatch as
+        // `onCdp` and `mapPage` above.
+        if (harness.onInject) {
+          const out = harness.onInject(src, target);
+          if (out !== undefined) return [{ result: out }];
+        }
         return [{ result: null }];
       },
     },

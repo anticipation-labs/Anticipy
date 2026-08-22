@@ -81,7 +81,7 @@ class StubLLM:
         def __init__(self, text):
             self.text = text
 
-    def chat(self, system, user, temperature=0.1):
+    def chat(self, system, user, temperature=0.1, **kw):
         s = (system or "").lower()
         if "triage" in s or "ignore|ask|act" in (system or ""):
             return self.R('{"decision":"act","goal":"book a table at Cactus",'

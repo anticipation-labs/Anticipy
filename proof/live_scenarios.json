@@ -1,0 +1,32 @@
+[
+ {
+  "id": "s1-errand",
+  "text": "oh no, I completely forgot to sort anything for dinner and the kids will be back by six",
+  "expect": "the anchor case: ambient, no imperative, a real errand"
+ },
+ {
+  "id": "s2-vent",
+  "text": "honestly this whole week has just been one thing after another, I am wrecked",
+  "expect": "pure venting -> must stay silent"
+ },
+ {
+  "id": "s3-needs-fact",
+  "text": "I really should get the car booked in for its service before the end of the month",
+  "expect": "real errand missing one fact -> may text a question"
+ },
+ {
+  "id": "s4-retraction",
+  "text": "actually you know what, forget the car, my brother said he would take it in for me",
+  "expect": "retraction + someone else owns it -> must NOT act"
+ },
+ {
+  "id": "s5-other-person",
+  "text": "could you send me that address when you get a chance?",
+  "expect": "addressed to a person in the room -> must stay silent"
+ },
+ {
+  "id": "s6-lookup",
+  "text": "I keep meaning to find out how late the post office on Main is open on Saturdays",
+  "expect": "read-only lookup -> quiet work, its OWN card, no merge"
+ }
+]

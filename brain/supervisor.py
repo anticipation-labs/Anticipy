@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -136,6 +137,127 @@ def stop_child(child) -> None:
         child.wait(timeout=5)
 
 
+def owner_state_dir(owner_ref: str) -> Path:
+    """Where one account's durable mind lives. Same arithmetic as
+    child_environment, kept as its own function so the purge cannot drift from
+    the thing it deletes."""
+    return Path(os.environ.get("ANTICIPY_STATE_ROOT", STATE_ROOT)) / owner_ref
+
+
+def purge_deleted_owners(*, remove: Callable = shutil.rmtree,
+                         live_refs: set[str] | None = None) -> int:
+    """Finish the deletions PocketBase could not.
+
+    `POST /me/delete` clears every owner-scoped row synchronously, but memory is
+    a per-owner SQLite file on THIS volume and PocketBase cannot reach it. So it
+    leaves a `purges` row behind and this drains the queue.
+
+    Why here and not in the worker: by the time a purge exists the account is
+    gone from discovery, so reconcile_children has already SIGTERMed that
+    owner's child. Asking a reaped process to clean up after itself is asking
+    for the file to survive forever.
+
+    ONLY EVER PURGES AN ACCOUNT DISCOVERY SAYS IS GONE, and that guard is the
+    important line in this function. The endpoint writes the purge row BEFORE it
+    deletes the account, because a crash between the two must not leave memory
+    on disk with nothing left to say it should go. The cost of that ordering is
+    a window: if the account delete then fails — a locked row, a constraint, a
+    500 — the account is still live, still discovered, still being spoken to,
+    and a pending purge row is sitting there naming it. Without this check the
+    next pass would rmtree the memory of somebody mid-conversation.
+
+    `live_refs` is passed in rather than fetched so the decision is made against
+    the SAME discovery snapshot reconcile_children just acted on; refetching
+    here would reintroduce the race in a smaller window.
+
+    Retried until it succeeds. `memory_purged` is only set once the directory is
+    actually gone, because a delete that reports success while the data is still
+    on disk is the one outcome that turns a privacy promise into a lie.
+    """
+    done = 0
+    try:
+        response = pb.get(f"{PB}/api/collections/purges/records",
+                          params={"filter": "memory_purged=false", "perPage": 50},
+                          timeout=10)
+        response.raise_for_status()
+        rows = response.json().get("items", [])
+    except Exception as exc:
+        print(f"purge queue unreadable (retrying): {exc}")
+        return 0
+
+    for row in rows:
+        ref = str(row.get("owner_ref") or "").strip()
+        # An account that still exists has not been deleted, whatever the queue
+        # says. Left pending on purpose: if the delete is retried and succeeds,
+        # the account leaves discovery and the next pass finishes the job.
+        if live_refs is not None and ref in live_refs:
+            print(f"purge deferred: account {ref} is still live")
+            continue
+        # The same guard discovery uses. A blank or hostile id must never be
+        # joined onto the state root — that path is one rmtree away from every
+        # other owner's mind.
+        if not _SAFE_ID.fullmatch(ref):
+            print(f"purge skipped, unsafe owner ref: {ref!r}")
+            continue
+        # EVERY path this account's mind could live at, not just the tidy one.
+        #
+        # child_environment keeps the pre-migration founder on the OLD
+        # ANTICIPY_MEMORY_DB / ANTICIPY_CLOCK_STATE paths when their
+        # legacy_uuid matches ANTICIPY_OWNER_ID, so for that one account
+        # <state root>/<ref> does not exist. Checking only that directory meant
+        # taking the "nothing to remove" branch and then marking the purge
+        # COMPLETE over a memory database still fully on disk — precisely the
+        # lie this function's docstring forbids. The purges row carries
+        # legacy_uuid for exactly this case and nothing read it.
+        legacy = str(row.get("legacy_uuid") or "").strip()
+        targets = [owner_state_dir(ref)]
+        configured = str(os.environ.get("ANTICIPY_OWNER_ID") or "").strip()
+        if legacy and configured and legacy == configured:
+            for key in ("ANTICIPY_MEMORY_DB", "ANTICIPY_CLOCK_STATE"):
+                value = str(os.environ.get(key) or "").strip()
+                if value and value != ":memory:":
+                    targets.append(Path(value))
+
+        failed_target = False
+        for target in targets:
+            # A symlink AT the target passes the name check, passes exists()
+            # (which follows it), and then makes rmtree raise "Cannot call
+            # rmtree on a symbolic link" on every pass, forever. It is also an
+            # integrity signal in its own right: nothing should be symlinking
+            # into the state root.
+            if target.is_symlink():
+                print(f"PURGE BLOCKED: {target} is a symlink — refusing to follow it")
+                failed_target = True
+                break
+            try:
+                if target.is_dir():
+                    remove(target)
+                    print(f"purged durable memory · owner={ref} · {target}")
+                elif target.exists():
+                    target.unlink()
+                    print(f"purged durable file · owner={ref} · {target}")
+            except Exception as exc:
+                print(f"purge failed for {ref} at {target} (will retry): {exc}")
+                failed_target = True
+                break
+        if failed_target:
+            continue
+        # Nothing left anywhere is a completed purge, not a failure: the account
+        # may simply never have been spoken to.
+        try:
+            pb.patch(f"{PB}/api/collections/purges/records/{row.get('id')}",
+                     json={"memory_purged": True,
+                           "purged_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+                     timeout=10).raise_for_status()
+            done += 1
+        except Exception as exc:
+            # The directory is gone but the row still says pending. The next
+            # pass finds nothing to delete and marks it — which is why "already
+            # absent" counts as success above.
+            print(f"purge mark failed for {ref} (harmless, will retry): {exc}")
+    return done
+
+
 def reconcile_children(children: dict, owners: list[dict],
                        spawn: Callable = spawn_owner) -> list[str]:
     """Bring the running set into line with discovery. Returns the unserved.
@@ -205,10 +327,26 @@ def main() -> None:
         if time.time() - last_webhook > worker.WEBHOOK_CHECK_EVERY_SECONDS:
             last_webhook = time.time()
             worker.ensure_inbound_webhook()
+        # One discovery snapshot, used for BOTH decisions. Fetching it twice
+        # would let an account disappear between the two calls and have its
+        # memory purged on evidence the reconcile never saw.
+        owners = None
         try:
-            reconcile_children(children, discover_owners())
+            owners = discover_owners()
+            reconcile_children(children, owners)
         except Exception as exc:
             print(f"owner discovery failed (retrying): {exc}")
+        # After reconcile, so the child owning that directory has already been
+        # stopped and cannot rewrite the file we are about to remove. Skipped
+        # entirely when discovery failed: with no trustworthy list of who is
+        # live, "this account is gone" is a guess, and the cost of guessing
+        # wrong is a live person's memory. Its own try — a failed purge must
+        # not stop anyone being heard.
+        if owners is not None:
+            try:
+                purge_deleted_owners(live_refs={o["id"] for o in owners})
+            except Exception as exc:
+                print(f"purge pass failed (retrying): {exc}")
 
         deadline = time.monotonic() + DISCOVERY_SECONDS
         while not stopping and time.monotonic() < deadline:

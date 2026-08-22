@@ -68,11 +68,85 @@ routerUse((e) => {
       if (ownerRef && path === jobsBase && method === "GET" && ownedList(ownerRef)) {
         return e.next();
       }
+      // EVIDENCE IS NOT WORK PRODUCT.
+      //
+      // This allowance exists so a Chrome install can report on the job it is
+      // running: status, result, trace, the claim. It used to protect only
+      // `owner_ref`, which meant the claimant could also write the two columns
+      // that describe the world OUTSIDE this process - and therefore mint its
+      // own authorisation:
+      //
+      //   {"watching_until": "<far future>"}  -> a read nobody is watching,
+      //     because research_lane.pb.js believes that column is what the PHONE
+      //     last wrote. It was one extra request away from being false.
+      //   {"lane": ""} or {"lane": "Supervised_Read"}  -> removes the row from
+      //     the lease check entirely (the comparison is exact-match), or
+      //     launders a research job into browser-claimable work.
+      //
+      // That is the same shape as the `legacy_uuid` hole a prior audit found in
+      // the delete endpoint: a client-authored value trusted as proof about the
+      // world. A claimant may describe ITS OWN progress and nothing else.
+      const EVIDENCE = { watching_until: 1, lane: 1, owner_ref: 1, owner: 1 };
       if (ownerRef && path.startsWith(jobsBase + "/")) {
         const id = path.split("/").pop();
         if (recordOwner("jobs", id) === ownerRef && (method === "GET" || method === "PATCH")) {
           const b = body();
-          if (!b.owner_ref || b.owner_ref === ownerRef) return e.next();
+          const writesEvidence = Object.keys(b).some((k) => EVIDENCE[k]);
+          // `owner_ref` echoed back unchanged stays allowed: PocketBase clients
+          // resend it, and refusing that breaks ordinary work for no gain.
+          const echo = Object.keys(b).every(
+            (k) => !EVIDENCE[k] || (k === "owner_ref" && b[k] === ownerRef));
+          if (!writesEvidence || echo) return e.next();
+        }
+      }
+      // NARRATION FROM A SUPERVISED READ, and only while it is supervised.
+      //
+      // A Chrome install could not write an event at all until now, which is
+      // correct for everything except the one job kind whose whole output is
+      // narration: `lane="supervised_read"` sends back `read_line` (one short
+      // sentence in her voice) and `read_fact` (one distilled fact) so the
+      // person watching sees what she is reading, as she reads it
+      // (`design/day-zero.md` §2). Nothing else — no raw page text, no message
+      // body, no subject line ever becomes a row here (LOCAL-FIRST.md:9-11:
+      // only conclusions travel).
+      //
+      // Gated on the SAME evidence as the claim itself
+      // (research_lane.pb.js): the named job must be this owner's, in that
+      // lane, with `watching_until` still in the future. So the channel is
+      // open only while somebody is actually watching, and closes itself
+      // within thirty seconds of them looking away — an extension cannot
+      // decide on its own that now is a good time to write "facts" into
+      // somebody's memory. A flag would have been forgeable by the caller;
+      // this is not (side_trip.js:194-198).
+      //
+      // `owner_ref` is REQUIRED, not merely permitted: the phone reads these
+      // back filtered on its account, so an unowned narration row is a line
+      // written about somebody that they can never see.
+      const eventsBase = "/api/collections/events/records";
+      if (ownerRef && path === eventsBase && method === "POST") {
+        const b = body();
+        const kind = String(b.kind || "");
+        // ONE SENTENCE, NOT A PAGE. "Never the mailbox, never a message, never
+        // an attachment" is the fourth line of `ContextSource.mail.promises`,
+        // and the shape of breaking it is a `read_fact` carrying a pasted
+        // message body. A distilled fact is a sentence; the page slice the
+        // reader works from is ~5,000 characters (page_map.js:214-247), so a
+        // cap here is the difference between the two. It is a mechanism for
+        // one promise, not all of it: nothing server-side can tell a short
+        // quote from a short conclusion.
+        const text = String(b.text || "");
+        if ((kind === "read_line" || kind === "read_fact") &&
+            b.owner_ref === ownerRef && text.length > 0 && text.length <= 400) {
+          let job = null;
+          try { job = e.app.findRecordById("jobs", String(b.goal || "")); } catch (_) {}
+          if (job && job.getString("owner_ref") === ownerRef &&
+              job.getString("lane") === "supervised_read") {
+            // Same date idiom as workflow_guard.pb.js:160-161; missing or
+            // lapsed both fail closed.
+            const rawUntil = job.getString("watching_until");
+            const until = rawUntil ? new Date(rawUntil).getTime() : 0;
+            if (until > Date.now()) return e.next();
+          }
         }
       }
       return e.json(403, { error: "agent is not allowed to access that record" });

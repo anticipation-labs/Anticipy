@@ -43,6 +43,18 @@ committing, exactly as much as a full sentence would be.
   read-only and costs them nothing, so a question with a findable answer is
   work worth doing, not chatter. Make the goal a research goal naming the
   specific thing, and carry every detail they gave (the event, the day).
+  A REALISATION THAT SOMETHING WAS FORGOTTEN IS AN ERRAND, NOT VENTING.
+  "Oh my goodness, I forgot to cook for my kids this afternoon", "I never
+  sent Priya that invoice", "I completely forgot the dentist was today" —
+  the dismay is not the content. The content is a need that is STILL LIVE,
+  and this is the single most valuable thing you will ever catch, because
+  nobody thinks to ASK for help with something they have only just realised
+  they dropped. Test it by whether the need survives the sentence: is there
+  something that still has to happen, inside a window you can still see?
+  Then act, and make the goal the thing that would actually help — food that
+  arrives in time, not a reminder that they forgot.
+  If nothing is left to finish, stay quiet: "I forgot to call my brother on
+  his birthday last month" is over, and saying so helps nobody.
 - "ask": help is clearly wanted but one missing detail blocks starting — the
   single question you'd lean over and ask.
   A THING HE SAYS HE HAS TO DO IS THE WHOLE JOB. "I have to email Priya
@@ -51,10 +63,14 @@ committing, exactly as much as a full sentence would be.
   precisely what you exist to catch. It being HIS obligation, and stated to
   nobody in particular, is not a reason to stay out of it; it is the reason
   to get involved. Never dismiss one of these as thinking aloud.
-- "ignore": a great assistant stays quiet: chatter, venting, jokes, questions
-  aimed at other people, facts merely mentioned, and commitments that belong
-  to someone else. Everything is remembered regardless; ignore only means no
+- "ignore": a great assistant stays quiet: chatter, jokes, questions aimed at
+  other people, facts merely mentioned, and commitments that belong to
+  someone else. Everything is remembered regardless; ignore only means no
   task right now.
+  Venting counts only when there is nothing to be done about it. Frustration
+  aimed at something you could still fix is not venting, it is the errand
+  arriving in the tone people actually use, and "they were only complaining"
+  is the most expensive mistake you can make.
   The line between a to-do and a mere wish is whether there is a REAL,
   FINISHABLE act at the end of it — something you could tell somebody had
   been done. "I have to email Priya" finishes. "I should get to the gym
@@ -117,6 +133,18 @@ differently depending on who said it and who "you" refers to:
 - "owner": the obligation is HIS. He promised someone something; or
   someone asked HIM for something he took on; or he asked you directly.
   This is the only value that can justify doing consequential work.
+  AND - this is the one ambient listening exists for - an obligation he
+  ALREADY HAD, which these words merely REVEALED. Nobody promised
+  anything, nobody asked, he was not talking to you: he noticed something
+  out loud. "I forgot to cook for my kids this afternoon", "the VAT return
+  is due on the seventh", "we're completely out of the good coffee", "that
+  filling has been aching for a week". The duty existed before the
+  sentence did; the sentence is only how you came to hear about it.
+  THE TEST: if nobody had spoken at all, would something still need doing,
+  and is it his to do? Then "owner". A speech act is ONE way an obligation
+  reaches you, never the only way - measured 2026-08-20, treating it as
+  the only way sent half of all real errands to "nobody", and the ones it
+  dropped were the ones nobody would ever think to ask for.
 - "other": the obligation belongs to somebody else in the room. A friend
   saying "I'll book it" or "leave that with me" has taken it on
   THEMSELVES. Remember it — he may want it tracked — but it is not his
@@ -134,8 +162,13 @@ differently depending on who said it and who "you" refers to:
   being read out, or commands that only make sense to software. The
   machine he is talking to is ALREADY doing it. There is nothing here for
   you — acting would duplicate work he is doing himself.
-- "nobody": no obligation exists. Chatter, opinions, venting, jokes,
-  half-thoughts, facts in passing, or transcription too mangled to trust.
+- "nobody": no obligation exists ANYWHERE - not merely no obligation
+  created by this sentence. Chatter, opinions, jokes, transcription too
+  mangled to trust, and venting there is nothing to be done about.
+  A "fact in passing" that names something of his still undone is not this:
+  a deadline, an empty cupboard, a bill unpaid, an appointment missed. Ask
+  the test above before you land here - would something still need doing if
+  nobody had spoken? "Nobody" is for when the honest answer is no.
 
 "you" is the trap. In "can you look into flights" the "you" is YOU only if
 he was addressing you; said to a friend, the friend is "you" and the job is
@@ -369,6 +402,24 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         if owes not in OWES:
             owes = None       # no answer changes nothing: the honesty wall
         continues = _continues(raw.get("continues"), candidates)
+        # THE ERRAND HAS TO BE IN HIS LINE. See inherited_errand() above for
+        # the live pair this is here for: a vent line 50 seconds after a
+        # dinner errand, in a different segment, came back as "act" with the
+        # dinner errand reworded — and texted him about it.
+        #
+        # It runs BEFORE the second look on purpose, and drops the goal as
+        # well as the verdict. An "ignore" that still carries a goal is a real
+        # state elsewhere in this system — score.py reads it as the quiet lane
+        # and the phone renders it "Looking into it." — and it would be a lie
+        # here, because there is no errand at all. Dropping the goal is also
+        # what stops the second look immediately flipping this back to "act".
+        if decision in ("act", "ask") and goal and inherited_errand(
+                transcript_line, goal):
+            decision = "ignore"
+            goal = None
+            missing = []
+            assumption = None
+            raw["reason"] = "the errand came from the context, not this line"
         # An "ignore" that still names a concrete task is the model
         # contradicting itself — the exact shape of a real plan slipping by
         # ("let's do it" sealed a dinner; verdict said nothing to do). One
@@ -512,6 +563,266 @@ def unsupported_names(goal: str, *heard: str) -> list:
         if not supported:
             out.append(" ".join(words))
     return out[:4]
+
+
+# --------------------------------------------------------------------------
+# CONTEXT MAY INFORM A JUDGEMENT. IT MAY NOT SUPPLY THE ERRAND.
+#
+# MEASURED live 2026-08-21 on a real account, two lines 50 seconds apart in
+# DIFFERENT segments:
+#
+#   s1 "oh no, I completely forgot to sort anything for dinner and the kids
+#       will be back by six"     -> act, "Arrange dinner for the kids for 6 PM"
+#   s2 "honestly this whole week has just been one thing after another, I am
+#       wrecked"                 -> act, "Order dinner for kids", job queued,
+#                                   AND A TEXT SENT TO HIM
+#
+# s2 is venting with no errand in it at all, and the goal it produced is
+# visibly s1's, reworded. It interrupted him about work he never mentioned.
+# proof/ambient/score.py:62 weights a false ping as five misses, because
+# trust does not come back — this is the most expensive thing we can do.
+#
+# WHICH CARRIER: reproduced by replaying both lines through Anticipy.hear()
+# with a recording brain in place of this one. The segmenter is innocent —
+# "(Earlier in this conversation: ...)" was EMPTY for s2, the segments really
+# were different. The dinner line reached triage twice by other routes:
+#   "(Previous line, background: ...)"  — anticipy_core's `_prev`, a 120s
+#       process-level cursor that has never known what a segment is; and
+#   "(Recent lines, oldest first ...)"  — the numbered link candidates, which
+#       worker.link_candidates() draws across segments by construction.
+# Memory recall is a third route on any line whose words happen to match.
+#
+# So this is fixed HERE, in the one place that sees the current line AND
+# everything appended to it. Blocking one carrier would leave the other two,
+# and the next context block anyone adds would open a fourth.
+#
+# THE RULE, and it is narrow on purpose: context resolves REFERENCES — "seven
+# works", "yeah book it", "the Brooklyn one instead" are the owner sealing a
+# plan and MUST keep working (tests/test_continues.py). What it may not do is
+# hand an errand to a line that contributes none of it and points at nothing.
+# --------------------------------------------------------------------------
+
+# anticipy_core appends each context block as a fresh line starting "(":
+# "(Earlier in this conversation: ...)", "(Previous line, background: ...)",
+# "(Addressee of the previous line: ...)", "(Voice check: ...)", "(Pre-check:
+# ...)", "(Related memory: ...)", "(Recent lines, oldest first ...)". Cutting
+# at the FIRST one leaves exactly the words he said — and a block added
+# tomorrow is stripped by the same seam without anyone editing this file.
+_CONTEXT_BLOCK_RE = re.compile(r"\n\(")
+
+
+def own_words(prompt: str) -> str:
+    """The line as he actually said it, with every appended block removed."""
+    return _CONTEXT_BLOCK_RE.split(prompt or "", 1)[0].strip()
+
+
+def appended_context(prompt: str) -> str:
+    """Everything the caller decorated the line with, and nothing he said."""
+    parts = _CONTEXT_BLOCK_RE.split(prompt or "", 1)
+    return parts[1] if len(parts) > 1 else ""
+
+
+# TWO DIFFERENT QUESTIONS, and conflating them cost two false positives in a
+# battery run before this comment existed ("book us a table" and "what time
+# did we say" both got eaten):
+#
+#   DID HE CONTRIBUTE ANY OF THIS ERRAND?  -> _content(): everything he said
+#       that carries meaning. "book us a table" contributes "book" and
+#       "table" even though the goal's Joe's-at-seven came from context, and
+#       filling a detail from context is explicitly her job (TRIAGE_SYSTEM:
+#       "when the context supplies a missing piece, use it").
+#   IS THERE ANYTHING IN THIS GOAL TO TRACE?  -> _substance(): the same,
+#       minus the words she is entitled to supply herself. A goal's "book" or
+#       "dinner" proves nothing about where the errand came from, because
+#       _GOAL_VERBS exists precisely to say those are hers.
+#
+# _GLUE is what neither question may count: words any two unrelated English
+# sentences share by accident. A shared "the" or "my" is not evidence, and
+# counting one as evidence is how a guard like this quietly stops working.
+_GLUE = {
+    "the", "a", "an", "and", "or", "but", "for", "to", "at", "of", "on",
+    "in", "with", "it", "its", "i", "this", "that", "be", "been", "am",
+    "is", "are", "was", "were", "do", "does", "did", "have", "has", "had",
+    "will", "would", "should", "could", "can", "may", "get", "got", "go",
+    "going", "gone", "my", "me", "we", "us", "our", "you", "your", "he",
+    "she", "him", "her", "his", "hers", "they", "them", "their", "by",
+    "from", "up", "out", "off", "about", "before", "after", "into", "over",
+    "under", "again", "just", "some", "any", "all", "no", "not", "so", "if",
+    "as", "than", "then", "there", "here", "what", "when", "where", "who",
+    "how", "why", "very", "really", "one", "ones", "thing", "things",
+    "those", "these", "back", "now", "still", "more",
+}
+
+
+def _content(text: str) -> set:
+    """Every meaning-bearing token, plus every number however it was written.
+
+    Singulars and plurals are one token ("kids" == "kid"), the same
+    normalisation unsupported_names already uses, so "dinner for kids" and
+    "the kids will be back" are recognised as the same subject.
+    """
+    out = set(_numbers(text))
+    for w in re.findall(r"[a-z][a-z']*", (text or "").lower()):
+        w = w.rstrip("'").replace("'s", "")
+        if w in _GLUE or len(w) < 3:
+            continue
+        out.add(w.rstrip("s") or w)
+    return out
+
+
+def _substance(text: str) -> set:
+    """What could only have come from somewhere — her own verbs removed."""
+    return {w for w in _content(text) if w not in _GOAL_VERBS}
+
+
+# Ways a line points OUT of itself. Every shape here is how people really
+# seal a plan in three words, and all of them must survive this guard.
+#
+# STRONG seals: words whose whole job in a sentence is to answer something
+# already on the table, wherever they appear in the line.
+_SEALS_RE = re.compile(
+    r"\b(?:yeah|yep|yes|yup|ok|okay|sure|agreed|alright|all right|"
+    r"sounds (?:good|right|fine)|go ahead|let'?s|do it|book it|please|"
+    r"confirmed|scratch that|never ?mind|forget it|cancel|instead)\b", re.I)
+
+# WEAK seals: the same job, but done by words that also live ordinary lives
+# in the middle of a sentence. The battery run caught this the honest way —
+# "work has been absolutely relentless lately" was let through by "work"
+# matching a confirming "works" and by a bare "absolutely". So these count
+# only where a confirmation actually lands: as the whole line, or at the end
+# of one ("seven works", "Tuesday is fine").
+_WEAK_SEAL_RE = re.compile(
+    r"^\W*(?:perfect|great|fine|deal|definitely|absolutely|lovely|cool|"
+    r"nice)\W*$|\b(?:works?|is fine|is good|will do|suits me)\W*$", re.I)
+
+# And a bare pronoun — a hand pointing at something outside the line.
+#
+# THE DISTINCTION THAT DECIDES THIS WHOLE FIX: "this", "that" and "one" are
+# pronouns only when nothing follows them to be pointed at. IN FRONT OF A
+# NOUN they name their own subject and point nowhere — "this whole week",
+# "one thing after another", "that dentist appointment". The vent line is
+# built entirely out of that second shape, so a regex that ignored the
+# difference would either miss the bug or swallow "do that".
+#
+# "it" and "them" are never determiners, so they need no tail. The others
+# count only before a stop, an apostrophe, or a closed set of words a
+# determiner can never precede.
+_REFERS_OUT_RE = re.compile(
+    r"\b(?:it|its|them|they|theirs)\b"
+    r"|\b(?:this|that|these|those|one|ones|same)\b"
+    r"(?:\s*$|\s*[,.!?;:—-]|\s*'|\s+(?:is|are|was|were|works?|sounds?|looks?|"
+    r"seems?|will|would|should|could|can|does|do|did|has|have|too|as well|"
+    r"instead|then|though)\b)", re.I)
+
+# And a reference to what was SAID earlier, which is the same pointing finger
+# wearing a different glove: "what time did we say", "the place you mentioned",
+# "like we agreed". Added after a battery run ate "what time did we say" — a
+# perfectly good look-it-up errand about the plan sitting right there.
+_RECALLS_TALK_RE = re.compile(
+    r"\b(?:we|you|he|she|they|i)\s+(?:said|say|agreed|mentioned|decided|"
+    r"picked|chose|settled\s+on)\b|\b(?:did\s+we|as\s+discussed|"
+    r"like\s+we|you\s+mentioned)\b", re.I)
+
+
+# A NEED OF ITS OWN, in whatever words. The battery run that produced this
+# ate four honest requests — "can you get us a reservation", "make the
+# booking", "sort us out somewhere", "we still need a table" — because none
+# of them happens to share a word with the goal she wrote for them. Lexical
+# overlap can never catch a synonym, so the shape of the sentence has to be
+# asked about separately: is this line ASKING for something, or is it just
+# describing how the day went?
+#
+# Deliberately generous. It only ever stops the guard from firing, and the
+# guard only runs on a line the model ALREADY called act or ask, so a loose
+# match here costs a missed catch, never a wrong action.
+#
+# MEASURED against proof/ambient/corpus.json, all 173 gold act/ask lines
+# decorated with their real conversation context: this guard ate exactly one
+# of them, amb-0318 "I am not doing another shop this week, can something
+# just turn up." — a refusal plus a wish, with the coffee and the dishwasher
+# tablets named several turns earlier. A bare "can" and a flat refusal are
+# both a need being voiced, so both were added; that took the count to 0 out
+# of 173 eaten, and left the guard's catch rate on the same corpus unchanged.
+_NEEDS_RE = re.compile(
+    r"\b(?:can|could|would|will|do)\s+(?:you|u|we)\b|\bplease\b"
+    r"|\bneeds?\b|\bhave\s+to\b|\bhas\s+to\b|\bhad\s+to\b|\bgotta\b"
+    r"|\bgot\s+to\b|\bmust\b|\bshould\b|\bwant(?:s|ed)?\s+to\b"
+    r"|\bwould\s+like\b|\blet'?s\b|\bsupposed\s+to\b|\bmeant\s+to\b"
+    r"|\bforgot\b|\bforgotten\b|\bnever\s+(?:got|sent|did|called|booked|paid)\b"
+    r"|\bhaven'?t\b|\bhasn'?t\b|\bdidn'?t\b|\bran\s+out\b|\bout\s+of\b"
+    r"|\bnot\s+doing\b|\bnot\s+going\s+to\b|\bcan\b(?!['\u2019])"
+    r"|\bdue\b|\bdeadline\b|\boverdue\b|\bby\s+(?:six|seven|eight|nine|ten|"
+    r"eleven|twelve|noon|tonight|tomorrow|monday|tuesday|wednesday|thursday|"
+    r"friday|saturday|sunday|\d)", re.I)
+
+# Speech is imperative when it opens on a verb: "make the booking", "sort us
+# out somewhere", "grab something for the kids". A separate list from
+# _GOAL_VERBS, which answers a different question (what SHE may put in a
+# goal) and carries nouns and particles this must not treat as verbs.
+_ACTION_VERBS = {
+    "book", "order", "buy", "get", "grab", "sort", "arrange", "organise",
+    "organize", "make", "take", "pick", "put", "set", "send", "email", "text",
+    "message", "call", "ring", "phone", "tell", "ask", "pay", "cancel",
+    "reschedule", "move", "swap", "change", "fix", "find", "look", "check",
+    "confirm", "chase", "bring", "fetch", "drop", "print", "scan", "file",
+    "submit", "renew", "register", "sign", "apply", "draft", "write", "add",
+    "remind", "research", "prepare", "plan", "schedule", "invite", "reply",
+    "help", "start", "finish", "sort", "clean", "pack", "ship", "return",
+    "extend", "open", "update", "review", "share", "upload", "post", "edit",
+}
+
+
+def states_a_need(line: str) -> bool:
+    """Is there something in this line's OWN words that wants doing?"""
+    line = (line or "").strip()
+    if _NEEDS_RE.search(line):
+        return True
+    first = re.match(r"[a-z']+", line.lower())
+    return bool(first and first.group(0) in _ACTION_VERBS)
+
+
+def points_outward(line: str) -> bool:
+    """Does this line lean on something said earlier to mean anything?"""
+    line = line or ""
+    return bool(_SEALS_RE.search(line) or _WEAK_SEAL_RE.search(line.strip())
+                or _REFERS_OUT_RE.search(line) or _RECALLS_TALK_RE.search(line))
+
+
+def inherited_errand(prompt: str, goal: str) -> bool:
+    """Was this goal taken from the context rather than from his words?
+
+    True only when ALL FOUR hold, and each one is there to keep a real errand
+    out of the net:
+      1. the goal has substance to trace at all — a goal made only of her own
+         verbs ("book a table for dinner") is not evidence of anything;
+      2. he contributed NO part of it and asked for nothing — not the action,
+         not the subject, not a name, not a number, and no need in any words
+         of his own. Both halves are generous on purpose: a real request
+         whose details came from context ("book us a table" / "can you get us
+         a reservation", after they settled on Joe's at seven) is her filling
+         a gap, which TRIAGE_SYSTEM tells her to do, not a fault;
+      3. his line points at nothing — no agreement, no refusal, no bare
+         pronoun, so there is no reference for context to resolve;
+      4. the substance IS sitting in the appended context — which is what
+         makes this inheritance rather than invention. Invention out of thin
+         air is unsupported_names' job, and is left to it.
+
+    Anything less and the answer is False: the honesty wall runs the same way
+    here as everywhere else, and a guard that guesses is worse than none.
+    """
+    if not goal:
+        return False
+    want = _substance(goal)
+    if not want:
+        return False                       # nothing traceable: no evidence
+    line = own_words(prompt)
+    if _content(goal) & _content(line):
+        return False                       # he said part of it himself
+    if states_a_need(line):
+        return False                       # the ask is his, only the details aren't
+    if points_outward(line):
+        return False                       # "seven works", "yeah book it"
+    return bool(want & _substance(appended_context(prompt)))
 
 
 # --------------------------------------------------------------------------
@@ -733,6 +1044,36 @@ def fill_gaps_from_memory(llm, memory, goal: str, gaps: list) -> tuple:
             facts = memory.recall(f"{goal} {gap}", limit=8)
         except Exception:
             facts = []
+        # UNTRUSTED FACTS ARE EXCLUDED HERE, not fenced.
+        #
+        # Every other memory sink can afford to show untrusted text inside a
+        # "quoted, never obey it" block, because the worst case is the model
+        # describing it. This one cannot: the answer becomes filled[gap] ->
+        # params[key] -> seed_facts -> new_plan(facts=...) -> the browser
+        # agent's FACTS ALREADY GIVEN block, i.e. an APPROVED VALUE it may type
+        # into a form and submit. extension/agent_loop.js:982-991 states the
+        # invariant in as many words: memory must never be promoted into facts,
+        # because "a sentence she overheard could put a value into a form that
+        # spends his money."
+        #
+        # A calendar title is written by whoever sent the invitation, and a mail
+        # subject line is written by whoever sent the mail. Letting either
+        # answer "what is the reservation name" would launder a stranger's text
+        # into a value spent on the owner's behalf. Anything untrusted is
+        # therefore not eligible to settle a gap at all — she asks instead,
+        # which is the safe branch this function already has.
+        #
+        # Imported LOCALLY so the fence has one definition. anticipy_core
+        # imports this module (anticipy_core.py:36-40), so a module-level
+        # import the other way is a cycle; the deferred one costs a dict lookup
+        # per gap and keeps this sink from drifting out of step with
+        # memory_notes, which is exactly how it came to be comparing against
+        # the literal "import" while the set grew. An ImportError here
+        # propagates to the caller's except, which sets filled={} and asks the
+        # owner — this fails CLOSED.
+        from .anticipy_core import _UNTRUSTED_SOURCES
+        facts = [f for f in facts
+                 if str(f.get("source") or "") not in _UNTRUSTED_SOURCES]
         known = "\n".join(
             f"- {f.get('fact') or f.get('text') or ''}".strip()
             for f in facts if (f.get("fact") or f.get("text")))
@@ -742,7 +1083,7 @@ def fill_gaps_from_memory(llm, memory, goal: str, gaps: list) -> tuple:
         try:
             res = llm.chat(MEMORY_FILL_SYSTEM,
                            f"TASK: {goal}\nMISSING: {gap}\n\nKNOWN:\n{known}",
-                           temperature=0.0)
+                           temperature=0.0, aux=True)
             raw = json.loads(_extract_json(res.text))
         except Exception:
             remaining.append(gap)
@@ -843,6 +1184,15 @@ def check_sufficiency(llm, goal: str) -> list:
     if not goal or not llm or not getattr(llm, "live", False):
         return []
     try:
+        # NOT aux. Measured 2026-08-21 on 120 lines: moving this one call to
+        # the cheap model took false pings to 0.0% and behaviour accuracy to
+        # 81.7%, which looks like a win until you read the behaviour matrix —
+        # `act` landing on his desk collapsed from 37 to 8 and quiet work rose
+        # from 12 to 41, because a cheaper model finds fewer blocking unknowns
+        # and the task then runs silently instead of asking. That is a trade of
+        # the owner's visibility for silence, not a saving, and it was worth
+        # about 15% of a per-utterance cost already down 5.7x. Left on the main
+        # model deliberately; see TESTING-PASS-2026-08-21.md.
         res = llm.chat(SUFFICIENCY_SYSTEM, f"TASK: {goal}", temperature=0.0)
         raw = json.loads(_extract_json(res.text))
     except Exception:

@@ -25,7 +25,18 @@ check("a late liveness helper exists", /const stoppedNow = async \(\)/.test(src)
 check("the helper keeps working when liveness cannot be determined",
   /catch \(_\) \{ return false; \}/.test(src));
 
-// Every external-effect gate must have a liveness check in the lines above it.
+// Every external-effect gate must re-check liveness BEFORE it persists
+// uncertainty and before it acts.
+//
+// THE INVARIANT IS THE ORDER, NOT THE DISTANCE. This used to scan a fixed
+// eight-line window above each gate, which made it a proximity test wearing a
+// safety test's clothes: adding five correct lines between the liveness check
+// and the gate (the submission digest, 2026-08-22) turned it red while the
+// ordering it exists to protect was still perfect —
+//     stoppedNow()  ->  effectState = ...  ->  onBeforeExternalEffect(...)
+// A test that fails when nothing it cares about changed teaches people to edit
+// the test, which is how the real property eventually gets lost. So: look back
+// as far as the enclosing block plausibly runs, and assert the sequence.
 const lines = src.split("\n");
 const gates = [];
 lines.forEach((line, i) => {
@@ -33,7 +44,7 @@ lines.forEach((line, i) => {
 });
 check("both external-effect gates were found", gates.length >= 2);
 for (const at of gates) {
-  const window = lines.slice(Math.max(0, at - 8), at).join("\n");
+  const window = lines.slice(Math.max(0, at - 40), at).join("\n");
   check(`gate at line ${at + 1} re-checks liveness before acting`,
     /stoppedNow\(\)/.test(window));
   // The check must come before the uncertainty write, or a stop leaves a

@@ -26,10 +26,27 @@ def _hook_regex(src, name):
 
 def test_new_extension_claim_filter_excludes_the_lane():
     src = (ROOT / "extension" / "background.js").read_text()
-    m = re.search(r"const cond = `([^`]+)`", src)
-    assert m, "claim filter not found in background.js"
-    assert 'lane!="research"' in m.group(1)
-    assert 'status="queued"' in m.group(1)
+    # ONE definition, and both callers named against it. This used to grep for
+    # the first `const cond = \`…\`` in the file, which is a promise about
+    # variable names rather than about lanes: the claim filter moved behind a
+    # shared builder and the regex silently locked on to the research-lane
+    # DIAGNOSIS query further down, asserting the exact opposite of the
+    # invariant. The invariant is that the claim poll and the stale sweep
+    # exclude the same lane, so assert that.
+    lane = re.search(r"const BROWSER_LANE = '([^']+)'", src)
+    assert lane, "background.js must define the browser's lanes exactly once"
+    assert 'lane!="research"' in lane.group(1)
+    assert 'workflow_id!=""' in lane.group(1)
+
+    built = re.search(r"const ownerLaneFilter = \([^)]*\) =>\s*`([^`]+)`", src)
+    assert built, "the shared filter builder must be one template literal"
+    assert 'status="${status}"' in built.group(1)
+    assert 'owner_ref="${ownerRef}"' in built.group(1)
+    assert "${BROWSER_LANE}" in built.group(1)
+
+    # The claim and the sweep, each exactly once, through that one builder.
+    assert src.count('ownerLaneFilter("queued"') == 1
+    assert src.count('ownerLaneFilter("running"') == 1
 
 
 def test_hook_rewrite_catches_the_old_extensions_poll():

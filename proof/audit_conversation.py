@@ -22,6 +22,7 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 import urllib.request
 from collections import defaultdict
 
@@ -35,10 +36,20 @@ STOP = {"the", "a", "an", "and", "or", "to", "of", "in", "on", "at", "for",
 
 
 def fetch_all() -> list[dict]:
-    sid, tok = os.environ.get("TWILIO_ACCOUNT_SID"), os.environ.get("TWILIO_AUTH_TOKEN")
-    if not (sid and tok):
-        sys.exit("no Twilio credentials in env — run via: railway run --service worker")
-    auth = base64.b64encode(f"{sid}:{tok}".encode()).decode()
+    # One credential resolver for the whole tree, so this tool keeps working
+    # after the owner mints an API key and takes the auth token off the worker
+    # service — the token only has to stay where INBOUND signatures are checked
+    # (backend/pb_hooks/sms.pb.js), which is PocketBase, not here.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from brain.voice_arm import rest_credential
+
+    sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    credential = rest_credential()
+    if not (sid and credential):
+        sys.exit(f"{credential.complaint or 'TWILIO_ACCOUNT_SID unset'} — "
+                 f"run via: railway run --service worker")
+    user, secret = credential.basic()
+    auth = base64.b64encode(f"{user}:{secret}".encode()).decode()
 
     def get(url):
         req = urllib.request.Request(url)
