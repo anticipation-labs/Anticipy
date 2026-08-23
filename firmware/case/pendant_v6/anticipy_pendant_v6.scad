@@ -21,7 +21,7 @@
  *               (pointing up into the front dome) clear; board still sits at
  *               the parting plane so the USB opening lines up. Back halves
  *               are IDENTICAL between the two, so any back mates with either.
- * Both halves print rim-down / visible face UP: zero supports.
+ * Both halves print cavity-opening-UP (dome on the plate): zero supports.
  *
  * v6.3 (print-failure fixes from the gold XL print):
  *  - Chain hole enlarged 4.5 -> 10.6 mm (fits 6 mm chain loose, 10 mm max),
@@ -33,9 +33,9 @@
  *    friction bias -0.10 -> -0.05 (net 0.25 mm/side).
  *  - PRINT ORIENTATION FIX: the fully-hollow XL cavity ceiling is a ~66 x 32 mm
  *    flat bridge; printed rim-down with no supports it collapses into
- *    spaghetti that blocks the chain hole and USB slot. Print rim-down WITH
- *    supports "on build plate only" (they grow up through the open rim into
- *    the cavity and pull out clean), or print cavity-opening-UP.
+ *    spaghetti, and rim-down WITH supports packs the cavity with support
+ *    material that fuses in place (silk PLA). Print cavity-opening-UP
+ *    (dome on the plate), NO supports — the ceiling becomes the floor.
  *
  * PART = "front" | "back" | "both" | "coupon"
  * BATT = "200" | "500"

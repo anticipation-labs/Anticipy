@@ -80,8 +80,8 @@ super glue). Changes:
   any compliant USB-C overmold fits without hunting.
 - **Friction fit loosened**: LID_CLR 0.25 → 0.30, friction bias −0.10 → −0.05
   (net 0.25 mm/side). No more glue-jammed halves.
-- **SUPPORTS ARE NOW REQUIRED** — see below. This, not the geometry, was the
-  primary spaghetti cause.
+- **PRINT CAVITY-OPENING-UP, NO SUPPORTS** — see below. Orientation, not the
+  geometry, was the primary spaghetti cause.
 
 ## Print settings (Bambu P2S) — v6.3
 
@@ -90,13 +90,14 @@ super glue). Changes:
   the loaded spool, not a requirement. Black hides layer lines but shows dust;
   silver matches the titanium product look.
 - 0.12 mm layers, 3 walls, 4 top/5 bottom shells, 15 % gyroid infill.
-- Both halves print rim-down / visible dome UP, **WITH supports enabled:
-  tree supports, "on build plate only"**. They grow up through the open rim
-  into the cavity, hold the big flat cavity ceiling, and snap out clean —
-  they never touch the visible outer faces. Do NOT print these hollow XL
-  halves unsupported: the ceiling bridge is far past safe bridging span.
+- Both halves print **cavity-opening-UP (dome on the plate), NO supports**.
+  Flipped this way the cavity ceiling becomes the floor, so there is no
+  bridge and nothing is ever printed inside the bays. (The first silver
+  print went rim-down with tree supports: silk-PLA supports fused into the
+  cavity like solid infill and would not snap out — don't repeat that.)
+  Use a brim: dome-down contact area is small.
 - The USB slot and chain hole must come off the printer open — if either has
-  strands across it after support removal, the print failed; don't force it.
+  strands across it, the print failed; don't force it.
 - Slicer sanity check before printing: top view must show the chain hole as a
   clean Ø10.6 circle and the USB slot as a 15 × 8.6 opening in the end wall.
 
