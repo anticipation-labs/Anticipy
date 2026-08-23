@@ -5,7 +5,7 @@ export default function HardwarePage() {
     <div className="min-h-screen" style={{ background: "#0C0C0C", color: "#F5F0EB" }}>
       <div className="max-w-4xl mx-auto px-4 py-8">
 
-        <Link href="/internal" className="inline-flex items-center gap-2 text-sm mb-8 hover:opacity-80 transition-opacity" style={{ color: "#8A8A8A" }}>
+        <Link href="/internal/docs" className="inline-flex items-center gap-2 text-sm mb-8 hover:opacity-80 transition-opacity" style={{ color: "#8A8A8A" }}>
           ← Internal Dashboard
         </Link>
 

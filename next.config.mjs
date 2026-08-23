@@ -72,6 +72,41 @@ const nextConfig = {
       // pointed at the same place so anything already posted keeps working.
       { source: "/r/:code", destination: `${FELLOWSHIP_ORIGIN}/r/:code` },
       { source: "/c/:code", destination: `${FELLOWSHIP_ORIGIN}/r/:code` },
+      // HQ — the team's own workspace — now answers at anticipy.ai/internal.
+      //
+      // It used to be reachable only at the raw Railway hostname, because
+      // this site answers /internal itself and nothing forwarded. Nobody is
+      // going to type backend-production-61e0a.up.railway.app.
+      //
+      // NOTHING WAS DELETED TO MAKE ROOM. The hardware hub that lived here —
+      // BOM, schematic, assembly, manufacturing, packaging, pendant-upload,
+      // competitive — moved one level down to /internal/docs, and the ten
+      // pages that linked back to it now link there. Every doc keeps its own
+      // URL, untouched.
+      //
+      // src/middleware.ts still matches /internal and /internal/:path*, so
+      // this is BEHIND the site passcode as well as HQ's own key. Two gates
+      // is the correct posture for a page that lists three people's phone
+      // numbers, and the gate cookie is per-device, so it is one extra
+      // password once rather than one every visit.
+      { source: "/internal", destination: `${FELLOWSHIP_ORIGIN}/internal.html` },
+      // The routes HQ's own page calls. /internal/docs/* is a real Next
+      // route and is NOT listed here, so it keeps winning on the filesystem.
+      { source: "/internal/state", destination: `${FELLOWSHIP_ORIGIN}/internal/state` },
+      { source: "/internal/login", destination: `${FELLOWSHIP_ORIGIN}/internal/login` },
+      { source: "/internal/health", destination: `${FELLOWSHIP_ORIGIN}/internal/health` },
+      { source: "/internal/people", destination: `${FELLOWSHIP_ORIGIN}/internal/people` },
+      { source: "/internal/todos", destination: `${FELLOWSHIP_ORIGIN}/internal/todos` },
+      { source: "/internal/todos/delete", destination: `${FELLOWSHIP_ORIGIN}/internal/todos/delete` },
+      { source: "/internal/events", destination: `${FELLOWSHIP_ORIGIN}/internal/events` },
+      { source: "/internal/events/delete", destination: `${FELLOWSHIP_ORIGIN}/internal/events/delete` },
+      { source: "/internal/tracks", destination: `${FELLOWSHIP_ORIGIN}/internal/tracks` },
+      { source: "/internal/router", destination: `${FELLOWSHIP_ORIGIN}/internal/router` },
+      { source: "/internal/assistant", destination: `${FELLOWSHIP_ORIGIN}/internal/assistant` },
+      { source: "/internal/research", destination: `${FELLOWSHIP_ORIGIN}/internal/research` },
+      { source: "/internal/research/status", destination: `${FELLOWSHIP_ORIGIN}/internal/research/status` },
+      { source: "/internal/fellows", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows` },
+      { source: "/internal/fellows/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/remove` },
     ];
   },
   async headers() {
