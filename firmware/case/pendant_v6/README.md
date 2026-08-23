@@ -62,14 +62,43 @@ identical between pins/no-pins, so any back mates with either front.
 5 mm outer brims, 65 °C textured-PEI bed, 20 mm/s first layer (silk-PLA
 adhesion fixes after two failed plate attempts).
 
-## Print settings (Bambu P2S)
-- 0.12 mm layers, 3 walls, 4 top/5 bottom shells, 15 % gyroid infill
-  (shells are mostly walls; infill matters only in the solid chain end —
-  gyroid there gives the chain hole its strength).
-- NO supports (supports scar the visible faces). Both halves print rim-down /
-  visible dome UP.
-- The USB slot prints as a short bridge — fine without support.
-- Silk PLA works; PETG better for daily wear.
+## v6.3 — fixes from the gold XL print (spaghetti postmortem)
+
+What went wrong on the gold print: the XL cavity (v6.2, +20/+10 mm) turned the
+cavity ceiling into a ~66 × 32 mm flat unsupported bridge. Printed rim-down
+with NO supports, that bridge collapsed into spaghetti which then blocked the
+chain hole and the USB slot, and the friction lip printed too tight (needed
+super glue). Changes:
+
+- **Chain hole 4.5 → 10.6 mm**, chamfered both faces. Fits a 6 mm chain with
+  room to spare and a 10 mm chain at the limit. 2.0 mm outer wall, 1.7 mm to
+  the lip groove (verified from the parametric math).
+- **Mic port → 7-hole grille** (center + hex ring, Ø1.2, 2.4 mm pitch) over an
+  Ø8 internal acoustic recess — much more open area for clean sound, still
+  reads as a deliberate speaker dot.
+- **USB slot 14×8 → 15.0 × 8.6 mm** with a deeper (1.8 mm) chamfer lead-in —
+  any compliant USB-C overmold fits without hunting.
+- **Friction fit loosened**: LID_CLR 0.25 → 0.30, friction bias −0.10 → −0.05
+  (net 0.25 mm/side). No more glue-jammed halves.
+- **SUPPORTS ARE NOW REQUIRED** — see below. This, not the geometry, was the
+  primary spaghetti cause.
+
+## Print settings (Bambu P2S) — v6.3
+
+- **Filament: silver.** PETG silver for the wearable unit (LiPo-safe temps);
+  silk/basic PLA silver fine for fit checks. Gold on the last print was just
+  the loaded spool, not a requirement. Black hides layer lines but shows dust;
+  silver matches the titanium product look.
+- 0.12 mm layers, 3 walls, 4 top/5 bottom shells, 15 % gyroid infill.
+- Both halves print rim-down / visible dome UP, **WITH supports enabled:
+  tree supports, "on build plate only"**. They grow up through the open rim
+  into the cavity, hold the big flat cavity ceiling, and snap out clean —
+  they never touch the visible outer faces. Do NOT print these hollow XL
+  halves unsupported: the ceiling bridge is far past safe bridging span.
+- The USB slot and chain hole must come off the printer open — if either has
+  strands across it after support removal, the print failed; don't force it.
+- Slicer sanity check before printing: top view must show the chain hole as a
+  clean Ø10.6 circle and the USB slot as a 15 × 8.6 opening in the end wall.
 
 ## Still only provable with plastic + real parts
 Exact battery body/tab size, real cable overmold, printer clearance, friction

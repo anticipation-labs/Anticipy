@@ -23,6 +23,20 @@
  *               are IDENTICAL between the two, so any back mates with either.
  * Both halves print rim-down / visible face UP: zero supports.
  *
+ * v6.3 (print-failure fixes from the gold XL print):
+ *  - Chain hole enlarged 4.5 -> 10.6 mm (fits 6 mm chain loose, 10 mm max),
+ *    chamfered both faces, kept clear of the lip groove and the outer edge.
+ *  - Mic port is now a tidy 7-hole grille (center + hex, 1.2 mm) over a
+ *    wider internal acoustic recess so sound passes cleanly.
+ *  - USB slot widened to 15.0 x 8.6 with a deeper chamfer lead-in.
+ *  - Friction fit loosened (halves needed glue): LID_CLR 0.25 -> 0.30,
+ *    friction bias -0.10 -> -0.05 (net 0.25 mm/side).
+ *  - PRINT ORIENTATION FIX: the fully-hollow XL cavity ceiling is a ~66 x 32 mm
+ *    flat bridge; printed rim-down with no supports it collapses into
+ *    spaghetti that blocks the chain hole and USB slot. Print rim-down WITH
+ *    supports "on build plate only" (they grow up through the open rim into
+ *    the cavity and pull out clean), or print cavity-opening-UP.
+ *
  * PART = "front" | "back" | "both" | "coupon"
  * BATT = "200" | "500"
  * MECH = "friction" | "magnet" | "screw"
@@ -34,8 +48,8 @@ MECH    = "friction";
 PINS    = false;
 XTRA_L  = 20.0;     // extra internal cavity length (user: "2 cm taller")
 XTRA_W  = 10.0;     // extra internal cavity width  (user: "1 cm wider")
-LID_CLR = 0.25;      // per-side lip clearance from the coupon test
-fit_clr = (MECH == "friction") ? LID_CLR - 0.10 : LID_CLR;  // friction grips tighter
+LID_CLR = 0.30;      // per-side lip clearance (v6.3: loosened — halves jammed)
+fit_clr = (MECH == "friction") ? LID_CLR - 0.05 : LID_CLR;  // friction grips tighter
 $fn = $preview ? 48 : 128;
 
 /* ---------- hardware (headers CLIPPED FLUSH) ---------- */
@@ -65,15 +79,15 @@ outer_t = front_d + back_d + 2*face;
 zc      = (front_d - back_d)/2;
 cx      = 0;
 
-chain_x = outer_l/2 - 5.8;
-chain_d = 4.5;
+chain_d = 10.6;                   // v6.3: passes 6 mm chain loose, 10 mm max
+chain_x = outer_l/2 - chain_d/2 - 2.0;  // 2.0 mm plan wall to the outer edge
 bx = cx - cav_l/2 + xiao_l/2;
 anchor_x = cx + cav_l/2 + 3.0;    // screw / magnet center in the solid chain end
 back_t  = back_d + face;
 
 mag_d   = 5.2;  mag_h = 2.1;      // pocket for a 5 x 2 mm disc magnet
 mag_x   = cav_l/2 + lip_t + LID_CLR + 0.8 + mag_d/2;  // clears groove outer wall
-mag_y   = 6.2;                    // clears the 4.5 mm chain hole by >0.8 mm
+mag_y   = 8.0;                    // clears the 10.6 mm chain hole by >0.8 mm
 
 echo(str("V6 ", BATT, "mAh / ", MECH, "  ", outer_l, " x ", outer_w, " x ", outer_t));
 
@@ -107,27 +121,39 @@ module cavity() {
         rrect(cav_l, cav_w, 4);
 }
 
-module chain_opening()
+module chain_opening() {
     translate([chain_x, 0, -outer_t]) cylinder(d = chain_d, h = 2*outer_t);
+    // 1 mm chamfers at both face exits: clean edges, kind to the chain
+    translate([chain_x, 0, zc + outer_t/2 - 1.0])
+        cylinder(d1 = chain_d, d2 = chain_d + 2.4, h = 1.2);
+    translate([chain_x, 0, zc - outer_t/2 - 0.2])
+        cylinder(d1 = chain_d + 2.4, d2 = chain_d, h = 1.2);
+}
 
-module usb_slot() {      // 14 x 8: passes any compliant cable overmold
-    usb_w = 14.0; usb_h = 8.0;
+module usb_slot() {      // 15 x 8.6: passes any compliant cable overmold
+    usb_w = 15.0; usb_h = 8.6;
     depth = (cx - cav_l/2) - (-outer_l/2 - 2) + 2;
     translate([-outer_l/2 - 2, -usb_w/2, 0])
         cube([depth, usb_w, usb_h]);
-    // chamfered lead-in at the outer face: crisp edge, no fuzzing
+    // deeper chamfered lead-in at the outer face: crisp edge, easy cable entry
     hull() {
-        translate([-outer_l/2 - 2, -(usb_w + 2.4)/2, -1.2])
-            cube([0.01, usb_w + 2.4, usb_h + 2.4]);
-        translate([-outer_l/2 + 1.2, -usb_w/2, 0])
+        translate([-outer_l/2 - 2, -(usb_w + 3.6)/2, -1.8])
+            cube([0.01, usb_w + 3.6, usb_h + 3.6]);
+        translate([-outer_l/2 + 1.8, -usb_w/2, 0])
             cube([0.01, usb_w, usb_h]);
     }
 }
 
 module front_holes() {
     translate([bx - 2.0, 0, 0]) cylinder(d = 2.0, h = outer_t);           // LED
-    translate([bx + 3.0, 4.0, 0]) cylinder(d = 1.0, h = outer_t);         // mic
-    translate([bx + 3.0, 4.0, front_d - 0.1]) cylinder(d = 4.0, h = 1.0); // acoustic recess
+    // mic grille: center + 6 around (hex, 2.4 mm pitch), 1.2 mm holes —
+    // enough open area for clean sound, reads as an intentional speaker dot
+    translate([bx + 3.0, 4.0, 0]) {
+        cylinder(d = 1.2, h = outer_t);
+        for (a = [0:60:300])
+            translate([2.4*cos(a), 2.4*sin(a), 0]) cylinder(d = 1.2, h = outer_t);
+    }
+    translate([bx + 3.0, 4.0, front_d - 0.1]) cylinder(d = 8.0, h = 1.0); // acoustic recess
 }
 
 module pry_notch()       // thumbnail slot at the USB end of the seam
