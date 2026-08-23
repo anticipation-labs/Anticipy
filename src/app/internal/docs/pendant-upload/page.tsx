@@ -393,7 +393,7 @@ export default function PendantUploadPage() {
     <div style={{ minHeight: "100vh", background: "#0C0C0C", color: "#F5F0EB" }}>
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "32px 24px 80px" }}>
         <Link
-          href="/internal"
+          href="/internal/docs"
           style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "#8A8A8A", textDecoration: "none", marginBottom: 32 }}
         >
           ← Internal Dashboard
