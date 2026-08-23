@@ -101,10 +101,18 @@ const nextConfig = {
       { source: "/internal/events", destination: `${FELLOWSHIP_ORIGIN}/internal/events` },
       { source: "/internal/events/delete", destination: `${FELLOWSHIP_ORIGIN}/internal/events/delete` },
       { source: "/internal/tracks", destination: `${FELLOWSHIP_ORIGIN}/internal/tracks` },
-      { source: "/internal/router", destination: `${FELLOWSHIP_ORIGIN}/internal/router` },
-      { source: "/internal/assistant", destination: `${FELLOWSHIP_ORIGIN}/internal/assistant` },
-      { source: "/internal/research", destination: `${FELLOWSHIP_ORIGIN}/internal/research` },
-      { source: "/internal/research/status", destination: `${FELLOWSHIP_ORIGIN}/internal/research/status` },
+      // Signing in as yourself, and the seven routes HQ calls once you are.
+      // These were missing, so /internal/me 404'd at the edge and the page
+      // could never learn who you were — it reached the person picker and
+      // then stopped dead. Enumerated, never globbed: /internal/docs/* is a
+      // real Next route and a catch-all would swallow the whole hardware hub.
+      { source: "/internal/me", destination: `${FELLOWSHIP_ORIGIN}/internal/me` },
+      { source: "/internal/session", destination: `${FELLOWSHIP_ORIGIN}/internal/session` },
+      { source: "/internal/session/end", destination: `${FELLOWSHIP_ORIGIN}/internal/session/end` },
+      { source: "/internal/people/code", destination: `${FELLOWSHIP_ORIGIN}/internal/people/code` },
+      { source: "/internal/comments", destination: `${FELLOWSHIP_ORIGIN}/internal/comments` },
+      { source: "/internal/notifs/read", destination: `${FELLOWSHIP_ORIGIN}/internal/notifs/read` },
+      { source: "/internal/settings", destination: `${FELLOWSHIP_ORIGIN}/internal/settings` },
       { source: "/internal/fellows", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows` },
       { source: "/internal/fellows/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/remove` },
     ];
