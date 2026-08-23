@@ -101,7 +101,7 @@ const UNLOCK_PAGE = `<!doctype html>
     <button id="b" type="submit">Unlock</button>
   </form>
   <div class="msg" id="m" role="status" aria-live="polite"></div>
-  <p class="hint">This device stays unlocked for 12 hours.</p>
+  <p class="hint">This device stays unlocked for a month.</p>
 </div>
 <script>
 (function () {

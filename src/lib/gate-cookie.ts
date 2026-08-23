@@ -12,13 +12,12 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
 export const GATE_COOKIE_NAME = "anticipy_internal_gate";
-// 12 hours. It was 15 minutes, which is a sane number for a one-off demo
-// link and a miserable one for /internal, where people now work all day:
-// HQ would drop them mid-sentence four times an hour and the cookie is
-// httpOnly, so nothing in the page can even see it coming. This is a
-// passcode gate on internal docs, not an identity session — the thing it
-// protects against is a stranger with the URL, and 12 hours does that.
-export const GATE_TTL_SECONDS = 12 * 60 * 60; // 12 hours
+// 30 days. The journey here: 15 minutes (sane for a demo link, absurd for
+// a workplace), then 12 hours — which still meant re-typing the passcode
+// every single morning before the actual sign-in. HQ now has real identity
+// behind this gate (Clerk + per-person sessions); this cookie's only job is
+// keeping drive-by strangers off the URL, and 30 days of that costs nothing.
+export const GATE_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 function getSecret(): string {
   // Reuse SUPABASE_SERVICE_ROLE_KEY for HMAC unless GATE_COOKIE_SECRET is set.
