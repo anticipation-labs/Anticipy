@@ -116,6 +116,12 @@ const nextConfig = {
       // Clerk sign-in: the page trades a verified Clerk token for an ordinary
       // HQ session at this one route; nothing else in HQ knows Clerk exists.
       { source: "/internal/clerk/exchange", destination: `${FELLOWSHIP_ORIGIN}/internal/clerk/exchange` },
+      // Expenses (personal tracker + company log) and the password vault.
+      { source: "/internal/expenses", destination: `${FELLOWSHIP_ORIGIN}/internal/expenses` },
+      { source: "/internal/expenses/delete", destination: `${FELLOWSHIP_ORIGIN}/internal/expenses/delete` },
+      { source: "/internal/passwords", destination: `${FELLOWSHIP_ORIGIN}/internal/passwords` },
+      { source: "/internal/passwords/reveal", destination: `${FELLOWSHIP_ORIGIN}/internal/passwords/reveal` },
+      { source: "/internal/passwords/delete", destination: `${FELLOWSHIP_ORIGIN}/internal/passwords/delete` },
       { source: "/internal/fellows", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows` },
       { source: "/internal/fellows/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/remove` },
     ];
