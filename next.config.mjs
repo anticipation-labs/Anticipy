@@ -113,6 +113,9 @@ const nextConfig = {
       { source: "/internal/comments", destination: `${FELLOWSHIP_ORIGIN}/internal/comments` },
       { source: "/internal/notifs/read", destination: `${FELLOWSHIP_ORIGIN}/internal/notifs/read` },
       { source: "/internal/settings", destination: `${FELLOWSHIP_ORIGIN}/internal/settings` },
+      // Clerk sign-in: the page trades a verified Clerk token for an ordinary
+      // HQ session at this one route; nothing else in HQ knows Clerk exists.
+      { source: "/internal/clerk/exchange", destination: `${FELLOWSHIP_ORIGIN}/internal/clerk/exchange` },
       { source: "/internal/fellows", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows` },
       { source: "/internal/fellows/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/remove` },
     ];
