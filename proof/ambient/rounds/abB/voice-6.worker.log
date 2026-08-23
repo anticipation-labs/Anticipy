@@ -1,0 +1,31 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: escalate (substantive, no overlap, but recent) seg=9m3ne5w2g8uaob9
+heard: 'The revised drainage calcs still have not gone to the contractor and design freeze is Monday.' -> act (send revised drainage calculations to contractor)
+segment: escalate (substantive, no overlap, but recent) seg=lwbds246zly3u5q
+heard: 'My ethics form was supposed to go in last Friday and it is still sat in drafts.' -> act (send ethics form)
+segment: escalate (substantive, no overlap, but recent) seg=j18rb2n41y1q04f
+heard: 'The sprayer test certificate runs out before harvest.' -> act (renew sprayer test certificate before harvest)
+segment: link (anaphoric/short, still inside the near band) seg=gr34o9zpohlltiw
+heard: 'Morning, you alright?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=o4rfx2ywi2m3jpy
+heard: 'I keep seeing those adverts and wondering if they are any good.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=oto9fyh2tlfs08b
+heard: 'The probate forms are sat there and every single time I open them I close them again.' -> act (complete probate forms)
+segment: link (shares a name with the previous conversation) seg=h8nkjzx6pwlp4a5
+heard: 'The strata levy notices have to go out this week and the budget is not approved yet.' -> act (prepare strata levy notices for mailing)
+segment: link (shares a name with the previous conversation) seg=mkkb7n1ifpqy8hr
+heard: 'The bank shifts.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=rllg6ypj1f3q6bw
+heard: 'The chiller on aisle four has been running two degrees warm since Friday and nobody has logged it.' -> act (log chiller on aisle four running two degrees warm)
+segment: link (shares a name with the previous conversation) seg=xs94u55svmgw8wh
+heard: 'The hall booking runs out at the end of term and the parish council want it in writing, and I still have not decided if we are keeping the Thursday slot on.' -> act (decide on keeping Thursday slot for hall booking)
+segment: link (shares a name with the previous conversation) seg=pevov5f6dnhbkxg
+heard: 'The roadmap review is Thursday and I have not written up what we are dropping.' -> act (draft roadmap review drops)
+segment: escalate (substantive, no overlap, but recent) seg=ujgw7g6do63d25r
+heard: 'My breathing apparatus competency is due for reassessment and the slots go in about a day.' -> act (book breathing apparatus competency reassessment)
+segment: escalate (substantive, no overlap, but recent) seg=6vfitq8pc7bxnkn
+heard: 'Two of the counterbalance lads need their refresher and the licences go in a fortnight.' -> act (schedule counterbalance refresher for two lads)

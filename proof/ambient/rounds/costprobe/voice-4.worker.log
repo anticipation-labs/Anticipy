@@ -1,0 +1,38 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (substantive, no overlap, beyond the near band) seg=tblqfqg249ayffg
+heard: 'Marking moderation has eaten my entire reading week.' -> ignore (no goal)
+consolidation: 102 episodes -> 4 new facts, 0 merged
+segment: new (gap 8458s >= 1200s) seg=tkl9g8q81p9kvfa
+heard: 'I should get the CFA level three booked but I have lost track of the window.' -> ignore (look up CFA Level 3 registration windows and deadlines)
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: link (anaphoric/short, still inside the near band) seg=d78uu6oa2b2q9tm
+heard: 'These agency shifts pay more than I do and I am the one holding the ward together.' -> ignore (no goal)
+not amending 57c2leiyrqsijb0: already queued — his approval closed this card to edits: 'Research CFA Level 3 registration windows and deadlines'
+segment: append (conversation still open) seg=d78uu6oa2b2q9tm
+heard: 'I should get the CFA level three booked but I have lost track of the window.' -> ignore (Research CFA Level 3 registration windows and deadlines)
+segment: escalate (substantive, no overlap, but recent) seg=w2hgx86aslb8bby
+heard: 'I said I would tell Dan when his pull request lands and I have gone quiet on him.' -> act (draft update to Dan about his pull request)
+segment: append (conversation still open) seg=w2hgx86aslb8bby
+heard: 'These agency shifts pay more than I do and I am the one holding the ward together.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=pnb002jx15h3smp
+heard: 'I said I would tell Dan when his pull request lands and I have gone quiet on him.' -> ignore (check status of Dan's pull request and draft update to him)
+segment: append (conversation still open) seg=pnb002jx15h3smp
+heard: 'The calibration certificate on the loop tester ran out in March.' -> ignore (research loop tester calibration services in Vancouver)
+segment: append (conversation still open) seg=pnb002jx15h3smp
+heard: 'The calibration certificate on the loop tester ran out in March.' -> ignore (no goal)
+segment: append (conversation still open) seg=pnb002jx15h3smp
+heard: 'The calibration certificate on the loop tester ran out in March.' -> ignore (research calibration renewal options for the loop tester)
+segment: append (conversation still open) seg=pnb002jx15h3smp
+heard: 'If the BPS claim is not in by the fifteenth I lose the whole payment.' -> act (remind to submit BPS claim before the fifteenth)
+segment: append (conversation still open) seg=pnb002jx15h3smp
+heard: 'If the BPS claim is not in by the fifteenth I lose the whole payment.' -> act (track deadline to submit BPS claim before the fifteenth)
+segment: append (conversation still open) seg=pnb002jx15h3smp
+heard: 'If the BPS claim is not in by the fifteenth I lose the whole payment.' -> ignore (remind to submit BPS claim before the fifteenth)

@@ -1,0 +1,28 @@
+pb        http://127.0.0.1:8090
+owner_ref 1x6zqi1nd6udn36
+brain     worker: pid 6534,6545,6552,6560,6565,6570,6573,6578,6582 up since 02:01:51, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13]    amb-0029 want=ignore got=ignore      21.3s  'That loft conversion was a nightmare, never again.'
+[2/13] !! amb-0057 want=act    got=error       32.4s  "Ellie's swimming subs are overdue again."
+[3/13]    amb-0125 want=act    got=act         80.6s  'The single person council tax discount never got applied.'
+            goal: claim single person council tax discount
+[4/13]    amb-0187 want=ignore got=ignore      23.3s  'That is a good shout, actually.'
+[5/13]    amb-0223 want=ignore got=ignore      10.1s  'Terms and conditions apply, see website for details.'
+[6/13] !! per-0022 want=act    got=ignore      15.1s  'I have done nothing about the passport photos and the form'
+            goal: Find nearby passport photo services in Vancouver
+[7/13] !! fin-0057 want=ask    got=ignore      32.3s  'We are nearly out of the heavy copier paper and I cannot r'
+            goal: Find the billing code for stationery and draft heavy copier paper order
+[8/13]    med-0029 want=ignore got=ignore      32.3s  'Have you actually got round to your own registration renew'
+[9/13]    svc-0010 want=ignore got=ignore      15.1s  'Every single review mentions the breakfast eggs.'
+[10/13]    svc-0061 want=ignore got=ignore      24.2s  'If I ever taught full time out of the house I would have t'
+[11/13] !! tep-0027 want=ask    got=act         87.8s  'I want the replacement bearings on order today but I canno'
+            goal: order replacement bearings
+[12/13] !! trd-0022 want=ask    got=act         88.7s  'I want the powerflush booked in at the Hendon flats but I '
+            goal: book powerflush for Hendon flat
+[13/13] !! trd-0086 want=ask    got=ignore      24.2s  'The client wants the Lagos shipment quoting and I do not k'
+
+pushed 13 in 8.2 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abA/voice-8.jsonl
+  act=3  error=1  ignore=9
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

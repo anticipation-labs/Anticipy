@@ -1,0 +1,30 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (gap 3213s >= 1200s) seg=6t9yth078g8im17
+heard: 'I keep meaning to re-run the retirement projection on the Alvarez file before we meet.' -> ignore (re-run retirement projection on the Alvarez file before the meeting)
+segment: link (anaphoric/short, still inside the near band) seg=m6y1wlsdv2bozs3
+heard: 'Rain is not letting up at all.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=zhio0t0obo8l125
+heard: 'My F gas certificate expires in the spring.' -> act (track F gas certificate renewal for spring 2027)
+segment: escalate (substantive, no overlap, but recent) seg=qje948t4ji05i6j
+heard: 'The court warning for Thursday lands on my rest day.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=io2hc0qxwae0h9g
+heard: 'I sometimes think about packing it all in and doing something with my hands.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ptcq3sp0nxq7deo
+heard: 'We should do dinner out Friday, somewhere decent for once.' -> ignore (research decent dinner restaurant options in Vancouver for Friday August 21, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=kygo0gmdj0j3bl0
+heard: 'the trellis the trellis file letter i need that out before before friday' -> act (draft the Trellis file letter to send before Friday, August 28, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=2l9hkrfa8nttr4j
+heard: 'Did the offer letter ever go out to the Bhatt candidate?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=0htftokpfouzpjv
+heard: 'The bad character application went in on Thursday, that is off my list.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=pg5600sny8btw2r
+heard: 'I want the run of show over to the venue, I have just not decided whether the speeches sit before or after dinner.' -> ignore (no goal)
+heard: 'Do not worry about the printer, Yusuf has already logged it with the vendor.' -> error: 'choices'
+segment: escalate (substantive, no overlap, but recent) seg=wdfr8rx47bxn3ex
+heard: 'I want the reading group posters up this week but I have no idea which of the two dates we settled on.' -> ignore (find the date settled on for the reading group to prepare posters)
+segment: escalate (substantive, no overlap, but recent) seg=gih2oxaetzkpfyt
+heard: 'The gate will not let the two labourers on Monday, both their cards are out of date.' -> ignore (no goal)

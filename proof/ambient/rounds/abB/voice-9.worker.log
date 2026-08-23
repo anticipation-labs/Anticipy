@@ -1,0 +1,31 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: escalate (substantive, no overlap, but recent) seg=rvkyjruwcoj751d
+heard: 'I cannot do the Dover run until the trailer has had its brake test.' -> act (schedule brake test for trailer)
+segment: escalate (substantive, no overlap, but recent) seg=1nvzsilmuhvfo42
+heard: 'I would love to get away for a weekend but I have no idea what is affordable.' -> ignore (research affordable weekend getaways)
+segment: escalate (substantive, no overlap, but recent) seg=aw8802uicyvv3t1
+heard: "Both the kids' passports run out before the summer." -> ignore (check kids' passport expiry dates)
+segment: escalate (substantive, no overlap, but recent) seg=yka362ai61gj6i8
+heard: 'Statistically one of these meetings has to be useful.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=tm1bnk1c1ugi1h4
+heard: 'Honestly it is fine, I will sort the tickets out tonight.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=efxaw85tit94f4l
+heard: 'There is a message sat on my universal credit journal and I keep swiping it away.' -> ignore (check Universal Credit journal)
+segment: escalate (substantive, no overlap, but recent) seg=6ewuufg4vof8ph6
+heard: 'I said I would send Bea the maternity policy and it is still sitting in my drafts.' -> act (Draft email to Bea with maternity policy)
+segment: escalate (substantive, no overlap, but recent) seg=e3m0506rw55dhe8
+heard: 'The indemnity cover needs extending to online sessions and I am not sure how many hours a week I am doing remotely now.' -> ignore (Find out how many hours per week Alex is doing remotely)
+segment: link (shares a name with the previous conversation) seg=r4buv0f409h0vch
+heard: 'The gas certificate for the range is on the wall from two years ago and I know full well that is out.' -> act (renew gas certificate for range)
+segment: link (shares a name with the previous conversation) seg=k00e0bckf3i9fz5
+heard: 'The allergen labels are sorted, I ran the whole new set off on Tuesday.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=gu96arlktnojmsk
+heard: 'The machine shop has fitted the guards back to front on every single unit.' -> act (contact machine shop about guards fitted incorrectly)
+segment: link (shares a name with the previous conversation) seg=po3h635nc4p7n0f
+heard: 'The condenser is on the wagon already, it is all moving.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=m6vvf2ry0veg790
+heard: 'I should get the plate moved onto the new car, though I have not decided whether to keep the old one on the road.' -> act (transfer license plate to new car)

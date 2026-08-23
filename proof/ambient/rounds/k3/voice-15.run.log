@@ -1,0 +1,101 @@
+pb        http://127.0.0.1:8090
+owner_ref 8i1d8u5t7qwoxyd
+brain     worker: pid 96659,96660,96661,96662,96663,96664,96665,96666,96667,96668,96669,96670,96671,96672,96673,96674,96801,96805,96810,96811 up since 11:08:09, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63]    amb-0006 want=act    got=act         18.0s  'I told Priya I would send her the payroll journal and it c'
+            goal: Email payroll journal to Priya
+[2/63] !! amb-0022 want=act    got=ignore      46.2s  'I said I would tell Dan when his pull request lands and I '
+            goal: email Dan about his pull request
+[3/63] !! amb-0038 want=act    got=ignore       4.1s  'I cannot do the Dover run until the trailer has had its br'
+[4/63]    amb-0054 want=act    got=act         32.0s  'Student finance still have not paid and rent goes out on t'
+            goal: chase student finance for payment
+[5/63]    amb-0070 want=act    got=act         19.8s  'My press card expired and I need it for the conference.'
+            goal: renew press card
+[6/63]    amb-0086 want=act    got=act         10.3s  'The ward has run out of the small gloves again.'
+            goal: order small gloves for the ward
+[7/63]    amb-0102 want=act    got=act         55.1s  'My F gas certificate expires in the spring.'
+            goal: renew F gas certificate
+[8/63]    amb-0118 want=act    got=act          9.1s  'The library fine is stopping me getting my results.'
+            goal: pay library fine
+[9/63]    amb-0134 want=act    got=act         35.3s  "Both the kids' passports run out before the summer."
+            goal: renew kids' passports
+[10/63]    amb-0150 want=act    got=act         12.3s  'The studio have double booked me on Saturday morning.'
+            goal: Reschedule Saturday, August 22, 2026 studio booking
+[11/63]    amb-0166 want=act    got=act         49.0s  'My indemnity band changed and I never told them about the '
+            goal: Contact Alex at voice-15@lane.test to update indemnity band with implant work details.
+[12/63]    amb-0182 want=ignore got=ignore       7.2s  'Did you see the traffic on the bridge earlier?'
+[13/63]    amb-0198 want=ignore got=ignore       5.1s  'I am so tired of chasing people for things they already ag'
+[14/63]    amb-0214 want=ignore got=ignore       5.1s  'I keep seeing those adverts and wondering if they are any '
+[15/63]    amb-0230 want=ignore got=ignore      15.0s  'Book now and save twenty percent on your first order.'
+[16/63]    amb-0246 want=ignore got=ignore      19.1s  'In an ideal world we would have replaced that van two year'
+[17/63]    amb-0262 want=ignore got=ignore       7.1s  'Rachel, did you sign off the discharge summary or is that '
+[18/63]    amb-0278 want=ignore got=ignore       7.0s  'I will need a hire car for that trip, although it is cance'
+[19/63]    amb-0305 want=ignore got=ignore      15.3s  'If we ever go to Lisbon.'
+[20/63]    amb-0306 want=ignore got=ignore      22.9s  'We would want to do the tram thing, the yellow one.'
+[21/63] !! per-0011 want=act    got=ignore      11.9s  'The probate forms are sat there and every single time I op'
+[22/63]    per-0027 want=act    got=act         18.3s  'The washer dryer door will not shut properly and I have be'
+            goal: arrange repair for washer dryer door
+[23/63] !! per-0043 want=act    got=ignore       4.7s  "The dog's insurance renewal quote made me actually laugh o"
+[24/63] !! per-0059 want=ask    got=ignore      10.3s  'The vet has got an evening slot or the Saturday morning an'
+[25/63]    per-0075 want=ignore got=ignore      10.9s  "I got Mum's present weeks ago, I am being unbearably smug "
+[26/63]    per-0091 want=ignore got=ignore       6.5s  'No, Dave is picking the prescription up, he goes past the '
+[27/63] !! per-0106 want=ignore got=act         10.2s  'The wifi has been dropping out every night about nine, eve'
+            goal: troubleshoot wifi dropping out nightly around 9 PM
+[28/63] !! per-0107 want=act    got=ignore     100.3s  'And we are out of contract anyway, I saw the email, we are'
+            goal: research internet providers and plans
+[29/63] per-0108 POST FAILED: timed out
+[30/63] per-0109 POST FAILED: timed out
+[31/63] !! fin-0004 want=ask    got=ignore      59.3s  'Someone has to renew the terminal seat and I could not tel'
+[32/63]    fin-0020 want=act    got=act         17.1s  'The superannuation guarantee payment is due on the twenty '
+            goal: Run superannuation guarantee payment file
+[33/63]    fin-0036 want=act    got=act         32.6s  'The strata levy notices have to go out this week and the b'
+            goal: send strata levy notices this week
+[34/63]    fin-0052 want=ignore got=ignore       4.1s  'If we ever raised a growth fund we would need an entirely '
+[35/63]    fin-0068 want=act    got=act         11.6s  'We are down to one box of letterhead and the audit pack go'
+            goal: order more letterhead
+[36/63]    fin-0084 want=ignore got=ignore      12.6s  'I should get the trademark filed, actually the lawyer said'
+[37/63]    med-0019 want=ignore got=ignore      21.5s  'On the podcast they were saying four groups own half the p'
+[38/63] !! med-0038 want=act    got=ignore      10.0s  'The training portal has me non compliant on three modules '
+[39/63]    med-0054 want=ignore got=ignore       5.4s  'Right, sure, whatever they want.'
+[40/63]    med-0074 want=ignore got=ignore      48.3s  'Did you get the sealed order back from the court office?'
+[41/63] !! med-0093 want=act    got=ignore       5.0s  'I am still short on CLE credits and the accreditation refr'
+            goal: research CLE accreditation refresher courses that fulfill requirements and are available before Augu
+[42/63]    med-0109 want=ignore got=ignore       4.0s  'The transcript request is with the transcription provider '
+[43/63]    svc-0015 want=ignore got=ignore       3.0s  'Mate, are you still doing food or is it just drinks at thi'
+[44/63]    svc-0031 want=ignore got=ignore       4.0s  'The couch reupholstery is in hand, the man is collecting i'
+[45/63]    svc-0047 want=act    got=act         11.0s  "Mrs Whitfield's care plan review was due last month and no"
+            goal: rebook Mrs Whitfield's care plan review
+[46/63]    svc-0063 want=act    got=act          7.3s  'The get in is Sunday and the venue still has not had our r'
+            goal: send rigging plan to venue
+[47/63]    svc-0079 want=act    got=act         13.9s  'The HACCP plan has not been looked at since we put the sec'
+            goal: review HACCP plan
+[48/63]    tep-0003 want=ignore got=ignore       4.1s  'Every pre-app meeting turns into forty minutes of arguing '
+[49/63]    tep-0019 want=act    got=act         12.0s  'Nobody has told support the pricing change lands next week'
+            goal: Draft email to support about pricing change landing next week
+[50/63] !! tep-0035 want=ask    got=ignore       4.1s  'I need the nitrogen supply contract renewed and I do not k'
+[51/63]    tep-0051 want=ignore got=ignore       4.1s  'Half of these feature requests are the same request with a'
+[52/63]    tep-0067 want=ignore got=ignore       5.1s  'Nadia has already logged the fume hood service with estate'
+[53/63]    tep-0083 want=act    got=act         10.1s  'The hydrant inspection round for the industrial estate nev'
+            goal: record hydrant inspection round for industrial estate
+[54/63]    tep-0096 want=ignore got=ignore       4.1s  'Handover then. Two jobs overnight, both closed, nothing ou'
+[55/63]    tep-0097 want=ignore got=ignore       4.2s  'Nadia has put the defib pads order in already, so leave th'
+[56/63] !! tep-0098 want=ignore got=act         11.5s  'Crew room heating is still broken, third week of it now.'
+            goal: report crew room heating issue
+[57/63]    tep-0099 want=act    got=act          7.1s  'One thing though, the PPE inspection sheet has not been si'
+            goal: get PPE inspection sheet signed
+[58/63] !! trd-0029 want=ask    got=ignore       4.0s  'The Croydon landlord wants a heat pump price and I do not '
+[59/63]    trd-0045 want=act    got=act          8.1s  'The master key system for the block wants re-pinning and t'
+            goal: contact managing agent about master key system re-pinning for the block
+[60/63]    trd-0061 want=act    got=act         10.2s  'Out of the yellow mop heads at the Beeston site.'
+            goal: order yellow mop heads for Beeston site
+[61/63]    trd-0077 want=ignore got=ignore       5.0s  'tachograph card in the second slot no the the co drivers o'
+[62/63]    trd-0093 want=act    got=act          7.0s  'The depot want my CPC hours logged for the PSV renewal and'
+            goal: retrieve last year's CPC certificates for PSV renewal
+[63/63] !! trd-0109 want=act    got=ignore       4.0s  'The daily inspection sheets on the telehandler have not be'
+            goal: find last year's CPC certificates
+
+pushed 63 in 18.7 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k3/voice-15.jsonl
+  act=24  ignore=37
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

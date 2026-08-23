@@ -443,9 +443,18 @@ pendant firmware (XIAO nRF52840 Sense, Opus 16 kHz mono)
         ├─ Voice arm     (brain/voice_arm.py — Twilio SMS + calls; text-before-browser)
         └─ Job queue     (PocketBase `jobs` collection; awaiting_confirm gate)
    → Chrome extension (extension/ — MV3, chrome.debugger LLM click-loop, owner-scoped claim,
-                        heartbeat, pair code)  OR  cloud executor (agent/browser_agent.py, browser-use)
+                        heartbeat, pair code) — the ONLY executor; there is no second one
    → results PATCHed back → app feed + Anticipy closes memory loop (review_loops → memory.resolve)
 ```
+
+There is no cloud executor and there never really was one. `agent/browser_agent.py` sat in this
+tree advertising itself as a second pair of hands "with the same job model", and that claim was
+false in the only way that matters: no PocketBase import, no job poll, no claim, no status write,
+and a single `if __name__ == "__main__"` entry point that read a goal off argv. It also returned
+`ok=True` unconditionally on the browser-use path regardless of what the run did, and wrote its
+screenshot to `/home/ubuntu/anticipy_app/proof/agent_last.png`, a directory on the old box. It was
+deleted 2026-08-19 with `proof/test_end_to_end.py`, its only importer. When this document and the
+tree disagree about what exists, the tree wins.
 
 BLE UUIDs (identical in firmware and app — do not change one without the other):
 - Service `19B10000-E8F2-537E-4F6C-D104768A1214`, audio char `...0001...` (notify; byte[2]=intra-frame
@@ -517,9 +526,12 @@ anticipy_app/
 │   ├── pb_migrations/1700000001_jobs.js       ← jobs (goal, params JSON, status, result, device_id)
 │   ├── pb_migrations/1700000002_agents.js     ← agents (agent_id, pair_code, owner, paired,
 │   │                                             last_seen, browser) + jobs.owner/claimed_by/claimed_at
-│   └── sms_server.py           ← Twilio inbound webhook: signature-validated; "YES" reply flips the
-│                                  oldest awaiting_confirm job → queued. Run behind a public HTTPS URL,
-│                                  set as the number's SMS webhook.
+│   └── pb_hooks/                ← the deployed server logic; the Dockerfile COPYs pb_migrations,
+│                                  pb_public and pb_hooks and nothing else. sms.pb.js owns
+│                                  POST /sms/inbound: Twilio signature check via twilio_signature.js,
+│                                  then an owner_ref-scoped release. The old backend/sms_server.py
+│                                  was a second Python copy of that same endpoint which no image
+│                                  ever installed Python to run; deleted 2026-08-19.
 ├── extension/                  ← the action arm, Claude-in-Chrome grade. MV3.
 │   ├── manifest.json           ← permissions: debugger, scripting, tabs, tabGroups, alarms,
 │   │                              notifications, storage. Service worker background.js (module).
@@ -536,7 +548,6 @@ anticipy_app/
 │   ├── popup.html/js           ← status dot, PAIR CODE display, OpenRouter key entry.
 │   └── onboarding.html/js      ← branded guided setup (opens on install), pair code display,
 │                                  honest "unpacked builds don't auto-update" note.
-├── agent/browser_agent.py      ← cloud executor: browser-use + Playwright Chromium. Same job model.
 ├── app/ios/                    ← the iPhone app (SwiftUI, iOS 16+)
 │   ├── project.yml             ← XcodeGen spec. bundleIdPrefix ai.anticipy. MARKETING_VERSION 0.2.0,
 │   │                              CURRENT_PROJECT_VERSION 5 (== TestFlight build 5). Info.plist
@@ -573,7 +584,7 @@ anticipy_app/
 ├── proof/                      ← every test + evidence. Run these, don't trust prose.
 │   ├── test_memory.py (4/4), test_anticipy.py (4/4), test_anticipy_live.py (live spine vs real PB),
 │   ├── test_pairing_live.py (6/6 — pairing/heartbeat/owner-scope/dead-agent requeue),
-│   ├── test_backend.py, test_brain.py, test_extension.py, test_full_chain.py, test_end_to_end.py,
+│   ├── test_backend.py, test_brain.py, test_extension.py, test_full_chain.py,
 │   ├── test_scenarios.py, run_e2e_scenarios.py (10-scenario hands-off harness — run was cut for cost),
 │   ├── *-report.md (agent-v2, anticipy-core, ios-build, navigation, scenario, test),
 │   └── pendant_audio.wav, deepgram_transcript.txt, local_transcript.txt, screenshots.
@@ -593,8 +604,9 @@ PROVEN (real runs, evidence in proof/):
 - Pairing spine: 6/6 live (register, pair by code, wrong-code reject, heartbeat freshness,
   owner-scoped claim, dead-agent requeue).
 - Twilio: OUTBOUND SMS delivered to +1 604 724 5161; real voice call completed (13 s). Account
-  "Anticipy", number +1 619 658 4447. Inbound webhook code exists (sms_server.py) and worked
-  historically via a temp tunnel; NOT re-proven on a permanent host.
+  "Anticipy", number +1 619 658 4447. Inbound replies are handled by backend/pb_hooks/sms.pb.js,
+  which ships inside the PocketBase image and so is live wherever the backend is. The Python
+  sms_server.py this line used to credit was never installed by any image; it is deleted.
 - Extension: loaded in the (previous agent's) Chrome; chrome.debugger click-loop completed real
   multi-page tasks (login → cart → checkout → confirm, recorded); "started debugging" banner = real CDP.
 - iOS: compiles clean (Xcode 26.6), simulator run + screenshots; TestFlight build 5 (0.2.0) uploaded
@@ -735,8 +747,9 @@ Only flash AFTER the app is proven on the physical iPhone (Omar's explicit order
 - **G3 Production backend**: host PocketBase on HTTPS (Fly.io/Railway/VPS), lock collection rules
   to owners, atomic job claim (PB transaction or claim-token), rate limits, backups. Point app
   `backendURL`, extension `BASE`, and Twilio webhook at it.
-- **G4 Inbound SMS on permanent URL**: deploy sms_server.py behind the production host; re-prove
-  reply-YES-releases-job.
+- **G4 Inbound SMS on permanent URL**: the deploy half is CLOSED — the endpoint now lives inside
+  the PocketBase image (backend/pb_hooks/sms.pb.js), so there is no separate service to stand up.
+  Still owed: re-prove reply-YES-releases-job against the production host end to end.
 - **G5 Voice/contact policy**: allowlist of contacts Anticipy may text/call; per-contact consent;
   never call arbitrary numbers.
 - **G6 Chrome Web Store**: package extension, submit, get auto-updates. Until then: unpacked.

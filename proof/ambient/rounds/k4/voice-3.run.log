@@ -1,0 +1,104 @@
+pb        http://127.0.0.1:8090
+owner_ref yabnd1w5gr32woa
+brain     worker: pid 2686,2688,2689,2690,2691,2693,2694,2695,2696,2697,2698,2699,2700,2701,2702,2703,2904 up since 11:28:26, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62] !! amb-0009 want=ask    got=act          9.1s  "Somebody needs to chase the lab about Mr Okonkwo's bloods,"
+            goal: Chase lab about Mr. Okonkwo's bloods, sent to wrong practice
+[2/62]    amb-0025 want=act    got=act         10.2s  'We are four copies short of the Steinbeck for Year Nine.'
+            goal: Order 4 copies of Steinbeck for Year Nine
+[3/62]    amb-0041 want=act    got=act          9.1s  'The TB test is due and I still have not rung the vet.'
+            goal: Call vet to schedule TB test
+[4/62]    amb-0057 want=act    got=act         14.2s  "Ellie's swimming subs are overdue again."
+            goal: pay Ellie's swimming subscription
+[5/62]    amb-0073 want=act    got=act          9.1s  'The kitchen worktops are on a ten day lead and I promised '
+            goal: Order kitchen worktops for delivery by August 31, 2026
+[6/62]    amb-0089 want=act    got=act          9.1s  'The temporary works design has not been signed by anyone c'
+            goal: Get temporary works design signed by competent person
+[7/62]    amb-0105 want=act    got=act         10.5s  'We have nothing booked for the Christmas window display.'
+            goal: book Christmas window display
+[8/62]    amb-0121 want=act    got=act          9.2s  'The school trip deposit was due last Wednesday.'
+            goal: pay school trip deposit
+[9/62]    amb-0137 want=act    got=act         12.2s  'The dog is due his booster and the tick treatment ran out.'
+            goal: schedule dog booster and order tick treatment
+[10/62]    amb-0153 want=act    got=act         11.6s  'The court report has to be filed before the hearing and I '
+            goal: file court report
+[11/62]    amb-0169 want=act    got=act         10.1s  'The allergen matrix has not been updated since we changed '
+            goal: Update allergen matrix for new supplier
+[12/62]    amb-0185 want=ignore got=ignore       3.0s  'How was the weekend, did you get away at all?'
+[13/62]    amb-0201 want=ignore got=ignore       4.0s  'It is the same every single year and nothing changes.'
+[14/62]    amb-0217 want=ignore got=ignore       4.0s  'Dear Mr Ellis, further to our conversation of the fourth, '
+[15/62]    amb-0233 want=ignore got=ignore       5.4s  'Do not worry about the shopping, I will pick it up on the '
+[16/62]    amb-0249 want=ignore got=ignore       4.0s  'Sorted the MOT this morning, all done.'
+[17/62]    amb-0265 want=ignore got=ignore       5.5s  'Have you seen my glasses anywhere?'
+[18/62]    amb-0281 want=ignore got=ignore       4.0s  'It is all in the shared calendar already.'
+[19/62]    amb-0314 want=ignore got=ignore       3.3s  'Marcus asked about the survey figures again.'
+[20/62]    amb-0315 want=act    got=act         10.5s  'I will have to get those over to him before the site meeti'
+            goal: send survey figures to Marcus before site meeting
+[21/62]    per-0014 want=act    got=act         12.2s  "Nan's ninetieth is in three weeks and nobody has booked an"
+            goal: plan 90th birthday celebration for Nan in 3 weeks
+[22/62]    per-0030 want=act    got=act         12.9s  'Oh no, it is non uniform day tomorrow and there is the pou'
+            goal: arrange non-uniform day contribution for children for Saturday, August 22, 2026
+[23/62] !! per-0046 want=act    got=ignore       3.0s  'Honestly, the commute costs me more than my phone and the '
+[24/62] !! per-0062 want=ask    got=ignore       5.1s  'The school form wants a second emergency contact and I do '
+[25/62]    per-0078 want=ignore got=ignore       5.2s  'Have you got the code for the parcel locker on your phone?'
+[26/62]    per-0094 want=ignore got=ignore       8.1s  'The MOT is booked, it is in there now, they said they woul'
+[27/62]    per-0121 want=ignore got=ignore       5.5s  'Rent went out and it took me under again, honestly, every '
+[28/62]    per-0122 want=ignore got=ignore       5.1s  'The loan lands on the tenth so I have got a week of being '
+[29/62]    per-0123 want=act    got=act         14.4s  "And last year's deposit never came back, that is four hund"
+            goal: recover £400 deposit from last year
+[30/62]    per-0124 want=ignore got=ignore       5.2s  'Actually no, leave it, I will take the hit, I cannot be do'
+[31/62]    fin-0007 want=ignore got=ignore       3.0s  'The bookkeeping software has gone up again, forty pounds a'
+[32/62]    fin-0023 want=ignore got=ignore       5.6s  'Leave the T4s with me, I am filing the whole lot Thursday.'
+[33/62]    fin-0039 want=ignore got=ignore       6.4s  'Marco is handling the lift contract renewal, he has both q'
+[34/62]    fin-0055 want=ignore got=ignore       4.0s  'I raised the requisition for the laptops Monday, it is sat'
+[35/62] !! fin-0071 want=ask    got=ignore       4.0s  'The franking machine wants topping up and I do not know wh'
+[36/62]    fin-0087 want=ignore got=ignore       4.0s  'The Gift Aid claim went in last week, that one is closed.'
+[37/62] !! med-0025 want=ask    got=ignore       4.1s  'That DEA registration renewal notice is still on the desk '
+            goal: check DEA registration renewal notice for registrant name
+[38/62] !! med-0041 want=act    got=ignore       6.2s  'The logbook for the fellowship application is missing two '
+            goal: find missing logbook rotations for fellowship application
+[39/62]    med-0057 want=act    got=act          8.1s  'I am supposed to have five hours of practice related feedb'
+            goal: log five hours of practice related feedback for fellowship application
+[40/62]    med-0077 want=act    got=act         10.1s  'The apostille for the Dubai power of attorney was supposed'
+            goal: arrange apostille for Dubai power of attorney
+[41/62]    med-0096 want=act    got=act         17.6s  'Completion is Friday and the indemnity policy for the miss'
+            goal: get indemnity policy for missing building regs sign off
+[42/62]    svc-0002 want=ignore got=ignore       4.0s  'Excuse me, love, have you got these in an eight anywhere i'
+[43/62]    svc-0018 want=ignore got=ignore       3.0s  'Nobody warned me the venue had one plug socket for the who'
+[44/62]    svc-0034 want=act    got=act         21.2s  'The gym floor kit has not been inspected since we opened a'
+            goal: get gym floor kit inspection report
+[45/62]    svc-0050 want=act    got=act         11.5s  'The generator in the van has packed in and I have four dog'
+            goal: Arrange alternative power for dog grooming van for 8 AM, Saturday, August 22, 2026
+[46/62]    svc-0066 want=act    got=act         11.2s  'The council registration certificate has to be up on the w'
+            goal: order new council registration certificate with current address
+[47/62]    svc-0082 want=act    got=act         11.9s  'The liferaft service is out of date and we cannot sail wit'
+            goal: Arrange liferaft service for boat
+[48/62]    tep-0006 want=ignore got=ignore       5.1s  'If we ever moved off the managed cluster we would need som'
+[49/62] !! tep-0022 want=act    got=ignore       4.3s  'The accessibility audit flagged the contrast on the primar'
+[50/62] !! tep-0038 want=act    got=ignore       6.2s  'My RICS CPD hours are due by the end of December and I hav'
+            goal: research RICS CPD courses
+[51/62]    tep-0054 want=act    got=act         16.2s  'The IEP review for Tomas is overdue and his mum has asked '
+            goal: schedule IEP review for Tomas
+[52/62]    tep-0070 want=act    got=act          8.1s  'The section forty seven checks are due and the school stil'
+            goal: Chase school for section 47 checks for Alex's children
+[53/62]    tep-0086 want=act    got=act          9.1s  'My personal safety training refresher is out of date and I'
+            goal: schedule personal safety training refresher
+[54/62]    trd-0001 want=ignore got=ignore       4.1s  'The Fairfield job.'
+[55/62]    trd-0002 want=ignore got=ignore       4.0s  "Boiler's hung, gas run's in, that is about it."
+[56/62]    trd-0003 want=act    got=act         10.3s  'Nobody has ordered the flue extension kit and we are commi'
+            goal: order flue extension kit for Fairfield job
+[57/62]    trd-0004 want=ignore got=ignore       5.1s  'It is alright, I stuck it on the merchant order this morni'
+[58/62] !! trd-0032 want=act    got=ignore       5.1s  'I said I would price her the loft hatch and the trims and '
+            goal: Price loft hatch and trims for Alex
+[59/62]    trd-0048 want=ignore got=ignore       7.1s  'On the radio they were saying half of burglaries still go '
+[60/62]    trd-0064 want=act    got=act          9.1s  'The toughened units for the shopfront are three weeks out '
+            goal: expedite shopfront toughened units delivery
+[61/62]    trd-0080 want=ignore got=ignore       4.0s  'Amara has already redelivered the Sherwood parcels, they a'
+[62/62]    trd-0096 want=act    got=act         11.1s  'Nobody has signed the possession paperwork for Saturday ni'
+            goal: get possession paperwork signed for Saturday, August 22, 2026
+
+pushed 62 in 8.5 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k4/voice-3.jsonl
+  act=28  ignore=34
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

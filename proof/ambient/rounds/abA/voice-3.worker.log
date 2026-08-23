@@ -1,0 +1,33 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (gap 3212s >= 1200s) seg=up6juhqmk2dxew0
+heard: 'The trip risk assessment has to be with the head before the letters go out.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=fdgfr8mank12hmw
+heard: 'The compressor service is overdue and if it goes we close for the day.' -> ignore (research local compressor servicing options in Vancouver)
+segment: link (anaphoric/short, still inside the near band) seg=j82s5z4q3tbnu37
+heard: 'Everyone wants everything yesterday.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=8fqhji3lyeoecgq
+heard: 'Still need to sort that boiler.' -> act (research boiler repair and servicing options in Vancouver)
+segment: link (anaphoric/short, still inside the near band) seg=ydwee9nd013erhn
+heard: 'It is, it is in there, but hang on, that was done when you were about eleven.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=yz4vb5t24la6g3y
+heard: 'Actually Denise scanned the lot and emailed them Friday.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=369s6yzuze1406g
+heard: 'In the drama they had the paralegal cross examining someone, which is not a thing.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=bg8hgip4dnkwx3d
+heard: 'I should ring the fishmonger about Saturday, actually no, I will see him at the market in the morning anyway.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=619gi056sot6ggk
+heard: 'The board deck goes out Monday and the churn numbers in it are still off the old warehouse.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=ot4f5g2zuzh8ugw
+heard: 'He does the work and then argues with the mark scheme for twenty minutes.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=xjulqx54b4bqare
+heard: 'It is on the water till Thursday.' -> ignore (no goal)
+segment: append (conversation still open) seg=xjulqx54b4bqare
+heard: 'The customs entry has never been lodged and if it is not in before arrival we are paying storage.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=c8vmmmaxliswwrz
+heard: 'If we ever went all in on resin we would need a different mixer altogether.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=vgcf11ykcrfisqd
+heard: 'Nobody has signed the possession paperwork for Saturday night and it is Thursday.' -> ignore (no goal)

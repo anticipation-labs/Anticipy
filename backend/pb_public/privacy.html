@@ -3,37 +3,61 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anticipy Claude Version — Privacy</title>
-<meta name="description" content="What Anticipy Claude Version collects, why it is needed, where it goes, and how to delete it.">
+<title>Anticipy — Privacy</title>
+<meta name="description" content="What Anticipy collects, why it is needed, where it goes, and how to delete it.">
+<!-- The palette lives in one file for both public pages; it used to be copied
+     into each of them, and the copies had drifted (this page said
+     --stroke:#2b2b2b and --gray:#a09b96 where setup.html said #252525 and
+     #8A8A8A). Blocking, in <head>, so the page never paints in one theme and
+     then repaints in the other. -->
+<link rel="stylesheet" href="/site.css">
+<script src="/theme.js"></script>
 <style>
-  :root { --ink:#0c0c0c; --card:#1e1e1e; --stroke:#2b2b2b; --ivory:#f5f0eb;
-          --sand:#d4cec7; --gray:#a09b96; --champagne:#c8a97e; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--ink); color:var(--ivory);
-         font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  main { max-width:760px; margin:auto; padding:52px 20px 84px; }
-  .brand { color:var(--champagne); font-weight:650; letter-spacing:.04em; }
-  h1, h2 { font-family:Georgia, "Times New Roman", serif; font-weight:400; }
-  h1 { margin:10px 0 8px; font-size:clamp(34px, 7vw, 52px); line-height:1.08; }
-  h2 { margin:0 0 8px; font-size:23px; }
-  .lede { color:var(--sand); font-size:18px; margin:0 0 28px; }
-  .updated { color:var(--gray); font-size:14px; }
-  section { margin:16px 0; padding:22px 24px; background:var(--card);
-            border:1px solid var(--stroke); border-radius:16px; }
-  p { margin:8px 0; }
-  ul { margin:8px 0; padding-left:22px; }
-  li { margin:8px 0; }
-  strong { color:var(--sand); }
-  a { color:var(--champagne); text-underline-offset:3px; }
-  a:focus-visible { outline:2px solid var(--ivory); outline-offset:4px; }
-  .plain { border-color:rgba(200,169,126,.45); }
+  /* Page-specific only. Every colour here is a ROLE from site.css — this page
+     may not name a colour, or it stops having a light mode the moment somebody
+     adds a rule. */
+  body { font-size: 16px; line-height: 1.65; }
+  main { max-width: 760px; margin: auto; padding: 52px 20px 84px; }
+  .masthead { display: flex; align-items: center; justify-content: space-between;
+              gap: 16px; }
+  .brand { color: var(--accent); font-weight: 650; letter-spacing: .04em; }
+  h1, h2 { font-family: var(--display); font-weight: 400; }
+  h1 { margin: 10px 0 8px; font-size: clamp(34px, 7vw, 52px); line-height: 1.08;
+       letter-spacing: -1px; }
+  h2 { margin: 0 0 8px; font-size: 23px; }
+  .lede { color: var(--text-2); font-size: 18px; margin: 0 0 28px; }
+  .updated { color: var(--text-3); font-size: 14px; }
+  section { margin: 16px 0; padding: 22px 24px; background: var(--card);
+            border: 1px solid var(--edge); border-radius: 16px;
+            box-shadow: 0 1px 2px var(--shadow-near); }
+  p { margin: 8px 0; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 8px 0; }
+  strong { color: var(--text); font-weight: 600; }
+  /* Links are site.css's now. The only one on this page sits inside a
+     sentence, so it is deliberately NOT a pill: it takes the ghost's lit
+     label and keeps its underline. */
+  /* The short version is the one panel anybody reads, so it gets the only lit
+     edge on the page. */
+  .plain { border-color: var(--accent); }
 </style>
 </head>
 <body>
 <main>
-  <div class="brand">ANTICIPY CODEX VERSION</div>
+  <div class="masthead">
+    <!-- The product's name, as the manifest and every other surface say it.
+         This one line has now been the last survivor of a dead name twice: it
+         read "CODEX VERSION" while the rest of the page said Claude, and then
+         "CLAUDE VERSION" while the rest said Anticipy. It is upper-case here,
+         so a case-sensitive rename pass walks straight past it. -->
+    <div class="brand">ANTICIPY</div>
+    <button class="themetoggle" type="button" data-theme-toggle>
+      <span class="onlight"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M13.4 9.6A5.9 5.9 0 0 1 6.4 2.6a5.9 5.9 0 1 0 7 7Z"/></svg>Dark</span>
+      <span class="ondark"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="3.1" fill="currentColor"/><path stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M8 1.1v1.7M8 13.2v1.7M1.1 8h1.7M13.2 8h1.7M3.2 3.2l1.2 1.2M11.6 11.6l1.2 1.2M12.8 3.2l-1.2 1.2M4.4 11.6l-1.2 1.2"/></svg>Light</span>
+    </button>
+  </div>
   <h1>Privacy, in plain language.</h1>
-  <p class="lede">Anticipy Claude Version listens for work you want done, remembers what you tell it,
+  <p class="lede">Anticipy listens for work you want done, remembers what you tell it,
     and—only after you approve a task—can carry out that exact task in your Chrome.
     That requires personal data. This page says exactly what moves and why.</p>
   <p class="updated">Last updated August 12, 2026</p>
@@ -41,7 +65,7 @@
   <section class="plain">
     <h2>The short version</h2>
     <p>We do not sell your data, use it for advertising, track you across apps or
-      websites, or run third-party analytics. We use your data to operate Anticipy Claude Version
+      websites, or run third-party analytics. We use your data to operate Anticipy
       for you. You can ask us to delete the server copy at any time.</p>
   </section>
 
@@ -49,13 +73,13 @@
     <h2>What the iPhone app handles</h2>
     <ul>
       <li><strong>Your account and profile:</strong> email, phone number, name,
-        birthday if you add it, timezone, and facts you choose to tell Anticipy Claude Version.</li>
-      <li><strong>What Anticipy Claude Version hears:</strong> the finalized text transcript is sent
-        to Anticipy Claude Version's backend. When on-device speech recognition is available, raw
+        birthday if you add it, timezone, and facts you choose to tell Anticipy.</li>
+      <li><strong>What Anticipy hears:</strong> the finalized text transcript is sent
+        to Anticipy's backend. When on-device speech recognition is available, raw
         microphone audio stays on the phone. Otherwise iOS may send audio to Apple's
         speech-recognition service to produce that text. If you use an Anticipy pendant,
         its Opus audio is sent to Deepgram for live transcription; the finalized text
-        then follows the same Anticipy Claude Version backend path.</li>
+        then follows the same Anticipy backend path.</li>
       <li><strong>Work and memory:</strong> requests, approvals, task state, results,
         and the text memories needed to answer later questions.</li>
     </ul>
@@ -66,7 +90,7 @@
     <ul>
       <li><strong>Pairing and liveness:</strong> a private browser identity, extension
         version, browser user-agent, pairing state, and last-seen time go to the
-        Anticipy Claude Version backend.</li>
+        Anticipy backend.</li>
       <li><strong>During an approved task:</strong> the task goal, a structured map of
         the working page, and a downscaled screenshot are sent to OpenRouter so the
         selected model can choose the next browser action. Profile facts such as your
@@ -83,30 +107,30 @@
   <section>
     <h2>Services that process the data</h2>
     <ul>
-      <li><strong>Railway</strong> hosts Anticipy Claude Version's backend and encrypted service
+      <li><strong>Railway</strong> hosts Anticipy's backend and encrypted service
         configuration.</li>
       <li><strong>OpenRouter and the selected AI model provider</strong> process the
         task context, page map, screenshots, and relevant profile facts needed to
         reason about a task.</li>
-      <li><strong>Twilio</strong> carries text messages between Anticipy Claude Version and your phone.</li>
+      <li><strong>Twilio</strong> carries text messages between Anticipy and your phone.</li>
       <li><strong>Apple speech recognition</strong> may process microphone audio only
         when this iPhone cannot perform the recognition on-device.</li>
       <li><strong>Deepgram</strong> processes live audio from a paired Anticipy pendant
         to produce transcript text. The app receives a short-lived access token; the
-        long-lived Deepgram key remains on Anticipy Claude Version's backend.</li>
+        long-lived Deepgram key remains on Anticipy's backend.</li>
     </ul>
-    <p>These processors receive data only to deliver their part of Anticipy Claude Version. Their own
+    <p>These processors receive data only to deliver their part of Anticipy. Their own
       retention and security terms also apply to the data they process.</p>
   </section>
 
   <section>
     <h2>How long it stays</h2>
     <p>Account, transcript, memory, agent, job, and receipt records remain in the
-      Anticipy Claude Version backend while your account is active so the product can remember,
+      Anticipy backend while your account is active so the product can remember,
       recover, and prove what happened. The extension's local data remains until it is
       cleared or the extension is removed. There is not yet an automatic expiry for
       these records.</p>
-    <p>When you request deletion, we delete the data Anticipy Claude Version controls from the active
+    <p>When you request deletion, we delete the data Anticipy controls from the active
       backend and disconnect paired browser agents. Provider copies and security
       backups may take additional time to expire under the provider's retention rules.</p>
   </section>
@@ -114,19 +138,19 @@
   <section>
     <h2>Your choices</h2>
     <ul>
-      <li>Turn listening off whenever you do not want Anticipy Claude Version to hear.</li>
-      <li>Do not approve a browser task; Anticipy Claude Version will not start it.</li>
+      <li>Turn listening off whenever you do not want Anticipy to hear.</li>
+      <li>Do not approve a browser task; Anticipy will not start it.</li>
       <li>Use <strong>Forget me on this phone</strong> to clear local app identity and
         unsent text. That does not by itself delete the server copy.</li>
-      <li>Email us to access, correct, or delete the data Anticipy Claude Version controls.</li>
+      <li>Email us to access, correct, or delete the data Anticipy controls.</li>
     </ul>
   </section>
 
   <section>
     <h2>Contact and deletion</h2>
-    <p>Email <a href="mailto:hello@anticipationlabs.com?subject=Anticipy%20Codex%20Version%20privacy%20request">hello@anticipationlabs.com</a>.
-      For deletion, use the subject <strong>Anticipy Claude Version — please delete my data</strong>
-      and include the Anticipy Claude Version ID shown in the app's Settings screen. We will confirm
+    <p>Email <a href="mailto:hello@anticipationlabs.com?subject=Anticipy%20privacy%20request">hello@anticipationlabs.com</a>.
+      For deletion, use the subject <strong>Anticipy — please delete my data</strong>
+      and include the Anticipy ID shown in the app's Settings screen. We will confirm
       receipt and write back when the deletion is complete.</p>
   </section>
 </main>

@@ -1,0 +1,10 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+welcomed new owner …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (nothing to link to) seg=oh62365gamoguaf
+heard: 'Oh no, the VAT return is due on the seventh and I have not touched the card statements.' -> act (prepare card statements for VAT return due on the 7th)
+segment: escalate (substantive, no overlap, but recent) seg=oj3zzqxu0t8w46h
+heard: 'My revalidation is due and I have not logged a single hour of CPD.' -> act (set up CPD logging for upcoming revalidation)

@@ -1,0 +1,157 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9c841543825e
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: append (conversation still open) seg=v4wwrpvfll65x6v
+heard: 'These agency shifts pay more than I do and I am the one holding the ward together.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=kgr9ibvjvti6nxt
+heard: 'That loft conversion was a nightmare, never again.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=kmy76tirjhk6nfr
+heard: 'Table six sent it back twice.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=nmtoqkqh3coe965
+heard: 'Bowls was cancelled, wet green.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=k3h40caesgjaeag
+heard: 'I am nearly out of the six point six tint and Saturday is packed.' -> act (order 6.6 tint)
+heard: 'The SOC 2 evidence collection is due next month and nobody owns it.' -> that is her own message read back, ignoring
+segment: escalate (substantive, no overlap, but recent) seg=cxqmqqf5zzpk7up
+heard: 'The fencing on the top field is going to let them straight through.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=9bk32oon6vi4ihg
+heard: 'The single person council tax discount never got applied.' -> act (apply single person council tax discount)
+segment: escalate (substantive, no overlap, but recent) seg=s87iu1tcql55e2d
+heard: 'We need to do something about the car, it is costing more than it is worth.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=h14rzvzoh07zmre
+heard: 'The NHS claim submission window closes on the fifth.' -> act (Submit NHS claim by August 5, 2026)
+segment: link (shares a name with the previous conversation) seg=dzuvh7oathgzqh1
+heard: 'The PRS return has not been done for the last two quarters.' -> act (file PRS return for last two quarters)
+segment: link (anaphoric/short, still inside the near band) seg=rtye8a9qja93txx
+heard: 'Oh brilliant, that is one less thing.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=2041lbqwxepqjro
+heard: 'I hate this time of year.' -> ignore (no goal)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=chc8fga6ry0kubk
+heard: 'Postcode is C V three, seven, R B.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=4pm5mt6v3zedqul
+heard: 'I am booking the restaurant for Saturday, so do not double up.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=bdiy8658wevhg7e
+heard: 'I sent it over first thing so that one is off my list.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=fiox1rq2x1mwh7u
+heard: 'Did anyone actually reply to that thread?' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=t1kn82jn3gqnvn9
+heard: 'What was the name of that place.' -> ignore (no goal)
+segment: append (conversation still open) seg=t1kn82jn3gqnvn9
+heard: 'The one with the courtyard, off the high street.' -> ignore (no goal)
+segment: append (conversation still open) seg=t1kn82jn3gqnvn9
+heard: 'We should get a table there before it gets busy again.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=idqtocpb9y2e2av
+heard: 'Honestly, I keep meaning to ring the dentist and it has been, what, two years now.' -> act (book dentist appointment)
+segment: escalate (substantive, no overlap, but recent) seg=l5grzotouze95bk
+heard: 'I promised Mum I would sort her online banking and I keep saying next weekend.' -> act (Schedule time to help Mum with online banking)
+segment: escalate (substantive, no overlap, but recent) seg=btz012nl6is7caw
+heard: 'There is a message sat on my universal credit journal and I keep swiping it away.' -> ignore (check Universal Credit journal for message)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=v7fdribodaq499o
+heard: "My brother's fortieth is the same weekend as the wedding and I have promised both." -> ignore (no goal)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=kaycy0e1b6wggvd
+heard: 'the repeat script the pharmacy I have got like two days left of the of the tablets' -> act (request prescription refill for tablets)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=5l0j0i2xu4fwrmo
+heard: 'Coming up after the break, how to slash your energy bill in five easy steps.' -> ignore (no goal)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+profile identity seed failed (harmless): HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+echo check failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: failed (could not open a segment) seg=-
+heard: 'We used to go to that caravan place every August, the one with the awful shower block.' -> ignore (no goal)
+segment: failed (could not open a segment) seg=-
+heard: 'I have lost track of when the inspection window opens this year.' -> ignore (Find out when the inspection window opens this year for the caravan place)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+queue write never reached the backend for 'add new van to fleet policy': ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=d6niru7inlzc6ez
+heard: 'Karen said she would put the new van on the fleet policy but she left in March.' -> ignore (add new van to fleet policy)
+segment: escalate (substantive, no overlap, but recent) seg=4k4gycvepkbme8h
+heard: 'the the payment message the em tea one oh three whatever it is called' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=npndshc7yglklhg
+heard: 'The variation to the cleaning contract got agreed on a call and never written up.' -> act (Draft variation to cleaning contract)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=8h4onja8gmva08a
+heard: 'Has he actually signed the expenses or is it still in his tray?' -> ignore (no goal)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: append (gap 0s < 45s) seg=4nhe5fps32g0814
+heard: 'Revalidation.' -> ignore (no goal)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: append (conversation still open) seg=4nhe5fps32g0814
+heard: 'Is that five years since the last one or four, I genuinely cannot remember.' -> ignore (no goal)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: append (conversation still open) seg=4nhe5fps32g0814
+heard: 'Either way my CPD hours are nowhere near what they want and the appraisal is booked for October.' -> ignore (research CPD requirements for revalidation)
+segment: append (conversation still open) seg=4nhe5fps32g0814
+heard: 'And the indemnity cover has still got the old scope of practice on it.' -> act (update indemnity cover scope of practice)
+segment: escalate (substantive, no overlap, but recent) seg=9tt1gt1x4n7azjh
+heard: 'The agency shifts need indemnity cover sorting and I do not know if their policy covers me or if I need my own.' -> ignore (Research indemnity cover for agency shifts)
+segment: link (shares a name with the previous conversation) seg=r085u2w2swc4c27
+heard: 'The wholesaler has put the sertraline on quota again.' -> ignore (no goal)
+segment: append (conversation still open) seg=r085u2w2swc4c27
+heard: 'Third month running, that is.' -> ignore (no goal)
+segment: append (conversation still open) seg=r085u2w2swc4c27
+heard: 'I will have to find another supplier before Monday or half the repeats bounce.' -> act (Find new sertraline supplier by Monday, August 24, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=i080wxrm9jkuk3m
+heard: 'Have you actually got round to your own registration renewal yet?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=87llk05jy69j6xv
+heard: 'I signed the mortality review off on Monday, that one is closed.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ylnhbue1j85fot8
+heard: 'The GOC retention fee closes on the fifteenth and after that it is a restoration application.' -> ignore (check GOC retention fee deadline and restoration application process)
+segment: link (shares a name with the previous conversation) seg=veivzllpqsofeo3
+heard: 'The sponsor licence annual return is open and the key personnel list still has Tom on it.' -> act (remove Tom from sponsor licence annual return key personnel list)
+segment: escalate (substantive, no overlap, but recent) seg=7xihi6vkpv0xpe1
+heard: 'the the land reg the land registry requisition the uh' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=zbqea122z4d4b0e
+heard: 'The deep clean has to happen before the food hygiene rating re-inspection, though I have not settled whether we close a whole day or do it overnight.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=9fqn7ewtbc41bjk
+heard: 'The corkage the hotel wants is twenty a bottle and the Prentice family have not been told.' -> act (inform Prentice family of $20/bottle corkage fee)
+segment: escalate (substantive, no overlap, but recent) seg=osd5sbfvjeqbdy8
+heard: 'I promised Nadia a twelve week plan on paper and it is still entirely in my head.' -> act (draft 12-week plan for Nadia)
+segment: escalate (substantive, no overlap, but recent) seg=qvz00b0nd09347v
+heard: 'The drainage on the runs is being done, the groundworks lad started this morning.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=4t3zwwsvf90g2lz
+heard: 'Are these the ones you meant, the cream, or were you after the blush?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=fm4f3lpodjolj63
+heard: 'The duty return is due and I have not counted what is actually left in tank.' -> act (count remaining tank inventory for duty return)
+segment: escalate (substantive, no overlap, but recent) seg=ry5lioyl85vd2tw
+heard: 'I want the churn model retrained before the board see it, only I cannot remember which snapshot they signed off on.' -> ignore (Find which snapshot of the churn model the board signed off on)
+segment: escalate (substantive, no overlap, but recent) seg=totx1dm6iz6oh0w
+heard: 'The calibration certificate on the torque wrenches has run out and there is a witnessed test Monday.' -> act (schedule torque wrench calibration before Monday, August 24, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=6ajj0tn1qd3vgz8
+heard: 'I need the committee report on the agenda but I cannot remember if the chair wanted it in July or September.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=kazo3tlvxdnq5xf
+heard: 'He does the work and then argues with the mark scheme for twenty minutes.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=qs9kes14ew6ir1q
+heard: 'The consultation response window shuts on the ninth and our submission is still a bullet list.' -> act (draft consultation response from bullet list)
+segment: escalate (substantive, no overlap, but recent) seg=a73y1y819m2ms0d
+heard: 'Did I ever send you the range booking? No, I did not, it is still sat in my drafts.' -> act (send range booking to Alex)
+segment: escalate (substantive, no overlap, but recent) seg=v2bxg8mpz1tyxs3
+heard: 'Twenty two squares of slate and half of them come off the pallet broken.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=q008cpy8teyhzae
+heard: 'Every job this month has been mud, absolute mud, start to finish.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=5xv6872ofpalzmt
+heard: 'I want the vinyl welding course booked for the two lads but I do not know which week they are both off site.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ein5pxqc2mbt99i
+heard: 'I want the agency lads inducted before peak, though I have not settled how many shifts we are running.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=8y7z2wn0zbk0e4c
+heard: 'De-icer stocks. One bowser for the whole apron and it is forecast minus four.' -> act (check de-icer stock levels and order more if insufficient for forecast minus four)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)

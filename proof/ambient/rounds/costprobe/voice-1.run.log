@@ -1,0 +1,38 @@
+pb        http://127.0.0.1:8090
+owner_ref scrhkcffjglfkbq
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759,65282 up since 01:04:10, newer than every file in brain/
+corpus    5 utterances, 0 already done, 5 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/5] !! amb-0001 want=act    got=ignore      31.2s  'Oh my goodness, I forgot to cook for my kids this afternoo'
+            goal: find food delivery or quick meal options for the kids this afternoon
+[2/5] !! amb-0010 want=act    got=ignore      12.4s  'The appraisal portfolio deadline is creeping up on me agai'
+pb        http://127.0.0.1:8090
+owner_ref scrhkcffjglfkbq
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,32751,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    5 utterances, 0 already done, 5 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/5] !! amb-0001 want=act    got=ignore      17.2s  'Oh my goodness, I forgot to cook for my kids this afternoo'
+            goal: Research meal delivery options for the kids for this afternoon
+[3/5]    amb-0019 want=act    got=act         25.2s  'I keep putting off sending the rig two vibration data to t'
+            goal: draft email sending rig two vibration data to the bearing supplier
+[2/5] !! amb-0010 want=act    got=ignore      12.1s  'The appraisal portfolio deadline is creeping up on me agai'
+[4/5]    amb-0028 want=act    got=act         18.2s  "The van's MOT is end of the month and I have not rung anyo"
+            goal: find local garages to book van MOT before end of August
+[3/5] !! amb-0019 want=act    got=ignore      13.1s  'I keep putting off sending the rig two vibration data to t'
+            goal: draft email sending rig two vibration data to bearing supplier
+[5/5] !! amb-0037 want=act    got=ignore      10.1s  'My digital tacho card runs out in about six weeks.'
+            goal: research digital tachograph card renewal process and prepare application
+
+pushed 5 in 1.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-1.jsonl
+  act=2  ignore=3
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[4/5] !! amb-0028 want=act    got=ignore      12.1s  "The van's MOT is end of the month and I have not rung anyo"
+            goal: Find MOT test booking options for the van before end of August 2026
+[5/5] !! amb-0037 want=act    got=ignore       9.0s  'My digital tacho card runs out in about six weeks.'
+            goal: research digital tachograph card renewal process and deadlines
+
+pushed 5 in 1.1 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-1.jsonl
+  ignore=5
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

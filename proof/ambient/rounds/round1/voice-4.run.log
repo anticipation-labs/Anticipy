@@ -1,0 +1,145 @@
+REFUSING TO RUN against 'https://backend-production-61e0a.up.railway.app'. This harness posts hundreds of transcript events and mints jobs; the only place that is safe is the local rig.
+pb        http://127.0.0.1:8090
+owner_ref nm28bp0p7dj06ot
+brain     worker: pid 13937,29784,29785,29786,29787,29788,29790,29792,29793,29861,29863,29864 up since 20:51:24, newer than every file in brain/
+corpus    125 utterances, 0 already done, 125 to push
+pacing    gap=0.5s  timeout=240.0s  virtual convo gap=50.0s
+[1/125]    amb-0003 want=act    got=act         29.1s  'I keep meaning to re-run the retirement projection on the '
+            goal: re-run retirement projection on Alvarez file
+[2/125] !! amb-0011 want=act    got=ignore      10.0s  'My revalidation is due and I have not logged a single hour'
+[3/125]    amb-0019 want=act    got=act         37.2s  'I keep putting off sending the rig two vibration data to t'
+            goal: Draft email sending rig two vibration data to the bearing supplier
+[4/125] !! amb-0027 want=act    got=ignore      13.1s  'I am going to run out of twenty two mil compression fittin'
+            goal: find 22mm compression fittings suppliers before Thursday's job
+[5/125] !! amb-0035 want=act    got=ignore      16.1s  'The rota for next week still is not up and everyone keeps '
+[6/125]    amb-0043 want=act    got=act         37.2s  'We are catering forty on Saturday and the fish order is st'
+            goal: follow up and confirm fish order for Saturday catering of forty
+[7/125]    amb-0051 want=act    got=act         39.2s  'The FOI response deadline is twenty working days and we ar'
+            goal: track FOI response due in two working days
+[8/125] !! amb-0059 want=act    got=ignore      12.1s  'My prescription is down to two days and the pharmacy shut '
+            goal: find pharmacy hours and options to refill prescription in Vancouver
+[9/125]    amb-0067 want=act    got=act         37.2s  'The practice controlled drugs register audit is overdue by'
+            goal: remind Alex about overdue controlled drugs register audit
+[10/125] !! amb-0075 want=act    got=ignore      14.1s  'My medical certificate lapses in November and the AME book'
+            goal: research AME appointment availability in Vancouver before November 2026
+[11/125]    amb-0083 want=act    got=act         51.3s  'The flu jab rota needs sorting before October and nobody h'
+            goal: organize flu jab rota schedule before October
+[12/125] !! amb-0091 want=act    got=ignore      13.1s  'The pressure vessel inspection is due and the paperwork is'
+            goal: search emails and records for pressure vessel inspection paperwork
+[13/125]    amb-0099 want=act    got=act         30.8s  'The customer in Beeston still has not paid the deposit inv'
+            goal: draft payment reminder for Beeston customer deposit invoice
+[14/125]    amb-0107 want=act    got=act         41.1s  'I have not claimed the night out expenses for two months.'
+            goal: draft expense claim for night out expenses from the past two months
+[15/125] !! amb-0115 want=act    got=ignore      20.1s  'The complaints return has to be filed and the spreadsheet '
+[16/125]    amb-0123 want=act    got=act         31.2s  'His inhaler is nearly empty and school need a spare one.'
+            goal: request inhaler refill for school spare
+[17/125]    amb-0131 want=act    got=act         33.2s  'The smoke alarm has been chirping for a week now.'
+            goal: Order replacement smoke alarm batteries
+[18/125] !! amb-0139 want=act    got=ignore      13.1s  'The recycling calendar changed and we keep missing the col'
+            goal: look up updated Vancouver recycling collection schedule
+[19/125] !! amb-0147 want=act    got=ignore      16.1s  'The FOI I put in back in June has had no response at all.'
+[20/125] !! amb-0155 want=act    got=ignore      13.1s  'My proficiency check is due and the examiner is booked out'
+[21/125] !! amb-0163 want=act    got=ignore      14.1s  'The planning submission needs the daylight study and nobod'
+            goal: research daylight study providers for planning submission
+[22/125] !! amb-0171 want=act    got=ignore      13.1s  'Two of the room leaders need their paediatric first aid re'
+            goal: research paediatric first aid recertification courses in Vancouver
+[23/125]    amb-0179 want=ignore got=ignore       6.1s  'Morning, you alright?'
+[24/125]    amb-0187 want=ignore got=ignore       7.2s  'That is a good shout, actually.'
+[25/125]    amb-0195 want=ignore got=ignore      11.8s  'At this rate the dog is running the household.'
+[26/125]    amb-0203 want=ignore got=ignore      25.3s  'Whoever designed this parking system needs a word with the'
+[27/125]    amb-0211 want=ignore got=ignore      29.3s  'I do not know, I might, I might not.'
+[28/125]    amb-0219 want=ignore got=ignore      38.9s  'Invoice number four four seven two, amount one thousand tw'
+[29/125]    amb-0227 want=ignore got=ignore      15.3s  'Buy one get one free this weekend only at your local store'
+[30/125]    amb-0235 want=ignore got=ignore      12.5s  'Leave the bins with me, I am up early anyway.'
+[31/125]    amb-0243 want=ignore got=ignore       9.2s  'If we ever go to Lisbon I would want to do it properly, a '
+[32/125]    amb-0251 want=ignore got=ignore       8.1s  'That is paid, it went out Friday.'
+[33/125]    amb-0259 want=ignore got=ignore       7.0s  'Okay cool.'
+[34/125]    amb-0267 want=ignore got=ignore       6.0s  'Are you eating with us or are you out?'
+[35/125]    amb-0275 want=ignore got=ignore       7.0s  'okay so um right so basically the thing is'
+[36/125]    amb-0283 want=ignore got=ignore       8.0s  "That is on next week's agenda so it will get picked up."
+[37/125] !! amb-0284 want=ignore got=act         36.2s  'I should call the clinic.'
+            goal: remind owner to call the clinic
+[38/125] !! amb-0285 want=act    got=ignore      20.2s  'About the results, I mean, they said a week and it has bee'
+            goal: remind owner to call clinic regarding overdue test results
+[39/125]    amb-0301 want=ignore got=ignore      15.3s  "The car's MOT runs out next week."
+            goal: research MOT test booking options for car before next week
+[40/125] !! amb-0302 want=ignore got=act         47.6s  'Do not worry about it, I will book it in on my way home.'
+            goal: prepare car MOT booking for Coal Harbour location
+[41/125] !! per-0008 want=act    got=ignore      13.6s  'We are on the standard variable thing now, which is the mo'
+[42/125] !! per-0016 want=act    got=ignore      45.1s  'That coat I ordered for Ellie is the wrong size and the re'
+            goal: Check order and return process for Ellie's coat
+[43/125] !! per-0024 want=act    got=ignore      11.7s  'The gas meter reading is estimated again so the bill is ba'
+[44/125] !! per-0032 want=act    got=ignore      34.7s  'The boy needs new boots for football, his toes are through'
+            goal: research youth football boots options
+[45/125]    per-0040 want=act    got=act         50.9s  'The mattress people never turned up on Saturday and nobody'
+            goal: Follow up on the missed mattress delivery from Saturday
+[46/125] !! per-0048 want=act    got=ignore      18.6s  'I have not registered to vote since we moved, not at the n'
+            goal: research voter registration update steps for new address in Vancouver
+[47/125] !! per-0056 want=ask    got=ignore      12.3s  'The garage can do Tuesday or Thursday for the MOT and I ge'
+            goal: check calendar availability for Tuesday August 25 and Thursday August 27 2026 for garage MOT
+[48/125] !! per-0064 want=ask    got=ignore      13.4s  'I can put the notice in the local paper but I have not bee'
+[49/125]    per-0072 want=ignore got=ignore      10.2s  'If I did get made redundant I suppose I would have to look'
+[50/125]    per-0080 want=ignore got=ignore       9.1s  "Are we still doing your mum's on Sunday or has that change"
+[51/125]    per-0088 want=ignore got=ignore       9.1s  'the the with the thing on Thursday for the'
+[52/125]    per-0096 want=ignore got=ignore       9.0s  'The energy switch is going through, they reckon fourteen d'
+[53/125]    per-0118 want=ignore got=ignore      12.1s  'What time is it, half four?'
+[54/125] !! per-0119 want=act    got=ignore      15.1s  'Oh no. I said I would do them a proper tea tonight and the'
+            goal: find grocery delivery or quick dinner takeout options for tonight
+[55/125]    per-0120 want=ignore got=ignore      15.1s  'And she will not touch anything with sauce on, which leave'
+            goal: find dinner or takeout options without sauce for tonight
+[56/125]    fin-0001 want=act    got=act         29.1s  'The revolving facility renews in October and I have not as'
+            goal: draft request to bank for indicative terms on revolving facility renewing in October
+[57/125] !! fin-0009 want=act    got=ignore      14.1s  'I have got a supplier with no W-9 on file and I am issuing'
+[58/125] !! fin-0017 want=act    got=ignore      19.1s  'The VAT itself got paid, it is the penalty notice I have n'
+[59/125] !! fin-0025 want=act    got=ignore      13.1s  'The PI cover renewal came back nine hundred up on last yea'
+[60/125] !! fin-0033 want=act    got=ignore      35.1s  'The listing photographs for Ashworth Terrace are not booke'
+            goal: find availability for listing photography for Ashworth Terrace before Monday August 24, 2026
+[61/125] !! fin-0041 want=act    got=ignore      38.8s  'The nostro break from Tuesday is still open and it gets re'
+[62/125] !! fin-0049 want=act    got=ignore      18.0s  'The side letter for the Halberd round has not been counter'
+[63/125] !! fin-0057 want=ask    got=ignore      11.9s  'We are nearly out of the heavy copier paper and I cannot r'
+[64/125] !! fin-0065 want=act    got=ignore      13.4s  'The salary sacrifice change for one of the team never got '
+[65/125] !! fin-0073 want=act    got=ignore      22.9s  'The board dinner is on the twelfth and nobody has held a t'
+            goal: research restaurant options for board dinner on September 12
+[66/125] !! fin-0081 want=act    got=ignore      22.2s  'We never filed the Delaware franchise tax and it was due i'
+            goal: research filing overdue Delaware franchise tax
+[67/125] !! med-0005 want=ask    got=act         63.8s  "I want the prior authorisation in for Mrs Ferreira's biolo"
+            goal: find Mrs Ferreira's current insurer and prepare biologic prior authorization before Friday August 21
+[68/125]    med-0016 want=act    got=act         48.4s  'The controlled drug register has not been reconciled since'
+            goal: remind Alex to reconcile the controlled drug register
+[69/125] !! med-0027 want=act    got=ignore      10.5s  'The public liability and the professional indemnity renew '
+[70/125] !! med-0035 want=ask    got=ignore      12.2s  'The indemnity cover needs extending to online sessions and'
+[71/125]    med-0043 want=act    got=act         27.9s  'The appraisal wants patient feedback and I have not sent a'
+            goal: draft patient feedback questionnaire for appraisal
+[72/125]    med-0051 want=act    got=act         40.1s  'The inspection action plan response is due in ten days and'
+            goal: set reminder for inspection action plan response due August 30 2026
+[73/125]    med-0059 want=ignore got=ignore      10.4s  'The homebirth guideline update went out to the whole team '
+[74/125]    med-0071 want=act    got=act         37.7s  'The limitation period on the Okafor injury claim runs out '
+            goal: draft medical records request for Okafor injury claim
+[75/125]    med-0079 want=ignore got=ignore       8.1s  'If we ever took on volume work for the shipping firms we w'
+[76/125] !! med-0090 want=ask    got=ignore      16.7s  'I ought to get the mediation information session booked fo'
+            goal: research legal aid qualification for Whitmore mediation information session
+[77/125]    med-0098 want=act    got=act         38.1s  'The search fees on the Meadow Lane file were never billed '
+            goal: bill search fees on Meadow Lane file to client
+[78/125]    med-0106 want=act    got=act         40.4s  'The listing for the Sandhu committal has not been notified'
+            goal: draft notice of listing to parties for Sandhu committal hearing on Tuesday, August 25, 2026
+[79/125] !! svc-0004 want=act    got=error        6.1s  'The chiller on aisle four has been running two degrees war'
+[80/125] !! svc-0012 want=act    got=error        2.0s  'The grinder burrs are shot, the shots are pulling in eleve'
+[81/125] !! svc-0020 want=ask    got=error        2.0s  'I want the run of show over to the venue, I have just not '
+[82/125] !! svc-0028 want=ignore got=error        3.0s  'You alright waiting twenty minutes or do you want to come '
+[83/125] !! svc-0036 want=ignore got=error        2.0s  'You do not need to sort the bootcamp permit, Deano has alr'
+[84/125] !! svc-0044 want=ignore got=error        2.0s  'Mum, can I have the tablet when we get in?'
+[85/125] !! svc-0052 want=act    got=error        2.1s  'We are out of the hypoallergenic shampoo and down to two p'
+[86/125] !! svc-0060 want=act    got=error        3.0s  'Exam entries close on the twelfth and I have got three pup'
+[87/125] !! svc-0068 want=act    got=error        2.0s  'The Dutch order has to be in by ten tonight or the funeral'
+[88/125] !! svc-0076 want=act    got=error        3.1s  'The slurry store inspection paperwork has to be in before '
+[89/125] !! svc-0084 want=ask    got=error        2.0s  'The bottling line is booked for the fourteenth and I have '
+[90/125] !! svc-0092 want=act    got=error        2.0s  'The Bergen group have still not had their final invoice of'
+[91/125] !! svc-0093 want=ignore got=error        2.0s  'Chef, table eleven are asking if the risotto can be done w'
+[92/125] !! svc-0094 want=act    got=error        3.0s  'That is the second parmesan one tonight and the risotto is'
+[93/125] !! svc-0095 want=ignore got=error        2.0s  'Leave the matrix, Sami said he would type the new dishes u'
+[94/125] !! svc-0096 want=act    got=error        2.0s  'And I still have not put the fridge temperatures in the bo'
+[95/125] !! tep-0008 want=act    got=error        3.0s  'The board deck goes out Monday and the churn numbers in it'
+[96/125] !! tep-0016 want=ignore got=error        2.0s  'Sprint carryover. Again.'
+[97/125] !! tep-0024 want=ignore got=error        3.0s  'Every temporary works drawing on this job comes back with '
+[98/125] !! tep-0032 want=act    got=error        2.0s  'The COSHH assessment for the new solvent is not written an'
+[99/125] !! tep-0040 want=act    got=error        3.0s  'The highways consultation response is late and the determi'

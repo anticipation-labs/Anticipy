@@ -1,0 +1,34 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=f5068bf4e1d3
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+clock: reminder has no owner-authored task — dropping model goal 'plan dinner for tonight'
+clock: initiated -> 'Hey, just a quick check on dinner tonight. Did you have a chance to book anything?'
+segment: new (gap 26248s >= 1200s) seg=4rolhvu5qdk2b0p
+heard: 'I keep meaning to re-run the retirement projection on the Alvarez file before we meet.' -> ignore (re-run retirement projection on Alvarez file)
+segment: link (anaphoric/short, still inside the near band) seg=o0pgl79sqguhuco
+heard: 'Rain is not letting up at all.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=yveua4csoh9s8wd
+heard: 'My F gas certificate expires in the spring.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=8xv7ipgsqriksfm
+heard: 'The court warning for Thursday lands on my rest day.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=hg8sfd4c5crfne1
+heard: 'I sometimes think about packing it all in and doing something with my hands.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=1wbnbot5pts7ezf
+heard: 'We should do dinner out Friday, somewhere decent for once.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=0ps44xsqgb3t2xs
+heard: 'the trellis the trellis file letter i need that out before before friday' -> act (Send "trellis file letter" email)
+segment: escalate (substantive, no overlap, but recent) seg=utnxv2132e32gic
+heard: 'Did the offer letter ever go out to the Bhatt candidate?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=e63dh6v245e35ek
+heard: 'The bad character application went in on Thursday, that is off my list.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=82wuu4kgtkt08mf
+heard: 'I want the run of show over to the venue, I have just not decided whether the speeches sit before or after dinner.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=u59201t9n3e17x9
+heard: 'Do not worry about the printer, Yusuf has already logged it with the vendor.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=s8x8opabsak38yw
+heard: 'I want the reading group posters up this week but I have no idea which of the two dates we settled on.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=7gd81225ses9906
+heard: 'The gate will not let the two labourers on Monday, both their cards are out of date.' -> ignore (no goal)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)

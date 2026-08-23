@@ -1,0 +1,667 @@
+{
+ "utterances_in_corpus": 320,
+ "answered": 319,
+ "unanswered": 1,
+ "behaviour_accuracy": 69.9,
+ "decision_accuracy": 56.1,
+ "false_pings": 5,
+ "false_ping_rate_of_ignores": 3.4,
+ "misses": 88,
+ "miss_rate_of_work": 50.9,
+ "caught_quietly": 44,
+ "caught_loudly": 41,
+ "quiet_drift": 2,
+ "asked_when_told_to_ask": 3,
+ "assumed_instead_of_asking": 3,
+ "weighted_cost": 113,
+ "weighted_cost_note": "one false ping counted as 5 misses",
+ "hard_accuracy": 97.0,
+ "easy_accuracy": 62.7,
+ "conversations_needing_work": 9,
+ "conversations_dropped": 2,
+ "dropped_conversation_ids": [
+  "c03",
+  "c04"
+ ],
+ "by_field": {
+  "accounting": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "architecture": {
+   "n": 2,
+   "scored": 2,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "aviation": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "carpentry": {
+   "n": 3,
+   "scored": 3,
+   "right": 1,
+   "accuracy": 33.3
+  },
+  "charity": {
+   "n": 3,
+   "scored": 3,
+   "right": 1,
+   "accuracy": 33.3
+  },
+  "civil_engineering": {
+   "n": 6,
+   "scored": 6,
+   "right": 3,
+   "accuracy": 50.0
+  },
+  "cleaning": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "dentistry": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "electrical": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "emergency_services": {
+   "n": 2,
+   "scored": 2,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "farming": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "finance": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "fitness": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "food_production": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "government_admin": {
+   "n": 4,
+   "scored": 4,
+   "right": 1,
+   "accuracy": 25.0
+  },
+  "hairdressing": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "hospitality": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "hotel_management": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "hvac": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "insurance": {
+   "n": 4,
+   "scored": 4,
+   "right": 1,
+   "accuracy": 25.0
+  },
+  "journalism": {
+   "n": 4,
+   "scored": 4,
+   "right": 2,
+   "accuracy": 50.0
+  },
+  "law": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "logistics_trucking": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "marketing": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "mechanical_engineering": {
+   "n": 4,
+   "scored": 4,
+   "right": 2,
+   "accuracy": 50.0
+  },
+  "medicine": {
+   "n": 5,
+   "scored": 5,
+   "right": 2,
+   "accuracy": 40.0
+  },
+  "music": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "none": {
+   "n": 158,
+   "scored": 158,
+   "right": 139,
+   "accuracy": 88.0
+  },
+  "nursery": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "nursing": {
+   "n": 5,
+   "scored": 5,
+   "right": 2,
+   "accuracy": 40.0
+  },
+  "parent": {
+   "n": 10,
+   "scored": 10,
+   "right": 7,
+   "accuracy": 70.0
+  },
+  "pharmacy": {
+   "n": 3,
+   "scored": 3,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "photography": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "plumbing": {
+   "n": 7,
+   "scored": 7,
+   "right": 4,
+   "accuracy": 57.1
+  },
+  "real_estate": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "recruitment": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "retail": {
+   "n": 5,
+   "scored": 5,
+   "right": 2,
+   "accuracy": 40.0
+  },
+  "retiree": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "security": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "social_work": {
+   "n": 3,
+   "scored": 3,
+   "right": 1,
+   "accuracy": 33.3
+  },
+  "software_engineering": {
+   "n": 6,
+   "scored": 6,
+   "right": 3,
+   "accuracy": 50.0
+  },
+  "student": {
+   "n": 6,
+   "scored": 6,
+   "right": 4,
+   "accuracy": 66.7
+  },
+  "teaching": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "translation": {
+   "n": 1,
+   "scored": 1,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "veterinary": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  }
+ },
+ "by_family": {
+  "admin": {
+   "n": 6,
+   "scored": 6,
+   "right": 2,
+   "accuracy": 33.3
+  },
+  "childcare": {
+   "n": 3,
+   "scored": 3,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "communication": {
+   "n": 13,
+   "scored": 13,
+   "right": 10,
+   "accuracy": 76.9
+  },
+  "compliance": {
+   "n": 51,
+   "scored": 51,
+   "right": 22,
+   "accuracy": 43.1
+  },
+  "education": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "finance_admin": {
+   "n": 21,
+   "scored": 21,
+   "right": 11,
+   "accuracy": 52.4
+  },
+  "food": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "gifts": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "health_admin": {
+   "n": 6,
+   "scored": 6,
+   "right": 3,
+   "accuracy": 50.0
+  },
+  "home_maintenance": {
+   "n": 9,
+   "scored": 9,
+   "right": 5,
+   "accuracy": 55.6
+  },
+  "pets": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "procurement": {
+   "n": 12,
+   "scored": 12,
+   "right": 4,
+   "accuracy": 33.3
+  },
+  "property": {
+   "n": 2,
+   "scored": 2,
+   "right": 1,
+   "accuracy": 50.0
+  },
+  "scheduling": {
+   "n": 12,
+   "scored": 12,
+   "right": 2,
+   "accuracy": 16.7
+  },
+  "shopping": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "travel": {
+   "n": 5,
+   "scored": 5,
+   "right": 2,
+   "accuracy": 40.0
+  },
+  "vehicle": {
+   "n": 6,
+   "scored": 6,
+   "right": 2,
+   "accuracy": 33.3
+  },
+  "work_deliverable": {
+   "n": 12,
+   "scored": 12,
+   "right": 6,
+   "accuracy": 50.0
+  }
+ },
+ "by_hard_kind": {
+  "ack": {
+   "n": 6,
+   "scored": 6,
+   "right": 6,
+   "accuracy": 100.0
+  },
+  "asr_mush": {
+   "n": 7,
+   "scored": 7,
+   "right": 7,
+   "accuracy": 100.0
+  },
+  "hypothetical": {
+   "n": 8,
+   "scored": 8,
+   "right": 8,
+   "accuracy": 100.0
+  },
+  "in_flight": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "media": {
+   "n": 9,
+   "scored": 9,
+   "right": 9,
+   "accuracy": 100.0
+  },
+  "other_commitment": {
+   "n": 11,
+   "scored": 11,
+   "right": 9,
+   "accuracy": 81.8
+  },
+  "past_done": {
+   "n": 8,
+   "scored": 8,
+   "right": 8,
+   "accuracy": 100.0
+  },
+  "question_to_person": {
+   "n": 11,
+   "scored": 11,
+   "right": 11,
+   "accuracy": 100.0
+  },
+  "retraction": {
+   "n": 6,
+   "scored": 6,
+   "right": 6,
+   "accuracy": 100.0
+  }
+ },
+ "by_register": {
+  "aside": {
+   "n": 48,
+   "scored": 48,
+   "right": 41,
+   "accuracy": 85.4
+  },
+  "complaint": {
+   "n": 52,
+   "scored": 52,
+   "right": 29,
+   "accuracy": 55.8
+  },
+  "direct": {
+   "n": 40,
+   "scored": 40,
+   "right": 37,
+   "accuracy": 92.5
+  },
+  "fragment": {
+   "n": 23,
+   "scored": 23,
+   "right": 22,
+   "accuracy": 95.7
+  },
+  "realisation": {
+   "n": 59,
+   "scored": 59,
+   "right": 37,
+   "accuracy": 62.7
+  },
+  "thinking_aloud": {
+   "n": 35,
+   "scored": 35,
+   "right": 27,
+   "accuracy": 77.1
+  },
+  "worry": {
+   "n": 62,
+   "scored": 62,
+   "right": 30,
+   "accuracy": 48.4
+  }
+ },
+ "decision_confusion": {
+  "act->act": 38,
+  "act->ignore": 122,
+  "ask->act": 3,
+  "ask->ignore": 10,
+  "ignore->act": 4,
+  "ignore->ask": 1,
+  "ignore->ignore": 141
+ },
+ "lane_confusion": {
+  "act->desk": 1,
+  "act->quiet": 41,
+  "act->silent": 81,
+  "act->spoke": 37,
+  "ask->quiet": 3,
+  "ask->silent": 7,
+  "ask->spoke": 3,
+  "ignore->quiet": 2,
+  "ignore->silent": 139,
+  "ignore->spoke": 5
+ },
+ "false_ping_examples": [
+  {
+   "id": "amb-0237",
+   "text": "I am booking the restaurant for Saturday, so do not double up.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "book restaurant for Saturday August 22 2026",
+   "said": [
+    "I can set up that reservation for two on Saturday, August 22\u2014which restaurant and time are we aiming for?"
+   ],
+   "hard_kind": "other_commitment"
+  },
+  {
+   "id": "amb-0284",
+   "text": "I should call the clinic.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "look up contact details for clinic",
+   "said": [
+    "Caught your plan \u2014 ready to go: look up contact details for clinic. First I need: which clinic. Say go and I'll book it."
+   ],
+   "hard_kind": ""
+  },
+  {
+   "id": "amb-0302",
+   "text": "Do not worry about it, I will book it in on my way home.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "Book car MOT inspection at Coal Harbour location",
+   "said": [
+    "I can take that Coal Harbour MOT inspection off your plate before next week\u2014which shop, car details, and date/time should I line up for your OK?"
+   ],
+   "hard_kind": "other_commitment"
+  },
+  {
+   "id": "amb-0313",
+   "text": "God, turn that down a bit.",
+   "lane": "spoke",
+   "decision": "ask",
+   "goal": "turn down the volume",
+   "said": [
+    "Which device or app should I turn down?"
+   ],
+   "hard_kind": ""
+  },
+  {
+   "id": "amb-0317",
+   "text": "And the dishwasher tablets, that is the last box.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "add dishwasher tablets to shopping list",
+   "said": [
+    "Heard you're on the last box of dishwasher tablets\u2014which shopping list do you want me to add them to?"
+   ],
+   "hard_kind": ""
+  }
+ ],
+ "miss_examples": [
+  {
+   "id": "amb-0007",
+   "text": "The practice indemnity renewal quote came in at nearly double what we paid last year.",
+   "wanted": "act",
+   "expected_goal": "get alternative professional indemnity quotes"
+  },
+  {
+   "id": "amb-0010",
+   "text": "The appraisal portfolio deadline is creeping up on me again.",
+   "wanted": "act",
+   "expected_goal": "look up the appraisal portfolio deadline and what is outstanding"
+  },
+  {
+   "id": "amb-0011",
+   "text": "My revalidation is due and I have not logged a single hour of CPD.",
+   "wanted": "act",
+   "expected_goal": "look up NMC revalidation requirements and the deadline"
+  },
+  {
+   "id": "amb-0012",
+   "text": "I am on nights all next week and I have not sorted anything for the kids.",
+   "wanted": "act",
+   "expected_goal": "arrange childcare for next week's night shifts"
+  },
+  {
+   "id": "amb-0017",
+   "text": "The site cannot pour on Friday if that rebar inspection is not booked.",
+   "wanted": "act",
+   "expected_goal": "book the rebar inspection before Friday's pour"
+  },
+  {
+   "id": "amb-0020",
+   "text": "We are going to be short on the test cell booking if nobody puts a date in.",
+   "wanted": "ask",
+   "expected_goal": "book test cell time"
+  },
+  {
+   "id": "amb-0021",
+   "text": "Staging is throwing cert errors, I bet I never renewed that domain.",
+   "wanted": "act",
+   "expected_goal": "check the domain and certificate expiry for the staging environment"
+  },
+  {
+   "id": "amb-0025",
+   "text": "We are four copies short of the Steinbeck for Year Nine.",
+   "wanted": "act",
+   "expected_goal": "order additional copies of the Steinbeck set text for Year Nine"
+  },
+  {
+   "id": "amb-0034",
+   "text": "We are going to be short on till float over the bank holiday.",
+   "wanted": "act",
+   "expected_goal": "arrange extra till float for the bank holiday weekend"
+  },
+  {
+   "id": "amb-0035",
+   "text": "The rota for next week still is not up and everyone keeps asking me.",
+   "wanted": "act",
+   "expected_goal": "publish next week's staff rota"
+  },
+  {
+   "id": "amb-0038",
+   "text": "I cannot do the Dover run until the trailer has had its brake test.",
+   "wanted": "act",
+   "expected_goal": "book the trailer brake test before the Dover run"
+  },
+  {
+   "id": "amb-0047",
+   "text": "The Hartleys cannot do Thursday for the viewing after all.",
+   "wanted": "act",
+   "expected_goal": "rearrange the Hartley viewing away from Thursday"
+  }
+ ],
+ "unanswered_examples": [
+  {
+   "id": "amb-0224",
+   "error": "no decision within 240.0s",
+   "text": "Section four subsection two, the contractor shall maintain adequate in"
+  }
+ ]
+}

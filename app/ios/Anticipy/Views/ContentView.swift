@@ -94,6 +94,299 @@ struct HomeView: View {
     @State private var briefingTyped = false
     /// Plain-English explanation of whichever status pill was last tapped.
     @State private var pillNote: String?
+    /// Which connection she is asking for right now, and the sentence that
+    /// provoked it. Transient: a dismissed ask is recorded in ContextGrants,
+    /// never here, so it survives the view going away.
+    @State private var contextAsk: ContextSource?
+    @State private var heardForAsk = ""
+    /// The word from your own sentence that provoked the ask, so the question
+    /// can name it instead of being generic.
+    @State private var askSubject: String?
+    /// The newest line already considered. Nil until the first poll populates
+    /// the feed, which is what stops a cold launch asking about yesterday.
+    @State private var lastSeenLineID: String?
+    /// Which source the open sheet is about, so a swipe-dismiss can be recorded
+    /// as a decline. `contextAsk` is already nil by the time onDismiss runs.
+    @State private var lastAskedSource: ContextSource?
+    @State private var showInterview = false
+    /// "I'll do this later", remembered. The browser ask below is the one
+    /// page first run no longer has, and an offer that returns every time the
+    /// feed refreshes is nagging, not offering — so a decline is written down,
+    /// exactly as the interview's is. Settings still pairs whenever he wants.
+    @AppStorage("browserOfferDeferred") private var browserOfferDeferred = false
+    /// The supervised read screen, presented.
+    @State private var showMailRead = false
+    /// "Not now" on the mail offer, remembered.
+    ///
+    /// `@AppStorage` on the CANONICAL `ContextGrants` key rather than a private
+    /// flag of this view's own, for two reasons. It is the same "no" that
+    /// Settings can reopen (`ContextGrants.reopen`, which exists because one
+    /// "not now" silencing a source forever is the recoverability failure
+    /// `CONSUMER-READINESS` B1 forbids). And it is observed, so the card leaves
+    /// the screen on the tap instead of three seconds later when the next poll
+    /// happens to redraw the feed.
+    @AppStorage(ContextSource.mail.declinedKey) private var mailDeclined = false
+    /// May she offer to get to know you?
+    ///
+    /// "After she has demonstrated value" is the rule
+    /// (`design/PREMIUM-FEEL.md:43-47`), and the first version of this read that
+    /// as "after a completed job". That made the product's ONLY conversation
+    /// about somebody's life contingent on pairing a browser — which onboarding
+    /// explicitly invites you to skip ("I'll do this later"). Decline the mic as
+    /// well, also a first-class skip, and there is no transcript either, so the
+    /// just-in-time asks never fire. A person taking both offered exits was
+    /// never asked a single thing about themselves, forever.
+    ///
+    /// So value OR patience: a finished errand still counts, and failing that,
+    /// simply having come back the next day. Both mean she is no longer a
+    /// stranger asking on first launch, which is the thing the rule protects
+    /// against.
+    private var showInterviewOffer: Bool {
+        guard !UserDefaults.standard.bool(forKey: "interview.declined") else { return false }
+        guard !InterviewProgress().isComplete else { return false }
+        // An ERRAND she finished. A supervised read is also a `done` job, and
+        // "she has demonstrated value" cannot be satisfied by the read this
+        // very gate is meant to lead up to. See `isErrand`.
+        if session.jobs.contains(where: { isErrand($0) && $0.status == "done" }) { return true }
+        return hasSettledIn
+    }
+
+    /// A day since the app was first opened. Recorded on first read rather than
+    /// at install, because there is no install hook — and a nil marker means
+    /// "today is day zero", so a brand-new install can never satisfy it.
+    private var hasSettledIn: Bool {
+        let key = "firstOpenedAt"
+        let stored = UserDefaults.standard.double(forKey: key)
+        if stored == 0 {
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: key)
+            return false
+        }
+        return Date().timeIntervalSince1970 - stored > 24 * 60 * 60
+    }
+
+    /// Not a card among cards. `design/CONSUMER-FEEL-DIRECTION-2026-08-03.md`
+    /// §6 asks for hero moments to get bespoke layouts rather than the fourth
+    /// identical rounded rectangle — so this is her voice against the page in
+    /// serif and space. It stood behind an accent rule until the golden bars
+    /// came out of the product; nothing replaced it, and nothing should: a
+    /// border or a fill here is the card §6 forbids. The leading inset went
+    /// with the rule, because an indent clearing a rule that is gone reads as
+    /// a misaligned section against everything else in this scroll view.
+    private var interviewOfferCard: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.snug) {
+            Text("Want me to actually know you?")
+                .font(Theme.display(24))
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Six questions, in your words. I ask, you answer or skip. I never send anything on your behalf without your yes.")
+                .font(Theme.aside)
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Theme.Space.snug) {
+                Button {
+                    Haptics.engage()
+                    showInterview = true
+                } label: {
+                    Text("Ask me")
+                }
+                .buttonStyle(.glass)
+                // Equal weight, and it means it: declined once, never offered
+                // again unprompted. Settings still opens it. The touch haptic
+                // is the style's, so this action no longer fires its own.
+                Button {
+                    UserDefaults.standard.set(true, forKey: "interview.declined")
+                } label: {
+                    Text("Not now")
+                }
+                .buttonStyle(.ghost)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(Theme.springSlow, value: showInterviewOffer)
+    }
+
+    /// May she ask for the browser yet?
+    ///
+    /// Only with an errand genuinely parked for want of hands: queued and
+    /// running jobs are jobs the extension is meant to execute, and with no
+    /// browser linked they sit there until one is. That is the "when an errand
+    /// actually needs hands" that `design/day-zero.md:237-239` moved this ask
+    /// out of first run for — never on day zero, never before she has anything
+    /// to show for it.
+    ///
+    /// `verified` matters as much as the rest: a server she cannot reach
+    /// reports `agentPaired` as false (`AnticipyApp.swift:473`), so without it
+    /// a dropped connection would tell someone who paired months ago to go and
+    /// pair.
+    private var browserOffer: Bool {
+        verified && !session.agentPaired && !browserOfferDeferred && !handling.isEmpty
+    }
+
+    /// The browser ask, asked here instead of in first run.
+    ///
+    /// `design/day-zero.md:237-239` took it out of onboarding — "It is asked
+    /// just-in-time, when an errand actually needs hands" — so this is where
+    /// that page went. It sits directly over the work that is waiting for it,
+    /// which is the only thing that makes it an answer rather than a chore.
+    ///
+    /// Bespoke like `interviewOfferCard` and for the same reason
+    /// (`CONSUMER-FEEL-DIRECTION-2026-08-03.md` §6): her voice against the
+    /// page in serif and space, not the fourth identical rounded rectangle. The
+    /// ceremony itself — the step-by-step guide and the six-digit code — is
+    /// already in Settings, so this routes there rather than growing a second
+    /// copy of pairing that can drift from the first.
+    private var browserOfferCard: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.snug) {
+            Text(handling.count == 1 ? "This one needs your Chrome" : "These need your Chrome")
+                .font(Theme.display(24))
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            // Kept from the onboarding step this replaces, because it was the
+            // honest version: no password, a computer, one setting, two
+            // minutes. Naming what she will NOT do is the rule
+            // (`design/PREMIUM-FEEL.md:43-47`).
+            Text("I work inside your own Chrome, using the accounts you're already signed in to. I never ask for a password. It takes about two minutes, it has to happen on a computer, and there's one Chrome setting to flip. The guide shows you where.")
+                .font(Theme.aside)
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Theme.Space.snug) {
+                NavigationLink { SettingsView() } label: {
+                    Text("Set it up")
+                }
+                .buttonStyle(.glass)
+                // A NavigationLink runs no action closure of its own, and this
+                // is the one tap on the card that commits to something.
+                .simultaneousGesture(TapGesture().onEnded { Haptics.engage() })
+                // The same escape the onboarding step offered, in the same
+                // words, and it means it: taken once, she stops asking. The
+                // sentence under the header still explains why nothing is
+                // moving, so declining costs him no honesty.
+                Button {
+                    browserOfferDeferred = true
+                } label: {
+                    Text("I'll do this later")
+                }
+                .buttonStyle(.ghost)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(Theme.springSlow, value: browserOffer)
+    }
+
+    /// May she offer to read your mail yet?
+    ///
+    /// The trigger is that SHE HAS BEEN TOLD what you live in all day —
+    /// interview question 3 (`Interview.swift:56-65`), the one no scrape can
+    /// answer. That is a much better provocation than a clock: it puts this ask
+    /// in the same register as the just-in-time calendar and contacts asks,
+    /// where the ask follows something the person themselves said, rather than
+    /// following our schedule. `PREMIUM-FEEL.md:43-47` wants value demonstrated
+    /// before the ask, and her having sat and listened to six answers is a far
+    /// better demonstration than twenty-four hours having elapsed.
+    ///
+    /// WHAT SHE CANNOT DO, and it is worth stating so nobody tries: this card
+    /// cannot QUOTE the answer. "You said you live in Gmail" is unavailable
+    /// from the phone. Interview answers travel out as `kind:"profile"` events
+    /// and land in the brain's per-owner SQLite `profile_facts`
+    /// (`brain/memory.py:60`); there is no route back, and `upsertOwner` is the
+    /// only `owner_profile` call the app makes — a write. `InterviewProgress`
+    /// deliberately records WHICH questions were answered and never the
+    /// answers, because a second local copy is exactly the split-brain
+    /// `design/day-zero.md` §3 already names as a known defect. So the gate
+    /// reads the question id and the copy says only what is true of it: that
+    /// she was told, not what she was told.
+    ///
+    /// `design/day-zero.md` §1 phase 3's own trigger was "one errand completed
+    /// with a visible result, AND at least one overnight". The finished errand
+    /// is kept verbatim. The overnight is dropped, and the interview answer
+    /// stands in its place, because the overnight was only ever a proxy for
+    /// "she is not a stranger asking on first launch" — and the interview is
+    /// itself gated on a finished errand or an overnight
+    /// (`showInterviewOffer`), so having been through it proves the same thing
+    /// the clock was guessing at, plus the person actually talking to her.
+    ///
+    /// Then three conditions the interview offer does not need:
+    ///
+    /// - `agentPaired && agentOnline` — the read happens in HER Chrome, in the
+    ///   accounts she is already signed into. Offering a screen whose only
+    ///   button cannot work is the "confidently asserts things that are not
+    ///   true" failure `CONSUMER-READINESS` §1 names.
+    /// - not already granted — one ask, ever, unless the door is reopened in
+    ///   Settings. Supervision is required for the FIRST read of a source and
+    ///   refreshes afterwards are quiet (§2), so this card is not the way you
+    ///   read again; it is the way you let her in the first time.
+    /// - not while the interview offer is up. Two asks stacked on one screen is
+    ///   the six-step wall wearing a different hat, and `PREMIUM-FEEL.md:43-47`
+    ///   allows exactly one at a time.
+    private var mailReadOffer: Bool {
+        guard verified, session.agentPaired, session.agentOnline else { return false }
+        guard !mailDeclined, !ContextGrants().granted(.mail) else { return false }
+        guard !showInterviewOffer else { return false }
+        guard InterviewProgress().isAnswered("tools") else { return false }
+        // A finished ERRAND, never a finished read: otherwise a first read
+        // would qualify a person for the offer to do their first read.
+        return session.jobs.contains(where: { isErrand($0) && $0.status == "done" })
+    }
+
+    /// The mail ask. Bespoke for the same reason as its two siblings
+    /// (`CONSUMER-FEEL-DIRECTION-2026-08-03.md` §6): her voice against the page
+    /// in serif and space, NOT a fourth identical rounded rectangle.
+    ///
+    /// The question comes from `ContextSource.mail.ask()` rather than being
+    /// retyped here. That string and the promise list on the read screen are
+    /// the consent copy, and a second copy of consent wording is a second copy
+    /// that can drift from what the code actually does — which is exactly how
+    /// two of those promises came to be untrue once already.
+    private var mailReadCard: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.snug) {
+            Text(ContextSource.mail.ask())
+                .font(Theme.display(24))
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            // The provocation, said in the only way that is TRUE from here.
+            // She was told what you live in all day (that is the gate); she
+            // cannot read back WHAT you said, so she does not pretend to —
+            // see `mailReadOffer`. "The one part of it I still can't see" holds
+            // whether or not you named a mail app, because she genuinely
+            // cannot see any of it.
+            //
+            // Then `design/day-zero.md` §1 phase 3, in her words: read and
+            // only read, you are there for the first one, and the veto is
+            // named up front rather than discovered.
+            Text("You've told me what you live in all day. Your mail's the one part of it I still can't see. I'll read, only read, never send, never reply, never delete. You watch the whole thing, and anything I get wrong you tap and it's gone.")
+                .font(Theme.aside)
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Theme.Space.snug) {
+                Button {
+                    Haptics.engage()
+                    showMailRead = true
+                } label: {
+                    Text("Watch me read")
+                }
+                .buttonStyle(.glass)
+                // Equal weight, and it means it. Recorded through
+                // `declineContext` so it is the one canonical "no" — the same
+                // one the just-in-time asks write and the same one Settings can
+                // reopen. Nothing about the person is recorded either way: a
+                // skip is never a fact (`design/briefs/08-day-zero.md:30`).
+                Button {
+                    session.declineContext(.mail)
+                } label: {
+                    Text("Not now")
+                }
+                .buttonStyle(.ghost)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(Theme.springSlow, value: mailReadOffer)
+    }
+    /// Names she has already been told, so a familiar one is not a reason to
+    /// ask for the address book.
+    private var knownNames: Set<String> {
+        Set([session.ownerFirstName, session.ownerLastName]
+            .filter { !$0.isEmpty })
+    }
 
     // needs_user (login wall, CAPTCHA, refused site) used to render in NO
     // section at all — the job silently disappeared while the card said
@@ -108,8 +401,52 @@ struct HomeView: View {
         }
         return Array(done.prefix(5))
     }
-    private var handling: [AgentJob] { session.jobs.filter { $0.status == "queued" || $0.status == "running" } }
-    private var finished: [AgentJob] { session.jobs.filter { $0.status == "done" || $0.status == "failed" } }
+    /// Questions she asked that have NO task behind them, and that he has not
+    /// answered yet.
+    ///
+    /// `needs_user` and `act` always carry a job, so `ConfirmJobCard` already
+    /// gives them a box. The two lanes that do not are `clock` (her own
+    /// proactive check-in: "Want me to book a table at Earls tonight?") and
+    /// `ask` ("what is 'it' in this case?"). Production holds 17 of them and
+    /// they rendered as prose he could not reply to, so the only way to answer
+    /// the phone that heard him was to leave the app and send a text.
+    ///
+    /// Still-open is decided by comparing against his newest reply rather than
+    /// by remembering locally what he answered. PocketBase `created` is a fixed
+    /// ISO shape, so string order IS time order here.
+    private var openQuestions: [BrainEvent] {
+        let newestReply = session.ownerReplies
+            .map(\.created).max() ?? ""
+        let goalsWithCards = Set(needsOK.map(\.goal))
+        return session.anticipySays.filter { ev in
+            guard ev.kind == "anticipy_says",
+                  ev.decision == "clock" || ev.decision == "ask",
+                  let text = ev.text, !text.isEmpty,
+                  ev.created > newestReply else { return false }
+            // Belt and braces: a `clock` line normally carries no goal, but if
+            // one ever does and that task is already on screen, the card there
+            // is the place to answer it.
+            let goal = ev.goal ?? ""
+            return goal.isEmpty || !goalsWithCards.contains(goal)
+        }
+        // Two at most. She is allowed to be curious, not to fill the desk with
+        // interrogation while the work he actually asked for scrolls away.
+        .prefix(2)
+        .map { $0 }
+    }
+    /// A supervised read is a job, but it is NOT an errand, so it stays out of
+    /// both feed sections.
+    ///
+    /// Left in, a read the person is sitting there watching also renders on
+    /// Home under "Waiting for your browser" — with `browserOfferCard` possibly
+    /// stacked over it telling them to go and pair the Chrome they are watching
+    /// her work in. And once it lands it would file under "Done" as an errand
+    /// nobody asked for. `lane` is the server's own word for this
+    /// (`AgentJob.lane`), which is why this reads the field rather than
+    /// sniffing goals or params.
+    private func isErrand(_ job: AgentJob) -> Bool { job.lane != "supervised_read" }
+    private var handling: [AgentJob] { session.jobs.filter { isErrand($0) && ($0.status == "queued" || $0.status == "running") } }
+    private var finished: [AgentJob] { session.jobs.filter { isErrand($0) && ($0.status == "done" || $0.status == "failed") } }
 
     /// What she heard, as conversations rather than as a wall of lines.
     ///
@@ -137,18 +474,35 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Theme.ink.ignoresSafeArea()
-                Grain.image
-                    .opacity(0.035)
-                    .blendMode(.plusLighter)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
+                Theme.bg.ignoresSafeArea()
+                // Was a hand-rolled copy of the grain with .plusLighter
+                // hard-coded — a white haze over a white page once light mode
+                // existed. GrainLayer reads the scheme.
+                GrainLayer()
                 ScrollView {
                     // Rhythm is driven explicitly: space BETWEEN groups is
                     // 2.5–3x space WITHIN one, which is what makes this read
                     // as a layout instead of a list.
                     VStack(alignment: .leading, spacing: 0) {
                         if micNeedsHelp { micRecoveryCard.padding(.top, Theme.Space.tight) }
+                        // "Want me to actually know you?" — the graduation.
+                        //
+                        // Gated on her having FINISHED something visible, not
+                        // on a step count. design/PREMIUM-FEEL.md:43-47: ask
+                        // AFTER demonstrating value, framed as her curiosity
+                        // rather than data collection. Asking on day one, before
+                        // she has done a single thing, is the version people
+                        // decline.
+                        if verified && showInterviewOffer {
+                            interviewOfferCard.padding(.top, Theme.Space.snug)
+                        }
+                        // "Want to open your mail and let me read it once while
+                        // you watch?" — the graduation's second half, and the
+                        // one that needs her to have earned it most, because it
+                        // is the only source that is not on this phone.
+                        if mailReadOffer {
+                            mailReadCard.padding(.top, Theme.Space.snug)
+                        }
                         // Her briefing only appears over a verified read. She
                         // does not get to say "I've got the watch" from an app
                         // that has never once reached its own server — and on
@@ -199,6 +553,19 @@ struct HomeView: View {
                                     }
                                 }
                             }
+                            if !openQuestions.isEmpty {
+                                askHeader
+                                    .padding(.top, Theme.Space.section)
+                                    .padding(.bottom, Theme.Space.tight)
+                                VStack(spacing: Theme.Space.snug) {
+                                    ForEach(openQuestions, id: \.id) { ev in
+                                        AskCard(event: ev)
+                                            .transition(.asymmetric(
+                                                insertion: .move(edge: .top).combined(with: .opacity),
+                                                removal: .opacity.combined(with: .scale(scale: 0.96))))
+                                    }
+                                }
+                            }
                             if !handling.isEmpty {
                                 // Honest about WHY nothing is moving: with Chrome
                                 // shut there are no hands, and saying "Handling"
@@ -206,12 +573,23 @@ struct HomeView: View {
                                 sectionHeader(session.agentOnline ? "Handling" : "Waiting for your browser")
                                     .padding(.top, Theme.Space.section)
                                     .padding(.bottom, Theme.Space.tight)
-                                if !session.agentOnline {
+                                // Unpaired used to be one grey sentence
+                                // pointing at a screen with nothing to tap —
+                                // and it is now all that is left of first
+                                // run's browser page. So where there is real
+                                // work waiting, the ask itself goes here,
+                                // once. The sentence stays for the two cases
+                                // the card does not cover: paired but shut,
+                                // and anyone who already said "later".
+                                if browserOffer {
+                                    browserOfferCard
+                                        .padding(.bottom, Theme.Space.base)
+                                } else if !session.agentOnline {
                                     Text(session.agentPaired
                                          ? "Open Chrome and these pick up on their own."
                                          : "Link Chrome in Settings and these pick up on their own.")
                                         .font(.system(size: 15))
-                                        .foregroundStyle(Theme.sand)
+                                        .foregroundStyle(Theme.text2)
                                         .padding(.bottom, Theme.Space.tight)
                                 }
                                 // He has had to ASK whether his extension was
@@ -234,7 +612,7 @@ struct HomeView: View {
                                          + "something needs your word. These will just wait. "
                                          + "Add it in Settings and I'll start reaching you.")
                                         .font(.system(size: 15))
-                                        .foregroundStyle(Theme.champagne)
+                                        .foregroundStyle(Theme.accent)
                                         .padding(.bottom, Theme.Space.tight)
                                 }
                                 if let stale = session.staleExtensionVersion {
@@ -242,12 +620,12 @@ struct HomeView: View {
                                          + "Open chrome://extensions and press Reload to get \(AnticipySession.expectedExtensionVersion)"
                                          + "until then it's working from old instructions.")
                                         .font(.system(size: 15))
-                                        .foregroundStyle(Theme.champagne)
+                                        .foregroundStyle(Theme.accent)
                                         .padding(.bottom, Theme.Space.tight)
                                 }
                                 VStack(spacing: 0) {
                                     ForEach(Array(handling.enumerated()), id: \.element.id) { i, job in
-                                        if i > 0 { Rectangle().fill(Theme.stroke).frame(height: 0.5) }
+                                        if i > 0 { Rectangle().fill(Theme.edge).frame(height: 0.5) }
                                         HandlingCard(job: job)
                                             .transition(.asymmetric(
                                                 insertion: .move(edge: .top).combined(with: .opacity),
@@ -263,7 +641,7 @@ struct HomeView: View {
                                     .padding(.bottom, Theme.Space.tight)
                                 VStack(spacing: 0) {
                                     ForEach(Array(finished.prefix(8).enumerated()), id: \.element.id) { i, job in
-                                        if i > 0 { Rectangle().fill(Theme.stroke).frame(height: 0.5) }
+                                        if i > 0 { Rectangle().fill(Theme.edge).frame(height: 0.5) }
                                         DoneCard(job: job)
                                             .transition(.asymmetric(
                                                 insertion: .move(edge: .top).combined(with: .opacity),
@@ -284,18 +662,48 @@ struct HomeView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    HStack(spacing: 10) {
-                        LogoMark(size: 26)
-                            .accessibilityHidden(true)
-                        Text("Anticipy Claude Version")
-                            .font(Theme.display(24))
-                            .foregroundStyle(Theme.ivory)
-                    }
+                    // THE MARK ALONE, AND THAT IS THE FIX. This was an HStack
+                    // of the mark plus `Text("Anticipy")` at 24pt serif, and
+                    // the wordmark never rendered: the leading slot is narrow
+                    // once the trailing control has its share, so the system
+                    // truncated the text to nothing — while the HStack's 10pt
+                    // spacing before it SURVIVED.
+                    //
+                    // iOS gives a toolbar item its own glass backing and
+                    // centres the item's content inside it. So the thing being
+                    // centred was `[mark][10pt][nothing]`, which put the mark
+                    // 5pt left of the circle's middle and read exactly as a
+                    // logo sitting off-centre in its own button.
+                    //
+                    // Nothing visible is lost: the wordmark was already
+                    // invisible, and the app it names is the one you are in.
+                    LogoMark(size: 26)
+                        .accessibilityLabel("Anticipy")
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    // NO PLATE OF ITS OWN, and that is the whole point.
+                    //
+                    // iOS draws a glass capsule behind EVERY toolbar item -
+                    // it is what the mark on the left is sitting in. Giving
+                    // this one `.icon` as well put the component's machined
+                    // metal face INSIDE that capsule: two nested surfaces, a
+                    // grey disc in a white one, which is what read as "there
+                    // is still colour inside it". The leading item looks right
+                    // for exactly the reason this one looked wrong - it brings
+                    // no surface of its own.
+                    //
+                    // So `GlassyIconStyle` is for glyph buttons that have to
+                    // supply their own affordance, like the send arrow on the
+                    // compose line. In a toolbar the system already did it.
                     NavigationLink { SettingsView() } label: {
                         Image(systemName: "slider.horizontal.3")
-                            .foregroundStyle(Theme.sand)
+                            // The colour it had before any of this: a muted
+                            // dark, the same weight as the mark opposite it.
+                            // Without it the glyph inherits the app's champagne
+                            // `.tint`, which makes a gold gear - and a `Theme`
+                            // role is not a view naming a colour, which is what
+                            // the contract actually forbids.
+                            .foregroundStyle(Theme.text2)
                     }
                     // An icon on its own is announced as "button" and nothing
                     // else. VoiceOver users got two unnamed controls on Home.
@@ -305,7 +713,9 @@ struct HomeView: View {
             // The single clearest "this is a real, current iOS app" signal
             // available: content blurs as it passes under the header.
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            // NOT pinned to .dark. It was, which put white toolbar glyphs on a
+            // white page the moment light mode existed. Omitted so it inherits
+            // whatever AnticipyApp pinned.
             // If listening was on when the app closed or backgrounded, she
             // picks it back up herself — no button-press chore per open.
             .onAppear {
@@ -316,7 +726,63 @@ struct HomeView: View {
                 if phase == .active {
                     Haptics.warmUp()
                     session.resumeListeningIfWanted()
+                    // A granted source whose facts never made it out (offline,
+                    // a dead connection) is retried here rather than lost.
+                    Task { await session.flushPendingContext() }
                 }
+            }
+            // The just-in-time ask. It is provoked by a line she actually
+            // heard, decided by ContextTrigger (a rule, not the model), and it
+            // asks at most once per source. Presented as a sheet rather than a
+            // step, because it is a question about the sentence you just said —
+            // not another page of a wizard.
+            .onChange(of: session.transcript) { _ in
+                // Only ever on a line that is genuinely NEW to this session.
+                //
+                // `transcript` starts empty and the first poll replaces it
+                // wholesale, so without this the sheet opened on every cold
+                // launch quoting a sentence from hours ago — the unexpected,
+                // unexplained ask that CONSUMER-READINESS T4 exists to prevent.
+                // It re-fired again every time the server filled in a
+                // `decision` on an older line, because any element change makes
+                // the array unequal while `last` is unchanged.
+                guard let latest = session.transcript.last else { return }
+                let firstLoad = lastSeenLineID == nil
+                let alreadySeen = latest.id == lastSeenLineID
+                lastSeenLineID = latest.id
+                guard !firstLoad, !alreadySeen, contextAsk == nil,
+                      let hit = ContextTrigger.ask(for: latest.text, knownNames: knownNames)
+                else { return }
+                heardForAsk = latest.text
+                askSubject = hit.subject
+                contextAsk = hit.source
+            }
+            // onDismiss catches the SWIPE. A sheet dismissed by gesture runs
+            // neither button, so nothing was recorded and `mayAsk` stayed true —
+            // and the next poll, three seconds later, presented it again. Swipe
+            // it away twice and it came back twice. A swipe is a "not now", and
+            // it is recorded as one.
+            .sheet(isPresented: $showInterview) {
+                InterviewView().environmentObject(session)
+            }
+            // The supervised read. A sheet rather than a push, because it is
+            // one bounded thing you sit and watch — and it gets the live
+            // session so it can create the job, hold the watch lease, and read
+            // her narration back. NOT wrapped in a NavigationStack: the screen
+            // carries its own header, and a nav bar over it would be a second
+            // title saying the same thing.
+            .sheet(isPresented: $showMailRead) {
+                SupervisedReadView(session: session)
+            }
+            .sheet(item: $contextAsk, onDismiss: {
+                if let asked = lastAskedSource, ContextGrants().mayAsk(asked) {
+                    session.declineContext(asked)
+                }
+                lastAskedSource = nil
+            }) { source in
+                ContextAskSheet(source: source, heard: heardForAsk, subject: askSubject)
+                    .environmentObject(session)
+                    .onAppear { lastAskedSource = source }
             }
         }
     }
@@ -353,7 +819,7 @@ struct HomeView: View {
             if let pillNote {
                 Text(pillNote)
                     .font(.caption)
-                    .foregroundStyle(Theme.sand)
+                    .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -395,7 +861,7 @@ struct HomeView: View {
         switch pendant.state {
         case .connected:
             return session.pendantCapturing
-                ? "Your pendant audio is being securely transcribed by Deepgram. Finalized words come back to Anticipy Claude Version; the long-lived provider key never enters this phone."
+                ? "Your pendant audio is being securely transcribed by Deepgram. Finalized words come back to Anticipy; the long-lived provider key never enters this phone."
                 : "Your pendant is connected and I'm opening its secure transcription stream. If that service is unavailable, I say so here instead of dropping audio behind a Listening label."
         case .warmingUp: return "Bluetooth is still waking up. I'll start looking for your pendant the moment it's ready. Nothing for you to do."
         case .connecting, .reconnecting, .searching: return "I'm looking for your pendant. Listen with phone works right now either way."
@@ -406,14 +872,16 @@ struct HomeView: View {
         }
     }
 
+    /// A chip that explains itself when tapped. The `Theme.surface` capsule it
+    /// used to be painted on is gone: at rest it is the dot, the icon and the
+    /// words, and the frosted pill arrives under your finger.
     private func statusPill(icon: String, label: String, active: Bool, detail: String?, note: String) -> some View {
         Button {
-            Haptics.tap()
             pillNote = (pillNote == note) ? nil : note
         } label: {
             HStack(spacing: 6) {
                 Circle()
-                    .fill(active ? Theme.champagne : Theme.stroke)
+                    .fill(active ? Theme.accent : Theme.edge)
                     .frame(width: 7, height: 7)
                     // Pure decoration: the label right beside it says the
                     // same thing in words.
@@ -421,14 +889,13 @@ struct HomeView: View {
                 Image(systemName: icon).font(.caption)
                     .accessibilityHidden(true)
                 Text(label).font(.caption.weight(.medium)).lineLimit(1)
-                if let detail { Text(detail).font(.caption2).foregroundStyle(Theme.gray) }
+                if let detail { Text(detail).font(.caption2).foregroundStyle(Theme.muted) }
             }
-            .foregroundStyle(active ? Theme.ivory : Theme.gray)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Capsule().fill(Theme.surface))
+            // Kept over the ghost's own label token because here the colour
+            // is STATE — this pill says whether the thing it names is on.
+            .foregroundStyle(active ? Theme.text : Theme.muted)
         }
-        .buttonStyle(.pressable)
+        .buttonStyle(.ghost)
         .accessibilityLabel(label)
         .accessibilityHint("Explains what this means.")
     }
@@ -446,23 +913,20 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("I can't hear you", systemImage: "mic.slash")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.champagne)
-            Text("The microphone is switched off for Anticipy Claude Version, so tapping Listen won't do anything. iOS only asks once. Turn it back on and I'll start the moment you come back.")
+                .foregroundStyle(Theme.accent)
+            Text("The microphone is switched off for Anticipy, so tapping Listen won't do anything. iOS only asks once. Turn it back on and I'll start the moment you come back.")
                 .font(.callout)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
+            // Secondary: it is the card's way out, not the page's action.
             Button {
                 session.openSystemSettings()
             } label: {
                 Text("Open Settings")
-                    .font(.callout.weight(.semibold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(Capsule().fill(Theme.champagne))
-                    .foregroundStyle(Theme.ink)
             }
-            .buttonStyle(.pressable)
-            .accessibilityHint("Opens Anticipy Claude Version's page in the iOS Settings app, where Microphone and Speech Recognition can be switched back on.")
+            .buttonStyle(.ghost)
+            .accessibilityHint("Opens Anticipy's page in the iOS Settings app, where Microphone and Speech Recognition can be switched back on.")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
@@ -480,9 +944,11 @@ struct HomeView: View {
                         session.startListening()
                     }
                 } label: {
-                    // The switch that turns the entire product on is the one
-                    // lit object on this screen — not a dim capsule smaller
-                    // than the button that approves one email.
+                    // The switch that turns the entire product on wears the
+                    // same glass as every other primary. What says LISTENING
+                    // is the breathing dot and the word — not a second fill
+                    // colour. The champagne capsule was the last bespoke
+                    // background on this screen.
                     HStack(spacing: Theme.Space.snug) {
                         if session.listener.isListening {
                             BreathingDot(size: 10)
@@ -490,25 +956,18 @@ struct HomeView: View {
                             Image(systemName: listenButtonIcon)
                                 .font(.system(size: 18, weight: .medium))
                         }
+                        // THE ONE CONTROL THAT KEEPS ITS OWN TYPE. 14pt on the
+                        // switch that turns the product on would read as a
+                        // footnote, and a label that sets its own font wins
+                        // over the style's default by design — see
+                        // GlassCTAStyle. Everything else takes the 14/600.
                         Text(listenButtonLabel)
                             .font(Theme.display(22))
                             .tracking(-0.2)
                     }
-                    .padding(.horizontal, Theme.Space.card)
-                    .frame(height: 60)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                            .fill(session.listener.isListening ? Theme.champagne : Theme.card)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                                    .strokeBorder(session.listener.isListening ? .clear : Theme.champagne.opacity(0.45),
-                                                  lineWidth: 1)
-                            )
-                    )
-                    .foregroundStyle(listenButtonTint)
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.glass)
                 // A tap that iOS will instantly refuse is worse than no
                 // button: it reads as the app being broken.
                 .disabled(micNeedsHelp)
@@ -525,7 +984,7 @@ struct HomeView: View {
             if session.listener.suspended {
                 Label("Mic interrupted, taking it back…", systemImage: "exclamationmark.triangle")
                     .font(.caption)
-                    .foregroundStyle(Theme.gray)
+                    .foregroundStyle(Theme.muted)
             }
             // Nothing you said is lost when the network is: say the count out
             // loud rather than let it look like she stopped hearing you.
@@ -537,7 +996,7 @@ struct HomeView: View {
                     systemImage: "tray.and.arrow.up"
                 )
                 .font(.caption)
-                .foregroundStyle(Theme.gray)
+                .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             }
             // The current session's spoken lines stay visible right here —
@@ -558,27 +1017,37 @@ struct HomeView: View {
                 Text(session.listener.partial)
                     .font(.system(size: 20))
                     .lineSpacing(3)
-                    .foregroundStyle(Theme.ivory.opacity(0.55))
+                    .foregroundStyle(Theme.text.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity)
             }
             HStack(spacing: 8) {
-                TextField("Or tell Anticipy Claude Version something…", text: $typedLine)
+                TextField("Or tell Anticipy something…", text: $typedLine)
                     .font(.callout)
-                    .foregroundStyle(Theme.ivory)
+                    .foregroundStyle(Theme.text)
                     .textFieldStyle(.plain)
                     .onSubmit(submitTyped)
+                // ONLY a glyph, so `.icon` — and the state colours go with it.
+                // "Empty field versus ready" was `Theme.edge` versus
+                // `Theme.accent` decided here, beside a `.disabled` that then
+                // dimmed the whole thing again: two expressions of one fact,
+                // neither of them the material's. The style says refusing now,
+                // in the same voice the primary says it.
+                //
+                // `arrow.up`, not `arrow.up.circle.fill`: the control IS the
+                // circle now, and a filled disc inside a 44pt round face is
+                // two nested circles with a gap between them.
                 Button(action: submitTyped) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(typedLine.isEmpty ? Theme.stroke : Theme.champagne)
+                    Image(systemName: "arrow.up")
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.icon)
                 .disabled(typedLine.isEmpty)
                 .accessibilityLabel("Send")
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 9)
+            // The arrow brings its own 44pt, so the row adds the hair rather
+            // than stacking two paddings into a 62pt compose bar.
+            .padding(.vertical, Theme.Space.hair)
             .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
         }
     }
@@ -591,11 +1060,6 @@ struct HomeView: View {
     private var listenButtonIcon: String {
         if micNeedsHelp { return "mic.slash" }
         return session.listener.isListening ? "mic.fill" : "mic"
-    }
-
-    private var listenButtonTint: Color {
-        if micNeedsHelp { return Theme.gray }
-        return session.listener.isListening ? Theme.ink : Theme.ivory
     }
 
     private func submitTyped() {
@@ -617,7 +1081,7 @@ struct HomeView: View {
                 Text(greeting)
                     .font(Theme.display(30))
                     .tracking(-0.5)
-                    .foregroundStyle(Theme.champagne)
+                    .foregroundStyle(Theme.accent)
                 // Breathing means "she is doing something right now". A
                 // connected pendant is not that: it captures nothing.
                 if session.listener.isListening || !handling.isEmpty {
@@ -627,18 +1091,17 @@ struct HomeView: View {
             briefingView
             if let says = session.freshAnticipySays {
                 Rectangle()
-                    .fill(Theme.champagne.opacity(0.14))
+                    .fill(Theme.accent.opacity(0.14))
                     .frame(height: 1)
                     .padding(.vertical, Theme.Space.snug)
                 Text(says)
                     .font(.system(size: 15))
                     .lineSpacing(2)
-                    .foregroundStyle(Theme.sand)
+                    .foregroundStyle(Theme.text2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface(elevated: true)
-        .background(Theme.bloom(0.10, radius: 300))
     }
 
     /// She types her opening line ONCE.
@@ -654,7 +1117,7 @@ struct HomeView: View {
                 Text(briefingText)
                     .font(.system(size: 17))
                     .lineSpacing(3)
-                    .foregroundStyle(Theme.ivory)
+                    .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(Theme.spring, value: briefingText)
             } else {
@@ -742,7 +1205,7 @@ struct HomeView: View {
                     // A hairline belongs between two rows on the ink. It does
                     // not belong beside a card, which has its own edge already.
                     if i > 0, !group.isCarded, !groups[i - 1].isCarded {
-                        Rectangle().fill(Theme.stroke).frame(height: 0.5)
+                        Rectangle().fill(Theme.edge).frame(height: 0.5)
                     }
                     ConversationCard(group: group)
                         .transition(.asymmetric(
@@ -762,7 +1225,7 @@ struct HomeView: View {
         Text(text.uppercased())
             .font(.system(size: 12, weight: .semibold))
             .tracking(1.2)
-            .foregroundStyle(Theme.gray)
+            .foregroundStyle(Theme.muted)
     }
 
     /// The one section that demands an action gets the display register and
@@ -772,13 +1235,13 @@ struct HomeView: View {
             Text("Needs your OK")
                 .font(Theme.display(22))
                 .tracking(-0.2)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
             Text("\(needsOK.count)")
                 .font(.system(size: 12, weight: .bold))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(Theme.champagne))
-                .foregroundStyle(Theme.ink)
+                .background(Capsule().fill(Theme.fill))
+                .foregroundStyle(Theme.onFill)
         }
     }
 
@@ -787,13 +1250,28 @@ struct HomeView: View {
             Text("Found for you")
                 .font(Theme.display(22))
                 .tracking(-0.2)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
             Text("\(foundForYou.count)")
                 .font(.system(size: 12, weight: .bold))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(Theme.champagne))
-                .foregroundStyle(Theme.ink)
+                .background(Capsule().fill(Theme.fill))
+                .foregroundStyle(Theme.onFill)
+        }
+    }
+
+    private var askHeader: some View {
+        HStack(spacing: Theme.Space.tight) {
+            Text("She asked you")
+                .font(Theme.display(22))
+                .tracking(-0.2)
+                .foregroundStyle(Theme.text)
+            Text("\(openQuestions.count)")
+                .font(.system(size: 12, weight: .bold))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Theme.fill))
+                .foregroundStyle(Theme.onFill)
         }
     }
 
@@ -809,11 +1287,11 @@ struct HomeView: View {
             Text("One moment.")
                 .font(Theme.display(30))
                 .tracking(-0.5)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
             Text("I'm catching up on your day. This takes a second.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 300)
@@ -827,18 +1305,18 @@ struct HomeView: View {
         VStack(spacing: 14) {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 34))
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
                 .padding(.top, Theme.Space.hero)
                 .accessibilityHidden(true)
             Text("I can't reach my side.")
                 .font(Theme.display(30))
                 .tracking(-0.5)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
                 .multilineTextAlignment(.center)
             Text(offlineBody)
                 .font(.system(size: 17))
                 .lineSpacing(3)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 300)
@@ -848,7 +1326,7 @@ struct HomeView: View {
     }
 
     private var offlineBody: String {
-        let base = "Your phone can't get through to Anticipy Claude Version right now. It's almost always the connection. You can keep talking to me either way."
+        let base = "Your phone can't get through to Anticipy right now. It's almost always the connection. You can keep talking to me either way."
         guard session.pendingCount > 0 else { return base }
         return base + " I'm holding \(session.pendingCount) thing\(session.pendingCount == 1 ? "" : "s") you said, and I'll send \(session.pendingCount == 1 ? "it" : "them") the moment we're back."
     }
@@ -859,24 +1337,24 @@ struct HomeView: View {
         VStack(spacing: 14) {
             Image(systemName: "lock")
                 .font(.system(size: 34))
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
                 .padding(.top, Theme.Space.hero)
                 .accessibilityHidden(true)
-            Text("Anticipy Claude Version won't let me in.")
+            Text("Anticipy won't let me in.")
                 .font(Theme.display(30))
                 .tracking(-0.5)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
                 .multilineTextAlignment(.center)
             Text("I reached my server and it turned me away. I'm sorting my own key out. This should clear itself in a moment.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 300)
             Text("Error \(status)")
                 .font(.system(size: 12))
-                .foregroundStyle(Theme.gray)
+                .foregroundStyle(Theme.muted)
             retryButton("Try again")
         }
         .frame(maxWidth: .infinity)
@@ -890,21 +1368,18 @@ struct HomeView: View {
     /// SUCCEEDED, and offering a retry tells a first-timer something broke.
     private var emptyState: some View {
         VStack(spacing: 16) {
-            ZStack {
-                Theme.bloom(0.14, radius: 260)
-                LogoMark(size: 96)
-            }
-            .frame(height: 120)
-            .padding(.top, Theme.Space.wide)
-            .accessibilityHidden(true)
+            LogoMark(size: 96)
+                .frame(height: 120)
+                .padding(.top, Theme.Space.wide)
+                .accessibilityHidden(true)
             Text(greeting)
                 .font(Theme.display(40))
                 .tracking(-1.0)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
             Text("Live your day. I listen, I understand, and I handle the follow-through, asking before anything is sent.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 300)
@@ -917,12 +1392,12 @@ struct HomeView: View {
                 manifestRow("anything that needs a reply", delay: 1.07)
             }
             .padding(.top, Theme.Space.tight)
-            Rectangle().fill(Theme.stroke).frame(height: 0.5)
+            Rectangle().fill(Theme.edge).frame(height: 0.5)
                 .padding(.vertical, Theme.Space.snug)
             Text("WHEN I CATCH SOMETHING, IT LOOKS LIKE THIS")
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(1.2)
-                .foregroundStyle(Theme.gray)
+                .foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)
             // The REAL components, fed fixtures — using the actual views
             // guarantees the promise matches the delivery.
@@ -948,7 +1423,7 @@ struct HomeView: View {
             PulseDot(delay: delay)
             Text(text)
                 .font(.system(size: 17))
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
         }
     }
 
@@ -958,13 +1433,8 @@ struct HomeView: View {
             Task { await session.refresh() }
         } label: {
             Label(title, systemImage: "arrow.clockwise")
-                .font(.callout.weight(.semibold))
-                .padding(.horizontal, 20)
-                .padding(.vertical, 11)
-                .background(Capsule().strokeBorder(Theme.stroke))
-                .foregroundStyle(Theme.sand)
         }
-        .buttonStyle(.pressable)
+        .buttonStyle(.ghost)
         .padding(.top, 4)
     }
 
@@ -973,23 +1443,21 @@ struct HomeView: View {
     private var staleNotice: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: session.connection == .offline ? "wifi.slash" : "lock")
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
                 Text(session.connection == .offline
-                     ? "I can't reach Anticipy Claude Version right now, so this is what I had a moment ago."
-                     : "Anticipy Claude Version turned me away just now, so this is what I had a moment ago.")
+                     ? "I can't reach Anticipy right now, so this is what I had a moment ago."
+                     : "Anticipy turned me away just now, so this is what I had a moment ago.")
                     .font(.footnote)
-                    .foregroundStyle(Theme.sand)
+                    .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {
                     Task { await session.refresh() }
                 } label: {
                     Label("Try again", systemImage: "arrow.clockwise")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Theme.champagne)
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.ghost)
             }
             Spacer(minLength: 0)
         }
@@ -1016,28 +1484,28 @@ struct ConfirmJobCard: View {
             Label(stuck ? "Stuck. I need you" : "Ready. Say the word",
                   systemImage: stuck ? "hand.raised" : "checkmark.seal")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
             Text(job.humanGoal)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
             if let source = job.approvalSource {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Your exact words")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Theme.gray)
+                        .foregroundStyle(Theme.muted)
                     Text(source)
                         .font(.footnote)
-                        .foregroundStyle(Theme.sand)
+                        .foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if let r = job.result, !r.isEmpty {
-                Text(r).font(.footnote).foregroundStyle(Theme.sand)
+                Text(r).font(.footnote).foregroundStyle(Theme.text2)
             }
             if uncertain {
                 Text("First check the site or app where this was happening. Only continue if the action did not happen.")
                     .font(.caption)
-                    .foregroundStyle(Theme.sand)
+                    .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if stuck && !uncertain {
@@ -1045,7 +1513,7 @@ struct ConfirmJobCard: View {
                           axis: .vertical)
                     .lineLimit(1...4)
                     .font(.callout)
-                    .foregroundStyle(Theme.ivory)
+                    .foregroundStyle(Theme.text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
@@ -1055,9 +1523,9 @@ struct ConfirmJobCard: View {
             // this row that reads as a UI glitch, and the natural next move
             // is to tap Send again — which is how one email goes twice.
             if failed {
-                Label("That didn't go through, I couldn't reach Anticipy Claude Version. Nothing was sent.", systemImage: "exclamationmark.triangle")
+                Label("That didn't go through, I couldn't reach Anticipy. Nothing was sent.", systemImage: "exclamationmark.triangle")
                     .font(.caption)
-                    .foregroundStyle(Theme.sand)
+                    .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 10) {
@@ -1078,30 +1546,97 @@ struct ConfirmJobCard: View {
                                  : (failed ? "Try again" : (stuck ? "Send answer" : "Send it")))
                         }
                     }
-                    .font(.callout.weight(.semibold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(Capsule().fill(Theme.champagne))
-                    .foregroundStyle(Theme.ink)
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.glass)
                 .disabled(sending || (stuck && !uncertain
                            && answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 Button {
-                    Haptics.tap()
                     Task { await session.decline(job) }
                 } label: {
                     Text("Not now")
-                        .font(.callout.weight(.semibold))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        .background(Capsule().strokeBorder(Theme.stroke))
-                        .foregroundStyle(Theme.sand)
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.ghost)
                 .disabled(sending)
             }
-            .opacity(sending ? 0.7 : 1)
+            // No opacity on the row: each control dims itself when it is
+            // disabled, so a send in flight no longer greys out the sentence
+            // the person is still reading.
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .anticipyCard()
+    }
+}
+
+/// A question she asked with no task behind it, and a box to answer it in.
+///
+/// `ConfirmJobCard` answers questions that belong to a job. This answers the
+/// other kind, and it deliberately looks quieter: nothing here is waiting on
+/// consent, and a proactive check-in dressed up as an approval would teach him
+/// to stop reading them.
+///
+/// The answer goes to the brain as one inbound turn, never onto a job. Which
+/// task she meant, whether the answer covers what she asked, and what to keep
+/// as a fact about him are all decisions the text lane already owns; a
+/// card-local write would be a second, worse copy of that reasoning.
+struct AskCard: View {
+    let event: BrainEvent
+    @EnvironmentObject var session: AnticipySession
+    @State private var answer = ""
+
+    private var sending: Bool { session.inFlight.contains(event.id) }
+    private var failed: Bool { session.failedWrites.contains(event.id) }
+    private var empty: Bool {
+        answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("She asked", systemImage: "quote.bubble")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+            Text(event.text ?? "")
+                .font(.callout)
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField("Answer her", text: $answer, axis: .vertical)
+                .lineLimit(1...4)
+                .font(.callout)
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surface))
+                .accessibilityLabel("Your answer to her question")
+            // Same reason ConfirmJobCard carries this row: a write that failed
+            // while the card stayed put reads as a UI glitch, and the natural
+            // next move is to send again.
+            if failed {
+                Label("That didn't go through, I couldn't reach Anticipy. She hasn't heard it.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button {
+                // No haptic here. `answer` buzzes only once the server has
+                // taken it, which is the same rule every other write follows.
+                Task { await session.answer(event, text: answer) }
+            } label: {
+                Group {
+                    if sending {
+                        HStack(spacing: 8) {
+                            BreathingDot(size: 6)
+                            Text("Sending…")
+                        }
+                    } else {
+                        Text(failed ? "Try again" : "Send")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+            .disabled(sending || empty)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
@@ -1119,18 +1654,18 @@ struct SessionLineRow: View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: line.received ? "checkmark.circle.fill" : "circle.dotted")
                 .font(.caption)
-                .foregroundStyle(line.received ? Theme.champagne : Theme.gray)
+                .foregroundStyle(line.received ? Theme.accent : Theme.muted)
                 .scaleEffect(line.received ? 1.0 : 0.9)
                 .animation(Theme.springJoy, value: line.received)
                 .padding(.top, 2)
                 .accessibilityHidden(true)
             Text(line.text)
                 .font(.footnote)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
             if line.decision == "act" {
                 Image(systemName: "bolt.fill")
                     .font(.caption2)
-                    .foregroundStyle(Theme.champagne)
+                    .foregroundStyle(Theme.accent)
                     .padding(.top, 2)
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
                     .accessibilityLabel("I'm acting on this")
@@ -1185,21 +1720,21 @@ struct HandlingCard: View {
                 BreathingDot(size: 8)
             } else {
                 Image(systemName: "hourglass")
-                    .foregroundStyle(Theme.gray)
+                    .foregroundStyle(Theme.muted)
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(job.status == "running" ? "I'm handling it" : "Queued for your browser")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.champagne)
+                    .foregroundStyle(Theme.accent)
                 Text(job.humanGoal)
                     .font(.system(size: 17))
                     .lineSpacing(3)
-                    .foregroundStyle(Theme.ivory)
+                    .foregroundStyle(Theme.text)
                 if let doingNow {
                     Text(doingNow)
                         .font(.system(size: 13))
-                        .foregroundStyle(Theme.sand)
+                        .foregroundStyle(Theme.text2)
                         .lineLimit(2)
                         .transition(.opacity)
                         .animation(Theme.spring, value: doingNow)
@@ -1220,12 +1755,8 @@ struct HandlingCard: View {
                     Task { _ = await session.stopRunning(job) }
                 } label: {
                     Text(stopping ? "Stopping…" : "Stop")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(stopping ? Theme.sand : Theme.champagne)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .overlay(Capsule().strokeBorder(Theme.stroke, lineWidth: 1))
                 }
+                .buttonStyle(.ghost)
                 .disabled(stopping)
                 .accessibilityLabel(stopping ? "Stopping" : "Stop this task")
             }
@@ -1255,31 +1786,30 @@ struct FoundCard: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "sparkle")
-                .foregroundStyle(Theme.champagne)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 8) {
-                Text(headline)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(Theme.ivory)
-                Text(event.text ?? "")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.sand)
-                    .lineLimit(expanded ? nil : 3)
-                    .fixedSize(horizontal: false, vertical: expanded)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        Haptics.tap()
-                        withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
-                    }
-                if !expanded {
-                    Text("tap for the full picture")
-                        .font(.caption2)
-                        .foregroundStyle(Theme.gray)
+        // No leading glyph. The sparkle was decoration on a card that already
+        // announces itself with `anticipyCard`'s surface and the section
+        // heading above it; the headline carries the beat in semibold instead,
+        // and the text starts at the card's own edge rather than behind an
+        // indent nothing occupies.
+        VStack(alignment: .leading, spacing: 8) {
+            Text(headline)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Theme.text)
+            Text(event.text ?? "")
+                .font(.footnote)
+                .foregroundStyle(Theme.text2)
+                .lineLimit(expanded ? nil : 3)
+                .fixedSize(horizontal: false, vertical: expanded)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    Haptics.tap()
+                    withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
                 }
+            if !expanded {
+                Text("tap for the full picture")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.muted)
             }
-            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
@@ -1299,7 +1829,7 @@ struct DoneCard: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: succeeded ? "checkmark.circle.fill" : "exclamationmark.circle")
-                .foregroundStyle(succeeded ? Theme.champagne : Theme.gray)
+                .foregroundStyle(succeeded ? Theme.accent : Theme.muted)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
                 if succeeded {
@@ -1311,7 +1841,7 @@ struct DoneCard: View {
                     let card = JobReceiptPolicy.doneCard(goal: job.humanGoal, result: job.result)
                     Text(card.lead)
                         .font(.callout.weight(.medium))
-                        .foregroundStyle(card.hasReceipt ? Theme.ivory : Theme.sand)
+                        .foregroundStyle(card.hasReceipt ? Theme.text : Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                         .lineLimit(expanded ? nil : 4)
                         .contentShape(Rectangle())
@@ -1322,15 +1852,15 @@ struct DoneCard: View {
                     if let context = card.context {
                         Text(context)
                             .font(.footnote)
-                            .foregroundStyle(Theme.gray)
+                            .foregroundStyle(Theme.muted)
                     }
                 } else {
                     Text(job.humanGoal)
                         .font(.callout.weight(.medium))
-                        .foregroundStyle(Theme.ivory)
+                        .foregroundStyle(Theme.text)
                     Text(job.failureLine)
                         .font(.footnote)
-                        .foregroundStyle(Theme.sand)
+                        .foregroundStyle(Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     // docs ex 78: a failed card must answer THREE things -
                     // what happened, is my stuff safe, what do I do next.
@@ -1342,12 +1872,12 @@ struct DoneCard: View {
                     // the person cannot tell.
                     Text(job.safetyLine)
                         .font(.caption)
-                        .foregroundStyle(Theme.gray)
+                        .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                     if retryFailed {
-                        Text("I couldn't even queue it back up. I can't reach Anticipy Claude Version.")
+                        Text("I couldn't even queue it back up. I can't reach Anticipy.")
                             .font(.caption)
-                            .foregroundStyle(Theme.gray)
+                            .foregroundStyle(Theme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     VStack(alignment: .leading, spacing: 8) {
@@ -1366,37 +1896,28 @@ struct DoneCard: View {
                                     Text("Start a fresh attempt")
                                 }
                             }
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(Theme.champagne))
-                            .foregroundStyle(Theme.ink)
                         }
-                        .buttonStyle(.pressable)
+                        .buttonStyle(.glass)
                         .disabled(retrying)
                         Text("This failed attempt stays in history; the retry gets its own approval and result.")
                             .font(.caption2)
-                            .foregroundStyle(Theme.gray)
+                            .foregroundStyle(Theme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .opacity(retrying ? 0.7 : 1)
                     // The raw string is a JavaScript exception. It stays
                     // available and stops being the headline.
                     if let r = job.result, !r.isEmpty {
                         Button {
-                            Haptics.tap()
                             withAnimation(.easeInOut(duration: 0.2)) { showRaw.toggle() }
                         } label: {
                             Label(showRaw ? "Hide the details" : "Show me the details",
                                   systemImage: showRaw ? "chevron.up" : "chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(Theme.gray)
                         }
-                        .buttonStyle(.pressable)
+                        .buttonStyle(.ghost)
                         if showRaw {
                             Text(r)
                                 .font(.caption2.monospaced())
-                                .foregroundStyle(Theme.gray)
+                                .foregroundStyle(Theme.muted)
                                 .textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .padding(10)
@@ -1422,22 +1943,39 @@ struct TranscriptRow: View {
     private var local: Bool { line.id.hasPrefix("local-") }
 
     /// The instant the product becomes real — a line flipping to "act" —
-    /// arrives on the joy spring, once.
+    /// arrives on the joy spring, once. A latch and nothing more now: it used
+    /// to flash the row's champagne rule to full strength for 0.6s and settle
+    /// back, and that rule went with every other golden bar. The moment is
+    /// still carried twice — `Haptics.taskDone()` below, and "On it" springing
+    /// in on `Theme.springJoy` — so the flash was the third telling of it.
     @State private var celebrated = false
 
+    /// WHICH EARS caught this line, drawn small and grey. Which sources earn a
+    /// badge — and which deliberately stay silent — is decided by
+    /// CaptureSourcePolicy, where it is tested without a simulator.
+    private var ear: CaptureSourcePolicy.Badge? {
+        CaptureSourcePolicy.badge(for: line.source)
+    }
+
     var body: some View {
-        // Speech looks like speech: a champagne rule at the edge, her words
-        // at voice size, no container.
-        HStack(alignment: .top, spacing: 12) {
-            Capsule()
-                .fill(Theme.champagne.opacity(line.decision == "act" && celebrated ? 1.0 : 0.35))
-                .frame(width: 2)
-                .animation(Theme.spring, value: celebrated)
-            VStack(alignment: .leading, spacing: 5) {
+        // Speech looks like speech: her words at voice size, no container and
+        // no edge. The champagne rule that stood at the left is gone; nothing
+        // took its place, because the row was never a container and a border
+        // would make it one.
+        VStack(alignment: .leading, spacing: 5) {
             Text(line.text)
                 .font(.system(size: 17))
                 .lineSpacing(3)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
+            if let ear {
+                HStack(spacing: 4) {
+                    Image(systemName: ear.glyph).accessibilityHidden(true)
+                    Text(ear.label)
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.muted)
+                .accessibilityLabel(CaptureSourcePolicy.accessibilityLabel(for: ear))
+            }
             switch line.decision {
             case "act":
                 HStack(spacing: 5) {
@@ -1445,7 +1983,7 @@ struct TranscriptRow: View {
                     Text("On it")
                 }
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
                 .transition(.scale(scale: 0.8).combined(with: .opacity))
             case "ask":
                 HStack(spacing: 5) {
@@ -1453,7 +1991,7 @@ struct TranscriptRow: View {
                     Text("Quick question for you")
                 }
                 .font(.caption.weight(.medium))
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
             case "ignore":
                 // Two different silences, finally told apart. "Ignored with
                 // a goal" means she quietly started work because of this
@@ -1466,11 +2004,11 @@ struct TranscriptRow: View {
                         Text("Looking into it. I'll text you what I find")
                     }
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(Theme.champagne.opacity(0.85))
+                    .foregroundStyle(Theme.accent.opacity(0.85))
                 } else {
                     Text("Noted. Nothing needed")
                         .font(.caption)
-                        .foregroundStyle(Theme.gray)
+                        .foregroundStyle(Theme.muted)
                 }
             default:
                 if waitedTooLong {
@@ -1479,16 +2017,14 @@ struct TranscriptRow: View {
                              ? "This one is still on your phone, it hasn't reached me yet."
                              : "I have this, but I haven't come back with anything on it.")
                             .font(.caption)
-                            .foregroundStyle(Theme.gray)
+                            .foregroundStyle(Theme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                         Button {
                             Task { await session.refresh() }
                         } label: {
                             Label(local ? "Send it now" : "Check again", systemImage: "arrow.clockwise")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.champagne)
                         }
-                        .buttonStyle(.pressable)
+                        .buttonStyle(.ghost)
                     }
                 } else {
                     // A line still on this phone hasn't reached the brain yet —
@@ -1496,9 +2032,8 @@ struct TranscriptRow: View {
                     // network dropped it.
                     Text(local ? "Sending…" : "Thinking…")
                         .font(.caption)
-                        .foregroundStyle(Theme.gray)
+                        .foregroundStyle(Theme.muted)
                 }
-            }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1507,10 +2042,6 @@ struct TranscriptRow: View {
             guard decision == "act", !celebrated else { return }
             celebrated = true
             Haptics.taskDone()
-            // The rule flashes to full for a moment, then settles.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                withAnimation(Theme.spring) { celebrated = false }
-            }
         }
         .task(id: line.id) {
             waitedTooLong = false

@@ -15,42 +15,28 @@ struct ConversationCard: View {
 
     private var front: HeardFront { group.front }
 
-    /// A single vertical stripe, read peripherally. `.noted` is today's exact
-    /// value from `TranscriptRow`, which is the honesty wall in one number: a
-    /// conversation carrying no signal looks exactly as it does today.
-    private var ruleOpacity: Double {
-        switch group.weight {
-        case .noted:   return 0.35
-        case .looking: return 0.55
-        case .acting:  return 0.80
-        case .asking:  return 1.00
-        }
-    }
-
     private var hasFrontContent: Bool { front.verb != nil || !front.rows.isEmpty }
 
+    // The vertical stripe that used to grade this card by weight is gone with
+    // every other golden bar, and NOTHING replaced it, because the weight was
+    // never only in the stripe: `frontFace` says it in words she already uses
+    // ("Quick question for you", "On it", "Looking into it"), and
+    // `HeardRegister(carded:)` says it in register — an object at `.acting`
+    // and above, a line on the ink below. The stripe was the third telling of
+    // one fact, and the quietest one at that.
     var body: some View {
-        HStack(alignment: .top, spacing: front.showsHerOwn ? Theme.Space.snug : 0) {
-            if front.showsHerOwn {
-                Capsule()
-                    .fill(Theme.champagne.opacity(ruleOpacity))
-                    .frame(width: 2)
-                    .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: Theme.Space.snug) {
+            if let t = front.title { titleRow(t) }
+            // Emitted only when there is a face to show, so a title-only
+            // card cannot pick up a phantom row of stack spacing.
+            // .clipped() because the two faces cross-move: neither may
+            // paint over its neighbours on the way past.
+            if showingRecord {
+                recordFace.clipped()
+            } else if hasFrontContent {
+                frontFace.clipped()
             }
-            VStack(alignment: .leading, spacing: Theme.Space.snug) {
-                if let t = front.title { titleRow(t) }
-                // Emitted only when there is a face to show, so a title-only
-                // card cannot pick up a phantom row of stack spacing.
-                // .clipped() because the two faces cross-move: neither may
-                // paint over its neighbours on the way past.
-                if showingRecord {
-                    recordFace.clipped()
-                } else if hasFrontContent {
-                    frontFace.clipped()
-                }
-                if !front.isComplete { affordanceRow }
-            }
-            Spacer(minLength: 0)
+            if !front.isComplete { affordanceRow }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(HeardRegister(carded: group.isCarded))
@@ -74,7 +60,7 @@ struct ConversationCard: View {
                 Text(text)
                     .font(Theme.display(22))
                     .tracking(-0.2)
-                    .foregroundStyle(Theme.ivory)
+                    .foregroundStyle(Theme.text)
             } else {
                 // Her words, not a summary she never wrote. The voice register,
                 // so it reads as speech. lineLimit truncates the RENDERING and
@@ -83,14 +69,24 @@ struct ConversationCard: View {
                 Text(text)
                     .font(.system(size: 17))
                     .lineSpacing(3)
-                    .foregroundStyle(Theme.ivory)
+                    .foregroundStyle(Theme.text)
                     .lineLimit(showingRecord ? nil : 2)
             }
             Spacer(minLength: Theme.Space.tight)
+            // Provenance sits at the same visual weight as the clock, because
+            // that is what it is: metadata about the capture, not something she
+            // decided. Nil for a typed, unknown or MIXED-ear conversation —
+            // HeardGroup.ear refuses to pick a side.
+            if let ear = CaptureSourcePolicy.badge(for: front.ear) {
+                Image(systemName: ear.glyph)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.muted)
+                    .accessibilityLabel(CaptureSourcePolicy.accessibilityLabel(for: ear))
+            }
             if let t = clockTime {
                 Text(t)
                     .font(.system(size: 12))
-                    .foregroundStyle(Theme.gray)
+                    .foregroundStyle(Theme.muted)
                     .accessibilityHidden(true)
             }
         }
@@ -108,21 +104,21 @@ struct ConversationCard: View {
                     Text("Quick question for you")
                 }
                 .font(.caption.weight(.medium))
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
             case .acting:
                 HStack(spacing: 5) {
                     Image(systemName: "bolt.fill").accessibilityHidden(true)
                     Text("On it")
                 }
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
             case .looking:
                 HStack(spacing: 5) {
                     Image(systemName: "magnifyingglass").accessibilityHidden(true)
                     Text("Looking into it. I'll text you what I find")
                 }
                 .font(.caption.weight(.medium))
-                .foregroundStyle(Theme.champagne.opacity(0.85))
+                .foregroundStyle(Theme.accent.opacity(0.85))
             case .noted, .none:
                 EmptyView()
             }
@@ -157,7 +153,7 @@ struct ConversationCard: View {
                 .accessibilityHidden(true)
         }
         .font(.system(size: 12))
-        .foregroundStyle(Theme.gray)
+        .foregroundStyle(Theme.muted)
     }
 
     /// The clock time of the newest line we can actually read a date off. Local

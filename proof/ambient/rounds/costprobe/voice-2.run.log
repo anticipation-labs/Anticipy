@@ -1,0 +1,32 @@
+pb        http://127.0.0.1:8090
+owner_ref 15i3kxezkt1qwto
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    5 utterances, 0 already done, 5 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+pb        http://127.0.0.1:8090
+owner_ref 15i3kxezkt1qwto
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,32863,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    5 utterances, 0 already done, 5 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/5]    amb-0002 want=act    got=act         54.9s  'Damn, the Hendricks review is Thursday and I still have no'
+            goal: remind to pull Q3 numbers before the Hendricks review on Thursday, August 27, 2026
+[2/5] !! amb-0011 want=act    got=ignore      10.1s  'My revalidation is due and I have not logged a single hour'
+[1/5] !! amb-0002 want=act    got=ignore      22.2s  'Damn, the Hendricks review is Thursday and I still have no'
+            goal: pull Q3 numbers for Hendricks review on Thursday August 27, 2026
+[3/5] !! amb-0020 want=ask    got=ignore       7.0s  'We are going to be short on the test cell booking if nobod'
+[4/5]    amb-0029 want=ignore got=ignore       9.1s  'That loft conversion was a nightmare, never again.'
+[2/5] !! amb-0011 want=act    got=ignore      15.1s  'My revalidation is due and I have not logged a single hour'
+[3/5] !! amb-0020 want=ask    got=ignore       9.3s  'We are going to be short on the test cell booking if nobod'
+[5/5] !! amb-0038 want=act    got=ignore      12.1s  'I cannot do the Dover run until the trailer has had its br'
+
+pushed 5 in 1.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-2.jsonl
+  act=1  ignore=4
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[4/5]    amb-0029 want=ignore got=ignore       7.0s  'That loft conversion was a nightmare, never again.'
+[5/5] !! amb-0038 want=act    got=ignore      12.1s  'I cannot do the Dover run until the trailer has had its br'
+
+pushed 5 in 1.1 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-2.jsonl
+  ignore=5
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

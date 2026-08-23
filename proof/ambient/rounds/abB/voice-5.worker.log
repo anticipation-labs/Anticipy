@@ -1,0 +1,31 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: escalate (substantive, no overlap, but recent) seg=c3xjgixhgdshmhm
+heard: 'I am on nights all next week and I have not sorted anything for the kids.' -> act (arrange childcare/meals for kids next week)
+segment: link (anaphoric/short, still inside the near band) seg=v4o415ydoeok7cw
+heard: 'Table six sent it back twice.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=6wlxhpcrycqud4k
+heard: 'My Driver CPC hours are seven short and the cutoff is September.' -> ignore (find Driver CPC courses to make up 7 hours before September 1, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=xqei65sl6b1xet2
+heard: 'My SIA licence expires in three months and the renewal takes eight weeks.' -> act (renew SIA licence)
+segment: link (anaphoric/short, still inside the near band) seg=zx6jfv6lxtfrv7n
+heard: 'It would be nice to have a proper garden.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ev74schhgtgcotu
+heard: 'Did we ever sort the hotel for the wedding?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=thvwbrm3sjhpphx
+heard: 'The claim is with the adjuster now, but the excess payment still has to go out this week.' -> act (Arrange excess payment for claim this week)
+segment: link (anaphoric/short, still inside the near band) seg=fh440kt0khbeo6v
+heard: 'Revalidation.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=zg15r9u7rq8ww4n
+heard: 'The stock count is Sunday night and I have not asked a soul to come in early for it.' -> ignore (arrange for staff to come in early for stock count on Sunday, August 23, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=bxckg6hhun5e48m
+heard: 'If I ever got a unit of my own I would want a sled track down one side of it.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=0rimmmi8f1crmju
+heard: 'I am supposed to sign the release off tonight and I do not know whether we agreed to block on the accessibility defects.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=8fe7o0u7tmf2vbo
+heard: 'My defib refresher has lapsed and I am on the response rota from Sunday.' -> act (book defib refresher course)
+segment: escalate (substantive, no overlap, but recent) seg=41wpvd3ru3cndte
+heard: 'I will be out of hours before Carlisle at this rate and the planner needs telling now.' -> ignore (email Alex about defib refresher lapse)

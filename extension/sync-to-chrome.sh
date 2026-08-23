@@ -21,6 +21,7 @@
 set -e
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
+CHROME_DIR="$HOME/Library/Application Support/Google/Chrome"
 
 # FIND WHERE CHROME IS ACTUALLY READING IT, rather than assuming.
 #
@@ -34,11 +35,35 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 # and sync into whichever folder Chrome actually points at. Some installs read
 # straight from a folder on the Desktop; others read Chrome's own private copy.
 # Both work, because we write to the path Chrome itself recorded.
-DEST=$(python3 - <<'PY'
-import json, os, glob
-base = os.path.expanduser("~/Library/Application Support/Google/Chrome")
-best = ""
-for prefs in glob.glob(os.path.join(base, "*", "Secure Preferences")):
+#
+# Still true on Chrome 151 (verified on this Mac, 151.0.7922.138): the records
+# live in each profile's `Secure Preferences` under extensions.settings — the
+# plain `Preferences` file carries none of them. Three things this now handles
+# that it did not:
+#
+#   * A RELATIVE path. Chrome stores its own private copies relative to the
+#     profile directory, and os.path.isdir() on a bare "abcdef/1.0_0" is False,
+#     so those installs reported "not loaded" and were silently skipped.
+#   * MORE THAN ONE profile. It used to stop at the first hit; this Mac has
+#     eight profiles, so "synced" could easily mean "synced the one you don't
+#     use". Every match is written.
+#   * Chrome reading the REPO folder itself, which is what Load unpacked does
+#     when you point it here. There is nothing to copy in that case, and
+#     rsyncing a folder onto itself is a bad way to find that out.
+FOUND=$(python3 - "$CHROME_DIR" <<'PY'
+import json, os, sys, glob
+base = sys.argv[1]
+names = {}
+try:
+    state = json.load(open(os.path.join(base, "Local State")))
+    for key, info in ((state.get("profile") or {}).get("info_cache") or {}).items():
+        names[key] = (info or {}).get("name") or ""
+except Exception:
+    pass
+seen = set()
+for prefs in sorted(glob.glob(os.path.join(base, "*", "Secure Preferences"))):
+    profile_dir = os.path.dirname(prefs)
+    profile = os.path.basename(profile_dir)
     try:
         d = json.load(open(prefs))
     except Exception:
@@ -48,34 +73,92 @@ for prefs in glob.glob(os.path.join(base, "*", "Secure Preferences")):
             continue
         name = ((e.get("manifest") or {}).get("name") or "")
         path = e.get("path") or ""
-        if "anticipy" in (name + path).lower() and os.path.isdir(path):
-            best = path
-            break
-    if best:
-        break
-print(best)
+        if "anticipy" not in (name + path).lower():
+            continue
+        # Chrome writes an absolute path for a folder you picked yourself and a
+        # profile-relative one for a copy it made. Resolve both.
+        full = path if os.path.isabs(path) else os.path.join(profile_dir, path)
+        if not os.path.isfile(os.path.join(full, "manifest.json")):
+            continue
+        if full in seen:
+            continue
+        seen.add(full)
+        label = f"{profile} ({names.get(profile)})" if names.get(profile) else profile
+        print("\t".join([full, label, ext_id]))
 PY
 )
 
-if [ -z "$DEST" ]; then
-  echo "Anticipy is not loaded as an unpacked extension in any Chrome profile."
-  echo "Load it once via chrome://extensions -> Load unpacked, then re-run this."
+if [ -z "$FOUND" ]; then
+  cat <<EOF
+Anticipy is not loaded in any Chrome profile on this Mac.
+
+Nothing can do this for you: Chrome 151 blocks --load-extension on the stable
+channel, so it is five clicks, once, by hand.
+
+  1. Open Chrome, go to    chrome://extensions
+  2. Turn ON "Developer mode"  — the switch at the TOP RIGHT of that page
+  3. Click "Load unpacked"     — the button at the TOP LEFT
+  4. Choose this exact folder:
+
+       $SRC
+
+     (In the file picker press Shift-Cmd-G, paste that path, Enter, then
+     click "Select". Pick the folder itself — do not open it first.)
+  5. A card appears: "Anticipy". A setup tab opens with a
+     6-digit code; type that code into Anticipy on your iPhone.
+
+If you use more than one Chrome profile, do it in the profile you actually
+browse in — the avatar at the top right is the one you are in now.
+
+Then re-run this script each time the repo changes:  sh extension/sync-to-chrome.sh
+EOF
   exit 1
 fi
 
 echo "repo   : $SRC"
-echo "chrome : $DEST"
 
-# Tests, the store bundle and package.json are development-only; shipping them
-# is harmless but they are not part of the extension.
-rsync -a --delete \
-  --exclude 'tests/' --exclude 'store/' --exclude 'node_modules/' \
-  --exclude 'package.json' --exclude 'sync-to-chrome.sh' \
-  "$SRC"/ "$DEST"/
-
+TAB=$(printf '\t')
 REPO_V=$(python3 -c "import json;print(json.load(open('$SRC/manifest.json'))['version'])")
-LIVE_V=$(python3 -c "import json;print(json.load(open('$DEST/manifest.json'))['version'])")
+
+# A temp file, not a pipe: a `while` on the right of a pipe runs in a subshell,
+# where an `exit 1` on a failed copy exits nothing but the subshell and the
+# script goes on to print its cheerful closing line.
+LIST=$(mktemp)
+trap 'rm -f "$LIST"' EXIT
+printf '%s\n' "$FOUND" > "$LIST"
+
+while IFS="$TAB" read -r DEST LABEL EXT_ID; do
+  [ -n "$DEST" ] || continue
+  echo "chrome : $DEST"
+  echo "         profile $LABEL, extension id $EXT_ID"
+  if [ "$DEST" = "$SRC" ]; then
+    # The good case, and the one that used to end in rsync copying a folder
+    # over itself: Chrome is reading this checkout directly, so the code on
+    # disk IS the code it will load. Nothing to copy.
+    echo "         Chrome reads this repo folder directly — nothing to copy."
+    echo "         Press Reload on that card in chrome://extensions to pick up your edits."
+    continue
+  fi
+  # Tests, the store bundle and package.json are development-only; shipping
+  # them is harmless but they are not part of the extension. Excluded files are
+  # also protected from --delete, which is what keeps this safe to run against
+  # a folder that is not a pristine copy.
+  rsync -a --delete \
+    --exclude 'tests/' --exclude 'store/' --exclude 'node_modules/' \
+    --exclude 'package.json' --exclude 'sync-to-chrome.sh' \
+    "$SRC"/ "$DEST"/
+  LIVE_V=$(python3 -c "import json;print(json.load(open('$DEST/manifest.json'))['version'])")
+  if [ "$REPO_V" = "$LIVE_V" ]; then
+    echo "         synced $REPO_V"
+  else
+    echo "         MISMATCH — copied $REPO_V but that folder still reads $LIVE_V."
+    echo "         Something else owns that folder; load unpacked from $SRC instead."
+    exit 1
+  fi
+done < "$LIST"
+
 echo
-echo "synced $REPO_V -> Chrome now has $LIVE_V"
-[ "$REPO_V" = "$LIVE_V" ] || { echo "MISMATCH — the copy did not take"; exit 1; }
-echo "Now press Reload on the Anticipy Claude Version card in chrome://extensions."
+echo "Now press Reload on the Anticipy card in chrome://extensions (in that"
+echo "profile), then check the version on the card reads $REPO_V. An unpacked"
+echo "extension never auto-updates, and a stale worker graph is the single most"
+echo "common reason the browser arm looks dead."

@@ -1,0 +1,107 @@
+pb        http://127.0.0.1:8090
+owner_ref 1x6zqi1nd6udn36
+brain     worker: pid 27562,27563,27564,27565,27566,27567,27568,27570,27571,27572,27573,27574,27575,27576,27577,27578,27622,27626,27630,27635,27637,27639 up since 12:53:12, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62]    amb-0014 want=act    got=act         17.0s  'The bundle for the Prentice hearing has to be filed by fou'
+            goal: File the bundle for the Prentice hearing by 4 PM PDT today, August 21, 2026
+[2/62]    amb-0030 want=act    got=act         13.2s  'My eighteenth edition update expires this year and courses'
+            goal: Research course schedule and booking for Alex's 18th edition update
+[3/62]    amb-0046 want=act    got=act         11.2s  'The EPC on the Kingsway flat expired, I cannot list it wit'
+            goal: Renew EPC for Kingsway flat
+[4/62] !! amb-0062 want=act    got=ignore       6.1s  'I have just realised the car insurance ran out on the twel'
+            goal: Renew car insurance
+[5/62]    amb-0078 want=act    got=act         18.6s  'The Charity Commission annual return is open and nobody ha'
+            goal: Prepare Charity Commission annual return
+[6/62] !! amb-0094 want=act    got=ignore       8.0s  'The on call rota has me down for Christmas week again.'
+[7/62]    amb-0110 want=act    got=act         24.2s  'The hygiene re-inspection could come any week and the frid'
+            goal: Fix fridge log for hygiene re-inspection
+[8/62] !! amb-0126 want=act    got=ignore      17.9s  'The passport expires in four months and Spain want six.'
+            goal: research passport renewal process for Spain travel requirements
+[9/62] !! amb-0142 want=ask    got=ignore      27.4s  'I want to move my pension somewhere sensible.'
+[10/62]    amb-0158 want=act    got=act         14.4s  'We are out of the paediatric amoxicillin and the wholesale'
+            goal: Order paediatric amoxicillin from an alternative wholesaler
+[11/62]    amb-0174 want=act    got=act         28.0s  'The COSHH sheets for the new degreaser never arrived.'
+            goal: obtain COSHH sheets for new degreaser
+[12/62]    amb-0190 want=ignore got=ignore       8.2s  'You would not believe the queue in there.'
+[13/62]    amb-0206 want=ignore got=ignore      10.5s  'Everyone wants everything yesterday.'
+[14/62]    amb-0222 want=ignore got=ignore      12.3s  'Bullet point, review the schedule. Bullet point, confirm t'
+[15/62]    amb-0238 want=ignore got=ignore      28.2s  'Give me the reference and I will call them myself.'
+[16/62]    amb-0254 want=ignore got=ignore      12.3s  'The inspection passed, no actions.'
+[17/62]    amb-0270 want=ignore got=ignore      13.5s  'the the sorry no I mean the other one the'
+[18/62]    amb-0292 want=ignore got=ignore       9.7s  'The van.'
+[19/62]    amb-0293 want=act    got=act         60.0s  'It is due its service, it has been flashing at me for a fo'
+            goal: Book van service
+[20/62] !! amb-0294 want=act    got=ignore      14.1s  'And the front tyres are borderline as well.'
+            goal: schedule van service and tire replacement
+[21/62] !! per-0003 want=act    got=ignore      23.5s  'The car tax runs out on the thirty first and I have not lo'
+            goal: renew car tax for the van by August 31, 2026
+[22/62]    per-0019 want=act    got=act         57.7s  'My railcard is done and I am still standing there buying f'
+            goal: renew railcard
+[23/62]    per-0035 want=act    got=act        100.4s  'Apparently that interview travel expenses form has to go i'
+            goal: Submit interview travel expenses form
+[24/62] !! per-0051 want=act    got=ignore      15.0s  'I said I would take Auntie Pat to her hospital appointment'
+            goal: Find Auntie Pat's hospital appointment time
+[25/62]    per-0067 want=act    got=act         92.1s  'school thing tomorrow the slip the permission one needs si'
+            goal: get permission slip signed for school thing tomorrow, Saturday, August 22, 2026
+[26/62]    per-0083 want=ignore got=ignore       6.4s  'She told him if he does not sign those papers by Friday th'
+[27/62]    per-0126 want=ignore got=ignore       3.3s  'Honestly, I miss when the whole summer was just being outs'
+[28/62]    fin-0012 want=act    got=act         28.5s  'the trellis the trellis file letter i need that out before'
+            goal: send the trellis file letter
+[29/62]    fin-0028 want=ignore got=ignore       9.6s  'Get a quote in two minutes and see how much you could save'
+[30/62] !! fin-0044 want=ask    got=ignore      18.4s  'Somebody needs to order a replacement security token but I'
+[31/62]    fin-0060 want=ignore got=ignore      22.9s  'Priya, is the NDA with the Danish lot signed or still in r'
+[32/62]    fin-0076 want=act    got=act         15.6s  'The franchisor wants the refit signed off this quarter and'
+            goal: get builder's quote for refit
+[33/62]    med-0011 want=act    got=act         23.5s  'My GDC retention fee comes out at the end of December and '
+            goal: update GDC retention fee payment method
+[34/62]    med-0030 want=ignore got=ignore       6.1s  'Half my referrals turn up with no imaging and no history w'
+[35/62]    med-0046 want=act    got=act         22.4s  'The audit is due and the dose reference levels have not be'
+            goal: review dose reference levels for audit
+[36/62]    med-0062 want=act    got=act         19.3s  'The tonometer has not been calibrated since the day we bou'
+            goal: schedule tonometer calibration
+[37/62]    med-0066 want=act    got=act         16.6s  'The discovery deadline on the Ballantyne matter is the twe'
+            goal: index disclosure for Ballantyne matter by September 12, 2026
+[38/62]    med-0067 want=ignore got=ignore       5.1s  'Although, hang on, that is the one that settled at mediati'
+[39/62]    med-0068 want=ignore got=ignore       9.8s  'So forget the Ballantyne index, there is no deadline left '
+[40/62]    med-0069 want=ignore got=ignore       9.8s  'Amazing what a week does to a list.'
+[41/62]    med-0081 want=ignore got=ignore       8.2s  'The Adeyemi appeal.'
+[42/62]    med-0082 want=act    got=act         14.3s  'The bundle has to be lodged fourteen days before the heari'
+            goal: lodge Adeyemi appeal bundle by August 23, 2026
+[43/62]    med-0083 want=ignore got=ignore       5.2s  'No, wait, Farida took the lodging over when she picked the'
+[44/62] !! med-0085 want=ask    got=ignore       7.1s  'I want the accreditation assessment booked before the fees'
+            goal: Research Adeyemi accreditation assessment levels and fee change dates
+[45/62] !! med-0101 want=act    got=ignore       5.1s  'The anti money laundering policy review is annual and the '
+            goal: Research current anti-money laundering policy version
+[46/62]    svc-0007 want=ignore got=ignore       4.0s  'And after the break, we take a hidden camera into a kitche'
+[47/62]    svc-0023 want=act    got=act         11.1s  'The deposit on the string quartet was due Friday and I hav'
+            goal: Send deposit for string quartet
+[48/62]    svc-0039 want=ignore got=ignore       4.0s  'If I ever got a unit of my own I would want a sled track d'
+[49/62]    svc-0055 want=act    got=act          8.1s  'The Hallam album proof has been sat with me three weeks pa'
+            goal: Send Hallam album proof
+[50/62] !! svc-0071 want=act    got=ignore       4.0s  'The prover thermostat is drifting and the overnight doughs'
+            goal: Research prover thermostat repair options
+[51/62]    svc-0087 want=act    got=act          8.0s  'The glycol chiller is short cycling again and we are brewi'
+            goal: Contact Alex about glycol chiller repair
+[52/62] !! tep-0011 want=act    got=ignore       6.0s  'Half the laptops in finance are still on the old build and'
+            goal: Research finance laptop license renewal
+[53/62] !! tep-0027 want=ask    got=ignore       5.0s  'I want the replacement bearings on order today but I canno'
+[54/62]    tep-0043 want=act    got=act          8.0s  'Safeguarding training renewal was due at half term and min'
+            goal: renew safeguarding training
+[55/62] !! tep-0059 want=act    got=ignore       4.0s  'My DBS renewal is the thing the agency keep emailing about'
+            goal: renew DBS
+[56/62]    tep-0075 want=ignore got=ignore       6.0s  'Mm, yeah, noted.'
+            goal: renew DBS
+[57/62]    trd-0021 want=act    got=act          9.2s  'My Gas Safe reassessment slot has gone and the certificate'
+            goal: book Gas Safe reassessment
+[58/62] !! trd-0037 want=ask    got=ignore       4.0s  'I need the cherry picker hiring for the gable but I am not'
+[59/62] !! trd-0053 want=act    got=ignore       4.0s  'That oak is in a conservation area, the six week notice ha'
+[60/62]    trd-0069 want=ignore got=ignore       4.0s  'If we ever went all in on resin we would need a different '
+[61/62]    trd-0085 want=act    got=act         11.1s  'The BOL for the Rotterdam consignment has the wrong consig'
+            goal: correct consignee on BOL for Rotterdam consignment
+[62/62]    trd-0101 want=ignore got=ignore       4.0s  'Did the loadsheet come through for the Malaga or not.'
+
+pushed 62 in 18.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k8/voice-8.jsonl
+  act=24  ignore=38
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

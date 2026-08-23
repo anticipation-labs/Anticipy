@@ -1,0 +1,100 @@
+pb        http://127.0.0.1:8090
+owner_ref 8t1gqa330etjugc
+brain     worker: pid 2686,2688,2689,2690,2691,2693,2694,2695,2696,2697,2698,2699,2700,2701,2702,2703,2737,2738,2739 up since 11:28:26, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63]    amb-0017 want=act    got=act          7.5s  'The site cannot pour on Friday if that rebar inspection is'
+            goal: Book rebar inspection for site
+[2/63]    amb-0033 want=ignore got=ignore       4.0s  'Refrigerant prices are insane this year.'
+[3/63] !! amb-0049 want=act    got=ignore       2.0s  'The broker never sent the revised schedule for the fleet p'
+[4/63] !! amb-0065 want=act    got=ignore       3.0s  'The washing machine has started making that noise again.'
+[5/63] !! amb-0081 want=act    got=ignore       5.0s  'The confirmation statement is due and I have not checked t'
+            goal: Check PSC register for confirmation statement
+[6/63]    amb-0097 want=act    got=act         14.5s  'I need cover for the Thursday I am away on the course.'
+            goal: Find cover for Thursday, August 27, 2026
+[7/63] !! amb-0113 want=act    got=ignore       6.6s  'The board outside the Willow Road place has been down sinc'
+[8/63]    amb-0129 want=act    got=act         22.2s  'The gym has been taking money off me since I stopped going'
+            goal: cancel gym membership
+[9/63]    amb-0145 want=act    got=act          9.9s  'The RCVS fee is due and the reminder went to my old addres'
+            goal: Find out how to pay RCVS fee and update address
+[10/63]    amb-0161 want=act    got=act         10.2s  'The grant report is due to the funder at the end of the mo'
+            goal: Draft grant report for funder
+[11/63]    amb-0177 want=act    got=act         10.8s  'The campaign microsite domain renews next week and it is o'
+            goal: Renew campaign microsite domain
+[12/63]    amb-0193 want=ignore got=ignore       6.1s  'The printer has personally chosen violence today.'
+[13/63]    amb-0209 want=ignore got=ignore       4.0s  'I sometimes think about packing it all in and doing someth'
+[14/63]    amb-0225 want=ignore got=ignore       5.1s  'And that is why we always tell people to fix the rate befo'
+[15/63]    amb-0241 want=ignore got=ignore       4.0s  'My brother is picking Dad up from the hospital.'
+[16/63]    amb-0257 want=ignore got=ignore       4.0s  'Mm hm.'
+[17/63]    amb-0273 want=ignore got=ignore       4.4s  'hang on there is something wrong with the'
+[18/63]    amb-0307 want=ignore got=ignore       4.1s  'That mole on my back.'
+[19/63]    amb-0308 want=ignore got=ignore       5.1s  'It has changed shape I think, it is darker than it was.'
+[20/63]    amb-0309 want=act    got=act         14.1s  'I ought to get somebody to look at it.'
+            goal: book a dermatology appointment for mole check
+[21/63]    per-0006 want=act    got=act         11.4s  "Sam's asthma review letter came in March and it is still p"
+            goal: schedule asthma review for Sam
+[22/63]    per-0022 want=act    got=act         10.1s  'I have done nothing about the passport photos and the form'
+            goal: get passport photos for Sam
+[23/63]    per-0038 want=act    got=act         12.4s  'That library book is nine weeks over and I am too embarras'
+            goal: return library book
+[24/63] !! per-0054 want=act    got=ignore       4.0s  'He needs a bank account for this job and I have no clue wh'
+[25/63]    per-0070 want=ignore got=ignore       4.0s  'Someone needs to sort the bins, ah, no, I have just rememb'
+[26/63]    per-0086 want=ignore got=ignore       5.2s  'Right, sure, whatever you think.'
+[27/63]    per-0129 want=ignore got=ignore       5.1s  'I am so tired that even deciding what to eat feels like a '
+[28/63]    fin-0015 want=act    got=act         13.5s  'The extension deadline is the fifteenth and the Ferreira r'
+            goal: chase Ferreira for K-1 for tax return due August 15
+[29/63] !! fin-0031 want=act    got=ignore       6.1s  'If that rate lock lapses we lose the whole case, and it la'
+            goal: check status of rate lock for Ferreira case, due to lapse Tuesday, August 25, 2026
+[30/63]    fin-0047 want=ignore got=ignore       5.1s  'Past performance is no guide to future returns and your ca'
+[31/63]    fin-0063 want=act    got=act         11.3s  'The right to work check has to happen before Monday and I '
+            goal: schedule right to work check before Monday, August 24, 2026
+[32/63]    fin-0079 want=ignore got=ignore       4.2s  'Franchise opportunities in your area now, be your own boss'
+[33/63]    fin-0102 want=ignore got=ignore       6.8s  'The Ellery invoice.'
+[34/63] !! fin-0103 want=ignore got=act          8.1s  'Net 30 was up a fortnight ago.'
+            goal: send reminder for Ellery invoice
+[35/63] !! fin-0104 want=act    got=ignore       7.1s  'I am going to have to ring them, we cannot carry it into n'
+            goal: Call Ellery about overdue invoice
+[36/63]    fin-0105 want=ignore got=ignore       4.1s  'Although they did say the finance director is off until th'
+[37/63]    fin-0106 want=ignore got=ignore       5.1s  'Leave it, I will catch him when he is back.'
+[38/63]    med-0014 want=ignore got=ignore       4.0s  'If we ever put a second surgery upstairs the whole place w'
+[39/63]    med-0033 want=ignore got=ignore       4.1s  "I was going to move Thursday's group to the afternoon, act"
+[40/63]    med-0049 want=ignore got=ignore       4.1s  'If we ever got a second scanner the whole appointment book'
+[41/63]    med-0065 want=ignore got=ignore       5.1s  'Every single person in today wanted the one frame we have '
+[42/63]    med-0088 want=ignore got=ignore       9.5s  'The consent order is with counsel now, she is drafting it '
+[43/63]    med-0104 want=ignore got=ignore       4.0s  'We should get an external firm in to do the file reviews, '
+[44/63]    svc-0010 want=ignore got=ignore       7.2s  'Every single review mentions the breakfast eggs.'
+[45/63]    svc-0026 want=act    got=act         10.0s  'The clipper blades all want sharpening and I have got a we'
+            goal: arrange clipper blade sharpening
+[46/63]    svc-0042 want=act    got=act         21.9s  'Two of the staff DBS certificates are still on the old sch'
+            goal: update staff DBS certificates to new scheme
+[47/63]    svc-0058 want=act    got=act         12.2s  'The drone operator permission renews in November and the t'
+            goal: renew drone operator permission
+[48/63] !! svc-0074 want=act    got=ignore       7.2s  'The hygiene rating inspection is due round about now and t'
+            goal: check hygiene rating inspection due date and cold room log
+[49/63] !! svc-0090 want=ask    got=ignore       5.4s  'I would like the ghost walk running through the winter, I '
+            goal: Research ghost walk running through winter at 6pm or 8pm
+[50/63]    tep-0014 want=act    got=act          9.3s  'That talk has reminded me the pen test report has been sat'
+            goal: Triage pen test report
+[51/63]    tep-0030 want=act    got=act         10.5s  'The insulation resistance tester has no calibration certif'
+            goal: get calibration certificate for insulation resistance tester
+[52/63]    tep-0046 want=ignore got=ignore       6.2s  'Have you done your safeguarding one yet or are you leaving'
+[53/63]    tep-0062 want=ignore got=ignore       6.1s  'That documentary reckoned every county will have lost half'
+[54/63]    tep-0078 want=act    got=act         10.1s  'My defib refresher has lapsed and I am on the response rot'
+            goal: book defib refresher course
+[55/63]    tep-0104 want=ignore got=ignore       4.0s  "Tomas's review."
+[56/63] !! tep-0105 want=ignore got=act          8.1s  'It has gone past the date and his mum has emailed twice no'
+            goal: email Tomas's mum about his review
+[57/63] !! tep-0106 want=ask    got=ignore       4.1s  'I need it in the diary this week, though I have no idea wh'
+[58/63] !! trd-0024 want=ask    got=act         10.1s  'I ought to get the PAT testing round done on the tool flee'
+            goal: schedule PAT testing for tool fleet
+[59/63]    trd-0040 want=ignore got=ignore       4.2s  'Yeah, no, fair enough.'
+[60/63]    trd-0056 want=ignore got=ignore       5.1s  'the LOLER thing on the winch is or or was it the the other'
+[61/63]    trd-0072 want=ignore got=ignore       4.0s  'Right, sure, yeah.'
+[62/63]    trd-0088 want=act    got=act          9.1s  'The bunker survey figures from the last voyage never got s'
+            goal: send bunker survey figures to office
+[63/63]    trd-0104 want=ignore got=ignore       4.0s  'I should get the antifoul ordered, actually leave it, the '
+
+pushed 63 in 8.1 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k4/voice-10.jsonl
+  act=22  ignore=41
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

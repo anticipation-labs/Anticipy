@@ -1,0 +1,133 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9c841543825e
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+clock: initiated -> 'Just confirming for your calendar, are we set for your cut and blow dry tomorrow, Saturday, August 22, 2026, at 6 PM?'
+segment: append (conversation still open) seg=s0tg5f04des9ihf
+heard: 'Oh no, the VAT return is due on the seventh and I have not touched the card statements.' -> act (Prepare VAT return from card statements for August 7, 2026 deadline)
+segment: escalate (substantive, no overlap, but recent) seg=b3zojciamnth1kf
+heard: 'Staging is throwing cert errors, I bet I never renewed that domain.' -> act (Renew domain for staging)
+segment: escalate (substantive, no overlap, but recent) seg=6thqaz7drauhgsl
+heard: 'My digital tacho card runs out in about six weeks.' -> act (renew digital tacho card)
+segment: escalate (substantive, no overlap, but recent) seg=o5bf5bdk475q85f
+heard: 'My ethics form was supposed to go in last Friday and it is still sat in drafts.' -> act (submit ethics form)
+segment: escalate (substantive, no overlap, but recent) seg=i00xs7p6620s4mn
+heard: 'Copy deadline is six and I have not got the second source to say yes.' -> act (get second source to say yes for copy deadline)
+segment: escalate (substantive, no overlap, but recent) seg=c303199en7b8fym
+heard: 'My DBS is three years old, I think it needs redoing for the bank shifts.' -> act (Renew DBS for bank shifts)
+segment: escalate (substantive, no overlap, but recent) seg=4h3vbscoan59jnh
+heard: 'I promised the shop a quote for the rewire and it is still only in my head.' -> act (Draft quote for rewire for the shop)
+segment: escalate (substantive, no overlap, but recent) seg=375yms3vu3yiimy
+heard: 'Committee papers have to be published five clear days before and it is Thursday.' -> ignore (Draft quote for shop rewire)
+segment: escalate (substantive, no overlap, but recent) seg=bhvvhylstfwzes3
+heard: 'I have not filed my self assessment and January is not that far off.' -> ignore (research self assessment filing deadline)
+segment: escalate (substantive, no overlap, but recent) seg=fhpd2xmcvuwg9ho
+heard: 'My public liability renews on the first and I have not compared anything.' -> ignore (Research public liability insurance renewal options)
+segment: escalate (substantive, no overlap, but recent) seg=76hifdio3ucj02v
+heard: 'The compressor service is overdue and if it goes we close for the day.' -> act (schedule compressor service)
+segment: link (anaphoric/short, still inside the near band) seg=pblm2dkzhw0ga3s
+heard: 'It has gone cold again, has it not.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=gnl3myn3b13mphd
+heard: 'Everything takes three emails now, everything.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=l5bwpy4yx70d89w
+heard: 'Part of me wants to just start again from scratch.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=3tw48e0muzyuv7x
+heard: 'So my next guest has been doing this for over thirty years.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ywlu0mcf6z6936c
+heard: 'Suppose we did move the whole thing to Friday, would that even help?' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=nqoln1ymhku0xxb
+heard: 'Yep, that works.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=yolr7w1t5sk0yhq
+heard: 'We should get flowers sent, actually no, she said not to.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=d7xnraa1s4jwitz
+heard: 'Did you ever hear back.' -> ignore (no goal)
+segment: append (conversation still open) seg=d7xnraa1s4jwitz
+heard: 'From the school, about the trip.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=wmu57ddj1bwxkx4
+heard: "Dad's headstone, the mason wanted a decision by the end of the month and I cannot face it." -> act (draft email to mason about dad's headstone)
+segment: escalate (substantive, no overlap, but recent) seg=vlrd5khe9ish6vv
+heard: 'Three quid here, eight quid there, I have no idea what is even coming out of my account any more.' -> act (review recent account debits)
+segment: escalate (substantive, no overlap, but recent) seg=hjlry6xh632ja4q
+heard: 'There is a bird stuck behind the vent, I can hear it, I cannot just leave it there.' -> act (remove bird from behind vent)
+segment: escalate (substantive, no overlap, but recent) seg=gn918hwoplnnp2v
+heard: "The visa form wants Ella's middle name exactly as it is on the certificate and I cannot picture it." -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=ntg36xo3lve7m7s
+heard: 'The car tax, yeah, I did that on the phone while the kettle was boiling.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=yhpfn59frmtn8kc
+heard: 'sorry what no I was saying about the whether the whether it' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=wzmf02csrzo5c7n
+heard: 'Mum, is my passport still in that drawer thing?' -> ignore (no goal)
+segment: append (conversation still open) seg=wzmf02csrzo5c7n
+heard: 'It is, it is in there, but hang on, that was done when you were about eleven.' -> ignore (no goal)
+segment: append (conversation still open) seg=wzmf02csrzo5c7n
+heard: 'Oh God, so it has run out, and you need it for Easter, that is, that is weeks away.' -> act (renew Alex's passport)
+segment: append (conversation still open) seg=wzmf02csrzo5c7n
+heard: 'And everyone says they are taking weeks and weeks at the minute.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=39v3fy02rz5z1fl
+heard: 'Markets closed lower again as investors weighed the inflation print.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=h363itcs1kfp7zr
+heard: 'I want the state estimate away early but I do not know which account we are paying it from.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=cq0up7qd2hlhrf7
+heard: "Did the vendor's solicitor ever come back on the boundary, or is that still sat with us?" -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=43cyse7tk3msz1c
+heard: 'Everyone is pricing seed rounds like it is still twenty twenty one.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=whu7zncbw03enju
+heard: 'I ought to get the second analyst advert back up but I never settled on the band with the partners.' -> act (settle salary band for second analyst advert with partners)
+segment: escalate (substantive, no overlap, but recent) seg=aew9vl7zt184oiq
+heard: 'If the seed had come in at twice the size we would have three engineers by now.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=sepc5mtc6yeirxe
+heard: 'The x ray tube quote is with the finance people already, they are running it now.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=txqtp5pz77r4c4w
+heard: 'The paediatric bag has been short of the small bag valve mask since the weekend and nobody has ordered one.' -> act (order small bag valve mask for paediatric bag)
+segment: link (shares a name with the previous conversation) seg=y00o5m96ix4vxy5
+heard: 'The moving and handling refresher is overdue for the whole night team.' -> ignore (Order small bag valve mask for paediatric bag)
+segment: escalate (substantive, no overlap, but recent) seg=9yk5vbnwckpp5hn
+heard: 'the court fee the fee schedule on the file its the old one they the fees went up in april' -> ignore (find current court fee schedule)
+segment: escalate (substantive, no overlap, but recent) seg=gb444k330vjk6le
+heard: 'My duty solicitor slots for the next rota period never got submitted.' -> act (submit duty solicitor slots for next rota period)
+segment: escalate (substantive, no overlap, but recent) seg=0y5y1xvvohyvepv
+heard: 'The interpreter for the Wednesday list was never booked.' -> act (Book interpreter for Wednesday, August 26, 2026)
+segment: link (shares a name with the previous conversation) seg=xzuvtfkqy91i2lr
+heard: 'The darts final runs well past midnight and I never applied for the TENs.' -> act (apply for TENs)
+segment: escalate (substantive, no overlap, but recent) seg=s10mogsijkir89g
+heard: 'We are nearly out of the wax strips and Saturday is back to back all day.' -> act (order wax strips)
+segment: escalate (substantive, no overlap, but recent) seg=4j52nv64a4x9tuo
+heard: 'The insect screen on the baby room window still has not been fitted.' -> act (arrange for insect screen to be fitted on baby room window)
+segment: escalate (substantive, no overlap, but recent) seg=mvb9b7k73h0otoh
+heard: "I want a pupils' concert on before Christmas, I have simply not picked which Saturday." -> act (Plan pupils' concert before Christmas)
+segment: escalate (substantive, no overlap, but recent) seg=xh0dz9x22gjy8pq
+heard: 'The reseed on the far field is happening, the contractor is in there now.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=hb50x9o3ti7zd5a
+heard: 'Have you got anything Saturday morning, even early, for a cut and blow dry?' -> ignore (Find Saturday morning availability for a cut and blow dry)
+segment: append (conversation still open) seg=hb50x9o3ti7zd5a
+heard: 'Saturday has gone I am afraid, I could do you Friday at six.' -> ignore (no goal)
+segment: append (conversation still open) seg=hb50x9o3ti7zd5a
+heard: 'The online booking is still showing Saturday as open, that is the third one today.' -> ignore (no goal)
+segment: append (conversation still open) seg=hb50x9o3ti7zd5a
+heard: 'The colour order is going in as we speak, Leanne is on the site now.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=houpaqvezybe1vj
+heard: 'The bloke in that conference talk was saying you should delete your staging environment entirely and test in production.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=j6evw0wcni9yfcu
+heard: 'The roadmap review is Thursday and I have not written up what we are dropping.' -> act (Draft roadmap review notes on dropped items for Thursday, August 27, 2026)
+segment: link (shares a name with the previous conversation) seg=x56nl6nt3ftao3s
+heard: 'The relief valve on R three is out of test and I have not raised the work order.' -> act (Raise work order for relief valve on R3 (out of test))
+segment: escalate (substantive, no overlap, but recent) seg=w4sjdi8fijzke2j
+heard: 'Two of the DBS renewals for the site team expired over the summer and nobody flagged it.' -> act (Renew DBS for two site team members)
+segment: escalate (substantive, no overlap, but recent) seg=tx6e3gdbpb95o3l
+heard: 'The calibration certificate on the analytical balance has expired and audit is next week.' -> act (Renew calibration certificate for analytical balance)
+segment: link (anaphoric/short, still inside the near band) seg=m8pnfqlb205cskz
+heard: 'That training video went on about flashover for twenty minutes and never once mentioned ventilation.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=e1l8nlg2975u1yj
+heard: 'The condenser is on the wagon already, it is all moving.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=n919sblvu5znycz
+heard: 'argon bottle the reg is on the the other one no the' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=j3wxpqxyoqikvd5
+heard: "The night team's method statement for the atrium has never been written and the client audit is next week." -> act (draft method statement for atrium for night team)
+segment: link (shares a name with the previous conversation) seg=2ywk69dszw8rk1f
+heard: 'The ADR licence renewal wants a course and I cannot remember if mine is tanks or packages.' -> ignore (Research ADR licence course type for Alex)
+segment: escalate (substantive, no overlap, but recent) seg=ggoukcfujjw8e67
+heard: 'Two hours in the airport queue for a nine pound job.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=tz562ek2uefk12e
+heard: 'The wide load permit for shifting the three sixty on Sunday has never been applied for.' -> act (Apply for wide load permit for 360 shift on Sunday, August 23, 2026)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)

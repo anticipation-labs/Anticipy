@@ -1,0 +1,32 @@
+pb        http://127.0.0.1:8090
+owner_ref 1x6zqi1nd6udn36
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/4] !! amb-0008 want=act    got=ignore      22.2s  'My medical indemnity lapses next month and I have not look'
+            goal: research medical indemnity insurance renewal options
+pb        http://127.0.0.1:8090
+owner_ref 1x6zqi1nd6udn36
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,32754,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[2/4]    amb-0017 want=act    got=act         29.2s  'The site cannot pour on Friday if that rebar inspection is'
+            goal: research booking rebar inspection for site pour on Friday, August 21, 2026
+[1/4] !! amb-0008 want=act    got=ignore      11.4s  'My medical indemnity lapses next month and I have not look'
+            goal: research medical indemnity insurance renewal options
+[3/4]    amb-0026 want=ignore got=ignore       8.0s  'Half of them did not even open the booklet.'
+[4/4] !! amb-0035 want=act    got=ignore       9.0s  'The rota for next week still is not up and everyone keeps '
+
+pushed 4 in 1.2 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-8.jsonl
+  act=1  ignore=3
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[2/4] !! amb-0017 want=act    got=ignore      28.2s  'The site cannot pour on Friday if that rebar inspection is'
+            goal: book rebar inspection for Friday pour
+[3/4]    amb-0026 want=ignore got=ignore       7.0s  'Half of them did not even open the booklet.'
+[4/4] !! amb-0035 want=act    got=ignore       7.0s  'The rota for next week still is not up and everyone keeps '
+
+pushed 4 in 0.9 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-8.jsonl
+  ignore=4
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

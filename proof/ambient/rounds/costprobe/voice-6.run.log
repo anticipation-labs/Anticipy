@@ -1,0 +1,34 @@
+pb        http://127.0.0.1:8090
+owner_ref fnw0pvulizndqze
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/4]    amb-0006 want=act    got=act         34.6s  'I told Priya I would send her the payroll journal and it c'
+            goal: draft email to Priya with the payroll journal
+[2/4] !! amb-0015 want=ask    got=ignore      11.1s  'I ought to get the practising certificate renewed, the win'
+            goal: check practising certificate renewal window and requirements
+pb        http://127.0.0.1:8090
+owner_ref fnw0pvulizndqze
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,32893,32948,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/4] !! amb-0006 want=act    got=ignore      15.3s  'I told Priya I would send her the payroll journal and it c'
+            goal: Draft email to Priya with the payroll journal
+[3/4]    amb-0024 want=act    got=act         26.2s  'Parents evening slots go live tomorrow and I have not set '
+            goal: remind Alex to set availability for parents' evening before slots open on Saturday, August 22, 2026
+[4/4]    amb-0033 want=ignore got=ignore      12.1s  'Refrigerant prices are insane this year.'
+
+pushed 4 in 1.4 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-6.jsonl
+  act=2  ignore=2
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[2/4] !! amb-0015 want=ask    got=ignore      24.3s  'I ought to get the practising certificate renewed, the win'
+            goal: check practising certificate renewal window and requirements
+[3/4] !! amb-0024 want=act    got=ignore      16.2s  'Parents evening slots go live tomorrow and I have not set '
+            goal: set reminder to configure parents' evening availability today
+[4/4]    amb-0033 want=ignore got=ignore       6.0s  'Refrigerant prices are insane this year.'
+
+pushed 4 in 1.1 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-6.jsonl
+  ignore=4
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

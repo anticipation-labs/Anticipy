@@ -1,0 +1,13 @@
+pb        http://127.0.0.1:8090
+owner_ref nm28bp0p7dj06ot
+brain     worker: pid 13937,23494,23496,23499,23505,23508,23518,23581,23582,23584,23585 up since 20:51:24, newer than every file in brain/
+corpus    2 utterances, 0 already done, 2 to push
+pacing    gap=1.0s  timeout=240.0s  virtual convo gap=50.0s
+[1/2] !! amb-0004 want=ask    got=ignore      11.1s  'I should get the CFA level three booked but I have lost tr'
+            goal: Research CFA Level III registration windows and deadlines
+[2/2] !! amb-0010 want=act    got=ignore       9.0s  'The appraisal portfolio deadline is creeping up on me agai'
+
+pushed 2 in 0.4 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/smoke/voice-4.jsonl
+  ignore=2
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

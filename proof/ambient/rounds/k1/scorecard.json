@@ -1,0 +1,1700 @@
+{
+ "utterances_in_corpus": 1000,
+ "answered": 989,
+ "unanswered": 11,
+ "behaviour_accuracy": 88.9,
+ "decision_accuracy": 78.5,
+ "false_pings": 13,
+ "false_ping_rate_of_ignores": 3.1,
+ "misses": 74,
+ "miss_rate_of_work": 13.0,
+ "caught_quietly": 112,
+ "caught_loudly": 383,
+ "quiet_drift": 22,
+ "asked_when_told_to_ask": 12,
+ "assumed_instead_of_asking": 23,
+ "weighted_cost": 139,
+ "weighted_cost_note": "one false ping counted as 5 misses",
+ "hard_accuracy": 97.5,
+ "easy_accuracy": 85.6,
+ "conversations_needing_work": 39,
+ "conversations_dropped": 5,
+ "dropped_conversation_ids": [
+  "c01",
+  "c02",
+  "c03",
+  "svc-c03",
+  "svc-c05"
+ ],
+ "by_field": {
+  "accounting": {
+   "n": 9,
+   "scored": 9,
+   "right": 6,
+   "accuracy": 66.7
+  },
+  "architecture": {
+   "n": 8,
+   "scored": 8,
+   "right": 8,
+   "accuracy": 100.0
+  },
+  "audit": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "aviation": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "aviation_ground": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "bakery": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "banking_ops": {
+   "n": 4,
+   "scored": 4,
+   "right": 2,
+   "accuracy": 50.0
+  },
+  "bar_management": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "barbering": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "beauty_therapy": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "bookkeeping": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "brewing": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "bricklaying": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "bus_driving": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "butcher": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "cafe": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "care_home": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "carer": {
+   "n": 11,
+   "scored": 11,
+   "right": 10,
+   "accuracy": 90.9
+  },
+  "carpentry": {
+   "n": 7,
+   "scored": 7,
+   "right": 7,
+   "accuracy": 100.0
+  },
+  "catering": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "charity": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "chemical_engineering": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "childcare": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "civil_engineering": {
+   "n": 9,
+   "scored": 9,
+   "right": 9,
+   "accuracy": 100.0
+  },
+  "cleaning": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "commuter": {
+   "n": 8,
+   "scored": 8,
+   "right": 6,
+   "accuracy": 75.0
+  },
+  "compliance_officer": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "contract_management": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "conveyancing": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "courier": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "court_clerk": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "criminal_defence": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "cybersecurity": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "data_science": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "dentistry": {
+   "n": 7,
+   "scored": 7,
+   "right": 6,
+   "accuracy": 85.7
+  },
+  "devops": {
+   "n": 8,
+   "scored": 8,
+   "right": 8,
+   "accuracy": 100.0
+  },
+  "dog_grooming": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "elder_care": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "electrical": {
+   "n": 11,
+   "scored": 11,
+   "right": 11,
+   "accuracy": 100.0
+  },
+  "electrical_engineering": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "emergency_services": {
+   "n": 8,
+   "scored": 8,
+   "right": 7,
+   "accuracy": 87.5
+  },
+  "event_planning": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "executive_assistant": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "family_law": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "farming": {
+   "n": 8,
+   "scored": 8,
+   "right": 6,
+   "accuracy": 75.0
+  },
+  "finance": {
+   "n": 9,
+   "scored": 9,
+   "right": 6,
+   "accuracy": 66.7
+  },
+  "financial_advice": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "firefighting": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "fishing": {
+   "n": 2,
+   "scored": 2,
+   "right": 1,
+   "accuracy": 50.0
+  },
+  "fitness": {
+   "n": 7,
+   "scored": 7,
+   "right": 7,
+   "accuracy": 100.0
+  },
+  "flooring": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "florist": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "food_production": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "franchise_owner": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "freight_forwarding": {
+   "n": 7,
+   "scored": 7,
+   "right": 6,
+   "accuracy": 85.7
+  },
+  "glazing": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "government_admin": {
+   "n": 8,
+   "scored": 8,
+   "right": 8,
+   "accuracy": 100.0
+  },
+  "hairdressing": {
+   "n": 8,
+   "scored": 8,
+   "right": 6,
+   "accuracy": 75.0
+  },
+  "hobbyist": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "homeowner": {
+   "n": 7,
+   "scored": 7,
+   "right": 7,
+   "accuracy": 100.0
+  },
+  "hospitality": {
+   "n": 8,
+   "scored": 8,
+   "right": 6,
+   "accuracy": 75.0
+  },
+  "hotel_management": {
+   "n": 6,
+   "scored": 6,
+   "right": 4,
+   "accuracy": 66.7
+  },
+  "hr": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "hvac": {
+   "n": 8,
+   "scored": 8,
+   "right": 6,
+   "accuracy": 75.0
+  },
+  "immigration_law": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "insurance": {
+   "n": 9,
+   "scored": 9,
+   "right": 9,
+   "accuracy": 100.0
+  },
+  "insurance_claims": {
+   "n": 6,
+   "scored": 6,
+   "right": 5,
+   "accuracy": 83.3
+  },
+  "it_support": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "jobseeker": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "journalism": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "kennels": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "lab_technician": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "landscaping": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "law": {
+   "n": 10,
+   "scored": 10,
+   "right": 9,
+   "accuracy": 90.0
+  },
+  "lecturing": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "librarian": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "locksmith": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "logistics_trucking": {
+   "n": 12,
+   "scored": 12,
+   "right": 11,
+   "accuracy": 91.7
+  },
+  "machine_operator": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "marine": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "marketing": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "massage_therapy": {
+   "n": 2,
+   "scored": 2,
+   "right": 1,
+   "accuracy": 50.0
+  },
+  "mechanical_engineering": {
+   "n": 7,
+   "scored": 7,
+   "right": 5,
+   "accuracy": 71.4
+  },
+  "medicine": {
+   "n": 10,
+   "scored": 10,
+   "right": 8,
+   "accuracy": 80.0
+  },
+  "mental_health": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "midwifery": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "military_admin": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "mortgage_broking": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "music": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "music_teaching": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "new_parent": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "none": {
+   "n": 189,
+   "scored": 189,
+   "right": 168,
+   "accuracy": 88.9
+  },
+  "nonprofit_admin": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "notary": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "nursery": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "nursing": {
+   "n": 10,
+   "scored": 10,
+   "right": 9,
+   "accuracy": 90.0
+  },
+  "office_admin": {
+   "n": 4,
+   "scored": 4,
+   "right": 2,
+   "accuracy": 50.0
+  },
+  "optometry": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "painting_decorating": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "paralegal": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "paramedic": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "parent": {
+   "n": 27,
+   "scored": 27,
+   "right": 23,
+   "accuracy": 85.2
+  },
+  "payroll": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "performing_arts": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "personal_training": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "pest_control": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "pharmacy": {
+   "n": 8,
+   "scored": 8,
+   "right": 7,
+   "accuracy": 87.5
+  },
+  "photography": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "physiotherapy": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "plumbing": {
+   "n": 13,
+   "scored": 13,
+   "right": 11,
+   "accuracy": 84.6
+  },
+  "policing": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "procurement": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "product_management": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "property_management": {
+   "n": 5,
+   "scored": 5,
+   "right": 3,
+   "accuracy": 60.0
+  },
+  "qa_testing": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "radiology": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "rail_ops": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "real_estate": {
+   "n": 9,
+   "scored": 9,
+   "right": 8,
+   "accuracy": 88.9
+  },
+  "recruitment": {
+   "n": 6,
+   "scored": 6,
+   "right": 4,
+   "accuracy": 66.7
+  },
+  "renter": {
+   "n": 13,
+   "scored": 13,
+   "right": 10,
+   "accuracy": 76.9
+  },
+  "research_science": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "restaurant": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "retail": {
+   "n": 8,
+   "scored": 8,
+   "right": 8,
+   "accuracy": 100.0
+  },
+  "retiree": {
+   "n": 9,
+   "scored": 9,
+   "right": 9,
+   "accuracy": 100.0
+  },
+  "roofing": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "roommate": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "scaffolding": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "school_admin": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "security": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "shipping": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "single_parent": {
+   "n": 6,
+   "scored": 6,
+   "right": 6,
+   "accuracy": 100.0
+  },
+  "small_business_owner": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "social_work": {
+   "n": 7,
+   "scored": 7,
+   "right": 6,
+   "accuracy": 85.7
+  },
+  "software_engineering": {
+   "n": 9,
+   "scored": 9,
+   "right": 8,
+   "accuracy": 88.9
+  },
+  "special_education": {
+   "n": 6,
+   "scored": 6,
+   "right": 4,
+   "accuracy": 66.7
+  },
+  "startup_founder": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "student": {
+   "n": 8,
+   "scored": 8,
+   "right": 8,
+   "accuracy": 100.0
+  },
+  "supermarket": {
+   "n": 6,
+   "scored": 6,
+   "right": 6,
+   "accuracy": 100.0
+  },
+  "surgery": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "surveying": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "tattooing": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "tax_preparation": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "taxi_rideshare": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "teaching": {
+   "n": 9,
+   "scored": 9,
+   "right": 9,
+   "accuracy": 100.0
+  },
+  "teenager": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "tourism": {
+   "n": 2,
+   "scored": 2,
+   "right": 1,
+   "accuracy": 50.0
+  },
+  "translation": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "travel_agency": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "traveller": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "tree_surgery": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "tutoring": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "university_student": {
+   "n": 6,
+   "scored": 6,
+   "right": 6,
+   "accuracy": 100.0
+  },
+  "urban_planning": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "ux_design": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "venture_capital": {
+   "n": 4,
+   "scored": 4,
+   "right": 4,
+   "accuracy": 100.0
+  },
+  "veterinary": {
+   "n": 9,
+   "scored": 9,
+   "right": 8,
+   "accuracy": 88.9
+  },
+  "videography": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "volunteer": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "warehousing": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "waste_collection": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "wedding_planning": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "welding": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "winemaking": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "yoga_instruction": {
+   "n": 2,
+   "scored": 2,
+   "right": 1,
+   "accuracy": 50.0
+  }
+ },
+ "by_family": {
+  "admin": {
+   "n": 24,
+   "scored": 24,
+   "right": 18,
+   "accuracy": 75.0
+  },
+  "appointment": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "banking": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "benefits": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "bereavement": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "broadband": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "celebration": {
+   "n": 3,
+   "scored": 3,
+   "right": 1,
+   "accuracy": 33.3
+  },
+  "childcare": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "communication": {
+   "n": 30,
+   "scored": 30,
+   "right": 27,
+   "accuracy": 90.0
+  },
+  "compliance": {
+   "n": 184,
+   "scored": 184,
+   "right": 167,
+   "accuracy": 90.8
+  },
+  "council": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "customer_job": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "customer_quote": {
+   "n": 4,
+   "scored": 4,
+   "right": 1,
+   "accuracy": 25.0
+  },
+  "delivery": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "education": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "finance": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "finance_admin": {
+   "n": 43,
+   "scored": 43,
+   "right": 32,
+   "accuracy": 74.4
+  },
+  "food": {
+   "n": 5,
+   "scored": 5,
+   "right": 4,
+   "accuracy": 80.0
+  },
+  "gifts": {
+   "n": 2,
+   "scored": 2,
+   "right": 1,
+   "accuracy": 50.0
+  },
+  "groceries": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "health": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "health_admin": {
+   "n": 6,
+   "scored": 6,
+   "right": 3,
+   "accuracy": 50.0
+  },
+  "home_maintenance": {
+   "n": 9,
+   "scored": 9,
+   "right": 8,
+   "accuracy": 88.9
+  },
+  "housing": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "insurance": {
+   "n": 2,
+   "scored": 2,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "maintenance": {
+   "n": 16,
+   "scored": 16,
+   "right": 13,
+   "accuracy": 81.2
+  },
+  "materials_order": {
+   "n": 10,
+   "scored": 10,
+   "right": 10,
+   "accuracy": 100.0
+  },
+  "permit": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "pet_care": {
+   "n": 2,
+   "scored": 2,
+   "right": 1,
+   "accuracy": 50.0
+  },
+  "pets": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "prescription": {
+   "n": 2,
+   "scored": 2,
+   "right": 2,
+   "accuracy": 100.0
+  },
+  "procurement": {
+   "n": 32,
+   "scored": 32,
+   "right": 28,
+   "accuracy": 87.5
+  },
+  "property": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "repair": {
+   "n": 5,
+   "scored": 5,
+   "right": 5,
+   "accuracy": 100.0
+  },
+  "returns": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "scheduling": {
+   "n": 29,
+   "scored": 29,
+   "right": 17,
+   "accuracy": 58.6
+  },
+  "school_admin": {
+   "n": 6,
+   "scored": 6,
+   "right": 5,
+   "accuracy": 83.3
+  },
+  "shopping": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "staffing": {
+   "n": 4,
+   "scored": 4,
+   "right": 2,
+   "accuracy": 50.0
+  },
+  "subscriptions": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "tenancy": {
+   "n": 3,
+   "scored": 3,
+   "right": 3,
+   "accuracy": 100.0
+  },
+  "training": {
+   "n": 3,
+   "scored": 3,
+   "right": 2,
+   "accuracy": 66.7
+  },
+  "travel": {
+   "n": 11,
+   "scored": 11,
+   "right": 7,
+   "accuracy": 63.6
+  },
+  "travel_docs": {
+   "n": 4,
+   "scored": 4,
+   "right": 3,
+   "accuracy": 75.0
+  },
+  "utilities": {
+   "n": 3,
+   "scored": 3,
+   "right": 0,
+   "accuracy": 0.0
+  },
+  "vehicle": {
+   "n": 8,
+   "scored": 8,
+   "right": 5,
+   "accuracy": 62.5
+  },
+  "waste": {
+   "n": 1,
+   "scored": 1,
+   "right": 1,
+   "accuracy": 100.0
+  },
+  "work_deliverable": {
+   "n": 68,
+   "scored": 68,
+   "right": 62,
+   "accuracy": 91.2
+  }
+ },
+ "by_hard_kind": {
+  "ack": {
+   "n": 22,
+   "scored": 22,
+   "right": 22,
+   "accuracy": 100.0
+  },
+  "asr_mush": {
+   "n": 34,
+   "scored": 34,
+   "right": 32,
+   "accuracy": 94.1
+  },
+  "hypothetical": {
+   "n": 33,
+   "scored": 33,
+   "right": 33,
+   "accuracy": 100.0
+  },
+  "in_flight": {
+   "n": 22,
+   "scored": 22,
+   "right": 21,
+   "accuracy": 95.5
+  },
+  "media": {
+   "n": 31,
+   "scored": 31,
+   "right": 31,
+   "accuracy": 100.0
+  },
+  "other_commitment": {
+   "n": 40,
+   "scored": 40,
+   "right": 40,
+   "accuracy": 100.0
+  },
+  "past_done": {
+   "n": 27,
+   "scored": 27,
+   "right": 27,
+   "accuracy": 100.0
+  },
+  "question_to_person": {
+   "n": 41,
+   "scored": 41,
+   "right": 40,
+   "accuracy": 97.6
+  },
+  "retraction": {
+   "n": 26,
+   "scored": 26,
+   "right": 23,
+   "accuracy": 88.5
+  }
+ },
+ "by_register": {
+  "aside": {
+   "n": 127,
+   "scored": 127,
+   "right": 118,
+   "accuracy": 92.9
+  },
+  "complaint": {
+   "n": 125,
+   "scored": 125,
+   "right": 108,
+   "accuracy": 86.4
+  },
+  "direct": {
+   "n": 123,
+   "scored": 123,
+   "right": 121,
+   "accuracy": 98.4
+  },
+  "fragment": {
+   "n": 91,
+   "scored": 91,
+   "right": 89,
+   "accuracy": 97.8
+  },
+  "realisation": {
+   "n": 184,
+   "scored": 184,
+   "right": 176,
+   "accuracy": 95.7
+  },
+  "thinking_aloud": {
+   "n": 125,
+   "scored": 125,
+   "right": 76,
+   "accuracy": 60.8
+  },
+  "worry": {
+   "n": 214,
+   "scored": 214,
+   "right": 191,
+   "accuracy": 89.3
+  }
+ },
+ "decision_confusion": {
+  "act->act": 369,
+  "act->ignore": 127,
+  "ask->act": 14,
+  "ask->ignore": 59,
+  "ignore->act": 12,
+  "ignore->ask": 1,
+  "ignore->ignore": 407
+ },
+ "lane_confusion": {
+  "act->desk": 59,
+  "act->quiet": 91,
+  "act->silent": 36,
+  "act->spoke": 310,
+  "ask->desk": 2,
+  "ask->quiet": 21,
+  "ask->silent": 38,
+  "ask->spoke": 12,
+  "ignore->desk": 2,
+  "ignore->quiet": 22,
+  "ignore->silent": 385,
+  "ignore->spoke": 11
+ },
+ "false_ping_examples": [
+  {
+   "id": "amb-0264",
+   "text": "Do you know if the bins went out last night?",
+   "lane": "spoke",
+   "decision": "ask",
+   "goal": "",
+   "said": [
+    "which bins are you asking about?"
+   ],
+   "hard_kind": "question_to_person"
+  },
+  {
+   "id": "amb-0297",
+   "text": "Still need to sort that boiler.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "Sort boiler repair",
+   "said": [
+    "Caught your plan \u2014 ready to go: Sort boiler repair. First I need: which boiler needs repair, what kind of repair is needed, who to contact for the repair. Say go and I'll book it."
+   ],
+   "hard_kind": "in_flight"
+  },
+  {
+   "id": "amb-0299",
+   "text": "Oh, hang on, Priya is in Leeds Friday.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "Reschedule Friday dinner with Priya",
+   "said": [
+    "i have a note to reschedule friday's dinner with priya. which friday were you thinking of?"
+   ],
+   "hard_kind": ""
+  },
+  {
+   "id": "amb-0301",
+   "text": "The car's MOT runs out next week.",
+   "lane": "desk",
+   "decision": "act",
+   "goal": "Book car MOT next week",
+   "said": [],
+   "hard_kind": ""
+  },
+  {
+   "id": "amb-0316",
+   "text": "We are out of the good coffee again.",
+   "lane": "desk",
+   "decision": "act",
+   "goal": "Order more good coffee",
+   "said": [],
+   "hard_kind": ""
+  },
+  {
+   "id": "fin-0070",
+   "text": "can you order the the ones for the the printer the",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "Order printer toner",
+   "said": [
+    "i have the toner for the Coal Harbour printer in a cart, ready to order for Alex. can I send it?"
+   ],
+   "hard_kind": "asr_mush"
+  },
+  {
+   "id": "fin-0094",
+   "text": "The adjuster wanted photographs and the invoice for the flooring.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "send adjuster photographs and invoice for flooring",
+   "said": [
+    "i have a draft email for the adjuster with the photographs and invoice for the flooring, but i need to confirm a few things with you first. which adjuster was this for?"
+   ],
+   "hard_kind": ""
+  },
+  {
+   "id": "fin-0103",
+   "text": "Net 30 was up a fortnight ago.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "Chase Ellery invoice",
+   "said": [
+    "i have a draft ready to chase the ellery invoice for net 30 being up a fortnight ago; can i send it?"
+   ],
+   "hard_kind": ""
+  },
+  {
+   "id": "per-0068",
+   "text": "I need to ring the dentist, actually no, forget it, I will just walk in on Saturday.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "Walk in to the dentist on Saturday, August 22, 2026",
+   "said": [
+    "which dentist are you planning to walk into tomorrow, Saturday, August 22?"
+   ],
+   "hard_kind": "retraction"
+  },
+  {
+   "id": "per-0106",
+   "text": "The wifi has been dropping out every night about nine, every night.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "Troubleshoot recurring nightly WiFi dropouts",
+   "said": [
+    "about the wifi dropouts, i can start looking into that for you. what kind of equipment do you have?"
+   ],
+   "hard_kind": ""
+  },
+  {
+   "id": "svc-0107",
+   "text": "Actually no, forget that, I will stand on the desk myself Friday and Kirsty can have the Saturday.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "update rota: Alex on desk Friday, Kirsty on desk Saturday",
+   "said": [
+    "i've got the rota update to switch alex to friday and kirsty to saturday, ready to go whenever you give the word."
+   ],
+   "hard_kind": "retraction"
+  },
+  {
+   "id": "tep-0031",
+   "text": "need to get the the arc flash the flash study over to to whoever it was",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "send arc flash study to Alex",
+   "said": [
+    "i have the arc flash study ready to send to Alex at voice-11@lane.test, if you want me to do that."
+   ],
+   "hard_kind": "asr_mush"
+  },
+  {
+   "id": "tep-0055",
+   "text": "I was going to move the annual review to the Tuesday, no, forget it, I will leave it where it is.",
+   "lane": "spoke",
+   "decision": "act",
+   "goal": "cancel move annual review",
+   "said": [
+    "i'm holding the cancelation for the annual review, let me know when you're ready for me to send it."
+   ],
+   "hard_kind": "retraction"
+  }
+ ],
+ "miss_examples": [
+  {
+   "id": "amb-0007",
+   "text": "The practice indemnity renewal quote came in at nearly double what we paid last year.",
+   "wanted": "act",
+   "expected_goal": "get alternative professional indemnity quotes"
+  },
+  {
+   "id": "amb-0010",
+   "text": "The appraisal portfolio deadline is creeping up on me again.",
+   "wanted": "act",
+   "expected_goal": "look up the appraisal portfolio deadline and what is outstanding"
+  },
+  {
+   "id": "amb-0047",
+   "text": "The Hartleys cannot do Thursday for the viewing after all.",
+   "wanted": "act",
+   "expected_goal": "rearrange the Hartley viewing away from Thursday"
+  },
+  {
+   "id": "amb-0064",
+   "text": "I would love to get away for a weekend but I have no idea what is affordable.",
+   "wanted": "ask",
+   "expected_goal": "find affordable weekend away options"
+  },
+  {
+   "id": "amb-0094",
+   "text": "The on call rota has me down for Christmas week again.",
+   "wanted": "act",
+   "expected_goal": "get the Christmas week on call shift swapped"
+  },
+  {
+   "id": "amb-0102",
+   "text": "My F gas certificate expires in the spring.",
+   "wanted": "act",
+   "expected_goal": "renew the F gas certification before spring"
+  },
+  {
+   "id": "amb-0109",
+   "text": "The fencing on the top field is going to let them straight through.",
+   "wanted": "act",
+   "expected_goal": "arrange fencing repair on the top field"
+  },
+  {
+   "id": "amb-0128",
+   "text": "The dentist has been sending me reminders since March.",
+   "wanted": "act",
+   "expected_goal": "book the overdue dental check up"
+  },
+  {
+   "id": "amb-0141",
+   "text": "We need to do something about the car, it is costing more than it is worth.",
+   "wanted": "ask",
+   "expected_goal": "decide whether to repair or replace the car"
+  },
+  {
+   "id": "amb-0142",
+   "text": "I want to move my pension somewhere sensible.",
+   "wanted": "ask",
+   "expected_goal": "review pension transfer options"
+  },
+  {
+   "id": "amb-0157",
+   "text": "The NHS claim submission window closes on the fifth.",
+   "wanted": "act",
+   "expected_goal": "submit the NHS claim before the fifth"
+  },
+  {
+   "id": "amb-0160",
+   "text": "I keep turning colour correction work away because I never did the course.",
+   "wanted": "act",
+   "expected_goal": "find and book a colour correction course"
+  }
+ ],
+ "unanswered_examples": [
+  {
+   "id": "amb-0251",
+   "error": "no decision within 240.0s",
+   "text": "That is paid, it went out Friday."
+  },
+  {
+   "id": "amb-0284",
+   "error": "no decision within 240.0s",
+   "text": "I should call the clinic."
+  },
+  {
+   "id": "amb-0296",
+   "error": "no decision within 240.0s",
+   "text": "The radiators upstairs were never right last winter either."
+  },
+  {
+   "id": "amb-0302",
+   "error": "no decision within 240.0s",
+   "text": "Do not worry about it, I will book it in on my way home."
+  },
+  {
+   "id": "amb-0308",
+   "error": "no decision within 240.0s",
+   "text": "It has changed shape I think, it is darker than it was."
+  },
+  {
+   "id": "amb-0317",
+   "error": "post: timed out",
+   "text": "And the dishwasher tablets, that is the last box."
+  },
+  {
+   "id": "amb-0318",
+   "error": "no decision within 240.0s",
+   "text": "I am not doing another shop this week, can something just turn up."
+  },
+  {
+   "id": "per-0003",
+   "error": "no decision within 240.0s",
+   "text": "The car tax runs out on the thirty first and I have not looked at that"
+  },
+  {
+   "id": "per-0005",
+   "error": "no decision within 240.0s",
+   "text": "I have got this horrible feeling I have missed the deadline for the fr"
+  },
+  {
+   "id": "per-0007",
+   "error": "post: timed out",
+   "text": "The MOT is due this month, I saw the date on the certificate and then "
+  },
+  {
+   "id": "per-0111",
+   "error": "no decision within 240.0s",
+   "text": "Yeah, the twenty second, at eleven, at the crematorium."
+  }
+ ]
+}

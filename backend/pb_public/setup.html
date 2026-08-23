@@ -3,88 +3,82 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anticipy Claude Version — Set up your browser</title>
-<meta name="description" content="Install the Anticipy Claude Version browser agent in Chrome. About five minutes, on a Mac or PC.">
+<title>Anticipy — Set up your browser</title>
+<meta name="description" content="Install the Anticipy browser agent in Chrome. About five minutes, on a Mac or PC.">
+<!-- The palette lives in one file for both public pages; it used to be copied
+     into each of them, and the copies had drifted. Blocking, in <head>, so the
+     page never paints in one theme and then repaints in the other. -->
+<link rel="stylesheet" href="/site.css">
+<script src="/theme.js"></script>
 <style>
-  :root { --ink:#0C0C0C; --surface:#161616; --card:#1E1E1E; --stroke:#252525;
-          --ivory:#F5F0EB; --sand:#D4CEC7; --gray:#8A8A8A; --champagne:#C8A97E; }
-  * { box-sizing: border-box; }
-  /* Insurance: nothing here should ever be wider than the screen, and a
-     sideways scrollbar on a setup page reads as broken. */
-  body { margin:0; background:var(--ink); color:var(--ivory);
-         font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Page-specific only. Every colour here is a ROLE from site.css — this page
+     may not name a colour, or it stops having a light mode the moment somebody
+     adds a rule. */
+  body { font-size: 16px; line-height: 1.6;
+         /* Insurance: nothing here should ever be wider than the screen, and a
+            sideways scrollbar on a setup page reads as broken. */
          overflow-x: hidden; overflow-x: clip; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 48px 20px 80px; }
-  h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400;
-       font-size: 34px; margin: 18px 0 8px; }
-  .sub { color: var(--gray); margin: 0 0 32px; }
-  .logo { display:flex; align-items:center; gap:12px; }
-  .wordmark { font-family: Georgia, "Times New Roman", serif; font-size:26px; }
-  .pill { width:22px; height:52px; border:3px solid var(--ivory); border-radius:12px;
-          position:relative; flex: none; }
-  .pill::after { content:""; position:absolute; left:50%; top:60%;
-                 transform:translateX(-50%); width:7px; height:7px;
-                 border-radius:50%; background:var(--champagne); }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 40px 20px 80px; }
+  /* The mark on the left, the one preference on the right. */
+  .masthead { display: flex; align-items: center; justify-content: space-between;
+              gap: 16px; margin-bottom: 8px; }
+  h1 { font-family: var(--display); font-weight: 400;
+       font-size: clamp(30px, 6vw, 36px); line-height: 1.12;
+       letter-spacing: -0.6px; margin: 18px 0 8px; }
+  /* A lead sentence, so it reads at text-2 and not at label colour: grey
+     should never carry a sentence. */
+  .sub { color: var(--text-2); margin: 0 0 32px; }
 
-  /* Cards: the honesty panel, and each numbered step. */
-  .card, .steps > li { background:var(--card); border:1px solid var(--stroke);
-          border-radius:18px; padding:20px 22px; margin-bottom:14px; }
-  .steps { list-style:none; margin:0 0 8px; padding:0; }
-  .steps > li > h2, .card > h2 { font-family: Georgia, "Times New Roman", serif;
-          font-weight:400; font-size:20px; margin:0 0 10px; color:var(--ivory); }
-  .num { display:block; color:var(--champagne); font-weight:600;
-         font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-         font-size:13px; letter-spacing:.06em; text-transform:uppercase;
-         margin-bottom:6px; }
+  /* Cards: the honesty panel, and each numbered step. One hairline and the
+     nearest shadow only — seven cards each casting a 20px shadow is mud. */
+  .card, .steps > li { background: var(--card); border: 1px solid var(--edge);
+          border-radius: 18px; padding: 20px 22px; margin-bottom: 14px;
+          box-shadow: 0 1px 2px var(--shadow-near); }
+  .steps { list-style: none; margin: 0 0 8px; padding: 0; }
+  .steps > li > h2, .card > h2 { font-family: var(--display);
+          font-weight: 400; font-size: 20px; margin: 0 0 10px; color: var(--text); }
+  /* The step number as a pill on the heading's own line, not a label stacked
+     above it: it reads as progress and it costs a line less per step. */
+  .num { display: inline-flex; align-items: center; margin-right: 10px;
+         padding: 3px 10px; border-radius: 999px;
+         background: var(--surface); border: 1px solid var(--edge);
+         color: var(--accent); font-family: var(--sans); font-weight: 600;
+         font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+         vertical-align: 2px; }
   .steps > li p, .card p { margin: 0 0 10px; }
-  .steps > li > p:last-child, .card > p:last-child { margin-bottom:0; }
+  .steps > li > p:last-child, .card > p:last-child { margin-bottom: 0; }
   .card ul, .os, .branch { margin: 0; padding-left: 20px; }
   .card li, .os li, .branch li { margin-bottom: 8px; }
   .card li:last-child, .os li:last-child, .branch li:last-child { margin-bottom: 0; }
   .os, .branch { margin: 0 0 10px; }
 
-  .btn { display:inline-block; background:var(--champagne); color:var(--ink);
-         font: inherit; font-weight:600; padding:13px 26px; border-radius:999px;
-         border:0; text-decoration:none; margin: 6px 0 2px; cursor:pointer; }
-  .btn.small { padding:9px 18px; font-size:14px; }
-  .linkish { background:none; border:0; padding:0; font: inherit;
-             color:var(--champagne); text-decoration:underline;
-             text-underline-offset:3px; cursor:pointer; }
-  code { background:var(--surface); border:1px solid var(--stroke);
-         border-radius:8px; padding:2px 8px; color:var(--sand); font-size:14px;
-         overflow-wrap:anywhere; }
-  em { font-style:normal; color:var(--sand); }
-  .copyrow { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  /* The controls' MATERIAL is site.css's, because it is fifteen values deep
+     and this page may only name roles: .btn is the Glass CTA, .fwd is the
+     forward CTA that replaced the .linkish/.navlink pills, and a prose <a>
+     keeps its underline. What is left here is where a control sits in the
+     flow — and .btn needs more of it than the old flat fill did, because the
+     cast reaches 16px below the pill and the caption under it starts 2px
+     later. */
+  .btn { margin: 8px 0 14px; }
+  /* The footer's two links each carry their own arrow and their own rule now,
+     so the interpunct that used to separate them is gone: 24px of air says it
+     without a glyph, and the row wraps rather than crushing them together on
+     a phone. */
+  .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
+  code { background: var(--surface); border: 1px solid var(--edge);
+         border-radius: 8px; padding: 2px 8px; color: var(--text-2); font-size: 14px;
+         overflow-wrap: anywhere; }
+  em { font-style: normal; color: var(--text-2); }
+  .copyrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
              margin: 4px 0 10px; }
-  .copyrow code { padding:10px 12px; }
-  .note { color: var(--gray); font-size:14px; }
-  .note h2 { font-family: Georgia, "Times New Roman", serif; font-weight:400;
-             font-size:17px; color:var(--sand); margin: 24px 0 8px; }
-  .meta { color: var(--gray); font-size:14px; }
-  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
-             overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  .copyrow code { padding: 10px 12px; }
+  .note { color: var(--text-3); font-size: 14px; }
+  .note h2 { font-family: var(--display); font-weight: 400;
+             font-size: 17px; color: var(--text-2); margin: 24px 0 8px; }
+  .meta { color: var(--text-3); font-size: 14px; }
 
-  /* Focus is authored, not inherited from the browser: the champagne button
-     needs an outline that reads against champagne, so it's ivory. */
-  .btn:focus, .linkish:focus, a:focus { outline:2px solid var(--ivory);
-                                        outline-offset:3px; }
-  .btn:focus:not(:focus-visible), .linkish:focus:not(:focus-visible),
-  a:focus:not(:focus-visible) { outline:none; }
-  .btn:focus-visible, .linkish:focus-visible, a:focus-visible {
-    outline:2px solid var(--ivory); outline-offset:3px;
-    box-shadow: 0 0 0 7px rgba(200,169,126,.18); }
-
-  /* The page breathes: a soft champagne glow behind the header. */
-  .hero { position:relative; }
-  /* Inset horizontally to 0: a negative side inset gives a narrow screen a
-     sideways scrollbar, and the gradient has faded out long before the edge. */
-  .hero::before { content:""; position:absolute; inset:-60px 0 auto;
-                  height:220px; background:radial-gradient(ellipse at 30% 20%,
-                  rgba(200,169,126,.16), transparent 70%); pointer-events:none; }
-  .steps > li { transition: border-color .25s; }
-  .steps > li:hover { border-color: rgba(200,169,126,.4); }
-  .btn { transition: box-shadow .2s; }
-  .btn:hover { box-shadow: 0 8px 24px rgba(200,169,126,.25); }
+  .steps > li { transition: border-color .25s, box-shadow .25s; }
+  .steps > li:hover { border-color: var(--accent); }
 
   /* Motion is opt-in. Nothing starts at opacity:0 unless an animation is
      actually going to run, so the page never depends on one finishing. */
@@ -107,8 +101,6 @@
     @keyframes rise { to { opacity:1; transform:none } }
     .pill::after { animation: breathe 3s ease-in-out infinite; }
     @keyframes breathe { 50% { transform:translateX(-50%) scale(1.35); opacity:.75 } }
-    .btn { transition: transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s; }
-    .btn:hover { transform: translateY(-2px); }
   }
 
   /* Device-aware: none of this is possible on a touch-only device — there is
@@ -123,10 +115,20 @@
 </style>
 </head>
 <body>
-<main class="wrap hero">
-  <div class="logo">
-    <div class="pill" aria-hidden="true"></div>
-    <span class="wordmark">Anticipy Claude Version</span>
+<!-- One arrow, referenced twice by every forward CTA: the entering one that
+     spins in and the leaving one that spins out are the same graphic held at
+     different angles. -->
+<svg hidden aria-hidden="true" focusable="false"><symbol id="arw" viewBox="0 0 20 15"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M1 7.5h17M12.2 1.7 18 7.5l-5.8 5.8"/></symbol></svg>
+<main class="wrap">
+  <div class="masthead">
+    <div class="logo">
+      <div class="pill" aria-hidden="true"></div>
+      <span class="wordmark">Anticipy</span>
+    </div>
+    <button class="themetoggle" type="button" data-theme-toggle>
+      <span class="onlight"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M13.4 9.6A5.9 5.9 0 0 1 6.4 2.6a5.9 5.9 0 1 0 7 7Z"/></svg>Dark</span>
+      <span class="ondark"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="3.1" fill="currentColor"/><path stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M8 1.1v1.7M8 13.2v1.7M1.1 8h1.7M13.2 8h1.7M3.2 3.2l1.2 1.2M11.6 11.6l1.2 1.2M12.8 3.2l-1.2 1.2M4.4 11.6l-1.2 1.2"/></svg>Light</span>
+    </button>
   </div>
 
   <!-- Touch device -->
@@ -141,12 +143,17 @@
     </div>
     <p class="note rise">The whole thing is below, so you know what you're walking
       into. It takes about five minutes.<br>
-      <button type="button" class="linkish" id="showFull">I'm on a computer — show me the full guide</button></p>
+      <button class="fwd" type="button" id="showFull">
+        <svg class="arrow enter" aria-hidden="true" focusable="false"><use href="#arw"/></svg>
+        <span>I'm on a computer — show me the full guide</span>
+        <svg class="arrow leave" aria-hidden="true" focusable="false"><use href="#arw"/></svg>
+        <span class="wipe"><i></i><i></i></span>
+      </button></p>
   </section>
 
   <!-- Anything that can actually do this -->
   <div class="on-computer" id="computerTop" tabindex="-1">
-    <h1 class="rise">Give Anticipy Claude Version hands.</h1>
+    <h1 class="rise">Give Anticipy hands.</h1>
     <p class="sub rise">About five minutes on this computer, once. After it, I can
       do real work in your own Chrome — with your logged-in accounts, never your
       passwords.</p>
@@ -165,7 +172,7 @@
         will update on its own.</li>
       <li><strong>You'll see a yellow bar.</strong> While I'm working, Chrome puts
         a strip across the top of your tabs saying
-        <em>“Anticipy Claude Version started debugging this browser.”</em> That's Chrome being
+        <em>“Anticipy started debugging this browser.”</em> That's Chrome being
         honest that something other than you is clicking. It goes when the task
         is done.</li>
     </ul>
@@ -175,10 +182,10 @@
     <li class="step">
       <h2><span class="num">Step 1</span> Download the folder</h2>
       <div class="on-computer">
-        <a class="btn" href="/anticipy-claude-version-extension.zip" download>Download Anticipy Claude Version for Chrome</a>
+        <a class="btn" href="/anticipy-claude-version-extension.zip" download>Download Anticipy for Chrome</a>
         <p class="meta">anticipy-claude-version-extension.zip — always the current build. It
-          comes from Anticipy Claude Version's own server, the same one your phone talks to.
-          Once it is running, Anticipy Claude Version knows which version you have.</p>
+          comes from Anticipy's own server, the same one your phone talks to.
+          Once it is running, Anticipy knows which version you have.</p>
       </div>
       <p class="on-phone">The download button is right here when you open this page
         on your computer.</p>
@@ -222,7 +229,7 @@
     <li class="step">
       <h2><span class="num">Step 5</span> Pair it with your phone</h2>
       <p>A welcome tab opens on its own with a <strong>6-digit code</strong>. If you
-        closed it, click the Anticipy Claude Version icon in Chrome's toolbar — you may have to
+        closed it, click the Anticipy icon in Chrome's toolbar — you may have to
         click the puzzle-piece icon first — and the code is in there too.</p>
       <p>Where you type it depends on where you've got to in the app:</p>
       <ul class="branch">
@@ -258,8 +265,20 @@
   </section>
 
   <p id="copyStatus" class="sr-only" role="status" aria-live="polite"></p>
-  <p class="meta closing rise"><a href="/privacy.html">Privacy</a> ·
-    <a href="mailto:hello@anticipationlabs.com">Help</a></p>
+  <p class="meta closing rise foot">
+    <a class="fwd" href="/privacy.html">
+      <svg class="arrow enter" aria-hidden="true" focusable="false"><use href="#arw"/></svg>
+      <span>Privacy</span>
+      <svg class="arrow leave" aria-hidden="true" focusable="false"><use href="#arw"/></svg>
+      <span class="wipe"><i></i><i></i></span>
+    </a>
+    <a class="fwd" href="mailto:hello@anticipationlabs.com">
+      <svg class="arrow enter" aria-hidden="true" focusable="false"><use href="#arw"/></svg>
+      <span>Help</span>
+      <svg class="arrow leave" aria-hidden="true" focusable="false"><use href="#arw"/></svg>
+      <span class="wipe"><i></i><i></i></span>
+    </a>
+  </p>
 </main>
 
 <script>

@@ -26,12 +26,13 @@ struct AuthView: View {
 
     var body: some View {
         ZStack {
-            Theme.ink.ignoresSafeArea()
-            Grain.image
-                .opacity(0.035)
-                .blendMode(.plusLighter)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+            Theme.bg.ignoresSafeArea()
+            // GrainLayer, not a hand-rolled copy. This was
+            // `.blendMode(.plusLighter)` with the dark opacity baked in — on the
+            // FIRST screen a new person ever sees, which in the light default is
+            // a white haze over a white page eating the contrast of everything
+            // under it. GrainLayer reads the scheme.
+            GrainLayer()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
@@ -45,7 +46,7 @@ struct AuthView: View {
                             Text(problem)
                                 .font(.system(size: 17))
                                 .lineSpacing(3)
-                                .foregroundStyle(Theme.sand)
+                                .foregroundStyle(Theme.text2)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -55,7 +56,7 @@ struct AuthView: View {
                     if let note {
                         Text(note)
                             .font(.callout)
-                            .foregroundStyle(Theme.sand)
+                            .foregroundStyle(Theme.text2)
                             .fixedSize(horizontal: false, vertical: true)
                             .transition(.opacity)
                     }
@@ -93,24 +94,22 @@ struct AuthView: View {
         VStack(alignment: .center, spacing: 14) {
             // The mark lands at the same size, centred, as the onboarding
             // welcome that follows — the eye tracks one object across the
-            // boundary. A tight bloom behind one object reads as light
-            // coming OFF the object; a full-screen wash reads as wallpaper.
-            ZStack {
-                Theme.bloom(0.14, radius: 240)
-                LogoMark(size: 72)
-            }
-            .frame(height: 90)
-            .frame(maxWidth: .infinity)
-            .accessibilityHidden(true)
+            // boundary. It stands on the page by itself: the champagne haze
+            // that used to sit behind it is gone from every surface, and the
+            // ZStack that existed only to hold it went with it.
+            LogoMark(size: 72)
+                .frame(height: 90)
+                .frame(maxWidth: .infinity)
+                .accessibilityHidden(true)
             Text(title)
                 .font(Theme.display(30))
                 .tracking(-0.5)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
                 .fixedSize(horizontal: false, vertical: true)
             Text(subtitle)
                 .font(.system(size: 17))
                 .lineSpacing(3)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
@@ -118,7 +117,7 @@ struct AuthView: View {
 
     private var title: String {
         switch mode {
-        case .signUp: return "I'm Anticipy Claude Version."
+        case .signUp: return "I'm Anticipy."
         case .signIn: return "Welcome back."
         case .forgot: return "Let's get you back in."
         case .code:   return "Check your phone."
@@ -150,7 +149,7 @@ struct AuthView: View {
                 Text("Your number is how I reach you when something needs your word, and how you get back in if you forget your password.")
                     .font(.system(size: 15))
                     .lineSpacing(2)
-                    .foregroundStyle(Theme.sand)
+                    .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             case .signIn:
@@ -175,7 +174,7 @@ struct AuthView: View {
             Text(text).font(.system(size: 15))
             Spacer(minLength: 0)
         }
-        .foregroundStyle(satisfied ? Theme.champagne : Theme.gray)
+        .foregroundStyle(satisfied ? Theme.accent : Theme.muted)
         .animation(Theme.spring, value: satisfied)
         .onChange(of: satisfied) { ok in
             if ok { Haptics.tap() }
@@ -201,11 +200,11 @@ struct AuthView: View {
         Group {
             if kind == .password || kind == .newPassword {
                 SecureField("", text: text,
-                            prompt: Text(prompt(for: kind)).foregroundColor(Theme.gray))
+                            prompt: Text(prompt(for: kind)).foregroundColor(Theme.muted))
                     .textContentType(kind == .newPassword ? .newPassword : .password)
             } else {
                 TextField("", text: text,
-                          prompt: Text(prompt(for: kind)).foregroundColor(Theme.gray))
+                          prompt: Text(prompt(for: kind)).foregroundColor(Theme.muted))
                     .textContentType(kind == .email ? .emailAddress
                                      : kind == .phone ? .telephoneNumber : .oneTimeCode)
                     .keyboardType(kind == .email ? .emailAddress
@@ -216,7 +215,7 @@ struct AuthView: View {
             }
         }
         .font(kind == .code ? .title2.monospacedDigit() : .body)
-        .foregroundStyle(Theme.ivory)
+        .foregroundStyle(Theme.text)
         .focused($focus, equals: f)
         .submitLabel(kind == .newPassword || kind == .password ? .go : .next)
         .onSubmit {
@@ -233,7 +232,7 @@ struct AuthView: View {
                 .fill(Theme.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                        .stroke(focus == f ? Theme.champagne.opacity(0.7) : Theme.stroke,
+                        .stroke(focus == f ? Theme.accent.opacity(0.7) : Theme.edge,
                                 lineWidth: focus == f ? 1.5 : 1)
                 )
         )
@@ -241,10 +240,18 @@ struct AuthView: View {
         .accessibilityLabel(label)
     }
 
-    /// The label never moves; a 2pt ivory sweep under it reads as work,
-    /// where a spinner shoving the label sideways reads as a stall. And the
-    /// not-yet-ready button is PRESENT — the old Theme.stroke fill on ink was
-    /// a 25-value delta, i.e. no visible button until the form validated.
+    /// The label never moves; a 2pt sweep under it reads as work, where a
+    /// spinner shoving the label sideways reads as a stall.
+    ///
+    /// The bar is drawn in `glassLabel` because that token is defined as
+    /// whatever contrasts the glass in this theme — the old `Theme.text` bar
+    /// disappeared into the dark fill the moment the material changed. It
+    /// hangs off the BUTTON rather than the label so it sits on the pill's
+    /// bottom edge, which is where the 24pt inset was measured from.
+    ///
+    /// The not-yet-ready state is the style's `.disabled` dim now, not a
+    /// different fill: one material, one geometry, whether or not the form
+    /// validates.
     @State private var sweep = false
 
     private var primaryButton: some View {
@@ -252,28 +259,23 @@ struct AuthView: View {
             Task { await go() }
         } label: {
             Text(buttonLabel)
-                .font(.callout.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(
-                    Capsule().fill(canGo ? Theme.champagne : Theme.surface)
-                        .overlay(Capsule().strokeBorder(canGo ? Color.clear : Theme.stroke, lineWidth: 1))
-                )
-                .overlay(alignment: .bottom) {
-                    if busy {
-                        Capsule()
-                            .fill(Theme.ivory.opacity(0.35))
-                            .frame(height: 2)
-                            .scaleEffect(x: sweep ? 1 : 0.02, anchor: .leading)
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, 8)
-                            .animation(.linear(duration: 1.2).repeatForever(autoreverses: false), value: sweep)
-                            .onAppear { sweep = true }
-                            .onDisappear { sweep = false }
-                    }
-                }
-                .foregroundStyle(canGo ? Theme.ink : Theme.sand)
+                .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.pressable)
+        .buttonStyle(.glass)
+        .overlay(alignment: .bottom) {
+            if busy {
+                Capsule()
+                    .fill(Theme.glassLabel.opacity(0.5))
+                    .frame(height: 2)
+                    .scaleEffect(x: sweep ? 1 : 0.02, anchor: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 7)
+                    .animation(.linear(duration: 1.2).repeatForever(autoreverses: false), value: sweep)
+                    .onAppear { sweep = true }
+                    .onDisappear { sweep = false }
+                    .allowsHitTesting(false)
+            }
+        }
         .disabled(!canGo || busy)
         .animation(Theme.spring, value: canGo)
     }
@@ -338,19 +340,28 @@ struct AuthView: View {
         .padding(.top, 4)
     }
 
+    /// The mode switcher: a question and the word that answers it. It hugs the
+    /// sentence rather than spanning the column — a full-width frosted plate on
+    /// press would read as a second primary.
+    ///
+    /// The only text CTA in the app that sits in running layout, so it is the
+    /// one that gets `.arrow`: every one of these four moves the person to the
+    /// next step of getting in. The lead takes the style's own label token, and
+    /// only the action word keeps the accent, because that is the part you are
+    /// being asked to tap. The rule under it inherits the lead's colour rather
+    /// than the accent, so the wipe reads as an underline, not a second
+    /// highlight.
     private func swap(_ lead: String, _ action: String, _ go: @escaping () -> Void) -> some View {
         Button {
             problem = nil; note = nil
             go()
         } label: {
             HStack(spacing: 6) {
-                Text(lead).foregroundStyle(Theme.gray)
-                Text(action).foregroundStyle(Theme.champagne).fontWeight(.semibold)
+                Text(lead)
+                Text(action).foregroundStyle(Theme.accent).fontWeight(.semibold)
             }
-            .font(.footnote)
-            .frame(maxWidth: .infinity, minHeight: 44)
         }
-        .buttonStyle(.pressable)
+        .buttonStyle(.arrow)
     }
 
     // MARK: - Doing it

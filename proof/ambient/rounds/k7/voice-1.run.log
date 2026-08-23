@@ -1,0 +1,59 @@
+pb        http://127.0.0.1:8090
+owner_ref scrhkcffjglfkbq
+brain     worker: pid 16676,16677,16678,16679,16680,16681,16682,16683,16684,16685,16686,16687,16688,16689,16690,16691,16817,16819 up since 12:10:23, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63]    amb-0016 want=act    got=act         11.6s  'The client care letter for the Duffy file never went out, '
+            goal: send client care letter for Duffy file
+[2/63]    amb-0032 want=act    got=act          8.1s  'The Mitsubishi units for the Croydon install have not been'
+            goal: order Mitsubishi units for Croydon install
+[3/63]    amb-0048 want=ignore got=ignore       3.1s  'That vendor is never going to accept.'
+[4/63] !! amb-0064 want=ask    got=ignore       5.0s  'I would love to get away for a weekend but I have no idea '
+            goal: research affordable weekend getaways
+[5/63] !! amb-0080 want=act    got=ignore       6.1s  'My FCA fee invoice is sat unopened somewhere.'
+            goal: find FCA fee invoice
+[6/63]    amb-0096 want=act    got=act         19.7s  'The trip risk assessment has to be with the head before th'
+            goal: ensure trip risk assessment is with head before letters go out
+[7/63] !! amb-0112 want=act    got=ignore      13.6s  'The client money account audit needs an accountant and I h'
+            goal: find accountant for client money account audit
+[8/63]    amb-0128 want=act    got=act         22.8s  'The dentist has been sending me reminders since March.'
+            goal: schedule dentist appointment
+[9/63] !! amb-0144 want=ask    got=ignore      19.8s  'I ought to see someone about my back but I do not know if '
+            goal: Research whether GP or physio is appropriate for back pain
+[10/63] !! amb-0160 want=act    got=ignore      19.7s  'I keep turning colour correction work away because I never'
+[11/63] !! amb-0176 want=act    got=ignore      16.2s  "The candidate's right to work documents expire before the "
+[12/63] !! amb-0192 want=ignore got=act         54.1s  'My back has filed a formal complaint.'
+            goal: book GP appointment for back pain
+[13/63]    amb-0208 want=ignore got=ignore      16.2s  'Maybe one day I will learn to sail.'
+[14/63]    amb-0224 want=ignore got=ignore      19.3s  'Section four subsection two, the contractor shall maintain'
+[15/63] !! amb-0240 want=ignore got=act         52.6s  'Honestly it is fine, I will sort the tickets out tonight.'
+            goal: sort out tickets
+[16/63]    amb-0256 want=ignore got=ignore      12.7s  'Yeah ok sure.'
+[17/63]    amb-0272 want=ignore got=ignore      24.4s  'yeah no yeah no yeah'
+[18/63] !! amb-0298 want=act    got=ignore      30.3s  'We should do dinner out Friday, somewhere decent for once.'
+            goal: research dinner options for Friday, August 21, 2026
+[19/63]    amb-0299 want=ignore got=ignore      80.4s  'Oh, hang on, Priya is in Leeds Friday.'
+            goal: Cancel dinner out Friday
+[20/63]    amb-0300 want=ignore got=ignore      52.6s  'Forget Friday then, we will do it another time.'
+            goal: cancel dinner out Friday, August 21, 2026
+[21/63] !! per-0005 want=act    got=ignore      81.1s  'I have got this horrible feeling I have missed the deadlin'
+            goal: research free childcare hours deadline
+[22/63]    per-0021 want=act    got=act         72.3s  "The visa appointment slots for Ella's trip open on Monday "
+            goal: book visa appointment slots for Ella's trip on Monday, August 24, 2026
+[23/63] !! per-0037 want=act    got=ignore     107.9s  'The halls deposit was supposed to come back in September a'
+            goal: Check status of halls deposit refund
+[24/63] per-0053 POST FAILED: timed out
+[25/63] per-0069 POST FAILED: timed out
+[26/63] per-0085 POST FAILED: timed out
+[27/63] per-0128 POST FAILED: timed out
+[28/63] fin-0014 POST FAILED: timed out
+[29/63] fin-0030 POST FAILED: timed out
+[30/63] fin-0046 POST FAILED: timed out
+[31/63] fin-0062 POST FAILED: timed out
+[32/63] fin-0078 POST FAILED: timed out
+[33/63] !! fin-0093 want=ignore got=TIMEOUT    241.3s  'The water damage in the back office.'
+[34/63] fin-0094 POST FAILED: timed out
+[35/63] !! fin-0095 want=act    got=TIMEOUT    255.8s  'I have not sent him anything and it has been eight days.'
+[36/63] !! fin-0096 want=ignore got=TIMEOUT    245.2s  'Actually Denise scanned the lot and emailed them Friday.'
+
+THREE TIMEOUTS IN A ROW. The worker is not stamping anything — check /Users/josegaelcruzlopez/.anticipy-rig/brain.log. Stopping rather than filling the results file with silence that looks like data.

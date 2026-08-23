@@ -1,0 +1,17 @@
+[
+ {
+  "id": "anchor1",
+  "text": "oh my goodness, I forgot to cook for my kids this afternoon",
+  "expect": "the product's own flagship example \u2014 must be caught"
+ },
+ {
+  "id": "anchor2",
+  "text": "ugh I completely forgot about dinner and there's nothing in for the kids",
+  "expect": "the product's own flagship example \u2014 must be caught"
+ },
+ {
+  "id": "anchor3",
+  "text": "I never sorted anything for the kids to eat tonight and it's already half five",
+  "expect": "the product's own flagship example \u2014 must be caught"
+ }
+]

@@ -176,13 +176,13 @@ async function refresh() {
   if (linked) {
     say("head", "This browser is hers.");
     say("state", reachable === false
-      ? "Linked to your iPhone — but I can't reach Anticipy Claude Version from this browser right now."
+      ? "Linked to your iPhone — but I can't reach Anticipy from this browser right now."
       : "Linked to your iPhone. She's live here.");
   } else if (!registered) {
     say("head", "One step left: link this browser to your iPhone.");
     say("state", reachable === false
-      ? "I can't reach Anticipy Claude Version from this browser yet, so there's no code to show. I'll keep trying."
-      : "Introducing this browser to Anticipy Claude Version…");
+      ? "I can't reach Anticipy from this browser yet, so there's no code to show. I'll keep trying."
+      : "Introducing this browser to Anticipy…");
   } else {
     say("head", "One step left: link this browser to your iPhone.");
     say("state", "Waiting for your phone. This page will say so by itself the moment the code lands.");
@@ -198,7 +198,7 @@ async function refresh() {
   else hint(code
     ? "Click the code to copy it."
     : reachable === false
-      ? "Your code appears here the moment I can reach Anticipy Claude Version."
+      ? "Your code appears here the moment I can reach Anticipy."
       : "Getting your code…", 0);
 
   // Step one is finished — it must stop giving an instruction that no longer
@@ -213,15 +213,23 @@ async function refresh() {
   show("noapp", !linked);
 
   // --- the three beats. Real progress, not a picture of a wizard.
-  const beat = (id, state) => el(id).setAttribute("data-state", state);
+  // The colour of a dot is not available to a screen reader, and the bar that
+  // used to say the same thing in champagne is gone. This is the one beat
+  // worth hearing about, so it says which of the three it is out loud.
+  const beat = (id, state) => {
+    const li = el(id);
+    li.setAttribute("data-state", state);
+    if (state === "now") li.setAttribute("aria-current", "step");
+    else li.removeAttribute("aria-current");
+  };
   beat("beat1", registered ? "done" : (reachable === false ? "wait" : "now"));
   beat("beat2", linked ? "done" : (registered ? "now" : "wait"));
   beat("beat3", linked ? "done" : "wait");
   say("beat1text", registered
-    ? "This browser introduced itself to Anticipy Claude Version"
+    ? "This browser introduced itself to Anticipy"
     : reachable === false
-      ? "This browser can't reach Anticipy Claude Version to introduce itself"
-      : "This browser is introducing itself to Anticipy Claude Version");
+      ? "This browser can't reach Anticipy to introduce itself"
+      : "This browser is introducing itself to Anticipy");
   say("beat3text", linked
     ? "She's live here — work you approve happens in this browser"
     : "She's live here, and work you approve happens in this browser");
@@ -229,8 +237,8 @@ async function refresh() {
   // The tab title is the only thing a person sees when this page is in the
   // background, which is exactly where it will be while they hold their phone.
   const title = linked
-    ? "Anticipy Claude Version — linked"
-    : "Anticipy Claude Version — link your browser";
+    ? "Anticipy — linked"
+    : "Anticipy — link your browser";
   if (document.title !== title) document.title = title;
 }
 

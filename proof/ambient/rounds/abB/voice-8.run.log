@@ -1,0 +1,28 @@
+pb        http://127.0.0.1:8090
+owner_ref 1x6zqi1nd6udn36
+brain     worker: pid 289,291,300,337,89298,89307,89315,89319,89324,89338,89344,89395,89403 up since 02:13:09, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13]    amb-0029 want=ignore got=ignore       5.3s  'That loft conversion was a nightmare, never again.'
+[2/13]    amb-0057 want=act    got=act          8.1s  "Ellie's swimming subs are overdue again."
+            goal: pay Ellie's swimming subs
+[3/13] !! amb-0125 want=act    got=ignore       5.0s  'The single person council tax discount never got applied.'
+            goal: apply for single person council tax discount
+[4/13]    amb-0187 want=ignore got=ignore       6.1s  'That is a good shout, actually.'
+            goal: apply single person council tax discount
+[5/13]    amb-0223 want=ignore got=ignore       4.1s  'Terms and conditions apply, see website for details.'
+[6/13]    per-0022 want=act    got=act          8.1s  'I have done nothing about the passport photos and the form'
+            goal: get passport photos
+[7/13] !! fin-0057 want=ask    got=act          8.1s  'We are nearly out of the heavy copier paper and I cannot r'
+            goal: Order heavy copier paper
+[8/13]    med-0029 want=ignore got=ignore       5.0s  'Have you actually got round to your own registration renew'
+[9/13]    svc-0010 want=ignore got=ignore       5.1s  'Every single review mentions the breakfast eggs.'
+[10/13]    svc-0061 want=ignore got=ignore       4.0s  'If I ever taught full time out of the house I would have t'
+[11/13] !! tep-0027 want=ask    got=ignore       5.0s  'I want the replacement bearings on order today but I canno'
+[12/13] !! trd-0022 want=ask    got=ignore       4.0s  'I want the powerflush booked in at the Hendon flats but I '
+[13/13] !! trd-0086 want=ask    got=ignore       5.0s  'The client wants the Lagos shipment quoting and I do not k'
+
+pushed 13 in 1.3 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abB/voice-8.jsonl
+  act=3  ignore=10
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

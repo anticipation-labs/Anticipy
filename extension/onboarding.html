@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Anticipy Claude Version &mdash; link your browser</title>
+    <title>Anticipy &mdash; link your browser</title>
     <!-- Blocking, in <head>, and not a module: it sets the palette before the
          first frame so nobody watches this page change colour. See theme.js. -->
     <script src="theme.js"></script>
@@ -15,8 +15,10 @@
          workflow_state.js). theme.js is reachable BECAUSE it is a <script
          src>; CSS has no such path in. -->
     <style>
-      /* ===== shared: theme + scale + the toggle. Byte-identical in popup.html
-         and onboarding.html — extension/tests/test_theme_contract.mjs fails if
+      /* ===== shared: theme + scale + the toggle. And the glass material, for
+         the reason given where it starts: two pages must not grow two
+         dialects of the same button. Byte-identical in popup.html and
+         onboarding.html — extension/tests/test_theme_contract.mjs fails if
          these two blocks ever drift apart. Edit both, or neither. ===== */
 
       /* TWO PALETTES, ONE SET OF ROLES. Every rule past this block reads a
@@ -60,7 +62,26 @@
            LIGHTEN ink (film grain). `overlay` collapses to nothing on both,
            which is how you conclude grain "doesn't work". */
         --grain-blend: multiply; --grain-opacity: 0.03;
-        --bloom: rgba(200, 169, 126, 0.22); --bloom-lit: rgba(200, 169, 126, 0.48);
+        /* THE GLASS MATERIAL, measured off the owner's Framer component
+           (Liquid-Glass-Navbar). It is THEME-DEPENDENT, which is the one
+           judgement call in it: the CTA as drawn is near-black (#26262a →
+           #08080a), and on a #000000 page that is an invisible rectangle. So
+           the material inverts — light theme gets the dark glass the component
+           ships with, dark gets the same construction in the navbar shell's
+           own light metal — while the token NAMES stay one set, exactly like
+           the palette above. All four surfaces carry these values verbatim
+           (site.css, website/index.html, Theme.swift); PASS 5 compares them.
+           --ghost-label is 4.06:1 on white, under AA, and allowed for the same
+           reason --muted is: it dresses a control at rest, never a sentence,
+           and touching it takes it to 19:1. */
+        --glass-top: #26262a; --glass-bottom: #08080a;
+        --glass-rim: rgba(255, 255, 255, 0.28); --glass-under: rgba(0, 0, 0, 0.50);
+        --glass-cast: rgba(0, 0, 0, 0.38); --glass-label: #ffffff;
+        --glass-top-hi: rgba(37, 37, 41, 0.85); --glass-bottom-hi: rgba(8, 8, 10, 0.85);
+        --glass-rim-hi: rgba(255, 255, 255, 0.45); --glass-cast-hi: rgba(0, 0, 0, 0.58);
+        --ghost-fill: rgba(255, 255, 255, 0.40); --ghost-rim: rgba(255, 255, 255, 0.85);
+        --ghost-cast: rgba(148, 160, 181, 0.45); --ghost-glow: rgba(255, 255, 255, 0.50);
+        --ghost-label: rgba(20, 20, 25, 0.55); --ghost-label-hi: #0a0a0c;
       }
       :root[data-theme="dark"] {
         color-scheme: dark;
@@ -76,18 +97,34 @@
         --accent-dim: rgba(200, 169, 126, 0.45);
         --shadow-near: rgba(0, 0, 0, 0.70); --shadow-far: rgba(0, 0, 0, 0.50);
         --grain-blend: plus-lighter; --grain-opacity: 0.035;
-        --bloom: rgba(200, 169, 126, 0.16); --bloom-lit: rgba(200, 169, 126, 0.3);
+        /* The same material in light metal. The shell's own ramp
+           (#ffffff / #e4e4e4 4.5% / #969696 50% / #e4e4e4 95.5% / #ffffff)
+           decomposes into rim + fill + rim: the two pure-white ends ARE the
+           inset lip and the inset floor, and #e4e4e4 → #969696 is the fill
+           between them. So --glass-under stops being a shadow, and --glass-cast
+           stops being one too: rgba(0, 0, 0, 0.38) on a #000000 page is a
+           shadow nobody can see, so depth inverts to a halo — the same
+           operator flip the grain makes just below. --glass-label #08080a
+           measures 6.6:1 on the #969696 core. */
+        --glass-top: #e4e4e4; --glass-bottom: #969696;
+        --glass-rim: rgba(255, 255, 255, 0.95); --glass-under: rgba(255, 255, 255, 0.55);
+        --glass-cast: rgba(255, 255, 255, 0.18); --glass-label: #08080a;
+        --glass-top-hi: rgba(255, 255, 255, 0.92); --glass-bottom-hi: rgba(168, 168, 168, 0.92);
+        --glass-rim-hi: #ffffff; --glass-cast-hi: rgba(255, 255, 255, 0.30);
+        --ghost-fill: rgba(255, 255, 255, 0.10); --ghost-rim: rgba(255, 255, 255, 0.38);
+        --ghost-cast: rgba(148, 160, 181, 0.28); --ghost-glow: rgba(255, 255, 255, 0.18);
+        --ghost-label: rgba(245, 240, 235, 0.55); --ghost-label-hi: #f5f0eb;
       }
       :root {
         /* Champagne is the brand's signature and stays a FILL in both themes:
            #c8a97e carries #000000 at 9.0:1, so a filled button needs no
            per-theme text colour and the logo dot never changes hue. */
         --fill: #c8a97e; --on-fill: #000000;
-        /* The bloom's outer stop. A named token, not a literal, so that every
-           colour outside this block is a ROLE — which is what makes the guard
-           in test_theme_contract.mjs able to say "no page hard-codes a
-           colour" and mean it. */
-        --bloom-out: rgba(200, 169, 126, 0);
+        /* One specular band for both materials: white at 0.70 reads on the
+           dark glass, and on the metal it lifts the #969696 core while
+           vanishing into the white lips — which is what a glint on metal
+           does. */
+        --shine: rgba(255, 255, 255, 0.70);
         /* One spacing scale (Theme.Space). Space BETWEEN groups is ~2.5x space
            WITHIN one; that ratio is what makes a layout instead of a list. */
         --hair: 4px; --tight: 8px; --snug: 12px; --base: 16px; --pad: 20px;
@@ -110,18 +147,218 @@
       .mark rect { stroke: var(--text); }
       .mark-dot { fill: var(--accent); }
 
-      /* The only control on either surface that is not about pairing, so it is
-         the quietest thing on it — a hairline pill that earns an edge on
-         hover. */
-      .themetoggle {
-        display: inline-flex; align-items: center; flex: none;
-        padding: 5px 11px; border-radius: 999px;
-        border: 1px solid var(--edge); background: var(--surface);
-        color: var(--text-3); font-family: var(--sans); font-size: 11px;
-        font-weight: 600; letter-spacing: 0.4px; cursor: pointer;
-        transition: color var(--spring), border-color var(--spring);
+      /* ===== the glass. Every control on both surfaces is one of exactly two
+         objects from the owner's component: the Glass CTA for the one action
+         that matters, the Nav Link for everything else. The material lives in
+         the SHARED block, beside the palette, for two reasons — it is
+         theme-dependent, and these two pages had already drifted to different
+         buttons (13px labels here, 14px there) from copying one design twice.
+         Only LAYOUT, which row and what margin, stays in each page's half. */
+
+      /* THE GLASS CTA, at the component's intrinsic 126.5x36: padding
+         11px 24px, 14/600/0.01em, fully round. The three shadows ARE the
+         object — a lit top lip, a shaded floor, and a cast thrown far enough
+         below to read as height rather than as a border. */
+      button.act.filled {
+        position: relative; overflow: clip;
+        display: inline-flex; align-items: center; justify-content: center; flex: none;
+        padding: 11px 24px; border: none; border-radius: 999px;
+        background-image: linear-gradient(180deg, var(--glass-top) 0%, var(--glass-bottom) 100%);
+        box-shadow:
+          inset 0 1px 0 var(--glass-rim),
+          inset 0 -1px 1px var(--glass-under),
+          0 7px 16px -6px var(--glass-cast);
+        color: var(--glass-label);
+        font-family: var(--sans); font-size: 14px; font-weight: 600;
+        letter-spacing: 0.01em; line-height: 1; cursor: pointer;
+        transition: box-shadow var(--spring), transform var(--spring);
       }
-      .themetoggle:hover { color: var(--text); border-color: var(--accent); }
+      /* The shine: a 70x90 band, rotated 20deg, that crosses the button once
+         per hover and is clipped by it. It parks one band-width off the left
+         edge, and left: 100% is exactly the component's right: -70px, the band
+         being 70px wide. 0.8s on the component's own curve — three times
+         slower than everything else here, because this is a reflection
+         travelling, not a state changing. */
+      button.act.filled::before {
+        content: ""; position: absolute; top: -20px; left: -70px;
+        width: 70px; height: 90px; pointer-events: none; opacity: 0;
+        transform: rotate(20deg);
+        background-image: linear-gradient(90deg, transparent 0%, var(--shine) 50%, transparent 100%);
+        transition: left 0.8s cubic-bezier(0.25, 0.1, 0.25, 1),
+                    opacity 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+      }
+      button.act.filled:hover::before { left: 100%; opacity: 1; }
+      /* No engine interpolates gradient stops, so the fill snaps while the rim
+         and the cast carry the 240ms. That is the right way round anyway:
+         hover is 15% of alpha on the fill against a doubled shadow, and the
+         shadow is the part you read as the button coming up to meet you. */
+      button.act.filled:hover {
+        background-image: linear-gradient(180deg, var(--glass-top-hi) 0%, var(--glass-bottom-hi) 100%);
+        box-shadow:
+          inset 0 1px 0 var(--glass-rim-hi),
+          inset 0 -1px 1px var(--glass-under),
+          0 12px 24px -6px var(--glass-cast-hi);
+      }
+      /* The component's whileTap. 0.9 is a big number for a 36px pill, which
+         is the point: the press has to land inside a frame while the shine is
+         still most of a second from finishing. */
+      button.act.filled:active { transform: scale(0.9); }
+
+      /* THE NAV LINK — the controls that stay put: the secondary buttons and
+         the theme toggle. A link that is GOING somewhere stopped being a pill
+         when the forward CTA below arrived, so this list is shorter than it
+         was. Transparent at rest, and the shadow is DECLARED at rest with
+         every colour `transparent`, because box-shadow animates from a shadow
+         and never from `none`. That is the whole reason the component ships a
+         rest shadow nobody can see. */
+      button.act:not(.filled), .plain, .themetoggle {
+        display: inline-flex; align-items: center; flex: none;
+        padding: 10px 15px; border: none; border-radius: 999px;
+        background-color: transparent;
+        box-shadow:
+          inset 0 1px 0 transparent,
+          0 8px 20px -6px transparent,
+          -4px -4px 12px transparent;
+        color: var(--ghost-label); text-decoration: none; cursor: pointer;
+        font-family: var(--sans); font-size: 14px; font-weight: 500;
+        letter-spacing: 0.01em; line-height: 1;
+        transition: color var(--spring), background-color var(--spring),
+                    box-shadow var(--spring), transform var(--spring);
+      }
+      button.act:not(.filled):hover, .plain:hover, .themetoggle:hover {
+        background-color: var(--ghost-fill);
+        box-shadow:
+          inset 0 1px 0 var(--ghost-rim),
+          0 8px 20px -6px var(--ghost-cast),
+          -4px -4px 12px var(--ghost-glow);
+        color: var(--ghost-label-hi);
+      }
+      button.act:not(.filled):active, .plain:active,
+      .themetoggle:active { transform: scale(0.9); }
+
+      /* THE FORWARD CTA — the owner's Text Arrow CTA, verbatim. The third
+         material, and the only one that is not a pill: the glass DOES
+         something, the ghost is a preference, and this one is going
+         SOMEWHERE. Nothing in it names a colour — every stroke and both
+         underline segments are currentColor, so the hairline sits at exactly
+         the label's weight at rest and brightens with the label on hover,
+         which is the one moment it is moving and has to be seen.
+
+         It is given to the links that GO somewhere and to nothing else. A
+         <details> summary is the near miss worth naming: an arrow promises
+         forward motion and a disclosure does not go anywhere, it expands in
+         place — so both disclosures on the onboarding page keep the plain
+         champagne summary and their triangle.
+
+         Two mechanisms, both the component's:
+
+         1. THE ARROW SWAPS SIDES; it does not slide. The leaving arrow spins
+            a quarter turn and scales to nothing while the entering one spins
+            in from -90deg, and because that arrow leaves `absolute` for the
+            flow, the label shifts right by an arrow plus a gap. They
+            swap simultaneously, so the control's WIDTH never changes and a
+            footer of these does not reflow under the pointer.
+         2. THE UNDERLINE WIPES in two halves that TRADE: at rest the right
+            half is the line and the left is a 1% nub; on hover they exchange,
+            so the rule redraws itself from the other end instead of fading.
+            The halves are staggered by 0.3s and the stagger FLIPS with
+            direction — on the way in the right half is the late one, on the
+            way back it is the left — which is what stops the pair reading as
+            one bar sliding across.
+
+         The component's transition is a spring (bounce .3, duration 1). CSS
+         has no spring, so the LENGTH is the component's own 1s and the SHAPE
+         is --spring's curve: the bounce is approximated, deliberately with
+         the curve the glass already uses, because two easings on one page is
+         two products. --spring itself carries its own 240ms and so cannot be
+         reused for a 1s move; the curve is therefore written once, here, and
+         read from --fwd-motion everywhere below. */
+      .fwd {
+        --fwd-motion: 1s cubic-bezier(0.22, 1, 0.36, 1);
+        position: relative;
+        display: inline-flex; align-items: center; gap: var(--base); flex: none;
+        margin: 0; padding: 0; border: none; background: none;
+        color: var(--ghost-label); text-decoration: none; cursor: pointer;
+        font-family: var(--sans); font-size: 14px; font-weight: 500;
+        letter-spacing: -0.02em; line-height: 1;
+        /* An inline-flex box takes its baseline from its FIRST in-flow child,
+           and the swap changes which child that is — so a CTA sitting in a
+           line of prose nudged everything below it down 2.5px the moment you
+           pointed at it. Aligning the box itself takes the question away. */
+        vertical-align: middle;
+        transition: color var(--spring);
+      }
+      .fwd:hover, .fwd:focus-visible { color: var(--ghost-label-hi); }
+      .fwd .arrow {
+        width: 20px; height: 15px; flex: none;
+        transition: transform var(--fwd-motion), opacity var(--fwd-motion);
+      }
+      /* Rest: the ENTERING arrow is parked one width off the left edge, turned
+         a quarter turn and scaled away; the LEAVING one is the visible one.
+         `position` is the only property here that cannot animate, and that is
+         the component's design rather than a compromise — the swap of places
+         is instant and the spin across it is what you actually read. */
+      .fwd .arrow.enter {
+        position: absolute; left: -20px; top: 50%;
+        transform: translateY(-50%) rotate(-90deg) scale(0); opacity: 0;
+      }
+      .fwd .arrow.leave {
+        position: relative; transform: rotate(0deg) scale(1); opacity: 1;
+      }
+      .fwd:hover .arrow.enter, .fwd:focus-visible .arrow.enter {
+        position: relative; left: auto; top: auto;
+        transform: rotate(0deg) scale(1); opacity: 1;
+      }
+      .fwd:hover .arrow.leave, .fwd:focus-visible .arrow.leave {
+        position: absolute; right: 0; top: 50%;
+        transform: translateY(-50%) rotate(-90deg) scale(0); opacity: 0;
+      }
+      /* 129% of the label's own height, so the rule clears the descenders at
+         whatever size the label is set in — which is why it is a percentage
+         and not a number of pixels. */
+      .fwd .wipe {
+        position: absolute; top: 129%; left: 50%; width: 100%;
+        transform: translate(-50%, -50%);
+        min-height: 1px; pointer-events: none;
+      }
+      /* The two halves are ANCHORED — one to each end — rather than laid out
+         as the component's 32px-gap row, and that is the one place this port
+         had to be argued instead of typed. As a flex row they shrink against
+         each other: their used widths are pinned to the container, so the
+         half that is not moving is dragged by the half that is, and the 0.3s
+         stagger cannot show. Measured, before this was fixed: the right half
+         began moving 67ms into a hover with a 300ms delay declared on it.
+         Anchored, they are independent, and the stagger becomes the whole
+         effect — the rule EMPTIES and REFILLS instead of sliding:
+
+           on the way in   the right half retracts to the right at once and
+                           the left half redraws from the left 0.3s behind it;
+           on the way out   the mirror image — the left half retracts first
+                           and the right redraws behind it.
+
+         The component's 32px gap has no counterpart here for the same reason
+         it has none there: an absolutely positioned child ignores its stack's
+         gap. At rest the right half IS the rule, full width, which is what
+         keeps the control underlined when nothing is animating at all. */
+      .fwd .wipe i {
+        position: absolute; height: 1px; background: currentColor;
+        transition: left var(--fwd-motion), right var(--fwd-motion),
+                    width var(--fwd-motion);
+      }
+      /* A segment's delay is the delay it uses on the way TO that state, so
+         the 0.3s always sits on the half that is arriving and never on the
+         half that is leaving. That is the direction the component runs. */
+      .fwd .wipe i:first-child { left: -3px; width: 1%; transition-delay: 0s; }
+      .fwd .wipe i:last-child { right: 0; width: 100%; transition-delay: 0.3s; }
+      .fwd:hover .wipe i:first-child,
+      .fwd:focus-visible .wipe i:first-child { left: 0; width: 100%; transition-delay: 0.3s; }
+      .fwd:hover .wipe i:last-child,
+      .fwd:focus-visible .wipe i:last-child { right: -3px; width: 1%; transition-delay: 0s; }
+
+      /* The toggle is the only control on either surface that is not about
+         pairing, so it stays the quietest thing on it: the same material, but
+         a preference is not a link and keeps its own micro label. */
+      .themetoggle { padding: 6px 11px; font-size: 11px; font-weight: 600; letter-spacing: 0.4px; }
       .themetoggle span { display: inline-flex; align-items: center; gap: 6px; }
       .themetoggle svg { width: 13px; height: 13px; flex: none; }
       /* Two glyphs, one visible. The label names what the click DOES — a
@@ -172,23 +409,18 @@
       }
       b { font-weight: 600; color: var(--text); }
       a { color: var(--accent); }
+      /* The ring follows whatever radius the element already carries, so it
+         must not declare one of its own: a 6px ring around a 999px pill is a
+         different shape. The things with no radius of their own get it here. */
+      a, summary { border-radius: 6px; }
       a:focus-visible, button:focus-visible, summary:focus-visible,
       input:focus-visible {
-        outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px;
+        outline: 2px solid var(--accent); outline-offset: 3px;
       }
 
       /* ------------------------------------------------------- masthead */
       .top { display: flex; align-items: center; justify-content: space-between; gap: var(--base); }
-      .markwrap { position: relative; display: inline-flex; }
-      /* The one eye-anchor on the page, always behind the mark. Two is
-         wallpaper. It brightens once, when pairing lands. */
-      .bloom {
-        position: absolute; left: 50%; top: 50%; width: 320px; height: 320px;
-        transform: translate(-50%, -50%); pointer-events: none;
-        background: radial-gradient(circle, var(--bloom), var(--bloom-out) 70%);
-        filter: blur(26px); transition: opacity 900ms ease-out;
-      }
-      .linked .bloom { background: radial-gradient(circle, var(--bloom-lit), var(--bloom-out) 70%); }
+      .markwrap { display: inline-flex; }
       .lead { margin: var(--base) 0 0; max-width: 34em; color: var(--text-2); }
 
       /* ----------------------------------------------------------- hero */
@@ -233,27 +465,26 @@
       /* .aside zeroes its own margins, so the follow-up sentence needs its own
          gap or it butts straight into the instruction above it. */
       #firstrun { margin-top: var(--tight); }
-      .plain {
-        margin-top: var(--base); padding: 0; border: none; background: none;
-        color: var(--accent); font-family: var(--sans); font-size: 14px;
-        cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
-      }
+      /* The material is in the shared block. This one is a forward CTA and
+         has no padding to cancel, so it sits on the card's text edge on its
+         own and only needs the gap above it. */
+      #newcode { margin-top: var(--snug); }
       details { margin-top: var(--base); }
       summary { color: var(--accent); font-size: 14px; cursor: pointer; }
       details > *:not(summary) { margin-top: var(--snug); }
 
       /* ---------------------------------------------------------- track */
-      /* Three beats, no cards. Cards would make this the fourth identical
-         rounded rectangle on the page; a rule list with a live marker reads as
-         progress, which is what it is. */
+      /* Three beats, no cards — and no rule down the left either. The dot and
+         the weight of the words already carry the state, so an edge was a
+         second copy of the same signal in champagne. Colour never says it
+         alone: the live beat is the one filled dot AND the one sentence at
+         full strength, and onboarding.js puts aria-current on it so the
+         position is spoken as well as seen. */
       .track { list-style: none; margin: var(--section) 0 0; padding: 0; }
       .track li {
         display: flex; gap: var(--base); align-items: flex-start;
-        padding: var(--snug) 0 var(--snug) var(--snug);
-        border-left: 2px solid var(--edge);
+        padding: var(--snug) 0;
       }
-      .track li[data-state="now"] { border-left-color: var(--accent); }
-      .track li[data-state="done"] { border-left-color: var(--accent-dim); }
       .beatdot {
         width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 6px;
         border: 1px solid var(--muted); background: transparent;
@@ -264,12 +495,16 @@
       li[data-state="now"] .beattext { color: var(--text); }
 
       /* ---------------------------------------------------------- rules */
-      /* The three honest facts about her working here, one sentence each. Same
-         rule-list gesture as the track, used in the other place she is asking
-         to be trusted. */
+      /* The three honest facts about her working here, one sentence each. No
+         edge and no fill: a champagne rule down three stacked blocks is
+         decoration pretending to be structure, and a left inset with nothing
+         at its edge reads as a border that failed to paint. So each fact
+         starts on the page's own text edge and grouping comes from the scale
+         — a 16px/600 heading 4px above its 13px sentence, with six times that
+         much air before the next fact. Weight and rhythm, which is also what
+         keeps this a list of facts rather than three cards. */
       .rules { margin-top: var(--section); }
-      .rule { padding-left: var(--base); border-left: 2px solid var(--accent-dim); }
-      .rule + .rule { margin-top: var(--pad); }
+      .rule + .rule { margin-top: var(--roomy); }
       .rule h3 { font-size: 16px; font-weight: 600; margin: 0 0 var(--hair); color: var(--text); }
 
       /* -------------------------------------------------------- advanced */
@@ -298,18 +533,10 @@
       /* Height reserved so a verdict appearing cannot move the buttons. */
       .msg { min-height: 1.6em; margin-top: var(--tight); }
       .row { display: flex; flex-wrap: wrap; gap: var(--tight); margin-top: var(--snug); }
-      button.act {
-        padding: 9px 16px; border-radius: 999px; border: 1px solid var(--accent);
-        background: transparent; color: var(--accent);
-        font-family: var(--sans); font-size: 14px; font-weight: 600; cursor: pointer;
-        transition: transform var(--spring), filter var(--spring);
-      }
-      button.act.filled { background: var(--fill); border-color: var(--fill); color: var(--on-fill); }
-      button.act:hover { filter: brightness(1.08); }
-      /* Every press is acknowledged within a frame; the work can take seconds
-         as long as the touch is not. 0.96 + a brightness lift, because 3% of
-         scale alone sits under the perception threshold. */
-      button.act:active { transform: scale(0.96); }
+      /* Both controls in this row are the glass from the shared block: the
+         Glass CTA for "Save address", the Nav Link for "Use the default". No
+         optical pull here — the row leads with the filled pill, and a pill
+         with a fill at rest owns its own left edge. */
       .bad { color: var(--alarm); }
       .ok { color: var(--accent); }
       .note {
@@ -335,15 +562,46 @@
       .mark-dot { transform-box: fill-box; transform-origin: center; }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation: none !important; transition: none !important; }
+        /* Killing the transition is not enough for the two glass states that
+           MOVE rather than fade: with no transition the shine would simply
+           appear, parked at the far edge of the button, and the press would be
+           an instant 10% jump. Both are dropped — hover still lights the rim
+           and throws the cast, which is the part that carries the meaning. */
+        button.act.filled:hover::before { display: none; }
+        button.act:active,
+        .themetoggle:active { transform: none !important; }
+        /* Both of the forward CTA's mechanisms hang off `position`, and
+           position does not transition — so killing the transition above
+           leaves the arrow swapping sides and the underline trading halves as
+           instant jumps, which is precisely the movement this query exists to
+           remove. Both are therefore pinned to their resting geometry, and
+           hover keeps the one thing that is not motion: the label and its
+           underline brighten together. The rule stays drawn, the arrow stays
+           where it was, and the control still says it is a link. */
+        .fwd:hover .arrow.enter, .fwd:focus-visible .arrow.enter {
+          position: absolute; left: -20px; top: 50%;
+          transform: translateY(-50%) rotate(-90deg) scale(0); opacity: 0;
+        }
+        .fwd:hover .arrow.leave, .fwd:focus-visible .arrow.leave {
+          position: relative; right: auto; top: auto;
+          transform: rotate(0deg) scale(1); opacity: 1;
+        }
+        .fwd:hover .wipe i:first-child,
+        .fwd:focus-visible .wipe i:first-child { left: -3px; width: 1%; }
+        .fwd:hover .wipe i:last-child,
+        .fwd:focus-visible .wipe i:last-child { right: 0; width: 100%; }
       }
     </style>
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
+    <!-- One arrow, referenced twice by every forward CTA: the entering one
+         that spins in and the leaving one that spins out are the same
+         graphic held at different angles. -->
+    <svg hidden aria-hidden="true" focusable="false"><symbol id="arw" viewBox="0 0 20 15"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M1 7.5h17M12.2 1.7 18 7.5l-5.8 5.8"/></symbol></svg>
     <main>
       <header class="top">
         <span class="markwrap">
-          <span class="bloom" aria-hidden="true"></span>
           <svg class="mark" width="46" height="46" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
             <rect x="10.5" y="3" width="11" height="26" rx="5.5" stroke-width="2" />
             <circle class="mark-dot" cx="16" cy="20" r="1.8" />
@@ -373,7 +631,7 @@
         <p class="aside" id="codehint" role="status" aria-live="polite">Getting your code&hellip;</p>
 
         <p class="voice where" id="where">On your iPhone:
-        <b>Anticipy Claude Version</b> &rarr; <b>Settings</b> &rarr;
+        <b>Anticipy</b> &rarr; <b>Settings</b> &rarr;
         <b>Your computer</b>. Type these six digits in &mdash; it links itself
         the moment the sixth one lands.</p>
 
@@ -384,7 +642,12 @@
         <p class="voice where" id="donenote" hidden>Nothing else to do here
         &mdash; you can close this page.</p>
 
-        <button class="plain" id="newcode" type="button" hidden>Show me a different code</button>
+        <button class="fwd" id="newcode" type="button" hidden>
+          <svg class="arrow enter" aria-hidden="true" focusable="false"><use href="#arw"/></svg>
+          <span>Show me a different code</span>
+          <svg class="arrow leave" aria-hidden="true" focusable="false"><use href="#arw"/></svg>
+          <span class="wipe"><i></i><i></i></span>
+        </button>
 
         <details id="noapp">
           <summary>I don&rsquo;t have the iPhone app yet</summary>
@@ -399,7 +662,7 @@
       <ol class="track" id="track">
         <li id="beat1" data-state="wait">
           <span class="beatdot" aria-hidden="true"></span>
-          <span class="beattext" id="beat1text">This browser introduces itself to Anticipy Claude Version</span>
+          <span class="beattext" id="beat1text">This browser introduces itself to Anticipy</span>
         </li>
         <li id="beat2" data-state="wait">
           <span class="beatdot" aria-hidden="true"></span>
@@ -438,8 +701,8 @@
 
       <details id="advanced">
         <summary>Advanced</summary>
-        <p class="aside">Point this browser at a different Anticipy Claude
-        Version backend &mdash; a local rig, or a staging deployment. If you
+        <p class="aside">Point this browser at a different Anticipy backend
+        &mdash; a local rig, or a staging deployment. If you
         don&rsquo;t know what that means, you don&rsquo;t need it: leave it
         empty and everything uses the production backend.</p>
 

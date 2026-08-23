@@ -19,6 +19,7 @@ enum AnticipySession {
         var goal: String? = nil
         var segmentID: String? = nil
         var created: String = ""
+        var source: String? = nil
     }
 }
 
@@ -52,9 +53,10 @@ func eq<T: Equatable>(_ name: String, _ got: T, _ want: T) {
 typealias L = AnticipySession.TranscriptLine
 
 func line(_ id: String, _ text: String, decision: String? = nil,
-          goal: String? = nil, segment: String? = nil, created: String = "") -> L {
+          goal: String? = nil, segment: String? = nil, created: String = "",
+          source: String? = nil) -> L {
     L(id: id, text: text, decision: decision, goal: goal,
-      segmentID: segment, created: created)
+      segmentID: segment, created: created, source: source)
 }
 
 // ---------------------------------------------------------------- cases
@@ -168,7 +170,7 @@ enum Cases {
         eq("she has nothing of her own to add", g.front.verb, nil)
         eq("no live rows on the front", g.front.rows.count, 0)
         check("the other eleven lines are behind the tap", !g.front.isComplete)
-        check("it still gets a stripe", g.front.showsHerOwn)
+        check("she has something of her own on the front", g.front.showsHerOwn)
     }
 
     static func rung2SkipsBlanks() {
@@ -208,7 +210,7 @@ enum Cases {
         eq("no title is synthesized over a live row", g.front.title, nil)
         eq("the words render as the live row", g.front.rows.map(\.id), ["a"])
         eq("no verb row", g.front.verb, nil)
-        check("no stripe, no gutter, no affordance", !g.front.showsHerOwn)
+        check("nothing of her own on the front, so no affordance", !g.front.showsHerOwn)
         check("nothing hidden => not flippable", g.front.isComplete)
 
         let two = HeardGroup(id: "x", lines: [
@@ -300,6 +302,54 @@ enum Cases {
                   .allSatisfy { !Humanize.goal($0).isEmpty })
         eq("unicode is not mangled", Humanize.goal("émigré paperwork"), "Émigré paperwork")
     }
+
+    // MARK: which ear
+
+    /// Comparing a pendant run of an errand against a phone-mic run of the same
+    /// errand is the reason `events.source` exists. The card front is where that
+    /// comparison actually happens — a glance down the feed.
+    static func whichEar() {
+        section("HeardGroup.ear")
+
+        func ear(_ sources: [String?]) -> String? {
+            HeardGroup(id: "g", lines: sources.enumerated().map {
+                line("e\($0.offset)", "said something", segment: "segA", source: $0.element)
+            }).ear
+        }
+
+        eq("a whole conversation off the phone reads phone_mic",
+           ear(["phone_mic", "phone_mic", "phone_mic"]), "phone_mic")
+        eq("a whole conversation off the pendant reads pendant",
+           ear(["pendant", "pendant"]), "pendant")
+
+        // THE ONE THAT MATTERS. Half off each ear must claim NEITHER: a card
+        // labelled "Pendant" whose speech was half phone-mic corrupts the exact
+        // comparison this field exists for, silently, in the direction of
+        // whichever line happened to come first.
+        check("a MIXED conversation claims no ear at all",
+              ear(["pendant", "phone_mic"]) == nil && ear(["phone_mic", "pendant"]) == nil)
+
+        check("an unstamped conversation claims no ear", ear([nil, nil]) == nil)
+        check("an empty group claims no ear", HeardGroup(id: "g", lines: []).ear == nil)
+        check("typed alone claims no ear", ear(["typed", "typed"]) == nil)
+        check("blank and whitespace sources claim no ear", ear(["", "   "]) == nil)
+
+        // Sources that earn no badge must not be able to make a real ear
+        // ambiguous — otherwise typing one reply into a pendant conversation
+        // would erase its provenance.
+        eq("typed lines do not make a pendant conversation mixed",
+           ear(["pendant", "typed", "pendant"]), "pendant")
+        eq("unstamped lines do not make a phone conversation mixed",
+           ear([nil, "phone_mic", nil]), "phone_mic")
+        eq("padding is tolerated", ear([" pendant ", "pendant"]), "pendant")
+
+        // And the front must actually carry it, or none of the above is visible.
+        let front = HeardGroup(id: "g", lines: [
+            line("e1", "check the happy hour times", decision: "act",
+                 goal: "Check happy hour times", segment: "segA", source: "pendant"),
+        ]).front
+        eq("the card front carries the ear", front.ear, "pendant")
+    }
 }
 
 @main
@@ -320,6 +370,7 @@ enum Main {
         Cases.noDuplicationEitherWay()
         Cases.nothingIsEverLost()
         Cases.humanize()
+        Cases.whichEar()
 
         print("\n\(checks - failures.count)/\(checks) checks passed")
         if !failures.isEmpty {

@@ -1,0 +1,107 @@
+pb        http://127.0.0.1:8090
+owner_ref wum2g1b2fhrd0u2
+brain     worker: pid 6220,6221,6222,6223,6224,6225,6226,6227,6228,6229,6230,6231,6232,6233,6234,6235,6288,6289,6290 up since 11:37:51, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63] !! amb-0004 want=ask    got=ignore       4.2s  'I should get the CFA level three booked but I have lost tr'
+            goal: Find CFA Level 3 booking window
+[2/63] !! amb-0020 want=ask    got=act         10.1s  'We are going to be short on the test cell booking if nobod'
+            goal: Book test cell
+[3/63]    amb-0036 want=ignore got=ignore       3.1s  'Third shoplifter this week.'
+[4/63]    amb-0052 want=ignore got=ignore       3.0s  'Another reorganisation, marvellous.'
+[5/63]    amb-0068 want=act    got=act          9.0s  'We are nearly out of the feline vaccine and the rep never '
+            goal: Order more feline vaccine
+[6/63]    amb-0084 want=act    got=act          7.0s  'The defibrillator pads in room three are out of date.'
+            goal: order replacement defibrillator pads for room three
+[7/63]    amb-0100 want=act    got=act          8.0s  'The apprentice needs his college enrolment sorted before t'
+            goal: email Alex about college enrolment
+[8/63]    amb-0116 want=act    got=act          8.0s  'The equality impact assessment for the new policy has not '
+            goal: start equality impact assessment for new policy
+[9/63] !! amb-0132 want=act    got=ignore       5.0s  'The broadband contract ended so we are on the out of contr'
+            goal: research new broadband contracts
+[10/63]    amb-0148 want=act    got=act          7.1s  'The shorthand refresher is a condition of the contract and'
+            goal: Book shorthand refresher course
+[11/63]    amb-0164 want=act    got=act          8.1s  'My ARB registration fee notice arrived and I put it straig'
+            goal: book ARB registration fee payment
+[12/63]    amb-0180 want=ignore got=ignore       4.0s  'Not too bad thanks, you?'
+[13/63]    amb-0196 want=ignore got=ignore       4.0s  'Statistically one of these meetings has to be useful.'
+[14/63]    amb-0212 want=ignore got=ignore       3.0s  'There is probably a better way to do all this.'
+[15/63]    amb-0228 want=ignore got=ignore       4.0s  'Join us after the break for the weather.'
+[16/63]    amb-0244 want=ignore got=ignore       4.0s  'If I ever win anything decent I am buying a boat, that is '
+[17/63]    amb-0260 want=ignore got=ignore       4.0s  'Fine by me.'
+[18/63]    amb-0276 want=ignore got=ignore      10.0s  'I need to book the car in for a service, oh no hang on, I '
+[19/63]    amb-0301 want=ignore got=ignore      29.2s  "The car's MOT runs out next week."
+            goal: Book car MOT
+[20/63]    amb-0302 want=ignore got=ignore      12.7s  'Do not worry about it, I will book it in on my way home.'
+[21/63]    per-0009 want=act    got=act         21.9s  'I have not told the bank we moved, so absolutely nothing i'
+            goal: Notify bank of address change
+[22/63] !! per-0025 want=act    got=ignore      43.8s  'I still have not cancelled that streaming thing we watched'
+            goal: Cancel streaming service
+[23/63] !! per-0041 want=act    got=ignore      24.4s  'I want the flu jab this year, I was ill for a fortnight th'
+            goal: research flu jab options
+[24/63] !! per-0057 want=ask    got=ignore      16.9s  "I will book the table for Nan's birthday, only I have comp"
+[25/63]    per-0073 want=ignore got=ignore      12.6s  'Imagine if we just went, no planning, passports and off.'
+[26/63]    per-0089 want=ignore got=ignore      11.6s  'I said I would the deposit no the the other one'
+[27/63]    per-0098 want=ignore got=ignore      14.1s  'Did that thing from school come home in her bag or not?'
+[28/63] !! per-0099 want=ignore got=act         73.5s  'The forms, the trip one, they want it back with the money.'
+            goal: return trip form with money
+[29/63]    per-0100 want=ignore got=ignore      23.9s  'Ugh, and it is the Friday, I am fairly sure it said the Fr'
+[30/63] !! per-0101 want=act    got=ignore       9.4s  'Right, well, I will have to do the form and find the money'
+            goal: find school trip money and complete form by Friday, August 28, 2026
+[31/63] !! fin-0002 want=act    got=ignore      50.0s  'I have no idea what the base rate actually settled at afte'
+[32/63]    fin-0018 want=ignore got=ignore      14.0s  'Every single year the software update lands the week befor'
+[33/63]    fin-0034 want=ignore got=ignore      10.4s  'They are asking six ninety for a two bed with no parking, '
+[34/63] !! fin-0050 want=act    got=ignore      13.5s  'I never checked how many days notice a capital call actual'
+            goal: research capital call notice period (ten or fifteen days)
+[35/63]    fin-0066 want=ignore got=ignore      11.6s  'Do not chase the appraisal forms, Rob is collecting the lo'
+[36/63] !! fin-0082 want=act    got=ignore      13.9s  'I have never actually looked up what registering an ABN co'
+            goal: research cost of ABN registration
+[37/63] !! med-0017 want=act    got=ignore      23.4s  'The out of hours provider contract renews in November and '
+            goal: Research alternative out of hours provider contracts
+[38/63]    med-0036 want=act    got=act         10.1s  'My blue light driving reassessment is out of date and they'
+            goal: Renew blue light driving reassessment
+[39/63] !! med-0052 want=act    got=ignore       5.0s  'Two of the new carers are on shift without their DBS check'
+            goal: check DBS status for two new carers
+[40/63]    med-0072 want=act    got=act          8.1s  'The conflict check on the new matter never got run, it is '
+            goal: Run conflict check on new matter
+[41/63]    med-0091 want=act    got=act          9.6s  'The chain of custody on the phone download has a gap in it'
+            goal: Instruct an expert on the phone download chain of custody gap
+[42/63] !! med-0107 want=act    got=ignore       5.1s  'The audio recordings get purged at three years and nobody '
+            goal: Check retention schedule for audio recording purge policy
+[43/63] !! svc-0013 want=act    got=ignore       4.0s  'The cellar temperature has been sat at fourteen all week a'
+[44/63]    svc-0029 want=act    got=act         10.1s  'The insurer wants proof I have done the level four laser c'
+            goal: Find and book a Level 4 laser course for Alex
+[45/63]    svc-0045 want=act    got=act          7.0s  'We are one short on ratios in the two year old room from W'
+            goal: Find staff to cover two-year-old room from Wednesday, August 26, 2026 onwards
+[46/63]    svc-0061 want=ignore got=ignore       3.0s  'If I ever taught full time out of the house I would have t'
+[47/63] !! svc-0077 want=ask    got=ignore       4.0s  'The lambing shed lights want doing before we start, though'
+[48/63]    svc-0097 want=ignore got=ignore       6.0s  'Excuse me, is the self scan the only way to pay now or hav'
+[49/63]    svc-0098 want=ignore got=ignore       4.0s  'There is one open right on the end, past the kiosk.'
+[50/63]    svc-0099 want=ignore got=ignore       5.0s  'Which reminds me, the till float.'
+            goal: check till float
+[51/63]    svc-0100 want=act    got=act         11.2s  'We will be short right through the weekend, the bank order'
+            goal: Order bank float for weekend
+[52/63]    tep-0001 want=act    got=act          8.1s  'There is a high dependency CVE sat in my inbox since Tuesd'
+            goal: Investigate high dependency CVE on payments service
+[53/63] !! tep-0017 want=ask    got=ignore       4.0s  'I am supposed to sign the release off tonight and I do not'
+            goal: Find agreement on accessibility defects for release sign-off
+[54/63]    tep-0033 want=ignore got=ignore       5.1s  'If we scaled the batch to two thousand litres we would be '
+[55/63] !! tep-0049 want=ask    got=act          8.0s  'I ought to get the sample scripts over to the external exa'
+            goal: Send sample scripts to external examiner by Friday, August 28, 2026
+[56/63]    tep-0065 want=act    got=act          7.0s  'The ethics approval on the freezer samples only covers the'
+            goal: Amend ethics approval for freezer samples to cover new protocol
+[57/63]    tep-0081 want=act    got=act         12.1s  'My breathing apparatus competency is due for reassessment '
+            goal: Book breathing apparatus competency reassessment
+[58/63]    trd-0027 want=act    got=act         10.5s  'Two hundred litres of glycol for Tuesday. Not on order.'
+            goal: Order 200 litres of glycol for delivery by Tuesday, August 25, 2026
+[59/63]    trd-0043 want=ignore got=ignore       3.0s  'If we ever took structural steel on properly we would want'
+[60/63]    trd-0059 want=ignore got=ignore       5.0s  'Signed the wasp job in Carlton off this morning, that one '
+[61/63]    trd-0075 want=act    got=act          8.0s  'I will be out of hours before Carlisle at this rate and th'
+            goal: Tell planner owner will be out of hours before Carlisle
+[62/63] !! trd-0091 want=ask    got=ignore       5.1s  'I should get the plate moved onto the new car, though I ha'
+[63/63]    trd-0107 want=ignore got=ignore       5.1s  'If the council ever went fortnightly on the trade bins we '
+
+pushed 63 in 12.8 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k5/voice-13.jsonl
+  act=21  ignore=42
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

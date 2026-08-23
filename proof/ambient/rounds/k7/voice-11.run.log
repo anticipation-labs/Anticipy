@@ -1,0 +1,47 @@
+pb        http://127.0.0.1:8090
+owner_ref 621g0q8tga3zuy3
+brain     worker: pid 16676,16677,16678,16679,16680,16681,16682,16683,16684,16685,16686,16687,16688,16689,16690,16691 up since 12:10:23, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63]    amb-0018 want=act    got=act         11.7s  'The revised drainage calcs still have not gone to the cont'
+            goal: send revised drainage calculations to contractor
+[2/63]    amb-0034 want=act    got=act          9.1s  'We are going to be short on till float over the bank holid'
+            goal: order till float for bank holiday
+[3/63]    amb-0050 want=act    got=act         12.1s  'I have not done the CII structured hours for this year at '
+            goal: schedule CII structured hours
+[4/63]    amb-0066 want=act    got=act         12.1s  "Mum's birthday is Saturday and I have absolutely nothing f"
+            goal: arrange a birthday gift for Mum for Saturday, August 22, 2026
+[5/63] !! amb-0082 want=ask    got=ignore      11.9s  'The client keeps sending receipts as photos and I have now'
+            goal: Find a system for organizing client photo receipts
+[6/63]    amb-0098 want=act    got=act         19.2s  'Gas Safe renewal is this month and I always leave it far t'
+            goal: book Gas Safe renewal
+[7/63]    amb-0114 want=act    got=act         29.3s  'The flood cover renews next week and they still have not s'
+            goal: Chase flood cover survey
+[8/63] !! amb-0130 want=ask    got=ignore      25.8s  'I want the cat booked in for the booster but I never remem'
+            goal: find opening hours for Coal Harbour vet
+[9/63] !! amb-0146 want=act    got=ignore       9.0s  'The radiation protection review on the x ray machine is ov'
+[10/63]    amb-0162 want=act    got=act         49.8s  'The DBS checks for the new volunteers have not been starte'
+            goal: start DBS checks for new volunteers
+[11/63]    amb-0178 want=act    got=act         32.9s  'The fire alarm certificate is out of date and the inspecti'
+            goal: renew fire alarm certificate
+[12/63]    amb-0194 want=ignore got=ignore      23.8s  'I am not saying I am old, but I groaned getting out of the'
+[13/63]    amb-0210 want=ignore got=ignore      13.4s  'It would be nice to have a proper garden.'
+[14/63]    amb-0226 want=ignore got=ignore      24.1s  'Tonight on the programme, the chancellor faces questions o'
+[15/63]    amb-0242 want=ignore got=ignore      10.3s  'Sam said he would chase the missing receipts from the Manc'
+[16/63]    amb-0258 want=ignore got=ignore      21.2s  'Right, yeah.'
+[17/63]    amb-0274 want=ignore got=ignore      20.3s  'cannot hear you at all now you are breaking'
+[18/63] !! amb-0316 want=ignore got=act         82.8s  'We are out of the good coffee again.'
+            goal: Order more good coffee
+[19/63] !! amb-0317 want=ignore got=act        103.6s  'And the dishwasher tablets, that is the last box.'
+            goal: Order dishwasher tablets
+[20/63]    amb-0318 want=act    got=act        148.4s  'I am not doing another shop this week, can something just '
+            goal: order coffee and dishwasher tablets for delivery
+[21/63] !! per-0007 want=act    got=TIMEOUT    251.3s  'The MOT is due this month, I saw the date on the certifica'
+[22/63] per-0023 POST FAILED: timed out
+[23/63] per-0039 POST FAILED: timed out
+[24/63] per-0055 POST FAILED: timed out
+[25/63] !! per-0071 want=ignore got=TIMEOUT    247.6s  'If we ever got a bigger place I would want one of those pr'
+[26/63] per-0087 POST FAILED: timed out
+[27/63] !! per-0130 want=ignore got=TIMEOUT    252.6s  'Everything is a subscription now, you cannot even own a to'
+
+THREE TIMEOUTS IN A ROW. The worker is not stamping anything — check /Users/josegaelcruzlopez/.anticipy-rig/brain.log. Stopping rather than filling the results file with silence that looks like data.

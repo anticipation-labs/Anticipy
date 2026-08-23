@@ -167,8 +167,34 @@ check("research is still refused outright, lease or no lease",
 check("ordinary browser work is untouched by any of this",
   claim({ "jobs/job1": record("job1", { lane: "", workflow_id: "wf1" }) }) === "next");
 
-check("the worker's own requests are never judged by the watch lease",
-  claim(readJob({}), claimBody, { "X-Anticipy-Worker": "1" }) === "next");
+// THE MARKER IS NOT THE CREDENTIAL. This block used to assert that the bare
+// `X-Anticipy-Worker` header exempted a caller from the lane and the lease,
+// which PINNED a one-header bypass as correct behaviour. `brain/pb.py:21-22`
+// says what the header is in so many words - "a ROUTING marker, not a
+// credential; the service token is what authenticates" - and
+// `test_config_base.mjs:197` pins that the extension never sends the service
+// token, so demanding it costs nothing legitimate.
+check("the marker alone does NOT exempt anybody from the watch lease",
+  claim(readJob({}), claimBody, { "X-Anticipy-Worker": "1" })?.status === 403);
+check("the marker alone does NOT let a browser claim research either",
+  claim({ "jobs/job1": record("job1", { lane: "research" }) }, claimBody,
+        { "X-Anticipy-Worker": "1" })?.status === 403);
+check("the authenticated worker IS exempt",
+  claim(readJob({}), claimBody,
+        { "X-Anticipy-Worker": "1", "X-Anticipy-Token": SERVICE_TOKEN }) === "next");
+check("a wrong service token is not a worker",
+  claim(readJob({}), claimBody,
+        { "X-Anticipy-Worker": "1", "X-Anticipy-Token": "nope" })?.status === 403);
+
+// A lane is normalised before it is compared, so neither refusal can be walked
+// past with casing or padding - and until the guard fix that accompanies this,
+// `lane` was a column the claimant could write itself.
+check("a mixed-case supervised lane is still judged by the lease",
+  claim({ "jobs/job1": record("job1", { lane: "Supervised_Read" }) }, claimBody)
+    ?.status === 403);
+check("a padded research lane is still refused",
+  claim({ "jobs/job1": record("job1", { lane: "  research  " }) }, claimBody)
+    ?.status === 403);
 
 // Layer 1: an 0.2.3 extension in the wild polls without naming a lane. It must
 // never even SEE a supervised read — it has no read-only vocabulary narrowing
@@ -242,6 +268,34 @@ check("a fact-length sentence still gets through",
   narrate({ ...fact, text: "x".repeat(400) }, { watching_until: pbStamp(25000) }) === "next");
 check("an empty narration line is refused rather than written as a blank row",
   narrate({ ...fact, text: "" }, { watching_until: pbStamp(25000) })?.status === 403);
+// THE CLAIMANT MAY NOT AUTHOR THE EVIDENCE ABOUT ITSELF.
+//
+// The guard protected only `owner_ref` on a job PATCH, so the Chrome install
+// could write `watching_until` and `lane` on its own owner's jobs - one extra
+// request before the claim, and research_lane's belief that the column "is what
+// the PHONE last wrote" became false. Same shape as the `legacy_uuid` hole a
+// prior audit found in the delete endpoint: a client-authored value trusted as
+// proof about the world. Nothing covered this before.
+const patchJob = (body) => drive(guard, {
+  method: "PATCH", path: "/api/collections/jobs/records/job1",
+  headers: agentHeaders, body, rows: agentRows({ watching_until: pbStamp(-1000) }),
+}).outcome;
+
+check("a browser cannot stamp its own watch lease",
+  patchJob({ watching_until: pbStamp(600000) })?.status === 403);
+check("a browser cannot stamp one alongside honest progress either",
+  patchJob({ status: "running", watching_until: pbStamp(600000) })?.status === 403);
+check("a browser cannot blank the lane out of the lease check",
+  patchJob({ lane: "" })?.status === 403);
+check("a browser cannot rename the lane to escape either comparison",
+  patchJob({ lane: "Supervised_Read" })?.status === 403);
+check("a browser cannot launder research into browser-claimable work",
+  patchJob({ lane: "researchX" })?.status === 403);
+check("but it can still report on the job it is running",
+  patchJob({ status: "done", result: "read your last 30 subject lines" }) === "next");
+check("and an echoed owner_ref is not treated as an attack",
+  patchJob({ status: "running", owner_ref: OWNER }) === "next");
+
 check("the agent still cannot touch a collection it has no business in",
   drive(guard, { method: "GET", path: "/api/collections/owner_profile/records",
                  headers: agentHeaders, rows: agentRows({}) }).outcome?.status === 403);

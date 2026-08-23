@@ -1,0 +1,31 @@
+pb        http://127.0.0.1:8090
+owner_ref 2yr3b24kbuen4ye
+brain     worker: pid 60512,60572,60618,60629,60663,60677,60699,60709,60717 up since 09:40:35, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13] !! amb-0028 want=act    got=ignore      20.8s  "The van's MOT is end of the month and I have not rung anyo"
+            goal: book MOT for the van before August 31, 2026
+[2/13] !! amb-0056 want=act    got=ignore      24.4s  'World book day is Thursday and we have not got a costume.'
+            goal: find World Book Day costume options for Thursday, August 27, 2026
+[3/13]    amb-0113 want=act    got=act         38.0s  'The board outside the Willow Road place has been down sinc'
+            goal: arrange repair of Willow Road sign
+[4/13]    amb-0181 want=ignore got=ignore      17.5s  'It has gone cold again, has it not.'
+[5/13]    amb-0222 want=ignore got=ignore      10.9s  'Bullet point, review the schedule. Bullet point, confirm t'
+[6/13] !! per-0018 want=act    got=ignore      31.6s  'I promised Mum I would sort her online banking and I keep '
+            goal: Schedule time to help Mum with online banking
+[7/13] !! fin-0050 want=act    got=ignore      20.9s  'I never checked how many days notice a capital call actual'
+            goal: research capital call notice period (10 or 15 days)
+[8/13] !! med-0012 want=act    got=ignore      51.5s  'I am forty hours short on verifiable CPD and the cycle clo'
+            goal: research verifiable CPD options to fulfill 40-hour requirement by January
+[9/13] !! svc-0006 want=ask    got=ignore      23.0s  'The deep clean has to happen before the food hygiene ratin'
+            goal: research options for deep clean before food hygiene re-inspection: full day closure vs. overnight
+[10/13] !! svc-0055 want=act    got=ignore      30.4s  'The Hallam album proof has been sat with me three weeks pa'
+            goal: send Hallam album proof
+[11/13]    tep-0021 want=ignore got=ignore      26.3s  'This design system has four different greys all called neu'
+[12/13]    tep-0087 want=ignore got=ignore      14.3s  'I will put a marker on the address, actually no, leave it,'
+[13/13] !! trd-0084 want=ask    got=ignore      10.2s  'I want the agency lads inducted before peak, though I have'
+
+pushed 13 in 5.7 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abC/voice-7.jsonl
+  act=1  ignore=12
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

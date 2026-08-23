@@ -1,0 +1,47 @@
+pb        http://127.0.0.1:8090
+owner_ref 15i3kxezkt1qwto
+brain     worker: pid 16676,16677,16678,16679,16680,16681,16682,16683,16684,16685,16686,16687,16688,16689,16690,16691,16822,16823,16825,16828 up since 12:10:23, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62] !! amb-0008 want=act    got=ignore       8.4s  'My medical indemnity lapses next month and I have not look'
+            goal: research medical indemnity renewal options
+[2/62]    amb-0024 want=act    got=act         10.1s  'Parents evening slots go live tomorrow and I have not set '
+            goal: Set availability for parents evening slots
+[3/62]    amb-0040 want=act    got=act          8.1s  'If the BPS claim is not in by the fifteenth I lose the who'
+            goal: remind owner to submit BPS claim by August 15, 2026
+[4/62]    amb-0056 want=act    got=act          9.3s  'World book day is Thursday and we have not got a costume.'
+            goal: get World Book Day costume for Thursday, August 27, 2026
+[5/62]    amb-0072 want=ignore got=ignore       6.2s  'Three clients cancelled on me this week.'
+[6/62]    amb-0088 want=act    got=act         16.1s  "Counsel's fee note is unpaid and they will stop taking my "
+            goal: pay counsel's fee note
+[7/62] !! amb-0104 want=act    got=ignore      16.3s  'The card machine contract auto renews in a fortnight at a '
+            goal: research card machine contract renewal options
+[8/62]    amb-0120 want=act    got=act         21.5s  'My railcard expired so every journey has cost me a fortune'
+            goal: renew railcard
+[9/62]    amb-0136 want=act    got=act         36.0s  'The freezer is making that clicking noise and it is full o'
+            goal: investigate freezer clicking noise
+[10/62]    amb-0152 want=act    got=act         52.4s  'That last invoice is forty days overdue now.'
+            goal: chase overdue invoice
+[11/62] !! amb-0168 want=act    got=ignore      10.8s  'The court warning for Thursday lands on my rest day.'
+[12/62]    amb-0184 want=ignore got=ignore      24.5s  'Long week already and it is only Tuesday.'
+[13/62]    amb-0200 want=ignore got=ignore      13.3s  'They changed the system again without telling anyone.'
+[14/62]    amb-0216 want=ignore got=ignore      24.1s  'We will see how it goes I suppose.'
+[15/62]    amb-0232 want=ignore got=ignore      17.9s  'Coming up, we will be taking your calls on the housing cri'
+[16/62]    amb-0248 want=ignore got=ignore      14.8s  'Say we did go for the bigger unit, we would need the three'
+[17/62]    amb-0264 want=ignore got=ignore      23.1s  'Do you know if the bins went out last night?'
+[18/62]    amb-0280 want=ignore got=ignore      18.1s  'The hotel is booked, the trains are booked, we are actuall'
+[19/62]    amb-0312 want=ignore got=ignore      47.8s  'And after the break, we will have the latest from the coas'
+[20/62]    amb-0313 want=ignore got=ignore      36.4s  'God, turn that down a bit.'
+[21/62]    per-0013 want=act    got=act        130.1s  'I need to get that deposit dispute to the scheme before th'
+            goal: submit deposit dispute to scheme
+[22/62]    per-0029 want=act    got=act        105.9s  'My screening letter has been in the drawer since before Ch'
+            goal: send screening letter to scheme
+[23/62] !! per-0045 want=act    got=TIMEOUT    249.6s  'The rent goes up in April and I have not read a word of th'
+[24/62] per-0061 POST FAILED: timed out
+[25/62] per-0077 POST FAILED: timed out
+[26/62] per-0093 POST FAILED: timed out
+[27/62] !! per-0114 want=ignore got=TIMEOUT    249.3s  'The car.'
+[28/62] per-0115 POST FAILED: timed out
+[29/62] !! per-0116 want=act    got=TIMEOUT    253.5s  'And that noise it makes turning right has not gone away, i'
+
+THREE TIMEOUTS IN A ROW. The worker is not stamping anything — check /Users/josegaelcruzlopez/.anticipy-rig/brain.log. Stopping rather than filling the results file with silence that looks like data.

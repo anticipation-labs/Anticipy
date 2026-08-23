@@ -1,0 +1,37 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=f5068bf4e1d3
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+clock: reminder has no owner-authored task — dropping model goal 'get the trellis file letter out'
+clock: initiated -> 'Just a quick heads-up: the trellis file letter needs to go out today, Friday, August 21, 2026. Did you manage to get that done?'
+segment: new (gap 26249s >= 1200s) seg=arofhb6m6lpzq6o
+heard: "The van's MOT is end of the month and I have not rung anyone." -> ignore (book MOT for the van before August 31, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=10hdtjd0yyejc87
+heard: 'World book day is Thursday and we have not got a costume.' -> ignore (find World Book Day costume options for Thursday, August 27, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=lrx57o774e88ml1
+heard: 'The board outside the Willow Road place has been down since the storm.' -> act (arrange repair of Willow Road sign)
+segment: link (anaphoric/short, still inside the near band) seg=rr9ia6f4wvesojn
+heard: 'It has gone cold again, has it not.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=78evs8sijwe913q
+heard: 'Bullet point, review the schedule. Bullet point, confirm the site access.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=6e3hgde3bf3ut6j
+heard: 'I promised Mum I would sort her online banking and I keep saying next weekend.' -> ignore (Schedule time to help Mum with online banking)
+not amending fi39lfsozbxzu4i: already queued — his approval closed this card to edits: 'research capital call notice period (10 or 15 days)'
+segment: escalate (substantive, no overlap, but recent) seg=ivqcbe8s863d313
+heard: 'I never checked how many days notice a capital call actually needs, ten or fifteen.' -> ignore (research capital call notice period (10 or 15 days))
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+not amending grkbiflo33b13yf: already queued — his approval closed this card to edits: 'research verifiable CPD options to fulfill 40-hour requirement by January'
+segment: escalate (substantive, no overlap, but recent) seg=0ief1vrvq4k7xkw
+heard: 'I am forty hours short on verifiable CPD and the cycle closes in January.' -> ignore (research verifiable CPD options to fulfill 40-hour requirement by January)
+not amending qm8ypbu3hihg2yh: already queued — his approval closed this card to edits: 'research options for deep clean before food hygiene re-inspection: full day closure vs. overnight'
+segment: escalate (substantive, no overlap, but recent) seg=nscalfiz5xbi526
+heard: 'The deep clean has to happen before the food hygiene rating re-inspection, though I have not settled whether we close a whole day or do it overnight.' -> ignore (research options for deep clean before food hygiene re-inspection: full day closure vs. overnight)
+segment: link (shares a name with the previous conversation) seg=fzpt21vlta74axx
+heard: 'The Hallam album proof has been sat with me three weeks past what I promised them.' -> ignore (send Hallam album proof)
+segment: escalate (substantive, no overlap, but recent) seg=eornj5ed8cdv3gj
+heard: 'This design system has four different greys all called neutral.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=3q66r0861lbhlog
+heard: "I will put a marker on the address, actually no, leave it, that is the neighbouring force's job." -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=f5ltvj7rf42gaos
+heard: 'I want the agency lads inducted before peak, though I have not settled how many shifts we are running.' -> ignore (no goal)

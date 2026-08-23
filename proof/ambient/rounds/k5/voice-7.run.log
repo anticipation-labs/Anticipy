@@ -1,0 +1,99 @@
+pb        http://127.0.0.1:8090
+owner_ref 2yr3b24kbuen4ye
+brain     worker: pid 6220,6221,6222,6223,6224,6225,6226,6227,6228,6229,6230,6231,6232,6233,6234,6235 up since 11:37:51, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62]    amb-0013 want=ignore got=ignore       4.2s  'These agency shifts pay more than I do and I am the one ho'
+[2/62]    amb-0029 want=ignore got=ignore       3.0s  'That loft conversion was a nightmare, never again.'
+[3/62]    amb-0045 want=ignore got=ignore       3.0s  'Table six sent it back twice.'
+[4/62]    amb-0061 want=ignore got=ignore       3.0s  'Bowls was cancelled, wet green.'
+[5/62]    amb-0077 want=act    got=act          7.0s  'I am nearly out of the six point six tint and Saturday is '
+            goal: order 6.6 hair tint
+[6/62]    amb-0093 want=act    got=act          7.0s  'The SOC 2 evidence collection is due next month and nobody'
+            goal: create SOC 2 evidence collection project
+[7/62]    amb-0109 want=act    got=act          7.0s  'The fencing on the top field is going to let them straight'
+            goal: arrange fencing repair for top field
+[8/62]    amb-0125 want=act    got=act          7.0s  'The single person council tax discount never got applied.'
+            goal: apply single person council tax discount
+[9/62] !! amb-0141 want=ask    got=ignore       3.0s  'We need to do something about the car, it is costing more '
+[10/62] !! amb-0157 want=act    got=ignore       4.0s  'The NHS claim submission window closes on the fifth.'
+[11/62]    amb-0173 want=act    got=act          7.0s  'The PRS return has not been done for the last two quarters'
+            goal: file PRS return for last two quarters
+[12/62]    amb-0189 want=ignore got=ignore       3.0s  'Oh brilliant, that is one less thing.'
+[13/62]    amb-0205 want=ignore got=ignore       4.1s  'I hate this time of year.'
+[14/62]    amb-0221 want=ignore got=ignore       5.0s  'Postcode is C V three, seven, R B.'
+[15/62]    amb-0237 want=ignore got=ignore       3.0s  'I am booking the restaurant for Saturday, so do not double'
+[16/62]    amb-0253 want=ignore got=ignore       4.1s  'I sent it over first thing so that one is off my list.'
+[17/62]    amb-0269 want=ignore got=ignore       4.0s  'Did anyone actually reply to that thread?'
+[18/62]    amb-0289 want=ignore got=ignore       3.0s  'What was the name of that place.'
+[19/62]    amb-0290 want=ignore got=ignore       4.0s  'The one with the courtyard, off the high street.'
+[20/62] !! amb-0291 want=act    got=ignore       4.1s  'We should get a table there before it gets busy again.'
+[21/62]    per-0002 want=act    got=act         13.7s  'Honestly, I keep meaning to ring the dentist and it has be'
+            goal: book dentist appointment
+[22/62]    per-0018 want=act    got=act         25.6s  'I promised Mum I would sort her online banking and I keep '
+            goal: Help Mum sort online banking
+[23/62] !! per-0034 want=act    got=ignore      20.0s  'There is a message sat on my universal credit journal and '
+            goal: Check universal credit journal for messages
+[24/62] !! per-0050 want=act    got=ignore      13.5s  "My brother's fortieth is the same weekend as the wedding a"
+            goal: research options for attending brother's 40th birthday and a wedding on the same weekend
+[25/62]    per-0066 want=act    got=act         31.3s  'the repeat script the pharmacy I have got like two days le'
+            goal: request prescription refill for owner's tablets
+[26/62]    per-0082 want=ignore got=ignore      15.0s  'Coming up after the break, how to slash your energy bill i'
+[27/62]    per-0125 want=ignore got=ignore      13.2s  'We used to go to that caravan place every August, the one '
+[28/62] !! fin-0011 want=act    got=ignore      19.9s  'I have lost track of when the inspection window opens this'
+            goal: find out when the inspection window opens for the caravan place
+[29/62] !! fin-0027 want=act    got=ignore      12.1s  'Karen said she would put the new van on the fleet policy b'
+            goal: Find out if the new van is on the fleet policy.
+[30/62]    fin-0043 want=ignore got=ignore      12.0s  'the the payment message the em tea one oh three whatever i'
+[31/62]    fin-0059 want=act    got=act         29.4s  'The variation to the cleaning contract got agreed on a cal'
+            goal: draft variation to cleaning contract
+[32/62]    fin-0075 want=ignore got=ignore      36.3s  'Has he actually signed the expenses or is it still in his '
+[33/62]    med-0001 want=ignore got=ignore      29.6s  'Revalidation.'
+[34/62]    med-0002 want=ignore got=ignore       5.1s  'Is that five years since the last one or four, I genuinely'
+[35/62] !! med-0003 want=act    got=ignore       7.3s  'Either way my CPD hours are nowhere near what they want an'
+            goal: research CPD requirements for appraisal in October
+[36/62]    med-0004 want=act    got=act         62.2s  'And the indemnity cover has still got the old scope of pra'
+            goal: update indemnity cover with current scope of practice
+[37/62] !! med-0010 want=ask    got=ignore      10.8s  'The agency shifts need indemnity cover sorting and I do no'
+[38/62]    med-0021 want=ignore got=ignore      13.9s  'The wholesaler has put the sertraline on quota again.'
+[39/62]    med-0022 want=ignore got=ignore      15.2s  'Third month running, that is.'
+[40/62] !! med-0023 want=act    got=ignore      17.0s  'I will have to find another supplier before Monday or half'
+            goal: Find new sertraline supplier before Monday, August 24, 2026
+[41/62]    med-0029 want=ignore got=ignore       8.2s  'Have you actually got round to your own registration renew'
+[42/62]    med-0045 want=ignore got=ignore      20.7s  'I signed the mortality review off on Monday, that one is c'
+[43/62] !! med-0061 want=act    got=ignore       4.0s  'The GOC retention fee closes on the fifteenth and after th'
+[44/62]    med-0084 want=act    got=act          8.2s  'The sponsor licence annual return is open and the key pers'
+            goal: remove Tom from sponsor licence annual return key personnel list
+[45/62]    med-0100 want=ignore got=ignore       4.1s  'the the land reg the land registry requisition the uh'
+[46/62] !! svc-0006 want=ask    got=ignore       4.0s  'The deep clean has to happen before the food hygiene ratin'
+            goal: Research options for deep clean: full day closure vs. overnight
+[47/62]    svc-0022 want=act    got=act          9.4s  'The corkage the hotel wants is twenty a bottle and the Pre'
+            goal: Inform Prentice family about $20 corkage fee
+[48/62]    svc-0038 want=act    got=act          7.1s  'I promised Nadia a twelve week plan on paper and it is sti'
+            goal: Draft 12-week plan for Nadia
+[49/62]    svc-0054 want=ignore got=ignore       3.0s  'The drainage on the runs is being done, the groundworks la'
+[50/62]    svc-0070 want=ignore got=ignore       4.0s  'Are these the ones you meant, the cream, or were you after'
+[51/62]    svc-0086 want=act    got=act          9.1s  'The duty return is due and I have not counted what is actu'
+            goal: Count remaining inventory for duty return
+[52/62] !! tep-0010 want=ask    got=ignore       5.1s  'I want the churn model retrained before the board see it, '
+            goal: Find which churn model snapshot the board signed off on
+[53/62]    tep-0026 want=act    got=act          9.1s  'The calibration certificate on the torque wrenches has run'
+            goal: Arrange calibration for torque wrenches before Monday, August 24, 2026
+[54/62] !! tep-0042 want=ask    got=ignore       4.0s  'I need the committee report on the agenda but I cannot rem'
+            goal: Find out if the committee chair wanted the report in July or September
+[55/62]    tep-0058 want=ignore got=ignore       4.0s  'He does the work and then argues with the mark scheme for '
+[56/62]    tep-0074 want=act    got=act          6.3s  'The consultation response window shuts on the ninth and ou'
+            goal: Draft consultation response from bullet list by September 9, 2026
+[57/62]    tep-0090 want=act    got=act         11.3s  'Did I ever send you the range booking? No, I did not, it i'
+            goal: Send range booking to Alex (voice-7@lane.test)
+[58/62]    trd-0036 want=ignore got=ignore       3.0s  'Twenty two squares of slate and half of them come off the '
+[59/62]    trd-0052 want=ignore got=ignore       4.0s  'Every job this month has been mud, absolute mud, start to '
+[60/62] !! trd-0068 want=ask    got=ignore       5.0s  'I want the vinyl welding course booked for the two lads bu'
+[61/62] !! trd-0084 want=ask    got=ignore       3.0s  'I want the agency lads inducted before peak, though I have'
+[62/62] !! trd-0100 want=act    got=ignore       4.0s  'De-icer stocks. One bowser for the whole apron and it is f'
+            goal: Research de-icer stock levels and bowser availability for the apron, given forecast of -4 degrees.
+
+pushed 62 in 11.9 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k5/voice-7.jsonl
+  act=17  ignore=45
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

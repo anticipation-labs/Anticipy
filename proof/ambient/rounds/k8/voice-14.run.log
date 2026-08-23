@@ -1,0 +1,105 @@
+pb        http://127.0.0.1:8090
+owner_ref ohd8x8tskrq6tpo
+brain     worker: pid 27562,27563,27564,27565,27566,27567,27568,27570,27571,27572,27573,27574,27575,27576,27577,27578,27622,27626,27628,27630,27637,27639 up since 12:53:12, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63]    amb-0005 want=act    got=act         16.0s  'Oh no, the VAT return is due on the seventh and I have not'
+            goal: Prepare VAT return for September 7, 2026
+[2/63]    amb-0021 want=act    got=act         11.3s  'Staging is throwing cert errors, I bet I never renewed tha'
+            goal: Renew staging domain certificate
+[3/63]    amb-0037 want=act    got=act         13.6s  'My digital tacho card runs out in about six weeks.'
+            goal: Renew digital tacho card
+[4/63]    amb-0053 want=act    got=act         12.3s  'My ethics form was supposed to go in last Friday and it is'
+            goal: Submit ethics form
+[5/63]    amb-0069 want=act    got=act         20.3s  'Copy deadline is six and I have not got the second source '
+            goal: Get second source confirmation for copy
+[6/63] !! amb-0085 want=act    got=ignore      17.1s  'My DBS is three years old, I think it needs redoing for th'
+            goal: Research DBS renewal process for bank shifts
+[7/63]    amb-0101 want=act    got=act         18.9s  'I promised the shop a quote for the rewire and it is still'
+            goal: Draft quote for shop rewire
+[8/63]    amb-0117 want=act    got=act         39.3s  'Committee papers have to be published five clear days befo'
+            goal: remind owner to publish committee papers by end of day today, Thursday, August 20, 2026
+[9/63]    amb-0133 want=act    got=act         29.9s  'I have not filed my self assessment and January is not tha'
+            goal: file self assessment
+[10/63] !! amb-0149 want=act    got=ignore      10.2s  'My public liability renews on the first and I have not com'
+            goal: research public liability insurance renewal options
+[11/63]    amb-0165 want=act    got=act         13.3s  'The compressor service is overdue and if it goes we close '
+            goal: schedule compressor service
+[12/63]    amb-0181 want=ignore got=ignore      13.3s  'It has gone cold again, has it not.'
+[13/63]    amb-0197 want=ignore got=ignore      25.1s  'Everything takes three emails now, everything.'
+[14/63]    amb-0213 want=ignore got=ignore      11.3s  'Part of me wants to just start again from scratch.'
+[15/63]    amb-0229 want=ignore got=ignore      16.8s  'So my next guest has been doing this for over thirty years'
+[16/63]    amb-0245 want=ignore got=ignore      10.9s  'Suppose we did move the whole thing to Friday, would that '
+[17/63]    amb-0261 want=ignore got=ignore      10.4s  'Yep, that works.'
+[18/63]    amb-0277 want=ignore got=ignore      43.9s  'We should get flowers sent, actually no, she said not to.'
+[19/63]    amb-0303 want=ignore got=ignore      10.8s  'Did you ever hear back.'
+[20/63]    amb-0304 want=ignore got=ignore       8.3s  'From the school, about the trip.'
+[21/63]    per-0010 want=act    got=act         53.8s  "Dad's headstone, the mason wanted a decision by the end of"
+            goal: email mason about dad's headstone decision
+[22/63]    per-0026 want=act    got=act         88.6s  'Three quid here, eight quid there, I have no idea what is '
+            goal: review bank statements for August 2026
+[23/63]    per-0042 want=act    got=act         35.5s  'There is a bird stuck behind the vent, I can hear it, I ca'
+            goal: contact building management about bird stuck behind vent
+[24/63] !! per-0058 want=ask    got=ignore     100.2s  "The visa form wants Ella's middle name exactly as it is on"
+            goal: find Ella's middle name from her birth certificate
+[25/63]    per-0074 want=ignore got=ignore       6.1s  'The car tax, yeah, I did that on the phone while the kettl'
+[26/63]    per-0090 want=ignore got=ignore       7.1s  'sorry what no I was saying about the whether the whether i'
+[27/63]    per-0102 want=ignore got=ignore       8.7s  'Mum, is my passport still in that drawer thing?'
+[28/63]    per-0103 want=ignore got=ignore      11.2s  'It is, it is in there, but hang on, that was done when you'
+[29/63] !! per-0104 want=act    got=ignore      14.3s  'Oh God, so it has run out, and you need it for Easter, tha'
+[30/63]    per-0105 want=ignore got=ignore       4.5s  'And everyone says they are taking weeks and weeks at the m'
+[31/63]    fin-0003 want=ignore got=ignore      25.6s  'Markets closed lower again as investors weighed the inflat'
+[32/63] !! fin-0019 want=ask    got=ignore      15.4s  'I want the state estimate away early but I do not know whi'
+[33/63]    fin-0035 want=ignore got=ignore       7.3s  "Did the vendor's solicitor ever come back on the boundary,"
+[34/63]    fin-0051 want=ignore got=ignore       8.2s  'Everyone is pricing seed rounds like it is still twenty tw'
+[35/63] !! fin-0067 want=ask    got=ignore       9.3s  'I ought to get the second analyst advert back up but I nev'
+[36/63]    fin-0083 want=ignore got=ignore      11.3s  'If the seed had come in at twice the size we would have th'
+[37/63]    med-0018 want=ignore got=ignore      10.5s  'The x ray tube quote is with the finance people already, t'
+[38/63]    med-0037 want=act    got=act         23.9s  'The paediatric bag has been short of the small bag valve m'
+            goal: order a small bag valve mask for the paediatric bag
+[39/63]    med-0053 want=act    got=act         14.4s  'The moving and handling refresher is overdue for the whole'
+            goal: schedule moving and handling refresher for night team
+[40/63]    med-0073 want=act    got=act         11.2s  'the court fee the fee schedule on the file its the old one'
+            goal: update court fee schedule on file
+[41/63]    med-0092 want=act    got=act         17.1s  'My duty solicitor slots for the next rota period never got'
+            goal: Submit duty solicitor slots for next rota period
+[42/63]    med-0108 want=act    got=act         17.8s  'The interpreter for the Wednesday list was never booked.'
+            goal: book interpreter for Wednesday list
+[43/63]    svc-0014 want=act    got=act         17.5s  'The darts final runs well past midnight and I never applie'
+            goal: apply for TENs
+[44/63]    svc-0030 want=act    got=act         12.3s  'We are nearly out of the wax strips and Saturday is back t'
+            goal: order wax strips for delivery
+[45/63]    svc-0046 want=act    got=act         11.1s  'The insect screen on the baby room window still has not be'
+            goal: Arrange insect screen fitting for baby room window
+[46/63] !! svc-0062 want=ask    got=ignore       5.1s  "I want a pupils' concert on before Christmas, I have simpl"
+            goal: Research available Saturdays for a pupils' concert before Christmas 2026
+[47/63]    svc-0078 want=ignore got=ignore       4.0s  'The reseed on the far field is happening, the contractor i'
+[48/63] !! svc-0101 want=ignore got=ask         12.2s  'Have you got anything Saturday morning, even early, for a '
+            goal: Find Saturday morning availability for a cut and blow dry
+[49/63] !! svc-0102 want=ignore got=ask          8.0s  'Saturday has gone I am afraid, I could do you Friday at si'
+            goal: Book Alex a cut and blow dry for Friday, August 21, 2026 at 6 PM.
+[50/63] !! svc-0103 want=act    got=ignore       3.0s  'The online booking is still showing Saturday as open, that'
+[51/63]    svc-0104 want=ignore got=ignore       4.0s  'The colour order is going in as we speak, Leanne is on the'
+[52/63]    tep-0002 want=ignore got=ignore       3.0s  'The bloke in that conference talk was saying you should de'
+[53/63]    tep-0018 want=act    got=act          9.1s  'The roadmap review is Thursday and I have not written up w'
+            goal: write up items to drop from roadmap
+[54/63]    tep-0034 want=act    got=act          9.0s  'The relief valve on R three is out of test and I have not '
+            goal: raise work order for R3 relief valve
+[55/63]    tep-0050 want=act    got=act          8.2s  'Two of the DBS renewals for the site team expired over the'
+            goal: Renew DBS for two site team members
+[56/63]    tep-0066 want=act    got=act         11.1s  'The calibration certificate on the analytical balance has '
+            goal: renew calibration certificate for analytical balance
+[57/63]    tep-0082 want=ignore got=ignore       3.0s  'That training video went on about flashover for twenty min'
+[58/63]    trd-0028 want=ignore got=ignore       4.0s  'The condenser is on the wagon already, it is all moving.'
+[59/63]    trd-0044 want=ignore got=ignore       3.0s  'argon bottle the reg is on the the other one no the'
+[60/63]    trd-0060 want=act    got=act          8.1s  "The night team's method statement for the atrium has never"
+            goal: draft method statement for atrium for night team
+[61/63] !! trd-0076 want=ask    got=ignore       3.0s  'The ADR licence renewal wants a course and I cannot rememb'
+[62/63]    trd-0092 want=ignore got=ignore       5.0s  'Two hours in the airport queue for a nine pound job.'
+[63/63]    trd-0108 want=act    got=act          9.1s  'The wide load permit for shifting the three sixty on Sunda'
+            goal: Apply for wide load permit for 360 on Sunday, August 23, 2026
+
+pushed 63 in 18.8 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k8/voice-14.jsonl
+  act=26  ask=2  ignore=35
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

@@ -1,0 +1,36 @@
+pb        http://127.0.0.1:8090
+owner_ref yabnd1w5gr32woa
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759,65290 up since 01:04:10, newer than every file in brain/
+corpus    5 utterances, 0 already done, 5 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/5]    amb-0003 want=act    got=act         27.4s  'I keep meaning to re-run the retirement projection on the '
+            goal: Re-run the retirement projection on the Alvarez file
+pb        http://127.0.0.1:8090
+owner_ref yabnd1w5gr32woa
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,32681,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    5 utterances, 0 already done, 5 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[2/5]    amb-0012 want=act    got=act         27.2s  'I am on nights all next week and I have not sorted anythin'
+            goal: arrange coverage and logistics for the kids next week
+[1/5] !! amb-0003 want=act    got=ignore      17.2s  'I keep meaning to re-run the retirement projection on the '
+            goal: create task to re-run retirement projection on Alvarez file before meeting
+[3/5] !! amb-0021 want=act    got=ignore      11.1s  'Staging is throwing cert errors, I bet I never renewed tha'
+[4/5] !! amb-0030 want=act    got=ignore      13.1s  'My eighteenth edition update expires this year and courses'
+            goal: research 18th edition update course options and availability
+[2/5]    amb-0012 want=act    got=act         22.1s  'I am on nights all next week and I have not sorted anythin'
+            goal: compile childcare and evening coverage options for the kids next week
+[5/5]    amb-0039 want=ignore got=ignore       9.1s  'The M6 was solid from junction twelve.'
+
+pushed 5 in 1.5 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-3.jsonl
+  act=2  ignore=3
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[3/5] !! amb-0021 want=act    got=ignore      11.1s  'Staging is throwing cert errors, I bet I never renewed tha'
+[4/5] !! amb-0030 want=act    got=ignore       9.0s  'My eighteenth edition update expires this year and courses'
+            goal: research 18th edition update course options and availability
+[5/5]    amb-0039 want=ignore got=ignore       8.1s  'The M6 was solid from junction twelve.'
+
+pushed 5 in 1.2 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-3.jsonl
+  act=1  ignore=4
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

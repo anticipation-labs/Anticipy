@@ -1,0 +1,14 @@
+pb        http://127.0.0.1:8090
+owner_ref 15i3kxezkt1qwto
+brain     worker: pid 13937,23494,23496,23499,23505,23508,23518,23582,23583,23584,23585 up since 20:51:24, newer than every file in brain/
+corpus    2 utterances, 0 already done, 2 to push
+pacing    gap=1.0s  timeout=240.0s  virtual convo gap=50.0s
+[1/2]    amb-0002 want=act    got=act         27.2s  'Damn, the Hendricks review is Thursday and I still have no'
+            goal: pull Q3 numbers for the Hendricks review
+[2/2] !! amb-0008 want=act    got=ignore       9.1s  'My medical indemnity lapses next month and I have not look'
+            goal: research medical indemnity renewal options
+
+pushed 2 in 0.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/smoke/voice-2.jsonl
+  act=1  ignore=1
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

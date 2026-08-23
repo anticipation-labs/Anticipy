@@ -1,0 +1,31 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (gap 3262s >= 1200s) seg=jk1ijmwrv5d57lr
+heard: 'The revised drainage calcs still have not gone to the contractor and design freeze is Monday.' -> act (draft email to contractor with revised drainage calculations before Monday August 24 2026 design freeze)
+segment: escalate (substantive, no overlap, but recent) seg=pz1na8ckkqipy1g
+heard: 'My ethics form was supposed to go in last Friday and it is still sat in drafts.' -> act (Locate and prepare overdue draft ethics form for submission)
+segment: escalate (substantive, no overlap, but recent) seg=6vsy5i0mz6qm3kv
+heard: 'The sprayer test certificate runs out before harvest.' -> ignore (research sprayer testing and certification booking options before harvest)
+segment: link (anaphoric/short, still inside the near band) seg=gtgq9o6dsazk7lq
+heard: 'Morning, you alright?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=sxoaz8kphyxey0i
+heard: 'I keep seeing those adverts and wondering if they are any good.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=wototjmyz8kll1k
+heard: 'The probate forms are sat there and every single time I open them I close them again.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=mbifcksyympcimc
+heard: 'The strata levy notices have to go out this week and the budget is not approved yet.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=ubvyzy7j8lp3dsg
+heard: 'The bank shifts.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=3rhk4jl21p71iao
+heard: 'The chiller on aisle four has been running two degrees warm since Friday and nobody has logged it.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=82u2dnxil2k123j
+heard: 'The hall booking runs out at the end of term and the parish council want it in writing, and I still have not decided if we are keeping the Thursday slot on.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=9qmfxdv8bhfopst
+heard: 'The roadmap review is Thursday and I have not written up what we are dropping.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=oclw2mn3ximhv2s
+heard: 'My breathing apparatus competency is due for reassessment and the slots go in about a day.' -> ignore (research breathing apparatus competency reassessment booking options)
+segment: escalate (substantive, no overlap, but recent) seg=iufoirzeqmwo91g
+heard: 'Two of the counterbalance lads need their refresher and the licences go in a fortnight.' -> ignore (no goal)

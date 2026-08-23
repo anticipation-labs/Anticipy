@@ -1,0 +1,28 @@
+pb        http://127.0.0.1:8090
+owner_ref nm28bp0p7dj06ot
+brain     worker: pid 6534,6545,6552,6560,6565,6570,6573,6578,6582,16574 up since 02:01:51, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13] !! amb-0003 want=act    got=ignore      78.3s  'I keep meaning to re-run the retirement projection on the '
+            goal: re-run retirement projection on the Alvarez file before the meeting
+[2/13]    amb-0042 want=ignore got=ignore      17.1s  'Rain is not letting up at all.'
+[3/13]    amb-0102 want=act    got=act         71.6s  'My F gas certificate expires in the spring.'
+            goal: track F gas certificate renewal for spring 2027
+[4/13] !! amb-0168 want=act    got=ignore      20.2s  'The court warning for Thursday lands on my rest day.'
+[5/13]    amb-0209 want=ignore got=ignore      24.2s  'I sometimes think about packing it all in and doing someth'
+[6/13] !! amb-0298 want=act    got=ignore      39.3s  'We should do dinner out Friday, somewhere decent for once.'
+            goal: research decent dinner restaurant options in Vancouver for Friday August 21, 2026
+[7/13]    fin-0012 want=act    got=act         72.7s  'the trellis the trellis file letter i need that out before'
+            goal: draft the Trellis file letter to send before Friday, August 28, 2026
+[8/13]    fin-0098 want=ignore got=ignore      56.5s  'Did the offer letter ever go out to the Bhatt candidate?'
+[9/13]    med-0094 want=ignore got=ignore      30.3s  'The bad character application went in on Thursday, that is'
+[10/13] !! svc-0020 want=ask    got=ignore      22.2s  'I want the run of show over to the venue, I have just not '
+[11/13] !! tep-0012 want=ignore got=error       32.3s  'Do not worry about the printer, Yusuf has already logged i'
+[12/13] !! tep-0063 want=ask    got=ignore      29.3s  'I want the reading group posters up this week but I have n'
+            goal: find the date settled on for the reading group to prepare posters
+[13/13] !! trd-0071 want=act    got=ignore      30.3s  'The gate will not let the two labourers on Monday, both th'
+
+pushed 13 in 8.8 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abA/voice-4.jsonl
+  act=2  error=1  ignore=10
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

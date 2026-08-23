@@ -1,0 +1,31 @@
+pb        http://127.0.0.1:8090
+owner_ref yabnd1w5gr32woa
+brain     worker: pid 289,291,89298,89307,89315,89319,89324,89338,89344,89395,89403 up since 02:13:09, newer than every file in brain/
+corpus    14 utterances, 0 already done, 14 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/14]    amb-0096 want=act    got=act         10.6s  'The trip risk assessment has to be with the head before th'
+            goal: ensure trip risk assessment is with head before letters go out
+[2/14]    amb-0165 want=act    got=act         11.1s  'The compressor service is overdue and if it goes we close '
+            goal: schedule compressor service
+[3/14]    amb-0206 want=ignore got=ignore       4.0s  'Everyone wants everything yesterday.'
+[4/14] !! amb-0297 want=ignore got=act          8.1s  'Still need to sort that boiler.'
+            goal: sort boiler
+[5/14]    per-0103 want=ignore got=ignore       4.0s  'It is, it is in there, but hang on, that was done when you'
+[6/14]    fin-0096 want=ignore got=ignore       5.1s  'Actually Denise scanned the lot and emailed them Friday.'
+[7/14]    med-0075 want=ignore got=ignore       4.1s  'In the drama they had the paralegal cross examining someon'
+[8/14]    svc-0017 want=ignore got=ignore       5.1s  'I should ring the fishmonger about Saturday, actually no, '
+[9/14]    tep-0008 want=act    got=act         10.1s  'The board deck goes out Monday and the churn numbers in it'
+            goal: update churn numbers in board deck to reflect new warehouse
+[10/14]    tep-0058 want=ignore got=ignore       9.1s  'He does the work and then argues with the mark scheme for '
+            goal: correct churn numbers in board deck
+[11/14]    trd-0014 want=ignore got=ignore       3.0s  'It is on the water till Thursday.'
+[12/14]    trd-0015 want=act    got=act          8.1s  'The customs entry has never been lodged and if it is not i'
+            goal: lodge customs entry for shipment arriving Thursday, August 27, 2026
+[13/14]    trd-0069 want=ignore got=ignore       4.1s  'If we ever went all in on resin we would need a different '
+[14/14]    trd-0096 want=act    got=act         11.1s  'Nobody has signed the possession paperwork for Saturday ni'
+            goal: get possession paperwork signed for Saturday, August 22, 2026
+
+pushed 14 in 1.7 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abB/voice-3.jsonl
+  act=6  ignore=8
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

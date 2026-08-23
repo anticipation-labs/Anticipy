@@ -1,0 +1,13 @@
+pb        http://127.0.0.1:8090
+owner_ref fnw0pvulizndqze
+brain     worker: pid 13937,23494,23496,23499,23505,23508,23518,23581,23582,23583,23584,23586 up since 20:51:24, newer than every file in brain/
+corpus    2 utterances, 0 already done, 2 to push
+pacing    gap=1.0s  timeout=240.0s  virtual convo gap=50.0s
+[1/2]    amb-0006 want=act    got=act         25.2s  'I told Priya I would send her the payroll journal and it c'
+            goal: Draft email to Priya sending the payroll journal
+[2/2] !! amb-0012 want=act    got=ignore      15.1s  'I am on nights all next week and I have not sorted anythin'
+
+pushed 2 in 0.7 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/smoke/voice-6.jsonl
+  act=1  ignore=1
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

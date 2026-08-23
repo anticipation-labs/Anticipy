@@ -1,0 +1,108 @@
+pb        http://127.0.0.1:8090
+owner_ref scrhkcffjglfkbq
+brain     worker: pid 2686,2688,2689,2690,2691,2693,2694,2695,2696,2697,2698,2699,2700,2701,2702,2703,2737,2739,2740 up since 11:28:26, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63] !! amb-0016 want=act    got=ignore       1.4s  'The client care letter for the Duffy file never went out, '
+[2/63]    amb-0032 want=act    got=act          8.0s  'The Mitsubishi units for the Croydon install have not been'
+            goal: Order Mitsubishi units for Croydon install
+[3/63]    amb-0048 want=ignore got=ignore       3.0s  'That vendor is never going to accept.'
+[4/63] !! amb-0064 want=ask    got=ignore       5.1s  'I would love to get away for a weekend but I have no idea '
+            goal: Research affordable weekend getaways
+[5/63] !! amb-0080 want=act    got=ignore       7.0s  'My FCA fee invoice is sat unopened somewhere.'
+            goal: Find FCA fee invoice for Alex
+[6/63]    amb-0096 want=act    got=act          8.1s  'The trip risk assessment has to be with the head before th'
+            goal: Draft trip risk assessment for Alex
+[7/63]    amb-0112 want=act    got=act         15.5s  'The client money account audit needs an accountant and I h'
+            goal: Appoint an accountant for the client money account audit
+[8/63]    amb-0128 want=act    got=act          9.1s  'The dentist has been sending me reminders since March.'
+            goal: Schedule dentist appointment for Alex
+[9/63] !! amb-0144 want=ask    got=ignore       5.0s  'I ought to see someone about my back but I do not know if '
+            goal: Research whether GP or physio is appropriate for back pain
+[10/63] !! amb-0160 want=act    got=ignore       4.0s  'I keep turning colour correction work away because I never'
+[11/63] !! amb-0176 want=act    got=ignore       5.3s  "The candidate's right to work documents expire before the "
+[12/63]    amb-0192 want=ignore got=ignore       4.0s  'My back has filed a formal complaint.'
+[13/63]    amb-0208 want=ignore got=ignore       5.1s  'Maybe one day I will learn to sail.'
+[14/63]    amb-0224 want=ignore got=ignore       4.3s  'Section four subsection two, the contractor shall maintain'
+[15/63]    amb-0240 want=ignore got=ignore       5.2s  'Honestly it is fine, I will sort the tickets out tonight.'
+[16/63]    amb-0256 want=ignore got=ignore       6.6s  'Yeah ok sure.'
+[17/63]    amb-0272 want=ignore got=ignore       5.2s  'yeah no yeah no yeah'
+[18/63] !! amb-0298 want=act    got=ignore       5.1s  'We should do dinner out Friday, somewhere decent for once.'
+            goal: Find restaurants for dinner on Friday, August 21, 2026
+[19/63]    amb-0299 want=ignore got=ignore      21.4s  'Oh, hang on, Priya is in Leeds Friday.'
+            goal: Cancel dinner Friday
+[20/63]    amb-0300 want=ignore got=ignore      20.8s  'Forget Friday then, we will do it another time.'
+            goal: cancel dinner Friday
+[21/63] !! per-0005 want=act    got=ignore       6.2s  'I have got this horrible feeling I have missed the deadlin'
+            goal: research free childcare hours deadline
+[22/63]    per-0021 want=act    got=act         11.8s  "The visa appointment slots for Ella's trip open on Monday "
+            goal: book visa appointment for Ella on Monday, August 24, 2026
+[23/63] !! per-0037 want=act    got=ignore       5.3s  'The halls deposit was supposed to come back in September a'
+            goal: check status of halls deposit
+[24/63]    per-0053 want=act    got=act          9.4s  'The freezer has defrosted itself overnight and everything '
+            goal: dispose of defrosted food in freezer
+[25/63]    per-0069 want=ignore got=ignore       5.1s  'We should book the caravan for August, oh, do not bother, '
+[26/63]    per-0085 want=ignore got=ignore       3.1s  'Yeah, no, exactly.'
+[27/63]    per-0128 want=ignore got=ignore       5.1s  'Her car failed its MOT on four things, four, and she only '
+[28/63]    fin-0014 want=ignore got=ignore       5.0s  'Nadia, did you tie the inventory count back to the ledger '
+[29/63]    fin-0030 want=act    got=act         13.6s  'The claim is with the adjuster now, but the excess payment'
+            goal: send excess payment this week
+[30/63] !! fin-0046 want=act    got=ignore       6.1s  'I said I would find out if her old scheme has a guaranteed'
+            goal: Find out if Alex's old scheme has a guaranteed annuity rate
+[31/63]    fin-0062 want=ignore got=ignore       5.1s  'Yeah, no, fair enough, that works.'
+            goal: Find out if Alex's old scheme has a guaranteed annuity rate
+[32/63]    fin-0078 want=ignore got=ignore       5.5s  'The royalty is seven percent of gross and they still want '
+[33/63]    fin-0093 want=ignore got=ignore       4.0s  'The water damage in the back office.'
+[34/63] !! fin-0094 want=ignore got=act         15.7s  'The adjuster wanted photographs and the invoice for the fl'
+            goal: send Alex photographs and invoice for flooring
+[35/63] !! fin-0095 want=act    got=ignore       6.0s  'I have not sent him anything and it has been eight days.'
+            goal: email Alex photographs and flooring invoice for water damage
+[36/63]    fin-0096 want=ignore got=ignore       5.0s  'Actually Denise scanned the lot and emailed them Friday.'
+            goal: confirm Denise emailed Alex on Friday, August 21, 2026 regarding water damage photos and flooring in
+[37/63] !! fin-0097 want=act    got=ignore       7.3s  'The dehumidifier hire has not been invoiced back to them t'
+            goal: invoice dehumidifier hire to Alex
+[38/63]    med-0013 want=ignore got=ignore       6.2s  'The compressor service is done, the engineer came Tuesday '
+[39/63] !! med-0032 want=act    got=ignore       4.0s  'The membership lapsed, that is why the directory listing c'
+[40/63] !! med-0048 want=act    got=ignore       4.0s  'The MRI service contract renewal came in thirty per cent u'
+[41/63]    med-0064 want=ignore got=ignore       3.1s  'The practice manager does the claim submission this month,'
+[42/63] !! med-0087 want=act    got=ignore      10.3s  'The safeguarding letter went to the old office address, so'
+            goal: find safeguarding letter sent to old office address
+[43/63]    med-0103 want=ignore got=ignore       5.1s  'Legal are handling the breach notification, they have got '
+[44/63]    svc-0009 want=act    got=act         11.2s  'The lift service contract lapsed in March and we have been'
+            goal: Renew lift service contract
+[45/63]    svc-0025 want=act    got=act          8.4s  'My PAT test on the driers and the dressing table sockets i'
+            goal: arrange PAT test for driers and dressing table sockets
+[46/63] !! svc-0041 want=ask    got=ignore      16.7s  'I would like to run a retreat weekend in the spring, I jus'
+[47/63]    svc-0057 want=act    got=act          9.1s  'The backup drive has been beeping at me and every job sinc'
+            goal: back up all jobs since June
+[48/63]    svc-0073 want=act    got=act         11.2s  'We are down to a bag and a half of the strong white.'
+            goal: order more strong white flour
+[49/63]    svc-0089 want=act    got=act         11.6s  'The boat trip operator licence has the old passenger numbe'
+            goal: update boat trip operator licence with correct passenger numbers
+[50/63]    svc-0108 want=ignore got=ignore       4.2s  'and if you are a small business owner, this next bit on ca'
+[51/63]    svc-0109 want=ignore got=ignore       5.2s  'Yeah, no, right.'
+[52/63] !! svc-0110 want=act    got=ignore       6.1s  'Our rate went up in April and I never once looked at it, t'
+[53/63] !! tep-0013 want=ask    got=ignore       7.0s  'The new starter in legal begins Monday and I cannot build '
+[54/63]    tep-0029 want=ignore got=ignore       5.1s  'The machine shop has fitted the guards back to front on ev'
+[55/63]    tep-0045 want=act    got=act         10.2s  'The Year Eleven mock papers want photocopying and reprogra'
+            goal: Photocopy Year Eleven mock papers before reprographics closes at 3 PM
+[56/63]    tep-0061 want=act    got=act          9.1s  'The e-journal renewal quote has to reach finance before th'
+            goal: Send e-journal renewal quote to finance before August 31, 2026
+[57/63]    tep-0077 want=act    got=act          9.1s  'Forget the equalities annex, actually no, it does have to '
+            goal: ensure equalities annex is included with paper by Friday, August 21, 2026
+[58/63]    trd-0023 want=act    got=act          9.1s  'The board at the nursery keeps dropping the RCD and they h'
+            goal: Arrange for RCD at nursery to be fixed
+[59/63]    trd-0039 want=act    got=act         10.1s  'I promised the letting agent a schedule of works for the t'
+            goal: Draft schedule of works for three voids for letting agent
+[60/63]    trd-0055 want=ignore got=ignore       4.2s  'The chipper is being collected this afternoon, that one is'
+[61/63]    trd-0071 want=act    got=act          9.1s  'The gate will not let the two labourers on Monday, both th'
+            goal: renew cards for two labourers by Monday, August 24, 2026
+[62/63]    trd-0087 want=act    got=act          8.1s  'My STCW basic safety refresher is due and I cannot sign on'
+            goal: book STCW basic safety refresher for Alex
+[63/63]    trd-0103 want=act    got=act         10.1s  'the the engine anode on the port side wants changing befor'
+            goal: change engine anode on port side
+
+pushed 63 in 8.4 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k4/voice-1.jsonl
+  act=21  ignore=42
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

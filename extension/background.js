@@ -21,7 +21,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.10.0";
+const ENGINE_BUILD = "0.11.0";
 
 const BACKEND_LLM = "backend-proxy";
 // Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier
@@ -140,7 +140,7 @@ async function ensureRegisteredOnce() {
   // saving agentId above and saving the registration result below. Re-POSTing
   // the same id 409s forever, and a null return here is total death: heartbeat
   // stops at !reg, claimJob has no ownerRef, ensureLLMKey has no token. Worse,
-  // the setup page then says "Connected to Anticipy Claude Version" while
+  // the setup page then says "Connected to Anticipy" while
   // showing ······ and promising a code that can never arrive, and the one
   // recovery button is hidden because it needs a pair code we never got. A
   // fresh identity is the way out: the orphaned row was never paired to anyone.
@@ -668,7 +668,7 @@ export async function surfaceHandBack(tabId, detail, kind) {
     await chrome.notifications.create(`${HANDBACK_NOTIF}${tabId}`, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-      title: "Anticipy Claude Version",
+      title: "Anticipy",
       message: kind === "confirm"
         ? `Ready for your OK on ${site} — click to open.`
         : `I need you on ${site} — click to open.`,

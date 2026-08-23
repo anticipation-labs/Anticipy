@@ -1,0 +1,102 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9c841543825e
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: append (conversation still open) seg=qsd8kwlbd1jptu7
+heard: "Somebody needs to chase the lab about Mr Okonkwo's bloods, I think they went to the wrong practice." -> act (Chase lab about Mr. Okonkwo's bloods, sent to wrong practice)
+heard: 'We are four copies short of the Steinbeck for Year Nine.' -> that is her own message read back, ignoring
+segment: escalate (substantive, no overlap, but recent) seg=98n4t5z739k3nzt
+heard: 'The TB test is due and I still have not rung the vet.' -> act (Call vet to schedule TB test)
+segment: link (anaphoric/short, still inside the near band) seg=3l7pu2alfej03xp
+heard: "Ellie's swimming subs are overdue again." -> act (pay Ellie's swimming subs)
+segment: escalate (substantive, no overlap, but recent) seg=5lp2gw6wyjxwb3a
+heard: 'The kitchen worktops are on a ten day lead and I promised them fitted by the end of the month.' -> act (chase kitchen worktop order)
+segment: link (shares a name with the previous conversation) seg=8oc1ntgbi2phxel
+heard: 'The temporary works design has not been signed by anyone competent.' -> act (get temporary works design signed by competent person)
+segment: escalate (substantive, no overlap, but recent) seg=ehcwh69u2ejc6dl
+heard: 'We have nothing booked for the Christmas window display.' -> act (book Christmas window display designer)
+segment: escalate (substantive, no overlap, but recent) seg=harkhzajmm3rjxo
+heard: 'The school trip deposit was due last Wednesday.' -> act (pay school trip deposit)
+segment: link (shares a name with the previous conversation) seg=fhv97s4q9d3rjmm
+heard: 'The dog is due his booster and the tick treatment ran out.' -> act (schedule vet appointment for dog's booster and tick treatment)
+segment: link (shares a name with the previous conversation) seg=gas7zeo1f5mu9yh
+heard: 'The court report has to be filed before the hearing and I am two days behind.' -> act (file court report)
+segment: link (shares a name with the previous conversation) seg=i14v2xj9yunxk1q
+heard: 'The allergen matrix has not been updated since we changed supplier.' -> act (update allergen matrix for new supplier)
+segment: escalate (substantive, no overlap, but recent) seg=7y96yvh0nnyuh0i
+heard: 'How was the weekend, did you get away at all?' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=3n5nfm0oziw2wd9
+heard: 'It is the same every single year and nothing changes.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=w9mddgtop8dsaxv
+heard: 'Dear Mr Ellis, further to our conversation of the fourth, please find attached.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=bjfzljyoaevvk9p
+heard: 'Do not worry about the shopping, I will pick it up on the way home.' -> ignore (no goal)
+echo check failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: link (anaphoric/short, still inside the near band) seg=3pwhxbpdawtn33p
+heard: 'Sorted the MOT this morning, all done.' -> ignore (no goal)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: link (anaphoric/short, still inside the near band) seg=h51ibdouvktdet5
+heard: 'Have you seen my glasses anywhere?' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=qsdrb14s9v1bn9t
+heard: 'It is all in the shared calendar already.' -> ignore (no goal)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: link (anaphoric/short, still inside the near band) seg=3xjie9aq56ghlty
+heard: 'Marcus asked about the survey figures again.' -> ignore (no goal)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: append (conversation still open) seg=3xjie9aq56ghlty
+heard: 'I will have to get those over to him before the site meeting.' -> act (send survey figures to Marcus before site meeting)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+queue write never reached the backend for 'Plan 90th birthday celebration for Nan in three weeks': ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: failed (could not open a segment) seg=-
+heard: "Nan's ninetieth is in three weeks and nobody has booked anywhere, nobody." -> ignore (Plan 90th birthday celebration for Nan in three weeks)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+profile identity seed failed (harmless): HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+queue write never reached the backend for "prepare pound coins for children's non-uniform day": ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=dr6u1772f5e0v55
+heard: 'Oh no, it is non uniform day tomorrow and there is the pound coin thing as well.' -> ignore (prepare pound coins for children's non-uniform day)
+segment: escalate (substantive, no overlap, but recent) seg=kars8flgwkfgtqb
+heard: 'Honestly, the commute costs me more than my phone and the gym put together.' -> ignore (no goal)
+echo check failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=m5rcx1f0lgw4uk5
+heard: 'The school form wants a second emergency contact and I do not know if Mum would even want to be on it.' -> act (Ask Alex if Mum can be second emergency contact for school form)
+segment: escalate (substantive, no overlap, but recent) seg=cj5aasmfwdpnhav
+heard: 'Have you got the code for the parcel locker on your phone?' -> ignore (no goal)
+released 1 event(s) stranded mid-understanding by a restart
+segment: failed (could not open a segment) seg=-
+heard: "Nan's ninetieth is in three weeks and nobody has booked anywhere, nobody." -> ignore (research venues for Nan's 90th birthday party in 3 weeks)
+echo check failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=takaapy98qhr561
+heard: 'The MOT is booked, it is in there now, they said they would ring me.' -> ignore (no goal)
+echo check failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=5m6o3t74z7g8xpd
+heard: 'Rent went out and it took me under again, honestly, every month.' -> ignore (no goal)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+nag check failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+already_raised check failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+clock: initiated -> 'I noticed you mentioned sorting the flights and were unsure about Thursday or Friday. Do you need a hand confirming the date?'
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)

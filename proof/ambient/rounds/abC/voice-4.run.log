@@ -1,0 +1,25 @@
+pb        http://127.0.0.1:8090
+owner_ref nm28bp0p7dj06ot
+brain     worker: pid 60512,60572,60618,60629,60663,60677,60699,60709,60717 up since 09:40:35, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13] !! amb-0003 want=act    got=ignore      35.6s  'I keep meaning to re-run the retirement projection on the '
+            goal: re-run retirement projection on Alvarez file
+[2/13]    amb-0042 want=ignore got=ignore       7.1s  'Rain is not letting up at all.'
+[3/13] !! amb-0102 want=act    got=ignore      25.0s  'My F gas certificate expires in the spring.'
+[4/13] !! amb-0168 want=act    got=ignore      14.3s  'The court warning for Thursday lands on my rest day.'
+[5/13]    amb-0209 want=ignore got=ignore      17.2s  'I sometimes think about packing it all in and doing someth'
+[6/13] !! amb-0298 want=act    got=ignore      12.1s  'We should do dinner out Friday, somewhere decent for once.'
+[7/13]    fin-0012 want=act    got=act         40.9s  'the trellis the trellis file letter i need that out before'
+            goal: Send "trellis file letter" email
+[8/13]    fin-0098 want=ignore got=ignore      38.6s  'Did the offer letter ever go out to the Bhatt candidate?'
+[9/13]    med-0094 want=ignore got=ignore      22.3s  'The bad character application went in on Thursday, that is'
+[10/13] !! svc-0020 want=ask    got=ignore      17.0s  'I want the run of show over to the venue, I have just not '
+[11/13]    tep-0012 want=ignore got=ignore       6.7s  'Do not worry about the printer, Yusuf has already logged i'
+[12/13] !! tep-0063 want=ask    got=ignore       7.3s  'I want the reading group posters up this week but I have n'
+[13/13] !! trd-0071 want=act    got=ignore      13.1s  'The gate will not let the two labourers on Monday, both th'
+
+pushed 13 in 4.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abC/voice-4.jsonl
+  act=1  ignore=12
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

@@ -1,0 +1,27 @@
+pb        http://127.0.0.1:8090
+owner_ref nm28bp0p7dj06ot
+brain     worker: pid 89298,89307,89315,89319,89324,89338,89344,89395,89403 up since 02:13:09, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13]    amb-0003 want=act    got=act          9.3s  'I keep meaning to re-run the retirement projection on the '
+            goal: re-run retirement projection on Alvarez file
+[2/13]    amb-0042 want=ignore got=ignore       4.1s  'Rain is not letting up at all.'
+[3/13] !! amb-0102 want=act    got=ignore       4.0s  'My F gas certificate expires in the spring.'
+[4/13] !! amb-0168 want=act    got=ignore       4.0s  'The court warning for Thursday lands on my rest day.'
+[5/13]    amb-0209 want=ignore got=ignore       3.0s  'I sometimes think about packing it all in and doing someth'
+[6/13] !! amb-0298 want=act    got=ignore       5.0s  'We should do dinner out Friday, somewhere decent for once.'
+            goal: research restaurants for dinner on Friday, August 21, 2026
+[7/13] !! fin-0012 want=act    got=ignore      10.1s  'the trellis the trellis file letter i need that out before'
+            goal: send email with 'the trellis file' before Friday, August 21, 2026
+[8/13]    fin-0098 want=ignore got=ignore       5.1s  'Did the offer letter ever go out to the Bhatt candidate?'
+[9/13]    med-0094 want=ignore got=ignore       4.1s  'The bad character application went in on Thursday, that is'
+[10/13] !! svc-0020 want=ask    got=act         10.1s  'I want the run of show over to the venue, I have just not '
+            goal: send run of show to venue
+[11/13]    tep-0012 want=ignore got=ignore       4.1s  'Do not worry about the printer, Yusuf has already logged i'
+[12/13] !! tep-0063 want=ask    got=ignore       5.1s  'I want the reading group posters up this week but I have n'
+[13/13] !! trd-0071 want=act    got=ignore       4.1s  'The gate will not let the two labourers on Monday, both th'
+
+pushed 13 in 1.3 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abB/voice-4.jsonl
+  act=2  ignore=11
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

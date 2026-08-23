@@ -1,0 +1,34 @@
+pb        http://127.0.0.1:8090
+owner_ref scrhkcffjglfkbq
+brain     worker: pid 6534,6545,6552,6560,6565,6570,6573,6578,6582,16768 up since 02:01:51, newer than every file in brain/
+corpus    14 utterances, 0 already done, 14 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/14] !! amb-0078 want=act    got=ignore      24.6s  'The Charity Commission annual return is open and nobody ha'
+            goal: look up deadline and filing requirements for Charity Commission annual return
+[2/14] !! amb-0142 want=ask    got=ignore      61.5s  'I want to move my pension somewhere sensible.'
+[3/14]    amb-0197 want=ignore got=ignore      25.2s  'Everything takes three emails now, everything.'
+[4/14]    amb-0257 want=ignore got=ignore      25.2s  'Mm hm.'
+[5/14] !! amb-0293 want=act    got=ignore      34.3s  'It is due its service, it has been flashing at me for a fo'
+            goal: research vehicle service options in Vancouver
+[6/14] !! amb-0294 want=act    got=ignore      43.4s  'And the front tyres are borderline as well.'
+            goal: research car service and front tyre replacement options in Vancouver
+[7/14] !! per-0054 want=act    got=ignore      25.2s  'He needs a bank account for this job and I have no clue wh'
+            goal: research requirements to open a bank account for a job in Canada
+[8/14] !! fin-0070 want=ignore got=ask         52.5s  'can you order the the ones for the the printer the'
+            goal: order printer supplies
+[9/14] !! med-0043 want=act    got=ask         79.7s  'The appraisal wants patient feedback and I have not sent a'
+            goal: prepare patient feedback questionnaires for appraisal
+[10/14] !! svc-0012 want=act    got=ignore      18.1s  'The grinder burrs are shot, the shots are pulling in eleve'
+[11/14] !! svc-0077 want=ask    got=ignore      27.2s  'The lambing shed lights want doing before we start, though'
+            goal: research LED conversion options versus repair for lambing shed lighting
+[12/14]    tep-0039 want=act    got=act         75.7s  'The measured survey for the Halton warehouse has not been '
+            goal: draft update to Alex regarding Halton warehouse measured survey
+[13/14] !! trd-0029 want=ask    got=act         52.6s  'The Croydon landlord wants a heat pump price and I do not '
+            goal: Draft email to Croydon landlord clarifying if heat pump price is for flats or office block
+[14/14]    trd-0094 want=act    got=act        108.0s  'The route card for the school run diversion has never been'
+            goal: draft updated route card for school run diversion
+
+pushed 14 in 11.0 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abA/voice-1.jsonl
+  act=3  ask=2  ignore=9
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

@@ -62,3 +62,24 @@ swiftc -O \
     "$here/PendantRadioPolicyTests.swift" \
     -o "$out/pendanttests"
 "$out/pendanttests"
+
+# ex 75 / brief ex 120: a typed answer must reach the brain, not the job. The
+# wiring first -- a policy nothing calls is a policy that is not enforced.
+session="$app/AnticipyApp.swift"
+if ! grep -q 'AnswerRoutePolicy.route' "$session"; then
+    echo "confirm() no longer asks AnswerRoutePolicy where the answer goes."
+    exit 2
+fi
+if ! grep -q 'pushEvent(kind: "app_reply"' "$session"; then
+    echo "confirm() no longer sends a typed answer to the brain as app_reply."
+    echo "Writing it onto the job instead is the second path brief ex 120"
+    echo "forbids, and is how an answer resolved nothing on 2026-08-02."
+    exit 2
+fi
+echo "confirm() routes typed answers to the brain, not onto the job"
+
+swiftc -O \
+    "$app/Backend/AnswerRoutePolicy.swift" \
+    "$here/AnswerRoutePolicyTests.swift" \
+    -o "$out/answertests"
+"$out/answertests"

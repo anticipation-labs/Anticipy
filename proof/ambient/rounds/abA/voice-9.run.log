@@ -1,0 +1,26 @@
+pb        http://127.0.0.1:8090
+owner_ref fbmxghyvp84bce8
+brain     worker: pid 6534,6545,6552,6560,6565,6570,6573,6578,6582 up since 02:01:51, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13] !! amb-0038 want=act    got=ignore      44.5s  'I cannot do the Dover run until the trailer has had its br'
+[2/13] !! amb-0064 want=ask    got=ignore      11.1s  'I would love to get away for a weekend but I have no idea '
+[3/13] !! amb-0134 want=act    got=ignore      25.2s  "Both the kids' passports run out before the summer."
+[4/13]    amb-0196 want=ignore got=ignore      30.2s  'Statistically one of these meetings has to be useful.'
+[5/13] !! amb-0240 want=ignore got=act         64.6s  'Honestly it is fine, I will sort the tickets out tonight.'
+            goal: book or sort out tickets tonight
+[6/13] !! per-0034 want=act    got=ignore      15.1s  'There is a message sat on my universal credit journal and '
+[7/13]    fin-0064 want=act    got=act         67.5s  'I said I would send Bea the maternity policy and it is sti'
+            goal: send draft maternity policy to Bea
+[8/13] !! med-0035 want=ask    got=ignore      30.3s  'The indemnity cover needs extending to online sessions and'
+[9/13]    svc-0011 want=act    got=act         43.3s  'The gas certificate for the range is on the wall from two '
+            goal: Research certified gas engineers in Vancouver to renew gas safety certificate for range
+[10/13]    svc-0072 want=ignore got=ignore      22.2s  'The allergen labels are sorted, I ran the whole new set of'
+[11/13]    tep-0029 want=ignore got=ignore      58.5s  'The machine shop has fitted the guards back to front on ev'
+[12/13]    trd-0028 want=ignore got=ignore      22.2s  'The condenser is on the wagon already, it is all moving.'
+[13/13] !! trd-0091 want=ask    got=error       34.3s  'I should get the plate moved onto the new car, though I ha'
+
+pushed 13 in 7.9 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abA/voice-9.jsonl
+  act=3  error=1  ignore=9
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

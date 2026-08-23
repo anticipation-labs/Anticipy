@@ -1,0 +1,104 @@
+pb        http://127.0.0.1:8090
+owner_ref fnw0pvulizndqze
+brain     worker: pid 92901,92902,92903,92904,92905,92906,92907,92908,92909,92910,92911,92912,92913,92914,92915,92916,92948,92949 up since 10:56:52, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62]    amb-0012 want=act    got=act         10.8s  'I am on nights all next week and I have not sorted anythin'
+            goal: arrange kids' meals for next week
+[2/62]    amb-0028 want=act    got=act          9.2s  "The van's MOT is end of the month and I have not rung anyo"
+            goal: book MOT for van before August 31, 2026
+[3/62] !! amb-0044 want=ask    got=ignore       2.0s  'Someone really should chase the linen company about Tuesda'
+[4/62]    amb-0060 want=act    got=act         10.1s  'That TV licence renewal letter has been on the side a fort'
+            goal: renew TV license
+[5/62]    amb-0076 want=act    got=act          9.1s  'The CD cabinet key audit has not been signed off since I w'
+            goal: get CD cabinet key audit signed off
+[6/62]    amb-0092 want=act    got=act         10.1s  'That gearbox supplier never sent the datasheet.'
+            goal: get datasheet from gearbox supplier
+[7/62]    amb-0108 want=act    got=act          8.2s  'The sprayer test certificate runs out before harvest.'
+            goal: renew sprayer test certificate before harvest
+[8/62]    amb-0124 want=act    got=act          9.1s  'The boiler service plan letter says they will cancel if I '
+            goal: Reply to boiler service plan letter
+[9/62] !! amb-0140 want=ask    got=ignore       4.0s  'I should probably sort life insurance now there is a mortg'
+            goal: Research life insurance options
+[10/62] !! amb-0156 want=act    got=ignore       3.1s  'The club want the annual fee before the end of the month.'
+[11/62]    amb-0172 want=act    got=act          9.1s  'The invoice to the Berlin client is ninety days out now.'
+            goal: Chase invoice for Berlin client
+[12/62]    amb-0188 want=ignore got=ignore       4.1s  'Right, I am going to make a brew.'
+[13/62]    amb-0204 want=ignore got=ignore       4.0s  'The phone has not stopped since half seven.'
+[14/62]    amb-0220 want=ignore got=ignore       4.1s  'Send, reply all, include the attachment, remove item four '
+[15/62]    amb-0236 want=ignore got=ignore       5.0s  'I have already spoken to them, I will chase it tomorrow.'
+[16/62]    amb-0252 want=ignore got=ignore       4.0s  'We got the tickets in the end, front section.'
+[17/62]    amb-0268 want=ignore got=ignore       4.0s  'Dave, is the scaffold going up Monday or Tuesday?'
+[18/62]    amb-0286 want=ignore got=ignore       4.0s  'There is that thing on Saturday.'
+[19/62]    amb-0287 want=ignore got=ignore       3.0s  'The christening, right.'
+[20/62] !! amb-0288 want=act    got=ignore       5.0s  'And we have not got them anything at all.'
+            goal: research christening gift options for Saturday, August 22, 2026
+[21/62]    per-0001 want=act    got=act          8.1s  'Ugh, the school wants that permission slip back tomorrow a'
+            goal: find school permission slip envelope and return it by Saturday, August 22, 2026
+[22/62]    per-0017 want=act    got=act          9.1s  'The cat has been scratching at her ear all week and it is '
+            goal: book vet appointment for cat's ear
+[23/62]    per-0033 want=act    got=act         12.1s  'I am supposed to be doing the parents rota for the club an'
+            goal: Draft parents rota for the club
+[24/62]    per-0049 want=act    got=act         11.3s  'They said ring and arrange the six week check and I just, '
+            goal: Arrange six-week check-up
+[25/62] !! per-0065 want=ask    got=ignore       7.7s  'I will renew the pet insurance, I just cannot remember whe'
+[26/62]    per-0081 want=ignore got=ignore       5.5s  'And if you have been affected by any of the issues in toni'
+[27/62]    per-0097 want=ignore got=ignore      14.2s  'The plumber is under the sink as we speak, so, fingers cro'
+[28/62]    fin-0010 want=act    got=act         16.9s  'The engagement letter for Trellis has not gone out and fie'
+            goal: send engagement letter for Trellis
+[29/62]    fin-0026 want=act    got=act         11.3s  'The EO certificate the client asked for never actually wen'
+            goal: send EO certificate to client
+[30/62] !! fin-0042 want=act    got=ignore       4.5s  'I do not know what the cutoff for same day payments is now'
+[31/62] !! fin-0058 want=act    got=ignore      16.8s  'The master services agreement auto renews in twenty one da'
+            goal: check master services agreement auto-renewal notice period
+[32/62]    fin-0074 want=ignore got=ignore       3.1s  'The visa application is with them, we are only waiting on '
+[33/62]    fin-0107 want=ignore got=ignore       4.1s  'If the base rate moves again before completion.'
+[34/62]    fin-0108 want=ignore got=ignore       3.0s  'The Aldridge lock runs out on the fourth either way.'
+[35/62]    fin-0109 want=act    got=act          8.1s  'I need the extension request in with the lender before the'
+            goal: Draft extension request for lender for Aldridge lock before September 4, 2026
+[36/62]    fin-0110 want=ignore got=ignore       5.0s  'Yeah, no, that one is genuinely urgent.'
+            goal: draft extension request for Aldridge lock lender
+[37/62]    med-0006 want=ignore got=ignore       3.0s  'The bank shifts.'
+[38/62]    med-0007 want=ignore got=ignore       3.2s  'They will not put me on the rota until the DBS check comes'
+[39/62]    med-0008 want=act    got=act          9.2s  'Which means I have to actually start the DBS application, '
+            goal: start DBS application
+[40/62] !! med-0009 want=act    got=ignore       5.0s  'My revalidation confirmation is due and I have not even lo'
+            goal: research NMC revalidation requirements
+[41/62]    med-0028 want=act    got=act          9.1s  'The reformer has been out of service since August and nobo'
+            goal: get repair quote for reformer
+[42/62]    med-0044 want=ignore got=ignore       4.0s  'Ravi is pulling the theatre utilisation figures for the bo'
+[43/62]    med-0060 want=ignore got=ignore       4.4s  'the caseload the case load the uh the mat unit said the'
+[44/62]    med-0080 want=ignore got=ignore       3.0s  'Mm, yeah, no, quite.'
+[45/62]    med-0099 want=ignore got=ignore       3.1s  'If the chain collapses we would be looking at redoing ever'
+[46/62]    svc-0005 want=ignore got=ignore       3.0s  'Do not start the date checks tonight, Kelvin says he is do'
+[47/62]    svc-0021 want=ignore got=ignore       3.0s  'If we ever did a festival stage instead of a marquee we wo'
+[48/62]    svc-0037 want=act    got=act          9.2s  'My first aid certificate and the DBS both run out in the s'
+            goal: renew first aid certificate and DBS
+[49/62] !! svc-0053 want=act    got=ignore       4.1s  'The council licence inspection is annual and mine has gone'
+            goal: check council license inspection due date
+[50/62]    svc-0069 want=act    got=act          8.3s  'The market stall permit is up and the council want it back'
+            goal: renew market stall permit
+[51/62]    svc-0085 want=ignore got=ignore       7.5s  'In the glass, gooseberry, a little cut grass, and a long m'
+[52/62]    tep-0009 want=ignore got=ignore       4.0s  'Nobody has documented what this feature column actually me'
+[53/62]    tep-0025 want=act    got=act         10.6s  'The CDM regs want the principal designer appointed in writ'
+            goal: Draft letter appointing principal designer in writing for CDM regs
+[54/62]    tep-0041 want=act    got=act         10.2s  'The site notice for the Ashfield application never went up'
+            goal: Draft Ashfield application site notice
+[55/62]    tep-0057 want=act    got=act         12.2s  'I told the Kaurs I would send a progress summary every fou'
+            goal: Draft progress summary for the Kaurs
+[56/62]    tep-0073 want=ignore got=ignore       7.0s  'Did the duty team ever ring you back about that referral?'
+[57/62]    tep-0089 want=act    got=act          9.1s  'The security clearance renewal forms have been in my drawe'
+            goal: Process security clearance renewal forms
+[58/62]    trd-0035 want=ignore got=ignore       4.1s  'Do not chase the scaffolders, Dave is ringing them about t'
+[59/62] !! trd-0051 want=ask    got=ignore       4.8s  'The Wilsons want the patio pricing and I never wrote down '
+            goal: Find out if the Wilsons chose porcelain or sandstone for their patio.
+[60/62]    trd-0067 want=act    got=act         10.8s  'The subfloor readings are far too high and no adhesive war'
+            goal: Tell contractor subfloor readings are too high for adhesive warranty
+[61/62]    trd-0083 want=ignore got=ignore       5.0s  'the pallet spaces on the on the second aisle we we lost ha'
+[62/62]    trd-0099 want=act    got=act          8.1s  'My airside driving permit is out next month and the test h'
+            goal: renew airside driving permit
+
+pushed 62 in 7.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k2/voice-6.jsonl
+  act=25  ignore=37
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

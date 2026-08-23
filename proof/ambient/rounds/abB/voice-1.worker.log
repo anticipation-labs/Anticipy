@@ -1,0 +1,33 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: link (shares a name with the previous conversation) seg=h008tsv6cmffurd
+heard: 'The Charity Commission annual return is open and nobody has started it.' -> act (start Charity Commission annual return)
+segment: escalate (substantive, no overlap, but recent) seg=wpg7o0fe5czwm6c
+heard: 'I want to move my pension somewhere sensible.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=ukeosemejo0kybd
+heard: 'Everything takes three emails now, everything.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=x94c35w9iwdqqf6
+heard: 'Mm hm.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=mdrfdffovsk8w12
+heard: 'It is due its service, it has been flashing at me for a fortnight.' -> act (schedule vehicle service)
+segment: append (conversation still open) seg=mdrfdffovsk8w12
+heard: 'And the front tyres are borderline as well.' -> ignore (schedule car service and tire replacement)
+segment: link (anaphoric/short, still inside the near band) seg=tlrjf3jbioxkn8g
+heard: 'He needs a bank account for this job and I have no clue what you even need for that.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=3o5qvkipvk0jp8k
+heard: 'can you order the the ones for the the printer the' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=m6lb3bwuph2ze2l
+heard: 'The appraisal wants patient feedback and I have not sent a single questionnaire out.' -> act (send patient feedback questionnaires)
+segment: link (shares a name with the previous conversation) seg=w48p78dkv5mnzhr
+heard: 'The grinder burrs are shot, the shots are pulling in eleven seconds.' -> act (order new grinder burrs)
+segment: link (shares a name with the previous conversation) seg=mrshkh99j8fx7za
+heard: 'The lambing shed lights want doing before we start, though I have not decided whether we go LED right through or just patch it.' -> ignore (research LED lighting options for lambing shed)
+segment: link (shares a name with the previous conversation) seg=shcg25apw8khiop
+heard: 'The measured survey for the Halton warehouse has not been issued and they are chasing daily.' -> act (issue measured survey for Halton warehouse)
+segment: link (shares a name with the previous conversation) seg=tewhloj2m1b3rkg
+heard: 'The Croydon landlord wants a heat pump price and I do not know if he means the flats or the office block.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=8omcw0p2vlacur1
+heard: 'The route card for the school run diversion has never been reissued and drivers are guessing.' -> act (create and issue route card for school run diversion)

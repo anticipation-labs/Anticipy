@@ -126,6 +126,31 @@ struct HeardGroup: Identifiable, Equatable {
     /// crash.
     static let lastResortTitle = "Something I heard"
 
+    /// WHICH EARS heard this conversation, as one wire value, or nil.
+    ///
+    /// Nil in three cases, and the third is the interesting one:
+    ///   - nothing in the group carries a source (every row written before
+    ///     anything wrote the field);
+    ///   - the only sources present are ones that earn no badge (typed);
+    ///   - the group is MIXED — some of it came off the pendant and some off
+    ///     the phone.
+    ///
+    /// A mixed conversation must not claim one ear. The whole reason this is
+    /// surfaced is so a pendant run of an errand can be compared against the
+    /// phone-mic run of the same errand, and a card that says "Pendant" while
+    /// half its speech came from the phone would corrupt exactly that
+    /// comparison — quietly, and in the direction of whichever line happened to
+    /// be first. Showing nothing is recoverable; showing the wrong ear is not.
+    var ear: String? {
+        var found: String?
+        for line in lines {
+            guard let source = line.source?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  CaptureSourcePolicy.badge(for: source) != nil else { continue }
+            if found == nil { found = source } else if found != source { return nil }
+        }
+        return found
+    }
+
     /// Everything the front of the card shows, decided in one place from the
     /// lines alone.
     var front: HeardFront {
@@ -162,7 +187,8 @@ struct HeardGroup: Identifiable, Equatable {
             showsHerOwn: showsHerOwn,
             // Nothing is behind the tap, so there is nothing to tap: this card
             // is the raw row the app already draws, and stays as inert as one.
-            isComplete: !showsHerOwn && rows.count == lines.count
+            isComplete: !showsHerOwn && rows.count == lines.count,
+            ear: ear
         )
     }
 }
@@ -181,4 +207,8 @@ struct HeardFront: Equatable {
     /// When it does not, it gets no stripe, no gutter and no affordance.
     let showsHerOwn: Bool
     let isComplete: Bool
+    /// Which ear heard the conversation, on the FRONT rather than only on the
+    /// raw line behind the tap. Comparing the pendant against the phone is a
+    /// glance down the feed, not two taps per card.
+    let ear: String?
 }

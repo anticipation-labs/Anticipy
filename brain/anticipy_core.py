@@ -411,6 +411,11 @@ def _fact_words(text: str) -> set:
 # briefing comparing against "import" by hand.
 _UNTRUSTED_SOURCES = {"import", "supervised_mail", "supervised_professional"}
 
+# The untrusted share of a memory_notes budget: one third, matching
+# memory._UNTRUSTED_WINDOW_DIVISOR so there is ONE number to reason about for
+# "how much of a prompt may be things nobody typed".
+_UNTRUSTED_BUDGET_DIVISOR = 3
+
 
 def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str:
     """Recalled facts as one prose line, injection-filtered and length-capped.
@@ -434,11 +439,21 @@ def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str
     IMPORTED facts are segregated into a fence at the end rather than dropped.
     Dropping them would lose the very context day zero exists to acquire; mixing
     them in would hand a stranger with a calendar invite the same authority as
-    the owner."""
+    the owner.
+
+    AND THEY GET AT MOST A THIRD OF THE BUDGET WHILE A TRUSTED FACT IS STILL
+    WAITING. Segregating them in the OUTPUT is not enough: the old loop spent
+    the budget in arrival order, and recall returns highest-salience first, so
+    an untrusted run at the head ate all 600 characters before a trusted fact
+    was ever considered. Measured: `memory_notes([15 supervised_mail facts,
+    1 interview fact], budget=600)` dropped the interview fact entirely. The
+    trusted side spends first, from everything the untrusted side cannot use;
+    whatever it leaves goes back to the untrusted side, so an untrusted-only
+    recall still fills the block. Relevance order is preserved WITHIN each
+    class — this changes what is dropped, never what leads."""
     skip = _fact_words(exclude)
-    out: list[str] = []
+    told: list[str] = []
     quoted: list[str] = []
-    used = 0
     for f in facts or []:
         fact = (f.get("fact") or "").strip()
         if not fact or _MEMORY_INJECTION_RE.search(fact):
@@ -446,14 +461,30 @@ def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str
         # An episode that is just the originating line said back to us.
         if skip and _fact_words(fact) >= skip:
             continue
-        cost = len(fact) + (2 if out or quoted else 0)
-        if used + cost > budget:
-            break
         if str(f.get("source") or "") in _UNTRUSTED_SOURCES:
             quoted.append(fact)
         else:
-            out.append(fact)
-        used += cost
+            told.append(fact)
+
+    def _fill(candidates: list[str], allowance: int, used: int) -> tuple[list[str], int]:
+        # Whole facts only — a fact cut mid-sentence reads as a different,
+        # wrong fact — and `break`, not `continue`: truncating from the tail
+        # drops the least relevant first, which is why recall's order matters.
+        kept: list[str] = []
+        for fact in candidates:
+            cost = len(fact) + (2 if used else 0)
+            if used + cost > allowance:
+                break
+            kept.append(fact)
+            used += cost
+        return kept, used
+
+    # Never reserve more than the untrusted side can actually spend, or a
+    # single mail fact would cost a trusted one 200 characters for nothing.
+    want = sum(len(q) for q in quoted) + 2 * max(0, len(quoted) - 1)
+    reserved = min(budget // _UNTRUSTED_BUDGET_DIVISOR, want)
+    out, used = _fill(told, budget - reserved, 0)
+    quoted, used = _fill(quoted, budget, used)
     line = "; ".join(out)
     if quoted:
         # A NONCE, not a fixed marker. Escaping a fence means writing its

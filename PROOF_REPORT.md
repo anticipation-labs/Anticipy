@@ -7,7 +7,6 @@ except where marked "needs your keys/Mac". No claims without a run behind them.
 
 ```
 anticipy_app/
-├── agent/        the browser agent (drives a real browser like a human)
 ├── brain/        the orchestration brain (ignore / act / ask triage)
 ├── backend/      PocketBase: accounts, pendant pairing, events, job queue
 ├── app/
@@ -20,14 +19,15 @@ anticipy_app/
 
 ## Proofs that PASSED (run live, keyless)
 
-### 1. Browser agent operates a real browser
-`proof: python agent/browser_agent.py form_submit_demo`
-- Launched real Chromium, navigated to a live site, typed username+password,
-  clicked submit, read the site's response: **"You logged into a secure area!"**
-- Second run: navigated a live catalogue and extracted 3 options with prices
-  (the "research and report" flow).
-- With your OpenRouter key the same class swaps to **browser-use** (installed,
-  imports verified, wired to OpenRouter) for arbitrary natural-language goals.
+### 1. Browser executor operates a real browser — SUPERSEDED BY §5
+This section used to read `proof: python agent/browser_agent.py form_submit_demo`
+and credited that file as a cloud executor with "the same job model" as the
+extension. It had no job model at all: no PocketBase import, no job poll, no
+claim, no status write, and `ok=True` was returned unconditionally on the
+browser-use path regardless of what the run actually did. It was deleted
+2026-08-19 along with `proof/test_end_to_end.py`, its only importer. The Chrome
+extension is the only executor Anticipy has, and §5 is the live proof that it
+claims an owner-scoped job, acts in a real Chrome, and reports back.
 
 ### 2. Brain triage — 15/15 of your examples
 `proof: python proof/test_brain.py`
@@ -62,12 +62,14 @@ anticipy_app/
 - Also ships browser-only Gmail-compose and Calendar-template actions (prefill
   via URL — no APIs), which stop at the page for your final confirm.
 
-### 6. End-to-end spine
-`proof: python proof/test_end_to_end.py`
-- Real pendant audio decoded → transcript line → brain decided **act** →
-  browser agent executed in a real browser → result reported; irreversible line
-  ("I'll send you the pitch deck") stopped at **"Draft ready — send it?"**
-  Action-first, confirm-before-send — exactly the product behavior. **PASS**
+### 6. End-to-end spine — SUPERSEDED BY §6d
+`proof/test_end_to_end.py` was deleted 2026-08-19. It was the only importer of
+the deleted `agent/browser_agent.py`, and it could not have run anywhere but the
+old box in any case: it decoded `/home/ubuntu/audio_dump.bin` and posted to a
+PocketBase on `127.0.0.1:8090`. What it claimed to prove (act immediately on a
+reversible line, stop and ask on an irreversible one) is proven by §6d instead,
+which drives the same spine through the real extension rather than through a
+process that never touched the job queue.
 
 ## LIVE proofs with your OpenRouter key (added after key arrived)
 
@@ -76,13 +78,15 @@ anticipy_app/
   pitch deck → act; movie joke → ignore; vague dinner → ask; landlord
   reminder → act; blue-or-black → ask. All correct, JSON contract held.
 
-### 6c. Live browser-use agent (the PRODUCT's browser agent, not my tools)
+### 6c. Live browser-use agent (a one-off experiment, NOT the product executor)
 - browser-use launched its own Chromium, was given only the natural-language
   goal "open the Mystery category and report the first 3 books", and
   autonomously navigated, clicked, extracted, and reported:
   Sharp Objects £47.82 · In a Dark, Dark Wood £19.63 · The Past Never Ends
   £56.50 — verified correct against the live site. Model: DeepSeek V3.2
   through OpenRouter. **PASS**
+- The code behind this run (`agent/browser_agent.py`) was deleted 2026-08-19. It
+  was never wired to the job queue, so nothing in the product ever reached it.
 
 ### 6d. Full chain: app -> backend -> brain (live) -> extension -> result
 `proof: python proof/test_full_chain.py`

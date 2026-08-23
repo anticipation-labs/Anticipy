@@ -1,4 +1,4 @@
-# Chrome Web Store — Anticipy Claude Version listing package
+# Chrome Web Store — Anticipy listing package
 
 Status: PREPARED FOR FINAL STORE ASSET REVIEW. Every claim below is written against code
 I opened and read, and carries the file and the thing in it I checked. Upload
@@ -22,16 +22,16 @@ OpenRouter, Twilio, Apple speech-recognition, and deletion paths below.
 ---
 
 ## Name
-Anticipy Claude Version — your hands on the computer
+Anticipy — your hands on the computer
 
 ## Summary (132 chars max)
-Anticipy Claude Version does the task you already approved, in your own logged-in Chrome —
+Anticipy does the task you already approved, in your own logged-in Chrome —
 and shows you every page she touches.
 
 ## Description
-Anticipy Claude Version is a personal assistant that listens to your day, remembers what
+Anticipy is a personal assistant that listens to your day, remembers what
 matters, and handles the follow-through. This extension is her hands: once you
-approve a task in the Anticipy Claude Version app or by text, she opens the pages, fills the
+approve a task in the Anticipy app or by text, she opens the pages, fills the
 forms, and tells you plainly what happened — inside your own browser, with
 your own logged-in accounts, never with your passwords.
 
@@ -43,14 +43,14 @@ your own logged-in accounts, never with your passwords.
 - It never types your password or your card number, hands the task back at
   logins and CAPTCHAs, and refuses to operate banking and brokerage sites at
   all.
-- Everything happens in a tab group called "Anticipy Claude Version" that you can open and
+- Everything happens in a tab group called "Anticipy" that you can open and
   watch, or take over.
-- The text of the page Anticipy Claude Version is working on, and a picture of that tab, are
+- The text of the page Anticipy is working on, and a picture of that tab, are
   sent to an AI model so it can decide the next click — along with the name,
-  email and phone you saved in Anticipy Claude Version, when a form asks for them. Nothing
+  email and phone you saved in Anticipy, when a form asks for them. Nothing
   else is collected, and nothing is sold or shared.
 
-Requires the Anticipy Claude Version iPhone app and an Anticipy Claude Version account.
+Requires the Anticipy iPhone app and an Anticipy account.
 
 ### Where every sentence above comes from
 
@@ -83,8 +83,8 @@ Requires the Anticipy Claude Version iPhone app and an Anticipy Claude Version a
   `agent_loop.js`, a hard-coded list outside the model, checked by
   `blockedDomain()` against the current page and again before every
   navigation. It returns `refused: … is a protected financial site`.
-- **"a tab group called Anticipy Claude Version"** — `chrome.tabGroups.update(group, { title:
-  "Anticipy Claude Version", color: "yellow", collapsed: true })`, in `agent_loop.js` for
+- **"a tab group called Anticipy"** — `chrome.tabGroups.update(group, { title:
+  "Anticipy", color: "yellow", collapsed: true })`, in `agent_loop.js` for
   autonomous runs and `background.js` for prefilled pages.
 - **"page text and a picture of that tab go to an AI model"** — the numbered
   element map is built by `page_map.js` (injected by `agent_loop.js` via
@@ -98,11 +98,12 @@ Requires the Anticipy Claude Version iPhone app and an Anticipy Claude Version a
   `background.js` re-reads it at the start of every run, and `agent_loop.js`
   puts it in the prompt under `THE OWNER`.
 - **"nothing else is collected"** — the only hosts the extension ever contacts
-  are the Anticipy Claude Version backend (`DEFAULT_BASE` in `background.js`), OpenRouter,
+  are the Anticipy backend (`DEFAULT_BASE` in `config.js`, which
+  is the single place any module learns that URL), OpenRouter,
   and — if a key were ever present — CapSolver (see "Before you upload"). A
   grep of `extension/` for analytics, telemetry, gtag, Segment, Mixpanel,
   Sentry and Amplitude returns nothing.
-- **"requires the Anticipy Claude Version iPhone app"** — the phone claims the pair code
+- **"requires the Anticipy iPhone app"** — the phone claims the pair code
   (`ensureRegistered()` in `background.js` mints it,
   `backend/pb_hooks/guard.pb.js:63-80` is the claim route), and nothing runs
   until an owner is set: `claimJob()` returns null on `if (!owner)`.
@@ -112,7 +113,7 @@ Productivity / Tools
 
 ## Permission justifications (reviewer form)
 
-- **`debugger`**: Anticipy Claude Version performs trusted user-gesture clicks and typing on
+- **`debugger`**: Anticipy performs trusted user-gesture clicks and typing on
   pages the user asked it to operate. CDP input events are the only reliable
   way to drive modern event-delegated UIs — `agent_loop.js` dispatches
   `Input.dispatchMouseEvent` for clicks and `Input.dispatchKeyEvent` per
@@ -121,7 +122,7 @@ Productivity / Tools
   whatever the outcome. If the user clicks Cancel on Chrome's debugging
   banner, the run stops and hands back rather than re-attaching
   (`userCancelledTabs`).
-- **`tabs` / `tabGroups`**: the work happens in a labelled "Anticipy Claude Version" tab group
+- **`tabs` / `tabGroups`**: the work happens in a labelled "Anticipy" tab group
   the user can open and take over. When a task ends with nothing for a human
   to look at, `agent_loop.js` closes the tab rather than leaving it behind;
   when it needs them, it activates and ungroups it so it can be found.
@@ -151,12 +152,12 @@ CAPTCHAs, and `file`/`range` inputs.
 
 - **What leaves the browser, and where it goes.** For each step of a task: the
   text and element map of the page being worked on, plus a downscaled JPEG
-  screenshot of that one tab go through the Anticipy Claude Version backend to
+  screenshot of that one tab go through the Anticipy backend to
   OpenRouter. When a form asks for identity,
   the user's own saved first name, last name, email, phone, date of birth and
-  any facts they told Anticipy Claude Version go in the same request
+  any facts they told Anticipy go in the same request
   (`agent_key.pb.js:30-43` → the `THE OWNER` block in `agent_loop.js`). Task
-  goals, statuses and results are written to the user's own Anticipy Claude Version backend
+  goals, statuses and results are written to the user's own Anticipy backend
   (`updateJob()` in `background.js`). Nothing else is transmitted. No
   analytics, no ads, no tracking, nothing sold, nothing shared with anyone
   else.
@@ -178,7 +179,7 @@ CAPTCHAs, and `file`/`range` inputs.
 
 ## Test instructions (reviewer form)
 
-Anticipy Claude Version normally pairs to an iPhone app, and I know you don't have one. You
+Anticipy normally pairs to an iPhone app, and I know you don't have one. You
 don't need it. Pairing is a 6-digit code claimed over a deliberately open
 endpoint, and you can claim it yourself in about two minutes with nothing but
 Chrome. The whole path is below. It talks to my live production backend, so
@@ -227,7 +228,7 @@ Return to the welcome tab. Within about half a minute it changes to "Paired",
 because the worker's heartbeat reads the record back and stores the result. At
 that moment it also fetches its model-routing configuration, which the server refuses to
 anything unpaired (`agent_key.pb.js:13`).
-To skip the wait: `chrome://extensions` → Anticipy Claude Version → click **service worker**.
+To skip the wait: `chrome://extensions` → Anticipy → click **service worker**.
 Opening it wakes the worker, which polls immediately.
 
 **5 — Give it a real task.**
@@ -266,8 +267,8 @@ it here stands in for that approval. Any goal string works — it's a plain
 English instruction — so please try your own.
 
 **What you should see.** Within about five seconds — or instantly, since the
-backend also pushes new jobs over SSE — a collapsed tab group named "Anticipy Claude Version"
-appears. Expand it to watch. Chrome will show its yellow *"Anticipy Claude Version started
+backend also pushes new jobs over SSE — a collapsed tab group named "Anticipy"
+appears. Expand it to watch. Chrome will show its yellow *"Anticipy started
 debugging this browser"* banner; please leave it up. If it's cancelled, the run
 stops and hands the task back rather than fighting you. The console prints
 `running`, then `done` with a one-line result. The working tab closes itself
@@ -328,12 +329,12 @@ It has to say, at minimum:
 1. **What is sent off the machine, and to whom.** The page text and element
    map, plus a downscaled screenshot of the working tab, on every step of a
    task, to OpenRouter. The saved owner profile — first name, last name, email,
-   phone, date of birth, and any facts the user told Anticipy Claude Version — when a form
-   asks for them. Task goals, statuses and results, to the user's own Anticipy Claude Version
+   phone, date of birth, and any facts the user told Anticipy — when a form
+   asks for them. Task goals, statuses and results, to the user's own Anticipy
    backend. The pairing identity, the browser's user-agent string and a
    liveness timestamp, to the same backend.
 2. **What is stored, where, and for how long.** Job rows and agent rows live in
-   the Anticipy Claude Version backend (`backend/pb_migrations/1700000001_jobs.js`,
+   the Anticipy backend (`backend/pb_migrations/1700000001_jobs.js`,
    `1700000002_agents.js`); locally the extension keeps the pairing identity
    and model-routing configuration in `chrome.storage.local`. Name a retention period.
 3. **What it is never used for:** no advertising, no sale, no sharing with
@@ -348,5 +349,5 @@ It has to say, at minimum:
 ## Assets still needed
 
 - Screenshots: 1280×800, 3–5 — the popup, a task running in an expanded
-  "Anticipy Claude Version" tab group, and the pairing page.
+  "Anticipy" tab group, and the pairing page.
 - A promo tile (440×280), only if we want to be considered for featuring.

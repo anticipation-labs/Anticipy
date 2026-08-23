@@ -1,0 +1,113 @@
+pb        http://127.0.0.1:8090
+owner_ref hljkd1nhse8zr7u
+brain     worker: pid 86842,86845,86850,86854,86856,86860,86862,86865,86866,86867,86868,86869,86870,86871,86872,86873,86918,86919 up since 10:37:55, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63]    amb-0003 want=act    got=act         15.7s  'I keep meaning to re-run the retirement projection on the '
+            goal: re-run retirement projection on Alvarez file
+[2/63]    amb-0019 want=act    got=act         94.3s  'I keep putting off sending the rig two vibration data to t'
+            goal: email vibration data for rig 2 to bearing supplier
+[3/63] !! amb-0035 want=act    got=ignore      15.4s  'The rota for next week still is not up and everyone keeps '
+            goal: send rig two vibration data to bearing supplier
+[4/63] !! amb-0051 want=act    got=ignore      11.2s  'The FOI response deadline is twenty working days and we ar'
+            goal: check FOI response deadline
+[5/63]    amb-0067 want=act    got=act         18.2s  'The practice controlled drugs register audit is overdue by'
+            goal: audit practice controlled drugs register
+[6/63]    amb-0083 want=act    got=act          8.5s  'The flu jab rota needs sorting before October and nobody h'
+            goal: sort flu jab rota
+[7/63]    amb-0099 want=act    got=act         11.9s  'The customer in Beeston still has not paid the deposit inv'
+            goal: Chase deposit invoice from customer in Beeston
+[8/63]    amb-0115 want=act    got=act         11.4s  'The complaints return has to be filed and the spreadsheet '
+            goal: file complaints return
+[9/63]    amb-0131 want=act    got=act         10.8s  'The smoke alarm has been chirping for a week now.'
+            goal: replace smoke alarm battery
+[10/63]    amb-0147 want=act    got=act          9.6s  'The FOI I put in back in June has had no response at all.'
+            goal: follow up on FOI request from June
+[11/63]    amb-0163 want=act    got=act          9.4s  'The planning submission needs the daylight study and nobod'
+            goal: commission daylight study for planning submission
+[12/63]    amb-0179 want=ignore got=ignore       4.1s  'Morning, you alright?'
+[13/63]    amb-0195 want=ignore got=ignore       5.2s  'At this rate the dog is running the household.'
+[14/63]    amb-0211 want=ignore got=ignore       9.7s  'I do not know, I might, I might not.'
+[15/63]    amb-0227 want=ignore got=ignore       7.4s  'Buy one get one free this weekend only at your local store'
+[16/63]    amb-0243 want=ignore got=ignore       4.1s  'If we ever go to Lisbon I would want to do it properly, a '
+[17/63]    amb-0259 want=ignore got=ignore       6.7s  'Okay cool.'
+[18/63]    amb-0275 want=ignore got=ignore       5.4s  'okay so um right so basically the thing is'
+[19/63] !! amb-0284 want=ignore got=TIMEOUT    241.0s  'I should call the clinic.'
+[20/63] !! amb-0285 want=act    got=ignore      56.9s  'About the results, I mean, they said a week and it has bee'
+[21/63] !! per-0008 want=act    got=ignore      95.3s  'We are on the standard variable thing now, which is the mo'
+[22/63] !! per-0024 want=act    got=ignore      28.5s  'The gas meter reading is estimated again so the bill is ba'
+[23/63]    per-0040 want=act    got=act         17.8s  'The mattress people never turned up on Saturday and nobody'
+            goal: follow up with mattress company about missed delivery on Saturday, August 15, 2026
+[24/63] !! per-0056 want=ask    got=ignore      31.4s  'The garage can do Tuesday or Thursday for the MOT and I ge'
+[25/63]    per-0072 want=ignore got=ignore       4.2s  'If I did get made redundant I suppose I would have to look'
+[26/63]    per-0088 want=ignore got=ignore       4.4s  'the the with the thing on Thursday for the'
+[27/63]    per-0118 want=ignore got=ignore       5.2s  'What time is it, half four?'
+[28/63]    per-0119 want=act    got=act         11.8s  'Oh no. I said I would do them a proper tea tonight and the'
+            goal: Arrange proper tea for tonight
+[29/63]    per-0120 want=ignore got=ignore       5.1s  'And she will not touch anything with sauce on, which leave'
+            goal: research sauce-free dinner options for Alex
+[30/63] !! fin-0001 want=act    got=ignore       4.0s  'The revolving facility renews in October and I have not as'
+            goal: research indicative terms for revolving facility renewal from bank
+[31/63]    fin-0017 want=act    got=act          8.1s  'The VAT itself got paid, it is the penalty notice I have n'
+            goal: deal with VAT penalty notice
+[32/63]    fin-0033 want=act    got=act         15.4s  'The listing photographs for Ashworth Terrace are not booke'
+            goal: book listing photographs for Ashworth Terrace
+[33/63]    fin-0049 want=act    got=act         13.5s  'The side letter for the Halberd round has not been counter'
+            goal: get Halberd round side letter countersigned
+[34/63]    fin-0065 want=act    got=act          8.2s  'The salary sacrifice change for one of the team never got '
+            goal: Process salary sacrifice change for team member
+[35/63]    fin-0081 want=act    got=act          8.2s  'We never filed the Delaware franchise tax and it was due i'
+            goal: file Delaware franchise tax
+[36/63]    med-0016 want=act    got=act         10.5s  'The controlled drug register has not been reconciled since'
+            goal: Reconcile controlled drug register
+[37/63] !! med-0035 want=ask    got=act          9.2s  'The indemnity cover needs extending to online sessions and'
+            goal: Extend indemnity cover to include online sessions
+[38/63]    med-0051 want=act    got=act          8.2s  'The inspection action plan response is due in ten days and'
+            goal: draft inspection action plan response
+[39/63]    med-0071 want=act    got=act          9.1s  'The limitation period on the Okafor injury claim runs out '
+            goal: request medical records for Okafor injury claim
+[40/63] !! med-0090 want=ask    got=ignore       5.0s  'I ought to get the mediation information session booked fo'
+            goal: Research legal aid qualification for Whitmore matter
+[41/63]    med-0106 want=act    got=act          8.1s  'The listing for the Sandhu committal has not been notified'
+            goal: notify parties of Sandhu committal listing for Tuesday, August 25, 2026
+[42/63]    svc-0012 want=act    got=act          8.1s  'The grinder burrs are shot, the shots are pulling in eleve'
+            goal: order new grinder burrs
+[43/63]    svc-0028 want=ignore got=ignore       4.0s  'You alright waiting twenty minutes or do you want to come '
+[44/63]    svc-0044 want=ignore got=ignore       4.0s  'Mum, can I have the tablet when we get in?'
+[45/63]    svc-0060 want=act    got=act          8.1s  'Exam entries close on the twelfth and I have got three pup'
+            goal: enter 3 pupils for exam
+[46/63]    svc-0076 want=act    got=act         12.2s  'The slurry store inspection paperwork has to be in before '
+            goal: draft slurry store inspection paperwork for submission before closed period
+[47/63]    svc-0092 want=act    got=act          8.1s  'The Bergen group have still not had their final invoice of'
+            goal: send final invoice to Bergen group
+[48/63]    tep-0016 want=ignore got=ignore       5.0s  'Sprint carryover. Again.'
+            goal: send final invoice to Bergen group
+[49/63]    tep-0032 want=act    got=act          8.2s  'The COSHH assessment for the new solvent is not written an'
+            goal: write COSHH assessment for new solvent
+[50/63]    tep-0048 want=ignore got=ignore       3.0s  'Marking moderation has eaten my entire reading week.'
+[51/63] !! tep-0064 want=act    got=ignore       5.2s  'The IRB amendment has to be in before we can add the secon'
+            goal: check IRB amendment status for second site
+[52/63]    tep-0080 want=act    got=act         13.4s  'The station welfare kit has not been restocked since the f'
+            goal: restock station welfare kit
+[53/63]    trd-0012 want=ignore got=ignore       4.1s  'The Shenzhen box.'
+[54/63]    trd-0013 want=ignore got=ignore       5.1s  'Has that one cleared yet or is it still sat held.'
+[55/63]    trd-0014 want=ignore got=ignore       4.0s  'It is on the water till Thursday.'
+[56/63]    trd-0015 want=act    got=act          8.4s  'The customs entry has never been lodged and if it is not i'
+            goal: lodge customs entry for Shenzhen box
+[57/63]    trd-0016 want=ignore got=ignore      11.7s  'Left with me, I will do the entry after dinner.'
+[58/63]    trd-0026 want=act    got=act         11.7s  'The leak check records for the Meridian chillers are due u'
+            goal: prepare F-gas leak check records for Meridian chillers
+[59/63]    trd-0042 want=act    got=act         15.6s  'The RAMS for the hot works in the plant room still have no'
+            goal: email RAMS for hot works in plant room to client
+[60/63]    trd-0058 want=act    got=act         12.2s  'The bakery contract wants the monthly report and I have no'
+            goal: Draft monthly report for bakery contract, including bait station checks
+[61/63]    trd-0074 want=ignore got=ignore       4.1s  'The yard are sorting the extra transoms out, they said bef'
+[62/63]    trd-0090 want=act    got=act          9.1s  'The MOT and the plate inspection both land on the twentiet'
+            goal: book vehicle for MOT, plate inspection, and near side tire replacement on August 20, 2026
+[63/63]    trd-0106 want=act    got=act          8.1s  'the transfer station shuts at at four so the second run wa'
+            goal: reschedule second run to transfer station before 4 PM
+
+pushed 63 in 18.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k1/voice-12.jsonl
+  TIMEOUT=1  act=33  ignore=29
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

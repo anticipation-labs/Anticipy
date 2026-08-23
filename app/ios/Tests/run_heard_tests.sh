@@ -33,7 +33,11 @@ if ! diff -u "$out/real.txt" "$out/stub.txt" > "$out/drift.txt"; then
 fi
 echo "TranscriptLine stand-in matches the real declaration ($(wc -l < "$out/real.txt" | tr -d ' ') fields)"
 
+# CaptureSourcePolicy rides along because HeardGroup.ear asks it which sources
+# earn a badge — deciding that in two places is how a "Pendant" label ends up on
+# a phone-mic conversation.
 swiftc -O \
+    "$app/Audio/CaptureSourcePolicy.swift" \
     "$app/Views/HeardGroup.swift" \
     "$here/HeardGroupTests.swift" \
     -o "$out/heardtests"

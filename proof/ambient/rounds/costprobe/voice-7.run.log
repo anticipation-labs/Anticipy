@@ -1,0 +1,29 @@
+pb        http://127.0.0.1:8090
+owner_ref 2yr3b24kbuen4ye
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/4] !! amb-0007 want=act    got=ignore      13.6s  'The practice indemnity renewal quote came in at nearly dou'
+[2/4]    amb-0016 want=act    got=act         20.2s  'The client care letter for the Duffy file never went out, '
+            goal: draft client care letter for the Duffy file
+[3/4] !! amb-0025 want=act    got=ignore       9.1s  'We are four copies short of the Steinbeck for Year Nine.'
+pb        http://127.0.0.1:8090
+owner_ref 2yr3b24kbuen4ye
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,32863,32893,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[4/4] !! amb-0034 want=act    got=ignore       8.1s  'We are going to be short on till float over the bank holid'
+
+pushed 4 in 0.9 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-7.jsonl
+  act=1  ignore=3
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[1/4] !! amb-0007 want=act    got=ignore       8.2s  'The practice indemnity renewal quote came in at nearly dou'
+[2/4] !! amb-0016 want=act    got=ignore      13.1s  'The client care letter for the Duffy file never went out, '
+[3/4] !! amb-0025 want=act    got=ignore      11.1s  'We are four copies short of the Steinbeck for Year Nine.'
+[4/4] !! amb-0034 want=act    got=ignore       6.0s  'We are going to be short on till float over the bank holid'
+
+pushed 4 in 0.7 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-7.jsonl
+  ignore=4
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

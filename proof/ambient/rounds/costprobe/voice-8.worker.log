@@ -1,0 +1,29 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+consolidation: 114 episodes -> 2 new facts, 0 merged
+segment: new (gap 9039s >= 1200s) seg=xkusclv9a57o60r
+heard: 'My medical indemnity lapses next month and I have not looked at renewing it.' -> ignore (research medical indemnity insurance renewal options)
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: escalate (substantive, no overlap, but recent) seg=ea19v5z0zhrp84j
+heard: 'The site cannot pour on Friday if that rebar inspection is not booked.' -> act (research booking rebar inspection for site pour on Friday, August 21, 2026)
+segment: append (conversation still open) seg=ea19v5z0zhrp84j
+heard: 'My medical indemnity lapses next month and I have not looked at renewing it.' -> ignore (research medical indemnity insurance renewal options)
+segment: escalate (substantive, no overlap, but recent) seg=hl7e5e9wt4p36m7
+heard: 'Half of them did not even open the booklet.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=pm340yaieu2ylxj
+heard: 'The rota for next week still is not up and everyone keeps asking me.' -> ignore (no goal)
+segment: append (conversation still open) seg=pm340yaieu2ylxj
+heard: 'The site cannot pour on Friday if that rebar inspection is not booked.' -> ignore (book rebar inspection for Friday pour)
+segment: escalate (substantive, no overlap, but recent) seg=29jbb58r6m5g96u
+heard: 'Half of them did not even open the booklet.' -> ignore (no goal)
+segment: append (conversation still open) seg=29jbb58r6m5g96u
+heard: 'Half of them did not even open the booklet.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=dmerhf5cvs89apm
+heard: 'The rota for next week still is not up and everyone keeps asking me.' -> ignore (no goal)

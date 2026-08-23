@@ -162,6 +162,65 @@ _DONE_RE = re.compile(
     re.IGNORECASE)
 
 
+# HOW MUCH OF A BOUNDED PROFILE WINDOW MAY BE THINGS NOBODY TYPED: one slot in
+# three, and the rest is RESERVED for what the owner told us.
+#
+# Ranking here is salience = importance x 0.5 ** (age_days / 30) and it carries
+# no provenance term at all, so recency alone inverts authority: a supervised
+# read is always the freshest thing in the store, and a fresh importance-4 mail
+# fact scores 4.0 against 2.5 for the owner's own importance-5 interview answer
+# once that answer is 30 days old. Measured on this store: 2 interview rows aged
+# 45 days plus 15 fresh supervised_mail rows made `profile_facts(limit=10)`
+# return 10/10 supervised_mail, which made `Anticipy.briefing`'s `told` list
+# EMPTY and handed BRIEFING_SYSTEM a profile section that was wholly
+# `quoted_from_other_people`. No attacker: the client's own sanctioned ceiling
+# is 15 facts per source (`extension/supervised_read.js` FACT_CEILING) and the
+# briefing takes 10, so one honest read filled the window.
+#
+# A count cap on ingest cannot fix that — 15 legitimate facts are 15 legitimate
+# facts. The WINDOW is what has to be split.
+#
+# Three, not two: the untrusted share has to be small enough that the profile
+# block still reads as what she KNOWS about him (limit=10 -> 7 owner-told slots
+# are held) and big enough that a read visibly contributes (3 slots, which is
+# also what the briefing's 400-char fenced block comfortably holds).
+_UNTRUSTED_WINDOW_DIVISOR = 3
+
+
+def _provenance_window(facts: list[dict], limit: int) -> list[dict]:
+    """Take at most `limit` of `facts` without letting untrusted volume evict
+    what the owner told us — and without wasting a slot when one side is empty.
+
+    `facts` arrives already ranked (salience, or salience x relevance) and the
+    result keeps that order: this only decides what is DROPPED, never what
+    comes first, because every caller reads element 0 as "most salient".
+
+    The reserve is not a floor on owner-told rows. Unused reserve is handed
+    back to the untrusted side, so a read into an otherwise empty store still
+    contributes every fact it can fit — the point of a read is that it adds
+    something, and a floor would silently turn day zero off."""
+    if limit <= 0:
+        return []
+    # MEMBERSHIP, NOT THE LITERAL "import" — anticipy_core._UNTRUSTED_SOURCES is
+    # the one definition of the fence and every consumer asks it. Imported here
+    # rather than at module scope because anticipy_core imports this module.
+    from .anticipy_core import _UNTRUSTED_SOURCES
+    told, fenced = [], []
+    for i, f in enumerate(facts):
+        (fenced if str(f.get("source") or "") in _UNTRUSTED_SOURCES
+         else told).append(i)
+    keep_fenced = fenced[:limit // _UNTRUSTED_WINDOW_DIVISOR]
+    keep_told = told[:limit - len(keep_fenced)]
+    # Give back what the owner-told side could not use. Only ever positive when
+    # the store holds fewer owner-told rows than the reserve, which is the
+    # thin-profile and read-only cases — a full profile never triggers it.
+    spare = limit - len(keep_told) - len(keep_fenced)
+    if spare > 0:
+        keep_fenced = fenced[:len(keep_fenced) + spare]
+    keep = set(keep_told) | set(keep_fenced)
+    return [f for i, f in enumerate(facts) if i in keep]
+
+
 class Memory:
     def __init__(self, path: str | Path = ":memory:", llm=None):
         self.db = sqlite3.connect(str(path))
@@ -471,7 +530,7 @@ class Memory:
         self.db.commit()
         return fid
 
-    def forget_fact(self, text: str) -> int:
+    def forget_fact(self, text: str, source: str = "") -> int:
         """THE VETO, server half. design/day-zero.md §3: "Every fact is
         vetoable. A tap deletes it and marks it never-re-derive."
 
@@ -492,8 +551,35 @@ class Memory:
             return 0
         norm = " ".join(_fact_tokens(text))
         removed = 0
-        for rid, fact in self.db.execute(
-                "SELECT id, fact FROM profile_facts").fetchall():
+        # A VETO MAY ONLY DELETE WHAT THE SAME KIND OF SOURCE WROTE.
+        #
+        # This deleted every row `_same_as` matched, source-blind, and the text
+        # driving it is a stranger's. `_same_as` is deliberately loose - a 0.8
+        # Jaccard over `_compare_words`, which reduces "They asked me never to
+        # touch: anything to do with my bank." to {anything, asked, bank, never,
+        # touch} - so a mailed line distilling to "Never touch anything to do
+        # with their bank, they asked." matches it.
+        #
+        # The whole exploit was then the DESIGNED gesture: the odd-looking card
+        # is shown, the owner taps it to get rid of it (`design/day-zero.md`
+        # §3), and the row that dies is their own importance-5 interview
+        # boundary - the one `Interview.swift:70-75` calls the fact that must
+        # never be the one that fell off the end. `vetoed_facts` then blocks
+        # re-insertion for good and the app never re-asks, so one email plus one
+        # expected tap removed it permanently and silently.
+        #
+        # Exact-token equality is still allowed across provenance, so the owner
+        # vetoing their OWN words verbatim keeps working. Loose matching belongs
+        # in the never-re-derive check below, which is a refusal to write - not
+        # here, where it is a DELETE.
+        from .anticipy_core import _UNTRUSTED_SOURCES
+        untrusted_veto = str(source or "") in _UNTRUSTED_SOURCES
+        for rid, fact, src in self.db.execute(
+                "SELECT id, fact, source FROM profile_facts").fetchall():
+            row_untrusted = str(src or "") in _UNTRUSTED_SOURCES
+            if untrusted_veto and not row_untrusted \
+                    and " ".join(_fact_tokens(fact)) != norm:
+                continue
             if self._same_as(text, fact):
                 self.db.execute("DELETE FROM profile_facts WHERE id=?", (rid,))
                 removed += 1
@@ -560,7 +646,13 @@ class Memory:
     def profile_facts(self, limit: Optional[int] = None) -> list[dict]:
         """The distilled profile, most important-and-fresh first. Salience
         here is importance x recency (half-life 30 days on last_seen), so a
-        core fact stays near the top for months and stale color sinks."""
+        core fact stays near the top for months and stale color sinks.
+
+        A BOUNDED window is split by provenance (`_provenance_window`), not
+        simply taken off the top: salience carries no provenance term, so
+        without the split fifteen fresh read-derived rows evict every one of
+        the owner's own older answers. Unlimited callers get the whole store
+        in pure salience order, unchanged — there is no window to protect."""
         now = time.time()
         out = []
         for r in self.db.execute(
@@ -579,7 +671,7 @@ class Memory:
                 "salience": r[2] * (0.5 ** (age_days / 30.0)),
             })
         out.sort(key=lambda f: -f["salience"])
-        return out[:limit] if limit else out
+        return _provenance_window(out, limit) if limit else out
 
     def consolidate(self, now: Optional[float] = None, batch: int = 200) -> dict:
         """One incremental consolidation pass: read episodes newer than the
@@ -716,7 +808,13 @@ class Memory:
     def _profile_recall(self, words: set[str], limit: int) -> list[dict]:
         """Profile facts matching the query, ranked by importance x recency
         x relevance — so "mom is in hospital" beats a grocery mumble even
-        when the mumble is newer and matches more words."""
+        when the mumble is newer and matches more words.
+
+        The `limit` slots are split by provenance for the same reason
+        `profile_facts` splits them: relevance x salience carries no
+        provenance term either, so fifteen fresh read-derived rows that all
+        mention "Devon" would take every slot and the owner's own boundary
+        would never reach `memory_notes`."""
         if not words:
             return []
         out = []
@@ -744,9 +842,17 @@ class Memory:
             # most important known facts ride along so a paraphrased
             # question still reaches what she actually knows.
             have = {f["fact"] for f in out}
+            # OWNER-TOLD FIRST among the unmatched, then by importance. The key
+            # was -importance alone, and read facts are capped at importance 4
+            # while a consolidated fact is often 3 — so the padding preferred a
+            # stranger's mail, the window below then capped it, and recall came
+            # back SHORT with owner-told rows sitting unused in the store.
+            from .anticipy_core import _UNTRUSTED_SOURCES
             rest = sorted((f for f in self.profile_facts()
                            if f"known: {f['fact']}" not in have),
-                          key=lambda f: -f["importance"])
+                          key=lambda f: (
+                              str(f.get("source") or "") in _UNTRUSTED_SOURCES,
+                              -f["importance"]))
             for f in rest[:limit - len(out)]:
                 out.append({
                     "fact": f'known: {f["fact"]}',
@@ -756,7 +862,7 @@ class Memory:
                     "salience": 0.0,
                     "source": f.get("source", ""),
                 })
-        return out[:limit]
+        return _provenance_window(out, limit)
 
     # Set by _find_same_fact when the row it matched states the SAME fact
     # with a DIFFERENT number — the caller must rewrite the wording rather
@@ -926,6 +1032,30 @@ class Memory:
         self.db.execute(
             "INSERT OR REPLACE INTO consolidation_state(key, value) "
             "VALUES (?, ?)", (key, value))
+
+    def read_facts_admitted(self, job: str) -> int:
+        """How many supervised-read facts this job has already had written.
+
+        Lives in the STORE rather than in a worker dict because the ceiling it
+        feeds (`worker.READ_FACTS_PER_JOB`) has to survive a restart: an
+        in-process counter resets to zero on every redeploy, and a client that
+        ignores its own cap can simply keep posting until one happens."""
+        try:
+            return int(self._state_get(f"read_facts_{job}", "0") or 0)
+        except ValueError:
+            # An unreadable counter is treated as "already at the ceiling"
+            # nowhere — it is treated as zero, because refusing every fact
+            # forever on a corrupt row would silently turn day zero off. The
+            # ceiling is a flood guard, not a security boundary; the fence is.
+            return 0
+
+    def note_read_fact_admitted(self, job: str) -> int:
+        """Count one admitted fact against `job`'s ceiling. Committed, because
+        an uncommitted count is not a count across polls."""
+        n = self.read_facts_admitted(job) + 1
+        self._state_set(f"read_facts_{job}", str(n))
+        self.db.commit()
+        return n
 
     # ----------------------------------------------------------- internals
 

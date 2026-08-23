@@ -1,0 +1,33 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: escalate (substantive, no overlap, but recent) seg=yea704n615qigoo
+heard: 'My defib refresher has lapsed and I am on the response rota from Sunday.' -> ignore (Find defibrillator refresher training options before Sunday, August 23, 2026)
+consolidation: 108 episodes -> 3 new facts, 0 merged
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (gap 8279s >= 1200s) seg=6c9j8gjt3l48pn1
+heard: 'Damn, the Hendricks review is Thursday and I still have not pulled the Q3 numbers.' -> act (remind to pull Q3 numbers before the Hendricks review on Thursday, August 27, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=lx7ib7pljlfasb0
+heard: 'My revalidation is due and I have not logged a single hour of CPD.' -> ignore (no goal)
+segment: append (conversation still open) seg=lx7ib7pljlfasb0
+heard: 'Damn, the Hendricks review is Thursday and I still have not pulled the Q3 numbers.' -> ignore (pull Q3 numbers for Hendricks review on Thursday August 27, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=7hl998pvrjfkhbz
+heard: 'We are going to be short on the test cell booking if nobody puts a date in.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=i7np48qq5xm8vj7
+heard: 'That loft conversion was a nightmare, never again.' -> ignore (no goal)
+segment: append (conversation still open) seg=i7np48qq5xm8vj7
+heard: 'My revalidation is due and I have not logged a single hour of CPD.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=kdz14cy6xqmg3j2
+heard: 'We are going to be short on the test cell booking if nobody puts a date in.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=c84iccadaqvdv8o
+heard: 'I cannot do the Dover run until the trailer has had its brake test.' -> ignore (no goal)
+segment: append (conversation still open) seg=c84iccadaqvdv8o
+heard: 'That loft conversion was a nightmare, never again.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=z4ib7u6uy2tyma0
+heard: 'I cannot do the Dover run until the trailer has had its brake test.' -> ignore (no goal)

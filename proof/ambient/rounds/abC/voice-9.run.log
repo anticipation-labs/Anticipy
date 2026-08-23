@@ -1,0 +1,31 @@
+pb        http://127.0.0.1:8090
+owner_ref fbmxghyvp84bce8
+brain     worker: pid 60512,60572,60618,60629,60663,60677,60699,60709,60717 up since 09:40:35, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13] !! amb-0038 want=act    got=ignore      34.8s  'I cannot do the Dover run until the trailer has had its br'
+            goal: schedule brake test for trailer
+[2/13] !! amb-0064 want=ask    got=ignore      16.4s  'I would love to get away for a weekend but I have no idea '
+            goal: research affordable weekend getaways
+[3/13] !! amb-0134 want=act    got=ignore      34.2s  "Both the kids' passports run out before the summer."
+            goal: check passport expiry dates for children
+[4/13]    amb-0196 want=ignore got=ignore      16.1s  'Statistically one of these meetings has to be useful.'
+[5/13]    amb-0240 want=ignore got=ignore      13.7s  'Honestly it is fine, I will sort the tickets out tonight.'
+[6/13] !! per-0034 want=act    got=ignore      13.8s  'There is a message sat on my universal credit journal and '
+            goal: check Universal Credit journal for message
+[7/13] !! fin-0064 want=act    got=ignore      34.7s  'I said I would send Bea the maternity policy and it is sti'
+            goal: Send maternity policy to Bea
+[8/13] !! med-0035 want=ask    got=ignore      44.7s  'The indemnity cover needs extending to online sessions and'
+            goal: research current remote work hours for indemnity cover extension
+[9/13]    svc-0011 want=act    got=act         32.8s  'The gas certificate for the range is on the wall from two '
+            goal: Arrange gas certificate renewal for range
+[10/13]    svc-0072 want=ignore got=ignore      17.0s  'The allergen labels are sorted, I ran the whole new set of'
+            goal: Get current gas certificate for the range
+[11/13]    tep-0029 want=ignore got=ignore      22.0s  'The machine shop has fitted the guards back to front on ev'
+[12/13]    trd-0028 want=ignore got=ignore      22.3s  'The condenser is on the wagon already, it is all moving.'
+[13/13] !! trd-0091 want=ask    got=ignore      15.0s  'I should get the plate moved onto the new car, though I ha'
+
+pushed 13 in 5.7 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abC/voice-9.jsonl
+  act=1  ignore=12
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

@@ -1,0 +1,112 @@
+pb        http://127.0.0.1:8090
+owner_ref aomv4722ccarzj5
+brain     worker: pid 2686,2688,2689,2690,2691,2693,2694,2695,2696,2697,2698,2699,2700,2701,2702,2703,2931 up since 11:28:26, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62]    amb-0001 want=act    got=act          9.1s  'Oh my goodness, I forgot to cook for my kids this afternoo'
+            goal: Arrange meal delivery for kids this afternoon
+[2/62]    amb-0002 want=act    got=act         11.2s  'Damn, the Hendricks review is Thursday and I still have no'
+            goal: Pull Q3 numbers for Hendricks review
+[3/62] !! amb-0011 want=act    got=ignore       5.0s  'My revalidation is due and I have not logged a single hour'
+            goal: Research revalidation requirements and CPD logging for Alex
+[4/62]    amb-0027 want=act    got=act          8.4s  'I am going to run out of twenty two mil compression fittin'
+            goal: Order 22mm compression fittings
+[5/62] !! amb-0043 want=act    got=ignore      11.0s  'We are catering forty on Saturday and the fish order is st'
+            goal: Confirm fish order for catering forty on Saturday, August 22, 2026
+[6/62]    amb-0059 want=act    got=act          9.1s  'My prescription is down to two days and the pharmacy shut '
+            goal: refill Alex's prescription
+[7/62]    amb-0075 want=act    got=act          9.1s  'My medical certificate lapses in November and the AME book'
+            goal: Schedule AME appointment for medical certificate renewal in November
+[8/62] !! amb-0091 want=act    got=ignore       6.8s  'The pressure vessel inspection is due and the paperwork is'
+            goal: Find paperwork for pressure vessel inspection
+[9/62]    amb-0107 want=act    got=act         10.1s  'I have not claimed the night out expenses for two months.'
+            goal: Claim night out expenses for the last two months
+[10/62]    amb-0123 want=act    got=act         12.2s  'His inhaler is nearly empty and school need a spare one.'
+            goal: order a spare inhaler for school
+[11/62] !! amb-0139 want=act    got=ignore       9.5s  'The recycling calendar changed and we keep missing the col'
+            goal: find recycling calendar for Alex's address
+[12/62] !! amb-0155 want=act    got=ignore       4.0s  'My proficiency check is due and the examiner is booked out'
+            goal: Find next available proficiency check examiner appointment
+[13/62]    amb-0171 want=act    got=act         11.2s  'Two of the room leaders need their paediatric first aid re'
+            goal: schedule paediatric first aid renewal for two room leaders
+[14/62]    amb-0187 want=ignore got=ignore       4.1s  'That is a good shout, actually.'
+[15/62]    amb-0203 want=ignore got=ignore       4.3s  'Whoever designed this parking system needs a word with the'
+[16/62]    amb-0219 want=ignore got=ignore       5.2s  'Invoice number four four seven two, amount one thousand tw'
+[17/62]    amb-0235 want=ignore got=ignore       4.0s  'Leave the bins with me, I am up early anyway.'
+[18/62]    amb-0251 want=ignore got=ignore       7.7s  'That is paid, it went out Friday.'
+[19/62]    amb-0267 want=ignore got=ignore       3.0s  'Are you eating with us or are you out?'
+[20/62]    amb-0283 want=ignore got=ignore       4.1s  "That is on next week's agenda so it will get picked up."
+[21/62]    per-0016 want=act    got=act         12.2s  'That coat I ordered for Ellie is the wrong size and the re'
+            goal: process return for Ellie's coat
+[22/62]    per-0032 want=act    got=act         10.0s  'The boy needs new boots for football, his toes are through'
+            goal: Order new football boots for Alex
+[23/62]    per-0048 want=act    got=act         11.4s  'I have not registered to vote since we moved, not at the n'
+            goal: Register to vote at new address
+[24/62] !! per-0064 want=ask    got=ignore       5.0s  'I can put the notice in the local paper but I have not bee'
+[25/62]    per-0080 want=ignore got=ignore       4.0s  "Are we still doing your mum's on Sunday or has that change"
+[26/62]    per-0096 want=ignore got=ignore       4.0s  'The energy switch is going through, they reckon fourteen d'
+[27/62]    fin-0009 want=act    got=act         11.2s  'I have got a supplier with no W-9 on file and I am issuing'
+            goal: get W-9 from supplier
+[28/62] !! fin-0025 want=act    got=ignore       8.5s  'The PI cover renewal came back nine hundred up on last yea'
+            goal: research alternative PI cover quotes
+[29/62]    fin-0041 want=act    got=act         11.6s  'The nostro break from Tuesday is still open and it gets re'
+            goal: resolve nostro break from Tuesday, August 18, 2026
+[30/62] !! fin-0057 want=ask    got=act         12.6s  'We are nearly out of the heavy copier paper and I cannot r'
+            goal: Order heavy copier paper
+[31/62]    fin-0073 want=act    got=act         14.3s  'The board dinner is on the twelfth and nobody has held a t'
+            goal: Book a table for the board dinner on September 12
+[32/62]    fin-0098 want=ignore got=ignore       4.0s  'Did the offer letter ever go out to the Bhatt candidate?'
+[33/62]    fin-0099 want=ignore got=ignore       4.1s  'It went Tuesday, she has not signed it yet.'
+[34/62]    fin-0100 want=act    got=act         12.4s  'Her start date is the first and the superannuation choice '
+            goal: ensure superannuation choice form reaches fund for Bhatt candidate by September 1, 2026
+[35/62] !! fin-0101 want=ask    got=ignore       8.1s  'I ought to get on the phone to their employer line, whenev'
+            goal: call Alex's employer line to follow up on superannuation choice form
+[36/62] !! med-0005 want=ask    got=ignore       4.0s  "I want the prior authorisation in for Mrs Ferreira's biolo"
+[37/62] !! med-0027 want=act    got=ignore       4.1s  'The public liability and the professional indemnity renew '
+[38/62]    med-0043 want=act    got=act         20.3s  'The appraisal wants patient feedback and I have not sent a'
+            goal: send patient feedback questionnaires for appraisal
+[39/62]    med-0059 want=ignore got=ignore       6.0s  'The homebirth guideline update went out to the whole team '
+            goal: Draft patient feedback questionnaire for appraisal
+[40/62]    med-0079 want=ignore got=ignore       4.0s  'If we ever took on volume work for the shipping firms we w'
+[41/62]    med-0098 want=act    got=act         21.1s  'The search fees on the Meadow Lane file were never billed '
+            goal: bill search fees for Meadow Lane file to client
+[42/62]    svc-0004 want=act    got=act          9.2s  'The chiller on aisle four has been running two degrees war'
+            goal: log chiller on aisle four running two degrees warm
+[43/62] !! svc-0020 want=ask    got=act         10.2s  'I want the run of show over to the venue, I have just not '
+            goal: send run of show to venue
+[44/62]    svc-0036 want=ignore got=ignore       6.1s  'You do not need to sort the bootcamp permit, Deano has alr'
+[45/62]    svc-0052 want=act    got=act         12.3s  'We are out of the hypoallergenic shampoo and down to two p'
+            goal: Order more hypoallergenic shampoo and puppy packs
+[46/62]    svc-0068 want=act    got=act         11.4s  'The Dutch order has to be in by ten tonight or the funeral'
+            goal: Place Dutch order for funeral work by 10 PM PDT
+[47/62] !! svc-0084 want=ask    got=act         10.2s  'The bottling line is booked for the fourteenth and I have '
+            goal: Choose between two label proofs for bottling line booked for August 14
+[48/62]    tep-0008 want=act    got=act         10.3s  'The board deck goes out Monday and the churn numbers in it'
+            goal: Update churn numbers in board deck to reflect new warehouse data
+[49/62]    tep-0024 want=ignore got=ignore       3.0s  'Every temporary works drawing on this job comes back with '
+[50/62]    tep-0040 want=act    got=act         10.1s  'The highways consultation response is late and the determi'
+            goal: draft highways consultation response
+[51/62]    tep-0056 want=act    got=act          8.0s  'The EHCP annual review needs the educational psychologist '
+            goal: request educational psychologist report for EHCP annual review
+[52/62] !! tep-0072 want=ask    got=ignore       5.1s  'I need the interpreter booked for the Wednesday visit and '
+[53/62]    tep-0088 want=act    got=act         14.2s  'The annual fitness test window shuts at the end of the mon'
+            goal: book fitness test slot before August 31, 2026
+[54/62]    trd-0017 want=ignore got=ignore       7.1s  'Ashworth rewire.'
+            goal: book annual fitness test for Alex Ashworth before August 31, 2026
+[55/62]    trd-0018 want=ignore got=ignore       3.0s  'Yeah, no, go on.'
+[56/62]    trd-0019 want=act    got=act         10.1s  'That was notifiable works and the Part P certificate never'
+            goal: send Part P certificate for Ashworth rewire
+[57/62]    trd-0020 want=ignore got=ignore       4.0s  'I sent that off, did it on the portal Tuesday.'
+[58/62] !! trd-0034 want=act    got=ignore       6.0s  'The felt for the surgery flat roof is on back order again '
+[59/62]    trd-0050 want=act    got=act         11.1s  'Skip permit for the Mansfield Road job, that is the counci'
+            goal: apply for skip permit for Mansfield Road job
+[60/62]    trd-0066 want=act    got=act         16.2s  'The window survey for the Trent Bridge job never went acro'
+            goal: send window survey for Trent Bridge job to fabricator
+[61/62]    trd-0082 want=act    got=act         10.1s  'Two of the counterbalance lads need their refresher and th'
+            goal: schedule counterbalance refresher for two lads
+[62/62]    trd-0098 want=ignore got=ignore       4.0s  'Control are sorting the replacement bus, they have got tha'
+
+pushed 62 in 9.2 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k4/voice-5.jsonl
+  act=31  ignore=31
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

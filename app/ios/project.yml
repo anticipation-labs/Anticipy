@@ -10,7 +10,96 @@ settings:
     # commits landed (ex 77, 78, 83, 87, 88, 90), and the brief records build 63
     # as already shipped while this file still said 62 - so 62 would also have
     # been refused by App Store Connect as a used build number.
-    CURRENT_PROJECT_VERSION: "64"
+    #
+    # 66: the app has a light mode, and opens in it. The root used to pin
+    # .preferredColorScheme(.dark). A behaviour change that leaves the build
+    # number alone is also unprovable on a device - "is 65 the 65 I just
+    # installed?" has no answer.
+    #
+    # 67: light is WHITE and dark is BLACK, and onboarding can no longer strand
+    # anyone. `hasOnboarded` used to be written at the tail of a ~2.4s animation
+    # inside OnboardingView; an interrupted animation meant repeating all five
+    # steps forever with the profile already saved. The flag is now written the
+    # moment the last step clears, and the celebration is a transient overlay
+    # owned by AnticipyApp that records nothing.
+    #
+    # 68: day zero. She now asks about your life instead of guessing at it - six
+    # questions (`Interview.swift`), and just-in-time asks for the two sources
+    # that live on this phone, calendar and contacts, each with its own consent
+    # and its own stated reason. The browser step leaves first run and is offered
+    # when an errand actually needs hands. Deleting everything on the server is
+    # a button rather than an apology and a mailto.
+    #
+    # 69: the supervised read. She can read a page you opened - your mailbox,
+    # your LinkedIn - and distil it into what she knows, but ONLY while you are
+    # watching: the phone stamps `jobs.watching_until` every ten seconds from the
+    # foreground, and the extension re-checks it before every action. Lock the
+    # phone and the read stops itself. The action vocabulary is per source and
+    # default-deny (mail may navigate; professional may only extract, because
+    # LinkedIn's UA 8.2 turns on who navigates). Facts from a mailbox are written
+    # by other people, so they are fenced like an imported calendar title and
+    # capped at importance 4 - and cannot crowd the owner's own words out of a
+    # prompt.
+    #
+    # 70: the name is just Anticipy - the "Claude Version" suffix is gone from
+    # every surface, including two places a rename pass cannot see (the phrase
+    # split across a source line break, and one upper-case wordmark). Every
+    # button and link is now the owner's Liquid Glass material: a pill, a
+    # vertical fill, a lit top rim, a shaded floor, a cast thrown far enough to
+    # read as height, and a shine that crosses once on press. Light is the dark
+    # glass the component ships; dark inverts to light metal, because a
+    # near-black button on a true-black page is invisible. The champagne bloom
+    # is gone from all seven remaining views.
+    #
+    # 71: no vertical champagne rules anywhere. Twelve of them: nine drawn in
+    # accentDim and three in accent, which a grep for the dim token could not
+    # see. Two were carrying information rather than decoration and kept the
+    # signal in type instead of an edge; one, on a transcript row, turned out to
+    # be the third telling of a moment the haptic and the springing label had
+    # already made. Also: no star on a Found card, and no em dash in anything a
+    # person reads (the ~540 in code comments are left alone, deliberately).
+    #
+    # 72: two more of the owner's components. Glassy-button gives the two
+    # glyph-only controls a machined face with a real PRESSED state (the cast
+    # tightens rather than the button shrinking) and, at last, a real DISABLED
+    # one - the send arrow used to express refusal three times over, none of
+    # them the material's. Text-Arrow-CTA gives forward links an arrow that
+    # swaps sides rather than sliding, and an underline that wipes in two
+    # staggered halves. No click sound: she never comes to the foreground on her
+    # own, and a tap already has a haptic.
+    #
+    # 73: the icon button was black. Its face was wired to glassTop/glassBottom
+    # on the reasoning that the component's shell ramp IS the light metal this
+    # file already decomposed - true of those tokens' DARK values, false of
+    # their light ones, which are the Glass CTA's near-black #26262A -> #08080A.
+    # So an icon button on a white page wore the primary pill's fill. The
+    # component has ONE appearance, light metal, and now has its own tokens for
+    # it. Also: its cast floor sat 15pt below a 44pt control, a third of its own
+    # height, which read as a second pale plate lying under the button instead
+    # of as its shadow.
+    #
+    # 74: the two things 73 claimed and did not deliver, both found by finally
+    # getting Home on a screen instead of reasoning about it.
+    #
+    # The logo was off-centre because the leading toolbar item was the mark plus
+    # a 24pt serif wordmark, and the wordmark never rendered - the slot is too
+    # narrow once the trailing control takes its share, so the system truncated
+    # the text to nothing while the HStack's 10pt spacing before it survived.
+    # iOS centres a toolbar item's content in its own glass backing, so what was
+    # being centred was mark-plus-gap-plus-nothing: 5pt left of the middle.
+    #
+    # And `offFill` - the DISABLED plate - was still near-black in light theme,
+    # the same inversion 73 fixed for the face. DeadPlate is shared with the
+    # icon button, so a disabled send arrow was a black disc on a white page.
+    #
+    # 75: the settings button has no plate of its own. iOS draws a glass capsule
+    # behind every toolbar item - it is what the mark on the left sits in - so
+    # giving the gear `.icon` as well put the component's machined metal face
+    # INSIDE that capsule. Two nested surfaces, a grey disc in a white one. The
+    # leading item looked right for exactly the reason this one looked wrong: it
+    # brings no surface of its own. GlassyIconStyle stays where a glyph has to
+    # supply its own affordance, like the send arrow on the compose line.
+    CURRENT_PROJECT_VERSION: "75"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -51,7 +140,7 @@ targets:
     info:
       path: Anticipy/Info.plist
       properties:
-        CFBundleDisplayName: Anticipy Claude Version
+        CFBundleDisplayName: Anticipy
         CFBundleIconName: AppIcon
         # References the build settings above so the version can never
         # drift: on 2026-08-15 this literal silently overwrote the
@@ -69,13 +158,27 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - audio
-        NSBluetoothAlwaysUsageDescription: Anticipy Claude Version connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.
+        NSBluetoothAlwaysUsageDescription: Anticipy connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.
         # These describe what actually happens: capture continues in the
         # background, and the resulting TEXT is sent to Anticipy's server so she
         # can act on it. The old strings promised "on-device transcription" and
         # referenced a "Local mode" that gated nothing and appeared nowhere.
-        NSMicrophoneUsageDescription: Anticipy Claude Version listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy Claude Version so she can act on them. You control when she is listening.
-        NSSpeechRecognitionUsageDescription: Anticipy Claude Version turns what she hears into text on your phone, then sends that text to Anticipy Claude Version so she can remember it and act on it.
+        # "Anticipy's server" and "her server", not "Anticipy": once the name
+        # lost its suffix, "sent to Anticipy so she can act" named the same
+        # thing twice in one sentence and read like a bug.
+        NSMicrophoneUsageDescription: Anticipy listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy's server so she can act on them. You control when she is listening.
+        NSSpeechRecognitionUsageDescription: Anticipy turns what she hears into text on your phone, then sends that text to her server so she can remember it and act on it.
+        # Day zero, the two sources that live on this phone. Both strings say
+        # what is actually read, because both are narrower than the permission
+        # iOS grants: titles and times for a month, and names with no numbers.
+        #
+        # BOTH calendar keys ship. iOS 17 split calendar access and deprecated
+        # NSCalendarsUsageDescription, but the deployment target here is 16.0
+        # and an app linked on 16 WITHOUT that key crashes rather than being
+        # refused. Delete it only when the floor moves to 17.
+        NSCalendarsFullAccessUsageDescription: Anticipy reads what is coming up in the next month — the title and the time, nothing else — so she knows what you already have on. She never reads the notes or the invitees, and never puts anything in your calendar unless you ask her to.
+        NSCalendarsUsageDescription: Anticipy reads what is coming up in the next month — the title and the time, nothing else — so she knows what you already have on. She never reads the notes or the invitees, and never puts anything in your calendar unless you ask her to.
+        NSContactsUsageDescription: Anticipy reads the names in your contacts so she knows who you mean when you say one. She never reads a number, an email or an address, and never messages anyone on her own.
         ITSAppUsesNonExemptEncryption: false
         NSAppTransportSecurity:
           # Arbitrary loads is gone: everything the app talks to is HTTPS. Local

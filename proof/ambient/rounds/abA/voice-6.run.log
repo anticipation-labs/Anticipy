@@ -1,0 +1,27 @@
+pb        http://127.0.0.1:8090
+owner_ref fnw0pvulizndqze
+brain     worker: pid 6534,6545,6552,6560,6565,6570,6573,6578,6582 up since 02:01:51, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13]    amb-0018 want=act    got=act         67.0s  'The revised drainage calcs still have not gone to the cont'
+            goal: draft email to contractor with revised drainage calculations before Monday August 24 2026 design fre
+[2/13]    amb-0053 want=act    got=act         80.7s  'My ethics form was supposed to go in last Friday and it is'
+            goal: Locate and prepare overdue draft ethics form for submission
+[3/13] !! amb-0108 want=act    got=ignore      32.2s  'The sprayer test certificate runs out before harvest.'
+            goal: research sprayer testing and certification booking options before harvest
+[4/13]    amb-0179 want=ignore got=ignore       9.1s  'Morning, you alright?'
+[5/13]    amb-0214 want=ignore got=ignore      14.1s  'I keep seeing those adverts and wondering if they are any '
+[6/13] !! per-0011 want=act    got=ignore      23.2s  'The probate forms are sat there and every single time I op'
+[7/13] !! fin-0036 want=act    got=ignore      61.5s  'The strata levy notices have to go out this week and the b'
+[8/13]    med-0006 want=ignore got=ignore      22.2s  'The bank shifts.'
+[9/13] !! svc-0004 want=act    got=ignore      27.3s  'The chiller on aisle four has been running two degrees war'
+[10/13] !! svc-0040 want=ask    got=ignore      23.2s  'The hall booking runs out at the end of term and the paris'
+[11/13] !! tep-0018 want=act    got=ignore      33.3s  'The roadmap review is Thursday and I have not written up w'
+[12/13] !! tep-0081 want=act    got=ignore      27.2s  'My breathing apparatus competency is due for reassessment '
+            goal: research breathing apparatus competency reassessment booking options
+[13/13] !! trd-0082 want=act    got=ignore      32.3s  'Two of the counterbalance lads need their refresher and th'
+
+pushed 13 in 7.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abA/voice-6.jsonl
+  act=2  ignore=11
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

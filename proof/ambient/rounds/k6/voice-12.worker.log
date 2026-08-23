@@ -1,0 +1,139 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9c841543825e
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: append (conversation still open) seg=5vzwelv7gqkmsib
+heard: 'I keep meaning to re-run the retirement projection on the Alvarez file before we meet.' -> act (Re-run retirement projection for Alvarez file)
+heard: 'I keep putting off sending the rig two vibration data to the bearing supplier.' -> that is her own message read back, ignoring
+segment: escalate (substantive, no overlap, but recent) seg=oqb0xq1pdldd4dz
+heard: 'The rota for next week still is not up and everyone keeps asking me.' -> act (publish next week's rota)
+segment: link (shares a name with the previous conversation) seg=mxnm05la2xtte9b
+heard: 'The FOI response deadline is twenty working days and we are on eighteen.' -> ignore (check FOI response deadline)
+segment: link (shares a name with the previous conversation) seg=9cc001sizmuzpmd
+heard: 'The practice controlled drugs register audit is overdue by a fortnight.' -> act (audit practice controlled drugs register)
+segment: link (shares a name with the previous conversation) seg=wa4phbxqhx51tct
+heard: 'The flu jab rota needs sorting before October and nobody has started it.' -> act (sort flu jab rota before October)
+segment: link (shares a name with the previous conversation) seg=bzjdzapeidt4zzn
+heard: 'The customer in Beeston still has not paid the deposit invoice.' -> act (Chase deposit invoice from customer in Beeston)
+segment: link (shares a name with the previous conversation) seg=ms04wmf6udhve2c
+heard: 'The complaints return has to be filed and the spreadsheet is out of date.' -> act (File complaints return; update spreadsheet)
+segment: link (shares a name with the previous conversation) seg=4dfcbazxp35fufm
+heard: 'The smoke alarm has been chirping for a week now.' -> act (change smoke alarm battery)
+segment: link (shares a name with the previous conversation) seg=03ns1796qwzgexh
+heard: 'The FOI I put in back in June has had no response at all.' -> act (follow up on FOI request from June)
+segment: link (shares a name with the previous conversation) seg=8sfcwfbsa2eplbj
+heard: 'The planning submission needs the daylight study and nobody has commissioned it.' -> act (commission daylight study for planning submission)
+segment: link (anaphoric/short, still inside the near band) seg=24a08tdfr9bhnqw
+heard: 'Morning, you alright?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=7hij2mviuivropx
+heard: 'At this rate the dog is running the household.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=remfm963z8enkbh
+heard: 'I do not know, I might, I might not.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=cd3cyh5s8fi5fow
+heard: 'Buy one get one free this weekend only at your local store.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=c260czqhtwmted9
+heard: 'If we ever go to Lisbon I would want to do it properly, a week at least.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=9tusd7nyxwnaa1u
+heard: 'Okay cool.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=yq1fbt2nx4gte05
+heard: 'okay so um right so basically the thing is' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=qmctzrmk802buwz
+heard: 'I should call the clinic.' -> act (Call the clinic)
+segment: append (conversation still open) seg=qmctzrmk802buwz
+heard: 'About the results, I mean, they said a week and it has been three.' -> ignore (call clinic about results)
+segment: escalate (substantive, no overlap, but recent) seg=dd4psnb5me8cetw
+heard: 'We are on the standard variable thing now, which is the most expensive possible way to be warm.' -> ignore (Call clinic about results)
+segment: escalate (substantive, no overlap, but recent) seg=3kbwt1gr50z6868
+heard: 'The gas meter reading is estimated again so the bill is basically fiction.' -> act (submit actual gas meter reading)
+segment: link (shares a name with the previous conversation) seg=z1hlf1d3rqly6b2
+heard: 'The mattress people never turned up on Saturday and nobody has rung me since.' -> act (contact mattress company about missed delivery on Saturday, August 15, 2026)
+segment: link (shares a name with the previous conversation) seg=re7g2hvz6g6jx60
+heard: 'The garage can do Tuesday or Thursday for the MOT and I genuinely do not know which one I can do.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=d95x7fiuuz589i4
+heard: 'If I did get made redundant I suppose I would have to look at the mortgage thing.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=1yi4ew7f1tnrjvo
+heard: 'the the with the thing on Thursday for the' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=5rafmr5lgra8mzf
+heard: 'What time is it, half four?' -> ignore (no goal)
+segment: append (conversation still open) seg=5rafmr5lgra8mzf
+heard: 'Oh no. I said I would do them a proper tea tonight and there is nothing in, nothing at all.' -> act (arrange dinner for tonight)
+segment: append (conversation still open) seg=5rafmr5lgra8mzf
+heard: 'And she will not touch anything with sauce on, which leaves about three meals in the world.' -> ignore (order groceries for dinner tonight, focusing on sauce-free options)
+segment: escalate (substantive, no overlap, but recent) seg=qra0i7ses8hcutm
+heard: 'The revolving facility renews in October and I have not asked the bank for indicative terms.' -> act (get indicative terms from bank for revolving facility renewal in October)
+segment: link (shares a name with the previous conversation) seg=mynt1ef06wndc2y
+heard: 'The VAT itself got paid, it is the penalty notice I have not dealt with.' -> act (deal with VAT penalty notice)
+segment: link (shares a name with the previous conversation) seg=q4ro90egbz37xr2
+heard: 'The listing photographs for Ashworth Terrace are not booked and it goes live Monday.' -> act (Book listing photographs for Ashworth Terrace before Monday, August 24, 2026)
+segment: link (shares a name with the previous conversation) seg=uqx5ndswf7sp4q2
+heard: 'The side letter for the Halberd round has not been countersigned and we close Friday.' -> act (get Halberd round side letter countersigned)
+segment: link (shares a name with the previous conversation) seg=lcdl22zoyh78f2l
+heard: 'The salary sacrifice change for one of the team never got processed, that is two payrolls now.' -> act (Process salary sacrifice change for team member)
+segment: escalate (substantive, no overlap, but recent) seg=y645e69xfs7q1hm
+heard: 'We never filed the Delaware franchise tax and it was due in March.' -> act (file Delaware franchise tax)
+segment: escalate (substantive, no overlap, but recent) seg=c3amz114d6lnypg
+heard: 'The controlled drug register has not been reconciled since the locum was in and the inspection could be any week.' -> act (reconcile controlled drug register)
+segment: link (shares a name with the previous conversation) seg=xyk2uczgw4dzo35
+heard: 'The indemnity cover needs extending to online sessions and I am not sure how many hours a week I am doing remotely now.' -> ignore (research indemnity cover extension for online sessions)
+segment: link (shares a name with the previous conversation) seg=u1iepinr4z4etxm
+heard: 'The inspection action plan response is due in ten days and I have not drafted a line of it.' -> act (draft inspection action plan response)
+segment: link (shares a name with the previous conversation) seg=lsvg0f9c9fc9rtu
+heard: 'The limitation period on the Okafor injury claim runs out in March and the medical records have never been requested.' -> act (request medical records for Okafor injury claim)
+segment: escalate (substantive, no overlap, but recent) seg=u52w2pam04x2zpf
+heard: 'I ought to get the mediation information session booked for the Whitmore matter but I do not know if she qualifies for legal aid.' -> ignore (research legal aid qualification for Whitmore mediation information session)
+segment: escalate (substantive, no overlap, but recent) seg=an5fr1fgd7cku6w
+heard: 'The listing for the Sandhu committal has not been notified to the parties and it is next Tuesday.' -> act (notify parties of Sandhu committal listing for Tuesday, August 25, 2026)
+segment: link (shares a name with the previous conversation) seg=jm93178rxk720yx
+heard: 'The grinder burrs are shot, the shots are pulling in eleven seconds.' -> act (order new grinder burrs)
+segment: escalate (substantive, no overlap, but recent) seg=faik1lp221fyzze
+heard: 'You alright waiting twenty minutes or do you want to come back after?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=whm5k88fro76824
+heard: 'Mum, can I have the tablet when we get in?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=xm4jqsq9no0k6rc
+heard: 'Exam entries close on the twelfth and I have got three pupils not entered.' -> act (enter 3 pupils for exam)
+segment: escalate (substantive, no overlap, but recent) seg=aahyvafztklf4j5
+heard: 'The slurry store inspection paperwork has to be in before the closed period starts.' -> act (submit slurry store inspection paperwork before closed period)
+segment: link (shares a name with the previous conversation) seg=rpcbpklarp0nobl
+heard: 'The Bergen group have still not had their final invoice off us and they travel in three weeks.' -> act (send final invoice to Bergen group)
+segment: link (anaphoric/short, still inside the near band) seg=9bxp2fe7e57ovs7
+heard: 'Sprint carryover. Again.' -> ignore (send final invoice to Bergen group)
+segment: escalate (substantive, no overlap, but recent) seg=40u1n41ng0gk4re
+heard: 'The COSHH assessment for the new solvent is not written and the drum lands on site Thursday.' -> act (write COSHH assessment for new solvent)
+segment: escalate (substantive, no overlap, but recent) seg=p6fvhfad7crb858
+heard: 'Marking moderation has eaten my entire reading week.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=0psmpwymh4u7qdp
+heard: 'The IRB amendment has to be in before we can add the second site and recruitment starts in three weeks.' -> act (Submit IRB amendment for second site)
+segment: link (shares a name with the previous conversation) seg=vrk3rs0kxmuvg6v
+heard: 'The station welfare kit has not been restocked since the flooding job.' -> act (restock station welfare kit)
+segment: link (shares a name with the previous conversation) seg=swcdcfqt1xc26ah
+heard: 'The Shenzhen box.' -> ignore (restock station welfare kit)
+segment: append (conversation still open) seg=swcdcfqt1xc26ah
+heard: 'Has that one cleared yet or is it still sat held.' -> ignore (no goal)
+segment: append (conversation still open) seg=swcdcfqt1xc26ah
+heard: 'It is on the water till Thursday.' -> ignore (no goal)
+segment: append (conversation still open) seg=swcdcfqt1xc26ah
+heard: 'The customs entry has never been lodged and if it is not in before arrival we are paying storage.' -> act (lodge customs entry for Shenzhen box)
+segment: append (conversation still open) seg=swcdcfqt1xc26ah
+heard: 'Left with me, I will do the entry after dinner.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=067gp7515bekkl3
+heard: 'The leak check records for the Meridian chillers are due under F-gas and I have written up none of them.' -> act (prepare F-gas leak check records for Meridian chillers)
+segment: link (shares a name with the previous conversation) seg=ro2a9a1fty6kvqp
+heard: 'The RAMS for the hot works in the plant room still have not gone across to the client.' -> act (email RAMS for hot works in plant room to client)
+segment: link (shares a name with the previous conversation) seg=z7s3pk7vd5he3zl
+heard: 'The bakery contract wants the monthly report and I have not written up a single bait station check.' -> act (prepare monthly report for bakery contract)
+segment: link (shares a name with the previous conversation) seg=uu0jk767xmtzyju
+heard: 'The yard are sorting the extra transoms out, they said before dinner.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=igep6t12ko8jcil
+heard: 'The MOT and the plate inspection both land on the twentieth and that near side tyre will never see either through.' -> act (book car for MOT and plate inspection, replace near side tyre)
+segment: escalate (substantive, no overlap, but recent) seg=lpk7e0aglbsrg99
+heard: 'the transfer station shuts at at four so the second run wants moving up' -> act (reschedule second run to before 4 PM)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)

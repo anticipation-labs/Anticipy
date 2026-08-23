@@ -1,0 +1,45 @@
+pb        http://127.0.0.1:8090
+owner_ref yabnd1w5gr32woa
+brain     worker: pid 16676,16677,16678,16679,16680,16681,16682,16683,16684,16685,16686,16687,16688,16689,16690,16691,16823,16825,16827,16828 up since 12:10:23, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62] !! amb-0009 want=ask    got=act         12.5s  "Somebody needs to chase the lab about Mr Okonkwo's bloods,"
+            goal: Chase lab about Mr. Okonkwo's bloods, sent to wrong practice
+[2/62] !! amb-0025 want=act    got=ignore       2.0s  'We are four copies short of the Steinbeck for Year Nine.'
+[3/62]    amb-0041 want=act    got=act         10.1s  'The TB test is due and I still have not rung the vet.'
+            goal: Call vet to schedule TB test
+[4/62]    amb-0057 want=act    got=act         14.2s  "Ellie's swimming subs are overdue again."
+            goal: pay Ellie's swimming subs
+[5/62]    amb-0073 want=act    got=act         14.4s  'The kitchen worktops are on a ten day lead and I promised '
+            goal: chase kitchen worktop order
+[6/62]    amb-0089 want=act    got=act         17.2s  'The temporary works design has not been signed by anyone c'
+            goal: get temporary works design signed by competent person
+[7/62]    amb-0105 want=act    got=act         27.9s  'We have nothing booked for the Christmas window display.'
+            goal: book Christmas window display designer
+[8/62]    amb-0121 want=act    got=act         43.3s  'The school trip deposit was due last Wednesday.'
+            goal: pay school trip deposit
+[9/62]    amb-0137 want=act    got=act         50.5s  'The dog is due his booster and the tick treatment ran out.'
+            goal: schedule vet appointment for dog's booster and tick treatment
+[10/62]    amb-0153 want=act    got=act         33.5s  'The court report has to be filed before the hearing and I '
+            goal: file court report
+[11/62]    amb-0169 want=act    got=act         42.4s  'The allergen matrix has not been updated since we changed '
+            goal: update allergen matrix for new supplier
+[12/62]    amb-0185 want=ignore got=ignore      15.9s  'How was the weekend, did you get away at all?'
+[13/62]    amb-0201 want=ignore got=ignore      16.9s  'It is the same every single year and nothing changes.'
+[14/62]    amb-0217 want=ignore got=ignore      23.2s  'Dear Mr Ellis, further to our conversation of the fourth, '
+[15/62]    amb-0233 want=ignore got=ignore      17.6s  'Do not worry about the shopping, I will pick it up on the '
+[16/62]    amb-0249 want=ignore got=ignore      40.2s  'Sorted the MOT this morning, all done.'
+[17/62]    amb-0265 want=ignore got=ignore      44.9s  'Have you seen my glasses anywhere?'
+[18/62]    amb-0281 want=ignore got=ignore      29.6s  'It is all in the shared calendar already.'
+[19/62]    amb-0314 want=ignore got=ignore     101.0s  'Marcus asked about the survey figures again.'
+[20/62]    amb-0315 want=act    got=act        102.1s  'I will have to get those over to him before the site meeti'
+            goal: send survey figures to Marcus before site meeting
+[21/62] !! per-0014 want=act    got=TIMEOUT    257.7s  "Nan's ninetieth is in three weeks and nobody has booked an"
+[22/62] per-0030 POST FAILED: timed out
+[23/62] per-0046 POST FAILED: timed out
+[24/62] per-0062 POST FAILED: timed out
+[25/62] !! per-0078 want=ignore got=TIMEOUT    246.6s  'Have you got the code for the parcel locker on your phone?'
+[26/62] per-0094 POST FAILED: timed out
+[27/62] !! per-0121 want=ignore got=TIMEOUT    251.6s  'Rent went out and it took me under again, honestly, every '
+
+THREE TIMEOUTS IN A ROW. The worker is not stamping anything — check /Users/josegaelcruzlopez/.anticipy-rig/brain.log. Stopping rather than filling the results file with silence that looks like data.

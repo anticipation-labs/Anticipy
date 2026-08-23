@@ -1,0 +1,14 @@
+pb        http://127.0.0.1:8090
+owner_ref aomv4722ccarzj5
+brain     worker: pid 13937,23494,23496,23499,23505,23508,23518,23581,23583,23584,23585 up since 20:51:24, newer than every file in brain/
+corpus    2 utterances, 0 already done, 2 to push
+pacing    gap=1.0s  timeout=240.0s  virtual convo gap=50.0s
+[1/2]    amb-0005 want=act    got=act         26.1s  'Oh no, the VAT return is due on the seventh and I have not'
+            goal: prepare card statements for VAT return due on the 7th
+[2/2]    amb-0011 want=act    got=act         29.7s  'My revalidation is due and I have not logged a single hour'
+            goal: set up CPD logging for upcoming revalidation
+
+pushed 2 in 1.0 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/smoke/voice-5.jsonl
+  act=2
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

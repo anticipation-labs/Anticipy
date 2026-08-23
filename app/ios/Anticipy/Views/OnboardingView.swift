@@ -2,7 +2,7 @@ import SwiftUI
 import Speech
 
 /// First-run walkthrough: welcome → how it works → may I listen → where to
-/// reach you → your browser.
+/// reach you.
 ///
 /// Two things used to be wrong at the shape level. The pendant was presented as
 /// the microphone, so a stranger with no hardware finished believing they
@@ -10,9 +10,28 @@ import Speech
 /// microphone was asked for by iOS with no explanation at all, so the first
 /// thing the app ever said to anyone was a system alert. The primer is here to
 /// stop that. Every step is still skippable; nothing blocks the app.
+///
+/// The browser used to be a fifth page here, and it was the one page nobody
+/// could finish on the phone in their hand. `design/day-zero.md:237-239` moved
+/// it out: "It is asked just-in-time, when an errand actually needs hands,
+/// which also returns the ~70-second budget and removes a step from what the
+/// audit called a six-step wall." The pairing ceremony lives in Settings,
+/// where it always did; Home offers it the first time an errand is actually
+/// parked for want of hands — see `HomeView.browserOfferCard`.
 struct OnboardingView: View {
     @EnvironmentObject var session: AnticipySession
-    @AppStorage("hasOnboarded") private var hasOnboarded = false
+    /// Called the instant the last step is cleared. The CALLER writes the
+    /// durable "this person has onboarded" flag and then plays the celebration
+    /// over Home — see AnticipyApp.
+    ///
+    /// This used to be a `hasOnboarded = true` at the tail of a ~2.4s animation
+    /// inside this view: the typewriter had to finish, call back, and a further
+    /// 1.4s sleep had to elapse before anything was written down. Anything that
+    /// interrupted those seconds — backgrounding the app, force-quitting, the
+    /// view being torn down — left the flag false, and the person did all five
+    /// steps again on the next launch with their name, email and number already
+    /// saved. Recording the fact and celebrating it are now two different jobs.
+    let onFinished: () -> Void
 
     @State private var step = 0
     /// The step we were on before the last change, so a *swipe* off the number
@@ -36,41 +55,32 @@ struct OnboardingView: View {
     // Microphone
     @State private var micAsked = false
 
-    // Browser agent
-    @State private var agentCode = ""
-    @State private var pairOutcome: AnticipySession.PairOutcome?
-    @State private var pairing = false
-
+    /// Four beats. The browser was a fifth until `design/day-zero.md:237-239`
+    /// took it out of first run; nothing here may exceed the ~70-second budget
+    /// in `CONSUMER-FEEL-DIRECTION-2026-08-03.md` §5.
     private enum Step {
         static let welcome = 0
         static let howItWorks = 1
         static let mic = 2
         static let phone = 3
-        static let browser = 4
-        static let count = 5
+        static let count = 4
     }
-
-    /// The last four seconds of the flow — the peak-end moment — used to be a
-    /// Bool flipping. This holds the celebration scene while she says goodbye.
-    @State private var finishing = false
 
     var body: some View {
         ZStack {
-            Theme.ink.ignoresSafeArea()
+            Theme.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                progressDots
+                progressTrack
                 TabView(selection: $step) {
                     welcome.tag(Step.welcome)
                     howItWorks.tag(Step.howItWorks)
                     micPrimer.tag(Step.mic)
                     yourNumber.tag(Step.phone)
-                    browserAgent.tag(Step.browser)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(Theme.springSlow, value: step)
                 footer
             }
-            if finishing { finale }
         }
         .grainOverlay()
         // Leaving the number step by ANY route — Continue, Skip, or a swipe —
@@ -85,58 +95,62 @@ struct OnboardingView: View {
         }
     }
 
-    /// The ending someone will describe to a friend: the mark, two rings
-    /// collapsing inward, a rising bloom, two haptics, one typed sentence,
-    /// and a dissolve into Home.
-    private var finale: some View {
-        ZStack {
-            Theme.ink.ignoresSafeArea()
-            Theme.bloom(0.24, radius: 300)
-            VStack(spacing: Theme.Space.roomy) {
-                ZStack {
-                    RadarRipple(inward: true)
-                    RadarRipple(inward: true, delay: 0.8)
-                    LogoMark(size: 132)
-                }
-                .frame(height: 190)
-                TypewriterText(text: "Give me a day. You'll see.",
-                               font: Theme.display(30),
-                               color: Theme.ivory) {
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 1_400_000_000)
-                        hasOnboarded = true
-                    }
-                }
-                .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 28)
-        }
-        .transition(.opacity)
-        .onAppear {
-            Haptics.pairing()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { Haptics.taskDone() }
-        }
-    }
 
-    private var progressDots: some View {
-        HStack(spacing: 8) {
-            ForEach(0 ..< Step.count, id: \.self) { i in
-                Capsule()
-                    // Steps still to come used to be drawn in Theme.stroke on
-                    // Theme.ink — 1.28:1, invisible — so the flow read as
-                    // endless. Theme.gray is 5.6:1 and quiet.
-                    .fill(i <= step ? Theme.champagne : Theme.gray)
-                    .frame(width: i == step ? 22 : 8, height: 6)
-                    .animation(Theme.spring, value: step)
-            }
+    /// What each beat is called, in step order. Short because the live one
+    /// renders on a single line beside its count on a 375pt phone.
+    private static let beatNames = ["Hello", "How I work", "May I listen?", "Where to reach you"]
+
+    /// Progress in one line: the beat you are on, and which of four it is.
+    ///
+    /// `design/day-zero.md:230-231` asked for "a rule list with a live marker,
+    /// not wizard dots", and this was four 2px rules laid on their side — the
+    /// live one in the accent, finished ones dimmer, still-to-come quiet, and
+    /// only the live beat's text at full strength. The golden bars are out of
+    /// the product now, and the COLOUR of those rules was the position, so the
+    /// position moved into type rather than leaving with them: the live beat
+    /// says its name at full strength, and its number sits beside it in the
+    /// quiet register counts belong in.
+    ///
+    /// Not four dimmed names in a row instead. The four of them are 46
+    /// characters; on a 375pt phone with 28pt gutters they only fit by
+    /// shrinking to illegible, and at accessibility sizes they would wrap and
+    /// shove the TabView down the screen — the same reason only the live beat
+    /// has ever said its name here.
+    private var progressTrack: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
+            Text(Self.beatNames[step])
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                // A clipped progress label is survivable at AX5; a wrapped one
+                // would shove the TabView down the screen on every step that
+                // has a long name.
+                .minimumScaleFactor(0.75)
+                // A new identity per beat, so the name still crossfades on the
+                // page turn the way it did when it belonged to a live rule.
+                .id(step)
+                .transition(.opacity)
+            Text("\(step + 1) of \(Step.count)")
+                .font(Theme.meta)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
+        .animation(Theme.spring, value: step)
+        .padding(.horizontal, 28)
         .padding(.top, 18)
         // Let the product introduce itself before it starts counting — the
-        // dots turned her introduction into step 1 of 5 of a wizard.
+        // track turned her introduction into step 1 of 4 of a wizard.
         .opacity(step == Step.welcome ? 0 : 1)
         .animation(Theme.springSlow, value: step)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Step \(step + 1) of \(Step.count)")
+        // "Step N of M" is what a screen-reader user needs to know; the beat
+        // name is what the live marker adds for everyone else, so it says
+        // both rather than trading one for the other.
+        .accessibilityLabel("Step \(step + 1) of \(Step.count), \(Self.beatNames[step])")
+        // An element drawn at zero opacity that still announces "Step 1 of 4"
+        // is a wizard for VoiceOver users only.
+        .accessibilityHidden(step == Step.welcome)
     }
 
     // MARK: - Footer
@@ -147,9 +161,9 @@ struct OnboardingView: View {
             if session.listener.isListening || session.micBlocked || micAsked { return "Continue" }
             return "Yes, start listening"
         case Step.phone:
-            return savingPhone ? "Saving…" : "Continue"
-        case Step.browser:
-            return session.agentPaired ? "Start living your day" : "I'll do this later"
+            // The last page, now the browser has left first run, so the button
+            // has to read like an ending instead of promising another page.
+            return savingPhone ? "Saving…" : "Start living your day"
         default:
             return "Continue"
         }
@@ -174,29 +188,32 @@ struct OnboardingView: View {
                     .id(primaryLabel)
                     .transition(.opacity)
                     .animation(Theme.spring, value: primaryLabel)
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 26)
-                    .padding(.vertical, 14)
-                    .background(Capsule().fill(Theme.champagne))
-                    .foregroundStyle(Theme.ink)
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.pressable)
+            .buttonStyle(.glass)
+            // No hand-rolled .opacity beside this: the style dims what is
+            // disabled, so every control in the app dims by the same amount.
             .disabled(savingPhone)
-            .opacity(savingPhone ? 0.6 : 1)
 
             if let skip = skipLabel {
                 Button {
-                    Haptics.tap()
-                    if step == Step.phone { phoneSkipped = true }
+                    // The number is the last page now, so "Skip for now" has
+                    // nowhere to advance to — it ends the walkthrough instead.
+                    // It still saves the name and email they DID type: the
+                    // onChange(of: step) hook that normally does that on the
+                    // way out cannot fire when the step never changes.
+                    if step == Step.phone {
+                        phoneSkipped = true
+                        savePhoneOnLeaving()
+                        onFinished()
+                        return
+                    }
                     withAnimation(Theme.spring) { step += 1 }
                 } label: {
                     Text(skip)
-                        .font(.callout)
-                        .foregroundStyle(Theme.sand)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.ghost)
             } else {
                 // The one control that must be the same object on every page
                 // was the one thing that moved: reserve the skip row's height
@@ -254,7 +271,9 @@ struct OnboardingView: View {
         if step < Step.count - 1 {
             withAnimation(Theme.spring) { step += 1 }
         } else {
-            withAnimation(Theme.springSlow) { finishing = true }
+            // The last step is cleared. Say so and let the caller write it
+            // down; nothing about the celebration can strand anyone now.
+            onFinished()
         }
     }
 
@@ -317,22 +336,22 @@ struct OnboardingView: View {
     @State private var welcomeStage = 0
 
     private static let welcomeLine =
-        "I'm Anticipy Claude Version. I listen, I remember what matters, and I quietly do the work."
+        "I'm Anticipy. I listen, I remember what matters, and I quietly do the work."
 
     private var welcome: some View {
         stepBody(spacing: 22) {
-            ZStack {
-                Theme.bloom(0.12, radius: 300)
-                LogoMark(size: 120)
-                    .scaleEffect(welcomeStage >= 1 ? 1 : 0.6)
-                    .opacity(welcomeStage >= 1 ? 1 : 0)
-                    .accessibilityHidden(true)
-            }
-            .frame(height: 130)
-            Text("Anticipy Claude Version")
+            // The mark alone. This is the screen the champagne haze was
+            // asked off three times: a full-screen wash behind a logo is
+            // wallpaper, and the product has no ambient gradient anywhere now.
+            LogoMark(size: 120)
+                .scaleEffect(welcomeStage >= 1 ? 1 : 0.6)
+                .opacity(welcomeStage >= 1 ? 1 : 0)
+                .accessibilityHidden(true)
+                .frame(height: 130)
+            Text("Anticipy")
                 .font(Theme.display(40))
                 .tracking(-1.0)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
                 .opacity(welcomeStage >= 2 ? 1 : 0)
                 .offset(y: welcomeStage >= 2 ? 0 : 10)
             // The real string, invisible, reserves the full height — so the
@@ -373,7 +392,7 @@ struct OnboardingView: View {
             Text("How it works")
                 .font(Theme.display(30))
                 .tracking(-0.5)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
             // Phone-first. The pendant used to be described as the thing that
             // hears you, in an app whose microphone is the phone's.
             stepCard(icon: "iphone", title: "I listen through your phone",
@@ -388,10 +407,10 @@ struct OnboardingView: View {
                      text: "I set things up in Chrome on your computer, using accounts you're already signed in to. I ask you here first. Nothing goes out until you say yes.")
                 .opacity(cardsShown >= 3 ? 1 : 0)
                 .offset(y: cardsShown >= 3 ? 0 : 14)
-            Text("If you ever have an Anticipy Claude Version pendant, you can pair it in Settings. You don't need one. Your phone is enough.")
+            Text("If you ever have an Anticipy pendant, you can pair it in Settings. You don't need one. Your phone is enough.")
                 .font(.system(size: 15))
                 .lineSpacing(2)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
                 .opacity(cardsShown >= 3 ? 1 : 0)
         }
         .task(id: step) {
@@ -427,43 +446,41 @@ struct OnboardingView: View {
     private var micPrimer: some View {
         stepBody(alignment: .leading, spacing: 16) {
             // The thing the page is about, sitting above the promises: the
-            // mark over a bloom, dim until permission lands.
-            ZStack {
-                Theme.bloom(0.14, radius: 260)
-                LogoMark(size: 88)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 110)
-            .opacity(session.listener.isListening ? 1.0 : 0.35)
-            .animation(Theme.springJoy, value: session.listener.isListening)
+            // mark alone, dim until permission lands. No haze under it —
+            // the ambient champagne is gone from the whole product.
+            LogoMark(size: 88)
+                .frame(maxWidth: .infinity)
+                .frame(height: 110)
+                .opacity(session.listener.isListening ? 1.0 : 0.35)
+                .animation(Theme.springJoy, value: session.listener.isListening)
 
             Text("May I listen?")
                 .font(Theme.display(30))
                 .tracking(-0.5)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
             Text("This is the whole product, so here's exactly what happens.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
 
             // Four promises as a rule list — speech-shaped, not form-shaped.
             // Four evenly spaced symbol-and-card rows is the most
             // recognisable AI-built layout there is, and this is where
             // someone decides whether to hand over their microphone.
-            promiseRule(title: "What's said near your phone becomes text",
+            promiseLine(title: "What's said near your phone becomes text",
                         text: "You, and the people talking with you. That's how I catch what you've promised and what you need.")
-            promiseRule(title: "I keep going in the background",
+            promiseLine(title: "I keep going in the background",
                         text: "Your phone can be in your pocket or on another app. I stay on until you stop me.")
-            promiseRule(title: keepsAudioOnDevice ? "The audio stays on this iPhone" : "This iPhone needs Apple to do the transcribing",
+            promiseLine(title: keepsAudioOnDevice ? "The audio stays on this iPhone" : "This iPhone needs Apple to do the transcribing",
                         text: keepsAudioOnDevice
                            ? "Only the text comes to me, because text is what I can act on."
                            : "So the audio goes to Apple, not to me. The text comes to me, because text is what I can act on.")
-            promiseRule(title: "You decide when I'm on",
+            promiseLine(title: "You decide when I'm on",
                         text: "I'm off until you tap. There's a switch on the home screen, and off means off.")
 
             if micPriming {
                 TypewriterText(text: "Two taps from iOS. Both of them are me.",
-                               font: .system(size: 15), color: Theme.sand)
+                               font: .system(size: 15), color: Theme.text2)
                     .transition(.opacity)
             }
 
@@ -472,55 +489,52 @@ struct OnboardingView: View {
                     BreathingDot(size: 8)
                     Text("I'm listening. Thank you.")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(Theme.champagne)
+                        .foregroundStyle(Theme.accent)
                 }
                 .transition(.scale.combined(with: .opacity))
             } else if session.micBlocked {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("iOS has my microphone switched off. I can't ask again from here. It's one tap in Settings, under Microphone and Speech Recognition.")
                         .font(.footnote)
-                        .foregroundStyle(Theme.sand)
+                        .foregroundStyle(Theme.text2)
+                    // Inside a card, so it is the card's action, not the
+                    // page's: ghost, and the page's own primary keeps being
+                    // the only glass CTA on screen.
                     Button {
                         Haptics.engage()
                         session.openSystemSettings()
                     } label: {
                         Label("Open Settings", systemImage: "gear")
-                            .font(.callout.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(Capsule().fill(Theme.surface))
-                            .foregroundStyle(Theme.ivory)
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.pressable)
+                    .buttonStyle(.ghost)
                 }
                 .anticipyCard()
             } else if !micPriming {
                 Text("When you say yes, iOS asks twice, once for speech, once for the microphone. Both are me.")
                     .font(.system(size: 15))
                     .lineSpacing(2)
-                    .foregroundStyle(Theme.sand)
+                    .foregroundStyle(Theme.text2)
             }
         }
         .animation(Theme.spring, value: session.listener.isListening)
     }
 
-    /// The rule-list register: a champagne edge, a title, her sentence.
-    /// No fill, no border, no icon column.
-    private func promiseRule(title: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Capsule()
-                .fill(Theme.champagne.opacity(0.35))
-                .frame(width: 2)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.ivory)
-                Text(text)
-                    .font(.system(size: 17))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.sand)
-            }
-            .fixedSize(horizontal: false, vertical: true)
+    /// The rule-list register, now without the rule: a title, her sentence,
+    /// and the space between one promise and the next. No fill, no border, no
+    /// icon column, and no champagne edge — that edge came out with every
+    /// other golden bar, and the indent it needed came out with it.
+    private func promiseLine(title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Theme.text)
+            Text(text)
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.text2)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Theme.Space.hair)
     }
@@ -536,24 +550,24 @@ struct OnboardingView: View {
             Text("Where should I reach you?")
                 .font(Theme.display(30))
                 .tracking(-0.5)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
                 .multilineTextAlignment(.center)
             Text("When something needs your word, I'll text you. The rest is what every booking form asks for, so I never have to guess it.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
-                .foregroundStyle(Theme.sand)
+                .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
             TextField("First name", text: $firstName)
                 .textContentType(.givenName)
                 .autocorrectionDisabled()
                 .font(.title3)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
                 .multilineTextAlignment(.center)
                 .padding(.vertical, 12)
                 .padding(.horizontal, 12)
                 .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                    .strokeBorder(Theme.stroke, lineWidth: 1))
+                    .strokeBorder(Theme.edge, lineWidth: 1))
                 .task { if firstName.isEmpty { firstName = session.ownerFirstName } }
                 .onChange(of: firstName) { _ in detailsSaved = false; phoneSaveFailed = false }
             TextField("you@example.com", text: $email)
@@ -562,27 +576,27 @@ struct OnboardingView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .font(.title3)
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
                 .multilineTextAlignment(.center)
                 .padding(.vertical, 12)
                 .padding(.horizontal, 12)
                 .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                    .strokeBorder(Theme.stroke, lineWidth: 1))
+                    .strokeBorder(Theme.edge, lineWidth: 1))
                 .task { if email.isEmpty { email = session.ownerEmail } }
                 .onChange(of: email) { _ in detailsSaved = false; phoneSaveFailed = false }
             TextField("+1 604 555 0123", text: $phone)
                 .keyboardType(.phonePad)
                 .textContentType(.telephoneNumber)
                 .font(.title3.monospacedDigit())
-                .foregroundStyle(Theme.ivory)
+                .foregroundStyle(Theme.text)
                 .multilineTextAlignment(.center)
                 .padding(.vertical, 12)
                 .padding(.horizontal, 12)
                 .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface))
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                        .strokeBorder(session.e164(phone) != nil ? Theme.champagne : Theme.stroke,
+                        .strokeBorder(session.e164(phone) != nil ? Theme.accent : Theme.edge,
                                       lineWidth: session.e164(phone) != nil ? 1.5 : 1)
                         .animation(Theme.spring, value: session.e164(phone) != nil)
                 )
@@ -595,34 +609,31 @@ struct OnboardingView: View {
             if phoneSaved {
                 Label("Saved. I'll text you there.", systemImage: "checkmark.circle.fill")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Theme.champagne)
+                    .foregroundStyle(Theme.accent)
             } else if !phone.isEmpty, session.e164(phone) != nil {
                 Label("That's you", systemImage: "checkmark.circle.fill")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Theme.champagne)
+                    .foregroundStyle(Theme.accent)
                     .transition(.scale.combined(with: .opacity))
                     .onAppear { Haptics.tap() }
             } else if !phone.isEmpty {
                 Text("That doesn't look like a full number yet.")
                     .font(.system(size: 15))
-                    .foregroundStyle(Theme.gray)
+                    .foregroundStyle(Theme.muted)
             }
             if phoneSaveFailed {
                 VStack(spacing: 10) {
                     Text("I couldn't save that just now. I need a connection to keep it. Everything you entered is still here.")
                         .font(.footnote)
-                        .foregroundStyle(Theme.sand)
+                        .foregroundStyle(Theme.text2)
                         .multilineTextAlignment(.center)
                     Button {
                         Task { await advance() }
                     } label: {
                         Text("Try again")
-                            .font(.callout.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(Capsule().fill(Theme.surface))
-                            .foregroundStyle(Theme.ivory)
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.pressable)
+                    .buttonStyle(.ghost)
                     .disabled(savingPhone)
                 }
                 .anticipyCard()
@@ -631,190 +642,16 @@ struct OnboardingView: View {
         .animation(Theme.spring, value: session.e164(phone) != nil)
     }
 
-    // MARK: - Browser agent
-
-    private var browserAgent: some View {
-        stepBody(alignment: .leading, spacing: 16) {
-            Text("Your hands on\nthe computer")
-                .font(Theme.display(30))
-                .tracking(-0.5)
-                .foregroundStyle(Theme.ivory)
-                .fixedSize(horizontal: false, vertical: true)
-            Text("I work inside your own Chrome, using the accounts you're already signed in to. I never ask for a password.")
-                .font(.system(size: 17))
-                .lineSpacing(3)
-                .foregroundStyle(Theme.ivory)
-            // The truth. This used to say Chrome "walks you through it", which
-            // set someone up for a developer sideload with no warning.
-            Text("It takes about two minutes, it has to happen on a computer, and there's one Chrome setting to flip. The guide shows you where.")
-                .font(.system(size: 15))
-                .lineSpacing(2)
-                .foregroundStyle(Theme.sand)
-
-            numbered(1, "On your computer, open the guide I send you")
-            numbered(2, "Follow it. You'll turn on one Chrome setting to add me")
-            numbered(3, "Type the 6-digit code it shows you, here")
-
-            if let setup = URL(string: session.backendURLString)?.appendingPathComponent("setup.html") {
-                ShareLink(item: setup) {
-                    Label("Send the guide to my computer", systemImage: "square.and.arrow.up")
-                        .font(.callout.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Capsule().fill(Theme.surface))
-                        .foregroundStyle(Theme.ivory)
-                }
-                .padding(.top, 2)
-            }
-
-            if session.agentPaired {
-                // Two devices finding each other is the one genuinely magical
-                // thing in this flow — it takes over the step instead of
-                // rendering smaller than the instructions above it.
-                VStack(spacing: Theme.Space.base) {
-                    ZStack {
-                        Theme.bloom(0.18, radius: 220)
-                        RadarRipple(inward: true)
-                        RadarRipple(inward: true, delay: 0.8)
-                        LogoMark(size: 104)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 170)
-                    TypewriterText(text: "Your browser is mine now. In a good way.",
-                                   font: .system(size: 17), color: Theme.ivory)
-                        .multilineTextAlignment(.center)
-                }
-                .anticipyCard()
-                .padding(.top, 4)
-                .transition(.scale(scale: 0.9).combined(with: .opacity))
-                .onAppear { Haptics.pairing() }
-            } else {
-                // The six-digit code is a ceremony, not a form: six boxes, a
-                // hidden field, and it pairs itself on the sixth digit.
-                codeBoxes
-                    .padding(.top, 4)
-                    // The red line used to stay on screen while they retyped.
-                    // Clear it the moment the code changes.
-                    .onChange(of: agentCode) { code in
-                        if pairOutcome != nil {
-                            withAnimation(Theme.spring) { pairOutcome = nil }
-                        }
-                        if code.count > 6 { agentCode = String(code.prefix(6)) }
-                        if agentCode.count == 6 { pair() }
-                        else if !code.isEmpty { Haptics.tap() }
-                    }
-
-                // A blip, a plane or hotel wifi used to be reported as a wrong
-                // code — so people retyped a code that was right all along.
-                switch pairOutcome {
-                case .noMatch:
-                    Text("That code didn't match. It's the six digits on the Anticipy Claude Version page in Chrome.")
-                        .font(.system(size: 15))
-                        .lineSpacing(2)
-                        .foregroundStyle(Theme.alarm)
-                        .onAppear { Haptics.warning() }
-                case .unreachable:
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("I can't reach Anticipy Claude Version right now, so I couldn't check that code. It's probably the connection, not you.")
-                            .font(.footnote)
-                            .foregroundStyle(Theme.sand)
-                        Button {
-                            pair()
-                        } label: {
-                            Text("Try again")
-                                .font(.callout.weight(.semibold))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .background(Capsule().fill(Theme.surface))
-                                .foregroundStyle(Theme.ivory)
-                        }
-                        .buttonStyle(.pressable)
-                        .disabled(pairing)
-                    }
-                    .anticipyCard()
-                case .paired, .none:
-                    EmptyView()
-                }
-            }
-        }
-    }
-
-    @MainActor
-    private func pair() {
-        guard agentCode.count == 6, !pairing else { return }
-        Haptics.engage()
-        Task {
-            pairing = true
-            let outcome = await session.pairAgent(code: agentCode)
-            pairing = false
-            withAnimation(Theme.spring) { pairOutcome = outcome }
-        }
-    }
-
-    @FocusState private var codeFocused: Bool
-
-    private var codeBoxes: some View {
-        ZStack {
-            // One hidden field holds the string; the boxes are the display.
-            TextField("", text: $agentCode)
-                .keyboardType(.numberPad)
-                .textContentType(.oneTimeCode)
-                .focused($codeFocused)
-                .opacity(0.02)
-                .frame(width: 1, height: 1)
-            HStack(spacing: Theme.Space.tight) {
-                ForEach(0 ..< 6, id: \.self) { i in
-                    let digits = Array(agentCode)
-                    let active = i == min(agentCode.count, 5) && !pairing
-                    Text(i < digits.count ? String(digits[i]) : "")
-                        .font(.system(size: 24, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Theme.ivory)
-                        .frame(width: 44, height: 54)
-                        .background(
-                            RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                                .fill(Theme.surface)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                                .strokeBorder(active ? Theme.champagne : Theme.stroke,
-                                              lineWidth: active ? 1.5 : 1)
-                        )
-                        .scaleEffect(active ? 1.06 : 1)
-                        .animation(Theme.spring, value: agentCode)
-                }
-                if pairing {
-                    BreathingDot(size: 8)
-                        .padding(.leading, Theme.Space.hair)
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { codeFocused = true }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func numbered(_ n: Int, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(n)")
-                .font(.callout.weight(.bold))
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(Theme.surface))
-                .foregroundStyle(Theme.champagne)
-            Text(text)
-                .font(.callout)
-                .foregroundStyle(Theme.ivory)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private func stepCard(icon: String, title: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.title3)
-                .foregroundStyle(Theme.champagne)
+                .foregroundStyle(Theme.accent)
                 .frame(width: 30)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(Theme.ivory)
-                Text(text).font(.footnote).foregroundStyle(Theme.gray)
+                Text(title).font(.body.weight(.semibold)).foregroundStyle(Theme.text)
+                Text(text).font(.footnote).foregroundStyle(Theme.muted)
             }
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -836,7 +673,7 @@ struct RadarRipple: View {
 
     var body: some View {
         Circle()
-            .stroke(Theme.champagne.opacity(0.5), lineWidth: 2)
+            .stroke(Theme.accent.opacity(0.5), lineWidth: 2)
             .frame(width: 130, height: 130)
             .scaleEffect(expand ? (inward ? 1.0 : 1.45) : (inward ? 1.45 : 1.0))
             .opacity(expand ? 0 : 0.8)

@@ -1,0 +1,32 @@
+pb        http://127.0.0.1:8090
+owner_ref scrhkcffjglfkbq
+brain     worker: pid 291,300,89298,89307,89315,89319,89324,89338,89344,89395,89403 up since 02:13:09, newer than every file in brain/
+corpus    14 utterances, 0 already done, 14 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/14]    amb-0078 want=act    got=act         10.3s  'The Charity Commission annual return is open and nobody ha'
+            goal: start Charity Commission annual return
+[2/14] !! amb-0142 want=ask    got=ignore       4.1s  'I want to move my pension somewhere sensible.'
+[3/14]    amb-0197 want=ignore got=ignore       4.0s  'Everything takes three emails now, everything.'
+[4/14]    amb-0257 want=ignore got=ignore       4.1s  'Mm hm.'
+[5/14]    amb-0293 want=act    got=act         10.1s  'It is due its service, it has been flashing at me for a fo'
+            goal: schedule vehicle service
+[6/14] !! amb-0294 want=act    got=ignore       7.1s  'And the front tyres are borderline as well.'
+            goal: schedule car service and tire replacement
+[7/14] !! per-0054 want=act    got=ignore       4.1s  'He needs a bank account for this job and I have no clue wh'
+[8/14]    fin-0070 want=ignore got=ignore       5.0s  'can you order the the ones for the the printer the'
+[9/14]    med-0043 want=act    got=act          8.1s  'The appraisal wants patient feedback and I have not sent a'
+            goal: send patient feedback questionnaires
+[10/14]    svc-0012 want=act    got=act         10.1s  'The grinder burrs are shot, the shots are pulling in eleve'
+            goal: order new grinder burrs
+[11/14] !! svc-0077 want=ask    got=ignore       5.0s  'The lambing shed lights want doing before we start, though'
+            goal: research LED lighting options for lambing shed
+[12/14]    tep-0039 want=act    got=act          7.1s  'The measured survey for the Halton warehouse has not been '
+            goal: issue measured survey for Halton warehouse
+[13/14] !! trd-0029 want=ask    got=ignore       4.0s  'The Croydon landlord wants a heat pump price and I do not '
+[14/14]    trd-0094 want=act    got=act          8.1s  'The route card for the school run diversion has never been'
+            goal: create and issue route card for school run diversion
+
+pushed 14 in 1.6 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abB/voice-1.jsonl
+  act=6  ignore=8
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

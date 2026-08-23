@@ -8,7 +8,7 @@
 // independent renderers racing each other. The old file had `checkConnection`
 // writing the status line on its own timeline while `refresh` wrote the panels
 // on another, so a running job could sit under the words "I can't reach
-// Anticipy Claude Version" and neither line knew about the other.
+// Anticipy" and neither line knew about the other.
 
 import { backendBase } from "./config.js";
 import { parseJobParams } from "./workflow_state.js";
@@ -183,8 +183,8 @@ function render(s) {
   let state;
   if (!s.registered) {
     state = reachable === false
-      ? "I can't reach Anticipy Claude Version from this browser, so this browser hasn't been given its code yet. I'll keep trying."
-      : "Introducing this browser to Anticipy Claude Version…";
+      ? "I can't reach Anticipy from this browser, so this browser hasn't been given its code yet. I'll keep trying."
+      : "Introducing this browser to Anticipy…";
   } else if (!s.linked) {
     state = "This browser isn't linked to your iPhone yet.";
   } else if (busy) {
@@ -194,7 +194,7 @@ function render(s) {
   } else if (status === "needs_user") {
     state = "I stopped part-way and I need you.";
   } else if (reachable === false) {
-    state = "Linked to your iPhone — but I can't reach Anticipy Claude Version from this browser right now.";
+    state = "Linked to your iPhone — but I can't reach Anticipy from this browser right now.";
   } else {
     state = "Linked, and watching for work.";
   }
@@ -213,7 +213,7 @@ function render(s) {
   hint(s.code
     ? "Click the code to copy it."
     : reachable === false
-      ? "Your code appears here the moment I can reach Anticipy Claude Version."
+      ? "Your code appears here the moment I can reach Anticipy."
       : "Getting your code…");
 
   // --- the job.
@@ -246,7 +246,9 @@ function render(s) {
     const result = String(job.result || "").trim();
     show("jobresult", !!result);
     if (result) say("jobresult", result);
-    el("jobresult").classList.toggle("warn", status === "failed");
+    // One class, one meaning: .bad is the failure colour. Both used to be set
+    // on the same condition because .warn drew the bar and .bad recoloured it;
+    // with the bar gone that is two rules racing for one line's colour.
     el("jobresult").classList.toggle("bad", status === "failed");
 
     show("why", status === "running" && !pending);
@@ -271,7 +273,7 @@ function render(s) {
     // "pairing can't finish" is a riddle.
     say("offline", s.linked
       ? "If you're online, that usually clears by itself in a minute. If you've pointed me at your own backend, check the address under Setup & advanced."
-      : "I can't reach Anticipy Claude Version from this browser, so pairing can't finish. If you've pointed me at your own backend, check the address under Setup & advanced.");
+      : "I can't reach Anticipy from this browser, so pairing can't finish. If you've pointed me at your own backend, check the address under Setup & advanced.");
   }
 }
 

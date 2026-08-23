@@ -1,0 +1,33 @@
+pb        http://127.0.0.1:8090
+owner_ref aomv4722ccarzj5
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759,65182,65244 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/4] !! amb-0005 want=act    got=ignore      22.4s  'Oh no, the VAT return is due on the seventh and I have not'
+            goal: gather credit card statements for upcoming VAT return
+pb        http://127.0.0.1:8090
+owner_ref aomv4722ccarzj5
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,32863,32948,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[2/4]    amb-0014 want=act    got=act         29.3s  'The bundle for the Prentice hearing has to be filed by fou'
+            goal: prepare Prentice hearing bundle due by 4:00 PM
+[1/4] !! amb-0005 want=act    got=ignore      12.4s  'Oh no, the VAT return is due on the seventh and I have not'
+            goal: gather card statements for the upcoming VAT return
+[3/4]    amb-0023 want=ignore got=ignore       8.1s  'Whoever wrote this test suite hated joy.'
+[2/4] !! amb-0014 want=act    got=ignore      14.1s  'The bundle for the Prentice hearing has to be filed by fou'
+[4/4] !! amb-0032 want=act    got=ignore      15.1s  'The Mitsubishi units for the Croydon install have not been'
+            goal: Check whether Mitsubishi units for Croydon install have been ordered
+
+pushed 4 in 1.3 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-5.jsonl
+  act=1  ignore=3
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[3/4]    amb-0023 want=ignore got=ignore      10.1s  'Whoever wrote this test suite hated joy.'
+[4/4] !! amb-0032 want=act    got=ignore      10.1s  'The Mitsubishi units for the Croydon install have not been'
+            goal: Check whether Mitsubishi units for Croydon install have been ordered
+
+pushed 4 in 0.8 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-5.jsonl
+  ignore=4
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

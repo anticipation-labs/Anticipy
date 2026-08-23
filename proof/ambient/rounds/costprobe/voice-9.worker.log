@@ -1,0 +1,27 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+consolidation: 28 episodes -> 1 new facts, 0 merged
+segment: new (gap 11235s >= 1200s) seg=zo5kn3zfv6rtp8p
+heard: "Somebody needs to chase the lab about Mr Okonkwo's bloods, I think they went to the wrong practice." -> act (Follow up with the lab regarding Mr Okonkwo's blood test results)
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: escalate (substantive, no overlap, but recent) seg=g4av1g0byxivic2
+heard: 'The revised drainage calcs still have not gone to the contractor and design freeze is Monday.' -> act (Draft email sending revised drainage calculations to contractor before Monday design freeze)
+segment: append (conversation still open) seg=g4av1g0byxivic2
+heard: "Somebody needs to chase the lab about Mr Okonkwo's bloods, I think they went to the wrong practice." -> ignore (draft follow-up to lab regarding Mr Okonkwo's bloods)
+segment: escalate (substantive, no overlap, but recent) seg=ev2l6bwb1hc9j1f
+heard: "I am going to run out of twenty two mil compression fittings before Thursday's job." -> act (source 22mm compression fittings before Thursday, August 27, 2026)
+segment: append (conversation still open) seg=ev2l6bwb1hc9j1f
+heard: 'The revised drainage calcs still have not gone to the contractor and design freeze is Monday.' -> ignore (draft email sending revised drainage calculations to the contractor before Monday design freeze)
+segment: link (anaphoric/short, still inside the near band) seg=gw7e40zqbev5euv
+heard: 'Third shoplifter this week.' -> ignore (no goal)
+segment: append (conversation still open) seg=gw7e40zqbev5euv
+heard: "I am going to run out of twenty two mil compression fittings before Thursday's job." -> act (Order 22mm compression fittings before Thursday's job)
+segment: link (shares a name with the previous conversation) seg=dmz1su0xp3w2jge
+heard: 'Third shoplifter this week.' -> ignore (no goal)

@@ -1,0 +1,36 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=f5068bf4e1d3
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+clock: reminder has no owner-authored task — dropping model goal 'plan for kitchen worktop fitting'
+clock: initiated -> "Just a quick check on the kitchen worktops – we're nearing the end of the month. Do we have a fitting date yet?"
+segment: new (gap 26247s >= 1200s) seg=501l3ignqbr1vms
+heard: 'I cannot do the Dover run until the trailer has had its brake test.' -> ignore (schedule brake test for trailer)
+segment: escalate (substantive, no overlap, but recent) seg=nh9fx1ragm4rdvl
+heard: 'I would love to get away for a weekend but I have no idea what is affordable.' -> ignore (research affordable weekend getaways)
+not amending g204leyvglzqniz: already queued — his approval closed this card to edits: 'check passport expiry dates for children'
+segment: escalate (substantive, no overlap, but recent) seg=51bg1xu4jbdkda6
+heard: "Both the kids' passports run out before the summer." -> ignore (check passport expiry dates for children)
+segment: escalate (substantive, no overlap, but recent) seg=rghem16ldrdhrpv
+heard: 'Statistically one of these meetings has to be useful.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=i09n5lhnl25hbtz
+heard: 'Honestly it is fine, I will sort the tickets out tonight.' -> ignore (no goal)
+not amending awjnc48mx3d4p7y: already queued — his approval closed this card to edits: 'check Universal Credit journal for message'
+segment: escalate (substantive, no overlap, but recent) seg=1782wk8ef2wytcu
+heard: 'There is a message sat on my universal credit journal and I keep swiping it away.' -> ignore (check Universal Credit journal for message)
+segment: escalate (substantive, no overlap, but recent) seg=xoysyeop77hewtz
+heard: 'I said I would send Bea the maternity policy and it is still sitting in my drafts.' -> ignore (Send maternity policy to Bea)
+segment: escalate (substantive, no overlap, but recent) seg=xtplkf3mz8kl9b8
+heard: 'The indemnity cover needs extending to online sessions and I am not sure how many hours a week I am doing remotely now.' -> ignore (research current remote work hours for indemnity cover extension)
+segment: link (shares a name with the previous conversation) seg=02sha6h0z41i9ny
+heard: 'The gas certificate for the range is on the wall from two years ago and I know full well that is out.' -> act (Arrange gas certificate renewal for range)
+segment: link (shares a name with the previous conversation) seg=j7cucxgb44fr0x0
+heard: 'The allergen labels are sorted, I ran the whole new set off on Tuesday.' -> ignore (Get current gas certificate for the range)
+segment: link (shares a name with the previous conversation) seg=dzofyyrssmrwd86
+heard: 'The machine shop has fitted the guards back to front on every single unit.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=cd9tqjna1xph081
+heard: 'The condenser is on the wagon already, it is all moving.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=h1azxea5r89dl14
+heard: 'I should get the plate moved onto the new car, though I have not decided whether to keep the old one on the road.' -> ignore (no goal)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)

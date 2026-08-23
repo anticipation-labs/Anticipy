@@ -1,0 +1,103 @@
+pb        http://127.0.0.1:8090
+owner_ref nm28bp0p7dj06ot
+brain     worker: pid 86842,86845,86850,86854,86856,86860,86862,86865,86866,86867,86868,86869,86870,86871,86872,86873,86940,86949 up since 10:37:55, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62] !! amb-0010 want=act    got=ignore       8.0s  'The appraisal portfolio deadline is creeping up on me agai'
+[2/62]    amb-0026 want=ignore got=ignore       7.2s  'Half of them did not even open the booklet.'
+[3/62]    amb-0042 want=ignore got=ignore      85.8s  'Rain is not letting up at all.'
+[4/62]    amb-0058 want=ignore got=ignore       5.1s  'He has been on that tablet for three hours.'
+[5/62]    amb-0074 want=act    got=act         19.6s  'The case review write up was due yesterday and I have not '
+            goal: draft case review write-up
+[6/62]    amb-0090 want=act    got=act         22.4s  'We cannot pour at the weekend without the road closure per'
+            goal: obtain road closure permit for weekend pour
+[7/62] !! amb-0106 want=act    got=ignore       6.2s  'My Driver CPC hours are seven short and the cutoff is Sept'
+            goal: find Driver CPC courses to cover 7 hours before September 1, 2026
+[8/62] !! amb-0122 want=act    got=ignore       5.1s  'We have not booked anything for half term and everything w'
+            goal: research half-term activities and availability
+[9/62]    amb-0138 want=act    got=act         11.6s  'We said we would send Nan photos and it has been months.'
+            goal: send photos to Nan
+[10/62] !! amb-0154 want=act    got=ignore       9.8s  'My supervision has not happened for three months.'
+            goal: Send Nan photos
+[11/62]    amb-0170 want=act    got=act          9.6s  'My SIA licence expires in three months and the renewal tak'
+            goal: renew SIA licence
+[12/62]    amb-0186 want=ignore got=ignore       5.6s  'Nice one, see you later.'
+[13/62]    amb-0202 want=ignore got=ignore       5.1s  'I have had about four hours sleep.'
+[14/62]    amb-0218 want=ignore got=ignore       4.1s  'New paragraph. The following items require sign off before'
+[15/62]    amb-0234 want=ignore got=ignore       5.4s  'I will photocopy the worksheets for you before first perio'
+[16/62]    amb-0250 want=ignore got=ignore       4.1s  'I raised the purchase order for the couplings last week.'
+[17/62]    amb-0266 want=ignore got=ignore       6.2s  'What time did they say they were coming?'
+[18/62]    amb-0282 want=ignore got=ignore       4.1s  'The invoice went out with the others on the batch run.'
+[19/62]    amb-0319 want=ignore got=ignore       9.3s  'I was going to ring them about the.'
+[20/62]    amb-0320 want=ignore got=ignore       6.3s  'No, it does not matter, it will keep.'
+[21/62] !! per-0015 want=act    got=ignore       7.7s  'There is a parcel sat in a locker somewhere and the code e'
+            goal: Find parcel locker code expiry and location
+[22/62] !! per-0031 want=act    got=ignore       6.3s  'The school photo order closes tonight and I have lost the '
+            goal: Find school photo order code
+[23/62]    per-0047 want=act    got=act         44.2s  'I should get the bike serviced before the lighter mornings'
+            goal: Schedule bike service for Alex; brakes singing
+[24/62] !! per-0063 want=ask    got=ignore     235.0s  'I will sort the flights, only I cannot remember now if we '
+[25/62]    per-0079 want=ignore got=ignore     139.9s  'What time did they say the appointment was, half three was'
+[26/62]    per-0095 want=ignore got=ignore      11.7s  'Passport is with them, the tracking said it left Peterboro'
+[27/62]    fin-0008 want=ignore got=ignore      15.0s  'The year end journals went in Tuesday, all reconciled, all'
+[28/62]    fin-0024 want=ignore got=ignore      10.9s  'Payroll week eats three days of my life and nobody in this'
+[29/62] !! fin-0040 want=ask    got=ignore       5.3s  'I want the gutters cleared before winter but I cannot reme'
+            goal: Find out which block of gutters was cleared last year
+[30/62]    fin-0056 want=ignore got=ignore       5.2s  'Net 30 apparently means sixty days if you are big enough.'
+[31/62]    fin-0072 want=act    got=act         12.3s  'His flight lands at six and there is no car booked for the'
+            goal: Book airport car for Alex's 6 PM flight arrival
+[32/62] !! fin-0088 want=ask    got=ignore       5.1s  'The volunteer cover needs renewing and I do not know if th'
+            goal: Research if minibus drivers are covered under volunteer insurance renewal
+[33/62]    fin-0089 want=ignore got=ignore       6.0s  'The BAS.'
+[34/62]    fin-0090 want=ignore got=ignore       4.0s  'It is the twenty eighth this quarter, not the twenty first'
+[35/62]    fin-0091 want=act    got=act          8.2s  'And the card feed has not reconciled since Easter.'
+            goal: Reconcile card feed
+[36/62]    fin-0092 want=act    got=act          9.3s  'The GST on the vehicle purchase needs splitting out as wel'
+            goal: split out GST on vehicle purchase
+[37/62]    med-0026 want=act    got=act          9.5s  'My HCPC renewal window opens next month and the CPD audit '
+            goal: prepare for HCPC renewal and CPD audit sample in September 2026
+[38/62]    med-0042 want=act    got=act         11.6s  'The consent leaflets on the laparoscopic list are the old '
+            goal: replace consent leaflets on laparoscopic list with new version
+[39/62]    med-0058 want=act    got=act          8.1s  'The community mileage claims have not gone in since April '
+            goal: submit community mileage claims for April to end of financial year
+[40/62]    med-0078 want=act    got=act         11.8s  'The seal supplier never sent the replacement embosser.'
+            goal: follow up with seal supplier about replacement embosser
+[41/62]    med-0097 want=act    got=act         11.6s  'The stamp duty return has to be filed within fourteen days'
+            goal: file stamp duty return for August 2, 2026
+[42/62]    svc-0003 want=ignore got=ignore       4.1s  'That EPOS update has moved every single button round for n'
+[43/62]    svc-0019 want=act    got=act          8.1s  'The insect screens for the marquee were meant to be on the'
+            goal: Add insect screens for marquee to hire list
+[44/62]    svc-0035 want=ignore got=ignore       4.0s  'Right. Sure. Yep, no.'
+[45/62]    svc-0051 want=ignore got=ignore       3.1s  'Is he alright with the drier or does he want hand drying l'
+[46/62]    svc-0067 want=ignore got=ignore       3.0s  'Do not chase the sharps collection, Row has already set th'
+[47/62] !! svc-0083 want=ask    got=ignore       4.0s  'I want her lifted for antifouling, I have just not worked '
+[48/62]    tep-0007 want=act    got=act          9.1s  'The rebuild is running now, but I still have not told fina'
+            goal: email finance about portal downtime until 3 PM
+[49/62]    tep-0023 want=act    got=act         11.1s  'The structural calcs for the transfer beam have to reach b'
+            goal: send structural calculations for transfer beam to building control
+[50/62]    tep-0039 want=act    got=act          8.1s  'The measured survey for the Halton warehouse has not been '
+            goal: issue measured survey for Halton warehouse
+[51/62] !! tep-0055 want=ignore got=act         26.8s  'I was going to move the annual review to the Tuesday, no, '
+            goal: cancel move annual review
+[52/62]    tep-0071 want=ignore got=ignore       4.1s  'Twenty two cases and they have given me a student to super'
+[53/62]    tep-0087 want=ignore got=ignore       4.0s  'I will put a marker on the address, actually no, leave it,'
+[54/62]    trd-0005 want=ignore got=ignore       4.1s  'Dover Thursday.'
+[55/62]    trd-0006 want=ignore got=ignore       4.1s  'Are you running that one or is Pav.'
+[56/62]    trd-0007 want=act    got=act          9.4s  'I cannot take it, that trailer has had no brake test and i'
+            goal: schedule brake test for trailer before August 14, 2026
+[57/62]    trd-0008 want=ignore got=ignore       9.1s  'Leave it, I will put Pav on Dover and get the trailer book'
+            goal: Schedule Pav to work on Dover. Book trailer into test lane.
+[58/62]    trd-0033 want=ignore got=ignore       4.1s  'Already dropped the ironmongery schedule over to them, did'
+[59/62]    trd-0049 want=act    got=act          8.1s  'The waste transfer notes for the green waste have not been'
+            goal: file waste transfer notes for green waste since May
+[60/62]    trd-0065 want=act    got=act         12.6s  'I never sent the client the manifestation drawing and it h'
+            goal: send manifestation drawing to client
+[61/62]    trd-0081 want=act    got=act         11.3s  'The racking inspection is meant to be annual and the last '
+            goal: schedule racking inspection
+[62/62]    trd-0097 want=act    got=act         17.5s  'My PTS competence lapses next month and the assessor days '
+            goal: schedule PTS competence assessment before September 2026
+
+pushed 62 in 18.0 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k1/voice-4.jsonl
+  act=23  ignore=39
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

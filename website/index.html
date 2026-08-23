@@ -5,95 +5,297 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anticipy — the assistant that already did it</title>
 <meta name="description" content="Anticipy listens to your day, remembers what matters, and does the follow-through in your own browser — after you say yes.">
+<!-- Light or dark, decided before the first frame. Inline and blocking on
+     purpose: this page is one file with no assets, and a deferred script would
+     paint the default palette first and the chosen one a frame later.
+
+     LIGHT IS THE DEFAULT and prefers-color-scheme is deliberately not
+     consulted — the first impression of the product must be the same for
+     everyone, not a different one for whoever runs their Mac dark. Dark is one
+     click away and remembered. The extension's two surfaces and the hosted
+     setup page carry the same key and the same rule (extension/theme.js,
+     backend/pb_public/theme.js). -->
+<script>
+(function () {
+  var KEY = "anticipy.theme";
+  var root = document.documentElement;
+  function stored() {
+    try { return window.localStorage.getItem(KEY); } catch (e) { return null; }
+  }
+  // Anything that is not the string "dark" is light, so a corrupted value can
+  // only ever fail toward the default.
+  function apply(t) { root.setAttribute("data-theme", t === "dark" ? "dark" : "light"); }
+  function label(b) {
+    b.setAttribute("aria-label", root.getAttribute("data-theme") === "dark"
+      ? "Switch to light mode" : "Switch to dark mode");
+  }
+  apply(stored());
+  document.addEventListener("DOMContentLoaded", function () {
+    var buttons = document.querySelectorAll("[data-theme-toggle]");
+    for (var i = 0; i < buttons.length; i++) {
+      label(buttons[i]);
+      buttons[i].addEventListener("click", function (e) {
+        var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        apply(next);
+        try { window.localStorage.setItem(KEY, next); } catch (err) {}
+        label(e.currentTarget);
+      });
+    }
+  });
+})();
+</script>
 <style>
-  /* The one Anticipy palette. Same values as app/ios/Anticipy/Theme.swift and
-     the hosted setup page, so the product looks like one thing everywhere. */
-  :root { --ink:#0C0C0C; --surface:#161616; --card:#1E1E1E; --stroke:#252525;
-          --ivory:#F5F0EB; --sand:#D4CEC7; --gray:#8A8A8A; --champagne:#C8A97E;
-          --serif: Georgia, "Times New Roman", serif;
-          --sans: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  /* TWO PALETTES, ONE SET OF ROLES. Every rule below reads a ROLE (--bg,
+     --text, --accent), never a colour, so a theme is a value swap rather than a
+     second stylesheet.
+
+     The dark palette is the app's, token for token
+     (app/ios/Anticipy/Theme.swift). Light has no counterpart in the app, so it
+     is a WHITE page with near-black letters, and it DARKENS the accent,
+     because champagne #c8a97e measures 2.23:1 on white. In light mode champagne
+     is a fill, never a letter.
+
+     These are the same values the extension's surfaces and the hosted pages
+     carry; test_theme_contract.mjs fails if the three copies drift. */
+  :root {
+    color-scheme: light;
+    --bg: #ffffff; --surface: #f2f2f0; --card: #ffffff; --raised: #ffffff;
+    --edge: rgba(17, 17, 17, 0.14); --edge-lit: rgba(17, 17, 17, 0.20);
+    --text: #111111; --text-2: #4d4d4d; --text-3: #6b6b6b; --muted: #8e8e8e;
+    --accent: #7c5729; --alarm: #a03d28;
+    --accent-dim: #c8a97e;
+    --shadow-near: rgba(17, 17, 17, 0.07); --shadow-far: rgba(17, 17, 17, 0.11);
+    /* THE GLASS CONTROL'S MATERIAL, measured off the owner's Liquid Glass
+       component (Glass CTA for --glass-*, Nav Link for --ghost-*). It is a
+       MATERIAL and not a colour, so it is theme-dependent: the component
+       ships near-black metal, and #26262a on the dark palette's #000000
+       ground is a button-shaped hole. Light keeps the component's own values
+       verbatim; dark inverts below. The one-unit gap between --glass-top
+       #26262a and --glass-top-hi rgba(37,37,41,.85) is the component's own. */
+    --glass-top: #26262a; --glass-bottom: #08080a;
+    --glass-rim: rgba(255, 255, 255, 0.28); --glass-under: rgba(0, 0, 0, 0.50);
+    --glass-cast: rgba(0, 0, 0, 0.38); --glass-label: #ffffff;
+    --glass-top-hi: rgba(37, 37, 41, 0.85); --glass-bottom-hi: rgba(8, 8, 10, 0.85);
+    --glass-rim-hi: rgba(255, 255, 255, 0.45); --glass-cast-hi: rgba(0, 0, 0, 0.58);
+    --ghost-fill: rgba(255, 255, 255, 0.40); --ghost-rim: rgba(255, 255, 255, 0.85);
+    --ghost-cast: rgba(148, 160, 181, 0.45); --ghost-glow: rgba(255, 255, 255, 0.50);
+    --ghost-label: rgba(20, 20, 25, 0.55); --ghost-label-hi: #0a0a0c;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #000000; --surface: #0d0d0d; --card: #141414; --raised: #1c1c1c;
+    --edge: rgba(255, 255, 255, 0.11); --edge-lit: rgba(255, 255, 255, 0.16);
+    --text: #f5f0eb; --text-2: #d4cec7; --text-3: #d4cec7; --muted: #8a8a8a;
+    --accent: #c8a97e; --alarm: #c96a5a;
+    --accent-dim: rgba(200, 169, 126, 0.45);
+    --shadow-near: rgba(0, 0, 0, 0.70); --shadow-far: rgba(0, 0, 0, 0.50);
+    /* The same material inverted to light metal, from the navbar shell's own
+       5-stop ramp: #ffffff 0%, #e4e4e4 4.5%, #969696 50%, #e4e4e4 95.5%,
+       #ffffff 100%. The pure-white stops at 0% and 100% ARE the rim
+       highlights, so the ramp decomposes into rim + fill + rim and needs no
+       token beyond the ones named here. --glass-cast inverts to a white halo
+       because a black drop shadow is invisible on #000000. */
+    --glass-top: #e4e4e4; --glass-bottom: #969696;
+    --glass-rim: rgba(255, 255, 255, 0.95); --glass-under: rgba(255, 255, 255, 0.55);
+    --glass-cast: rgba(255, 255, 255, 0.18); --glass-label: #08080a;
+    --glass-top-hi: rgba(255, 255, 255, 0.92); --glass-bottom-hi: rgba(168, 168, 168, 0.92);
+    --glass-rim-hi: #ffffff; --glass-cast-hi: rgba(255, 255, 255, 0.30);
+    --ghost-fill: rgba(255, 255, 255, 0.10); --ghost-rim: rgba(255, 255, 255, 0.38);
+    --ghost-cast: rgba(148, 160, 181, 0.28); --ghost-glow: rgba(255, 255, 255, 0.18);
+    --ghost-label: rgba(245, 240, 235, 0.55); --ghost-label-hi: #f5f0eb;
+  }
+  :root {
+    /* Champagne stays theme-invariant because #c8a97e carries #000000 at
+       9.0:1 either way. Nothing on this page fills with it any more — the
+       buttons are glass — but it is a CORE token every surface must declare
+       (test_theme_contract PASS 5), and it is what the app fills with. */
+    --fill: #c8a97e; --on-fill: #000000;
+    /* The sweep that crosses a control on hover. White in both themes: it
+       travels over near-black glass in one and over the metal's #969696
+       middle in the other, and reads on both. */
+    --shine: rgba(255, 255, 255, 0.70);
+    /* Theme.spring (response .35, damping .8) has no overshoot you can see,
+       so its CSS twin is a hard ease-out, never a bounce. */
+    --spring: 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    /* ui-serif is how the web reaches New York — the app's actual headline
+       face. Georgia stays as the non-Apple fallback. */
+    --display: ui-serif, "New York", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
   * { margin:0; padding:0; box-sizing:border-box; }
   html { scroll-behavior:smooth; }
-  body { background:var(--ink); color:var(--ivory);
-         font:16px/1.6 var(--sans); overflow-x:hidden; }
+  body { background:var(--bg); color:var(--text);
+         font:16px/1.6 var(--sans); overflow-x:hidden;
+         -webkit-font-smoothing:antialiased; }
   .wrap { max-width:760px; margin:0 auto; padding:0 20px; }
 
-  a { color:var(--champagne); }
-  :focus-visible { outline:2px solid var(--ivory); outline-offset:3px;
+  /* A link inside a sentence is the one control that does NOT get the pill:
+     10px 15px of padding around a word mid-paragraph forces the line box open
+     and the paragraph stops being one. Prose links keep their underline and
+     borrow the ghost's LABEL colours only — and the rest state is the LIT
+     label, because rgba(20,20,25,0.55) measures 3.2:1 on white, which is a
+     nav-bar colour and not a colour a sentence may be set in. */
+  a { color:var(--ghost-label-hi); text-decoration-color:var(--ghost-label);
+      text-underline-offset:3px; }
+  a:hover { text-decoration-color:var(--ghost-label-hi); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:3px;
                    border-radius:4px; }
 
-  /* ---- the mark: an ivory pill with a champagne dot, same as everywhere ---- */
+  /* ---- masthead ---- */
   nav { display:flex; align-items:center; justify-content:space-between;
-        gap:16px; flex-wrap:wrap; padding:26px 0; }
+        gap:20px; padding:26px 0; }
   .logo { display:flex; align-items:center; gap:11px; }
-  .pill { width:15px; height:36px; border:2px solid var(--ivory);
-          border-radius:8px; position:relative; flex:none; }
+  .navright { display:flex; align-items:center; gap:22px; }
+  /* The pendant mark, in role colours: an ivory outline is an invisible logo
+     on paper. */
+  .pill { width:16px; height:38px; border:2.5px solid var(--text);
+          border-radius:9px; position:relative; flex:none; }
   .pill::after { content:""; position:absolute; left:50%; top:60%;
                  transform:translateX(-50%); width:5px; height:5px;
-                 border-radius:50%; background:var(--champagne); }
-  .wordmark { font-family:var(--serif); font-size:23px; }
-  nav .links a { color:var(--gray); text-decoration:none; margin-left:22px;
-                 font-size:14px; }
-  nav .links a:hover { color:var(--ivory); }
+                 border-radius:50%; background:var(--accent); }
+  .wordmark { font-family:var(--display); font-size:23px; }
+  /* The nav links ARE the component's Nav Link, the same as .btn.ghost below:
+     inline-flex pills, so the hover fill has a box to land in. The 22px
+     margin drops to 8px because the pill now carries 15px of its own air on
+     each side. */
+  nav .links a { display:inline-flex; align-items:center; margin-left:8px;
+                 border-radius:999px; text-decoration:none; }
 
-  /* ---- type ---- */
-  h1 { font-family:var(--serif); font-weight:400; letter-spacing:0;
+  /* The theme control: the quietest thing on the page, because it is the one
+     control here that is not the point of the page. */
+  .themetoggle {
+    display:inline-flex; align-items:center; flex:none;
+    padding:6px 12px; border-radius:999px;
+    border:1px solid var(--edge); background:var(--surface);
+    color:var(--text-3); font-family:var(--sans); font-size:12px;
+    font-weight:600; letter-spacing:.4px; cursor:pointer;
+    transition:color .2s, border-color .2s;
+  }
+  .themetoggle:hover { color:var(--text); border-color:var(--accent); }
+  .themetoggle span { display:inline-flex; align-items:center; gap:7px; }
+  .themetoggle svg { width:14px; height:14px; flex:none; }
+  .themetoggle .ondark, :root[data-theme="dark"] .themetoggle .onlight { display:none; }
+  :root[data-theme="dark"] .themetoggle .ondark { display:inline-flex; }
+
+  /* ---- hero ---- */
+  .hero { padding:26px 0 8px; }
+  h1 { font-family:var(--display); font-weight:400; letter-spacing:-1px;
        font-size:clamp(34px, 6vw, 54px); line-height:1.12; }
-  h1 em { font-style:normal; color:var(--champagne); }
-  h2 { font-family:var(--serif); font-weight:400; font-size:28px;
+  h1 em { font-style:normal; color:var(--accent); }
+  h2 { font-family:var(--display); font-weight:400; font-size:28px;
        margin-bottom:8px; }
-  h3 { font-family:var(--serif); font-weight:400; font-size:19px;
-       margin:8px 0 6px; }
-  .sub { color:var(--gray); font-size:18px; max-width:52ch; }
-  .lead { color:var(--gray); max-width:56ch; }
-  .note { color:var(--gray); font-size:14px; }
+  h3 { font-family:var(--display); font-weight:400; font-size:19px;
+       margin:6px 0 6px; }
+  .sub { font-size:18px; color:var(--text-2); margin-top:16px; max-width:56ch; }
+  .lead { color:var(--text-2); max-width:60ch; }
+  .note { color:var(--text-3); font-size:14px; }
+  section { margin-top:72px; }
 
-  .hero { padding:70px 0 44px; }
-  .hero .sub { margin-top:18px; }
-  .cta { margin-top:30px; display:flex; gap:12px; flex-wrap:wrap; }
-  .btn { display:inline-block; font:inherit; font-weight:600;
-         padding:13px 26px; border-radius:999px; text-decoration:none;
-         background:var(--champagne); color:var(--ink); border:0;
-         cursor:pointer; }
-  .btn.ghost { background:transparent; color:var(--ivory);
-               border:1px solid var(--stroke); }
-  .btn.ghost:hover { border-color:var(--champagne); }
+  .cta { display:flex; flex-wrap:wrap; gap:12px; margin-top:26px; }
+  /* THE CONTROLS ARE THE OWNER'S LIQUID GLASS COMPONENT, rebuilt INLINE. This
+     page is deliberately one file with no assets — it is standalone marketing
+     and does not share backend/pb_public/site.css, which lives in another
+     deployment — so it carries its own copy of the material exactly the way
+     it already carries its own copy of the palette. PASS 5 of
+     extension/tests/test_theme_contract.mjs is what keeps the copies honest.
+
+     Four layers are what make glass read as one object: a vertical fill, an
+     inset rim along the top edge (the light above it), an inset floor along
+     the bottom (its thickness), and a cast underneath. The fifth is the sweep
+     below, and `overflow:clip` is what keeps it in the pill. */
+  .btn { display:inline-flex; align-items:center; justify-content:center;
+         position:relative; overflow:clip;
+         padding:11px 24px; border:0; border-radius:999px;
+         background:linear-gradient(180deg, var(--glass-top) 0%, var(--glass-bottom) 100%);
+         box-shadow:inset 0 1px 0 var(--glass-rim),
+                    inset 0 -1px 1px var(--glass-under),
+                    0 7px 16px -6px var(--glass-cast);
+         color:var(--glass-label); font-family:var(--sans); font-size:14px;
+         font-weight:600; letter-spacing:.01em; line-height:1;
+         text-decoration:none; cursor:pointer;
+         transition:background var(--spring), box-shadow var(--spring),
+                    transform var(--spring); }
+  /* The shine: a 70x90 band rotated 20deg, parked a full width off the left
+     edge at rest and driven off the right one on hover, on the component's own
+     0.8s ease. `left` is animated rather than a transform because the travel
+     is measured from the pill's own edges and these pills are not one width. */
+  .btn::before { content:""; position:absolute; pointer-events:none;
+                 top:-20px; left:-70px; width:70px; height:90px;
+                 transform:rotate(20deg); opacity:0;
+                 background:linear-gradient(90deg, transparent 0%, var(--shine) 50%, transparent 100%);
+                 transition:left .8s cubic-bezier(.25,.1,.25,1),
+                            opacity .8s cubic-bezier(.25,.1,.25,1); }
+  .btn:hover { background:linear-gradient(180deg, var(--glass-top-hi) 0%, var(--glass-bottom-hi) 100%);
+               box-shadow:inset 0 1px 0 var(--glass-rim-hi),
+                          inset 0 -1px 1px var(--glass-under),
+                          0 12px 24px -6px var(--glass-cast-hi); }
+  .btn:hover::before { opacity:1; left:calc(100% + 70px); }
+  /* The press, from the navbar's whileTap: 0.9 is a lot of travel for a
+     control this size, which is the point — it is the whole acknowledgement a
+     click gets. */
+  .btn:active { transform:scale(.9); }
+
+  /* The secondary control is the Nav Link: the same glass with nothing in it
+     until you point at it. Its three shadows are declared `transparent` rather
+     than omitted, because box-shadow cannot interpolate between `none` and a
+     list — omit them and the rim and the glow snap in instead of arriving. */
+  .btn.ghost, nav .links a {
+    padding:10px 15px; background:transparent; color:var(--ghost-label);
+    font-family:var(--sans); font-size:14px; font-weight:500;
+    letter-spacing:.01em; line-height:1;
+    box-shadow:inset 0 1px 0 transparent,
+               0 8px 20px -6px transparent,
+               -4px -4px 12px transparent;
+    transition:background var(--spring), box-shadow var(--spring),
+               color var(--spring); }
+  /* No sweep on the secondary: the component's Nav Link has none, and a shine
+     on a transparent control has nothing to travel across. */
+  .btn.ghost::before { display:none; }
+  .btn.ghost:hover, nav .links a:hover {
+    background:var(--ghost-fill); color:var(--ghost-label-hi);
+    box-shadow:inset 0 1px 0 var(--ghost-rim),
+               0 8px 20px -6px var(--ghost-cast),
+               -4px -4px 12px var(--ghost-glow); }
 
   /* ---- the conversation strip ---- */
-  .demo { margin-top:44px; background:var(--card); border:1px solid var(--stroke);
-          border-radius:18px; padding:22px 24px; }
+  .demo { margin-top:44px; background:var(--card); border:1px solid var(--edge);
+          border-radius:18px; padding:22px 24px;
+          box-shadow:0 1px 2px var(--shadow-near); }
   .demo dl { display:grid; grid-template-columns:auto 1fr; gap:14px 14px; }
   .demo dt { font-size:11px; font-weight:700; letter-spacing:.08em;
-             text-transform:uppercase; padding:4px 10px; border-radius:999px;
+             text-transform:uppercase; padding:4px 9px; border-radius:999px;
              height:fit-content; margin-top:2px; white-space:nowrap;
-             background:var(--surface); color:var(--gray);
-             border:1px solid var(--stroke); }
-  .demo dt.her { color:var(--champagne); border-color:rgba(200,169,126,.35); }
+             background:var(--surface); color:var(--text-3);
+             border:1px solid var(--edge); }
+  .demo dt.her { color:var(--accent); border-color:var(--accent-dim); }
   .demo dd { font-size:15px; }
-  .demo dd small { display:block; color:var(--gray); margin-top:3px; }
+  .demo dd small { display:block; color:var(--text-3); margin-top:3px; }
 
-  section { padding:76px 0 0; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+  /* ---- the three pieces ---- */
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
           gap:14px; margin-top:32px; list-style:none; }
-  .card { background:var(--card); border:1px solid var(--stroke);
-          border-radius:18px; padding:22px 24px; transition:border-color .25s; }
-  .card:hover { border-color:rgba(200,169,126,.4); }
+  .card { background:var(--card); border:1px solid var(--edge);
+          border-radius:18px; padding:22px 24px; transition:border-color .25s;
+          box-shadow:0 1px 2px var(--shadow-near); }
+  .card:hover { border-color:var(--accent); }
   .card .n { font-family:var(--sans); font-size:13px; font-weight:600;
              letter-spacing:.06em; text-transform:uppercase;
-             color:var(--champagne); }
-  .card p { color:var(--sand); font-size:14.5px; }
+             color:var(--accent); }
+  .card p { color:var(--text-2); font-size:14.5px; }
 
-  .install { background:var(--card); border:1px solid var(--stroke);
-             border-radius:18px; padding:24px 26px; margin-top:32px; }
-  .install ul { margin:0 0 18px; padding-left:20px; color:var(--sand); }
+  .install { background:var(--card); border:1px solid var(--edge);
+             border-radius:18px; padding:24px 26px; margin-top:32px;
+             box-shadow:0 1px 2px var(--shadow-near); }
+  .install ul { margin:0 0 18px; padding-left:20px; color:var(--text-2); }
   .install li { margin-bottom:8px; }
   .install li:last-child { margin-bottom:0; }
-  code { background:var(--surface); border:1px solid var(--stroke);
-         border-radius:8px; padding:2px 8px; color:var(--sand);
+  em { font-style:normal; color:var(--text-2); }
+  code { background:var(--surface); border:1px solid var(--edge);
+         border-radius:8px; padding:2px 8px; color:var(--text-2);
          font-size:14px; }
 
-  footer { margin-top:96px; padding:30px 0 44px; border-top:1px solid var(--stroke);
-           color:var(--gray); font-size:13.5px; }
+  footer { margin-top:96px; padding:30px 0 44px; border-top:1px solid var(--edge);
+           color:var(--text-3); font-size:13.5px; }
 
   /* ---- motion, kept quiet and optional ---- */
   .rise { opacity:0; transform:translateY(14px);
@@ -103,16 +305,17 @@
   @keyframes rise { to { opacity:1; transform:none } }
   .pill::after { animation:breathe 3s ease-in-out infinite; }
   @keyframes breathe { 50% { transform:translateX(-50%) scale(1.35); opacity:.75 } }
-  .btn { transition:transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s; }
-  .btn:hover { transform:translateY(-2px);
-               box-shadow:0 8px 24px rgba(200,169,126,.25); }
   /* Nothing here is contingent on an animation finishing. */
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior:auto; }
     .rise { opacity:1; transform:none; animation:none; }
     .pill::after { animation:none; }
-    .btn { transition:none; }
-    .btn:hover { transform:none; }
+    /* The glass keeps its fill, its rim and its cast — those are the material,
+       not motion. What goes is the travel: the sweep is nothing BUT travel, so
+       it is removed rather than made instant. */
+    .btn, .btn::before, .btn.ghost, nav .links a { transition:none; }
+    .btn::before { display:none; }
+    .btn:active { transform:none; }
   }
 </style>
 </head>
@@ -124,10 +327,16 @@
       <div class="pill" aria-hidden="true"></div>
       <span class="wordmark">Anticipy</span>
     </div>
-    <div class="links">
-      <a href="#how">How it works</a>
-      <a href="#install">Install</a>
-      <a href="#pendant">The pendant</a>
+    <div class="navright">
+      <div class="links">
+        <a href="#how">How it works</a>
+        <a href="#install">Install</a>
+        <a href="#pendant">The pendant</a>
+      </div>
+      <button class="themetoggle" type="button" data-theme-toggle>
+        <span class="onlight"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M13.4 9.6A5.9 5.9 0 0 1 6.4 2.6a5.9 5.9 0 1 0 7 7Z"/></svg>Dark</span>
+        <span class="ondark"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="3.1" fill="currentColor"/><path stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M8 1.1v1.7M8 13.2v1.7M1.1 8h1.7M13.2 8h1.7M3.2 3.2l1.2 1.2M11.6 11.6l1.2 1.2M12.8 3.2l-1.2 1.2M4.4 11.6l-1.2 1.2"/></svg>Light</span>
+      </button>
     </div>
   </nav>
 

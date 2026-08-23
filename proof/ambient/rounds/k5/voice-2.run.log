@@ -1,0 +1,102 @@
+pb        http://127.0.0.1:8090
+owner_ref 15i3kxezkt1qwto
+brain     worker: pid 6220,6221,6222,6223,6224,6225,6226,6227,6228,6229,6230,6231,6232,6233,6234,6235,6277 up since 11:37:51, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62] !! amb-0008 want=act    got=ignore       5.3s  'My medical indemnity lapses next month and I have not look'
+            goal: Research medical indemnity renewal options
+[2/62]    amb-0024 want=act    got=act          7.1s  'Parents evening slots go live tomorrow and I have not set '
+            goal: Set availability for parents evening slots
+[3/62]    amb-0040 want=act    got=act          7.0s  'If the BPS claim is not in by the fifteenth I lose the who'
+            goal: submit BPS claim by August 15, 2026
+[4/62] !! amb-0056 want=act    got=ignore       5.0s  'World book day is Thursday and we have not got a costume.'
+            goal: research World Book Day costume ideas for Thursday, August 27, 2026
+[5/62]    amb-0072 want=ignore got=ignore       3.0s  'Three clients cancelled on me this week.'
+[6/62]    amb-0088 want=act    got=act          7.0s  "Counsel's fee note is unpaid and they will stop taking my "
+            goal: pay counsel's fee note
+[7/62] !! amb-0104 want=act    got=ignore       4.0s  'The card machine contract auto renews in a fortnight at a '
+            goal: research card machine contract renewal options
+[8/62]    amb-0120 want=act    got=act          7.0s  'My railcard expired so every journey has cost me a fortune'
+            goal: renew railcard
+[9/62]    amb-0136 want=act    got=act          7.0s  'The freezer is making that clicking noise and it is full o'
+            goal: investigate freezer clicking noise and food contents
+[10/62]    amb-0152 want=act    got=act          9.1s  'That last invoice is forty days overdue now.'
+            goal: chase Alex for overdue invoice
+[11/62] !! amb-0168 want=act    got=ignore       4.0s  'The court warning for Thursday lands on my rest day.'
+[12/62]    amb-0184 want=ignore got=ignore       3.1s  'Long week already and it is only Tuesday.'
+[13/62]    amb-0200 want=ignore got=ignore       4.0s  'They changed the system again without telling anyone.'
+[14/62]    amb-0216 want=ignore got=ignore       4.0s  'We will see how it goes I suppose.'
+[15/62]    amb-0232 want=ignore got=ignore       3.0s  'Coming up, we will be taking your calls on the housing cri'
+[16/62]    amb-0248 want=ignore got=ignore       4.0s  'Say we did go for the bigger unit, we would need the three'
+[17/62] !! amb-0264 want=ignore got=ask          7.1s  'Do you know if the bins went out last night?'
+[18/62]    amb-0280 want=ignore got=ignore       3.0s  'The hotel is booked, the trains are booked, we are actuall'
+[19/62]    amb-0312 want=ignore got=ignore       4.4s  'And after the break, we will have the latest from the coas'
+[20/62]    amb-0313 want=ignore got=ignore      15.3s  'God, turn that down a bit.'
+[21/62]    per-0013 want=act    got=act         33.6s  'I need to get that deposit dispute to the scheme before th'
+            goal: Submit deposit dispute to the scheme
+[22/62] !! per-0029 want=act    got=ignore      14.9s  'My screening letter has been in the drawer since before Ch'
+            goal: send deposit dispute to scheme
+[23/62]    per-0045 want=act    got=act         27.1s  'The rent goes up in April and I have not read a word of th'
+            goal: Review rent increase letter from April
+[24/62] !! per-0061 want=ask    got=ignore      21.6s  'Somebody has to be in for the delivery and I honestly do n'
+            goal: Research delivery schedule for April
+[25/62]    per-0077 want=ignore got=ignore      16.8s  'The permission slip went in on Monday, she handed it over '
+[26/62]    per-0093 want=ignore got=ignore      23.6s  'My sister is dealing with all the funeral notices, she is '
+[27/62]    per-0114 want=ignore got=ignore      13.5s  'The car.'
+[28/62] !! per-0115 want=ignore got=act         37.4s  'It is due, is it not, the MOT, end of the month sometime.'
+            goal: book MOT for car before August 31, 2026
+[29/62] !! per-0116 want=act    got=ignore      65.3s  'And that noise it makes turning right has not gone away, i'
+            goal: book car in for service to investigate noise
+[30/62]    per-0117 want=ignore got=ignore      24.2s  'Do not book anything though, my dad said he would run it i'
+[31/62]    fin-0006 want=act    got=act         49.8s  'The accounts receivable ageing is a horror show and nobody'
+            goal: chase 60-day accounts receivable
+[32/62] !! fin-0022 want=act    got=ignore      14.3s  'I never checked what the contribution threshold went up to'
+            goal: research contribution threshold in April
+[33/62] !! fin-0038 want=act    got=ignore      11.1s  'Three tenants paid early this month and two have not paid '
+[34/62]    fin-0054 want=act    got=act         24.1s  'The purchase order for the chairs never got raised and the'
+            goal: raise purchase order for chairs
+[35/62] !! fin-0070 want=ignore got=ask         24.1s  'can you order the the ones for the the printer the'
+            goal: Order printer toner
+[36/62]    fin-0086 want=act    got=act         14.7s  'The insurance for the summer fete has not been arranged an'
+            goal: Arrange insurance for summer fete
+[37/62]    med-0024 want=act    got=act         22.4s  'The responsible pharmacist record has gaps from when I was'
+            goal: Address gaps in responsible pharmacist record for Wigan
+[38/62]    med-0040 want=ignore got=ignore       4.0s  'The HART application is in, they said six weeks for the ou'
+[39/62]    med-0056 want=act    got=act          8.1s  'The entonox scavenging service is overdue and they will sh'
+            goal: Schedule entonox scavenging service
+[40/62]    med-0076 want=act    got=act          9.2s  'My notarial commission needs renewing and the faculty offi'
+            goal: Renew notarial commission
+[41/62]    med-0095 want=ignore got=ignore       5.3s  'Have you had the custody record through from the station y'
+[42/62]    svc-0001 want=act    got=act          8.1s  'The stock count is Sunday night and I have not asked a sou'
+            goal: Arrange staff for Sunday night stock count
+[43/62]    svc-0017 want=ignore got=ignore       4.0s  'I should ring the fishmonger about Saturday, actually no, '
+[44/62] !! svc-0033 want=ask    got=ignore       4.0s  'I want a sixty minute pregnancy massage on the price list,'
+[45/62]    svc-0049 want=ignore got=ignore       4.0s  'her her tablets the pink ones i think she said something a'
+[46/62]    svc-0065 want=act    got=act          9.0s  'The licence for the show music is not in place and we open'
+            goal: Secure license for show music
+[47/62]    svc-0081 want=ignore got=ignore       4.0s  'If we ever took the whole range gluten free we would need '
+[48/62]    tep-0005 want=act    got=act         10.1s  'I am on the on-call rota from Saturday and I never swapped'
+            goal: Arrange for Priya to cover Sunday on-call shift
+[49/62]    tep-0021 want=ignore got=ignore       3.0s  'This design system has four different greys all called neu'
+[50/62]    tep-0037 want=act    got=act          7.0s  'The Part L overheating assessment was never commissioned f'
+            goal: Commission Part L overheating assessment for Beckwith scheme
+[51/62]    tep-0053 want=ignore got=ignore       4.1s  'The fire drill is happening right now, that is why they ar'
+[52/62] !! tep-0069 want=ignore got=act         10.3s  'autoclave the log the cycle log nobody has has signed some'
+            goal: Get autoclave cycle log signed
+[53/62]    tep-0085 want=act    got=act          9.1s  'The disclosure schedule for the Barrow file has to be with'
+            goal: Prepare disclosure schedule for Barrow file for CPS before PTPH
+[54/62]    tep-0107 want=ignore got=ignore       4.0s  'If the client went for the timber frame instead.'
+[55/62]    tep-0108 want=ignore got=ignore       4.0s  'We would have to redo the whole Part L package, and stage '
+[56/62]    tep-0109 want=ignore got=ignore       4.0s  'Which would be tight, but not actually impossible.'
+[57/62]    tep-0110 want=ignore got=ignore       4.0s  'They will not go for it though, they never do.'
+[58/62]    trd-0031 want=act    got=act         11.1s  'the the architrave for the for the master bedroom we we ne'
+            goal: order extra architrave lengths for master bedroom
+[59/62]    trd-0047 want=ignore got=ignore       4.2s  'Kev is taking the lockout in Sneinton, he is five minutes '
+[60/62]    trd-0063 want=ignore got=ignore       6.3s  'I ought to ring the hygiene supplier, actually no, leave i'
+[61/62]    trd-0079 want=ignore got=ignore       4.0s  'I will drop depot a note about the missed collection, no, '
+[62/62]    trd-0095 want=ignore got=ignore       4.0s  'And that is the traffic and travel, back to the studio.'
+
+pushed 62 in 12.5 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k5/voice-2.jsonl
+  act=22  ask=2  ignore=38
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

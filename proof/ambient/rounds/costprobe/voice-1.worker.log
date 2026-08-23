@@ -1,0 +1,34 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (substantive, no overlap, beyond the near band) seg=5tw9ucjvj9jh8ow
+heard: 'Kev is taking the lockout in Sneinton, he is five minutes off it.' -> ignore (no goal)
+consolidation: 120 episodes -> 3 new facts, 0 merged
+segment: new (gap 7878s >= 1200s) seg=9wtd0hyu62ks7cy
+heard: 'Oh my goodness, I forgot to cook for my kids this afternoon.' -> ignore (find food delivery or quick meal options for the kids this afternoon)
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: escalate (substantive, no overlap, but recent) seg=11zy88py8l7chy8
+heard: 'The appraisal portfolio deadline is creeping up on me again.' -> ignore (no goal)
+segment: append (conversation still open) seg=11zy88py8l7chy8
+heard: 'Oh my goodness, I forgot to cook for my kids this afternoon.' -> ignore (Research meal delivery options for the kids for this afternoon)
+segment: escalate (substantive, no overlap, but recent) seg=nscca7j0jbt87ld
+heard: 'I keep putting off sending the rig two vibration data to the bearing supplier.' -> act (draft email sending rig two vibration data to the bearing supplier)
+segment: append (conversation still open) seg=nscca7j0jbt87ld
+heard: 'The appraisal portfolio deadline is creeping up on me again.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=n35l90hdisct0nr
+heard: "The van's MOT is end of the month and I have not rung anyone." -> act (find local garages to book van MOT before end of August)
+segment: append (conversation still open) seg=n35l90hdisct0nr
+heard: 'I keep putting off sending the rig two vibration data to the bearing supplier.' -> ignore (draft email sending rig two vibration data to bearing supplier)
+segment: escalate (substantive, no overlap, but recent) seg=cxjlcm910866unv
+heard: 'My digital tacho card runs out in about six weeks.' -> ignore (research digital tachograph card renewal process and prepare application)
+segment: append (conversation still open) seg=cxjlcm910866unv
+heard: "The van's MOT is end of the month and I have not rung anyone." -> ignore (Find MOT test booking options for the van before end of August 2026)
+not amending 8ils6qqgjrsmzvs: already queued — his approval closed this card to edits: 'research digital tachograph card renewal process and deadlines'
+segment: escalate (substantive, no overlap, but recent) seg=w2pcbquz6368le8
+heard: 'My digital tacho card runs out in about six weeks.' -> ignore (research digital tachograph card renewal process and deadlines)

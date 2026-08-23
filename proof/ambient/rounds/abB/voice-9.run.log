@@ -1,0 +1,32 @@
+pb        http://127.0.0.1:8090
+owner_ref fbmxghyvp84bce8
+brain     worker: pid 89298,89307,89315,89319,89324,89338,89344,89395,89403 up since 02:13:09, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13]    amb-0038 want=act    got=act          9.4s  'I cannot do the Dover run until the trailer has had its br'
+            goal: schedule brake test for trailer
+[2/13] !! amb-0064 want=ask    got=ignore       4.0s  'I would love to get away for a weekend but I have no idea '
+            goal: research affordable weekend getaways
+[3/13] !! amb-0134 want=act    got=ignore       5.1s  "Both the kids' passports run out before the summer."
+            goal: check kids' passport expiry dates
+[4/13]    amb-0196 want=ignore got=ignore       4.0s  'Statistically one of these meetings has to be useful.'
+[5/13]    amb-0240 want=ignore got=ignore       3.0s  'Honestly it is fine, I will sort the tickets out tonight.'
+[6/13] !! per-0034 want=act    got=ignore       6.1s  'There is a message sat on my universal credit journal and '
+            goal: check Universal Credit journal
+[7/13]    fin-0064 want=act    got=act          8.1s  'I said I would send Bea the maternity policy and it is sti'
+            goal: Draft email to Bea with maternity policy
+[8/13] !! med-0035 want=ask    got=ignore       6.1s  'The indemnity cover needs extending to online sessions and'
+            goal: Find out how many hours per week Alex is doing remotely
+[9/13]    svc-0011 want=act    got=act          8.1s  'The gas certificate for the range is on the wall from two '
+            goal: renew gas certificate for range
+[10/13]    svc-0072 want=ignore got=ignore       5.1s  'The allergen labels are sorted, I ran the whole new set of'
+[11/13] !! tep-0029 want=ignore got=act          8.3s  'The machine shop has fitted the guards back to front on ev'
+            goal: contact machine shop about guards fitted incorrectly
+[12/13]    trd-0028 want=ignore got=ignore       5.1s  'The condenser is on the wagon already, it is all moving.'
+[13/13] !! trd-0091 want=ask    got=act          8.1s  'I should get the plate moved onto the new car, though I ha'
+            goal: transfer license plate to new car
+
+pushed 13 in 1.4 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abB/voice-9.jsonl
+  act=5  ignore=8
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

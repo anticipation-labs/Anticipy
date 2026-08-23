@@ -1,0 +1,30 @@
+pb        http://127.0.0.1:8090
+owner_ref aomv4722ccarzj5
+brain     worker: pid 60512,60572,60618,60629,60663,60677,60699,60709,60717,63487,63497,63525 up since 09:40:35, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13] !! amb-0012 want=act    got=ignore      37.0s  'I am on nights all next week and I have not sorted anythin'
+            goal: arrange childcare and meals for next week (August 24-28, 2026)
+[2/13]    amb-0045 want=ignore got=ignore       9.3s  'Table six sent it back twice.'
+[3/13] !! amb-0106 want=act    got=ignore      28.2s  'My Driver CPC hours are seven short and the cutoff is Sept'
+            goal: find a 7-hour Driver CPC course before September 1, 2026
+[4/13] !! amb-0170 want=act    got=ignore      21.7s  'My SIA licence expires in three months and the renewal tak'
+            goal: Renew SIA licence
+[5/13]    amb-0210 want=ignore got=ignore       9.5s  'It would be nice to have a proper garden.'
+[6/13]    amb-0310 want=ignore got=ignore      14.3s  'Did we ever sort the hotel for the wedding?'
+[7/13] !! fin-0030 want=act    got=ignore      30.1s  'The claim is with the adjuster now, but the excess payment'
+            goal: Arrange excess payment for claim this week
+[8/13]    med-0001 want=ignore got=ignore      15.2s  'Revalidation.'
+[9/13] !! svc-0001 want=act    got=ignore      57.1s  'The stock count is Sunday night and I have not asked a sou'
+            goal: ask staff to come in early for stock count Sunday, August 23, 2026
+[10/13]    svc-0039 want=ignore got=ignore      15.4s  'If I ever got a unit of my own I would want a sled track d'
+[11/13] !! tep-0017 want=ask    got=ignore       7.3s  'I am supposed to sign the release off tonight and I do not'
+[12/13] !! tep-0078 want=act    got=ignore      19.0s  'My defib refresher has lapsed and I am on the response rot'
+            goal: Find a defib refresher course for Alex before Sunday, August 23, 2026
+[13/13] !! trd-0075 want=act    got=ignore      39.5s  'I will be out of hours before Carlisle at this rate and th'
+            goal: Email Alex about defib refresher lapse and response rota conflict
+
+pushed 13 in 5.4 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abC/voice-5.jsonl
+  ignore=13
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

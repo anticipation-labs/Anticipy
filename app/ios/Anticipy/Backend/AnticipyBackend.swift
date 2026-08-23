@@ -18,6 +18,16 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     let effect_key: String?
     let effect_uncertain: Bool?
     let reconciliation: String?
+    /// Which arm is going to run this. "" or absent = the browser lane,
+    /// "research" = the worker, "supervised_read" = the browser WITH the person
+    /// watching (`design/day-zero.md` §2).
+    ///
+    /// Decoded because the feed has to tell the last one apart from an errand:
+    /// a read somebody is watching happen must never also appear under "Waiting
+    /// for your browser" as though it were stalled. The alternative was
+    /// sniffing the `params` JSON string, which is how a display bug becomes a
+    /// parsing bug.
+    let lane: String?
 
     init(id: String, goal: String, params: String, status: String,
          result: String?, created: String, workflow_id: String? = nil,
@@ -25,7 +35,7 @@ struct AgentJob: Identifiable, Decodable, Equatable {
          consequence: String? = nil, approval: String? = nil,
          scope_digest: String? = nil, effect_key: String? = nil,
          effect_uncertain: Bool? = nil,
-         reconciliation: String? = nil) {
+         reconciliation: String? = nil, lane: String? = nil) {
         self.id = id; self.goal = goal; self.params = params; self.status = status
         self.result = result; self.created = created; self.workflow_id = workflow_id
         self.workflow_version = workflow_version; self.workflow_state = workflow_state
@@ -33,6 +43,26 @@ struct AgentJob: Identifiable, Decodable, Equatable {
         self.scope_digest = scope_digest; self.effect_key = effect_key
         self.effect_uncertain = effect_uncertain
         self.reconciliation = reconciliation
+        self.lane = lane
+    }
+
+    /// The same job with one field replaced.
+    ///
+    /// Every property here is `let` on purpose - a job is a value, and nothing
+    /// on the phone gets to decide what a job's state is. This exists for the
+    /// one legitimate exception: `AnticipySession` holds a status the server has
+    /// ALREADY CONFIRMED over the feed until a later fetch agrees with it,
+    /// because the read is a separate request and can still return the pre-write
+    /// row. A named copy keeps that the only way to do it - a `var status` would
+    /// let any view invent a state instead.
+    func withStatus(_ status: String) -> AgentJob {
+        AgentJob(id: id, goal: goal, params: params, status: status,
+                 result: result, created: created, workflow_id: workflow_id,
+                 workflow_version: workflow_version, workflow_state: workflow_state,
+                 consequence: consequence, approval: approval,
+                 scope_digest: scope_digest, effect_key: effect_key,
+                 effect_uncertain: effect_uncertain,
+                 reconciliation: reconciliation, lane: lane)
     }
 }
 
@@ -63,6 +93,15 @@ struct BrainEvent: Decodable, Identifiable, Equatable {
     /// segmenting is switched off — in which case the feed groups nothing and
     /// renders exactly as it does today.
     let segment: String?
+    /// WHICH EARS heard this line: "phone_mic", "pendant" or "typed".
+    ///
+    /// The phone has stamped this on every event it pushes since the field was
+    /// added (`pushEvent(source:)`), and until now nothing ever read it back —
+    /// so the one comparison the field exists for, the pendant run of an errand
+    /// against the phone-mic run of the same errand, was invisible in the app
+    /// that produced both. Optional, and empty on the thousands of rows written
+    /// before anything wrote it: absent means "no verdict", never "typed".
+    let source: String?
 }
 
 /// Thin client for the Anticipy PocketBase backend (pairing, events, jobs).
@@ -252,6 +291,21 @@ final class AnticipyBackend {
         return (token, id)
     }
 
+    /// Ask the server to delete everything it holds, and close the account.
+    ///
+    /// The STATUS is returned rather than swallowed, because this is the one
+    /// call where "not quite" must not read as "done": 409 means the rows went
+    /// but the account survived, 500 means something was left behind. The
+    /// endpoint requires an explicit confirm so a replayed request from a stolen
+    /// token cannot wipe an account on its own.
+    func deleteAccount() async throws -> (status: Int, body: String) {
+        var req = writeRequest(baseURL.appendingPathComponent("me/delete"), method: "POST")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["confirm": "delete"])
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw BackendError(status: -1) }
+        return (http.statusCode, String(data: data, encoding: .utf8) ?? "")
+    }
+
     /// Adopt everything this device made before accounts existed onto the
     /// account that just signed in, so signing up never looks like losing your
     /// history.
@@ -409,8 +463,9 @@ final class AnticipyBackend {
     var accountID: String = ""
 
     func pushEvent(kind: String, text: String, decision: String? = nil,
+                   importance: Int? = nil,
                    goal: String? = nil, speaker: String? = nil,
-                   explicit: Bool = false) async throws {
+                   explicit: Bool = false, source: String? = nil) async throws {
         var body: [String: Any] = [
             "device_id": deviceID, "kind": kind, "text": text,
             "decision": decision ?? "", "goal": goal ?? "",
@@ -435,6 +490,21 @@ final class AnticipyBackend {
         // came from never leaves the phone, and neither does the audio.
         if let speaker, !speaker.isEmpty { body["speaker"] = speaker }
         if explicit { body["explicit"] = true }
+        // WHICH EARS HEARD IT. `device_id` names the build, not the
+        // microphone, so a phone-mic line and a pendant line were byte
+        // identical on the wire — 1338 transcripts in production and not one
+        // of them says which mic spoke. That makes "is the pendant as good as
+        // the phone" a stopwatch-and-eyeball question about the exact two
+        // paths this product is a comparison between. The column already
+        // exists on `events` and no build ever wrote it.
+        //
+        // Omitted rather than sent empty when unknown, so an old row and a
+        // genuinely unattributable one read the same downstream.
+        if let source, !source.isEmpty { body["source"] = source }
+        // How much a seeded fact matters. Only the day-zero paths set it; a
+        // transcript has no business claiming an importance, and a missing
+        // value reads as 4 on the worker side.
+        if let importance { body["importance"] = importance }
         // Say whose words these are. Until today `events` had no owner column
         // at all, which is why a brand-new account opened the app to a stranger's
         // transcripts — seen for real in the simulator against production.
@@ -442,26 +512,70 @@ final class AnticipyBackend {
         try await post("api/collections/events/records", body: body)
     }
 
-    func queueJob(goal: String, params: [String: String]) async throws {
+    /// Queue an errand, and say which row it became.
+    ///
+    /// `lane`, `consequence` and `watchingUntil` are omitted for ordinary
+    /// browser work, which is why they are optional: an errand from triage is
+    /// byte-identical on the wire to what it was before.
+    ///
+    /// A SUPERVISED READ IS BORN WITH ITS LEASE ALREADY SET. The extension
+    /// re-reads `watching_until` before it may claim the row
+    /// (`research_lane.pb.js`), so a job created without one is unclaimable
+    /// until the first heartbeat lands ten seconds later — which reads as a
+    /// dead screen. Set it here and the heartbeat only ever extends it.
+    ///
+    /// Returns the created row's id. Nothing else can name a supervised read
+    /// afterwards: the lease is PATCHed onto that id, and the narration comes
+    /// back stamped with it.
+    @discardableResult
+    func queueJob(goal: String, params: [String: String],
+                  lane: String? = nil, consequence: String? = nil,
+                  watchingUntil: Date? = nil) async throws -> String {
         let paramsJSON = String(data: try JSONSerialization.data(withJSONObject: params), encoding: .utf8) ?? "{}"
         var body: [String: Any] = [
             "goal": goal, "params": paramsJSON, "status": "queued", "device_id": deviceID,
         ]
+        if let lane, !lane.isEmpty { body["lane"] = lane }
+        if let consequence, !consequence.isEmpty { body["consequence"] = consequence }
+        if let watchingUntil {
+            body["watching_until"] = ISO8601DateFormatter.anticipyUTC.string(from: watchingUntil)
+        }
         if !accountID.isEmpty { body["owner_ref"] = accountID }
-        try await post("api/collections/jobs/records", body: body)
+        let data = try await post("api/collections/jobs/records", body: body)
+        // Trust the record, not the status code — the same law pairing learned
+        // the hard way (`pairAgent` above). A read whose job id we only think
+        // we know would heartbeat into the void and narrate nothing.
+        guard let row = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let id = row["id"] as? String, !id.isEmpty else {
+            throw BackendError(status: 502)
+        }
+        return id
     }
 
     /// Latest brain events, newest first — heard lines + what Anticipy said.
-    func fetchEvents(limit: Int = 40) async throws -> [BrainEvent] {
+    ///
+    /// `matching` narrows to one thing's events (a supervised read's narration,
+    /// say) and is ANDed onto the owner clause. IT MUST NOT CONTAIN `||`:
+    /// guard.pb.js:38-43 refuses any list whose filter carries an `or`, because
+    /// `&&` can only narrow the owner set while `||` can widen it back out.
+    /// Filter on one column and split the kinds on this side.
+    ///
+    /// `oldestFirst` exists for a narration log, which is only readable in the
+    /// order she said it.
+    func fetchEvents(limit: Int = 40, matching extra: String? = nil,
+                     oldestFirst: Bool = false) async throws -> [BrainEvent] {
         let listURL = baseURL.appendingPathComponent("api/collections/events/records")
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         var items = [URLQueryItem(name: "perPage", value: String(limit)),
-                     URLQueryItem(name: "sort", value: "-created")]
+                     URLQueryItem(name: "sort", value: oldestFirst ? "created" : "-created")]
         // Scoped, always. Unowned legacy rows are deliberately NOT included:
         // showing them to whoever happens to be signed in is the exact bug this
         // fixes. They are claimed onto an account by /auth/claim instead.
-        if !accountID.isEmpty {
-            items.append(URLQueryItem(name: "filter", value: "owner_ref=\"\(accountID)\""))
+        var clauses: [String] = []
+        if !accountID.isEmpty { clauses.append("owner_ref=\"\(accountID)\"") }
+        if let extra, !extra.isEmpty { clauses.append("(\(extra))") }
+        if !clauses.isEmpty {
+            items.append(URLQueryItem(name: "filter", value: clauses.joined(separator: " && ")))
         }
         comps.queryItems = items
         let data = try await readData(from: comps.url!)
@@ -521,15 +635,19 @@ final class AnticipyBackend {
         var message: String? = nil
     }
 
-    private func post(_ path: String, body: [String: Any]) async throws {
+    @discardableResult
+    private func post(_ path: String, body: [String: Any]) async throws -> Data {
         var request = writeRequest(baseURL.appendingPathComponent(path), method: "POST")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (_, resp) = try await URLSession.shared.data(for: request)
+        let (data, resp) = try await URLSession.shared.data(for: request)
         // A rejected write is a FAILED write: without this the caller's
         // do/catch never fires and a line the backend refused looks sent.
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw BackendError(status: http.statusCode)
         }
+        // The created row comes back in the body; `queueJob` needs its id and
+        // everything else still ignores it (@discardableResult).
+        return data
     }
 }
 

@@ -1,0 +1,31 @@
+pb        http://127.0.0.1:8090
+owner_ref 15i3kxezkt1qwto
+brain     worker: pid 60512,60572,60618,60629,60663,60677,60699,60709,60717 up since 09:40:35, newer than every file in brain/
+corpus    14 utterances, 0 already done, 14 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/14]    amb-0095 want=act    got=act         44.4s  'I still have not booked the conference and early bird ends'
+            goal: Book conference registration with early bird pricing
+[2/14] !! amb-0156 want=act    got=ignore      36.4s  'The club want the annual fee before the end of the month.'
+            goal: pay annual club fee
+[3/14]    amb-0199 want=ignore got=ignore      12.9s  'Honestly I do not know why I bother some days.'
+[4/14]    amb-0286 want=ignore got=ignore      10.0s  'There is that thing on Saturday.'
+[5/14]    per-0098 want=ignore got=ignore      16.5s  'Did that thing from school come home in her bag or not?'
+[6/14] !! fin-0085 want=act    got=ignore      34.4s  'The grant report is due on the last day of the month and t'
+            goal: prepare grant report with finance annex
+[7/14]    med-0044 want=ignore got=ignore      18.4s  'Ravi is pulling the theatre utilisation figures for the bo'
+[8/14] !! svc-0016 want=act    got=ignore      38.0s  'We are doing a hundred and twenty covers at the rugby club'
+            goal: confirm crockery hire for 120 covers at rugby club
+[9/14] !! svc-0090 want=ask    got=ignore      11.6s  'I would like the ghost walk running through the winter, I '
+            goal: Research ghost walk schedule for winter, 6 PM and 8 PM options
+[10/14]    svc-0101 want=ignore got=ignore      16.9s  'Have you got anything Saturday morning, even early, for a '
+            goal: Find Saturday morning availability for a cut and blow dry
+[11/14]    svc-0102 want=ignore got=ignore      22.0s  'Saturday has gone I am afraid, I could do you Friday at si'
+[12/14] !! tep-0049 want=ask    got=ignore      33.6s  'I ought to get the sample scripts over to the external exa'
+            goal: Send sample scripts to external examiner by Friday, August 21, 2026
+[13/14]    trd-0043 want=ignore got=ignore      12.7s  'If we ever took structural steel on properly we would want'
+[14/14]    trd-0095 want=ignore got=ignore      32.2s  'And that is the traffic and travel, back to the studio.'
+
+pushed 14 in 6.5 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abC/voice-2.jsonl
+  act=1  ignore=13
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

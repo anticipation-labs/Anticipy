@@ -44,7 +44,7 @@ export async function modelFetch(apiKey, payload, signal = undefined) {
     return fetch(OPENROUTER_URL, {
       signal, method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
-                 "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy Claude Version" },
+                 "HTTP-Referer": "https://anticipy.ai", "X-Title": "Anticipy" },
       body: JSON.stringify(boundedPayload),
     });
   }
@@ -3761,7 +3761,7 @@ export async function runAgentGoal(goal, opts) {
     // One colour for one name: two differently-coloured groups both called
     // "Anticipy" (this one and the prefill path in background.js) read as two
     // different things in the exact surface meant to make her legible.
-    await chrome.tabGroups.update(group, { title: "Anticipy Claude Version", color: "yellow", collapsed: true });
+    await chrome.tabGroups.update(group, { title: "Anticipy", color: "yellow", collapsed: true });
   } catch (e) { /* tab groups unavailable (e.g. incognito) */ }
 
   // Attach can race a just-created tab, and the "started debugging" bar being
@@ -4149,7 +4149,7 @@ export async function runAgentGoal(goal, opts) {
             history.push(`step ${step}: automation session re-attached`);
             continue;
           }
-          return (handBack = true) && { status: "needs_user", result: "the automation session was cancelled — the 'Anticipy Claude Version started debugging' bar has to stay up while I work. Send it again and leave the bar alone.", tabId: tab.id };
+          return (handBack = true) && { status: "needs_user", result: "the automation session was cancelled — the 'Anticipy started debugging' bar has to stay up while I work. Send it again and leave the bar alone.", tabId: tab.id };
         }
         if (/showing error page|ERR_[A-Z_]+|main frame not scriptable/i.test(msg)
             && await advanceFallback(`unreadable page (${msg.slice(0, 80)})`)) {

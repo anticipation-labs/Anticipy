@@ -7,6 +7,19 @@ struct AnticipyApp: App {
     @StateObject private var pendant = PendantManager()
     @StateObject private var session = AnticipySession()
     @AppStorage("hasOnboarded") private var hasOnboarded = false
+    /// LIGHT UNLESS YOU CHOSE DARK. This line used to read
+    /// `.preferredColorScheme(.dark)` a few lines down, which is why the app
+    /// was dark for everybody with no way out of it.
+    ///
+    /// The system setting is deliberately not followed. The app opens the same
+    /// way for everyone — the first thing a new owner sees should not depend on
+    /// a switch in iOS Settings they set for a different reason. Dark is one tap
+    /// away in Settings and remembered from then on.
+    @AppStorage(AppTheme.key) private var themeChoice = AppTheme.light.rawValue
+    /// The celebration, held OUTSIDE the routing decision. Transient on
+    /// purpose: if the app dies mid-animation the person is already onboarded
+    /// and lands on Home, because the flag was written before this was set.
+    @State private var celebrating = false
 
     var body: some Scene {
         WindowGroup {
@@ -20,8 +33,21 @@ struct AnticipyApp: App {
                     HomeView()
                         .transition(.opacity)
                 } else {
-                    OnboardingView()
-                        .transition(.opacity)
+                    OnboardingView(onFinished: {
+                        // Order matters, and it is the whole fix: write the
+                        // durable fact FIRST, then decorate. The old code did
+                        // it the other way round — the flag was the last line
+                        // of a 2.4s animation — so an interrupted animation
+                        // meant doing all five steps again.
+                        hasOnboarded = true
+                        celebrating = true
+                    })
+                    .transition(.opacity)
+                }
+            }
+            .overlay {
+                if celebrating {
+                    OnboardingFinale { celebrating = false }
                 }
             }
             // The three biggest state changes in the product used to hard-cut.
@@ -29,8 +55,11 @@ struct AnticipyApp: App {
             .animation(Theme.springSlow, value: hasOnboarded)
             .environmentObject(pendant)
             .environmentObject(session)
-            .preferredColorScheme(.dark)
-            .tint(Theme.champagne)
+            // Pinning the scheme is also what makes every Theme token resolve:
+            // they are dynamic UIColors, so they read this trait rather than
+            // being decided once at launch. One line themes the whole app.
+            .preferredColorScheme(AppTheme(rawValue: themeChoice).colorScheme)
+            .tint(Theme.accent)
             // Tell her what time it is where you are — and therefore where
             // you are — on every launch, so it follows you when you travel.
             // Only once signed in: there is no profile to write to before
@@ -137,6 +166,13 @@ final class AnticipySession: ObservableObject {
         let text: String
         let explicit: Bool
         let speaker: String?
+        /// WHICH microphone produced this line, carried through the offline
+        /// queue. Without it a line spoken on the pendant, buffered in a
+        /// tunnel and flushed an hour later arrives claiming nothing — and
+        /// the buffered lines are exactly the ones a capture comparison
+        /// cares about, because they are the ones a radio dropped.
+        /// Optional so a queue written by the previous build still decodes.
+        var source: String? = nil
         /// WHOSE words these are. The queue is @AppStorage: it survives
         /// relaunch AND sign-out by design, while pushEvent stamps owner_ref
         /// from whoever is signed in AT FLUSH TIME. So one person's private
@@ -233,7 +269,20 @@ final class AnticipySession: ObservableObject {
     /// phone all day, which is precisely the twitching the ack rule exists to
     /// prevent; and a line typed while the phone mic was running got no ack at
     /// all. Every call site already knows which of the three this is.
-    enum LineSource { case typed, phoneMic, pendant }
+    enum LineSource {
+        case typed, phoneMic, pendant
+
+        /// The stable name that goes on the wire and stays greppable in
+        /// production. Deliberately not `String(describing:)` — renaming a
+        /// Swift case must never silently re-label a year of history.
+        var wireName: String {
+            switch self {
+            case .typed: return "typed"
+            case .phoneMic: return "phone_mic"
+            case .pendant: return "pendant"
+            }
+        }
+    }
 
     func heard(_ line: String, speaker: String? = nil,
                explicit: Bool = false,
@@ -243,7 +292,12 @@ final class AnticipySession: ObservableObject {
         // won't stop twitching; the meaningful buzz is the act-verdict one.
         if source == .typed { Haptics.tap() }
         sessionLines.append(SessionLine(text: line))
-        transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line, decision: nil))
+        // Stamped locally too, not only on the wire: the line is in the feed
+        // for the ~3s until the server echoes it, and a badge that appears a
+        // poll late looks like a glitch in exactly the moment someone is
+        // watching to see which ear caught the line.
+        transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", text: line,
+                                         decision: nil, source: source.wireName))
         // No owner, no capture. A forced sign-out (an expired token 401s and
         // calls signOut) used to leave the microphone running and every line
         // pushed, 403'd, and queued — the room transcribed behind a sign-in
@@ -251,13 +305,15 @@ final class AnticipySession: ObservableObject {
         guard !accountID.isEmpty else { return }
         do {
             try await backend.pushEvent(kind: "transcript", text: line,
-                                        speaker: speaker, explicit: explicit)
+                                        speaker: speaker, explicit: explicit,
+                                        source: source.wireName)
         } catch {
             // A dropped push used to vanish into try? — the line then sat at
             // the top of the feed saying "Thinking…" forever while the brain
             // had never seen it. Queue it (on disk) and keep trying.
             unsent = unsent + [BufferedLine(text: line, explicit: explicit,
                                             speaker: speaker,
+                                            source: source.wireName,
                                             account: accountID)]
         }
     }
@@ -277,7 +333,8 @@ final class AnticipySession: ObservableObject {
             do {
                 try await backend.pushEvent(kind: "transcript", text: line.text,
                                             speaker: line.speaker,
-                                            explicit: line.explicit)
+                                            explicit: line.explicit,
+                                            source: line.source)
             }
             catch { failed.append(line) }
         }
@@ -320,7 +377,17 @@ final class AnticipySession: ObservableObject {
         // to .ready — otherwise the app reports itself perfectly healthy while
         // every read is being refused.
         do {
-            jobs = try await b.fetchJobs(owner: ownerID)
+            let fetched = try await b.fetchJobs(owner: ownerID)
+            // Retire each held value the moment the server says the same thing,
+            // so this can never pin a stale status indefinitely - the overlay
+            // survives exactly as long as the disagreement does.
+            for job in fetched where confirmedStatus[job.id] == job.status {
+                confirmedStatus.removeValue(forKey: job.id)
+            }
+            jobs = fetched.map { job in
+                guard let held = confirmedStatus[job.id] else { return job }
+                return job.withStatus(held)
+            }
             connection = .ready
             // Raised from the poll on purpose: the app keeps running while it
             // listens (background audio), so a local notification from here
@@ -357,7 +424,12 @@ final class AnticipySession: ObservableObject {
                                       // "" for an unset text column, and "" must mean
                                       // ungrouped, not a segment named "".
                                       segmentID: ($0.segment?.isEmpty == false) ? $0.segment : nil,
-                                      created: $0.created) }
+                                      created: $0.created,
+                                      // Same normalisation again: "" from an
+                                      // unset column must read as "no verdict
+                                      // about which microphone", not as a
+                                      // fourth kind of ear.
+                                      source: ($0.source?.isEmpty == false) ? $0.source : nil) }
             // Reconcile one-to-one by CONSUMING matches: saying the same
             // sentence twice used to mark both local copies received off a
             // single server row, and inherit the older row's verdict.
@@ -382,6 +454,12 @@ final class AnticipySession: ObservableObject {
             })
             transcript = serverLines
             anticipySays = events.filter { $0.kind == "anticipy_says" || $0.kind == "anticipy_text" }
+            // His replies, so a question that is already settled stops
+            // offering a box to settle it again. Both lanes: he may answer the
+            // same question by text or in here, and either one closes it.
+            ownerReplies = events.filter {
+                $0.kind == "sms_reply" || $0.kind == "app_reply"
+            }
         }
         // A quiet buzz the moment finished work lands.
         let doneIDs = Set(jobs.filter { $0.status == "done" }.map(\.id))
@@ -475,6 +553,352 @@ final class AnticipySession: ObservableObject {
             if !birthday.isEmpty { ownerBirthday = birthday }
         }
         return ok
+    }
+
+    // MARK: - Day zero: the two things that live on this phone
+
+    /// Say yes to a source, then read it once and send only what was concluded.
+    ///
+    /// The order is the whole point. Our own screen asks first and states the
+    /// reason; iOS is only ever asked after the person has already agreed on a
+    /// surface that could explain itself. `design/CONSUMER-READINESS-2026-08-03.md`
+    /// T4 records the opposite as the canonical anti-pattern: "The literal
+    /// first interaction with the product is a system alert."
+    ///
+    /// Returns false when iOS refused, so the caller can show a recovery route
+    /// rather than leaving a dead switch — B1 in the same audit.
+    @discardableResult
+    func grantContext(_ source: ContextSource) async -> Bool {
+        // ON-DEVICE sources only reach the OS. A supervised browser read has no
+        // iOS permission to request - the thing being read is not on this phone -
+        // so asking for one would be a round-trip to nowhere, and refusing for
+        // want of an answer would make the source permanently ungrantable.
+        guard source.isOnDevice else {
+        // A NEW GRANT IS A NEW DELIVERY. `context.sent.<source>` records that
+        // this source's facts reached the server; it is not cleared by
+        // `revoke`, because it is a delivery receipt rather than a permission.
+        // Without this line it outlives the grant it belongs to: revoke, then
+        // re-grant while offline, and `sendContextFacts` returns without
+        // setting it - but it is ALREADY true from the first grant, so
+        // `flushPendingContext` skips the source forever and no fact ever
+        // arrives, with no error anywhere. That is exactly the permanent silent
+        // loss the `return`-instead-of-`break` fix below was written to stop,
+        // re-entering through a different door.
+        UserDefaults.standard.removeObject(forKey: Self.sentKey(source))
+            ContextGrants().grant(source)
+            // Deliberately no sendContextFacts: LifeContext.facts is empty for
+            // anything not on the device, and posting nothing is not a fact.
+            // Facts from a supervised read arrive from the browser, one pass,
+            // while the person watches.
+            return true
+        }
+        let osOK: Bool
+        switch source {
+        case .calendar: osOK = await LifeContext.requestCalendar()
+        case .contacts: osOK = await LifeContext.requestContacts()
+        // Unreachable: the guard above removed every source that is not on the
+        // device, and both on-device sources are handled. It is spelled out
+        // rather than left to `default:` silently returning false, because a new
+        // on-device source added without a request here would otherwise be
+        // permanently ungrantable with no error anywhere.
+        default:
+            assertionFailure("on-device source \(source.rawValue) has no OS request")
+            osOK = false
+        }
+        guard osOK else { return false }
+        // A NEW GRANT IS A NEW DELIVERY. `context.sent.<source>` records that
+        // this source's facts reached the server; it is not cleared by
+        // `revoke`, because it is a delivery receipt rather than a permission.
+        // Without this line it outlives the grant it belongs to: revoke, then
+        // re-grant while offline, and `sendContextFacts` returns without
+        // setting it - but it is ALREADY true from the first grant, so
+        // `flushPendingContext` skips the source forever and no fact ever
+        // arrives, with no error anywhere. That is exactly the permanent silent
+        // loss the `return`-instead-of-`break` fix below was written to stop,
+        // re-entering through a different door.
+        UserDefaults.standard.removeObject(forKey: Self.sentKey(source))
+        // Record the grant only once iOS has actually agreed, so our gate can
+        // never claim access the system will refuse.
+        ContextGrants().grant(source)
+        await sendContextFacts(source)
+        return true
+    }
+
+    /// A skip is a "no for now" and nothing else. It is never written down as a
+    /// fact about the person (`design/briefs/08-day-zero.md:29-33`).
+    func declineContext(_ source: ContextSource) {
+        ContextGrants().decline(source)
+    }
+
+    /// Read on the device; send the conclusions.
+    ///
+    /// Posted as `kind: "profile"` — NOT as a transcript. A transcript goes
+    /// through triage and could mint an errand, and "Dinner with Priya,
+    /// Thursday" is a thing she should KNOW, not a thing she should start
+    /// doing. `kind` is a free text column so this needs no migration.
+    func sendContextFacts(_ source: ContextSource) async {
+        guard ContextGrants().granted(source) else { return }
+        let facts = LifeContext.facts(for: source)
+        guard !facts.isEmpty else { return }
+        for fact in facts {
+            do {
+                try await backend.pushEvent(kind: "profile", text: fact,
+                                            source: source.rawValue)
+            } catch {
+                // Stop, but do NOT mark delivered — the next foreground retries
+                // the whole set. This used to `break` and return silently with
+                // the grant already recorded, and because this function has one
+                // caller that made the loss permanent: grant underground or on
+                // a dead connection and zero facts ever arrived, with no error
+                // and no route back short of reinstalling. LOCAL-FIRST.md rule
+                // 4 is explicit that a device must keep working offline, and
+                // spoken lines already store-and-forward.
+                return
+            }
+        }
+        // Only now. remember_fact merges restatements, so a retry that
+        // duplicates a fact costs nothing; a fact that never arrives costs the
+        // whole feature.
+        UserDefaults.standard.set(true, forKey: Self.sentKey(source))
+    }
+
+    static func sentKey(_ source: ContextSource) -> String {
+        "context.sent.\(source.rawValue)"
+    }
+
+    /// Re-send anything a granted source never managed to deliver. Called on
+    /// foreground, which is the one moment a connection is most likely to be
+    /// back and the person is present to benefit from it.
+    func flushPendingContext() async {
+        let grants = ContextGrants()
+        for source in ContextSource.allCases
+        where grants.granted(source)
+            && !UserDefaults.standard.bool(forKey: Self.sentKey(source)) {
+            await sendContextFacts(source)
+        }
+    }
+
+    // MARK: - Day zero: the supervised read, and the lease that makes it true
+
+    /// The lane every supervised read runs in. Spelled once here; the server
+    /// spells it in `research_lane.pb.js` and `guard.pb.js`, and the extension
+    /// in its claim filter. Three copies is already one too many — a fourth,
+    /// inline, is how a lane clause drifts (background.js:60-73).
+    static let supervisedLane = "supervised_read"
+
+    /// How long one heartbeat buys.
+    ///
+    /// The screen pushes a new one every ten seconds, so two may be lost to a
+    /// bad connection before anything happens — and the read stopping on the
+    /// third is the CORRECT outcome, not a failure to paper over. Thirty
+    /// seconds is also the worst case for "she stops when you look away": lock
+    /// the phone and the server refuses her next claim within half a minute.
+    static let watchLeaseSeconds: TimeInterval = 30
+
+    /// Start a supervised read of one source, and say which job it became.
+    ///
+    /// `ContextSource.mail.promises` opens with "You open it. I read it once,
+    /// in the front window, while you watch." This is where that stops being a
+    /// sentence: the job is born with `watching_until` already set, and the
+    /// extension may not claim it — nor keep running it — unless that stamp is
+    /// still in the future (`research_lane.pb.js`). Nothing but a foregrounded
+    /// app can keep it there.
+    ///
+    /// The first lease is set HERE rather than left to the first heartbeat.
+    /// Ten seconds of an unclaimable job reads as a dead screen, and the
+    /// obvious fix for a dead screen is a flag, which is the one thing this
+    /// mechanism exists to avoid (`side_trip.js:194-198`).
+    ///
+    /// Returns nil rather than throwing, for every reason: no grant, no
+    /// connection, a server that refused. The caller shows a plain "I can't
+    /// reach my side" and does not retry — a read nobody could start is not a
+    /// read that half-happened.
+    func startSupervisedRead(source: ContextSource) async -> String? {
+        // GATE 1 of `design/day-zero.md` §4: no read without a stored
+        // per-source grant. Deterministic code, never the model
+        // (`CLAUDE-ONBOARDING.md:19-20`) — the prompt never gets to run,
+        // because the job is never created.
+        guard ContextGrants().granted(source) else { return nil }
+        // Calendar and contacts are read ON THIS PHONE by `LifeContext`; there
+        // is no browser tab to watch and nothing for the extension to claim.
+        // Queueing one would be a job that sits forever, so it is refused here
+        // and loudly in debug, where a new source wired to the wrong reader is
+        // a mistake somebody can still fix.
+        guard !source.isOnDevice else {
+            assertionFailure("\(source.rawValue) is read on the device, not in a browser")
+            return nil
+        }
+        do {
+            return try await backend.queueJob(
+                // Her words, because this goal is what the feed would show if
+                // it ever showed it: short, a contraction's worth of warmth,
+                // and it names the specific thing (`CLAUDE-ONBOARDING.md:27-33`).
+                goal: "Read \(source.label.lowercased()) once, while you watch.",
+                // `params.source` is the SOURCE NAME here ("mail"), not the
+                // sentence that provoked the errand, which is what it carries
+                // on a triaged job. The read loop keys off it; nothing else
+                // reads a supervised read's params.
+                params: ["source": source.rawValue],
+                lane: Self.supervisedLane,
+                // Read-only is the whole consequence class. The action
+                // vocabulary narrowing lives in the extension; this is what
+                // says so on the row, where an audit can see it.
+                consequence: "read_only",
+                watchingUntil: Date().addingTimeInterval(Self.watchLeaseSeconds))
+        } catch {
+            return nil
+        }
+    }
+
+    /// Push the watch lease out another thirty seconds. Cheap, idempotent,
+    /// safe to call every ten.
+    ///
+    /// SILENT ON PURPOSE. A missed heartbeat is ordinary — a lift, a tunnel, a
+    /// slow server — and the read stopping because of it is the mechanism
+    /// working, not an error to report or retry. Logging it would train
+    /// somebody to ignore the one signal that means "she stopped".
+    ///
+    /// The caller owns the only thing that matters: this must be called ONLY
+    /// while the read is on screen and the scene phase is `.active`. Nothing
+    /// here can check that, and nothing here should pretend to.
+    func holdWatchLease(jobID: String) async {
+        guard !jobID.isEmpty else { return }
+        try? await backend.setJobFields(id: jobID, fields: [
+            "watching_until": ISO8601DateFormatter.anticipyUTC.string(
+                from: Date().addingTimeInterval(Self.watchLeaseSeconds)),
+        ])
+    }
+
+    /// Stop the read NOW, rather than within the half-minute the last
+    /// heartbeat already bought.
+    ///
+    /// Letting the lease run out is the passive stop — it is what happens when
+    /// the phone is locked or the app is backgrounded, and it is what makes
+    /// supervision structural. But a person who taps Stop means now: without
+    /// this, the extension may keep reading for up to thirty more seconds and
+    /// whatever it finds in that window lands in the store having never
+    /// appeared on screen, which quietly falsifies "I kept what you watched me
+    /// find."
+    ///
+    /// A stamp in the past rather than a cleared field, so the row still
+    /// records WHEN she was stopped; both read as "nobody is watching" to
+    /// every guard.
+    func dropWatchLease(jobID: String) async {
+        guard !jobID.isEmpty else { return }
+        try? await backend.setJobFields(id: jobID, fields: [
+            "watching_until": ISO8601DateFormatter.anticipyUTC.string(
+                from: Date().addingTimeInterval(-1)),
+        ])
+    }
+
+    /// What she has said and concluded on this read so far, oldest first.
+    ///
+    /// The narration travels as ordinary events — `read_line` for one short
+    /// sentence in her voice, `read_fact` for one distilled fact — stamped with
+    /// the job id in `goal`. NOTHING ELSE COMES BACK. No page text, no subject
+    /// line, no message body is ever written as an event or stored server-side
+    /// (`design/LOCAL-FIRST.md:9-11`: only conclusions travel), and the server
+    /// refuses any other kind from a browser credential (`guard.pb.js`).
+    ///
+    /// Filtered on the job id alone and split by kind here, because a filter
+    /// containing `||` is refused outright for an account list
+    /// (`guard.pb.js:38-43`).
+    func supervisedLines(jobID: String) async -> (lines: [String], facts: [String]) {
+        guard !jobID.isEmpty else { return ([], []) }
+        guard let events = try? await backend.fetchEvents(
+            limit: 120, matching: "goal=\"\(jobID)\"", oldestFirst: true) else {
+            // Unreachable, not empty. The caller keeps whatever it has already
+            // shown rather than blanking a log somebody is reading.
+            return ([], [])
+        }
+        var lines: [String] = []
+        var facts: [String] = []
+        for event in events {
+            let text = (event.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            switch event.kind {
+            case "read_line": lines.append(text)
+            case "read_fact": facts.append(text)
+            // Any other kind on this job is not narration. Dropped rather than
+            // rendered: the log says only what she said.
+            default: continue
+            }
+        }
+        return (lines, facts)
+    }
+
+    /// She got one wrong — throw it away, and say so where it can be acted on.
+    ///
+    /// `design/day-zero.md` §3: "Every fact is vetoable. A tap deletes it and
+    /// marks it never-re-derive." The tap has already removed it from the
+    /// screen; this is the half that has to reach the server, posted as
+    /// `read_veto` carrying the fact's own text and the job it came from.
+    ///
+    /// Fire-and-forget and silent, like the heartbeat: the local removal is
+    /// what the person sees, and a veto that failed to send is retried by
+    /// nothing — it is one line, and she will offer it again rather than
+    /// pretend it was forgotten.
+    func forgetSupervisedFact(jobID: String, fact: String) async {
+        let text = fact.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        try? await backend.pushEvent(kind: "read_veto", text: text,
+                                     goal: jobID, source: "supervised_mail")
+    }
+
+    // MARK: - The interview
+
+    /// One answer, in her words about them, straight into the profile layer.
+    ///
+    /// Posted as `kind: "profile"` for the same reason the imports are: a
+    /// transcript gets triaged, and "I run product at a design studio" is
+    /// something she should KNOW, not an errand to start. `remember_fact`
+    /// merges restatements, so answering the same question twice cannot
+    /// duplicate the fact.
+    ///
+    /// Returns whether it landed, so the view can keep the question open rather
+    /// than telling somebody she remembered a thing she dropped on the floor.
+    @discardableResult
+    func sendInterviewAnswer(_ question: InterviewQuestion, answer: String) async -> Bool {
+        let text = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A skip records NOTHING. Never an empty fact, never a "they declined"
+        // fact — the absence of an answer is not information about a person
+        // (design/briefs/08-day-zero.md:30).
+        guard !text.isEmpty else { return false }
+        do {
+            try await backend.pushEvent(kind: "profile",
+                                        text: question.fact(text),
+                                        importance: question.importance,
+                                        source: "interview")
+            InterviewProgress().markAnswered(question.id)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Ask the server to forget everything, and say honestly what happened.
+    ///
+    /// `POST /me/delete` clears every owner-scoped table, schedules the purge of
+    /// the per-owner memory file, and closes the account. It answers 409 when
+    /// the rows went but the account survived, and 500 when something was left
+    /// behind — both of which must reach the person as "not done", because the
+    /// whole point of this endpoint is that "deleted" can be believed.
+    func deleteEverythingOnServer() async -> (ok: Bool, message: String) {
+        do {
+            let (status, _) = try await backend.deleteAccount()
+            switch status {
+            case 200:
+                return (true, "Done. It's gone, and so is your account.")
+            case 409:
+                return (false, "I deleted your data but couldn't close the account. What's gone stays gone. Try again.")
+            case 401, 403:
+                return (false, "I couldn't prove it was you. Sign out, sign back in, and ask again.")
+            default:
+                return (false, "I couldn't finish, so I stopped rather than tell you I had. Nothing was half-deleted. Try again.")
+            }
+        } catch {
+            return (false, "I couldn't reach my side. Nothing was deleted.")
+        }
     }
 
     func startListening() {
@@ -694,9 +1118,29 @@ final class AnticipySession: ObservableObject {
     /// Jobs whose last write failed, so the card can say so and offer Retry
     /// instead of buzzing success and leaving the card sitting there.
     @Published var failedWrites: Set<String> = []
+    /// Statuses the server has ALREADY ACCEPTED, held over the feed until a
+    /// fetch agrees with them.
+    ///
+    /// Not optimism about a write in flight - that would be the dishonesty
+    /// `write` exists to prevent. This is only ever populated AFTER the server
+    /// returned success, and it answers a different problem: `fetchJobs` is a
+    /// separate round-trip that can legitimately return a pre-write row
+    /// (PocketBase gives no read-after-write guarantee across requests), so
+    /// without this the card visibly snaps back to "waiting for your OK" for one
+    /// poll after she was told yes.
+    private var confirmedStatus: [String: String] = [:]
     /// Jobs with a write in flight — the card disables itself, so a tap that
     /// looks like it did nothing can't be tapped again into a double send.
     @Published var inFlight: Set<String> = []
+    /// HIS OWN turns, either lane, newest first. This is how the app knows
+    /// whether a question she asked is still OPEN.
+    ///
+    /// Without it there is no way to tell an unanswered question from one he
+    /// settled by text an hour ago, and a card offering to answer a closed
+    /// question is an invitation to answer it twice. Server truth on purpose:
+    /// a local "I answered this" set would forget on reinstall and would not
+    /// know about anything he said from his phone's Messages app.
+    @Published var ownerReplies: [BrainEvent] = []
 
     private enum WorkflowWriteError: Error { case malformed, unsafeRetry }
 
@@ -1021,37 +1465,69 @@ final class AnticipySession: ObservableObject {
 
     @discardableResult
     func confirm(_ job: AgentJob, ownerAnswer: String? = nil) async -> Bool {
-        // "Type what I need — or say you handled it." The second half of that
-        // promise was never built: EVERY non-empty answer requeued the errand,
-        // so "skip it, I don't need the batteries anymore" relaunched the run
-        // — which then Bing-searched those exact words and hit a CAPTCHA
-        // (found live, 2026-08-14). An answer that ENDS the errand must end
-        // it here, deterministically, on the same cancellation path as "Not
-        // now" — with the owner's words kept as the honest result.
+        // "Type what I need — or say you handled it." Both halves now go
+        // somewhere honest, and they are different places (AnswerRoutePolicy):
+        //
+        // An answer that ENDS the errand ends it here, deterministically, on the
+        // same cancellation path as "Not now" — because EVERY non-empty answer
+        // used to requeue the run, so "skip it, I don't need the batteries
+        // anymore" relaunched it, Bing-searched those exact words and hit a
+        // CAPTCHA (found live, 2026-08-14).
+        //
+        // A real ANSWER goes to the brain instead of onto the job. Writing it
+        // here would be a second path to a decision the text lane already owns
+        // (brief ex 120): it skips whether the answer covers what the task said
+        // it needed, skips keeping what he said about himself, and skips
+        // deciding which task he meant when two are blocked — the 2026-08-02
+        // failure, where an answer arrived and resolved nothing.
         let trimmed = ownerAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if job.status == "needs_user", job.effect_uncertain != true,
-           let ending = Self.answerThatEndsTheErrand(trimmed) {
-            return await write(job) {
+        switch AnswerRoutePolicy.route(
+            status: job.status,
+            effectUncertain: job.effect_uncertain == true,
+            answer: trimmed,
+            endsTheErrand: Self.answerThatEndsTheErrand(trimmed)) {
+
+        case .nothingToSend:
+            return false
+
+        case .endTheErrand(let ending):
+            return await write(job, expected: "cancelled") {
                 var fields = try self.cancellationFields(
                     for: job, trigger: "their answer read as ending it")
                     ?? ["status": "cancelled"]
                 fields["result"] = ending
                 try await self.backend.setJobFields(id: job.id, fields: fields)
             }
-        }
-        // Record the yes ON the job: the browser agent reads it and finishes
-        // the task, instead of stopping at the final button to ask again.
-        return await write(job) {
-            if let fields = try self.approvalFields(for: job,
-                                                    ownerAnswer: ownerAnswer) {
-                try await self.backend.setJobFields(id: job.id, fields: fields)
-            } else {
-                var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
-                    as? [String: Any] ?? [:]
-                params["authorized"] = true
-                try await self.backend.setJobFields(id: job.id, fields: [
-                    "status": "queued", "params": try self.jsonString(params),
-                ])
+
+        case .toTheBrain(let answer):
+            // ONE inbound turn, the same one a text produces. The worker reads
+            // `app_reply` beside `sms_reply` and both reach on_reply, so the
+            // stuck task resumes through _resume_stuck rather than being
+            // requeued on the hope that the answer was sufficient.
+            //
+            // The job is deliberately NOT touched. If this write lands and the
+            // brain never picks it up, the card stays as it is and says so —
+            // which is the truth. Flipping it to queued here would show him a
+            // task moving that nothing is working on.
+            return await write(job) {
+                try await self.backend.pushEvent(kind: "app_reply", text: answer)
+            }
+
+        case .approval:
+            // Record the yes ON the job: the browser agent reads it and finishes
+            // the task, instead of stopping at the final button to ask again.
+            return await write(job, expected: "queued") {
+                if let fields = try self.approvalFields(for: job,
+                                                        ownerAnswer: ownerAnswer) {
+                    try await self.backend.setJobFields(id: job.id, fields: fields)
+                } else {
+                    var params = (try? JSONSerialization.jsonObject(with: Data(job.params.utf8)))
+                        as? [String: Any] ?? [:]
+                    params["authorized"] = true
+                    try await self.backend.setJobFields(id: job.id, fields: [
+                        "status": "queued", "params": try self.jsonString(params),
+                    ])
+                }
             }
         }
     }
@@ -1079,7 +1555,7 @@ final class AnticipySession: ObservableObject {
     /// before every irreversible action, so this lands before a submit rather
     /// than after it.
     func stopRunning(_ job: AgentJob) async -> Bool {
-        await write(job) {
+        await write(job, expected: "cancelled") {
             var fields = try self.cancellationFields(
                 for: job, trigger: "tapped Stop on the phone")
                 ?? ["status": "cancelled"]
@@ -1095,7 +1571,7 @@ final class AnticipySession: ObservableObject {
     }
 
     func decline(_ job: AgentJob) async -> Bool {
-        await write(job) {
+        await write(job, expected: "cancelled") {
             if let fields = try self.cancellationFields(
                 for: job, trigger: "tapped Not now") {
                 try await self.backend.setJobFields(id: job.id, fields: fields)
@@ -1105,22 +1581,78 @@ final class AnticipySession: ObservableObject {
         }
     }
 
-    /// One place every job write goes, so success is only ever claimed for a
-    /// write the server actually accepted — and the haptic fires after that,
-    /// not before the request leaves.
-    private func write(_ job: AgentJob, _ body: @escaping () async throws -> Void) async -> Bool {
-        inFlight.insert(job.id)
-        failedWrites.remove(job.id)
-        defer { inFlight.remove(job.id) }
+    /// One place every write goes, so success is only ever claimed for a write
+    /// the server actually accepted — and the haptic fires after that, not
+    /// before the request leaves.
+    ///
+    /// Keyed by an arbitrary id rather than a job, because a question she
+    /// asked outside any task is answerable too and its card needs the same
+    /// sending/failed states. `inFlight` and `failedWrites` were always
+    /// `Set<String>`; only the assumption that the string was a job id was
+    /// ever job-shaped.
+    private func write(id: String,
+                       expected: String? = nil,
+                       _ body: @escaping () async throws -> Void) async -> Bool {
+        inFlight.insert(id)
+        failedWrites.remove(id)
+        // Still a defer, for the throwing path and for any caller with no
+        // expected status - removing it twice is harmless on a Set.
+        defer { inFlight.remove(id) }
         do {
             try await body()
             Haptics.success()
-            await refresh()
+            // THE SPINNER ENDS HERE, not after a reconciling fetch.
+            //
+            // This used to `await refresh()` before returning, with `inFlight`
+            // held by a `defer` until the whole function finished - so one tap
+            // cost TWO sequential round-trips of spinner (the write, then a
+            // full re-fetch of jobs, events, transcript and reachability)
+            // before anything on screen moved. On cellular that is seconds of
+            // dead time on the single most-used control in the product, and it
+            // is the whole of what "doesn't feel responsive" meant.
+            //
+            // The honesty rule is untouched: nothing is claimed until the server
+            // has accepted. What changed is that the ALREADY-CONFIRMED result
+            // is shown at once, and the reconciling read happens behind it.
+            inFlight.remove(id)
+            if let expected { confirmedStatus[id] = expected }
+            Task { await refresh() }
             return true
         } catch {
-            failedWrites.insert(job.id)
+            failedWrites.insert(id)
             Haptics.warning()
             return false
+        }
+    }
+
+    private func write(_ job: AgentJob,
+                       expected: String? = nil,
+                       _ body: @escaping () async throws -> Void) async -> Bool {
+        await write(id: job.id, expected: expected, body)
+    }
+
+    /// Answer a question she asked that has no task behind it — "Want me to
+    /// book a table at Earls tonight?", "what is 'it' in this case?".
+    ///
+    /// Until now those were answerable ONLY by text. Production holds 17 of
+    /// them and not one `app_reply` event has ever existed, so the app half of
+    /// "he answers on whichever channel he likes" was never actually reachable:
+    /// the question rendered as unanswerable prose, and a person holding the
+    /// phone that heard the question had to go find a different app to reply in.
+    ///
+    /// One inbound turn, the same shape a text produces, so it lands on the one
+    /// answer path (`handle_inbound` -> `on_reply`) and gets the same
+    /// which-task-did-he-mean reasoning rather than a second implementation of
+    /// it here.
+    @discardableResult
+    func answer(_ event: BrainEvent, text: String) async -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The view disables Send for this, but the guard cannot only live in
+        // the view: an empty answer would record a turn of nothing and mark her
+        // question closed.
+        guard !trimmed.isEmpty else { return false }
+        return await write(id: event.id) {
+            try await self.backend.pushEvent(kind: "app_reply", text: trimmed)
         }
     }
 
@@ -1150,6 +1682,14 @@ final class AnticipySession: ObservableObject {
         /// time. Empty on local lines and on anything we could not read a date
         /// from; the time is then simply not drawn.
         var created: String = ""
+        /// WHICH EARS heard this line, from `events.source`: "phone_mic",
+        /// "pendant" or "typed". Nil means the row predates the field or the
+        /// capture had no verdict to give, and nothing is drawn.
+        ///
+        /// Appended last with a default for the same reason `segmentID` was:
+        /// the synthesized memberwise init keeps every existing call site
+        /// compiling.
+        var source: String? = nil
     }
 
     /// One line spoken in the current Listen session, tracked locally from

@@ -1,0 +1,370 @@
+/* Anticipy's public pages: two palettes, one set of roles.
+ *
+ * Both pages that load this used to carry their own copy of the palette, and
+ * the copies had drifted — setup.html said --stroke:#252525 and privacy.html
+ * said #2b2b2b, setup.html said --gray:#8A8A8A and privacy.html said #a09b96,
+ * and both reached for Georgia while the app and the extension reach for New
+ * York. Three surfaces, three brands. This file is the one place the tokens
+ * live now.
+ *
+ * Every rule in the pages themselves reads a ROLE (--bg, --text, --accent),
+ * never a colour, because the parts of this design that are dark-ONLY are not
+ * the colours: they are a white top-lit hairline, a heavy black shadow, and
+ * grain in plus-lighter, each of which silently does nothing (or something
+ * ugly) on paper.
+ *
+ * The dark palette is the iOS app's, token for token
+ * (app/ios/Anticipy/Theme.swift). Light has no counterpart in the app, so it
+ * is a WHITE page with near-black letters, and it DARKENS the accent, because
+ * champagne #c8a97e measures 2.23:1 on white. In light mode champagne is a
+ * fill, never a letter. On white, elevation is the hairline and the shadow —
+ * --card and --raised are both #ffffff on purpose.
+ *
+ * LIGHT IS THE DEFAULT and prefers-color-scheme is deliberately not consulted;
+ * theme.js says why. These values are the same ones the extension's surfaces
+ * carry (extension/popup.html, extension/onboarding.html).
+ */
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --surface: #f2f2f0; --card: #ffffff; --raised: #ffffff;
+  --edge: rgba(17, 17, 17, 0.14); --edge-lit: rgba(17, 17, 17, 0.20);
+  /* 18.9:1, 8.5:1 and 5.3:1 on white. --muted is the only thing here allowed
+     under AA (3.3:1), because it dresses a placeholder and a disabled control —
+     neither of which is a sentence. */
+  --text: #111111; --text-2: #4d4d4d; --text-3: #6b6b6b; --muted: #8e8e8e;
+  /* 5.8:1 on --surface, the darkest ground either of these ever sits on. */
+  --accent: #7c5729; --alarm: #a03d28;
+  --shadow-near: rgba(17, 17, 17, 0.07); --shadow-far: rgba(17, 17, 17, 0.11);
+  --grain-blend: multiply; --grain-opacity: 0.03;
+  /* THE GLASS CONTROL'S MATERIAL, measured off the owner's Liquid Glass
+     component (Glass CTA for --glass-*, Nav Link for --ghost-*). It is a
+     MATERIAL and not a colour, which is why it is theme-dependent: the
+     component ships near-black metal, and #26262a on the dark palette's
+     #000000 ground is a button-shaped hole. Light therefore keeps the
+     component's own values verbatim; dark inverts (see below). The one-unit
+     gap between --glass-top #26262a and --glass-top-hi rgba(37,37,41,.85) is
+     the component's own, not a typo. */
+  --glass-top: #26262a; --glass-bottom: #08080a;
+  --glass-rim: rgba(255, 255, 255, 0.28); --glass-under: rgba(0, 0, 0, 0.50);
+  --glass-cast: rgba(0, 0, 0, 0.38); --glass-label: #ffffff;
+  --glass-top-hi: rgba(37, 37, 41, 0.85); --glass-bottom-hi: rgba(8, 8, 10, 0.85);
+  --glass-rim-hi: rgba(255, 255, 255, 0.45); --glass-cast-hi: rgba(0, 0, 0, 0.58);
+  --ghost-fill: rgba(255, 255, 255, 0.40); --ghost-rim: rgba(255, 255, 255, 0.85);
+  --ghost-cast: rgba(148, 160, 181, 0.45); --ghost-glow: rgba(255, 255, 255, 0.50);
+  --ghost-label: rgba(20, 20, 25, 0.55); --ghost-label-hi: #0a0a0c;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000; --surface: #0d0d0d; --card: #141414; --raised: #1c1c1c;
+  --edge: rgba(255, 255, 255, 0.11); --edge-lit: rgba(255, 255, 255, 0.16);
+  /* Dark has two text levels, not three: #8a8a8a is 6.1:1 on black but only
+     4.9:1 on --raised, so it stays for placeholders and disabled controls while
+     labels are sand — size, tracking and case make them subordinate. */
+  --text: #f5f0eb; --text-2: #d4cec7; --text-3: #d4cec7; --muted: #8a8a8a;
+  --accent: #c8a97e; --alarm: #c96a5a;
+  --shadow-near: rgba(0, 0, 0, 0.70); --shadow-far: rgba(0, 0, 0, 0.50);
+  --grain-blend: plus-lighter; --grain-opacity: 0.035;
+  /* The same material, inverted to light metal, taken from the navbar shell's
+     own 5-stop ramp: #ffffff 0%, #e4e4e4 4.5%, #969696 50%, #e4e4e4 95.5%,
+     #ffffff 100%. The pure-white stops at 0% and 100% ARE the rim highlights,
+     so that ramp decomposes into rim + fill + rim and needs no tokens beyond
+     the ones named here — --glass-rim is the 0% stop, --glass-top/--bottom the
+     4.5%/50% fill, --glass-under the 100% stop. --glass-cast inverts to a
+     white halo because a black drop shadow is invisible on #000000. */
+  --glass-top: #e4e4e4; --glass-bottom: #969696;
+  --glass-rim: rgba(255, 255, 255, 0.95); --glass-under: rgba(255, 255, 255, 0.55);
+  --glass-cast: rgba(255, 255, 255, 0.18); --glass-label: #08080a;
+  --glass-top-hi: rgba(255, 255, 255, 0.92); --glass-bottom-hi: rgba(168, 168, 168, 0.92);
+  --glass-rim-hi: #ffffff; --glass-cast-hi: rgba(255, 255, 255, 0.30);
+  --ghost-fill: rgba(255, 255, 255, 0.10); --ghost-rim: rgba(255, 255, 255, 0.38);
+  --ghost-cast: rgba(148, 160, 181, 0.28); --ghost-glow: rgba(255, 255, 255, 0.18);
+  --ghost-label: rgba(245, 240, 235, 0.55); --ghost-label-hi: #f5f0eb;
+}
+:root {
+  /* Champagne stays theme-invariant because #c8a97e carries #000000 at 9.0:1
+     either way. No control on these pages fills with it any more — the
+     buttons are glass — but it is a CORE token every surface must declare
+     (test_theme_contract PASS 5) and it is what the app fills with, so the
+     two palettes cannot answer this question differently. */
+  --fill: #c8a97e; --on-fill: #000000;
+  /* The sweep that crosses a control on hover. White in both themes: it
+     travels over near-black glass in one and over the metal's #969696 middle
+     in the other, and reads on both. */
+  --shine: rgba(255, 255, 255, 0.70);
+  /* Theme.spring (response .35, damping .8) has no overshoot you can see, so
+     its CSS twin is a hard ease-out, never a bounce. Byte-identical to the
+     extension's --spring; the glass transitions on both surfaces are the same
+     motion. */
+  --spring: 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* The app's own type: ui-serif is how the web reaches New York. Georgia is
+     the non-Apple fallback — a wider, more bookish face, not the headline. */
+  --display: ui-serif, "New York", Georgia, "Times New Roman", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The pendant mark: an ivory pill outline with a champagne dot. Drawn in role
+   colours rather than the brand hexes it used to hard-code — a #f5f0eb
+   outline is an invisible logo on paper. */
+.logo { display: flex; align-items: center; gap: 12px; }
+.wordmark { font-family: var(--display); font-size: 26px; }
+.pill {
+  width: 22px; height: 52px; border: 3px solid var(--text); border-radius: 12px;
+  position: relative; flex: none;
+}
+.pill::after {
+  content: ""; position: absolute; left: 50%; top: 60%;
+  transform: translateX(-50%); width: 7px; height: 7px;
+  border-radius: 50%; background: var(--accent);
+}
+
+/* The theme control: the quietest thing on the page, because it is the one
+   control here that is not about getting set up. The label names what the
+   click DOES — a toggle that names its current state reads as a status
+   line. */
+.themetoggle {
+  display: inline-flex; align-items: center; flex: none;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--edge); background: var(--surface);
+  color: var(--text-3); font-family: var(--sans); font-size: 12px;
+  font-weight: 600; letter-spacing: 0.4px; cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.themetoggle:hover { color: var(--text); border-color: var(--accent); }
+.themetoggle span { display: inline-flex; align-items: center; gap: 7px; }
+.themetoggle svg { width: 14px; height: 14px; flex: none; }
+.themetoggle .ondark, :root[data-theme="dark"] .themetoggle .onlight { display: none; }
+:root[data-theme="dark"] .themetoggle .ondark { display: inline-flex; }
+
+/* ===== the controls: one material, two themes =====
+   Every button and link on these pages is the owner's Liquid Glass component,
+   rebuilt from its measurements rather than eyeballed: the primary control is
+   Glass CTA (11px 24px, 14px/600/0.01em) and the secondary is Nav Link
+   (10px 15px, 14px/500). They live HERE rather than in the pages because the
+   pages may only name ROLES, and this material is fifteen values deep. */
+
+/* The primary control. Four layers are what make glass read as one object: a
+   vertical fill, an inset rim along the top edge (the light above it), an
+   inset floor along the bottom (its thickness), and a cast underneath. The
+   fifth is the sweep below, and `overflow: clip` is what keeps it in the
+   pill. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  position: relative; overflow: clip;
+  padding: 11px 24px; border: 0; border-radius: 999px;
+  background: linear-gradient(180deg, var(--glass-top) 0%, var(--glass-bottom) 100%);
+  box-shadow: inset 0 1px 0 var(--glass-rim),
+              inset 0 -1px 1px var(--glass-under),
+              0 7px 16px -6px var(--glass-cast);
+  color: var(--glass-label);
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  letter-spacing: 0.01em; line-height: 1; text-decoration: none;
+  cursor: pointer;
+  transition: background var(--spring), box-shadow var(--spring),
+              transform var(--spring);
+}
+/* Same material, less air. A second-rank button is a smaller button, not a
+   different one — the moment .small gets its own fill there are two materials
+   on the page and neither one means anything. */
+.btn.small { padding: 8px 18px; }
+/* The shine: a 70x90 band rotated 20deg, parked one full width off the left
+   edge at rest and driven off the right edge on hover, on the component's own
+   0.8s ease. `left` is animated rather than a transform because the travel is
+   measured from the pill's own edges and these pills are not a fixed width. */
+.btn::before {
+  content: ""; position: absolute; pointer-events: none;
+  top: -20px; left: -70px; width: 70px; height: 90px;
+  transform: rotate(20deg); opacity: 0;
+  background: linear-gradient(90deg, transparent 0%, var(--shine) 50%, transparent 100%);
+  transition: left 0.8s cubic-bezier(.25, .1, .25, 1),
+              opacity 0.8s cubic-bezier(.25, .1, .25, 1);
+}
+.btn:hover {
+  background: linear-gradient(180deg, var(--glass-top-hi) 0%, var(--glass-bottom-hi) 100%);
+  box-shadow: inset 0 1px 0 var(--glass-rim-hi),
+              inset 0 -1px 1px var(--glass-under),
+              0 12px 24px -6px var(--glass-cast-hi);
+}
+.btn:hover::before { opacity: 1; left: calc(100% + 70px); }
+/* The press, from the navbar's whileTap. 0.9 is a lot of travel for a control
+   this size, and that is the point: it is the only acknowledgement a click
+   gets before a 40MB download starts. */
+.btn:active { transform: scale(0.9); }
+
+/* THE FORWARD CTA — the owner's Text Arrow CTA, verbatim. The secondary
+   control on these pages is not a pill: .btn is the thing that DOES something
+   and this is the thing that is going SOMEWHERE, so it is a line of type with
+   an arrow and a rule under it. It replaced .linkish/.navlink outright — the
+   ghost pill's own rest-state trick (three `transparent` shadows, so
+   box-shadow has something to interpolate from) went with them, because
+   nothing here casts. The ghost's LABEL roles stay: they are what a link is
+   coloured in, in both themes.
+
+   Nothing below names a colour. Every stroke and both underline segments are
+   currentColor, so the rule sits at exactly the label's weight at rest and
+   brightens with the label on hover — the one moment it is moving.
+
+   Two mechanisms, both the component's:
+
+   1. THE ARROW SWAPS SIDES; it does not slide. The leaving arrow spins a
+      quarter turn and scales to nothing while the entering one spins in
+      from -90deg, and because that arrow leaves `absolute` for the flow,
+      the label shifts right by an arrow plus a gap. They swap at the same
+      moment, so the control's WIDTH never changes and a line of these does
+      not reflow under the pointer.
+   2. THE UNDERLINE WIPES in two halves that TRADE: at rest the right half is
+      the line and the left is a 1% nub; on hover they exchange, so the rule
+      redraws itself from the other end instead of fading. The halves are
+      staggered by 0.3s and the stagger FLIPS with direction — on the way in
+      the right half is the late one, on the way back the left — which is what
+      stops the pair reading as one bar sliding across.
+
+   The component's transition is a spring (bounce .3, duration 1). CSS has no
+   spring, so the LENGTH is the component's own 1s and the SHAPE is --spring's
+   curve: the bounce is approximated, and deliberately with the curve .btn
+   already uses. --spring carries its own 240ms and cannot be reused for a 1s
+   move, so the curve is written once, here, and read from --fwd-motion. */
+.fwd {
+  --fwd-motion: 1s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  display: inline-flex; align-items: center; gap: 16px; flex: none;
+  margin: 0; padding: 0; border: 0; background: none;
+  color: var(--ghost-label); text-decoration: none; cursor: pointer;
+  font-family: var(--sans); font-size: 14px; font-weight: 500;
+  letter-spacing: -0.02em; line-height: 1;
+  /* An inline-flex box takes its baseline from its FIRST in-flow child, and
+     the swap changes which child that is — so a CTA sitting in a line of prose
+     nudged everything below it down 2.5px the moment you pointed at it.
+     Aligning the box itself takes the question away. */
+  vertical-align: middle;
+  transition: color var(--spring);
+}
+.fwd:hover, .fwd:focus-visible { color: var(--ghost-label-hi); }
+.fwd .arrow {
+  width: 20px; height: 15px; flex: none;
+  transition: transform var(--fwd-motion), opacity var(--fwd-motion);
+}
+/* Rest: the ENTERING arrow is parked one width off the left edge, turned a
+   quarter turn and scaled away; the LEAVING one is the visible one.
+   `position` is the only property here that cannot animate, and that is the
+   component's design rather than a compromise — the change of places is
+   instant and the spin across it is what you read. */
+.fwd .arrow.enter {
+  position: absolute; left: -20px; top: 50%;
+  transform: translateY(-50%) rotate(-90deg) scale(0); opacity: 0;
+}
+.fwd .arrow.leave {
+  position: relative; transform: rotate(0deg) scale(1); opacity: 1;
+}
+.fwd:hover .arrow.enter, .fwd:focus-visible .arrow.enter {
+  position: relative; left: auto; top: auto;
+  transform: rotate(0deg) scale(1); opacity: 1;
+}
+.fwd:hover .arrow.leave, .fwd:focus-visible .arrow.leave {
+  position: absolute; right: 0; top: 50%;
+  transform: translateY(-50%) rotate(-90deg) scale(0); opacity: 0;
+}
+/* 129% of the label's own height, so the rule clears the descenders at
+   whatever size the label is set in — which is why it is a percentage and not
+   a number of pixels. */
+.fwd .wipe {
+  position: absolute; top: 129%; left: 50%; width: 100%;
+  transform: translate(-50%, -50%);
+  min-height: 1px; pointer-events: none;
+}
+/* The two halves are ANCHORED — one to each end — rather than laid out as the
+   component's 32px-gap row, and that is the one place this port had to be
+   argued instead of typed. As a flex row they shrink against each other:
+   their used widths are pinned to the container, so the half that is not
+   moving is dragged by the half that is, and the 0.3s stagger cannot show.
+   Measured, before this was fixed: the right half began moving 67ms into a
+   hover with a 300ms delay declared on it. Anchored, they are independent,
+   and the stagger becomes the whole effect — the rule EMPTIES and REFILLS
+   instead of sliding:
+
+     on the way in   the right half retracts to the right at once and the left
+                     half redraws from the left 0.3s behind it;
+     on the way out  the mirror image — the left half retracts first and the
+                     right redraws behind it.
+
+   The component's 32px gap has no counterpart here for the same reason it has
+   none there: an absolutely positioned child ignores its stack's gap. At rest
+   the right half IS the rule, full width, which is what keeps the control
+   underlined when nothing is animating at all. */
+.fwd .wipe i {
+  position: absolute; height: 1px; background: currentColor;
+  transition: left var(--fwd-motion), right var(--fwd-motion),
+              width var(--fwd-motion);
+}
+/* A segment's delay is the delay it uses on the way TO that state, so the
+   0.3s always sits on the half that is arriving and never on the half that is
+   leaving. That is the direction the component runs. */
+.fwd .wipe i:first-child { left: -3px; width: 1%; transition-delay: 0s; }
+.fwd .wipe i:last-child { right: 0; width: 100%; transition-delay: 0.3s; }
+.fwd:hover .wipe i:first-child,
+.fwd:focus-visible .wipe i:first-child { left: 0; width: 100%; transition-delay: 0.3s; }
+.fwd:hover .wipe i:last-child,
+.fwd:focus-visible .wipe i:last-child { right: -3px; width: 1%; transition-delay: 0s; }
+
+/* A link inside a sentence is the one control that does NOT get the pill:
+   10px 15px of padding around a word mid-paragraph forces the line box open
+   and the paragraph stops being a paragraph. So a prose link keeps the
+   underline it already had and borrows the ghost's LABEL colours only — and
+   its rest state is the LIT label, not --ghost-label, because
+   rgba(20,20,25,0.55) measures 3.2:1 on white: that is a nav-bar colour, not
+   a colour a sentence may be set in. Hover brightens the underline rather
+   than the word, so the line never reflows or changes weight. */
+a {
+  color: var(--ghost-label-hi);
+  text-decoration-color: var(--ghost-label);
+  text-underline-offset: 3px;
+}
+a:hover { text-decoration-color: var(--ghost-label-hi); }
+
+/* Focus is authored, not inherited. It deliberately sets no radius: the glass
+   controls are 999px pills, and the `border-radius: 6px` this rule used to
+   carry squared every one of them the moment it took focus — a:focus-visible
+   outranks .btn. */
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* Killing the transition alone would leave the sweep parked off the pill's
+     left edge and the press landing as an instant 10% jump. The glass keeps
+     its fill, rim and cast — those are the material — and loses everything
+     that was only travel. */
+  .btn::before { display: none; }
+  .btn:active { transform: none; }
+  /* Both of the forward CTA's mechanisms hang off `position`, and position
+     does not transition — so the line above leaves the arrow swapping sides
+     and the underline trading halves as instant jumps, which is precisely the
+     movement this query exists to remove. Both are pinned to their resting
+     geometry, and hover keeps the one thing that is not motion: the label and
+     its underline brighten together. The rule stays drawn and the arrow stays
+     where it was. */
+  .fwd:hover .arrow.enter, .fwd:focus-visible .arrow.enter {
+    position: absolute; left: -20px; top: 50%;
+    transform: translateY(-50%) rotate(-90deg) scale(0); opacity: 0;
+  }
+  .fwd:hover .arrow.leave, .fwd:focus-visible .arrow.leave {
+    position: relative; right: auto; top: auto;
+    transform: rotate(0deg) scale(1); opacity: 1;
+  }
+  .fwd:hover .wipe i:first-child,
+  .fwd:focus-visible .wipe i:first-child { left: -3px; width: 1%; }
+  .fwd:hover .wipe i:last-child,
+  .fwd:focus-visible .wipe i:last-child { right: 0; width: 100%; }
+}

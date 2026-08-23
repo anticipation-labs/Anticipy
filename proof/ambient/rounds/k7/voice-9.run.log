@@ -1,0 +1,55 @@
+pb        http://127.0.0.1:8090
+owner_ref fbmxghyvp84bce8
+brain     worker: pid 16676,16677,16678,16679,16680,16681,16682,16683,16684,16685,16686,16687,16688,16689,16690,16691 up since 12:10:23, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62] !! amb-0015 want=ask    got=act         11.4s  'I ought to get the practising certificate renewed, the win'
+            goal: Renew practicing certificate
+[2/62] !! amb-0031 want=act    got=ignore       6.0s  'The calibration certificate on the loop tester ran out in '
+            goal: renew calibration certificate for loop tester
+[3/62] !! amb-0047 want=act    got=ignore       4.0s  'The Hartleys cannot do Thursday for the viewing after all.'
+[4/62]    amb-0063 want=act    got=act         11.3s  'There is a leak under the sink and it is getting worse.'
+            goal: arrange plumber to fix leak under sink
+[5/62] !! amb-0079 want=act    got=ignore       5.1s  'The ISA allowance resets in April and I have not used half'
+[6/62]    amb-0095 want=act    got=act         16.0s  'I still have not booked the conference and early bird ends'
+            goal: Book conference registration
+[7/62]    amb-0111 want=act    got=act         23.5s  'We have a wedding party of sixty and no second chef booked'
+            goal: Find a second chef for a wedding party of sixty
+[8/62]    amb-0127 want=act    got=act         26.5s  'The gutter overflows every single time it rains.'
+            goal: arrange gutter cleaning
+[9/62] !! amb-0143 want=ask    got=ignore      25.1s  'The kids need something to do in the holidays and I have n'
+            goal: research holiday activities for children
+[10/62] !! amb-0159 want=act    got=ignore      31.4s  'The salon insurance certificate has to be on the wall and '
+            goal: find salon insurance certificate
+[11/62]    amb-0175 want=act    got=act         26.1s  'The wedding gallery was promised in six weeks and it has b'
+            goal: contact Alex about wedding gallery delivery
+[12/62]    amb-0191 want=ignore got=ignore      22.5s  'If I get one more calendar invite I am moving to a forest.'
+[13/62]    amb-0207 want=ignore got=ignore      12.8s  'I wonder how much those things even cost these days.'
+[14/62]    amb-0223 want=ignore got=ignore      26.5s  'Terms and conditions apply, see website for details.'
+[15/62]    amb-0239 want=ignore got=ignore      14.0s  'I will drop the forms in when I go past the surgery.'
+[16/62]    amb-0255 want=ignore got=ignore      14.4s  'Renewed it online while I was waiting, took two minutes.'
+[17/62]    amb-0271 want=ignore got=ignore      24.9s  'and then we uh sorry go on'
+[18/62]    amb-0295 want=act    got=act         55.5s  'I need to get the boiler serviced before it gets properly '
+            goal: schedule boiler service
+[19/62]    amb-0296 want=ignore got=ignore      59.1s  'The radiators upstairs were never right last winter either'
+            goal: schedule boiler service
+[20/62] !! amb-0297 want=ignore got=act        101.6s  'Still need to sort that boiler.'
+            goal: arrange boiler service
+[21/62]    per-0004 want=act    got=act        145.4s  'My repeat prescription is down to about four tablets and I'
+            goal: Order Alex's repeat prescription
+[22/62]    per-0020 want=act    got=act        109.7s  'The council keep sending the same letter about the single '
+            goal: Reply to council about single person discount letter
+[23/62] per-0036 POST FAILED: timed out
+[24/62] per-0052 POST FAILED: timed out
+[25/62] per-0068 POST FAILED: timed out
+[26/62] per-0084 POST FAILED: timed out
+[27/62] per-0127 POST FAILED: timed out
+[28/62] fin-0013 POST FAILED: timed out
+[29/62] fin-0029 POST FAILED: timed out
+[30/62] fin-0045 POST FAILED: timed out
+[31/62] !! fin-0061 want=ignore got=TIMEOUT    259.0s  'The redlines are back with their legal team, nothing for u'
+[32/62] fin-0077 POST FAILED: timed out
+[33/62] !! med-0012 want=act    got=TIMEOUT    242.6s  'I am forty hours short on verifiable CPD and the cycle clo'
+[34/62] !! med-0031 want=act    got=TIMEOUT    240.2s  'My clinical supervision hours are short for the accreditat'
+
+THREE TIMEOUTS IN A ROW. The worker is not stamping anything — check /Users/josegaelcruzlopez/.anticipy-rig/brain.log. Stopping rather than filling the results file with silence that looks like data.

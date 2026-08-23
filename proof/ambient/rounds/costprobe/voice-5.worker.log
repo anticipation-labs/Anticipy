@@ -1,0 +1,29 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+consolidation: 111 episodes -> 4 new facts, 0 merged
+segment: new (gap 9218s >= 1200s) seg=22a9cpq2p5saiea
+heard: 'Oh no, the VAT return is due on the seventh and I have not touched the card statements.' -> ignore (gather credit card statements for upcoming VAT return)
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: escalate (substantive, no overlap, but recent) seg=3tekzno6fiao8fo
+heard: 'The bundle for the Prentice hearing has to be filed by four and I am nowhere near.' -> act (prepare Prentice hearing bundle due by 4:00 PM)
+segment: append (conversation still open) seg=3tekzno6fiao8fo
+heard: 'Oh no, the VAT return is due on the seventh and I have not touched the card statements.' -> ignore (gather card statements for the upcoming VAT return)
+segment: link (anaphoric/short, still inside the near band) seg=20351so0q4v0gfq
+heard: 'Whoever wrote this test suite hated joy.' -> ignore (no goal)
+segment: append (conversation still open) seg=20351so0q4v0gfq
+heard: 'The bundle for the Prentice hearing has to be filed by four and I am nowhere near.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=as70djpdgc5epaa
+heard: 'The Mitsubishi units for the Croydon install have not been ordered, have they.' -> ignore (Check whether Mitsubishi units for Croydon install have been ordered)
+segment: append (conversation still open) seg=as70djpdgc5epaa
+heard: 'Whoever wrote this test suite hated joy.' -> ignore (no goal)
+segment: append (conversation still open) seg=as70djpdgc5epaa
+heard: 'The Mitsubishi units for the Croydon install have not been ordered, have they.' -> ignore (check status of Mitsubishi units order for Croydon install)
+segment: append (conversation still open) seg=as70djpdgc5epaa
+heard: 'The Mitsubishi units for the Croydon install have not been ordered, have they.' -> ignore (Check whether Mitsubishi units for Croydon install have been ordered)

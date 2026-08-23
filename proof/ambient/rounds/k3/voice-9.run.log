@@ -1,0 +1,107 @@
+pb        http://127.0.0.1:8090
+owner_ref fbmxghyvp84bce8
+brain     worker: pid 96659,96660,96661,96662,96663,96664,96665,96666,96667,96668,96669,96670,96671,96672,96673,96674,96786,96793,96795 up since 11:08:09, newer than every file in brain/
+corpus    62 utterances, 0 already done, 62 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/62] !! amb-0015 want=ask    got=act         16.9s  'I ought to get the practising certificate renewed, the win'
+            goal: Renew practicing certificate
+[2/62] !! amb-0031 want=act    got=ignore      12.0s  'The calibration certificate on the loop tester ran out in '
+[3/62] !! amb-0047 want=act    got=ignore      14.0s  'The Hartleys cannot do Thursday for the viewing after all.'
+[4/62]    amb-0063 want=act    got=act         16.9s  'There is a leak under the sink and it is getting worse.'
+            goal: arrange for plumbing repair for leak under sink
+[5/62] !! amb-0079 want=act    got=ignore      19.3s  'The ISA allowance resets in April and I have not used half'
+            goal: research ISA allowance options
+[6/62]    amb-0095 want=act    got=act         25.2s  'I still have not booked the conference and early bird ends'
+            goal: Book conference before early bird ends
+[7/62]    amb-0111 want=act    got=act         27.3s  'We have a wedding party of sixty and no second chef booked'
+            goal: Find a second chef for a wedding party of 60
+[8/62]    amb-0127 want=act    got=act         38.0s  'The gutter overflows every single time it rains.'
+            goal: fix overflowing gutter
+[9/62] !! amb-0143 want=ask    got=ignore       5.0s  'The kids need something to do in the holidays and I have n'
+            goal: research kids' holiday activities
+[10/62] !! amb-0159 want=act    got=ignore       4.0s  'The salon insurance certificate has to be on the wall and '
+            goal: Find salon insurance certificate
+[11/62]    amb-0175 want=act    got=act         24.5s  'The wedding gallery was promised in six weeks and it has b'
+            goal: Follow up with Alex about the wedding gallery delivery.
+[12/62]    amb-0191 want=ignore got=ignore       6.2s  'If I get one more calendar invite I am moving to a forest.'
+[13/62]    amb-0207 want=ignore got=ignore       5.5s  'I wonder how much those things even cost these days.'
+[14/62]    amb-0223 want=ignore got=ignore       6.5s  'Terms and conditions apply, see website for details.'
+[15/62]    amb-0239 want=ignore got=ignore      39.8s  'I will drop the forms in when I go past the surgery.'
+[16/62]    amb-0255 want=ignore got=ignore       9.2s  'Renewed it online while I was waiting, took two minutes.'
+[17/62]    amb-0271 want=ignore got=ignore       6.2s  'and then we uh sorry go on'
+[18/62]    amb-0295 want=act    got=act         21.2s  'I need to get the boiler serviced before it gets properly '
+            goal: Schedule boiler service
+[19/62]    amb-0296 want=ignore got=ignore      10.2s  'The radiators upstairs were never right last winter either'
+            goal: Schedule boiler service for Alex's home
+[20/62]    amb-0297 want=ignore got=ignore      32.7s  'Still need to sort that boiler.'
+            goal: arrange boiler service
+[21/62]    per-0004 want=act    got=act         25.0s  'My repeat prescription is down to about four tablets and I'
+            goal: order repeat prescription
+[22/62]    per-0020 want=act    got=act         59.2s  'The council keep sending the same letter about the single '
+            goal: Draft email to council regarding single person discount
+[23/62] !! per-0036 want=act    got=ignore      12.7s  'My student loan repayments look wrong and I have not check'
+            goal: check student loan repayments
+[24/62]    per-0052 want=act    got=act         26.4s  'There is nothing in for tea and the shop shuts at four on '
+            goal: order groceries for tea
+[25/62] !! per-0068 want=ignore got=act         16.3s  'I need to ring the dentist, actually no, forget it, I will'
+            goal: walk in to the dentist on Saturday, August 22, 2026
+[26/62]    per-0084 want=ignore got=ignore       4.4s  'Next week they help a family whose loft conversion has bee'
+[27/62]    per-0127 want=ignore got=ignore       7.2s  "My mate's landlord has not fixed her boiler since November"
+[28/62]    fin-0013 want=ignore got=ignore      64.6s  'If we ever picked up a listed client we would need a whole'
+[29/62]    fin-0029 want=ignore got=ignore     118.3s  'I ought to add the trailer to the policy, no hang on, it w'
+[30/62]    fin-0045 want=act    got=act         26.5s  'The Brennan review is next Thursday and the risk questionn'
+            goal: Send risk questionnaire to Alex for Brennan review by Thursday, August 27, 2026
+[31/62]    fin-0061 want=ignore got=ignore       8.5s  'The redlines are back with their legal team, nothing for u'
+[32/62]    fin-0077 want=act    got=act         31.4s  'The licence transfer paperwork has been in the van since h'
+            goal: retrieve licence transfer paperwork from van
+[33/62] !! med-0012 want=act    got=ignore       5.2s  'I am forty hours short on verifiable CPD and the cycle clo'
+            goal: research options for 40 hours of verifiable CPD before January
+[34/62] !! med-0031 want=act    got=ignore       4.1s  'My clinical supervision hours are short for the accreditat'
+            goal: find clinical supervision hours to meet accreditation requirement by January
+[35/62]    med-0047 want=act    got=act         15.5s  'The reporting workstation licence expires at the end of th'
+            goal: renew reporting workstation license
+[36/62]    med-0063 want=act    got=act         35.5s  'The contact lens stock order wants putting in before the b'
+            goal: Order contact lens stock
+[37/62]    med-0086 want=act    got=act         52.4s  'The Form E is due at court on Friday and the pension valua'
+            goal: Chase pension valuation for Form E court submission due Friday, August 28, 2026
+[38/62]    med-0102 want=act    got=act         10.1s  'The fitness and propriety attestations are due and half th'
+            goal: chase fitness and propriety attestations from half the desk
+[39/62]    svc-0008 want=act    got=act         11.1s  'Two of the front of house lot have never once been shown t'
+            goal: create allergen matrix training for front of house staff
+[40/62]    svc-0024 want=ignore got=ignore       3.0s  'And she goes, I am not walking down an aisle for anybody, '
+[41/62] !! svc-0040 want=ask    got=ignore       4.0s  'The hall booking runs out at the end of term and the paris'
+[42/62]    svc-0056 want=ignore got=ignore       3.0s  'I will ring the lab about the reprints, no, hang on, I wil'
+[43/62]    svc-0072 want=ignore got=ignore       4.0s  'The allergen labels are sorted, I ran the whole new set of'
+[44/62]    svc-0088 want=ignore got=ignore       3.2s  'Leave the duty relief return alone, the accountant is fili'
+[45/62]    svc-0093 want=ignore got=ignore       7.0s  'Chef, table eleven are asking if the risotto can be done w'
+[46/62] !! svc-0094 want=act    got=ignore       6.2s  'That is the second parmesan one tonight and the risotto is'
+[47/62]    svc-0095 want=ignore got=ignore       4.1s  'Leave the matrix, Sami said he would type the new dishes u'
+[48/62]    svc-0096 want=act    got=act         10.5s  'And I still have not put the fridge temperatures in the bo'
+            goal: record fridge temperatures in the book
+[49/62]    svc-0105 want=ignore got=ignore       6.1s  'The rota.'
+            goal: enter fridge temperatures in the book
+[50/62] !! svc-0106 want=act    got=ignore       3.0s  'Full house Friday and Saturday and reception is one person'
+[51/62] !! svc-0107 want=ignore got=act          9.1s  'Actually no, forget that, I will stand on the desk myself '
+            goal: Update rota: Alex on desk Friday, Kirsty on desk Saturday
+[52/62]    tep-0012 want=ignore got=ignore       5.2s  'Do not worry about the printer, Yusuf has already logged i'
+[53/62]    tep-0028 want=act    got=act         10.9s  'The Part L calculations for the lighting design never went'
+            goal: send Part L calculations for lighting design to M and E consultant
+[54/62]    tep-0044 want=ignore got=ignore       5.0s  'Ofsted are apparently due any day, which is exactly what t'
+[55/62]    tep-0060 want=ignore got=ignore       4.0s  'The exam entry is sorted, I paid for it online last night.'
+[56/62]    tep-0076 want=act    got=act          8.0s  'The information asset register has not been reviewed this '
+            goal: review information asset register
+[57/62] !! trd-0022 want=ask    got=ignore       3.0s  'I want the powerflush booked in at the Hendon flats but I '
+[58/62]    trd-0038 want=act    got=act          9.1s  'The COSHH assessment for the new two pack lacquer has not '
+            goal: arrange COSHH assessment for two pack lacquer
+[59/62]    trd-0054 want=act    got=act          8.0s  'The CS thirty and thirty one tickets for the new lad, nobo'
+            goal: Book CS30 and CS31 tickets for new employee
+[60/62]    trd-0070 want=act    got=act          9.0s  'The mortar on the conservation job has to be lime and I ha'
+            goal: Source sand for lime mortar for conservation job
+[61/62] !! trd-0086 want=ask    got=ignore       3.0s  'The client wants the Lagos shipment quoting and I do not k'
+[62/62]    trd-0102 want=act    got=act         12.2s  'The liferaft service is out of date and the survey is next'
+            goal: schedule liferaft service before next month's survey
+
+pushed 62 in 18.9 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k3/voice-9.jsonl
+  act=26  ignore=36
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

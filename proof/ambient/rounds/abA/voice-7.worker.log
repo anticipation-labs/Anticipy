@@ -1,0 +1,31 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (gap 3262s >= 1200s) seg=rivlwmkkgwwiik3
+heard: "The van's MOT is end of the month and I have not rung anyone." -> act (research MOT test booking options for the van before end of August 2026)
+segment: escalate (substantive, no overlap, but recent) seg=9yypoh2rhowtr5f
+heard: 'World book day is Thursday and we have not got a costume.' -> ignore (Find costume options available before World Book Day on Thursday, August 27, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=8g7pyk0aaby8orj
+heard: 'The board outside the Willow Road place has been down since the storm.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=k4u4y3nkhufy1v8
+heard: 'It has gone cold again, has it not.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=2l50fbo0askrrcj
+heard: 'Bullet point, review the schedule. Bullet point, confirm the site access.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=d9dpp0m57ytv8ul
+heard: 'I promised Mum I would sort her online banking and I keep saying next weekend.' -> act (set reminder to help Mum sort online banking this weekend)
+segment: escalate (substantive, no overlap, but recent) seg=abmjq2jmm437yud
+heard: 'I never checked how many days notice a capital call actually needs, ten or fifteen.' -> ignore (check capital call notice period requirements (10 vs 15 days))
+segment: escalate (substantive, no overlap, but recent) seg=gbpzoj7kf82jd0d
+heard: 'I am forty hours short on verifiable CPD and the cycle closes in January.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=wjy73gse76kp8uh
+heard: 'The deep clean has to happen before the food hygiene rating re-inspection, though I have not settled whether we close a whole day or do it overnight.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=owuw678ybm9n80q
+heard: 'The Hallam album proof has been sat with me three weeks past what I promised them.' -> act (Draft email to the Hallams regarding the overdue album proof)
+segment: escalate (substantive, no overlap, but recent) seg=4meqcpd5b6nl7x9
+heard: 'This design system has four different greys all called neutral.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=sg2n6ov5ftgjtiw
+heard: "I will put a marker on the address, actually no, leave it, that is the neighbouring force's job." -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ijw57lc9ebznats
+heard: 'I want the agency lads inducted before peak, though I have not settled how many shifts we are running.' -> ignore (no goal)

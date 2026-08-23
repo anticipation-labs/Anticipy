@@ -1,0 +1,79 @@
+{
+  "started_at": "2026-08-21T01:39:50.224Z",
+  "owner_ref": "qq85var8jxk705d",
+  "checks": [
+    {
+      "name": "queued_held",
+      "pass": true,
+      "detail": "yp7sihav00bln2x"
+    },
+    {
+      "name": "invisible_to_poll",
+      "pass": true
+    },
+    {
+      "name": "not_claimed_while_held",
+      "pass": true,
+      "detail": "70s"
+    },
+    {
+      "name": "approval_released_it",
+      "pass": true
+    },
+    {
+      "name": "claimed_after_approval",
+      "pass": true
+    },
+    {
+      "name": "reached_an_ending",
+      "pass": true,
+      "detail": "done"
+    },
+    {
+      "name": "booking_code",
+      "pass": true
+    },
+    {
+      "name": "verified_receipt",
+      "pass": true
+    },
+    {
+      "name": "one_booking",
+      "pass": true,
+      "detail": 1
+    },
+    {
+      "name": "no_side_effects",
+      "pass": true
+    }
+  ],
+  "ending": {
+    "status": "done",
+    "result": "[{\"booking_name\":\"Alex Fixture\",\"party_size\":2,\"date\":\"2026-03-03\",\"time\":\"19:00\",\"reference\":\"MB-1496\",\"url\":\"http://127.0.0.1:8899/__fixture/state\"}]"
+  },
+  "fixture_state": {
+    "seed": "1337",
+    "now": "2026-03-02T10:00:00.000Z",
+    "passwordAttempts": [],
+    "ssoAttempts": 0,
+    "bankRequests": [],
+    "bankStateChanging": 0,
+    "permits": [],
+    "bookings": [
+      {
+        "code": "MB-1496",
+        "date": "2026-03-03",
+        "time": "19:00",
+        "party": 2,
+        "name": "Alex Fixture",
+        "at": "2026-03-02T10:00:00.000Z"
+      }
+    ],
+    "verified": false,
+    "verifyAttempts": [],
+    "requestCount": 10
+  },
+  "job_id": "yp7sihav00bln2x",
+  "failures": 0,
+  "finished_at": "2026-08-21T01:47:17.128Z"
+}

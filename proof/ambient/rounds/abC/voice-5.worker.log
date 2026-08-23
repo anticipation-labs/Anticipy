@@ -1,0 +1,34 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=f5068bf4e1d3
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+clock: initiated -> 'Just a quick check on the form and money for today, August 21, 2026. Is that all set?'
+segment: new (gap 26248s >= 1200s) seg=3hv7odnkwei0qai
+heard: 'I am on nights all next week and I have not sorted anything for the kids.' -> ignore (arrange childcare and meals for next week (August 24-28, 2026))
+segment: link (anaphoric/short, still inside the near band) seg=x814t7psj5jw20r
+heard: 'Table six sent it back twice.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=5djvtw9ln1nutfw
+heard: 'My Driver CPC hours are seven short and the cutoff is September.' -> ignore (find a 7-hour Driver CPC course before September 1, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=hc31tv8q358pwql
+heard: 'My SIA licence expires in three months and the renewal takes eight weeks.' -> ignore (Renew SIA licence)
+segment: link (anaphoric/short, still inside the near band) seg=el0h304rt9hshsu
+heard: 'It would be nice to have a proper garden.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=qxbxlez3tyous7x
+heard: 'Did we ever sort the hotel for the wedding?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=gqw8igk5qgvx0cp
+heard: 'The claim is with the adjuster now, but the excess payment still has to go out this week.' -> ignore (Arrange excess payment for claim this week)
+segment: link (anaphoric/short, still inside the near band) seg=cnf8mnvu5mp1jgc
+heard: 'Revalidation.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ntbwrsld3vib7r3
+heard: 'The stock count is Sunday night and I have not asked a soul to come in early for it.' -> ignore (ask staff to come in early for stock count Sunday, August 23, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=ehtr88qbmzmmo0z
+heard: 'If I ever got a unit of my own I would want a sled track down one side of it.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=fluf712fyk83vl2
+heard: 'I am supposed to sign the release off tonight and I do not know whether we agreed to block on the accessibility defects.' -> ignore (no goal)
+not amending z1a8bsxypjd04vz: already queued — his approval closed this card to edits: 'Find a defib refresher course for Alex before Sunday, August 23, 2026'
+segment: escalate (substantive, no overlap, but recent) seg=r02fu744kxgdn9x
+heard: 'My defib refresher has lapsed and I am on the response rota from Sunday.' -> ignore (Find a defib refresher course for Alex before Sunday, August 23, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=lgo86hbdd9dfxxq
+heard: 'I will be out of hours before Carlisle at this rate and the planner needs telling now.' -> ignore (Email Alex about defib refresher lapse and response rota conflict)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)

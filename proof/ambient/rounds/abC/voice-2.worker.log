@@ -1,0 +1,35 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=f5068bf4e1d3
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+clock: reminder has no owner-authored task — dropping model goal 'ensure conference is booked at early bird rate'
+clock: initiated -> 'Just a quick reminder that early bird for the conference ends today, Friday, August 21, 2026.'
+segment: new (gap 26236s >= 1200s) seg=q18x5i81uepy05l
+heard: 'I still have not booked the conference and early bird ends Friday.' -> act (Book conference registration with early bird pricing)
+segment: escalate (substantive, no overlap, but recent) seg=ylze9cys5qk8ktd
+heard: 'The club want the annual fee before the end of the month.' -> ignore (pay annual club fee)
+segment: escalate (substantive, no overlap, but recent) seg=w6lqia37xttsref
+heard: 'Honestly I do not know why I bother some days.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=vaf5x76gqar0xpo
+heard: 'There is that thing on Saturday.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ohl58dlsysjqs3a
+heard: 'Did that thing from school come home in her bag or not?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ruo2ha24aveuhbd
+heard: 'The grant report is due on the last day of the month and the finance annex is blank.' -> ignore (prepare grant report with finance annex)
+segment: escalate (substantive, no overlap, but recent) seg=h3peex9jlaranxd
+heard: 'Ravi is pulling the theatre utilisation figures for the board, he offered at the meeting.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=orbu8nf3j9nw7hq
+heard: 'We are doing a hundred and twenty covers at the rugby club and the hire crockery is still not confirmed.' -> ignore (confirm crockery hire for 120 covers at rugby club)
+segment: escalate (substantive, no overlap, but recent) seg=spyxrwn42b8ku0e
+heard: 'I would like the ghost walk running through the winter, I cannot decide whether it goes on at six or at eight.' -> ignore (Research ghost walk schedule for winter, 6 PM and 8 PM options)
+segment: escalate (substantive, no overlap, but recent) seg=mkhs3akissxf0x9
+heard: 'Have you got anything Saturday morning, even early, for a cut and blow dry?' -> ignore (Find Saturday morning availability for a cut and blow dry)
+segment: append (conversation still open) seg=mkhs3akissxf0x9
+heard: 'Saturday has gone I am afraid, I could do you Friday at six.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ew2e3w9iplws9bb
+heard: 'I ought to get the sample scripts over to the external examiner, actually no, it does have to be this week, she has the board on the ninth.' -> ignore (Send sample scripts to external examiner by Friday, August 21, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=y1o6ljmutbget0c
+heard: 'If we ever took structural steel on properly we would want a full welding procedure spec.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=4nazv3dg4iik57w
+heard: 'And that is the traffic and travel, back to the studio.' -> ignore (no goal)

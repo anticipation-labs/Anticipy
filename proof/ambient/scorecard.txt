@@ -1,0 +1,180 @@
+==========================================================================
+AMBIENT SCORECARD — 319 answered of 320 written   (1 unanswered, excluded from every rate)
+==========================================================================
+
+  THE TWO THAT MATTER
+    FALSE PINGS :   5 of 146 silent lines   =   3.4%   <- reached him over nothing
+    MISSES      :  88 of 173 errands       =  50.9%   <- real need, nothing happened
+    weighted cost 113   (a false ping counted as 5 misses: trust does not come back, an errand does)
+
+  WHAT SHE DID WITH THE ERRANDS SHE CAUGHT
+    quietly, saying nothing :  44   <- the product's whole personality
+    put a card on his desk  :  41
+    asked when told to ask  :   3 of 13 `ask` lines
+    assumed instead of ask  :   3   <- went ahead on facts she did not have
+
+  behaviour accuracy : 69.9%  (223/319)   <- what actually happened
+  decision accuracy  : 56.1%   <- the raw stamp; understates her, kept for diffing runs
+  hard cases         : 97.0%  (67 lines)  vs 62.7% on the rest
+  quiet drift        : 2   <- research on noise; costs money, not trust
+  conversations dropped : 2 of 9  ['c03', 'c04']
+
+  BEHAVIOUR MATRIX — what he would have experienced   (rows = gold)
+                  silent    quiet     desk    spoke
+    ignore         139        2        0        5
+    ask              7        3        0        3
+    act             81       41        1       37
+
+  DECISION MATRIX — the raw stamp on the event row   (rows = gold)
+                  ignore      ask      act
+    ignore         141        1        4
+    ask             10        0        3
+    act            122        0       38
+
+  DRIFT CHECK — did she get worse, or did the corpus?
+    errands   1-43  miss  37.2%   top families: compliancex12, communicationx8, schedulingx5
+    errands  44-86  miss  46.5%   top families: compliancex14, finance_adminx5, procurementx5
+    errands  87-129 miss  53.5%   top families: finance_adminx10, compliancex8, home_maintenancex5
+    errands 130-173 miss  65.9%   top families: compliancex17, finance_adminx4, schedulingx3
+    within the 23 walks of life present in BOTH halves: early miss 40.0% (18/45)   late miss 53.5% (38/71)
+    a gap here is degradation with position; no gap means the later block is simply harder.
+
+  THE ASK LANE
+    times she stamped `ask` on ANY line : 1 of 319
+    of the 13 lines that needed a question, she asked 3
+    what she did instead: silent x7, quiet x3, spoke x3
+
+  BY HARD KIND   (worst first — 'hard' averages nine unrelated failure modes)
+    other_commitment          81.8%    9/11  ################
+    ack                      100.0%    6/6   ####################
+    asr_mush                 100.0%    7/7   ####################
+    hypothetical             100.0%    8/8   ####################
+    in_flight                100.0%    1/1   ####################
+    media                    100.0%    9/9   ####################
+    past_done                100.0%    8/8   ####################
+    question_to_person       100.0%   11/11  ####################
+    retraction               100.0%    6/6   ####################
+
+  BY REGISTER   (the product claim: no imperative needed)
+    worry                     48.4%   30/62  #########
+    complaint                 55.8%   29/52  ###########
+    realisation               62.7%   37/59  ############
+    thinking_aloud            77.1%   27/35  ###############
+    aside                     85.4%   41/48  #################
+    direct                    92.5%   37/40  ##################
+    fragment                  95.7%   22/23  ###################
+
+  BY TASK FAMILY (act/ask only)
+    childcare                  0.0%    0/3   
+    scheduling                16.7%    2/12  ###
+    admin                     33.3%    2/6   ######
+    procurement               33.3%    4/12  ######
+    vehicle                   33.3%    2/6   ######
+    travel                    40.0%    2/5   ########
+    compliance                43.1%   22/51  ########
+    health_admin              50.0%    3/6   ##########
+    property                  50.0%    1/2   ##########
+    work_deliverable          50.0%    6/12  ##########
+    finance_admin             52.4%   11/21  ##########
+    home_maintenance          55.6%    5/9   ###########
+    education                 60.0%    3/5   ############
+    food                      66.7%    2/3   #############
+    communication             76.9%   10/13  ###############
+    gifts                    100.0%    2/2   ####################
+    pets                     100.0%    3/3   ####################
+    shopping                 100.0%    2/2   ####################
+
+  BY WALK OF LIFE
+    architecture               0.0%    0/2   
+    cleaning                   0.0%    0/1   
+    emergency_services         0.0%    0/2   
+    food_production            0.0%    0/1   
+    hotel_management           0.0%    0/1   
+    marketing                  0.0%    0/1   
+    music                      0.0%    0/1   
+    nursery                    0.0%    0/1   
+    pharmacy                   0.0%    0/3   
+    photography                0.0%    0/1   
+    recruitment                0.0%    0/1   
+    security                   0.0%    0/1   
+    translation                0.0%    0/1   
+    government_admin          25.0%    1/4   #####
+    insurance                 25.0%    1/4   #####
+    carpentry                 33.3%    1/3   ######
+    charity                   33.3%    1/3   ######
+    social_work               33.3%    1/3   ######
+    medicine                  40.0%    2/5   ########
+    nursing                   40.0%    2/5   ########
+    retail                    40.0%    2/5   ########
+    civil_engineering         50.0%    3/6   ##########
+    journalism                50.0%    2/4   ##########
+    mechanical_engineering    50.0%    2/4   ##########
+    software_engineering      50.0%    3/6   ##########
+    plumbing                  57.1%    4/7   ###########
+    accounting                60.0%    3/5   ############
+    farming                   60.0%    3/5   ############
+    finance                   60.0%    3/5   ############
+    hospitality               60.0%    3/5   ############
+    law                       60.0%    3/5   ############
+    real_estate               60.0%    3/5   ############
+    teaching                  60.0%    3/5   ############
+    aviation                  66.7%    2/3   #############
+    hairdressing              66.7%    2/3   #############
+    student                   66.7%    4/6   #############
+    parent                    70.0%    7/10  ##############
+    electrical                75.0%    3/4   ###############
+    fitness                   75.0%    3/4   ###############
+    hvac                      75.0%    3/4   ###############
+    veterinary                75.0%    3/4   ###############
+    logistics_trucking        80.0%    4/5   ################
+    none                      88.0%  139/158 #################
+    dentistry                100.0%    2/2   ####################
+    retiree                  100.0%    5/5   ####################
+
+  EVERY FALSE PING — the number the MVP is judged on
+    [spoke] amb-0237 'I am booking the restaurant for Saturday, so do not double up.'
+        goal she invented : book restaurant for Saturday August 22 2026
+        SAID TO HIM       : I can set up that reservation for two on Saturday, August 22—which restaurant and time are we aiming for?
+    [spoke] amb-0284 'I should call the clinic.'
+        goal she invented : look up contact details for clinic
+        SAID TO HIM       : Caught your plan — ready to go: look up contact details for clinic. First I need: which clinic. Say go and I'll book it.
+    [spoke] amb-0302 'Do not worry about it, I will book it in on my way home.'
+        goal she invented : Book car MOT inspection at Coal Harbour location
+        SAID TO HIM       : I can take that Coal Harbour MOT inspection off your plate before next week—which shop, car details, and date/time shoul
+    [spoke] amb-0313 'God, turn that down a bit.'
+        goal she invented : turn down the volume
+        SAID TO HIM       : Which device or app should I turn down?
+    [spoke] amb-0317 'And the dishwasher tablets, that is the last box.'
+        goal she invented : add dishwasher tablets to shopping list
+        SAID TO HIM       : Heard you're on the last box of dishwasher tablets—which shopping list do you want me to add them to?
+
+  MISSES — nothing happened at all (first 12)
+    [want act] amb-0007 'The practice indemnity renewal quote came in at nearly doubl'
+        should have been: get alternative professional indemnity quotes
+    [want act] amb-0010 'The appraisal portfolio deadline is creeping up on me again.'
+        should have been: look up the appraisal portfolio deadline and what is outstanding
+    [want act] amb-0011 'My revalidation is due and I have not logged a single hour o'
+        should have been: look up NMC revalidation requirements and the deadline
+    [want act] amb-0012 'I am on nights all next week and I have not sorted anything '
+        should have been: arrange childcare for next week's night shifts
+    [want act] amb-0017 'The site cannot pour on Friday if that rebar inspection is n'
+        should have been: book the rebar inspection before Friday's pour
+    [want ask] amb-0020 'We are going to be short on the test cell booking if nobody '
+        should have been: book test cell time
+    [want act] amb-0021 'Staging is throwing cert errors, I bet I never renewed that '
+        should have been: check the domain and certificate expiry for the staging environment
+    [want act] amb-0025 'We are four copies short of the Steinbeck for Year Nine.'
+        should have been: order additional copies of the Steinbeck set text for Year Nine
+    [want act] amb-0034 'We are going to be short on till float over the bank holiday'
+        should have been: arrange extra till float for the bank holiday weekend
+    [want act] amb-0035 'The rota for next week still is not up and everyone keeps as'
+        should have been: publish next week's staff rota
+    [want act] amb-0038 'I cannot do the Dover run until the trailer has had its brak'
+        should have been: book the trailer brake test before the Dover run
+    [want act] amb-0047 'The Hartleys cannot do Thursday for the viewing after all.'
+        should have been: rearrange the Hartley viewing away from Thursday
+
+  UNANSWERED (1) — not scored either way
+    amb-0224 no decision within 240.0s  'Section four subsection two, the contractor shall '
+
+written to proof/ambient/scorecard.json

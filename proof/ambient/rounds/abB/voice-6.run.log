@@ -1,0 +1,33 @@
+pb        http://127.0.0.1:8090
+owner_ref fnw0pvulizndqze
+brain     worker: pid 652,89298,89307,89315,89319,89324,89338,89344,89395,89403 up since 02:13:09, newer than every file in brain/
+corpus    13 utterances, 0 already done, 13 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/13]    amb-0018 want=act    got=act          8.5s  'The revised drainage calcs still have not gone to the cont'
+            goal: send revised drainage calculations to contractor
+[2/13]    amb-0053 want=act    got=act          8.1s  'My ethics form was supposed to go in last Friday and it is'
+            goal: send ethics form
+[3/13]    amb-0108 want=act    got=act          8.1s  'The sprayer test certificate runs out before harvest.'
+            goal: renew sprayer test certificate before harvest
+[4/13]    amb-0179 want=ignore got=ignore       5.0s  'Morning, you alright?'
+[5/13]    amb-0214 want=ignore got=ignore       4.0s  'I keep seeing those adverts and wondering if they are any '
+[6/13]    per-0011 want=act    got=act          8.1s  'The probate forms are sat there and every single time I op'
+            goal: complete probate forms
+[7/13]    fin-0036 want=act    got=act         10.2s  'The strata levy notices have to go out this week and the b'
+            goal: prepare strata levy notices for mailing
+[8/13]    med-0006 want=ignore got=ignore       4.0s  'The bank shifts.'
+[9/13]    svc-0004 want=act    got=act          8.1s  'The chiller on aisle four has been running two degrees war'
+            goal: log chiller on aisle four running two degrees warm
+[10/13] !! svc-0040 want=ask    got=act         10.1s  'The hall booking runs out at the end of term and the paris'
+            goal: decide on keeping Thursday slot for hall booking
+[11/13]    tep-0018 want=act    got=act          9.1s  'The roadmap review is Thursday and I have not written up w'
+            goal: draft roadmap review drops
+[12/13]    tep-0081 want=act    got=act          9.1s  'My breathing apparatus competency is due for reassessment '
+            goal: book breathing apparatus competency reassessment
+[13/13]    trd-0082 want=act    got=act         10.2s  'Two of the counterbalance lads need their refresher and th'
+            goal: schedule counterbalance refresher for two lads
+
+pushed 13 in 1.8 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/abB/voice-6.jsonl
+  act=10  ignore=3
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

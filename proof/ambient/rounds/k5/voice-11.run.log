@@ -1,0 +1,111 @@
+pb        http://127.0.0.1:8090
+owner_ref 621g0q8tga3zuy3
+brain     worker: pid 6220,6221,6222,6223,6224,6225,6226,6227,6228,6229,6230,6231,6232,6233,6234,6235,6275 up since 11:37:51, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63]    amb-0018 want=act    got=act          8.4s  'The revised drainage calcs still have not gone to the cont'
+            goal: Send revised drainage calculations to contractor
+[2/63]    amb-0034 want=act    got=act          9.1s  'We are going to be short on till float over the bank holid'
+            goal: order till float for bank holiday
+[3/63]    amb-0050 want=act    got=act         10.0s  'I have not done the CII structured hours for this year at '
+            goal: schedule CII structured hours
+[4/63] !! amb-0066 want=act    got=ignore       5.0s  "Mum's birthday is Saturday and I have absolutely nothing f"
+            goal: find gift options for Mum's birthday on Saturday, August 22, 2026
+[5/63] !! amb-0082 want=ask    got=ignore       3.0s  'The client keeps sending receipts as photos and I have now'
+            goal: research options for receipt management software
+[6/63]    amb-0098 want=act    got=act          8.0s  'Gas Safe renewal is this month and I always leave it far t'
+            goal: schedule Gas Safe renewal
+[7/63]    amb-0114 want=act    got=act          7.0s  'The flood cover renews next week and they still have not s'
+            goal: chase flood cover survey
+[8/63] !! amb-0130 want=ask    got=ignore       4.0s  'I want the cat booked in for the booster but I never remem'
+            goal: Find opening hours for Coal Harbour vet
+[9/63]    amb-0146 want=act    got=act         10.1s  'The radiation protection review on the x ray machine is ov'
+            goal: schedule radiation protection review for x-ray machine
+[10/63]    amb-0162 want=act    got=act          8.0s  'The DBS checks for the new volunteers have not been starte'
+            goal: start DBS checks for new volunteers
+[11/63]    amb-0178 want=act    got=act         10.1s  'The fire alarm certificate is out of date and the inspecti'
+            goal: renew fire alarm certificate
+[12/63]    amb-0194 want=ignore got=ignore       4.0s  'I am not saying I am old, but I groaned getting out of the'
+[13/63]    amb-0210 want=ignore got=ignore       4.1s  'It would be nice to have a proper garden.'
+[14/63]    amb-0226 want=ignore got=ignore       4.0s  'Tonight on the programme, the chancellor faces questions o'
+[15/63]    amb-0242 want=ignore got=ignore       3.1s  'Sam said he would chase the missing receipts from the Manc'
+[16/63]    amb-0258 want=ignore got=ignore      18.2s  'Right, yeah.'
+[17/63]    amb-0274 want=ignore got=ignore      10.5s  'cannot hear you at all now you are breaking'
+[18/63] !! amb-0316 want=ignore got=act         28.4s  'We are out of the good coffee again.'
+            goal: Order more good coffee
+[19/63] !! amb-0317 want=ignore got=act         18.4s  'And the dishwasher tablets, that is the last box.'
+            goal: Order dishwasher tablets
+[20/63] !! amb-0318 want=act    got=ignore      32.7s  'I am not doing another shop this week, can something just '
+            goal: Order coffee and dishwasher tablets
+[21/63]    per-0007 want=act    got=act         31.4s  'The MOT is due this month, I saw the date on the certifica'
+            goal: book MOT for vehicle
+[22/63] !! per-0023 want=act    got=ignore      15.0s  'We are meant to be in Dublin in November and there is noth'
+            goal: research flights and accommodation for Dublin in November
+[23/63]    per-0039 want=act    got=act         21.7s  'The dishwasher is not draining, there is an inch of grey w'
+            goal: arrange dishwasher repair
+[24/63] !! per-0055 want=act    got=ignore      24.5s  'My phone has been out of contract for, I think it is two y'
+[25/63]    per-0071 want=ignore got=ignore      49.3s  'If we ever got a bigger place I would want one of those pr'
+[26/63]    per-0087 want=ignore got=ignore      32.4s  'Mm, yeah, that is fair enough.'
+[27/63]    per-0130 want=ignore got=ignore       4.6s  'Everything is a subscription now, you cannot even own a to'
+[28/63] !! fin-0016 want=act    got=ignore       6.3s  'I said I would find out whether they can still do a prior '
+            goal: research prior year IRA contribution rules
+[29/63]    fin-0032 want=act    got=act         65.2s  "Escrow closes on the twenty second and the buyer's lender "
+            goal: email HOA documents to buyer's lender
+[30/63] !! fin-0048 want=ask    got=ignore       9.0s  'I want the annual review in the diary with the Prices but '
+[31/63]    fin-0064 want=act    got=act         27.2s  'I said I would send Bea the maternity policy and it is sti'
+            goal: send maternity policy to Bea
+[32/63]    fin-0080 want=act    got=act         18.5s  'We are nine months of runway out and I have not booked a s'
+            goal: Book investor meetings for bridge funding
+[33/63] !! med-0015 want=ask    got=ignore      12.3s  'I need to renew the indemnity cover and I cannot remember '
+            goal: Research Alex's indemnity cover status (associate or principal)
+[34/63]    med-0034 want=ignore got=ignore      19.2s  'the the risk the risk assessment for uh for the for'
+[35/63]    med-0050 want=ignore got=ignore       4.0s  'The list ran forty minutes over and not one person said a '
+[36/63] !! med-0070 want=ask    got=ignore       4.0s  'I should pay the bar dues before they add the late fee but'
+            goal: Research bar dues reduced rate for Alex
+[37/63]    med-0089 want=ignore got=ignore       6.1s  'Both of them would rather pay us than talk to each other f'
+            goal: Research bar dues reduced rate for Alex
+[38/63] !! med-0105 want=ask    got=ignore       4.0s  "The firm's indemnity cover needs renewing and I do not kno"
+            goal: Find regulated turnover for the firm this year
+[39/63]    svc-0011 want=act    got=act          9.1s  'The gas certificate for the range is on the wall from two '
+            goal: Renew gas certificate for the range
+[40/63]    svc-0027 want=ignore got=ignore       5.0s  'the the chair the hydraulic on it went and I said to him a'
+[41/63]    svc-0043 want=ignore got=ignore       4.0s  'The EYFS progress checks are all done, I finished the last'
+[42/63]    svc-0059 want=ignore got=ignore       3.0s  'Subscribe, hit the bell, and I will see you all in the nex'
+[43/63]    svc-0075 want=ignore got=ignore       5.0s  'the mincer the guard on the mincer went and I never got ro'
+[44/63]    svc-0091 want=act    got=act          7.1s  'The ATOL renewal pack has come in and the accounts they wa'
+            goal: prepare ATOL renewal accounts
+[45/63]    tep-0015 want=act    got=act          8.0s  'The regression pack has not run against the staging enviro'
+            goal: Run regression pack against staging environment
+[46/63] !! tep-0031 want=ignore got=act          9.0s  'need to get the the arc flash the flash study over to to w'
+            goal: Send arc flash study to Alex
+[47/63]    tep-0047 want=act    got=act          8.1s  'The grant deadline is the twenty eighth and my costings ha'
+            goal: Submit grant costings to research office
+[48/63] !! tep-0063 want=ask    got=ignore       5.7s  'I want the reading group posters up this week but I have n'
+            goal: Find settled dates for reading group posters
+[49/63]    tep-0079 want=ignore got=ignore       3.2s  'Two days on site and the point cloud registration took lon'
+[50/63]    tep-0091 want=ignore got=ignore       3.1s  'Right, standup. Nothing from me, the deploy went out Thurs'
+[51/63]    tep-0092 want=ignore got=ignore       5.0s  'Carrying the flaky integration test over again, that is th'
+[52/63]    tep-0093 want=ignore got=ignore       3.0s  'Not blocked on anything, I will get through the PR review '
+[53/63]    tep-0094 want=act    got=act          7.2s  'Oh, hang on, the SSL renewal on the partner API is Thursda'
+            goal: Remind owner about SSL renewal for partner API on Thursday, August 27, 2026
+[54/63]    tep-0095 want=ignore got=ignore       5.0s  'Yeah, no, that is everything, let us get out of here.'
+            goal: remind Alex about SSL renewal for partner API on Thursday, August 27, 2026
+[55/63]    trd-0009 want=ignore got=ignore       4.0s  'That scaffold tag on the Church Street lift.'
+            goal: Check scaffold tag on Church Street lift
+[56/63]    trd-0010 want=ignore got=ignore       4.0s  'It has been hanging on there since before the bank holiday'
+[57/63]    trd-0011 want=act    got=act          8.0s  'That wants re-inspecting and re-tagging before anybody cli'
+            goal: Arrange re-inspection and re-tagging of Church Street scaffold lift before Monday, August 24, 2026
+[58/63]    trd-0025 want=ignore got=ignore       5.2s  'the the R C D on the ring it kept it kept dropping out on '
+[59/63] !! trd-0041 want=act    got=ignore       5.4s  'My six G coding runs out before the shutdown and they will'
+[60/63]    trd-0057 want=act    got=act          8.1s  'My rodenticide stewardship certificate is out and I cannot'
+            goal: renew rodenticide stewardship certificate
+[61/63]    trd-0073 want=act    got=act          9.1s  'The LOLER inspection on the hoist is a month overdue.'
+            goal: schedule LOLER inspection for hoist
+[62/63]    trd-0089 want=ignore got=ignore       3.0s  'Six weeks alongside and not one run ashore between us.'
+[63/63]    trd-0105 want=act    got=act         10.3s  'The waste carrier licence renewal notice came in and it is'
+            goal: renew waste carrier license for three years
+
+pushed 63 in 12.8 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/k5/voice-11.jsonl
+  act=25  ignore=38
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

@@ -1,0 +1,99 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9c841543825e
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: append (conversation still open) seg=efmkmb2d1womj14
+heard: 'The site cannot pour on Friday if that rebar inspection is not booked.' -> act (book rebar inspection for site)
+segment: link (anaphoric/short, still inside the near band) seg=7bw1aavfvrur7no
+heard: 'Refrigerant prices are insane this year.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ykiye8hjen46wuo
+heard: 'The broker never sent the revised schedule for the fleet policy.' -> act (get revised schedule for fleet policy from broker)
+segment: link (shares a name with the previous conversation) seg=m6rbgef7s988trt
+heard: 'The washing machine has started making that noise again.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=0pzt5xi8uc3xbfu
+heard: 'The confirmation statement is due and I have not checked the PSC register.' -> ignore (Check PSC register for confirmation statement)
+segment: escalate (substantive, no overlap, but recent) seg=ta1v4bfovrvwfi3
+heard: 'I need cover for the Thursday I am away on the course.' -> act (find cover for Thursday, August 27, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=muc8cdn62wqefxq
+heard: 'The board outside the Willow Road place has been down since the storm.' -> act (contact Willow Road place about their board being down)
+segment: link (shares a name with the previous conversation) seg=4ce5ua7i1nundbo
+heard: 'The gym has been taking money off me since I stopped going.' -> act (cancel gym membership)
+segment: link (shares a name with the previous conversation) seg=av6ysweqoxvk74o
+heard: 'The RCVS fee is due and the reminder went to my old address.' -> act (pay RCVS fee)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: link (shares a name with the previous conversation) seg=xygbsnew36f33hx
+heard: 'The grant report is due to the funder at the end of the month.' -> act (draft grant report for funder)
+segment: link (shares a name with the previous conversation) seg=27xsvqs0qbxs2ps
+heard: 'The campaign microsite domain renews next week and it is on my personal card.' -> act (renew campaign microsite domain)
+segment: link (shares a name with the previous conversation) seg=psh9xd1rq6dcv6e
+heard: 'The printer has personally chosen violence today.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=29u2f6geepdgow7
+heard: 'I sometimes think about packing it all in and doing something with my hands.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=de7tux0um3n0df2
+heard: 'And that is why we always tell people to fix the rate before the renewal window closes.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=e8w1tc6zqsev1ky
+heard: 'My brother is picking Dad up from the hospital.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=ofx5fs5stmj080u
+heard: 'Mm hm.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=luysbstnis17lpo
+heard: 'hang on there is something wrong with the' -> ignore (no goal)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: link (anaphoric/short, still inside the near band) seg=5hu86uixswbobev
+heard: 'That mole on my back.' -> act (schedule dermatology appointment for mole on back)
+segment: append (conversation still open) seg=5hu86uixswbobev
+heard: 'It has changed shape I think, it is darker than it was.' -> act (book dermatology appointment for mole check)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: append (conversation still open) seg=5hu86uixswbobev
+heard: 'I ought to get somebody to look at it.' -> act (book dermatology appointment for mole check)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+queue write never reached the backend for 'schedule asthma review for Sam': ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: failed (could not open a segment) seg=-
+heard: "Sam's asthma review letter came in March and it is still pinned to the fridge." -> ignore (schedule asthma review for Sam)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+profile identity seed failed (harmless): HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+queue write never reached the backend for 'get passport photos': ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=c93hwydsu274y5x
+heard: 'I have done nothing about the passport photos and the form will not go without them.' -> ignore (get passport photos)
+queue write never reached the backend for 'return library book': ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: link (anaphoric/short, still inside the near band) seg=bcs9xd1fzaphek1
+heard: 'That library book is nine weeks over and I am too embarrassed to walk it in.' -> ignore (return library book)
+segment: link (anaphoric/short, still inside the near band) seg=hu78wpqo2im2yts
+heard: 'He needs a bank account for this job and I have no clue what you even need for that.' -> ignore (Research requirements for opening a bank account for a job)
+segment: escalate (substantive, no overlap, but recent) seg=9axzrvef13pnms4
+heard: 'Someone needs to sort the bins, ah, no, I have just remembered it is next week now.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=4e9ur7zbyi1n0t1
+heard: 'Right, sure, whatever you think.' -> ignore (no goal)
+released 1 event(s) stranded mid-understanding by a restart
+segment: append (conversation still open) seg=4e9ur7zbyi1n0t1
+heard: "Sam's asthma review letter came in March and it is still pinned to the fridge." -> act (schedule Sam's asthma review)
+echo check failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+segment: escalate (substantive, no overlap, but recent) seg=jcmkcji83lk3zpi
+heard: 'I am so tired that even deciding what to eat feels like a job.' -> act (order dinner for Alex)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+backend unreachable: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research pass failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stuck-job ask failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+result report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+stalled-work report failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)
+research sweep failed: HTTPConnectionPool(host='127.0.0.1', port=8090): Read timed out. (read timeout=10)

@@ -23,20 +23,95 @@ set -e
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
 OUT="$SRC/../backend/pb_public/anticipy-claude-version-extension.zip"
-# Every filename ever handed to a customer keeps serving the SAME bytes:
-# the codex-era name and the original name are aliases, never stale copies.
+# The product is now just Anticipy, so all three of these names are historical:
+# two carry a product suffix that no longer exists anywhere in the UI, one is
+# the original. They are aliases of the same bytes, never stale copies — a URL
+# handed to a customer in any era still downloads the current build, which is
+# exactly why these paths outlive the name. Rename none of them.
 LEGACY_OUT="$SRC/../backend/pb_public/anticipy-extension.zip"
 LEGACY_OUT2="$SRC/../backend/pb_public/anticipy-codex-version-extension.zip"
 
-# Exactly what the extension needs at runtime — no tests, no store metadata,
-# no build scripts. Keep this list in step with what Chrome actually loads.
-FILES="manifest.json background.js agent_loop.js page_map.js workflow_state.js \
-popup.html popup.js onboarding.html onboarding.js icons"
-
 VERSION=$(python3 -c "import json;print(json.load(open('$SRC/manifest.json'))['version'])")
 
+# WHAT GOES IN THE ZIP IS DERIVED, NOT REMEMBERED.
+#
+# This was a hand-written list, and keeping a list in step with an import graph
+# is a job nobody can do reliably: workflow_state.js, config.js, side_trip.js,
+# learn.js, and then recipes.js and login_wall.js on 2026-08-19 were all
+# imported by shipped modules while missing from the list. The first of those
+# shipped — the MV3 worker died at load and every fresh install sat forever
+# with no pair code and no error anywhere.
+#
+# So: start where CHROME starts (the manifest's service worker, its popup, and
+# whatever <script> those pages load), follow every relative import to a fixed
+# point, and package exactly that. A new module is packaged the moment
+# something reaches it. The graph check further down stays as the belt: it now
+# proves the derivation, rather than being the only thing standing between an
+# edit and a dead install.
+# The script goes to a file rather than straight into $( <<heredoc ): the bash
+# that ships with macOS (3.2) scans a command substitution for balanced quotes
+# INCLUDING the heredoc body, so a python regex containing ["'] makes the whole
+# file a syntax error at a line nowhere near the cause.
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+cat > "$TMP/derive.py" <<'PYEOF'
+import json, re, sys
+from pathlib import Path
+
+src = Path(sys.argv[1])
+manifest = json.loads((src / "manifest.json").read_text())
+
+# Chrome's own entry points, read off the manifest so this cannot disagree
+# with what the browser will actually load.
+pages, scripts = [], []
+worker = (manifest.get("background") or {}).get("service_worker")
+if worker:
+    scripts.append(worker)
+popup = (manifest.get("action") or {}).get("default_popup")
+if popup:
+    pages.append(popup)
+# Not referenced by the manifest: the first-run page background.js opens with
+# chrome.runtime.getURL. A file only reachable through getURL cannot be found
+# by following imports, so it is named here — and, being HTML, its own
+# <script> tags are still followed below.
+pages.append("onboarding.html")
+
+SCRIPT_SRC = re.compile(r'''<script[^>]+src=["']([^"']+)["']''')
+for page in pages:
+    for hit in SCRIPT_SRC.finditer((src / page).read_text()):
+        scripts.append(hit.group(1).lstrip("./"))
+
+IMPORT = re.compile(r'''(?:^|\n)\s*(?:import[^"']*|export[^"']*from\s*)["']\./([^"']+)["']''')
+# An INJECTED file is an entry point too, and it is invisible to the import
+# graph: page_map.js is never imported, it is pushed into the page with
+# chrome.scripting.executeScript({ files: [...] }). Deriving from imports alone
+# dropped it — which would ship a package whose page mapping fails at the first
+# step, the same shape of dead install this whole check exists to prevent.
+INJECTED = re.compile(r'''files:\s*\[([^\]]*)\]''')
+NAME = re.compile(r'''["']([^"']+)["']''')
+out, queue, seen = [], list(scripts), set()
+while queue:
+    name = queue.pop(0)
+    if name in seen:
+        continue
+    seen.add(name)
+    path = src / name
+    if not path.is_file():
+        sys.exit(f"build-zip: {name} is referenced but not on disk")
+    out.append(name)
+    text = path.read_text()
+    for hit in IMPORT.finditer(text):
+        queue.append(hit.group(1))
+    for hit in INJECTED.finditer(text):
+        for ref in NAME.findall(hit.group(1)):
+            queue.append(ref.lstrip("./"))
+
+# The static half: everything Chrome loads that is not code.
+print(" ".join(["manifest.json", *pages, *out, "icons"]))
+PYEOF
+FILES=$(python3 "$TMP/derive.py" "$SRC")
+[ -n "$FILES" ] || { echo "build-zip: could not work out what to package" >&2; exit 1; }
+
 mkdir -p "$TMP/pkg"
 for f in $FILES; do
   [ -e "$SRC/$f" ] || { echo "build-zip: missing $f" >&2; exit 1; }

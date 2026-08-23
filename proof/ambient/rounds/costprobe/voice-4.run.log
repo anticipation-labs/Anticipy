@@ -1,0 +1,38 @@
+pb        http://127.0.0.1:8090
+owner_ref nm28bp0p7dj06ot
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759,65182,65218 up since 01:04:10, newer than every file in brain/
+corpus    5 utterances, 0 already done, 5 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/5] !! amb-0004 want=ask    got=ignore      33.5s  'I should get the CFA level three booked but I have lost tr'
+            goal: look up CFA Level 3 registration windows and deadlines
+[2/5]    amb-0013 want=ignore got=ignore       9.2s  'These agency shifts pay more than I do and I am the one ho'
+pb        http://127.0.0.1:8090
+owner_ref nm28bp0p7dj06ot
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    5 utterances, 0 already done, 5 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/5] !! amb-0004 want=ask    got=ignore      17.3s  'I should get the CFA level three booked but I have lost tr'
+            goal: Research CFA Level 3 registration windows and deadlines
+[3/5]    amb-0022 want=act    got=act         27.3s  'I said I would tell Dan when his pull request lands and I '
+            goal: draft update to Dan about his pull request
+[2/5]    amb-0013 want=ignore got=ignore       7.1s  'These agency shifts pay more than I do and I am the one ho'
+[3/5] !! amb-0022 want=act    got=ignore      11.1s  'I said I would tell Dan when his pull request lands and I '
+            goal: check status of Dan's pull request and draft update to him
+[4/5] !! amb-0031 want=act    got=ignore      17.2s  'The calibration certificate on the loop tester ran out in '
+            goal: research loop tester calibration services in Vancouver
+[4/5] !! amb-0031 want=act    got=ignore      18.1s  'The calibration certificate on the loop tester ran out in '
+            goal: research calibration renewal options for the loop tester
+[5/5]    amb-0040 want=act    got=act         28.2s  'If the BPS claim is not in by the fifteenth I lose the who'
+            goal: remind to submit BPS claim before the fifteenth
+
+pushed 5 in 2.0 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-4.jsonl
+  act=2  ignore=3
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[5/5] !! amb-0040 want=act    got=ignore      36.2s  'If the BPS claim is not in by the fifteenth I lose the who'
+            goal: remind to submit BPS claim before the fifteenth
+
+pushed 5 in 1.5 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-4.jsonl
+  ignore=5
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

@@ -1,0 +1,300 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=9acdbd92995a
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: new (substantive, no overlap, beyond the near band) seg=85yvc3z0id0hqm7
+heard: 'Oh my goodness, I forgot to cook for my kids this afternoon.' -> ignore (Find quick dinner delivery options for the kids tonight)
+segment: escalate (substantive, no overlap, but recent) seg=lb06oyaejlg0rz4
+heard: 'Damn, the Hendricks review is Thursday and I still have not pulled the Q3 numbers.' -> act (pull Q3 numbers for Hendricks review)
+segment: escalate (substantive, no overlap, but recent) seg=1rdw55yzjk84u9x
+heard: 'The appraisal portfolio deadline is creeping up on me again.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=3cehg0240f0928s
+heard: 'The revised drainage calcs still have not gone to the contractor and design freeze is Monday.' -> act (draft email to contractor with revised drainage calculations before Monday design freeze)
+segment: escalate (substantive, no overlap, but recent) seg=nfs1l3nr8v2656l
+heard: 'Half of them did not even open the booklet.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=svy0ky527muz5zi
+heard: 'We are going to be short on till float over the bank holiday.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=67roh7qb77sxnej
+heard: 'Rain is not letting up at all.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=brhzqatvz14jti0
+heard: 'I have not done the CII structured hours for this year at all.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=mzsob8g7czy3b0m
+heard: 'He has been on that tablet for three hours.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ek7eb59kig3byd2
+heard: "Mum's birthday is Saturday and I have absolutely nothing for her." -> ignore (research gift and delivery options for Mum's birthday on Saturday, August 22, 2026)
+segment: escalate (substantive, no overlap, but recent) seg=8vbxf8d8qg7hqm6
+heard: 'The case review write up was due yesterday and I have not opened the file.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=r4mdieyol7aea9j
+heard: 'The client keeps sending receipts as photos and I have nowhere sensible to put them.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=np45kdwmacjpgqx
+heard: 'We cannot pour at the weekend without the road closure permit.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=yul4keqyop7itot
+heard: 'Gas Safe renewal is this month and I always leave it far too late.' -> act (look into Gas Safe renewal process and requirements)
+segment: escalate (substantive, no overlap, but recent) seg=v5v5mf4hrpcoxsu
+heard: 'My Driver CPC hours are seven short and the cutoff is September.' -> ignore (research 7-hour Driver CPC courses before September)
+segment: escalate (substantive, no overlap, but recent) seg=f2rns7uz0uu6vcc
+heard: 'The flood cover renews next week and they still have not sent the survey.' -> act (follow up on missing survey for upcoming flood insurance renewal)
+segment: escalate (substantive, no overlap, but recent) seg=9o4iry0gsif5kuk
+heard: 'We have not booked anything for half term and everything will be gone.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=64pwnc7oakmm3w9
+heard: 'I want the cat booked in for the booster but I never remember when they are open.' -> ignore (check opening hours and cat booster booking options for Coal Harbour vet clinic)
+segment: escalate (substantive, no overlap, but recent) seg=4u3rlm4i7upax68
+heard: 'We said we would send Nan photos and it has been months.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=yz88rnvyalcxq9z
+heard: 'The radiation protection review on the x ray machine is overdue.' -> act (look into scheduling radiation protection review for x-ray machine)
+segment: escalate (substantive, no overlap, but recent) seg=zyt5mylahgtaixc
+heard: 'My supervision has not happened for three months.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=8l417e9m44od6rn
+heard: 'The DBS checks for the new volunteers have not been started.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=sjm9951jdr4nlbk
+heard: 'My SIA licence expires in three months and the renewal takes eight weeks.' -> ignore (research SIA licence renewal requirements and timeline)
+segment: escalate (substantive, no overlap, but recent) seg=duzm2zv9921qo87
+heard: 'The fire alarm certificate is out of date and the inspection is annual.' -> ignore (research annual fire alarm inspection options in Vancouver)
+segment: link (anaphoric/short, still inside the near band) seg=sxc6oqguslw99eb
+heard: 'Nice one, see you later.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=w3w8fex0rvzhsnn
+heard: 'I am not saying I am old, but I groaned getting out of the car.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=qnx6b1yjvhwih0j
+heard: 'I have had about four hours sleep.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=bw0tf09uhnxdwaw
+heard: 'It would be nice to have a proper garden.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=80i7oqc0o57y28f
+heard: 'New paragraph. The following items require sign off before Friday.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=s5pw9af1wv7rdd8
+heard: 'Tonight on the programme, the chancellor faces questions over the autumn statement.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ydu4wep3byrgec4
+heard: 'I will photocopy the worksheets for you before first period.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=gr2rzpvi0wmarab
+heard: 'Sam said he would chase the missing receipts from the Manchester office.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ldn4wfw27bzswb4
+heard: 'I raised the purchase order for the couplings last week.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=5rcxq53316z4kke
+heard: 'Right, yeah.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=p1sicki9r4au3go
+heard: 'What time did they say they were coming?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=2jw3913x5sonq01
+heard: 'cannot hear you at all now you are breaking' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=4ulcjmq7tfg1oxw
+heard: 'The invoice went out with the others on the batch run.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=1et1om727rkj2ux
+heard: 'We are out of the good coffee again.' -> act (reorder coffee)
+segment: append (conversation still open) seg=1et1om727rkj2ux
+heard: 'And the dishwasher tablets, that is the last box.' -> act (add dishwasher tablets to shopping list)
+segment: append (conversation still open) seg=1et1om727rkj2ux
+heard: 'I am not doing another shop this week, can something just turn up.' -> ignore (order or prepare delivery for coffee and dishwasher tablets)
+segment: escalate (substantive, no overlap, but recent) seg=gul2eiq8gey6qoo
+heard: 'The MOT is due this month, I saw the date on the certificate and then just, forgot it.' -> ignore (research MOT test booking options for this month)
+segment: escalate (substantive, no overlap, but recent) seg=ww9l5g8z1g8fmna
+heard: 'There is a parcel sat in a locker somewhere and the code expires today I think.' -> ignore (Find parcel locker pickup code and location in email)
+segment: escalate (substantive, no overlap, but recent) seg=5j0kljwndvtju3o
+heard: 'We are meant to be in Dublin in November and there is nothing booked, not the flights, not anything.' -> ignore (research flights and accommodation options for Dublin in November 2026)
+segment: escalate (substantive, no overlap, but recent) seg=gj3czlzmcfwzcho
+heard: 'The school photo order closes tonight and I have lost the code, obviously.' -> act (search emails and messages for the school photo order code)
+segment: link (shares a name with the previous conversation) seg=q0y2qyjnxbnk456
+heard: 'The dishwasher is not draining, there is an inch of grey water just sat in the bottom.' -> ignore (research troubleshooting steps and repair options for dishwasher not draining)
+segment: escalate (substantive, no overlap, but recent) seg=brx8lbyvhabie32
+heard: 'I should get the bike serviced before the lighter mornings, the brakes are singing at me.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=sy6um7a3olzkg6g
+heard: 'My phone has been out of contract for, I think it is two years actually.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=zztelc2re2nbz1j
+heard: 'I will sort the flights, only I cannot remember now if we said the Thursday or the Friday.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=bxutgq2ccvc5dcd
+heard: 'If we ever got a bigger place I would want one of those proper utility rooms.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=vqrhfjb1gj6xhmf
+heard: 'What time did they say the appointment was, half three was it?' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=e9181thoj72g0pf
+heard: 'Mm, yeah, that is fair enough.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=5n14ttqx4hux36b
+heard: 'Passport is with them, the tracking said it left Peterborough yesterday.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=rtn73t4y46ijiz7
+heard: 'Everything is a subscription now, you cannot even own a toaster in peace.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=gclaj9xgsszql12
+heard: 'The year end journals went in Tuesday, all reconciled, all agreed.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=hua6t3j99i25rj5
+heard: 'I said I would find out whether they can still do a prior year IRA contribution and I never did.' -> ignore (Research rules and deadlines for prior-year IRA contributions)
+segment: escalate (substantive, no overlap, but recent) seg=1754nhrplz6rinu
+heard: 'Payroll week eats three days of my life and nobody in this building notices.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=fzixh8z1uz8fjyk
+heard: "Escrow closes on the twenty second and the buyer's lender still has not had the HOA documents." -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=3mob9j4ydmfeo48
+heard: 'I want the gutters cleared before winter but I cannot remember which block we did last year.' -> ignore (find which block had gutters cleared last year)
+segment: escalate (substantive, no overlap, but recent) seg=p77787pzlqwguyd
+heard: 'I want the annual review in the diary with the Prices but I do not know if they are back from Portugal.' -> act (draft email to the Prices to schedule annual review)
+segment: escalate (substantive, no overlap, but recent) seg=avnalvutox7wz9x
+heard: 'Net 30 apparently means sixty days if you are big enough.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=73brm9mt4aqyurn
+heard: 'I said I would send Bea the maternity policy and it is still sitting in my drafts.' -> act (send maternity policy draft to Bea)
+segment: escalate (substantive, no overlap, but recent) seg=ay3vaaa2l5xzd6w
+heard: 'His flight lands at six and there is no car booked for the airport.' -> act (arrange airport car pickup for 6:00 flight arrival)
+segment: escalate (substantive, no overlap, but recent) seg=qatcg6ki5h3fmu6
+heard: 'We are nine months of runway out and I have not booked a single investor meeting for the bridge.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=vvftvzywvcujle2
+heard: 'The volunteer cover needs renewing and I do not know if the minibus drivers count.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=hrw8hlcddm9u6qs
+heard: 'I need to renew the indemnity cover and I cannot remember whether I am down as an associate or a principal now.' -> ignore (check indemnity cover policy records for associate or principal classification)
+segment: escalate (substantive, no overlap, but recent) seg=tokdpnibtz1bea7
+heard: 'My HCPC renewal window opens next month and the CPD audit sample lands at the same time.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=q99fdlb25v8pr1s
+heard: 'the the risk the risk assessment for uh for the for' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=5gkktrl6f0dgea8
+heard: 'The consent leaflets on the laparoscopic list are the old version, somebody is going to pick that up.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=j5np6eaj3da6r5h
+heard: 'The list ran forty minutes over and not one person said a word about it.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=nkpqnjepi31lle6
+heard: 'The community mileage claims have not gone in since April and the cutoff is the end of the financial year.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=eyw3u56nnqxt9kt
+heard: 'The discovery deadline on the Ballantyne matter is the twelfth and the disclosure is not indexed.' -> ignore (no goal)
+segment: append (conversation still open) seg=eyw3u56nnqxt9kt
+heard: 'Although, hang on, that is the one that settled at mediation on Tuesday.' -> ignore (no goal)
+segment: append (conversation still open) seg=eyw3u56nnqxt9kt
+heard: 'So forget the Ballantyne index, there is no deadline left to hit.' -> ignore (no goal)
+segment: append (conversation still open) seg=eyw3u56nnqxt9kt
+heard: 'Amazing what a week does to a list.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=woeatod3btk7pkq
+heard: 'I should pay the bar dues before they add the late fee but I cannot remember if I am on the reduced rate this year.' -> act (check bar dues fee schedule and reduced rate deadline)
+segment: escalate (substantive, no overlap, but recent) seg=2dwymugsave1jy0
+heard: 'The seal supplier never sent the replacement embosser.' -> act (draft follow-up email to seal supplier regarding missing replacement embosser)
+segment: escalate (substantive, no overlap, but recent) seg=5htxgifpr52vwpj
+heard: 'Both of them would rather pay us than talk to each other for ten minutes.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ritr6eea1p0n2sm
+heard: 'The stamp duty return has to be filed within fourteen days and that completion was the second.' -> act (flag overdue stamp duty return for August 2 completion)
+segment: link (shares a name with the previous conversation) seg=k361p17ukprflcf
+heard: "The firm's indemnity cover needs renewing and I do not know what our regulated turnover came out at this year." -> ignore (find regulated turnover figure for firm indemnity cover renewal)
+segment: link (anaphoric/short, still inside the near band) seg=e807tncc3dlf0eh
+heard: 'That EPOS update has moved every single button round for no reason at all.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=wked89shr21gxnc
+heard: 'The gas certificate for the range is on the wall from two years ago and I know full well that is out.' -> ignore (Research commercial gas safety inspection services in Vancouver for range certificate renewal)
+segment: link (shares a name with the previous conversation) seg=qxmxztwzo69elwo
+heard: 'The insect screens for the marquee were meant to be on the hire list and they are not on it.' -> act (Draft request to add insect screens to marquee hire order)
+segment: escalate (substantive, no overlap, but recent) seg=udx1ffct85qj5q6
+heard: 'the the chair the hydraulic on it went and I said to him about the' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=dq8fxnn0dblpd41
+heard: 'Right. Sure. Yep, no.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=q32tup3oj1jhk3n
+heard: 'The EYFS progress checks are all done, I finished the last four on Friday.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=4jhei1n7ruofudz
+heard: 'Is he alright with the drier or does he want hand drying like last time?' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=9do14yr6ika50fd
+heard: 'Subscribe, hit the bell, and I will see you all in the next one.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=w6o8zp93cnyc15d
+heard: 'Do not chase the sharps collection, Row has already set the new contract up.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=xby3pkiylfz4sje
+heard: 'the mincer the guard on the mincer went and I never got round to' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=5utixah10u9284y
+heard: 'I want her lifted for antifouling, I have just not worked out which week we can stand losing.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=zj8vx11r43mee1p
+heard: 'The ATOL renewal pack has come in and the accounts they want are nowhere near ready.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=pj5xow0xiby541r
+heard: 'The rebuild is running now, but I still have not told finance their portal is down until three.' -> act (draft notice to finance that portal is down until 3 PM)
+segment: link (shares a name with the previous conversation) seg=51n5samlo9qsrso
+heard: 'The regression pack has not run against the staging environment once since we swapped payment provider.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=nfxvq19mj1ceboz
+heard: 'The structural calcs for the transfer beam have to reach building control before the CDM file closes.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=hlb54gqxqy0jyhn
+heard: 'need to get the the arc flash the flash study over to to whoever it was' -> ignore (no goal)
+notify_owner failed (sms): Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+segment: escalate (substantive, no overlap, but recent) seg=nfxjf11yy3z4mf7
+heard: 'The measured survey for the Halton warehouse has not been issued and they are chasing daily.' -> act (prepare and issue the measured survey for the Halton warehouse)
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'The grant deadline is the twenty eighth and my costings have not been near the research office.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'I was going to move the annual review to the Tuesday, no, forget it, I will leave it where it is.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'I want the reading group posters up this week but I have no idea which of the two dates we settled on.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Twenty two cases and they have given me a student to supervise on top.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Two days on site and the point cloud registration took longer than the survey did.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: "I will put a marker on the address, actually no, leave it, that is the neighbouring force's job." -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Right, standup. Nothing from me, the deploy went out Thursday and it has been quiet since.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Carrying the flaky integration test over again, that is the third sprint running.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Not blocked on anything, I will get through the PR review queue after this.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Oh, hang on, the SSL renewal on the partner API is Thursday and nobody owns it.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Yeah, no, that is everything, let us get out of here.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Dover Thursday.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Are you running that one or is Pav.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'I cannot take it, that trailer has had no brake test and it is out on the fourteenth.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Leave it, I will put Pav on Dover and get the trailer booked into the test lane.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'That scaffold tag on the Church Street lift.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'It has been hanging on there since before the bank holiday.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'That wants re-inspecting and re-tagging before anybody climbs it Monday.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'the the R C D on the ring it kept it kept dropping out on the on the' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'Already dropped the ironmongery schedule over to them, did that before I left site.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'My six G coding runs out before the shutdown and they will not let me near the pipework without it.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'The waste transfer notes for the green waste have not been filed since May.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'My rodenticide stewardship certificate is out and I cannot buy bait without it.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402
+memory: extraction model unusable, falling back to rules (HTTPStatusError: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: )
+heard: 'I never sent the client the manifestation drawing and it has to be on before sign off.' -> error: Client error '402 Payment Required' for url 'https://openrouter.ai/api/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402

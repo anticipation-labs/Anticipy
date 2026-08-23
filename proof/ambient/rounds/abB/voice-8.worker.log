@@ -1,0 +1,31 @@
+worker up · llm=live:google/gemini-2.5-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: link (anaphoric/short, still inside the near band) seg=lxqb5o0u5cj3gr4
+heard: 'That loft conversion was a nightmare, never again.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=3fpodjhf3sowo3i
+heard: "Ellie's swimming subs are overdue again." -> act (pay Ellie's swimming subs)
+segment: escalate (substantive, no overlap, but recent) seg=7g04sri6plp2ecn
+heard: 'The single person council tax discount never got applied.' -> ignore (apply for single person council tax discount)
+segment: link (anaphoric/short, still inside the near band) seg=c0nbk2npbpeytbc
+heard: 'That is a good shout, actually.' -> ignore (apply single person council tax discount)
+segment: escalate (substantive, no overlap, but recent) seg=l935qpjdhneetz7
+heard: 'Terms and conditions apply, see website for details.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=zpekiv9sb7j6onj
+heard: 'I have done nothing about the passport photos and the form will not go without them.' -> act (get passport photos)
+segment: escalate (substantive, no overlap, but recent) seg=vhlk1e2zhyua8o8
+heard: 'We are nearly out of the heavy copier paper and I cannot remember which code stationery goes on.' -> act (Order heavy copier paper)
+segment: escalate (substantive, no overlap, but recent) seg=4ybv9dl7xceiqrg
+heard: 'Have you actually got round to your own registration renewal yet?' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=mi8wqob5qhq83io
+heard: 'Every single review mentions the breakfast eggs.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=i21dt0jm87iacxh
+heard: 'If I ever taught full time out of the house I would have to soundproof the back room.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=ai2fm73d2bkj26z
+heard: 'I want the replacement bearings on order today but I cannot remember whether we settled on sealed or open.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=zzhwy1kh14d9qyx
+heard: 'I want the powerflush booked in at the Hendon flats but I cannot remember which one had the sludge.' -> ignore (no goal)
+segment: escalate (substantive, no overlap, but recent) seg=baa00l1cexv96na
+heard: 'The client wants the Lagos shipment quoting and I do not know if they will take groupage or want a full container.' -> ignore (no goal)

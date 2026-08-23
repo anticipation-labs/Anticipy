@@ -1,0 +1,34 @@
+pb        http://127.0.0.1:8090
+owner_ref fbmxghyvp84bce8
+brain     worker: pid 49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[1/4] !! amb-0009 want=ask    got=act         33.5s  "Somebody needs to chase the lab about Mr Okonkwo's bloods,"
+            goal: Follow up with the lab regarding Mr Okonkwo's blood test results
+pb        http://127.0.0.1:8090
+owner_ref fbmxghyvp84bce8
+brain     worker: pid 21729,21810,22187,22315,22373,22424,22444,22449,22461,32677,49716,49725,49732,49736,49743,49746,49754,49758,49759 up since 01:04:10, newer than every file in brain/
+corpus    4 utterances, 0 already done, 4 to push
+pacing    gap=0.3s  timeout=240.0s  virtual convo gap=50.0s
+[2/4]    amb-0018 want=act    got=act         29.2s  'The revised drainage calcs still have not gone to the cont'
+            goal: Draft email sending revised drainage calculations to contractor before Monday design freeze
+[1/4] !! amb-0009 want=ask    got=ignore      20.4s  "Somebody needs to chase the lab about Mr Okonkwo's bloods,"
+            goal: draft follow-up to lab regarding Mr Okonkwo's bloods
+[3/4]    amb-0027 want=act    got=act         21.2s  'I am going to run out of twenty two mil compression fittin'
+            goal: source 22mm compression fittings before Thursday, August 27, 2026
+[2/4] !! amb-0018 want=act    got=ignore      20.2s  'The revised drainage calcs still have not gone to the cont'
+            goal: draft email sending revised drainage calculations to the contractor before Monday design freeze
+[4/4]    amb-0036 want=ignore got=ignore       7.1s  'Third shoplifter this week.'
+
+pushed 4 in 1.5 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-9.jsonl
+  act=3  ignore=1
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py
+[3/4]    amb-0027 want=act    got=act         20.2s  'I am going to run out of twenty two mil compression fittin'
+            goal: Order 22mm compression fittings before Thursday's job
+[4/4]    amb-0036 want=ignore got=ignore       7.0s  'Third shoplifter this week.'
+
+pushed 4 in 1.2 min -> /Users/josegaelcruzlopez/Desktop/anticipy-omize/proof/ambient/rounds/costprobe/voice-9.jsonl
+  act=1  ignore=3
+
+Now: ~/.anticipy-rig/venv/bin/python proof/ambient/score.py

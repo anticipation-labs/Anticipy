@@ -1,0 +1,34 @@
+worker up · llm=live:google/gemini-3.7-flash · sms=mock · pb=http://127.0.0.1:8090 · where=America/Vancouver · brain=73972eb06b87
+WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — every inbound text will be ignored as non-owner.
+owner phone updated from the app: …0142
+profile seeded from onboarding: name
+profile seeded from onboarding: email
+segment: append (conversation still open) seg=f1gc9c6b5wizrhs
+heard: 'The Charity Commission annual return is open and nobody has started it.' -> ignore (look up deadline and filing requirements for Charity Commission annual return)
+segment: escalate (substantive, no overlap, but recent) seg=b4qc3xt4o03ne0a
+heard: 'I want to move my pension somewhere sensible.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=g40tiaitwjg46b7
+heard: 'Everything takes three emails now, everything.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=2bnd2bmmdz484oq
+heard: 'Mm hm.' -> ignore (no goal)
+segment: link (anaphoric/short, still inside the near band) seg=5xwif4rr10abim7
+heard: 'It is due its service, it has been flashing at me for a fortnight.' -> ignore (research vehicle service options in Vancouver)
+not amending ayzl8ew7f54q7m7: already queued — his approval closed this card to edits: 'research car service and front tyre replacement options in Vancouver'
+segment: append (conversation still open) seg=5xwif4rr10abim7
+heard: 'And the front tyres are borderline as well.' -> ignore (research car service and front tyre replacement options in Vancouver)
+segment: link (anaphoric/short, still inside the near band) seg=2w5syrue2g65ulk
+heard: 'He needs a bank account for this job and I have no clue what you even need for that.' -> ignore (research requirements to open a bank account for a job in Canada)
+segment: escalate (substantive, no overlap, but recent) seg=pk8riag0eqhjv1a
+heard: 'can you order the the ones for the the printer the' -> ask (order printer supplies)
+segment: escalate (substantive, no overlap, but recent) seg=86lctg8gqe5esys
+heard: 'The appraisal wants patient feedback and I have not sent a single questionnaire out.' -> ask (prepare patient feedback questionnaires for appraisal)
+segment: link (shares a name with the previous conversation) seg=76494nhvfapthjx
+heard: 'The grinder burrs are shot, the shots are pulling in eleven seconds.' -> ignore (no goal)
+segment: link (shares a name with the previous conversation) seg=ue6ub6wzarg93lh
+heard: 'The lambing shed lights want doing before we start, though I have not decided whether we go LED right through or just patch it.' -> ignore (research LED conversion options versus repair for lambing shed lighting)
+segment: link (shares a name with the previous conversation) seg=67f3t8p1b9l298n
+heard: 'The measured survey for the Halton warehouse has not been issued and they are chasing daily.' -> act (draft update to Alex regarding Halton warehouse measured survey)
+segment: link (shares a name with the previous conversation) seg=b15kgpn02yt0ju4
+heard: 'The Croydon landlord wants a heat pump price and I do not know if he means the flats or the office block.' -> act (Draft email to Croydon landlord clarifying if heat pump price is for flats or office block)
+segment: link (shares a name with the previous conversation) seg=83l04kfqu984zyn
+heard: 'The route card for the school run diversion has never been reissued and drivers are guessing.' -> act (draft updated route card for school run diversion)

@@ -1,0 +1,46 @@
+pb        http://127.0.0.1:8090
+owner_ref 8t1gqa330etjugc
+brain     worker: pid 16676,16677,16678,16679,16680,16681,16682,16683,16684,16685,16686,16687,16688,16689,16690,16691 up since 12:10:23, newer than every file in brain/
+corpus    63 utterances, 0 already done, 63 to push
+pacing    gap=0.2s  timeout=240.0s  virtual convo gap=50.0s
+[1/63]    amb-0017 want=act    got=act         12.7s  'The site cannot pour on Friday if that rebar inspection is'
+            goal: book rebar inspection for site
+[2/63]    amb-0033 want=ignore got=ignore       4.0s  'Refrigerant prices are insane this year.'
+[3/63]    amb-0049 want=act    got=act          7.0s  'The broker never sent the revised schedule for the fleet p'
+            goal: get revised schedule for fleet policy from broker
+[4/63] !! amb-0065 want=act    got=ignore       5.0s  'The washing machine has started making that noise again.'
+[5/63] !! amb-0081 want=act    got=ignore       5.4s  'The confirmation statement is due and I have not checked t'
+            goal: Check PSC register for confirmation statement
+[6/63]    amb-0097 want=act    got=act         13.4s  'I need cover for the Thursday I am away on the course.'
+            goal: find cover for Thursday, August 27, 2026
+[7/63]    amb-0113 want=act    got=act         18.7s  'The board outside the Willow Road place has been down sinc'
+            goal: contact Willow Road place about their board being down
+[8/63]    amb-0129 want=act    got=act         46.5s  'The gym has been taking money off me since I stopped going'
+            goal: cancel gym membership
+[9/63]    amb-0145 want=act    got=act         35.4s  'The RCVS fee is due and the reminder went to my old addres'
+            goal: pay RCVS fee
+[10/63]    amb-0161 want=act    got=act         51.1s  'The grant report is due to the funder at the end of the mo'
+            goal: draft grant report for funder
+[11/63]    amb-0177 want=act    got=act         33.0s  'The campaign microsite domain renews next week and it is o'
+            goal: renew campaign microsite domain
+[12/63]    amb-0193 want=ignore got=ignore      11.7s  'The printer has personally chosen violence today.'
+[13/63]    amb-0209 want=ignore got=ignore      27.3s  'I sometimes think about packing it all in and doing someth'
+[14/63]    amb-0225 want=ignore got=ignore      26.5s  'And that is why we always tell people to fix the rate befo'
+[15/63]    amb-0241 want=ignore got=ignore      10.9s  'My brother is picking Dad up from the hospital.'
+[16/63]    amb-0257 want=ignore got=ignore      20.7s  'Mm hm.'
+[17/63]    amb-0273 want=ignore got=ignore      15.4s  'hang on there is something wrong with the'
+[18/63] !! amb-0307 want=ignore got=act         89.6s  'That mole on my back.'
+            goal: schedule dermatology appointment for mole on back
+[19/63] !! amb-0308 want=ignore got=act        100.7s  'It has changed shape I think, it is darker than it was.'
+            goal: book dermatology appointment for mole check
+[20/63]    amb-0309 want=act    got=act        147.9s  'I ought to get somebody to look at it.'
+            goal: book dermatology appointment for mole check
+[21/63] !! per-0006 want=act    got=TIMEOUT    247.6s  "Sam's asthma review letter came in March and it is still p"
+[22/63] per-0022 POST FAILED: timed out
+[23/63] per-0038 POST FAILED: timed out
+[24/63] per-0054 POST FAILED: timed out
+[25/63] per-0070 POST FAILED: timed out
+[26/63] !! per-0086 want=ignore got=TIMEOUT    247.5s  'Right, sure, whatever you think.'
+[27/63] !! per-0129 want=ignore got=TIMEOUT    255.3s  'I am so tired that even deciding what to eat feels like a '
+
+THREE TIMEOUTS IN A ROW. The worker is not stamping anything — check /Users/josegaelcruzlopez/.anticipy-rig/brain.log. Stopping rather than filling the results file with silence that looks like data.
