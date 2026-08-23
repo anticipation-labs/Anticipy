@@ -29,9 +29,11 @@
  */
 
 PART    = "both";
-BATT    = "200";
+BATT    = "500";
 MECH    = "friction";
 PINS    = false;
+XTRA_L  = 20.0;     // extra internal cavity length (user: "2 cm taller")
+XTRA_W  = 10.0;     // extra internal cavity width  (user: "1 cm wider")
 LID_CLR = 0.25;      // per-side lip clearance from the coupon test
 fit_clr = (MECH == "friction") ? LID_CLR - 0.10 : LID_CLR;  // friction grips tighter
 $fn = $preview ? 48 : 128;
@@ -50,8 +52,8 @@ re      = 2.2;
 dome    = 1.0;
 gr      = 4.6;
 
-cav_l   = max(xiao_l, bat[0]) + 2.5;
-cav_w   = max(xiao_w, bat[1]) + 1.2;
+cav_l   = max(xiao_l, bat[0]) + 2.5 + XTRA_L;
+cav_w   = max(xiao_w, bat[1]) + 1.2 + XTRA_W;
 front_d = board_stack + 0.6;
 back_d  = bat[2] + 0.6;
 face    = re + dome;
