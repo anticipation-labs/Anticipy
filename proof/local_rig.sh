@@ -79,6 +79,26 @@ start_backend() {
             && touch "$RIG/.superuser" \
             && echo "admin created: $PB_ADMIN_EMAIL / $PB_ADMIN_PASS"
     fi
+    # THE REQUEST-LOG DB IS THE RIG'S QUIETEST WAY TO DIE.
+    #
+    # backend/start.sh:12 drops auxiliary.db{,-wal,-shm} on EVERY container
+    # boot, because it is disposable diagnostics and the proven runaway grower:
+    # 1700000038_log_db_footprint.js records it reaching 3.96GB in production,
+    # 15x the real data, turning every write into "disk is full" while reads
+    # kept succeeding. This script starts pocketbase directly and so never got
+    # that guard — so the rig accumulated its own copy, and on 2026-08-24 it was
+    # 1.0GB of db behind a 656MB WAL.
+    #
+    # The symptom is worth writing down because it looks like nothing at all:
+    # pocketbase starts, writes NOT ONE BYTE of log, never binds 8090, and sits
+    # there replaying the WAL. No error, no crash, no output to tail — an
+    # apparently-broken rig with an empty pb.log, which reads as a bad binary or
+    # a bad hook rather than as a full log db. Two supervised restarts and a
+    # readiness timeout said less than `ls -la pb_data` did.
+    #
+    # data.db is never touched here, exactly as in start.sh.
+    rm -f "$RIG/pb_data/auxiliary.db" "$RIG/pb_data/auxiliary.db-wal" \
+          "$RIG/pb_data/auxiliary.db-shm"
     say_step "starting backend"
     # Deliberately NO ANTICIPY_SERVICE_TOKEN: guard.pb.js:19 returns e.next()
     # when it is unset, which is the documented local-dev mode and lets the

@@ -31,3 +31,15 @@ venv/
 
 # local speaker-recognition models + the owner's voice profile — never in git
 .speaker-models/
+
+# Chrome for Testing, when it lands in the repo instead of the cache.
+# `npx @puppeteer/browsers install chrome@stable` defaults to the CURRENT
+# DIRECTORY, so run from the repo root it drops a 356MB browser here and
+# `git add -A` cheerfully commits 348 files of app bundle (done once,
+# 2026-08-24, and reverted). proof/chrome_arm.mjs:157 only ever looks in
+# ~/.cache/puppeteer/chrome, so pass `--path "$HOME/.cache/puppeteer"` and
+# a copy in here is waste either way. chrome/.metadata stays tracked.
+/chrome/mac_arm-*/
+/chrome/linux-*/
+/chrome/mac-*/
+/chrome/win*-*/

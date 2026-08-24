@@ -288,12 +288,24 @@ machine.** Neither is CPU-bound alone; together they are.
 
 1. **The double booking.** Fixed in `cf4b5e3f` as a value digest shared by both
    commit gates, and pinned by `extension/tests/test_one_submission_two_keys.mjs`
-   — see the 2026-08-24 correction in §3. What is still open is the LIVE leg:
-   the fix has never been measured against a battery run, and one form shape
-   (a submit button bound to its form by `form="…"` from outside it) is
-   unverified in either direction.
-2. **`form` at 43.6%.** Consistent across 39 runs; the permit flow hands back
-   instead of committing. Worth its own session.
+   — see the 2026-08-24 correction in §3. **The LIVE leg is now closed too:** in
+   the 13-task form pass of 2026-08-24 the guard refused five or more repeat
+   dispatches of an already-sent payload, alternating the click and Enter paths,
+   and the fixture ledger ended at exactly one permit each time — while
+   `form-permit-file` and `form-terms-box` still completed through the same
+   multi-step form, which is the wizard regression a form-scoped key would have
+   caused. Still unverified: the submit button bound to its form by `form="…"`
+   from outside it.
+2. **`form` at 43.6%** — re-measured 2026-08-24 at 53.8% (7/13, one pass), but
+   the number is not the finding and n=13 against n=39 does not support a
+   claim of improvement. §3's diagnosis was wrong in an important way: the
+   permit flow does NOT stop instead of committing. It commits, and then fails
+   to notice. Two of the six failures have the correct permit in the fixture
+   ledger and still reported `needs_user` after burning the full six-minute
+   budget re-pressing a control the guard kept refusing. Behavioural success is
+   9/13; the report is what is broken. Full decomposition, traces and the
+   reason the fix is NOT to loosen the duplicate key:
+   `research/evals/form-family-2026-08-24/FINDINGS.md`.
 3. **`thinking_aloud` at 27% settled failure.** The one remaining register-level
    gap; everything else is 6% or below.
 4. **Production runs older brain code** (`a3f7880d74d8` vs tree). The Railway

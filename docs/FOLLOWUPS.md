@@ -15,12 +15,20 @@
 5. Steady >=3-lines/180s ambience (a TV) can sustain the meeting latch;
    the armed-duration disarm log makes this measurable — read it after a
    few home evenings.
-6. `agent_auth.pb.js:20-24` treats ANY exception from
-   `findFirstRecordByFilter` as "this code is free", so a transient DB
-   error can mint a duplicate pair code and the phone claims whichever
-   row comes back first — pairing to the wrong browser. Both honest
-   fixes (matching PocketBase's not-found error, or a unique-index
-   migration) are bigger than the throttle ticket that found it.
+6. ~~`agent_auth.pb.js:20-24` treats ANY exception from
+   `findFirstRecordByFilter` as "this code is free"~~ — FIXED 2026-08-24.
+   Neither proposed fix was needed: the third option is not to use an
+   exception as the answer at all. `findRecordsByFilter` returns an ARRAY,
+   so an empty array means "nothing matched" and a throw goes back to
+   meaning only that the query failed. Both lookups in that handler moved
+   to it — the agent_id one had the same defect and was only saved by
+   accident, because `agent_id` carries a unique index and `pair_code`
+   does not. A failed lookup now refuses the registration (503 / 500)
+   rather than minting a collision, which is the one outcome here that a
+   retry cannot undo: by then the code is on a screen and somebody has
+   typed it. Pinned by `extension/tests/test_pair_code_collision.mjs`,
+   whose bites-check restores the original try/catch and requires the
+   collision to reappear. Still unverified live (LAW 3).
 7. The pair-code throttle keys on `e.realIP()`. Behind Railway with no
    trusted proxy configured that is the connecting address, so every
    caller shares one bucket: ten failed guesses from anyone delays all

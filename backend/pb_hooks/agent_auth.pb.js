@@ -10,17 +10,45 @@ routerAdd("POST", "/agent/register", (e) => {
   if (!/^[A-Za-z0-9._-]{20,100}$/.test(agentId)) {
     return e.json(400, { error: "valid agent_id required" });
   }
+  // AN EXCEPTION IS NOT AN ANSWER.
+  //
+  // Both lookups below used to ask "does this exist?" by calling
+  // findFirstRecordByFilter and reading the THROW as "no". That conflates the
+  // two things a query can do when it does not return a row: find nothing,
+  // which is the answer we want, and fail, which is not an answer at all. It
+  // is the same shape as the guard's fall-through fixed alongside this — a
+  // failed lookup treated as a pass — and here it had teeth on the pair code:
+  // a transient DB error made the candidate look free, and `pair_code` carries
+  // NO unique index (only agent_id does, pb_migrations/1700000002_agents.js),
+  // so a duplicate SAVES. Two browsers then wear one code and the phone claims
+  // whichever row the lookup happens to return first, pairing somebody to a
+  // browser that is not theirs.
+  //
+  // findRecordsByFilter answers with a VALUE: an empty array is "nothing
+  // matched", and a throw stays what it always was, a failure. So a database
+  // hiccup now refuses the registration instead of quietly minting a collision
+  // — and a collision is the one outcome here that cannot be undone by
+  // retrying, because the code goes on somebody's screen.
+  const existing = (filter, params) =>
+    e.app.findRecordsByFilter("agents", filter, "", 1, 0, params) || [];
   try {
-    e.app.findFirstRecordByFilter("agents", "agent_id = {:id}", { id: agentId });
-    return e.json(409, { error: "agent already registered" });
-  } catch (_) {}
+    if (existing("agent_id = {:id}", { id: agentId }).length) {
+      return e.json(409, { error: "agent already registered" });
+    }
+  } catch (err) {
+    // Previously this throw fell through into registration, and only the
+    // unique index on agent_id turned the duplicate into a 500 by accident.
+    console.log("agent registration: agent_id lookup failed:", String(err));
+    return e.json(503, { error: "could not check the agent id right now" });
+  }
   try {
     const token = $security.randomStringWithAlphabet(64, alphabet);
     let pairCode = "";
     for (let i = 0; i < 20 && !pairCode; i++) {
       const candidate = $security.randomStringWithAlphabet(6, "0123456789");
-      try { e.app.findFirstRecordByFilter("agents", "pair_code = {:code}", { code: candidate }); }
-      catch (_) { pairCode = candidate; }
+      if (!existing("pair_code = {:code}", { code: candidate }).length) {
+        pairCode = candidate;
+      }
     }
     if (!pairCode) throw new Error("could not allocate a pair code");
     const record = new Record(e.app.findCollectionByNameOrId("agents"));

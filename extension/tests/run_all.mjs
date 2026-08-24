@@ -61,6 +61,7 @@ const suites = [
   "test_config_backend_base.mjs",
   "test_one_submission_two_keys.mjs",
   "test_pair_code_throttle.mjs",
+  "test_pair_code_collision.mjs",
 ];
 // A suite listed TWICE runs twice and inflates the number in the pass line —
 // and that number is exactly what a person reads to decide whether coverage
