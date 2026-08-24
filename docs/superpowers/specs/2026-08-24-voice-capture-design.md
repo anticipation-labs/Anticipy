@@ -145,11 +145,32 @@ emitted line is marked as continuing the previous one. The words go out immediat
 nothing is lost and the existing failure does not return, but the consumer is told this
 was a mid-sentence cut rather than a completed thought.
 
-**Change 2 — a minimum-new-words floor with merge-forward.** A fragment below the floor
-is held and merged into the next emission instead of posted alone, bounded by the same
-`maxHold` ceiling so held words can never be stranded. The floor restores the intent of
-the removed `take(minNewWords:)` without reintroducing all-or-nothing behaviour: the
-old version dropped, this one defers.
+**Change 2 — REMOVED before implementation. Ruling, 2026-08-24.** An earlier draft of
+this section called for a minimum-new-words floor with merge-forward. It is struck,
+because `app/ios/Tests/run_flush_policy_tests.sh` actively FORBIDS one:
+
+```sh
+if grep -vE '^[[:space:]]*//' "$listener" | grep -q 'minNewWords'; then
+    echo "PhoneListener still gates a flush on a new-word floor."
+    echo "That marked one- and two-word lines as sent without sending them."
+```
+
+That gate encodes a real incident. A floor that gates the flush advances the cursor past
+words that never left the phone, which is silent loss — the very failure the 8s ceiling
+was introduced to end. The architecture deliberately chose all-or-nothing
+`cursor.takePending`, and the runner asserts it in three separate places.
+
+Change 1 already solves what the floor was for: once a ceiling flush is marked as a
+continuation, a three-word fragment is no longer an orphan line, it is a linked
+part of one. The consumer stitches it. Adding a floor would reopen a loss bug to
+cosmetically fix a problem that marking already fixes, so the floor is not needed and
+not wanted. **No implementer may reintroduce `minNewWords` into
+`PhoneListener.swift`.**
+
+What remains genuinely open, and is NOT addressed here: echo suppression ignores lines
+under four words (`TranscriptFlushPolicy.swift:71`), so short true repeats still pass
+through. That is a separate judgement about duplicates, not about boundaries, and it is
+deferred rather than bundled.
 
 **Where the marker travels.** The `events` collection already carries `parent_line`
 (migration `1700000020`), written today only by the brain's dark link path and read by
@@ -167,9 +188,10 @@ that harness before the comparison is scored, or the timer-versus-link verdict w
 measured against a moving target. **Action: note it in `proof/score_links.py` as part
 of this work.**
 
-**Anti-goal.** No word-count or phrasing rule may decide what a line *means* — the
-floor decides only whether enough new material exists to post yet. Per LAW 1 that is
-plumbing, in the "senses" category, not meaning.
+**Anti-goal.** No word-count or phrasing rule may decide what a line *means*, and after
+the ruling above no word count decides anything at all — marking a continuation is a
+statement about *why the flush fired*, which is mechanism the phone already knows for
+certain. Per LAW 1 that is plumbing, in the "senses" category, not meaning.
 
 ## 7. Capture time becomes true
 
