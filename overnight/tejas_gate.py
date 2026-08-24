@@ -86,20 +86,51 @@ def extract_function(source: str, name: str, prelude: str = ""):
 # --------------------------------------------------------------------------
 def leg_1_meeting_posture() -> str:
     core = read(CORE)
-    orch = read(ORCH)
-    has_posture = bool(re.search(r"meeting_posture|in_meeting|posture", core))
-    if not has_posture:
+    worker = read(os.path.join(ROOT, "brain", "worker.py"))
+    if "in_meeting" not in core or "_meeting_held" not in core:
         raise LegFailed("no meeting posture exists anywhere in the brain. "
-                        "in_conversation() (anticipy_core.py ~:294) never fired on "
+                        "in_conversation() (anticipy_core.py ~:296) never fired on "
                         "this call; a posture that queues instead of acting is plan #1")
-    if not re.search(r"meeting|posture", orch, re.I):
-        raise LegFailed("a posture flag exists but TRIAGE_SYSTEM is never told about "
-                        "it — the model cannot honor a state it never sees")
-    if not re.search(r"digest", core, re.I):
+    if "meeting posture is armed" not in core:
+        raise LegFailed("a posture flag exists but the triage prompt is never told "
+                        "about it — the model cannot honor a state it never sees")
+    if "def meeting_digest" not in core:
         raise LegFailed("posture exists but no post-call digest does — suppressing "
                         "mid-call acts without the digest just loses the Tuesday call, "
                         "the one act that was right")
-    return "posture exists, triage is told, digest exists"
+    # The detector, RUN: the recorded call's density (137 lines / 28 min ≈ a
+    # line every 12s) must arm it; a lone person thinking out loud must not.
+    # Only the THRESHOLDS come from source (they are what this leg tests);
+    # the two state cells are re-declared clean, because grabbing them by
+    # regex also grabs the comprehension inside the function body.
+    consts = "\n".join(m.group(0) for m in re.finditer(
+        r"^MEETING_(?:DENSITY_N|DENSITY_S|SETTLE_S)\s*=\s*[^\n]+",
+        worker, re.M))
+    if not consts:
+        raise LegFailed("the meeting thresholds are gone from worker.py")
+    prelude = ("import time\nMEETING_ARRIVALS: list = []\n"
+               "MEETING_ARMED = False\n" + consts + "\n")
+    fn = extract_function(worker, "meeting_heard", prelude=prelude)
+    armed = False
+    for i in range(12):
+        armed = fn(now=1000.0 + i * 12.0)        # the Tejas cadence
+    if not armed:
+        raise LegFailed("meeting_heard() does not arm at the recorded call's "
+                        "own line density — the posture would have missed "
+                        "the exact call it was built from")
+    fn2 = extract_function(worker, "meeting_heard", prelude=prelude)
+    sparse = False
+    for i in range(12):
+        sparse = fn2(now=1000.0 + i * 300.0)     # one mutter every 5 min
+    if sparse:
+        raise LegFailed("meeting_heard() arms on one line every five minutes — "
+                        "a person alone in a room would live in permanent "
+                        "meeting posture and every act would queue forever")
+    if "in_meeting=in_meeting" not in worker or "maybe_meeting_digest(anticipy)" not in worker:
+        raise LegFailed("the posture exists but the worker never feeds it into "
+                        "hear() or never emits the digest — organs without "
+                        "nerves")
+    return "detector arms on the recorded cadence, spares the quiet room; digest wired"
 
 
 # --------------------------------------------------------------------------
@@ -116,18 +147,31 @@ def leg_2_shard_floor() -> str:
         raise LegFailed('nothing stops a 2-word line from acting. "At 5:15" '
                         '(event nbeb6oze5bmyrge) minted a calendar goal; the shard '
                         "floor is plan #2a")
-    fn = extract_function(core, "shard_too_thin")
-    mk = lambda d, c: type("D", (), {"decision": d, "continues": c})()
-    if not fn("At 5:15", mk("act", 0)):
-        raise LegFailed('shard_too_thin() lets "At 5:15" act — the exact '
-                        "recorded failure is back")
-    if fn("seven works", mk("act", 2)):
+    # The real function with its real deps (goal_tokens): the module imports
+    # clean offline — the pytest suite proves that on every run.
+    import sys as _sys
+    if ROOT not in _sys.path:
+        _sys.path.insert(0, ROOT)
+    from brain.anticipy_core import shard_too_thin as fn
+    mk = lambda d, c, g=None: type("D", (), {"decision": d, "continues": c,
+                                             "goal": g})()
+    evans_goal = "Schedule meeting for Monday, August 24, 2026 at 5:15 PM PDT"
+    if not fn("At 5:15", mk("act", 0, evans_goal)):
+        raise LegFailed('shard_too_thin() lets "At 5:15" mint a meeting full '
+                        "of words the audio never held — the exact recorded "
+                        "failure is back")
+    if fn("seven works", mk("act", 2, "dinner Thursday at 7pm")):
         raise LegFailed('shard_too_thin() kills "seven works" even when the '
                         "model linked it to an established thread — the "
                         "firming-up lane is dead")
-    if fn("At 5:15", mk("act", 0), explicit=True):
+    if fn("At 5:15", mk("act", 0, evans_goal), explicit=True):
         raise LegFailed("the floor blocks EXPLICIT owner instructions — he "
                         "typed it and she refused")
+    if fn("book us Earls tomorrow",
+          mk("ask", None, "Book dinner at Earls for tomorrow")):
+        raise LegFailed("the floor blocks a thin line acting on ITS OWN words "
+                        '("book us Earls tomorrow") — brevity is not the '
+                        "tell, invention is")
     if "shard_too_thin(line, decision" not in core:
         raise LegFailed("the floor exists but the ambient lane never calls it")
     # This is declared TAPE: the leg flips to testing its REMOVAL the day

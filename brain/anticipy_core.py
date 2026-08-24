@@ -535,8 +535,8 @@ _SENTENCE_START_RE = re.compile(r'(?:^|[.!?]\s+|[:;]\s+|["“]\s*)([A-Z][a-z]\w*
 
 def invented_names(said: str, context: dict) -> list:
     """Name-shaped tokens in an outgoing text that appear nowhere in what the
-    voice model was given. The mouth-side twin of unsupported_names(), which
-    guards GOALS: on 2026-08-23 the goal was clean and the TEXT invented
+    voice model was given. The mouth-side twin of the unsupported-names
+    goal guard: on 2026-08-23 the goal was clean and the TEXT invented
     "Dr. Evans", so the goal guard never saw it and a human being who does
     not exist went to the owner's phone.
 
@@ -565,7 +565,8 @@ def invented_names(said: str, context: dict) -> list:
     return out[:4]
 
 
-def shard_too_thin(line: str, decision, explicit: bool = False) -> bool:
+def shard_too_thin(line: str, decision, explicit: bool = False,
+                   context: Optional[list] = None) -> bool:
     """TAPE (HARNESS-LAWS.md Law 2). Expiry: segment-granularity triage —
     the day the judge reads closed conversations instead of raw lines,
     shards stop existing as decision units and this function is DELETED.
@@ -578,14 +579,24 @@ def shard_too_thin(line: str, decision, explicit: bool = False) -> bool:
     it may not act and it may not raise a card.
 
     What survives, deliberately: an explicit owner instruction (he typed
-    it), and a terse confirmation the model itself linked to an established
-    thread ("seven works" with continues>=1) — killing those would undo the
-    firming-up lane that catches real plans."""
+    it); a terse confirmation the model itself linked to an established
+    thread ("seven works" with continues>=1); and a thin line whose goal
+    only says what the LINE already says — "book us Earls tomorrow" is four
+    words and a complete errand, and blocking it would break the always-ask
+    contract the self-talk tests pin. The tell of the recorded failure is
+    not brevity, it is INVENTION: the goal minted from "At 5:15" carried
+    schedule/meeting/Monday/August — six content words the audio never
+    held. A thin line may act on its own words; it may not act on words
+    the model added."""
     if explicit or decision.decision not in ("act", "ask"):
         return False
     if (decision.continues or 0) >= 1:
         return False
-    return len(re.findall(r"[\w']+", line or "")) <= 4
+    if len(re.findall(r"[\w']+", line or "")) > 4:
+        return False
+    heard = " ".join([line or ""] + [c for c in (context or []) if c])
+    novel = goal_tokens(decision.goal or "") - goal_tokens(heard)
+    return len(novel) > 2
 
 
 def goal_tokens(text: str) -> set:
@@ -905,6 +916,12 @@ class Anticipy:
         # into the job's params so the agent sees them as facts.
         self._memory_filled: dict = {}
         self.session_start = time.time()
+        # Cards held while the owner was mid-conversation, waiting for the
+        # ONE digest text that goes out after it ends. (job_id, goal) pairs;
+        # meeting_digest() drains it. In-process on purpose: a worker restart
+        # mid-call loses at most one digest's WORDING — the cards themselves
+        # are durable rows and still on his desk.
+        self._meeting_held: list[tuple[str, str]] = []
         self._prev: Optional[tuple[str, float]] = None  # (last ignored line, ts)
         # Who the owner was talking to on the last classified line. Sticky:
         # people don't switch addressee mid-breath, so the previous
@@ -1130,7 +1147,8 @@ class Anticipy:
              capture_source: str = "",
              speaker: Optional[str] = None,
              link_candidates: Optional[list[str]] = None,
-             source_event_id: str = "", lineage_key: str = "") -> dict:
+             source_event_id: str = "", lineage_key: str = "",
+             in_meeting: bool = False) -> dict:
         """One transcript line in; memory, decision, and delegation out.
 
         channel names where the line arrived from ("sms" when he texted it).
@@ -1393,6 +1411,7 @@ class Anticipy:
                                 speaker=speaker, speaker_name=speaker_name,
                                 link_candidates=link_candidates,
                                 mid_conversation=in_conversation(context),
+                                in_meeting=in_meeting,
                                 explicit=explicit)
         # A speech recognizer commonly finalizes at punctuation: "Send Jonah
         # this exact message:" arrives first, then the quoted body after the
@@ -1550,7 +1569,7 @@ class Anticipy:
             # A shard cannot mint a meeting. Remembered above like every
             # line; acted on, never. See shard_too_thin's docstring for the
             # recorded failure and this tape's expiry.
-            if shard_too_thin(line, decision, explicit):
+            if shard_too_thin(line, decision, explicit, context):
                 self._prev = (line, time.time())
                 return {"memory": mem, "decision": Decision(
                     decision="ignore", goal="",
@@ -1593,7 +1612,12 @@ class Anticipy:
             # or nothing recorded as said).
             computed = compute_answer(goal) if quiet_research else None
             if computed:
-                verdict = self._may_say(may_say, computed, goal, "ambient_act")
+                # Kind "compute_answer", not "ambient_act", on purpose: he
+                # just asked this out loud, so the quiet-hours and
+                # live-conversation defers would answer a man who is
+                # provably awake and waiting — later. Dedupe still applies.
+                verdict = self._may_say(may_say, computed, goal,
+                                        "compute_answer")
                 if verdict and verdict != "defer" \
                         and self.notify_owner(computed):
                     handled = computed
@@ -1722,7 +1746,24 @@ class Anticipy:
                                 f"{addressee}-directed: already on her desk"),
                         needs_confirmation=True, addressee=addressee)
                 handled = None
-                if fresh:
+                if fresh and in_meeting:
+                    # THE MEETING POSTURE. On 2026-08-23 the owner sat in a
+                    # 28-minute call and she texted him four times about
+                    # things overheard INSIDE it — one of them a question
+                    # about the call he was still on. While he is mid
+                    # two-way conversation nothing interrupts: the card is
+                    # prepared and held exactly as below, but its one text
+                    # waits for meeting_digest(), which speaks ONCE after
+                    # the talking stops. Skipping _may_say here is
+                    # deliberate — a refusal verdict cancels cards, and a
+                    # deferred announcement is not a refused one.
+                    self._meeting_held.append((job_id, goal))
+                    decision = Decision(
+                        decision="act", goal=goal,
+                        reason=(f"{addressee}-directed: held for the digest "
+                                "after his conversation"),
+                        needs_confirmation=True, addressee=addressee)
+                elif fresh:
                     # Held work must never sit silently: one text asks for
                     # his go-ahead and names anything essential still
                     # unknown. The queue's dedupe keeps this to ONE per plan.
@@ -2186,6 +2227,7 @@ class Anticipy:
                 speaker_name: Optional[str] = None,
                 link_candidates: Optional[list[str]] = None,
                 mid_conversation: bool = False,
+                in_meeting: bool = False,
                 explicit: bool = False) -> Decision:
         if self.brain:
             context = self.memory.recall(line, limit=4)
@@ -2221,6 +2263,23 @@ class Anticipy:
                           f"the obligation is theirs. He may also be repeating "
                           f"back what they just said, which is not his intent. "
                           f"Only take on what he plainly commits HIMSELF to.)")
+            # DENSITY, not acknowledgement: a sustained stream of lines means
+            # a live two-way conversation or meeting even when both voices
+            # reach the microphone as content — the case the backchannel
+            # check above cannot see (measured on the 2026-08-23 call: 13%
+            # acknowledgement, threshold 20%, and it was a Google Meet at
+            # full speaker volume). BOTH voices arriving means half the
+            # lines shown may be the other person's words wearing his label.
+            if in_meeting:
+                prompt = (f"{prompt}\n(Pre-check: a meeting posture is armed "
+                          f"— he has been in a dense two-way conversation "
+                          f"for minutes, and BOTH sides may be reaching the "
+                          f"microphone, so this line may be the OTHER "
+                          f"person's words. Nothing here is addressed to "
+                          f"you. Judge extra conservatively: only a plan the "
+                          f"owner himself plainly seals is work, and even "
+                          f"that will be raised AFTER the conversation, not "
+                          f"during it.)")
             # The phone's LOCAL voice verdict — measured evidence, stronger
             # than anything wording can imply. It rides in as context the
             # model must weigh: "I'll get into it" in someone else's voice
@@ -2467,6 +2526,27 @@ class Anticipy:
         except Exception as e:
             print(f"notify_owner failed ({channel}): {e}")
             return None
+
+    def meeting_digest(self) -> Optional[str]:
+        """The ONE text after a conversation ends, naming everything held
+        during it. Drains _meeting_held; returns None when nothing was.
+
+        Template on purpose, not _voice: a digest's content is goal strings
+        that already passed the goal-level name guard, and running them back
+        through a temperature-0.7 composer is how "Dr. Evans" happened. The
+        worker sends this through the same may_say discipline as any other
+        uninvited text — the posture changes WHEN she speaks, never how
+        much she is allowed to."""
+        held, self._meeting_held = self._meeting_held, []
+        goals = [g for _, g in held if g]
+        if not goals:
+            return None
+        if len(goals) == 1:
+            return (f"While you were talking I got this ready: {goals[0]}. "
+                    "Want me to go ahead?")
+        listed = "; ".join(f"{i}) {g}" for i, g in enumerate(goals, 1))
+        return (f"While you were talking I got {len(goals)} things ready: "
+                f"{listed}. Say the word on any of them.")
 
     def can_notify_owner(self) -> bool:
         """Could a message reach this owner AT ALL, without composing one?

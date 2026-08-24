@@ -2008,6 +2008,73 @@ LAST_HEARD_AT = 0.0
 # call the gaps between a person's own fragments the end of their turn.
 LIVE_CONVERSATION_S = 14.0
 
+# THE MEETING POSTURE (2026-08-23). During a recorded 28-minute call she
+# acted six times and texted four — one text a question about the call he
+# was still on. in_conversation()'s backchannel heuristic never fired,
+# because at speaker volume BOTH voices arrive as content (13% backchannel
+# measured, threshold 20%). Density is the signal that cannot miss a real
+# conversation: people trading turns produce a steady stream of lines, and
+# a lone person thinking out loud does not. No speaker attribution needed —
+# which matters, because until build 76 there is none.
+#
+# Armed: MEETING_DENSITY_N lines inside MEETING_DENSITY_S seconds.
+# Over:   armed, then MEETING_SETTLE_S of silence — then ONE digest text.
+# The 14s LIVE_CONVERSATION_S guard above still handles short exchanges;
+# this posture exists for the long ones where waiting 14s is not the
+# problem, interrupting at all is.
+MEETING_ARRIVALS: list = []
+MEETING_ARMED = False
+MEETING_DENSITY_N = 10
+MEETING_DENSITY_S = 180.0
+MEETING_SETTLE_S = 90.0
+
+
+def meeting_heard(now: float = 0.0) -> bool:
+    """Record one heard line; return the armed state. Global by design —
+    this process serves exactly one owner under the supervisor."""
+    global MEETING_ARRIVALS, MEETING_ARMED
+    t = now or time.time()
+    MEETING_ARRIVALS = [a for a in MEETING_ARRIVALS
+                        if t - a <= MEETING_DENSITY_S][-100:] + [t]
+    if len(MEETING_ARRIVALS) >= MEETING_DENSITY_N:
+        if not MEETING_ARMED:
+            print(f"meeting posture ARMED — {len(MEETING_ARRIVALS)} lines in "
+                  f"{int(MEETING_DENSITY_S)}s; acts queue for the digest")
+        MEETING_ARMED = True
+    return MEETING_ARMED
+
+
+def maybe_meeting_digest(anticipy, now: float = 0.0) -> None:
+    """Disarm after the settle window and send the one digest text. The
+    digest passes SPEAK_ONCE like every uninvited text — the posture moves
+    WHEN she speaks, never how much she may."""
+    global MEETING_ARMED, MEETING_ARRIVALS
+    t = now or time.time()
+    if not MEETING_ARMED or (LAST_HEARD_AT
+                             and t - LAST_HEARD_AT < MEETING_SETTLE_S):
+        return
+    MEETING_ARMED = False
+    MEETING_ARRIVALS = []
+    try:
+        text = anticipy.meeting_digest()
+    except Exception as e:
+        print(f"meeting digest failed to compose: {e}")
+        return
+    if not text:
+        print("meeting posture over — nothing was held, saying nothing")
+        return
+    verdict = SPEAK_ONCE(text, kind="ambient_act")
+    if verdict and verdict != "defer":
+        if anticipy.notify_owner(text):
+            print(f"meeting digest sent: {text[:90]!r}")
+        else:
+            # Send failed: the cards are durable rows and still on his desk;
+            # only the combined wording is lost. Better one missing nudge
+            # than a retry loop texting him the same digest forever.
+            print("meeting digest send FAILED — cards remain on the desk")
+    else:
+        print("meeting digest withheld by the speak guard — cards remain")
+
 
 def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     """May she say this unprompted? Only if she has not already — and, for
@@ -2882,6 +2949,7 @@ def main() -> None:
                 # born from one fragment waits for the sentence to finish.
                 global LAST_HEARD_AT
                 LAST_HEARD_AT = time.time()
+                in_meeting = meeting_heard(LAST_HEARD_AT)
                 if not line:
                     mark_processed(ev["id"], "ignore")
                     continue
@@ -2945,7 +3013,8 @@ def main() -> None:
                                         or None,
                                         source_event_id=ev["id"],
                                         lineage_key=(open_seg.get("id")
-                                                     if open_seg else ev["id"]))
+                                                     if open_seg else ev["id"]),
+                                        in_meeting=in_meeting)
                 except TypeError:
                     # An older core keeps hearing. This retry deliberately
                     # passes ONLY the four kwargs hear() has had since the
@@ -3018,6 +3087,10 @@ def main() -> None:
             for ev in fetch_unprocessed("sms_reply", anticipy.owner_ref) + \
                     fetch_unprocessed("app_reply", anticipy.owner_ref):
                 handle_inbound(ev, convo, anticipy)
+
+            # A conversation that ended gets its one digest — everything
+            # held while he was talking, in a single text.
+            maybe_meeting_digest(anticipy)
 
             # The research lane runs HERE, in this process. Read-only goals
             # never wait for — or touch — his browser (roadmap §6).
