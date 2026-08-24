@@ -122,6 +122,9 @@ const nextConfig = {
       { source: "/internal/passwords", destination: `${FELLOWSHIP_ORIGIN}/internal/passwords` },
       { source: "/internal/passwords/reveal", destination: `${FELLOWSHIP_ORIGIN}/internal/passwords/reveal` },
       { source: "/internal/passwords/delete", destination: `${FELLOWSHIP_ORIGIN}/internal/passwords/delete` },
+      // The little AI on the side. Only the assistant — the old router and
+      // research surfaces stay unreachable.
+      { source: "/internal/assistant", destination: `${FELLOWSHIP_ORIGIN}/internal/assistant` },
       { source: "/internal/fellows", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows` },
       { source: "/internal/fellows/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/remove` },
     ];
