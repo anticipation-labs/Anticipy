@@ -385,15 +385,25 @@ final class AnticipySession: ObservableObject {
         let queue = unsent
         unsent = []
         var failed: [BufferedLine] = []
+        // The parent of a queued cut is the row posted immediately before it
+        // IN THIS FLUSH, and nothing else. `lastTranscriptEventID` cannot
+        // serve: it may hold a line posted live AFTER these words were spoken,
+        // which would link a sentence to its own future. A skipped row (a
+        // foreign account) and a failed row both break the chain outright, so
+        // both clear it rather than letting the next line inherit a parent it
+        // never followed. A cut whose parent went up live carries no parent at
+        // all: the queue never recorded that id, so there is nothing honest to
+        // point at.
+        var previousInThisFlush = ""
         for line in queue {
             // Never post one person's words into another person's account.
             // A line with no recorded owner predates this field and cannot be
             // attributed, so it is dropped rather than guessed at.
-            guard line.account == accountID else { continue }
-            // Rebuild the chain in order. The queue is oldest first, so the
-            // line a cut carried on from is the one posted just before it —
-            // neither of them had a server id at the moment they were spoken.
-            let parent = line.continuesPrevious == true ? lastTranscriptEventID : ""
+            guard line.account == accountID else {
+                previousInThisFlush = ""
+                continue
+            }
+            let parent = line.continuesPrevious == true ? previousInThisFlush : ""
             do {
                 let id = try await backend.pushEvent(kind: "transcript", text: line.text,
                                             speaker: line.speaker,
@@ -402,11 +412,14 @@ final class AnticipySession: ObservableObject {
                                             capturedAt: line.capturedAt,
                                             parentLine: parent)
                 if !id.isEmpty { lastTranscriptEventID = id }
+                // An unreadable id is a broken link, not a guessable one.
+                previousInThisFlush = id
                 ListenJournal.shared.record(.posted(ok: true, detail: "queued line sent"))
             }
             catch {
                 ListenJournal.shared.record(
                     .posted(ok: false, detail: "requeued, \(Self.postFailureShape(error))"))
+                previousInThisFlush = ""
                 failed.append(line)
             }
         }
@@ -1106,6 +1119,12 @@ final class AnticipySession: ObservableObject {
         // nothing was left to do it. keepListening stays as the person's
         // standing preference — it is honoured again when they sign back in.
         listener.stop()
+        // And forget which row the last line was. Sign out, sign in as someone
+        // else in the same launch, speak past the ceiling before anything
+        // posts, and the first cut line went up with the new owner_ref and the
+        // previous account's parent_line — a cross-account edge in a column
+        // the link scoring reads. No speech crosses here, but the pointer did.
+        lastTranscriptEventID = ""
         // And take their errands off the lock screen with them. A notification
         // outlives the session that raised it, so without this the next person
         // to pick up the phone reads what the last one was asked to approve.

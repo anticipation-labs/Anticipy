@@ -47,6 +47,31 @@ if ! code | grep -q 'heard(line, speaker: tag, from: .phoneMic'; then
     echo "The voice-tagged phone-mic callback does not name its source."
     exit 2
 fi
+# And both must carry what the phone knows about the line, because both
+# arguments DEFAULT. Delete `at: at` and heard() stamps Date() at push time
+# instead: a line buffered offline and flushed hours later reports the moment
+# the signal came back, which is the reordering the capture stamp exists to
+# end, and nothing else here would have gone red. The closing paren these two
+# checks used to carry was the only thing pinning the argument list, so what it
+# protected is spelled out instead of dropped.
+if ! code | grep -q 'heard(line, from: .phoneMic, at: '; then
+    echo "The phone-mic callback no longer carries when the words were spoken."
+    echo "heard() defaults that instant to now, so every line silently reverts"
+    echo "to being stamped when the network took it, not when it was said."
+    exit 2
+fi
+if ! code | grep -q 'heard(line, speaker: tag, from: .phoneMic, at: '; then
+    echo "The voice-tagged phone-mic callback dropped the spoken instant."
+    echo "heard() defaults it to now, so the stamp silently becomes push time."
+    exit 2
+fi
+if [ "$(code | grep -c 'continuesPrevious: continues)')" -lt 2 ]; then
+    echo "A phone-mic line no longer says whether the clock cut it in half."
+    echo "That flag is the only thing that makes a mid-sentence fragment a"
+    echo "linked part of a thought instead of an orphan line of its own, and"
+    echo "it defaults to false, so losing it is silent."
+    exit 2
+fi
 if ! code | grep -q 'heard(line, from: .pendant)'; then
     echo "The pendant transcript callback does not name itself as the pendant."
     echo "This is the one that buzzed all day: the phone mic is off, so the old"

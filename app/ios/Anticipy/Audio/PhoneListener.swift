@@ -122,6 +122,20 @@ final class PhoneListener: NSObject, ObservableObject {
     /// Whether this recognition task has sent anything yet — see the final
     /// handler, where it decides a polish from a whole unsent monologue.
     private var everEmittedThisTask = false
+    /// Whether the flush that produced the LAST emitted line was a cut.
+    ///
+    /// The direction is the whole point and is easy to write backwards.
+    /// `.ceiling` describes how a line ENDED: the clock ran out while the
+    /// recognizer was still revising. It says nothing about how that line
+    /// BEGAN. The line that carries on from a cut is therefore the NEXT one,
+    /// so the marker is read here and written afterwards.
+    ///
+    /// Marking the ceiling-flushed line itself was the bug this replaced: the
+    /// head of a monologue got chained onto whatever unrelated sentence came
+    /// before it, the tail was orphaned, and for the commonest shape (one cut,
+    /// then a pause) every edge produced was false. That false head edge is
+    /// the exact link `flushReason`'s gap-wins precedence exists to prevent.
+    private var lastFlushWasCut = false
 
     /// A pause this long ends an utterance. 2.6s, not shorter: people pause
     /// mid-thought ("I'll send the invoice… tomorrow"), and chopping there
@@ -271,7 +285,10 @@ final class PhoneListener: NSObject, ObservableObject {
                 ListenJournal.shared.record(.sessionStopped(cause: .interruption))
                 self.suspended = true   // honest: the mic is gone right now
             } else {
-                self.recoverAudio()     // ended (or unknown): take it back
+                // Ended (or unknown): take it back. The session was handed
+                // away and handed back, and the input we get back may not be
+                // the one we had.
+                self.recoverAudio(cause: .routeChange)
             }
         }
         nc.addObserver(forName: AVAudioSession.routeChangeNotification,
@@ -282,24 +299,41 @@ final class PhoneListener: NSObject, ObservableObject {
             guard let self, self.isListening else { return }
             let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
             if raw.flatMap(AVAudioSession.RouteChangeReason.init) == .categoryChange { return }
-            self.recoverAudio()
+            self.recoverAudio(cause: .routeChange)
         }
         nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification,
                        object: nil, queue: .main) { [weak self] _ in
             guard let self, self.isListening else { return }
             self.engine = AVAudioEngine()   // QA1749: the old engine is dead forever
-            self.recoverAudio()
+            // Not a route change: media services died and took the engine
+            // with them. A reader sent to AirPods and cables by a mislabelled
+            // line is a reader who never looks at the engine.
+            self.recoverAudio(cause: .error)
         }
     }
 
     /// Bring the whole capture chain back after whatever iOS did to it.
-    private func recoverAudio() {
+    ///
+    /// `cause` is required rather than defaulted. Three of the four callers
+    /// are failures, not route changes, and a default here would let the next
+    /// caller inherit "the route changed" for a dead AVAudioEngine — which is
+    /// the mislabelling this parameter exists to end.
+    private func recoverAudio(cause: ListenEvent.SwapCause) {
         guard isListening else { return }
+        // Read BEFORE the rebuild, because the rebuild is what clears it.
+        // While a phone call owns the microphone, configureAndStartEngine
+        // returns at the 0 Hz guard without ever starting the engine, so the
+        // watchdog arrives here again 4s later for the whole call. Recording a
+        // swap per attempt writes 75 identical lines in five minutes and
+        // evicts the entire ring in twenty-seven — the session the journal
+        // exists to explain, gone, replaced by one repeated sentence.
+        let alreadyDown = suspended
         engine.stop()
         configureAndStartEngine()
         // A live request's format was fixed by its first buffer; the new route
         // may differ, so start fresh — flushing whatever was pending first.
-        swapRecognition(flushPending: true, cause: .routeChange)
+        swapRecognition(flushPending: true, cause: cause,
+                        alreadyReported: alreadyDown)
     }
 
     /// Last line of defense: whatever stalled without a notification — engine
@@ -310,10 +344,16 @@ final class PhoneListener: NSObject, ObservableObject {
         watchdog?.invalidate()
         let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in
             guard let self, self.isListening else { return }
-            if !self.engine.isRunning { self.recoverAudio(); return }
+            // A dead engine is a failure, not a route change. This is the one
+            // stall the watchdog was built to catch.
+            if !self.engine.isRunning { self.recoverAudio(cause: .error); return }
             if self.task == nil { self.startRecognition(); return }
             let now = Date()
-            if now.timeIntervalSince(self.lastBufferAt) > 6 { self.recoverAudio(); return }
+            // Audio stopped flowing with no notification: also a failure.
+            if now.timeIntervalSince(self.lastBufferAt) > 6 {
+                self.recoverAudio(cause: .error)
+                return
+            }
             // Recognizer went silent mid-utterance: words on screen, nothing
             // arriving for 8s (a healthy one streams continuously).
             if !self.pendingTail.isEmpty, now.timeIntervalSince(self.lastResultAt) > 8 {
@@ -372,6 +412,12 @@ final class PhoneListener: NSObject, ObservableObject {
         cursor.reset()
         partial = ""
         pendingSince = nil
+        // A fresh recognition task starts a fresh chain. Carrying a cut across
+        // the seam would link the first line of the new task to a sentence
+        // that ended up to two minutes earlier (the 120s silence rotation is
+        // one of the swaps that lands here), and a false edge is worse than a
+        // missed one: nothing downstream can unpick it.
+        lastFlushWasCut = false
         // Nothing has been heard on THIS request yet. A stale timestamp here
         // would date the new task's silence from the old task's speech.
         lastPartialAt = nil
@@ -489,11 +535,15 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         lastDelivered = (line, now)
         everEmittedThisTask = true
-        // A CUT is the only thing marked as carrying on from what came before.
-        // A gap means the sentence ended, and chaining the next, unrelated
+        // WHICH line carries the mark. `.ceiling` says how THIS line ended:
+        // the clock ran out while he was still talking. The line that carries
+        // on from a cut is the NEXT one, so the flag is read from the previous
+        // flush here and written for the next one below. A gap or a final
+        // means the sentence ended, and chaining the following, unrelated
         // sentence onto a finished one reads as one rambling thought nobody
         // ever had. This is mechanism, not meaning: it says which timer fired.
-        let continuesPrevious = reason == .ceiling
+        let continuesPrevious = lastFlushWasCut
+        lastFlushWasCut = reason == .ceiling
         // The word COUNT, never the words. The journal is exportable from
         // Settings and the events collection already holds the speech itself.
         ListenJournal.shared.record(
@@ -551,8 +601,15 @@ final class PhoneListener: NSObject, ObservableObject {
     /// `cause` is recorded, because "the recognizer was replaced" with no
     /// trigger is the useless half of the report: a route change, Apple's task
     /// limit, an error and the 120s rotation are indistinguishable afterwards.
-    private func swapRecognition(flushPending: Bool, cause: ListenEvent.SwapCause) {
-        ListenJournal.shared.record(.recognizerSwapped(cause: cause))
+    ///
+    /// `alreadyReported` is how a recovery that the watchdog retries every 4s
+    /// for the length of a phone call stays one line in the journal instead of
+    /// hundreds. Only `recoverAudio` passes it.
+    private func swapRecognition(flushPending: Bool, cause: ListenEvent.SwapCause,
+                                 alreadyReported: Bool = false) {
+        if !alreadyReported {
+            ListenJournal.shared.record(.recognizerSwapped(cause: cause))
+        }
         silenceFlush?.cancel()
         // Whatever forced this swap ended the recognition task, so `.final` is
         // the honest label for the words it was still holding. It carries no
@@ -613,7 +670,11 @@ final class PhoneListener: NSObject, ObservableObject {
                          words: tail.split(whereSeparator: { $0.isWhitespace }).count))
             // Stamped as the words leave, not when they are pushed: the push
             // behind this one may not happen until the network is back.
-            onLine?(tail, Date(), false)
+            // A parting tail that follows a cut really does carry on from it,
+            // so it is marked like any other line: read the previous flush,
+            // then close the chain, because nothing follows this one.
+            onLine?(tail, Date(), lastFlushWasCut)
+            lastFlushWasCut = false
         }
         task?.finish()
         request = nil

@@ -39,7 +39,12 @@ if ! grep -q 'ListenJournal.shared.record(.recognizerSwapped' "$listener"; then
     echo "are indistinguishable afterwards, and they need different fixes."
     exit 2
 fi
-if ! grep -q '.flushed(reason:' "$listener"; then
+# Anchored on the record call like its siblings, and comment-stripped: the
+# call is wrapped across two lines because it does not fit, so the newlines are
+# folded first. Matching the bare case name against the raw file would pass on
+# a surviving doc comment with both record calls deleted.
+if ! grep -vE '^[[:space:]]*//' "$listener" | tr '\n' ' ' \
+    | grep -q 'ListenJournal.shared.record( *\.flushed(reason:'; then
     echo "A flush no longer records its reason and word count."
     echo "That pair is the only evidence of the shard rate this work exists to"
     echo "reduce, and the count is all the journal may hold: never the words."
@@ -53,10 +58,25 @@ if ! grep -q 'ListenJournal.shared.record(.posted(' "$session"; then
 fi
 # The journal is exportable from Settings, so a transcript copied into it
 # leaves the phone on a person's tap. design/LOCAL-FIRST.md governs this.
-if grep -vE '^[[:space:]]*//' "$session" | grep -q 'posted(ok: false, detail: "\\(error'; then
+#
+# Matched anywhere in a detail, not just at the start of the literal. Both live
+# sites open with a prefix ("queued, ", "requeued, "), so a pattern anchored at
+# the opening quote would miss the likeliest regression of all: swapping
+# postFailureShape(error) for error inside the string that is already there.
+# `.message` is named explicitly because it is the one shape that really does
+# carry the server's sentence about a body containing the owner's speech.
+if grep -vE '^[[:space:]]*//' "$session" | grep 'detail:' \
+    | grep -qE '\\\(error|error\.|\.message|localizedDescription|serverMessage'; then
     echo "A post failure writes the raw error into the journal."
     echo "BackendError carries the server's own sentence about a request whose"
     echo "payload was the owner's speech. Record the shape, not the message."
+    exit 2
+fi
+# And the safe reduction must still be the thing standing between them.
+if ! grep -q 'postFailureShape(error)' "$session"; then
+    echo "A post failure no longer goes through postFailureShape."
+    echo "That function is the only thing turning a refusal into a status code"
+    echo "instead of the server's sentence about the owner's own words."
     exit 2
 fi
 echo "the journal is written on start, stop, swap, flush and post"
