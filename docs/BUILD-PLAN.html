@@ -1,0 +1,193 @@
+<title>The Anticipy Build Plan</title>
+<style>
+  :root {
+    --paper:#F5F0EB; --card:#FCFAF6; --ink:#0C0C0C; --ink-2:#4E463C;
+    --ink-3:#8A8072; --rule:#D6D0C4; --champagne:#C8A97E; --accent:#8A6B44;
+    --good:#47664C; --warn:#8A6B44; --bad:#C96A5A; --mono-bg:#EFEAE1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#121110; --card:#1B1917; --ink:#EFEAE2; --ink-2:#C4BBAC;
+      --ink-3:#8F8778; --rule:#322E28; --accent:#C8A97E; --good:#7FA383;
+      --warn:#C8A97E; --bad:#D98D7B; --mono-bg:#23201C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#121110; --card:#1B1917; --ink:#EFEAE2; --ink-2:#C4BBAC;
+    --ink-3:#8F8778; --rule:#322E28; --accent:#C8A97E; --good:#7FA383;
+    --warn:#C8A97E; --bad:#D98D7B; --mono-bg:#23201C;
+  }
+  body { background:var(--paper); color:var(--ink);
+    font:16px/1.62 -apple-system,"Segoe UI",system-ui,sans-serif;
+    margin:0; padding:52px 20px 100px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1,h2,h3 { font-family:Georgia,"Times New Roman",serif; letter-spacing:-0.01em; }
+  h1 { font-size:clamp(2.5rem,7vw,3.8rem); line-height:1.03; margin:0 0 12px; text-wrap:balance; }
+  h2 { font-size:1.65rem; margin:0 0 4px; }
+  h3 { font-size:1.15rem; margin:0 0 8px; }
+  .kicker { font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3); margin-bottom:14px; }
+  .lede { font-size:1.12rem; color:var(--ink-2); max-width:44em; }
+  p { color:var(--ink-2); max-width:46em; }
+  strong { color:var(--ink); }
+  section { margin-top:60px; }
+  .num { color:var(--champagne); font-family:Georgia,serif; margin-right:10px; }
+  .sub { color:var(--ink-3); font-size:.95rem; margin:2px 0 18px; }
+  .card { background:var(--card); border:1px solid var(--rule); border-radius:16px; padding:22px 26px; margin-top:16px; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  th { text-align:left; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase;
+       color:var(--ink-3); padding:8px 12px 8px 0; border-bottom:1px solid var(--rule); }
+  td { padding:10px 12px 10px 0; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2); }
+  td:first-child { color:var(--ink); font-weight:600; white-space:nowrap; }
+  .tablewrap { overflow-x:auto; }
+  code { font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:.84em;
+         background:var(--mono-bg); border-radius:5px; padding:1px 6px; }
+  .chip { display:inline-block; font-size:.68rem; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; border-radius:999px; padding:2px 10px; margin-right:6px; }
+  .c-live { color:var(--good); border:1px solid var(--good); }
+  .c-open { color:var(--warn); border:1px solid var(--warn); }
+  .c-blocked { color:var(--bad); border:1px solid var(--bad); }
+  .organ { border-left:4px solid var(--champagne); }
+  .organ .meta { display:flex; gap:14px; flex-wrap:wrap; margin:6px 0 12px; font-size:.85rem; color:var(--ink-3); }
+  .organ .meta b { color:var(--ink-2); font-weight:650; }
+  .opt { margin:10px 0; padding:10px 14px; border:1px solid var(--rule); border-radius:10px; font-size:.93rem; color:var(--ink-2); }
+  .opt.pick { border-color:var(--champagne); }
+  .opt .tag { font-weight:700; color:var(--accent); margin-right:8px; }
+  ul.tight { margin:8px 0 0; padding-left:20px; color:var(--ink-2); }
+  ul.tight li { margin-bottom:7px; max-width:44em; }
+  .law { border-left:3px solid var(--champagne); padding-left:14px; margin:14px 0; }
+  .law b { color:var(--ink); } .law p { margin:3px 0 0; font-size:.93rem; }
+  .flow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:14px; font-size:.9rem; }
+  .flow .step { background:var(--card); border:1px solid var(--rule); border-radius:10px; padding:8px 14px; color:var(--ink); font-weight:600; }
+  .flow .arrow { color:var(--champagne); font-family:Georgia,serif; }
+  footer { margin-top:80px; border-top:1px solid var(--rule); padding-top:16px; color:var(--ink-3); font-size:.82rem; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="kicker">Engineering PRD · from today's machine to done · 2026-08-24</div>
+  <h1>The Anticipy Build Plan</h1>
+  <p class="lede">One document: <strong>where every piece of the system lives</strong>, what is already running, how each organ gets finished (options ranked, with a recommendation), in what order, under which rules, and the one definition of done nobody gets to redefine. Grounded in months of recorded incidents and a study of every shipped ambient product — not any single day. Deep reference with file-level detail: <code>docs/BRIEF.html</code> on the same branch.</p>
+</header>
+
+<section>
+  <h2><span class="num">1</span>Where everything is</h2>
+  <p class="sub">The map. If it isn't on this table, it isn't real.</p>
+  <div class="card tablewrap"><table>
+    <tr><th>Thing</th><th>Where</th><th>State / how to verify</th></tr>
+    <tr><td>Canonical code</td><td><code>github.com/omize10/Anticipy</code> → branch <code>harness/tejas-fixes</code> (local: <code>~/Documents/Codex/Anticipy-live</code>)</td><td>11 commits ahead of <code>jose_anticipy_system</code>; under review, not merged. <code>main</code> is the marketing site — never touched by this work.</td></tr>
+    <tr><td>Server brain</td><td>Railway project <code>anticipy-production</code> → service <code>worker</code></td><td><span class="chip c-live">live</span> running the branch. Verify: boot log line <code>brain=&lt;hash&gt;</code> must equal local <code>_brain_fingerprint()</code>. Rollback: redeploy from <code>54157bb</code>.</td></tr>
+    <tr><td>Backend + HQ</td><td>Railway service <code>backend</code> → <code>backend-production-61e0a.up.railway.app</code>; HQ SPA is <code>backend/pb_public/internal.html</code></td><td><span class="chip c-live">live</span> Deploys via the isolated-copy recipe; verify by byte-diff of the live file vs local.</td></tr>
+    <tr><td>The board</td><td><code>anticipy.ai/internal</code> (gate <code>amber-otter</code>, then Google sign-in)</td><td>11 cards: <em>0 · READ ME</em> + the ten organ tasks, each with its doc in Notes and its work as Steps.</td></tr>
+    <tr><td>iPhone app</td><td>Build 76 (v1.1.0), installed by cable</td><td><span class="chip c-live">on device</span> Speaker engine linked, vocabulary taught. TestFlight 76: uploaded, processing stalled — suspected framework issue; build 75 remains VALID. <span class="chip c-blocked">TestFlight open</span></td></tr>
+    <tr><td>Pendant hardware</td><td>XIAO nRF52840, flashed 07-24</td><td>Advertises "Anticipy"; app has pairing + BLE pipeline. Phone acts as the pendant until hardware ships.</td></tr>
+    <tr><td>The laws</td><td><code>HARNESS-LAWS.md</code> at branch root (mirrored in <code>CLAUDE.md</code>/<code>AGENTS.md</code>)</td><td>Binding for humans and AI agents; auto-loaded by any agent pointed at the repo.</td></tr>
+    <tr><td>Proof machinery</td><td><code>overnight/</code>: <code>done_gate.py</code> (the one scoreboard), <code>tejas_gate.py</code>, <code>triage_eval.py</code>, <code>replay_call.py</code>; labeled set in <code>research/evals/</code></td><td>1028 deterministic tests in <code>tests/</code>. done_gate: legs 1–5 green, leg 6 (the stranger) open.</td></tr>
+    <tr><td>Deep reference</td><td><code>docs/BRIEF.html</code> · <code>docs/FOLLOWUPS.md</code> · <code>research/HOW-AN-AGENT-EXISTS.md</code></td><td>Every screen and system with file:line refs · known open items · the industry field study.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="num">2</span>State of the machine</h2>
+  <p class="sub">What already runs, and why this plan exists.</p>
+  <div class="card">
+    <p style="margin-top:0"><strong>The evidence base is the pattern, not an incident:</strong> months of dated failures recorded in the code's own comments — an invented restaurant pursued for 58 steps, actions taken on dictated text, a held card that sat silent until its owner approved work he'd never been told about, uninvited-text evenings, and a decision lane that structurally could never ask a question — plus a field study of every shipped ambient product (where this system grades <em>ahead</em>: the approval gate, the browser hands' intent journal, memory provenance; and <em>below the floor</em>: hearing, and knowing who spoke).</p>
+    <p><strong>Live now on the worker</strong> (each verified against the live service, each with tests): worked examples + a declared effect-channel in the judge's prompt · computed answers for computable questions · a provenance guard on outgoing names · a floor under act-minting fragments · a conversation posture with a single after-conversation digest · a governed ask valve (real quiet, daylight, capped, deduped, recorded) · a frontier-model second opinion on anything about to become an action. Judgment measured <strong>68% → 80%</strong> on the labeled set.</p>
+    <p style="margin-bottom:0"><strong>What this plan finishes:</strong> the five organs below — because the machine walks, and now each organ has to be good.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">3</span>The five organs — how each gets done</h2>
+  <p class="sub">Each block mirrors a card on the board. Owner, dependencies, today's state, done-when, options ranked.</p>
+
+  <div class="card organ">
+    <h3>EARS — hear whole thoughts, not fragments</h3>
+    <div class="meta"><span><b>Owner</b> Jose</span><span><b>Order</b> first — everything downstream is capped by it</span><span><b>Depends on</b> nothing</span></div>
+    <p><b>Today:</b> a dictation-grade recognizer with no voice-activity detection and no true spoken-at timestamps; capture quality is the measured floor of the whole system. <b>Done when:</b> speech is captured with real timestamps, conversations emit close events, and judgment runs on finished thoughts.</p>
+    <div class="opt pick"><span class="tag">A · RECOMMENDED</span>Migrate to Apple SpeechAnalyzer/SpeechTranscriber (long-form, multi-speaker, on-device — keeps the local-first law), fronted by its built-in voice detection, with capture-time stamps and segment-close events per <code>CAPTURE-ARCHITECTURE.md</code>.</div>
+    <div class="opt"><span class="tag">B · Fallback</span>Keep SFSpeechRecognizer; add Silero VAD + spoken_at plumbing + an on-device semantic endpointer. Smaller change; dictation-grade errors remain.</div>
+    <div class="opt"><span class="tag">C · Rejected</span>Cloud streaming ASR. Most accurate, fastest — and raw audio leaves the phone, which is against standing law. Only ever a temporary flagged fallback.</div>
+  </div>
+
+  <div class="card organ">
+    <h3>SORTER — judge closed conversations, and whose task it is</h3>
+    <div class="meta"><span><b>Owner</b> Jose</span><span><b>Order</b> after EARS ships close events</span><span><b>Depends on</b> EARS</span></div>
+    <p><b>Today:</b> judgment is line-by-line — context-blind by construction, patched by a fragment floor that is marked as tape. <b>Done when:</b> each closed conversation gets one strong-model judgment with its participant list (voice tags as hard evidence), the tape is deleted, and the labeled set + call replay do not regress. This also cuts ~50 cheap model calls per conversation to ~3 — cheaper <em>and</em> smarter.</p>
+  </div>
+
+  <div class="card organ">
+    <h3>LIBRARY — memory that survives a life</h3>
+    <div class="meta"><span><b>Owner</b> Jose</span><span><b>Order</b> anytime, parallel</span><span><b>Depends on</b> nothing</span></div>
+    <p><b>The model, plainly:</b> three tools layered — the <b>vector finder</b> (fuzzy: "tooth guy" finds dentist), the <b>graph</b> (precise: which Laura), and <b>ranking</b> (fresh × important × relevant picks the five cards that matter now). The graph with provenance already exists. <b>Done when:</b></p>
+    <ul class="tight">
+      <li><b>Facts expire</b> — "we broke up" retires "partner is Sarah" (kept for audit, excluded from recall), and situation-facts decay without reinforcement.</li>
+      <li><b>Confidence is read</b> — it is stored today and consulted by nothing; doctrine says importance gates, confidence orders.</li>
+      <li><b>Origin gates action</b> — owner-said may act; overheard may prepare; imported text (a calendar title) may be quoted, never obeyed.</li>
+      <li><b>The vector channel exists</b> beside keyword and graph.</li>
+    </ul>
+  </div>
+
+  <div class="card organ">
+    <h3>HANDS — research first, skills cached, APIs preferred, browser safe</h3>
+    <div class="meta"><span><b>Owner</b> Jose (three cards)</span><span><b>Order</b> research card anytime; API and browser after it</span><span><b>Depends on</b> skills cache feeds the other two</span></div>
+    <ul class="tight">
+      <li><b>Research + skills:</b> deep research precedes any world-touching plan (server-side, cheap), and every successful run writes its recipe — site, steps, gotchas, last-verified — into a skills cache recalled before the next similar goal. Never pay for the same learning twice.</li>
+      <li><b>The API ladder:</b> onboarding offers account hookups (mail, calendar, Slack, Notion…); APIs are preferred over driving websites; a repeated browser chore triggers "want to hook up the API so this is instant?" <b>First step is research</b> — Composio is the named candidate, not the decision.</li>
+      <li><b>The browser:</b> safe (never touches credential or payment fields; journals intent before every click — already built), remembering (skills + library in its context, provenance respected), cheap (recipes before re-thinking; strong model only at decision points; screenshots captured as evidence).</li>
+    </ul>
+  </div>
+
+  <div class="card organ">
+    <h3>MOUTH — texts are the product</h3>
+    <div class="meta"><span><b>Owner</b> Jose</span><span><b>Order</b> anytime</span><span><b>Depends on</b> SHELF 2 for the act-and-tell voice</span></div>
+    <p><b>Done when:</b> she texts like a person (researched against real human threads — one thought per message, no forms), never loses a thread, never re-asks an answered question, and <b>done always arrives as evidence</b> — the screenshot or receipt, never a claim. A model grading a model is worthless; artifacts only. The app is the receipt drawer; texts are the interface.</p>
+  </div>
+
+  <div class="card organ" style="border-left-color:var(--good)">
+    <h3>Claude's two cards — in flight tonight</h3>
+    <div class="meta"><span><b>Owner</b> Claude</span><span><b>Jose's part</b> review the reversibility classifier on SHELF 2</span></div>
+    <ul class="tight">
+      <li><b>SHELF 2 — act-and-tell with one-tap undo.</b> The ruling: three shelves. Pure compute/lookups just happen (live). <b>Genuinely reversible actions run immediately with an announcement and a one-tap undo</b> — the new middle ground. Irreversible (money, messages to humans, deletes) stays gated forever, and the deterministic deny-list outranks any classification.</li>
+      <li><b>PHONE-AS-PENDANT.</b> Always-listening reliability on the phone: background survival, watchdog, resume after interruptions, battery sanity, ear provenance in the feed.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">4</span>The order</h2>
+  <div class="flow">
+    <span class="step">READ ME</span><span class="arrow">→</span>
+    <span class="step">EARS</span><span class="arrow">→</span>
+    <span class="step">SORTER</span><span class="arrow">→</span>
+    <span class="step">HANDS b + c</span><span class="arrow">→</span>
+    <span class="step">WIRE IT ALL</span>
+  </div>
+  <p class="sub" style="margin-top:10px">In parallel lanes at any time: LIBRARY · HANDS-research · MOUTH · Claude's two cards.</p>
+</section>
+
+<section>
+  <h2><span class="num">5</span>The rules — binding</h2>
+  <div class="card">
+    <div class="law"><b>1 · No pattern-match decides meaning.</b><p>Regexes and word lists never decide what words mean. Meaning belongs to a model with context. Legal pattern-matching: senses, the effect-channel seatbelt, deterministic tests.</p></div>
+    <div class="law"><b>2 · Tape ships only with an expiry</b><p>— a <code>TAPE:</code> comment naming the real fix and a red check tracking removal.</p></div>
+    <div class="law"><b>3 · Nothing is fixed until verified against the LIVE system.</b><p>Repo-green is a claim. Fingerprints and byte-diffs are facts.</p></div>
+    <div class="law"><b>4 · State lives in files, never in conversations.</b></div>
+    <div class="law"><b>5 · Fix order: senses → context → examples → model tier → structure.</b><p>A rule written while she is deaf, blind, untaught or under-modeled is tape by definition.</p></div>
+    <div class="law"><b>6 · The owner is not the review loop.</b><p>Nothing ships until an adversarial pass has tried to kill it.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">6</span>Done — the definition nobody may redefine</h2>
+  <div class="card">
+    <p style="margin-top:0"><strong>Done is when she's forgettable and nothing falls.</strong> A cold stranger onboards on their own accounts, lives a normal unscripted week, gets real things caught, never says "what?", never checks on her — and doesn't want to give it back. The test set is next week's life, which cannot be gamed.</p>
+    <p style="margin-bottom:0"><b>The daily metronome:</b> every morning, one question — was yesterday clean? Not clean → fix the one thing that broke it, then stop. Clean → touch nothing. No demo, green suite, or session may declare done; only lived days.</p>
+  </div>
+</section>
+
+<footer>
+  Companion documents on branch <code>harness/tejas-fixes</code>: <code>docs/BRIEF.html</code> (every screen, every pipeline stage, 105 worked examples at life-scale framing) · <code>HARNESS-LAWS.md</code> · <code>docs/FOLLOWUPS.md</code>. The working board: <code>anticipy.ai/internal</code>.
+</footer>
+
+</div>
