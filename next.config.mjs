@@ -1,6 +1,11 @@
-// Where the fellowship pages and their API are served from. An env var so a
-// preview deploy can point at a staging backend without a code change, and so
-// moving the backend never means editing a rewrite by hand.
+// Where HQ and the referral redirect are served from. An env var so a preview
+// deploy can point at a staging backend without a code change.
+//
+// THE FELLOWSHIP NO LONGER COMES THROUGH HERE. It has its own domain,
+// anticipyfellowship.com, its own Vercel project, and a CATCH-ALL rewrite to
+// this same backend — so adding a /fellows/* route needs no change in this
+// file any more. What is left below is HQ (which deliberately stays on
+// anticipy.ai, behind the site passcode) and /r/*.
 const FELLOWSHIP_ORIGIN =
   process.env.FELLOWSHIP_ORIGIN || "https://backend-production-61e0a.up.railway.app";
 
@@ -34,8 +39,21 @@ const nextConfig = {
       // never created in Supabase — the notification emails say so in their
       // own first line. Those three are owed a conversation, not a 301, and a
       // temporary redirect keeps the door open until they have had one.
-      { source: "/ugc", destination: "/fellowships", permanent: false },
-      { source: "/ugc/apply", destination: "/fellowships", permanent: false },
+      { source: "/ugc", destination: "https://anticipyfellowship.com/fellowships", permanent: false },
+      { source: "/ugc/apply", destination: "https://anticipyfellowship.com/fellowships", permanent: false },
+      // THE FELLOWSHIP MOVED to its own domain. These four keep every link
+      // that already exists — in an email, in a DM, in somebody's notes —
+      // working, and they are the ONLY thing about the fellowship left on
+      // this site.
+      //
+      // 302 and not 301 on purpose. A 301 is cached by browsers effectively
+      // for ever, so it cannot be taken back if the domain choice changes;
+      // the programme is a day old and the links are few. Flip these to
+      // permanent once the address has settled.
+      { source: "/fellowships", destination: "https://anticipyfellowship.com/fellowships", permanent: false },
+      { source: "/fellowships.html", destination: "https://anticipyfellowship.com/fellowships", permanent: false },
+      { source: "/fellowship-growth-learning", destination: "https://anticipyfellowship.com/fellowship-growth-learning", permanent: false },
+      { source: "/fellowship-growth-learning.html", destination: "https://anticipyfellowship.com/fellowship-growth-learning", permanent: false },
     ];
   },
   async rewrites() {
@@ -48,26 +66,17 @@ const nextConfig = {
         source: "/ingest/:path*",
         destination: "https://us.i.posthog.com/:path*",
       },
-      // THE FELLOWSHIP, SERVED FROM anticipy.ai.
+      // The fellowship pages and /fellows/* used to be rewritten here. They
+      // are gone: anticipyfellowship.com serves them now, and the redirects
+      // above carry the old URLs there. Nothing in this file needs touching
+      // when a /fellows/* route is added any more.
       //
-      // The pages and their API live on the PocketBase backend. Rewriting
-      // rather than proxying in an API route means the browser only ever
-      // talks to anticipy.ai, so there is no cross-origin request to permit
-      // and no CORS header to get wrong — the session token stays first
-      // party, and one origin owns the cookie jar.
+      // /r/* STAYS, and that is not an oversight. It is the SALES link — it
+      // redirects to this site's own front page with ?ref= — so it belongs on
+      // the domain that sells the product, both because that is where the
+      // buyer is going and because a link reading anticipyfellowship.com in a
+      // creator's bio tells a stranger nothing about what is being sold.
       //
-      // The API paths are rewritten too, and they must be: the pages call
-      // /fellows/* relative to wherever they are served from, so without
-      // these lines the pages would load on anticipy.ai and then fail every
-      // single request against a route that does not exist here.
-      { source: "/fellowships", destination: `${FELLOWSHIP_ORIGIN}/fellowships.html` },
-      { source: "/fellowship-growth-learning", destination: `${FELLOWSHIP_ORIGIN}/fellowship-growth-learning.html` },
-      // The .html shapes resolve too, because the two pages link to each
-      // other by filename. One set of pages then works unchanged on both
-      // origins, with no origin-sniffing in the page and no build step.
-      { source: "/fellowships.html", destination: `${FELLOWSHIP_ORIGIN}/fellowships.html` },
-      { source: "/fellowship-growth-learning.html", destination: `${FELLOWSHIP_ORIGIN}/fellowship-growth-learning.html` },
-      { source: "/fellows/:path*", destination: `${FELLOWSHIP_ORIGIN}/fellows/:path*` },
       // A fellow's minted link. /c/* was the old creator link shape and is
       // pointed at the same place so anything already posted keeps working.
       { source: "/r/:code", destination: `${FELLOWSHIP_ORIGIN}/r/:code` },
@@ -127,6 +136,13 @@ const nextConfig = {
       { source: "/internal/assistant", destination: `${FELLOWSHIP_ORIGIN}/internal/assistant` },
       { source: "/internal/fellows", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows` },
       { source: "/internal/fellows/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/remove` },
+      // These three existed in the backend and nowhere here, so past the site
+      // gate they 404'd at Vercel while answering 401 "wrong key" at the
+      // origin — alive, and unreachable through the domain. One of them is
+      // the route that pays a fellow.
+      { source: "/internal/fellows/pay", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/pay` },
+      { source: "/internal/fellows/submissions/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/submissions/remove` },
+      { source: "/internal/fellows/submissions/release", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/submissions/release` },
     ];
   },
   async headers() {
