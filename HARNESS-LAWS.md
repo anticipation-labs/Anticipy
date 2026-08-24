@@ -74,8 +74,12 @@ A rule written while 1–4 are unfixed is tape by definition.
 ## Known standing tape (legacy — scheduled for removal, do not extend)
 
 - `_READ_ONLY_RE` and the `is_consequential()` prose-regex fallback
-  (brain/anticipy_core.py ~:120, ~:363) → replaced by effect-channel
-  classification. Tracked by overnight/tejas_gate.py leg 4.
+  (brain/anticipy_core.py) → replaced by effect-channel classification.
+  Tracked by overnight/tejas_gate.py leg 4. PARTIAL as of 2026-08-24:
+  computable goals are now classified by CAPABILITY (compute_answer() is
+  asked, not a verb list — an early fix that ADDED compute verbs to the
+  regex was itself a Law-1 violation and was reverted); the prose-regex
+  fallback still owns everything else and remains the item to replace.
 - The digit guard and `unsupported_names`/`unsupported_counts` string checks
   (brain/orchestrator.py ~:472) → legitimate as BACKSTOPS only; the real fix
   is a frontier model with full context at act-minting. Do not add siblings.

@@ -122,14 +122,6 @@ _IRREVERSIBLE_RE = re.compile(
 # world without their word, while an over-hold costs one tap.
 _READ_ONLY_RE = re.compile(
     r"^\s*(research|compar\w*|look\s*up|find|check(?!\s*out)\w*|search\w*|read\w*|"
-    # Computing is the purest read-only there is — nothing leaves the
-    # owner's world when a number is worked out. This list had no word for
-    # it, so on 2026-08-23 "Convert 5 PM CST to PST" fell through the
-    # fallback and a TIMEZONE CONVERSION was held for his approval — the
-    # exact approval-fatigue failure the is_consequential docstring warns
-    # about. Effect channel, not vocabulary: convert/calculate/compute
-    # goals cannot be consequential.
-    r"convert\w*|calculat\w*|comput\w*|"
     r"summar\w*|gather\w*|browse|price|monitor|watch|list|"
     r"open(?!\s+(?:an?\s+)?account)|go\s+to|visit|navigat\w*|show|load|"
     # "Plan the weekend at Earls" is PREPARATION — options, hours, logistics
@@ -525,6 +517,16 @@ def is_consequential(goal: str, params: dict | None = None,
         return True
     if explicit:
         return False
+    # CAPABILITY, not vocabulary: a goal the calculator can satisfy outright
+    # is pure computation and cannot leave the owner's world, whatever verbs
+    # it wears. On 2026-08-23 "Convert 5 PM CST to PST" was HELD for his
+    # approval because no word list had "convert" — and the first fix was to
+    # ADD the word, which is how the last three months happened. Asking the
+    # organ that would do the work is an effect-channel test; asking a word
+    # list is tape. (The irreversible check above still wins: "send the CST
+    # conversion to Tejas" mentions computation and also SENDS.)
+    if compute_answer(g):
+        return False
     # Overheard: default to holding — only explicitly read-only runs unattended.
     return not _READ_ONLY_RE.search(g)
 
@@ -783,6 +785,11 @@ def job_lane(goal: str, params: dict | None = None) -> str:
         return ""
     if _BROWSER_TARGET_RE.search(f"{g} {source}"):
         return ""
+    # A computable goal that somehow reaches the queue anyway (the hear()
+    # path answers most of them before a job exists) belongs on the server
+    # arm, never in his browser — same capability test as is_consequential.
+    if compute_answer(g):
+        return "research"
     return "research" if _READ_ONLY_RE.search(g) else ""
 
 # How the best text-native agents actually sound (studied: Tomo — the

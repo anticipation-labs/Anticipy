@@ -233,13 +233,26 @@ def leg_3_entity_guard() -> str:
 # --------------------------------------------------------------------------
 def leg_4_compute_lane() -> str:
     core = read(CORE)
-    ro = extract_regex(core, "_READ_ONLY_RE")
+    # The REAL organ, end to end — never the word list. An earlier version
+    # of this leg tested that _READ_ONLY_RE contained compute verbs, which
+    # invited exactly the fix HARNESS-LAWS forbids (extending the tape). The
+    # honest question is behavioral: does the shipped is_consequential()
+    # hold a timezone conversion? Does it still hold a SEND that merely
+    # wears computation words?
+    import sys as _sys
+    if ROOT not in _sys.path:
+        _sys.path.insert(0, ROOT)
+    from brain.anticipy_core import is_consequential
     goal = "Convert 5 PM CST to PST"
-    if not ro.search(goal):
-        raise LegFailed(f'the brain\'s own _READ_ONLY_RE does not match "{goal}" — '
-                        "so the real is_consequential() fallback holds a timezone "
+    if is_consequential(goal):
+        raise LegFailed(f'is_consequential({goal!r}) still holds a timezone '
                         "conversion for approval, exactly as it did live "
-                        "(outbound auv9ieyhcvhy1nu). Add compute verbs (plan #3)")
+                        "(outbound auv9ieyhcvhy1nu) — classify by CAPABILITY "
+                        "(can the calculator satisfy it?), not by verb (plan #3)")
+    if not is_consequential("send the 5 PM CST to PST conversion to Tejas"):
+        raise LegFailed("a goal that wears computation words but SENDS is no "
+                        "longer held — the capability test must never outrank "
+                        "the irreversible check")
     # The other half of plan #3 is run, not grepped: the real compute organ
     # must produce the actual number the owner wanted (3 PM), and the core
     # must call it. It is stdlib-only by contract, so importing it is safe.
