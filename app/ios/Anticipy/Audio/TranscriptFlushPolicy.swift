@@ -78,3 +78,60 @@ struct TranscriptFlushPolicy {
         return Double(shared) / Double(new.count) >= 0.7
     }
 }
+
+extension TranscriptFlushPolicy {
+    /// Why a flush happened. Not what the words mean: only which of the two
+    /// timers ran out, or that the recognizer stopped on its own.
+    ///
+    /// The ceiling above ended the silent loss, but it also ends a LINE, so
+    /// someone talking without pausing gets cut every eight seconds wherever
+    /// the sentence happens to be. On the call recorded 2026-08-24, 54% of the
+    /// lines that arrived were four words or fewer. A reader cannot tell those
+    /// shards from real one-word answers, because the phone threw away the one
+    /// thing it knew for certain: that it was the clock, not the speaker, that
+    /// ended the line.
+    enum Reason: String, Equatable {
+        /// A pause ended the utterance: a complete thought.
+        case gap
+        /// maxHold expired mid-speech: a cut, not an ending.
+        case ceiling
+        /// The recognizer finalized.
+        ///
+        /// Never returned below. A clock cannot see a final result arrive, so
+        /// only the caller holding the recognition callback can name this one.
+        case final
+    }
+
+    /// Why must these words go out now, or nil if they need not.
+    ///
+    /// Additive: mustFlushNow still answers exactly as it did, and callers
+    /// asking it get the same ceiling they got before.
+    ///
+    /// - Parameters:
+    ///   - pendingSince: when the words now waiting first began waiting.
+    ///   - lastPartialAt: when the recognizer last revised its hypothesis.
+    ///     Nil means nothing has been heard since the wait began, which is
+    ///     silence of exactly that length.
+    func flushReason(pendingSince: Date?, lastPartialAt: Date?, now: Date) -> Reason? {
+        guard let pendingSince else { return nil }
+        let silence = now.timeIntervalSince(lastPartialAt ?? pendingSince)
+
+        // The gap is asked FIRST, and it wins when both are true. If he
+        // stopped talking and stayed stopped, the ceiling expiring behind him
+        // changes nothing about what he said: the sentence was over. Reporting
+        // that as a cut would tell the consumer to link the next, unrelated
+        // sentence onto the end of this finished one, and unrelated lines
+        // chained together read as one rambling thought nobody had.
+        if silence >= utteranceGap { return .gap }
+
+        // Still revising, so he is still mid-sentence, and the ceiling has run
+        // out anyway. The words go out now for the same reason they always
+        // did, but the caller is told this was a cut so the fragment can be
+        // linked to what came before instead of published as a whole thought.
+        if now.timeIntervalSince(pendingSince) >= maxHold { return .ceiling }
+
+        // Mid-utterance and inside the ceiling. Answering anything here would
+        // flush on every partial and shred every sentence into words.
+        return nil
+    }
+}

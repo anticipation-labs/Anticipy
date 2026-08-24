@@ -135,6 +135,45 @@ struct TranscriptFlushPolicyTests {
               !TranscriptFlushPolicy.isEchoOfPrevious("Yeah I know where it is", previous: "Yeah I know where it is",
                     apart: 60, window: 12))
 
+        // ------------------------------------------------- why the flush fired
+        // The ceiling ended the silent loss, but it ends a LINE as well, so
+        // continuous speech was cut every 8 seconds wherever the sentence
+        // happened to be. On the recorded call of 2026-08-24, 54% of the
+        // delivered lines were four words or fewer. Nothing here changes WHEN
+        // the words go out; it only tells the caller which of the two events
+        // just happened, so a mid-sentence cut can be linked instead of
+        // published as a finished thought.
+
+        let p0 = Date()
+        check("no waiting words means no reason to flush",
+              policy.flushReason(pendingSince: nil,
+                                 lastPartialAt: p0, now: p0) == nil)
+        check("still speaking past the ceiling is a cut, not an ending",
+              policy.flushReason(pendingSince: p0,
+                                 lastPartialAt: p0.addingTimeInterval(8.9),
+                                 now: p0.addingTimeInterval(9)) == .ceiling)
+        check("a pause longer than the gap ended the utterance",
+              policy.flushReason(pendingSince: p0,
+                                 lastPartialAt: p0.addingTimeInterval(0.3),
+                                 now: p0.addingTimeInterval(3)) == .gap)
+        check("mid-sentence and short of the ceiling is nobody's business yet",
+              policy.flushReason(pendingSince: p0,
+                                 lastPartialAt: p0.addingTimeInterval(2.5),
+                                 now: p0.addingTimeInterval(3)) == nil)
+        // Both conditions at once. He stopped talking and stayed stopped, and
+        // the ceiling merely expired behind him. Calling that a cut would
+        // chain the next unrelated sentence onto this finished one.
+        check("a finished thought is never reported as a cut",
+              policy.flushReason(pendingSince: p0,
+                                 lastPartialAt: p0.addingTimeInterval(6.3),
+                                 now: p0.addingTimeInterval(9)) == .gap)
+        // The reason is additive. The ceiling itself must answer exactly as it
+        // did before, because PhoneListener still asks it this question.
+        check("the ceiling contract is unchanged at the boundary",
+              policy.mustFlushNow(pendingSince: p0, now: p0.addingTimeInterval(policy.maxHold))
+              && !policy.mustFlushNow(pendingSince: p0,
+                                      now: p0.addingTimeInterval(policy.maxHold - 0.01)))
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {
