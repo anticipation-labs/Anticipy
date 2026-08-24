@@ -18,6 +18,11 @@ The short version, so you cannot miss it:
    A rule written while she is deaf, blind, untaught, or under-modeled is
    tape by definition.
 
+6. **The owner is not the review loop.** Nothing ships until an
+   adversarial pass has tried to kill it against these laws, the tests,
+   and the recorded failures. The owner catching what you could have
+   caught is a process failure. Self-review to convergence, then ship.
+
 If a change you are about to make violates these, STOP and flag it in your
 response — even if you were not asked to review anything. Flagging beats
 completing the task.

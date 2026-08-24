@@ -69,6 +69,18 @@ Before writing ANY rule, ask in order:
 
 A rule written while 1–4 are unfixed is tape by definition.
 
+## LAW 6 — The owner is not the review loop.
+
+Nothing ships until an adversarial pass — yours or a fleet's — has tried to
+kill it: against these laws, against the tests, against the recorded
+failures. The owner catching a violation you could have caught yourself is
+a PROCESS failure and gets logged as one. This law exists because on
+2026-08-23 an agent shipped a verb-list fix, was caught by the owner,
+shipped a calculator-sniff fix, was caught again, and only then built the
+right thing — three drafts, two of them reviewed by the one person whose
+time the whole product exists to protect. Self-review to convergence,
+then ship.
+
 ---
 
 ## Known standing tape (legacy — scheduled for removal, do not extend)
