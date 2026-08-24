@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		087F60BA4678D677DDBC3474 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC4BDEF755D6F5BC4138F18 /* AppTheme.swift */; };
+		0A4F7E4B9727318D39265E30 /* ListenJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66BCAC2FE553220A46D105D /* ListenJournal.swift */; };
 		0BB2CC5D62582F4FF458E8ED /* AnticipyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */; };
 		1741E2E9969BA00F175A514B /* ContextTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B835B3131A011B32F5BC29 /* ContextTrigger.swift */; };
 		18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0AB97746861DA294983C3B /* AnticipyBackend.swift */; };
@@ -79,6 +80,7 @@
 		8F3C23460620BAF04806F594 /* TranscriberClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriberClient.swift; sourceTree = "<group>"; };
 		9CD1CE1C9359C9DF75AA38DE /* TranscriptCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptCursor.swift; sourceTree = "<group>"; };
 		9EA3914C2F3E611680CF7A63 /* AnticipyVocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyVocabulary.swift; sourceTree = "<group>"; };
+		A66BCAC2FE553220A46D105D /* ListenJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenJournal.swift; sourceTree = "<group>"; };
 		A935B05F51033496D5EF92C9 /* HapticEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticEngine.swift; sourceTree = "<group>"; };
 		BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSourcePolicy.swift; sourceTree = "<group>"; };
 		BE0AB97746861DA294983C3B /* AnticipyBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyBackend.swift; sourceTree = "<group>"; };
@@ -176,6 +178,7 @@
 				9EA3914C2F3E611680CF7A63 /* AnticipyVocabulary.swift */,
 				C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */,
 				BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */,
+				A66BCAC2FE553220A46D105D /* ListenJournal.swift */,
 				2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */,
 				8E88365017E289B62475F24B /* PhoneListener.swift */,
 				10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */,
@@ -312,6 +315,7 @@
 				C4189246299602D02840F0D1 /* InterviewView.swift in Sources */,
 				65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */,
 				CC601CF895488D6287CAE43B /* LifeContext.swift in Sources */,
+				0A4F7E4B9727318D39265E30 /* ListenJournal.swift in Sources */,
 				732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */,
 				DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */,
 				A0C6AC3D27BE2A2D7D82A6D4 /* OnboardingFinale.swift in Sources */,

@@ -57,7 +57,7 @@ struct ListenJournalTests {
         let cause = ListenJournal(limit: 10)
         cause.record(.sessionStopped(cause: .routeChange), at: t0)
         check("a stop carries its cause into the line",
-              cause.entries[0].contains("routeChange"))
+              cause.entries.count == 1 && cause.entries[0].contains("routeChange"))
 
         // ------------------------------------------------------------ 4. bounded
         // backend/start.sh exists in this repo because a disposable log database
@@ -73,10 +73,27 @@ struct ListenJournalTests {
                   && bounded.entries[2].contains("r9"))
 
         // ------------------------------------------------------------ 5. clear
-        let cleared = ListenJournal(limit: 10)
+        // Emptying it is only half of clear's job. The ring also has to forget
+        // WHERE it was writing: leave that behind and the next refill past the
+        // limit unrolls from a stale offset, which keeps an old line and drops a
+        // new one. That is the same newest-wins property case 4 pins, broken by
+        // a path case 4 never walks. So this refills past the limit afterwards
+        // instead of trusting emptiness alone, and it checks there was something
+        // to clear in the first place, since a record that silently did nothing
+        // would satisfy an emptiness test on its own.
+        let cleared = ListenJournal(limit: 3)
         cleared.record(.sessionStarted, at: t0)
+        let hadSomethingToClear = !cleared.entries.isEmpty
         cleared.clear()
-        check("clearing empties the journal", cleared.entries.isEmpty)
+        let emptyAfterClear = cleared.entries.isEmpty
+        for i in 0..<5 { cleared.record(.flushed(reason: "c\(i)", words: i), at: t0) }
+        let refilled = cleared.entries
+        check("clearing empties the journal and resets it, so a refill still keeps the newest",
+              hadSomethingToClear && emptyAfterClear
+                  && refilled.count == 3
+                  && refilled[0].contains("c2")
+                  && refilled[1].contains("c3")
+                  && refilled[2].contains("c4"))
 
         // ------------------------------------------------------------ 6. a flush
         // The trigger and the size of a flush are what distinguish "the ceiling
@@ -90,26 +107,55 @@ struct ListenJournalTests {
         // digits too, and a check that a passing digit pair satisfies is not
         // checking the word count at all.
         check("a flush names its trigger and how many words went out",
-              flush.entries[0].contains("ceiling") && flush.entries[0].contains("12 words"))
+              flush.entries.count == 1
+                  && flush.entries[0].contains("ceiling")
+                  && flush.entries[0].contains("12 words"))
 
         // ------------------------------------------------------------ 7. two threads
-        // record() is called from the audio thread and from the main queue. An
-        // unsynchronised array here is a crash in the one code path whose job is
-        // to explain crashes.
-        let concurrent = ListenJournal(limit: 400)
-        let group = DispatchGroup()
-        let audioThread = DispatchQueue(label: "test.audio")
-        let mainThread = DispatchQueue(label: "test.main")
-        for queue in [audioThread, mainThread] {
-            queue.async(group: group) {
-                for i in 0..<100 {
-                    concurrent.record(.posted(ok: true, detail: "\(i)"), at: t0)
+        // record() is called from the audio thread and from the main queue while
+        // Settings may be reading it. An unsynchronised array here is a crash in
+        // the one code path whose job is to explain crashes.
+        //
+        // Run twice on purpose. With room to spare every write must survive,
+        // which is the plain no-loss property. With a limit BELOW the number of
+        // writes, the contended branch is the ring's overwrite rather than its
+        // append, so the wrap path is inside what this case proves instead of
+        // beside it. A third queue reads entries throughout, because on a phone
+        // Settings can be showing the journal while a session is still running.
+        func hammer(limit: Int) -> (kept: Int, reads: Int, torn: Bool) {
+            let journal = ListenJournal(limit: limit)
+            let group = DispatchGroup()
+            let audioThread = DispatchQueue(label: "test.audio")
+            let mainThread = DispatchQueue(label: "test.main")
+            let readerThread = DispatchQueue(label: "test.reader")
+            var reads = 0
+            var torn = false
+            for (tag, queue) in [("audio", audioThread), ("main", mainThread)] {
+                queue.async(group: group) {
+                    for i in 0..<100 {
+                        journal.record(.posted(ok: true, detail: "\(tag)\(i)"), at: t0)
+                    }
                 }
             }
+            // A snapshot taken mid-write may be short, but it may never exceed
+            // the bound, hold a blank line, or hold anything that is not one of
+            // the lines just written.
+            readerThread.async(group: group) {
+                for _ in 0..<200 {
+                    let snapshot = journal.entries
+                    reads += 1
+                    if snapshot.count > limit { torn = true }
+                    if snapshot.contains(where: { !$0.contains("posted") }) { torn = true }
+                }
+            }
+            group.wait()
+            return (journal.entries.count, reads, torn)
         }
-        group.wait()
-        check("two queues recording at once neither crash nor lose an entry",
-              concurrent.entries.count == 200)
+        let roomy = hammer(limit: 400)
+        let tight = hammer(limit: 64)
+        check("two queues writing while a third reads: nothing lost, nothing torn, bound held",
+              roomy.kept == 200 && roomy.reads == 200 && !roomy.torn
+                  && tight.kept == 64 && tight.reads == 200 && !tight.torn)
 
         // ------------------------------------------------------------------ result
         print("")

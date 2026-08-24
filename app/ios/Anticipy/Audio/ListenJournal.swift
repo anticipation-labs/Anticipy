@@ -23,6 +23,13 @@ enum ListenEvent: Equatable {
     case sessionStopped(cause: StopCause)
     case recognizerSwapped(cause: SwapCause)
     case flushed(reason: String, words: Int)
+    /// `detail` is a status or an error shape, never transcript text. The
+    /// tempting values at the call site are the wrong ones: `BackendError`
+    /// carries the server's own sentence, and a PocketBase error body is built
+    /// from a request whose payload includes the owner's speech. Spec section 9
+    /// makes this journal exportable from Settings, so anything put here leaves
+    /// the phone on a person's tap. A status code, a queue state or an error
+    /// name is what belongs; the words the owner said never do.
     case posted(ok: Bool, detail: String)
 
     enum StopCause: String, Equatable {
