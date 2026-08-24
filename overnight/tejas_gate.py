@@ -104,12 +104,13 @@ def leg_1_meeting_posture() -> str:
     # the two state cells are re-declared clean, because grabbing them by
     # regex also grabs the comprehension inside the function body.
     consts = "\n".join(m.group(0) for m in re.finditer(
-        r"^MEETING_(?:DENSITY_N|DENSITY_S|SETTLE_S)\s*=\s*[^\n]+",
+        r"^MEETING_(?:DENSITY_N|DENSITY_S|SETTLE_S|SETTLE_FLOOR_S"
+        r"|SETTLE_CEIL_S)\s*=\s*[^\n]+",
         worker, re.M))
     if not consts:
         raise LegFailed("the meeting thresholds are gone from worker.py")
     prelude = ("import time\nMEETING_ARRIVALS: list = []\n"
-               "MEETING_ARMED = False\n" + consts + "\n")
+               "MEETING_ARMED = False\nMEETING_MAX_GAP = 0.0\n" + consts + "\n")
     fn = extract_function(worker, "meeting_heard", prelude=prelude)
     armed = False
     for i in range(12):

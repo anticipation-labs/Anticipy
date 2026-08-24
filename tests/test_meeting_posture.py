@@ -56,7 +56,11 @@ def test_meeting_holds_tongue_and_digest_speaks_once(monkeypatch):
     assert "dinner Thursday at 7pm for four" in text
     assert "set up the Tuesday call" in text
     assert "2 things" in text
-    # Drained: the second call has nothing to say — a digest never repeats.
+    # NON-draining: composing must not destroy the held list — a quiet-hours
+    # defer between composing and sending once lost a whole evening's cards.
+    assert a.meeting_digest() == text
+    # The worker clears only after a real send; then there is nothing to say.
+    a.clear_meeting_held()
     assert a.meeting_digest() is None
 
 

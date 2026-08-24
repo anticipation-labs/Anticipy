@@ -27,7 +27,7 @@ import requests
 
 from . import pb
 
-from .asking import ask_line
+from .asking import ask_line, question_line
 from .compute import compute_answer
 from .llm import LLM, now_line, owner_tz
 from .memory import Memory
@@ -940,6 +940,13 @@ class Anticipy:
         # mid-call loses at most one digest's WORDING — the cards themselves
         # are durable rows and still on his desk.
         self._meeting_held: list[tuple[str, str]] = []
+        # One parked question from the ambient lane, waiting for the room to
+        # go quiet. (text, stamped_at, last_try_at). One slot, FIRST parked
+        # wins — a queue of questions is a form, and a later garbled
+        # fragment must not evict the good question already waiting. The
+        # WORKER owns sending (caps, dedupe, quiet hours, the durable
+        # record all live there); this side owns parking and cancelling.
+        self._pending_ask: tuple[str, float, float] | None = None
         self._prev: Optional[tuple[str, float]] = None  # (last ignored line, ts)
         # Who the owner was talking to on the last classified line. Sticky:
         # people don't switch addressee mid-breath, so the previous
@@ -1424,6 +1431,13 @@ class Anticipy:
                 speaker = None
         else:
             speaker = None
+        # A meeting arming kills the parked question: its moment is gone,
+        # and the digest-vs-question double-send in one worker pass was a
+        # reviewed failure. Held cards survive meetings; questions do not.
+        if in_meeting and self._pending_ask:
+            print(f"parked question cancelled by the meeting posture: "
+                  f"{self._pending_ask[0][:60]!r}")
+            self._pending_ask = None
         decision = self._decide(line, mem, prev_line=prev_line, convo=context,
                                 prev_addressee=prev_addressee, dictated=dictated,
                                 speaker=speaker, speaker_name=speaker_name,
@@ -1894,6 +1908,40 @@ class Anticipy:
                         # posted it as said, and the speak-once guard then
                         # suppressed every retry forever.
                         handled = None
+            elif (decision.decision == "ask"
+                  and addressee not in AUTHORED_ADDRESSEES
+                  and decision.owes != "other"
+                  and not in_meeting and decision.missing):
+                # THE ASK VALVE. On 2026-08-23 — a whole misheard day — she
+                # made 137 decisions: 131 ignores, 6 acts, ZERO questions.
+                # The one honest answer on a day like that was structurally
+                # unreachable: a goalless ambient ask fell through to "stays
+                # ambient" below and died with its question. Now it parks the
+                # question and the worker asks it the moment the room is
+                # quiet (SPEAK_ONCE's live-conversation guard makes asking
+                # from inside this very hearing pass impossible, correctly).
+                # Mid-meeting asks still stay unasked — interrupting his call
+                # with a question about his call is the recorded failure.
+                question = question_line(decision.missing,
+                    third_person_ok=bool(self.llm and getattr(self.llm, 'live', False)))
+                if question and self._pending_ask:
+                    # First parked wins while its ten minutes run — a later
+                    # fragment's question does not evict a good one.
+                    print(f"question slot taken — dropped: {question[:60]!r}")
+                    question = ""
+                if question:
+                    self._pending_ask = (question, time.time(), 0.0)
+                    decision = Decision(
+                        decision="ask", goal="",
+                        reason=(f"{addressee}-directed: one question parked "
+                                f"for the next quiet moment"),
+                        addressee=addressee, missing=list(decision.missing))
+                else:
+                    decision = Decision(
+                        decision="ignore", goal="",
+                        reason=(f"{addressee}-directed: nothing speakable "
+                                "to ask — remembered instead"),
+                        addressee=addressee)
             else:
                 # Dictation he is AUTHORING (voice-typing, instructing another
                 # AI) is content, not commitment — a booking inside it is a
@@ -2562,8 +2610,11 @@ class Anticipy:
         worker sends this through the same may_say discipline as any other
         uninvited text — the posture changes WHEN she speaks, never how
         much she is allowed to."""
-        held, self._meeting_held = self._meeting_held, []
-        goals = [g for _, g in held if g]
+        # NON-draining on purpose: a quiet-hours defer between composing
+        # and sending used to destroy the whole held list — the worker calls
+        # clear_meeting_held() only after the digest actually went out (or
+        # was hard-refused), so a deferred digest survives to the morning.
+        goals = [g for _, g in self._meeting_held if g]
         if not goals:
             return None
         if len(goals) == 1:
@@ -2572,6 +2623,19 @@ class Anticipy:
         listed = "; ".join(f"{i}) {g}" for i, g in enumerate(goals, 1))
         return (f"While you were talking I got {len(goals)} things ready: "
                 f"{listed}. Say the word on any of them.")
+
+    def clear_meeting_held(self, entries=None) -> None:
+        """Drop delivered entries only. The held list is SHARED across
+        meetings: an overnight-parked digest clearing the whole list once
+        wiped a newer morning meeting's cards unannounced — held work
+        sitting silent is this codebase's named worst failure. None still
+        clears everything, for the paths that own the whole list."""
+        if entries is None:
+            self._meeting_held = []
+            return
+        gone = set(entries)
+        self._meeting_held = [e for e in self._meeting_held
+                              if tuple(e) not in gone]
 
     def can_notify_owner(self) -> bool:
         """Could a message reach this owner AT ALL, without composing one?
@@ -2859,6 +2923,14 @@ class Anticipy:
 
     def _queue_job(self, goal: str, params: dict, hold: bool = False,
                    explicit: bool = False) -> Optional[str]:
+        # A held card supersedes the parked question: the plan the fragment
+        # was asking about has since completed itself, and the card's own
+        # one-text asks whatever is still missing. Two question texts for
+        # one dinner was a recorded failure; this is where it dies.
+        if hold and self._pending_ask:
+            print(f"parked question superseded by a held card: "
+                  f"{self._pending_ask[0][:60]!r}")
+            self._pending_ask = None
         # ONE CANONICAL SPELLING OF THE GOAL, DECIDED HERE.
         #
         # The row's `goal` column was written from the model's raw string

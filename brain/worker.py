@@ -912,14 +912,23 @@ def uninvited_sent_today(owner_ref: str = "") -> int:
         since = (datetime.now(CLOCK_TZ).replace(hour=0, minute=0, second=0,
                                                 microsecond=0)
                  .astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
-        filt = f'kind="anticipy_says" && decision="done" && created>="{since}"'
+        filt = (f'kind="anticipy_says" && created>="{since}" && '
+                f'(decision="done" || decision="ask")')
         r = pb.get(f"{PB}/api/collections/events/records",
                    params={"filter": _scoped_filter(filt, owner_ref),
                            "perPage": 100, "sort": "-created"}, timeout=10)
         if not getattr(r, "ok", False):
             return 0
+        # A parked ambient ask is uninvited BY DEFINITION and posts with
+        # goal="" — that emptiness is its tag. A direct-lane sufficiency
+        # question carries the job's goal and is the OPPOSITE of uninvited
+        # (he set the work in motion; she cannot finish without an answer);
+        # counting those once let three invited clarifications exhaust the
+        # daily budget and mute every FYI.
         return sum(1 for ev in r.json().get("items", [])
-                   if (ev.get("params") or "").find("uninvited") >= 0)
+                   if (ev.get("decision") == "ask"
+                       and not (ev.get("goal") or "").strip())
+                   or (ev.get("params") or "").find("uninvited") >= 0)
     except Exception as e:
         print(f"uninvited count failed: {e}")
         return 0
@@ -2024,58 +2033,218 @@ LIVE_CONVERSATION_S = 14.0
 # problem, interrupting at all is.
 MEETING_ARRIVALS: list = []
 MEETING_ARMED = False
+MEETING_MAX_GAP = 0.0
+# When the armed room went SPARSE. The latch used to be cleared only by full
+# silence, and with a 360-600s settle that made "in a meeting" the permanent
+# state of a lived-in home: a dinner-table conversation armed it, then one
+# stray line every few minutes kept it armed all evening — every plan muted
+# into a midnight mega-digest, every question expiring unasked. Sustained low
+# density (fewer than 3 lines in the trailing density window, for a full
+# settle period) is a meeting that ended even though the room still murmurs.
+MEETING_LOW_SINCE = 0.0
+# A composed digest that could not send yet (quiet hours, transport blip):
+# (text, composed_at, last_try_at). Parked here rather than re-arming the
+# posture — a re-armed empty posture recomposes and re-defers every 2s pass
+# all night. The held cards stay on the desk until this actually goes out.
+DIGEST_PENDING: tuple | None = None
+# When the posture armed, for the disarm log — a household that keeps her
+# armed for hours needs to show up in live evidence, not stay a theory.
+MEETING_ARMED_AT = 0.0
 MEETING_DENSITY_N = 10
 MEETING_DENSITY_S = 180.0
-MEETING_SETTLE_S = 90.0
+# The settle window is FLOORED ABOVE the worst mid-meeting silence ever
+# measured, and adapts upward from there. A fixed 90s wall was measured
+# wrong against the very call this posture was built from: that meeting
+# went quiet for 67s, 90s, and 310s IN THE MIDDLE (screen-share quiet, one
+# side muted — the 310s at only 35% through), so a 90s wall declares the
+# meeting over mid-call and sends the digest into it — the exact
+# interruption the posture exists to prevent. Learning from observed gaps
+# alone cannot save you either: a gap only teaches after it ENDS, and the
+# digest check runs during it. So: floor 360s (above the measured worst),
+# plus a conversation that has already shown an N-second silence earns 2N,
+# ceiling 600s. The cost is honest and chosen: the one digest arrives six
+# to ten minutes after the talking stops, and a late digest beats a
+# mid-call one every single time.
+MEETING_SETTLE_FLOOR_S = 360.0
+MEETING_SETTLE_CEIL_S = 600.0
+
+
+def deliver_pending_digest(anticipy, now: float = 0.0) -> None:
+    """Send the parked digest when it is allowed out — and the room is not
+    live. An overnight-parked digest firing into his 8 AM call is the exact
+    interruption the posture exists to prevent, so the same real-quiet gate
+    as the parked ask applies. Quiet hours defer to morning; a transport
+    blip retries with backoff; a hard refusal drops the announcement but
+    keeps the cards on the desk. Only THIS digest's snapshot of held
+    entries is ever cleared — the list is shared, and a newer meeting's
+    cards must survive an older digest's delivery. Twelve hours unparked
+    and it dies; the cards were on his desk all along."""
+    global DIGEST_PENDING
+    if not DIGEST_PENDING:
+        return
+    text, composed, last_try, entries = DIGEST_PENDING
+    t = now or time.time()
+    if t - composed > 12 * 3600:
+        DIGEST_PENDING = None
+        anticipy.clear_meeting_held(entries)
+        print("parked digest expired — cards remain visible in the app")
+        return
+    if MEETING_ARMED or (LAST_HEARD_AT
+                         and t - LAST_HEARD_AT < ASK_QUIET_S):
+        return
+    if t - last_try < ASK_RETRY_S:
+        return
+    DIGEST_PENDING = (text, composed, t, entries)
+    verdict = SPEAK_ONCE(text, kind="ambient_act")
+    if verdict == "defer":
+        return
+    if not verdict:
+        DIGEST_PENDING = None
+        anticipy.clear_meeting_held(entries)
+        print("parked digest refused by the speak guard — dropped, cards "
+              "remain on the desk")
+        return
+    if anticipy.notify_owner(text):
+        DIGEST_PENDING = None
+        anticipy.clear_meeting_held(entries)
+        print(f"meeting digest sent: {text[:90]!r}")
+    else:
+        print("meeting digest send failed — will retry")
+
+
+# A parked question speaks only into REAL quiet — not a sentence boundary.
+# 14s (LIVE_CONVERSATION_S) is the gap between a person's own fragments;
+# ordinary two-person talk pauses longer than that constantly, and a
+# question about the conversation landing INSIDE the conversation is the
+# recorded 2026-08-23 failure. Two minutes of nothing is a room that
+# actually went quiet.
+ASK_QUIET_S = 120.0
+ASK_RETRY_S = 60.0
+
+
+def maybe_ask_parked(anticipy, now: float = 0.0) -> None:
+    """Send the parked question, fully governed: real quiet, daylight only,
+    counted against the daily uninvited cap, deduped against what she has
+    actually sent, recorded durably so the feed and every guard can see it,
+    and backed off on transport failure."""
+    pa = getattr(anticipy, "_pending_ask", None)
+    if not pa or MEETING_ARMED:
+        return
+    text, stamped, last_try = pa
+    t = now or time.time()
+    if t - stamped > 600:
+        anticipy._pending_ask = None
+        print(f"parked question expired unasked: {text[:70]!r}")
+        return
+    if LAST_HEARD_AT and t - LAST_HEARD_AT < ASK_QUIET_S:
+        return
+    hour = datetime.now(CLOCK_TZ).hour
+    if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+        # Never a question at 2 AM. It stays parked; the ten-minute expiry
+        # means a question about a night moment dies quietly, which is
+        # right — its moment died too.
+        return
+    if t - last_try < ASK_RETRY_S:
+        return
+    anticipy._pending_ask = (text, stamped, t)
+    if uninvited_sent_today(anticipy.owner_ref) >= UNINVITED_TEXTS_PER_DAY:
+        anticipy._pending_ask = None
+        print(f"parked question dropped — daily uninvited cap reached: "
+              f"{text[:60]!r}")
+        return
+    if already_said(text, within_hours=24.0, owner_ref=anticipy.owner_ref):
+        anticipy._pending_ask = None
+        print(f"parked question already asked recently — dropped: "
+              f"{text[:60]!r}")
+        return
+    r = anticipy.notify_owner(text)
+    if r is None:
+        print("parked question send failed — will retry")
+        return
+    anticipy._pending_ask = None
+    if isinstance(r, dict) and ("skipped" in r or "deduped" in r):
+        print(f"parked question not delivered ({list(r)[0]}) — slot cleared")
+        return
+    try:
+        post_event("anticipy_says", text, decision="ask",
+                   owner_ref=anticipy.owner_ref)
+    except Exception as e:
+        print(f"asked but could not record it: {e}")
+    print(f"asked: {text[:80]!r}")
+
+
+def meeting_settle_s() -> float:
+    return min(MEETING_SETTLE_CEIL_S,
+               max(MEETING_SETTLE_FLOOR_S, 2.0 * MEETING_MAX_GAP))
 
 
 def meeting_heard(now: float = 0.0) -> bool:
     """Record one heard line; return the armed state. Global by design —
     this process serves exactly one owner under the supervisor."""
-    global MEETING_ARRIVALS, MEETING_ARMED
+    global MEETING_ARRIVALS, MEETING_ARMED, MEETING_MAX_GAP, MEETING_LOW_SINCE
     t = now or time.time()
+    if MEETING_ARMED and MEETING_ARRIVALS:
+        # Only gaps INSIDE an armed meeting teach the settle window; the
+        # hours of silence before it are not evidence about this meeting.
+        MEETING_MAX_GAP = max(MEETING_MAX_GAP, t - MEETING_ARRIVALS[-1])
     MEETING_ARRIVALS = [a for a in MEETING_ARRIVALS
                         if t - a <= MEETING_DENSITY_S][-100:] + [t]
     if len(MEETING_ARRIVALS) >= MEETING_DENSITY_N:
         if not MEETING_ARMED:
             print(f"meeting posture ARMED — {len(MEETING_ARRIVALS)} lines in "
                   f"{int(MEETING_DENSITY_S)}s; acts queue for the digest")
+            globals()["MEETING_ARMED_AT"] = t
         MEETING_ARMED = True
+        MEETING_LOW_SINCE = 0.0
+    elif MEETING_ARMED:
+        # Armed but under density: a real meeting keeps 3+ lines in the
+        # window; a lived-in evening does not. Transient dips (the first
+        # line after a screen-share silence) clear the moment density
+        # recovers, so only a SUSTAINED low period ends the meeting.
+        if len(MEETING_ARRIVALS) >= 3:
+            MEETING_LOW_SINCE = 0.0
+        elif not MEETING_LOW_SINCE:
+            MEETING_LOW_SINCE = t
     return MEETING_ARMED
 
 
 def maybe_meeting_digest(anticipy, now: float = 0.0) -> None:
-    """Disarm after the settle window and send the one digest text. The
-    digest passes SPEAK_ONCE like every uninvited text — the posture moves
-    WHEN she speaks, never how much she may."""
-    global MEETING_ARMED, MEETING_ARRIVALS
+    """Disarm when the meeting is actually over — full silence for the
+    settle window, or a room that has been SPARSE for a full settle window —
+    then send the one digest. The held list is cleared only after the text
+    actually goes out (or is hard-refused): a quiet-hours defer keeps
+    everything parked and the digest lands in the morning instead of
+    destroying the evening's cards, which is a reviewed failure."""
+    global MEETING_ARMED, MEETING_ARRIVALS, MEETING_MAX_GAP, MEETING_LOW_SINCE
     t = now or time.time()
-    if not MEETING_ARMED or (LAST_HEARD_AT
-                             and t - LAST_HEARD_AT < MEETING_SETTLE_S):
+    if not MEETING_ARMED:
         return
+    silent = not LAST_HEARD_AT or t - LAST_HEARD_AT >= meeting_settle_s()
+    sparse = MEETING_LOW_SINCE and t - MEETING_LOW_SINCE >= meeting_settle_s()
+    if not silent and not sparse:
+        return
+    print("meeting posture over — "
+          + (f"{int(t - LAST_HEARD_AT)}s of silence" if silent else
+             f"sparse for {int(t - MEETING_LOW_SINCE)}s")
+          + f" (window {int(meeting_settle_s())}s, was armed "
+          + (f"{int(t - MEETING_ARMED_AT)}s)" if MEETING_ARMED_AT else
+             "unknown)"))
     MEETING_ARMED = False
     MEETING_ARRIVALS = []
+    MEETING_MAX_GAP = 0.0
+    MEETING_LOW_SINCE = 0.0
     try:
         text = anticipy.meeting_digest()
     except Exception as e:
         print(f"meeting digest failed to compose: {e}")
         return
     if not text:
-        print("meeting posture over — nothing was held, saying nothing")
+        print("nothing was held during it, saying nothing")
         return
-    verdict = SPEAK_ONCE(text, kind="ambient_act")
-    if verdict and verdict != "defer":
-        if anticipy.notify_owner(text):
-            print(f"meeting digest sent: {text[:90]!r}")
-        else:
-            # Send failed: the cards are durable rows and still on his desk;
-            # only the combined wording is lost. Better one missing nudge
-            # than a retry loop texting him the same digest forever.
-            print("meeting digest send FAILED — cards remain on the desk")
-    else:
-        print("meeting digest withheld by the speak guard — cards remain")
-
-
+    global DIGEST_PENDING
+    DIGEST_PENDING = (text, t, 0.0,
+                      [tuple(e) for e in anticipy._meeting_held])
+    deliver_pending_digest(anticipy, now=t)
 def SPEAK_ONCE(text: str, goal: str = "", kind: str = "") -> bool:
     """May she say this unprompted? Only if she has not already — and, for
     speech born from OVERHEARD plans (kind="ambient_act"), only in waking
@@ -3091,6 +3260,15 @@ def main() -> None:
             # A conversation that ended gets its one digest — everything
             # held while he was talking, in a single text.
             maybe_meeting_digest(anticipy)
+
+            # A digest that could not send earlier (quiet hours, blip)
+            # goes out as soon as it is allowed to.
+            deliver_pending_digest(anticipy)
+
+            # A parked question gets asked once the room is REALLY quiet —
+            # never into a live meeting, never at night, never past the
+            # daily cap, never twice, never past ten minutes.
+            maybe_ask_parked(anticipy)
 
             # The research lane runs HERE, in this process. Read-only goals
             # never wait for — or touch — his browser (roadmap §6).

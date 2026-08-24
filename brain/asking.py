@@ -47,6 +47,8 @@ delivery; this owns the words.
 """
 from __future__ import annotations
 
+import re
+
 # What she says at once. See rule 3 above.
 SPOKEN_LIMIT = 2
 
@@ -187,3 +189,37 @@ def ask_line(goal: str, missing=None) -> str:
     if not asks:
         return f"{held}. say go and i'll run it."
     return f"{held}; " + ", and ".join(asks) + "?"
+
+
+_THIRD_PERSON_RE = re.compile(
+    r"\b(he|she|his|hers|him|they|them|their)\b", re.IGNORECASE)
+
+
+def question_line(missing, third_person_ok: bool = False) -> str:
+    """A pure question, for when there is NOTHING prepared. ask_line's opener
+    ("i've got that ready to go") is a claim about work on her desk, and the
+    goalless ask has no desk — on 2026-08-23 that shape of ask simply died,
+    which is how a whole misheard day scored 131 ignores, 6 acts and ZERO
+    questions. Same filters, same two-question ceiling, none of the claim.
+
+    Non-strings are DROPPED, not str()-ed — "quick one — 42, and
+    {'gap': 'time'}?" is a screenshot, not a question.
+
+    Third person: triage narrates his day from outside, so its missing
+    register is third-person ("which garage he uses"). When a live composer
+    stands between this text and his phone (conversation.reach_out rewrites
+    every outbound), the item passes through and the composer speaks to him
+    properly — dropping it there would re-weld the valve this function
+    exists to open. Only the DEGRADED path (no live model, raw template to
+    his phone) drops third-person items: silence beats being addressed
+    about yourself in the third person, a recorded wording failure.
+    TAPE (HARNESS-LAWS.md Law 2): this degraded-path drop expires when the
+    composer owns person-flipping explicitly; tracked in the standing-tape
+    list."""
+    items = [m for m in (missing or []) if isinstance(m, str)]
+    if not third_person_ok:
+        items = [m for m in items if not _THIRD_PERSON_RE.search(m)]
+    asks = [q for q in (_as_question(m) for m in speakable(items)) if q]
+    if not asks:
+        return ""
+    return "quick one — " + ", and ".join(asks) + "?"

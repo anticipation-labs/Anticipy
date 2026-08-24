@@ -95,6 +95,10 @@ then ship.
 - The digit guard and `unsupported_names`/`unsupported_counts` string checks
   (brain/orchestrator.py ~:472) → legitimate as BACKSTOPS only; the real fix
   is a frontier model with full context at act-minting. Do not add siblings.
+- The DEGRADED-path third-person drop in asking.question_line (live
+  composer absent → third-person items are dropped rather than texted to
+  the owner about himself). Expires when the composer owns person-flipping
+  explicitly. The live path passes them through untouched.
 - Word-level heuristics in triage pre-filtering → survive only as the cheap
   sift in front of the model, never as the decision.
 
