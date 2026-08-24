@@ -7,6 +7,7 @@ then asks the user to confirm anything irreversible (send/book/pay).
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, asdict
 from typing import Optional
@@ -361,6 +362,25 @@ class Decision:
 class Brain:
     def __init__(self, llm: Optional[LLM] = None):
         self.llm = llm or LLM()
+        # THE STRONG SECOND OPINION. Every shipped harness spends its model
+        # budget the same way: a cheap model may sift the 131 lines a day
+        # that become nothing, and a frontier model re-judges the handful
+        # that are about to become actions — because an action is where a
+        # wrong verdict leaves the owner's world. ~6 candidates/day at
+        # frontier prices is cents; the Tejas call's five wrong acts were
+        # all cheap-model verdicts nobody re-examined. Config-gated:
+        # ANTICIPY_STRONG_MODEL unset (the default) changes nothing at all.
+        strong_id = os.environ.get("ANTICIPY_STRONG_MODEL", "").strip()
+        self.strong: Optional[LLM] = None
+        if strong_id and strong_id != getattr(self.llm, "model", ""):
+            s = LLM(model=strong_id,
+                    owner_zone=getattr(self.llm, "owner_zone", None),
+                    owner_name=getattr(self.llm, "owner_name", None))
+            # The Gemini-first provider precedence would silently serve the
+            # CHEAP gemini_model default and make this a no-op wearing a
+            # strong model's name — pin both fields to the strong id.
+            s.gemini_model = strong_id.rsplit("/", 1)[-1]
+            self.strong = s
 
     SECOND_LOOK = """A transcript line was triaged and the verdict came back
 contradictory: "do nothing", yet a concrete task was extracted from the
@@ -430,6 +450,28 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         goal = raw.get("goal")
         if goal in ("null", ""):
             goal = None
+        # The strong second opinion, spent only where it pays: a verdict
+        # about to become an action or a question. Ignores never re-judge —
+        # they are 95% of traffic and the cheap model's specialty. The
+        # strong verdict REPLACES the cheap one in either direction: it may
+        # demote a hallucinated act to ignore just as it may sharpen a goal,
+        # and every downstream guard (inherited_errand, the second look, the
+        # shard floor) still runs on whatever it says. live is checked so a
+        # keyless rig's heuristic can never quietly overrule a real model.
+        if (decision in ("act", "ask") and self.strong
+                and getattr(self.strong, "live", False)):
+            try:
+                second = self.strong.chat(TRIAGE_SYSTEM, transcript_line,
+                                          temperature=0.0)
+                re_raw = json.loads(_extract_json(second.text))
+                if re_raw.get("decision") in ("act", "ask", "ignore"):
+                    raw = re_raw
+                    decision = raw.get("decision", "ignore")
+                    goal = raw.get("goal")
+                    if goal in ("null", ""):
+                        goal = None
+            except Exception:
+                pass       # the cheap verdict stands; never fail the line
         # A syntactically valid model reply can still miss an unmistakable
         # request.  That is especially costly on a direct channel: the owner
         # deliberately sent the line to this assistant, yet a single semantic
