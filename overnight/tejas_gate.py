@@ -253,6 +253,23 @@ def leg_4_compute_lane() -> str:
         raise LegFailed("a goal that wears computation words but SENDS is no "
                         "longer held — the capability test must never outrank "
                         "the irreversible check")
+    # The brain's own channel declaration is the primary classification —
+    # meaning from the model, enforcement from the gate, deny-list on top.
+    if is_consequential("work out what 5 PM CST is out west",
+                        touches="compute"):
+        raise LegFailed("a declared compute goal is still held when no word "
+                        "list recognises the phrasing — the model's channel "
+                        "declaration is not being honored")
+    if not is_consequential("plan dinner with the team Thursday",
+                            touches="world"):
+        raise LegFailed('a declared "world" goal runs unattended because its '
+                        "wording reads read-only — the declaration must hold it")
+    if not is_consequential("send the update to Tejas", touches="compute"):
+        raise LegFailed('declaring "compute" on a SEND makes it run — the '
+                        "deny-list no longer outranks the model")
+    if '"touches"' not in read(ORCH):
+        raise LegFailed("the triage contract no longer asks for the channel — "
+                        "the gate is enforcing a declaration nobody makes")
     # The other half of plan #3 is run, not grepped: the real compute organ
     # must produce the actual number the owner wanted (3 PM), and the core
     # must call it. It is stdlib-only by contract, so importing it is safe.

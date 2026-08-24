@@ -205,71 +205,92 @@ point at the one THIS line belongs to, not the nearest one.
 Omit "continues" entirely if you truly cannot tell — that is different
 from 0, and it is treated as no answer rather than as a new thread.
 
+ONE MORE FIELD — "touches". Name what the goal, as stated, actually reaches:
+- "compute": pure arithmetic or a conversion — answerable by working it out.
+  Nothing in the world moves.
+- "read": looking, finding, checking, preparing. The world is only observed.
+- "world": anything that would send, book, buy, post, cancel, schedule or
+  otherwise leave a mark someone else can see. A plan that inherently ENDS
+  in such a mark ("dinner Thursday" ends in a reservation) is "world" even
+  while today's step is preparation.
+Use null when there is no goal. This field decides what runs unattended and
+what waits for the owner's word, so a wrong "compute" or "read" on a goal
+that leaves a mark is the worst mistake this format allows. A deny-list
+below you still outranks the field: declaring "compute" on a send will not
+make it run.
+
 WORKED EXAMPLES — the judgment you are for, shown exactly. Inputs appear the
 way real lines arrive, context blocks included. Match the nearest shape.
 
 "ugh, I still haven't cancelled that free trial"
-{"decision":"act","goal":"cancel the free trial he mentioned — find which one, open the cancel page","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"complaint wraps a real unaddressed obligation"}
+{"decision":"act","goal":"cancel the free trial he mentioned — find which one, open the cancel page","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"complaint wraps a real unaddressed obligation","touches":"world"}
 
 "I should really email Priya about the invoice"
-{"decision":"act","goal":"draft an email to Priya about the outstanding invoice","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"named person, named subject, stated obligation"}
+{"decision":"act","goal":"draft an email to Priya about the outstanding invoice","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"named person, named subject, stated obligation","touches":"world"}
 
 "seven works
 (Earlier in this conversation: 1. "could do Thursday for dinner" 2. (other voice) "seven or eight?")"
-{"decision":"act","goal":"dinner Thursday at 7pm — find and hold options","addressee":"person","owes":"owner","continues":2,"missing":[],"assumption":"confirms the time floated in line 2","reason":"terse confirmation seals the discussed plan"}
+{"decision":"act","goal":"dinner Thursday at 7pm — find and hold options","addressee":"person","owes":"owner","continues":2,"missing":[],"assumption":"confirms the time floated in line 2","reason":"terse confirmation seals the discussed plan","touches":"world"}
 
 "it'll be us four
 (Earlier in this conversation: 1. dinner Thursday at 8pm agreed)"
-{"decision":"act","goal":"dinner Thursday 8pm for four people","addressee":"person","owes":"owner","continues":1,"missing":[],"assumption":null,"reason":"detail firms plan; goal carries everything"}
+{"decision":"act","goal":"dinner Thursday 8pm for four people","addressee":"person","owes":"owner","continues":1,"missing":[],"assumption":null,"reason":"detail firms plan; goal carries everything","touches":"world"}
 
 "à mardi
 (Earlier in this conversation: 1. arranging a coffee with them)"
-{"decision":"act","goal":"coffee with them on Tuesday","addressee":"person","owes":"owner","continues":1,"missing":[],"assumption":null,"reason":"sealed in three words, in French"}
+{"decision":"act","goal":"coffee with them on Tuesday","addressee":"person","owes":"owner","continues":1,"missing":[],"assumption":null,"reason":"sealed in three words, in French","touches":"world"}
 
 "so I'll get that over to you by Friday
 (Earlier in this conversation: 1. (other voice) "no rush, whenever works")"
-{"decision":"act","goal":"prepare what he owes them by Friday","addressee":"person","owes":"owner","continues":1,"missing":["what 'that' refers to"],"assumption":null,"reason":"his promise to another is his errand"}
+{"decision":"act","goal":"prepare what he owes them by Friday","addressee":"person","owes":"owner","continues":1,"missing":["what 'that' refers to"],"assumption":null,"reason":"his promise to another is his errand","touches":"world"}
 
 "just book the 8:40 to Boston"
-{"decision":"act","goal":"book the 8:40 flight to Boston — hold for approval","addressee":"assistant","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"clear ask; the gate holds purchases"}
+{"decision":"act","goal":"book the 8:40 flight to Boston — hold for approval","addressee":"assistant","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"clear ask; the gate holds purchases","touches":"world"}
+
+"what time is demo day on Monday again"
+{"decision":"act","goal":"find the start time for demo day on Monday","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"findable, and he wants the answer","touches":"read"}
+
+"wait what's 9 AM eastern for me"
+{"decision":"act","goal":"convert 9 AM EST to PST","addressee":"self","owes":"owner","continues":0,"missing":[],"assumption":"his zone is Pacific","reason":"one number, workable in the head","touches":"compute"}
 
 "can you sort out a gift for Priya's thing"
-{"decision":"ask","goal":null,"addressee":"assistant","owes":"owner","continues":0,"missing":["what the occasion is"],"assumption":null,"reason":"real errand, one blocking unknown"}
+{"decision":"ask","goal":null,"addressee":"assistant","owes":"owner","continues":0,"missing":["what the occasion is"],"assumption":null,"reason":"real errand, one blocking unknown","touches":null}
 
 "get the car booked in this week"
-{"decision":"ask","goal":null,"addressee":"self","owes":"owner","continues":0,"missing":["which garage he uses"],"assumption":null,"reason":"acting means inventing a garage"}
+{"decision":"ask","goal":null,"addressee":"self","owes":"owner","continues":0,"missing":["which garage he uses"],"assumption":null,"reason":"acting means inventing a garage","touches":null}
 
 "anyway, what's for lunch
 (Earlier in this conversation: 1. "I'll send the Devon invoice today")"
-{"decision":"ignore","goal":null,"addressee":"self","owes":"nobody","continues":0,"missing":[],"assumption":null,"reason":"context is for reading, never re-acting"}
+{"decision":"ignore","goal":null,"addressee":"self","owes":"nobody","continues":0,"missing":[],"assumption":null,"reason":"context is for reading, never re-acting","touches":null}
 
 "did you send it?
 (Earlier in this conversation: 1. (other voice) "yeah this morning")"
-{"decision":"ignore","goal":null,"addressee":"person","owes":"other","continues":1,"missing":[],"assumption":null,"reason":"question aimed at the person present"}
+{"decision":"ignore","goal":null,"addressee":"person","owes":"other","continues":1,"missing":[],"assumption":null,"reason":"question aimed at the person present","touches":null}
 
 "what was your number again
 (Earlier in this conversation: two voices trading contact details)"
-{"decision":"ignore","goal":null,"addressee":"person","owes":"other","continues":0,"missing":[],"assumption":null,"reason":"'your' belongs to the other voice"}
+{"decision":"ignore","goal":null,"addressee":"person","owes":"other","continues":0,"missing":[],"assumption":null,"reason":"'your' belongs to the other voice","touches":null}
 
 "at 3:30
 (Earlier in this conversation: 1. (other voice) "my standup usually runs late")"
-{"decision":"ignore","goal":null,"addressee":"person","owes":"other","continues":1,"missing":[],"assumption":null,"reason":"shard of someone else's schedule"}
+{"decision":"ignore","goal":null,"addressee":"person","owes":"other","continues":1,"missing":[],"assumption":null,"reason":"shard of someone else's schedule","touches":null}
 
 "I should just quit and move to Bali
 (Earlier in this conversation: 1. (laughter))"
-{"decision":"ignore","goal":null,"addressee":"person","owes":"nobody","continues":0,"missing":[],"assumption":null,"reason":"a joke; anchored words, no intention"}
+{"decision":"ignore","goal":null,"addressee":"person","owes":"nobody","continues":0,"missing":[],"assumption":null,"reason":"a joke; anchored words, no intention","touches":null}
 
 "we really need to fix the onboarding
 (Earlier in this conversation: a team meeting)"
-{"decision":"ignore","goal":null,"addressee":"person","owes":"other","continues":0,"missing":[],"assumption":null,"reason":"a team's 'we'; no owner errand"}
+{"decision":"ignore","goal":null,"addressee":"person","owes":"other","continues":0,"missing":[],"assumption":null,"reason":"a team's 'we'; no owner errand","touches":null}
 
 "I'm so done with today"
-{"decision":"ignore","goal":null,"addressee":"self","owes":"nobody","continues":0,"missing":[],"assumption":null,"reason":"tired; a good assistant stays quiet"}
+{"decision":"ignore","goal":null,"addressee":"self","owes":"nobody","continues":0,"missing":[],"assumption":null,"reason":"tired; a good assistant stays quiet","touches":null}
 
 Reply ONLY with compact JSON:
 {"decision":"ignore|ask|act","goal":"<short goal or null>",
  "addressee":"assistant|person|dictation|self",
  "owes":"owner|other|machine|nobody",
+ "touches":"compute|read|world, or null when goal is null",
  "continues":<number of the line this continues, or 0 for a new one>,
  "missing":["<essential unknowns; empty if none>"],
  "assumption":"<context you relied on, or null>","reason":"<8 words>"}"""
@@ -305,6 +326,11 @@ AUTHORED_ADDRESSEES = ("dictation",)
 # Whose obligation the words created. The second key: triage may say "act",
 # but nothing consequential happens unless the job is actually HIS.
 OWES = ("owner", "other", "machine", "nobody")
+
+# The only effect channels that mean anything. Anything else the model emits
+# is no answer, and behaviour falls back to what it was before the field
+# existed — a misbehaving model cannot regress her.
+TOUCHES = ("compute", "read", "world")
 
 # The two answers that mean "not his errand". Speech that creates no
 # obligation for him is remembered and nothing more — this is what stops
@@ -350,6 +376,12 @@ class Decision:
     # An out-of-range number is None, not 0: a model naming line 9 of 4 has
     # told us nothing, and must not be read as confidently starting a thread.
     continues: Optional[int] = None
+    # What the goal reaches, declared BY THE MODEL: "compute" | "read" |
+    # "world". This is meaning, so the model owns it — no word list does.
+    # None = no answer, and nothing changes (the honesty wall). The
+    # deterministic deny-list in is_consequential outranks the declaration:
+    # a "compute" claim on a send still holds.
+    touches: Optional[str] = None
 
     def __post_init__(self):
         if self.missing is None:
@@ -513,6 +545,9 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         owes = raw.get("owes")
         if owes not in OWES:
             owes = None       # no answer changes nothing: the honesty wall
+        touches = raw.get("touches")
+        if touches not in TOUCHES:
+            touches = None    # same wall — an invalid channel is no channel
         continues = _continues(raw.get("continues"), candidates)
         # THE ERRAND HAS TO BE IN HIS LINE. See inherited_errand() above for
         # the live pair this is here for: a vent line 50 seconds after a
@@ -560,6 +595,7 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
             addressee=addressee,
             owes=owes,
             continues=continues,
+            touches=touches,
         )
 
 

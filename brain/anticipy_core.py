@@ -502,7 +502,8 @@ def memory_notes(facts: list[dict], budget: int = 600, exclude: str = "") -> str
 
 
 def is_consequential(goal: str, params: dict | None = None,
-                     explicit: bool = False) -> bool:
+                     explicit: bool = False,
+                     touches: str | None = None) -> bool:
     """Does this goal change the world? Judged on the GOAL only — params carry
     the raw transcript, whose stray words ("cancel my flight" mentioned in
     passing) must not decide whether a research task is held.
@@ -513,18 +514,28 @@ def is_consequential(goal: str, params: dict | None = None,
     making them confirm "open wikipedia" teaches them to tap through prompts
     without reading."""
     g = (goal or "").strip()
+    # The deny-list outranks EVERYTHING below, including the model's own
+    # declaration — enforcement lives beneath the model, and a "compute"
+    # claim on a send must not make it run.
     if _IRREVERSIBLE_RE.search(g):
+        return True
+    # THE MODEL'S DECLARATION, when triage gave one. What a goal touches is
+    # a question of MEANING, and meaning belongs to the model — the first
+    # two fixes here were a verb list and then a calculator-sniff run on
+    # every goal, both pattern-matching wearing different coats. Now triage
+    # itself names the channel ("touches": compute | read | world) and this
+    # gate merely enforces it. "world" holds even when the wording reads
+    # read-only; compute/read runs unattended even when no word list would
+    # have recognised it.
+    if touches == "world":
         return True
     if explicit:
         return False
-    # CAPABILITY, not vocabulary: a goal the calculator can satisfy outright
-    # is pure computation and cannot leave the owner's world, whatever verbs
-    # it wears. On 2026-08-23 "Convert 5 PM CST to PST" was HELD for his
-    # approval because no word list had "convert" — and the first fix was to
-    # ADD the word, which is how the last three months happened. Asking the
-    # organ that would do the work is an effect-channel test; asking a word
-    # list is tape. (The irreversible check above still wins: "send the CST
-    # conversion to Tejas" mentions computation and also SENDS.)
+    if touches in ("compute", "read"):
+        return False
+    # No declaration (older outputs, retries that fell back). The calculator
+    # is consulted as a FALLBACK only — it dies with the effect-channel
+    # rewrite, tracked in HARNESS-LAWS.md.
     if compute_answer(g):
         return False
     # Overheard: default to holding — only explicitly read-only runs unattended.
@@ -1589,7 +1600,9 @@ class Anticipy:
             goal = (decision.goal or "").strip() or None
             consequential = bool(goal) and (decision.needs_confirmation
                                             or goal in IRREVERSIBLE
-                                            or is_consequential(goal))
+                                            or is_consequential(
+                                                goal,
+                                                touches=decision.touches))
             # Read-only preparation ALWAYS starts quietly — even when triage
             # wanted a detail first ("plan the Vienna trip", dates unknown:
             # research both weeks; the FYI text delivers whatever is found).
@@ -1617,7 +1630,12 @@ class Anticipy:
             # this sends is the answer itself — same voice discipline as
             # every other ambient text (may_say verdict, then a real send
             # or nothing recorded as said).
-            computed = compute_answer(goal) if quiet_research else None
+            computed = None
+            if quiet_research and decision.touches in ("compute", None):
+                # The calculator is a HAND, picked up when the brain says
+                # "this is math" (or gave no channel at all — the fallback).
+                # A declared "read" goal never wakes it.
+                computed = compute_answer(goal)
             if computed:
                 # Kind "compute_answer", not "ambient_act", on purpose: he
                 # just asked this out loud, so the quiet-hours and
