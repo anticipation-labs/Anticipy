@@ -232,6 +232,12 @@ way real lines arrive, context blocks included. Match the nearest shape.
 "just book the 8:40 to Boston"
 {"decision":"act","goal":"book the 8:40 flight to Boston — hold for approval","addressee":"assistant","owes":"owner","continues":0,"missing":[],"assumption":null,"reason":"clear ask; the gate holds purchases"}
 
+"can you sort out a gift for Priya's thing"
+{"decision":"ask","goal":null,"addressee":"assistant","owes":"owner","continues":0,"missing":["what the occasion is"],"assumption":null,"reason":"real errand, one blocking unknown"}
+
+"get the car booked in this week"
+{"decision":"ask","goal":null,"addressee":"self","owes":"owner","continues":0,"missing":["which garage he uses"],"assumption":null,"reason":"acting means inventing a garage"}
+
 "anyway, what's for lunch
 (Earlier in this conversation: 1. "I'll send the Devon invoice today")"
 {"decision":"ignore","goal":null,"addressee":"self","owes":"nobody","continues":0,"missing":[],"assumption":null,"reason":"context is for reading, never re-acting"}

@@ -1,0 +1,18 @@
+# The worker image COPYs brain/ and nothing else (brain/Dockerfile). The
+# build context must not haul the rest of the monorepo to the builder —
+# a 151MB stowaway dir is how backend builds died once already.
+dd/
+app/
+chrome/
+extension/
+website/
+firmware/
+proof/
+research/
+backend/
+design/
+tests/
+overnight/
+docs/
+*.jsonl
+.git/
