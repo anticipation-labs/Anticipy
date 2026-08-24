@@ -188,6 +188,17 @@ final class AnticipySession: ObservableObject {
         /// was posted into the NEXT person's account the moment they signed
         /// in on the same phone — a path the sign-up flow explicitly allows.
         var account: String?
+        /// WHEN THE WORDS WERE SPOKEN, carried through the queue untouched.
+        /// Without it a line buffered in a tunnel and flushed an hour later
+        /// told the brain it was said the moment the signal came back, and the
+        /// brain sorts a person's day by exactly this field.
+        /// Optional so a queue written by the previous build still decodes.
+        var capturedAt: Date? = nil
+        /// Whether the 8s ceiling cut this line out of the middle of a
+        /// sentence. Kept as the FACT and not as a parent id, because the line
+        /// it carries on from may still be sitting in this same queue with no
+        /// server id of its own; the flush rebuilds the chain in order.
+        var continuesPrevious: Bool? = nil
     }
     @AppStorage("unsentLines") private var unsentStore = ""
     private var unsent: [BufferedLine] {
@@ -238,15 +249,17 @@ final class AnticipySession: ObservableObject {
         // until the next failed push — and the screens that reassure you your
         // words survived read exactly this number.
         pendingCount = unsent.count
-        listener.onLine = { [weak self] line in
-            Task { await self?.heard(line, from: .phoneMic) }
+        listener.onLine = { [weak self] line, at, continues in
+            Task { await self?.heard(line, from: .phoneMic, at: at,
+                                     continuesPrevious: continues) }
         }
         // The on-device voice check rides with each line. It only engages
         // when a model is present AND he has enrolled; otherwise every line
         // travels bare, exactly as before.
         listener.speaker = speakerTagger
-        listener.onSpeaker = { [weak self] line, tag in
-            Task { await self?.heard(line, speaker: tag, from: .phoneMic) }
+        listener.onSpeaker = { [weak self] line, tag, at, continues in
+            Task { await self?.heard(line, speaker: tag, from: .phoneMic, at: at,
+                                     continuesPrevious: continues) }
         }
         pendantTranscriber.onTranscript = { [weak self] line in
             Task { await self?.heard(line, from: .pendant) }
@@ -292,9 +305,22 @@ final class AnticipySession: ObservableObject {
         }
     }
 
+    /// The id of the last transcript row this session created, so a line the
+    /// clock cut in half can say what it carries on from.
+    ///
+    /// Deliberately not persisted: a parent from a previous launch is a
+    /// sentence nobody is still speaking, and linking onto it would chain two
+    /// unrelated conversations into one.
+    private var lastTranscriptEventID = ""
+
+    /// `at` is when the words were spoken, which is not when this runs for
+    /// anything the phone buffered. `continuesPrevious` is true only when the
+    /// ceiling cut a sentence in half.
     func heard(_ line: String, speaker: String? = nil,
                explicit: Bool = false,
-               from source: LineSource = .typed) async {
+               from source: LineSource = .typed,
+               at capturedAt: Date = Date(),
+               continuesPrevious: Bool = false) async {
         // A typed line deserves an instant felt ack. Ambient capture does
         // NOT — buzzing on every finalized utterance all day is a phone that
         // won't stop twitching; the meaningful buzz is the act-verdict one.
@@ -311,19 +337,45 @@ final class AnticipySession: ObservableObject {
         // pushed, 403'd, and queued — the room transcribed behind a sign-in
         // door, then posted into whoever signed in next.
         guard !accountID.isEmpty else { return }
+        // Only a cut names a parent, and only a parent that exists: the first
+        // line of a session has nothing to carry on from.
+        let parent = continuesPrevious ? lastTranscriptEventID : ""
         do {
-            try await backend.pushEvent(kind: "transcript", text: line,
+            let id = try await backend.pushEvent(kind: "transcript", text: line,
                                         speaker: speaker, explicit: explicit,
-                                        source: source.wireName)
+                                        source: source.wireName,
+                                        capturedAt: capturedAt,
+                                        parentLine: parent)
+            if !id.isEmpty { lastTranscriptEventID = id }
+            ListenJournal.shared.record(.posted(ok: true, detail: source.wireName))
         } catch {
             // A dropped push used to vanish into try? — the line then sat at
             // the top of the feed saying "Thinking…" forever while the brain
             // had never seen it. Queue it (on disk) and keep trying.
+            ListenJournal.shared.record(
+                .posted(ok: false, detail: "queued, \(Self.postFailureShape(error))"))
             unsent = unsent + [BufferedLine(text: line, explicit: explicit,
                                             speaker: speaker,
                                             source: source.wireName,
-                                            account: accountID)]
+                                            account: accountID,
+                                            capturedAt: capturedAt,
+                                            continuesPrevious: continuesPrevious)]
         }
+    }
+
+    /// What went wrong, in a form that is safe to write down.
+    ///
+    /// A status code, or an error's domain and code. Never a message:
+    /// `BackendError` carries the server's own sentence, and a PocketBase error
+    /// body is built from a request whose payload is the words the owner just
+    /// said. The journal is exportable from Settings, so anything put in it
+    /// leaves the phone on a person's tap (`design/LOCAL-FIRST.md`).
+    static func postFailureShape(_ error: Error) -> String {
+        if let refusal = error as? AnticipyBackend.BackendError {
+            return "http \(refusal.status)"
+        }
+        let ns = error as NSError
+        return "\(ns.domain) \(ns.code)"
     }
 
     /// Re-push anything the network ate, oldest first. Whatever still fails
@@ -338,13 +390,25 @@ final class AnticipySession: ObservableObject {
             // A line with no recorded owner predates this field and cannot be
             // attributed, so it is dropped rather than guessed at.
             guard line.account == accountID else { continue }
+            // Rebuild the chain in order. The queue is oldest first, so the
+            // line a cut carried on from is the one posted just before it —
+            // neither of them had a server id at the moment they were spoken.
+            let parent = line.continuesPrevious == true ? lastTranscriptEventID : ""
             do {
-                try await backend.pushEvent(kind: "transcript", text: line.text,
+                let id = try await backend.pushEvent(kind: "transcript", text: line.text,
                                             speaker: line.speaker,
                                             explicit: line.explicit,
-                                            source: line.source)
+                                            source: line.source,
+                                            capturedAt: line.capturedAt,
+                                            parentLine: parent)
+                if !id.isEmpty { lastTranscriptEventID = id }
+                ListenJournal.shared.record(.posted(ok: true, detail: "queued line sent"))
             }
-            catch { failed.append(line) }
+            catch {
+                ListenJournal.shared.record(
+                    .posted(ok: false, detail: "requeued, \(Self.postFailureShape(error))"))
+                failed.append(line)
+            }
         }
         if !failed.isEmpty { unsent = failed + unsent }
     }
@@ -849,8 +913,11 @@ final class AnticipySession: ObservableObject {
     func forgetSupervisedFact(jobID: String, fact: String) async {
         let text = fact.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        try? await backend.pushEvent(kind: "read_veto", text: text,
-                                     goal: jobID, source: "supervised_mail")
+        // The row's id is discarded deliberately: nothing ever names a veto as
+        // the line it carries on from. `_ =` because `try?` makes the returned
+        // id an Optional, which @discardableResult no longer covers.
+        _ = try? await backend.pushEvent(kind: "read_veto", text: text,
+                                         goal: jobID, source: "supervised_mail")
     }
 
     // MARK: - The interview

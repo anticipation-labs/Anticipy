@@ -19,9 +19,21 @@ if [ ! -f "$listener" ]; then
     echo "PhoneListener.swift is missing — there is nothing for the policy to serve."
     exit 2
 fi
-if ! grep -q 'flushPolicy.mustFlushNow' "$listener"; then
+# `flushReason` subsumes `mustFlushNow`: it answers the same ceiling question
+# and also names WHICH clock ran out. The check follows the caller's entry
+# point rather than pinning a method name.
+if ! grep -q 'flushPolicy.flushReason' "$listener"; then
     echo "PhoneListener.swift never asks whether waiting words must go out."
     echo "Without the ceiling, a person who does not pause is never transcribed."
+    exit 2
+fi
+# And the answer is worthless if the caller cannot tell a cut from an ending.
+# Passing nil for the last partial makes .ceiling unreachable for every input
+# there is, silently, with no test anywhere going red to say so.
+if ! grep -q 'lastPartialAt: lastPartialAt' "$listener"; then
+    echo "PhoneListener asks why the flush fired but cannot answer 'a cut'."
+    echo "With no last-partial time the ceiling is unreachable, every line is"
+    echo "published as a finished thought, and mid-sentence cuts stay orphans."
     exit 2
 fi
 if ! grep -q 'cursor.observe' "$listener"; then

@@ -37,11 +37,18 @@ final class PhoneListener: NSObject, ObservableObject {
     /// route change) and recovery is in progress. The UI must say so.
     @Published var suspended = false
 
-    var onLine: ((String) -> Void)?
+    /// A finished line, the instant the flush produced it, and whether it
+    /// carries on from the line before it.
+    ///
+    /// The instant travels WITH the words because the push can be much later
+    /// than the speech: a line buffered offline and sent hours afterwards used
+    /// to reach the backend stamped with the moment the network came back, so
+    /// a whole buffered conversation looked like it happened in one second.
+    var onLine: ((_ line: String, _ capturedAt: Date, _ continuesPrevious: Bool) -> Void)?
     /// Who said it, decided on this device. Fires with the same line that
     /// went to `onLine`, carrying "owner" / "other:<who>" — or nil when the
     /// phone cannot honestly say, which the brain reads as no verdict.
-    var onSpeaker: ((String, String?) -> Void)?
+    var onSpeaker: ((_ line: String, _ speaker: String?, _ capturedAt: Date, _ continuesPrevious: Bool) -> Void)?
     /// The on-device voice check. Optional: without a model the app runs
     /// exactly as it did before speaker recognition existed.
     var speaker: SpeakerTagger?
@@ -96,6 +103,18 @@ final class PhoneListener: NSObject, ObservableObject {
     /// comes first. Long enough not to chop a flowing sentence, short enough
     /// that a fast talker never outruns it.
     private var pendingSince: Date?
+    /// When the recognizer last revised its hypothesis: the only evidence this
+    /// object has that someone is still mid-sentence.
+    ///
+    /// Load-bearing, not decoration. `flushReason` measures silence from this,
+    /// and the ceiling (8s) is longer than the gap (2.6s), so a caller that
+    /// cannot say when the last partial arrived makes `.ceiling` UNREACHABLE
+    /// for every input there is — every flush reads as a finished thought, no
+    /// cut is ever marked, and nothing goes red to say so.
+    ///
+    /// Not `lastResultAt`, which also moves on an error callback, where
+    /// nothing was heard at all.
+    private var lastPartialAt: Date?
     private let flushPolicy = TranscriptFlushPolicy()
     /// The last line actually handed over, so the same sentence arriving
     /// again in different words can be recognised as itself.
@@ -114,12 +133,21 @@ final class PhoneListener: NSObject, ObservableObject {
         SFSpeechRecognizer.requestAuthorization { [weak self] auth in
             guard let self else { return }
             guard auth == .authorized else {
+                // Say WHY nothing was heard. Without this line, a session that
+                // was never permitted to start and a session that started and
+                // captured nothing read identically afterwards, and permission
+                // is the first suspect a failed manual test has to rule out.
+                ListenJournal.shared.record(.sessionStopped(cause: .authorizationLost))
                 DispatchQueue.main.async { self.authorized = false }
                 return
             }
             AVAudioSession.sharedInstance().requestRecordPermission { ok in
                 DispatchQueue.main.async {
-                    guard ok else { self.authorized = false; return }
+                    guard ok else {
+                        ListenJournal.shared.record(.sessionStopped(cause: .authorizationLost))
+                        self.authorized = false
+                        return
+                    }
                     // Set it back to TRUE on the way through. Nothing anywhere
                     // used to do this, so one "Don't Allow" branded the app
                     // permanently broken: even after granting access in iOS
@@ -150,6 +178,7 @@ final class PhoneListener: NSObject, ObservableObject {
         guard !isListening else { return }
         installObserversOnce()
         isListening = true
+        ListenJournal.shared.record(.sessionStarted)
         lastBufferAt = Date()
         lastResultAt = Date()
         configureAndStartEngine()
@@ -182,6 +211,13 @@ final class PhoneListener: NSObject, ObservableObject {
         // 0 Hz / 0 channels — installTap with it raises an NSException that
         // no try? can catch. Stand down; the watchdog retries after the call.
         guard format.sampleRate > 0, format.channelCount > 0 else {
+            // Recorded once per outage, not once per watchdog tick: the 4s
+            // watchdog retries this path for as long as the call lasts, and a
+            // journal that spends all 400 of its lines saying the same thing
+            // has evicted the session it was meant to explain.
+            if !suspended {
+                ListenJournal.shared.record(.sessionStopped(cause: .interruption))
+            }
             suspended = true
             return
         }
@@ -209,7 +245,16 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         engine.prepare()
         try? engine.start()
-        suspended = !engine.isRunning
+        // Capture coming BACK is as much a fact about the session as capture
+        // going down. A journal that only ever says "stopped" leaves a reader
+        // unable to tell a recovered outage from a dead microphone.
+        let up = engine.isRunning
+        if up, suspended {
+            ListenJournal.shared.record(.sessionStarted)
+        } else if !up, !suspended {
+            ListenJournal.shared.record(.sessionStopped(cause: .unrecoveredFailure))
+        }
+        suspended = !up
     }
 
     // ------------------------------------------------------------- healing
@@ -223,6 +268,7 @@ final class PhoneListener: NSObject, ObservableObject {
             guard let self, self.isListening else { return }
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             if raw.flatMap(AVAudioSession.InterruptionType.init) == .began {
+                ListenJournal.shared.record(.sessionStopped(cause: .interruption))
                 self.suspended = true   // honest: the mic is gone right now
             } else {
                 self.recoverAudio()     // ended (or unknown): take it back
@@ -253,7 +299,7 @@ final class PhoneListener: NSObject, ObservableObject {
         configureAndStartEngine()
         // A live request's format was fixed by its first buffer; the new route
         // may differ, so start fresh — flushing whatever was pending first.
-        swapRecognition(flushPending: true)
+        swapRecognition(flushPending: true, cause: .routeChange)
     }
 
     /// Last line of defense: whatever stalled without a notification — engine
@@ -271,14 +317,23 @@ final class PhoneListener: NSObject, ObservableObject {
             // Recognizer went silent mid-utterance: words on screen, nothing
             // arriving for 8s (a healthy one streams continuously).
             if !self.pendingTail.isEmpty, now.timeIntervalSince(self.lastResultAt) > 8 {
-                self.swapRecognition(flushPending: true)
+                // Apple's task-duration limit is the known reason a healthy
+                // recognizer stops streaming without ever finalising.
+                self.swapRecognition(flushPending: true, cause: .taskLimit)
                 return
             }
             // Rotate only in true silence — nothing pending, nothing to lose.
             if self.pendingTail.isEmpty, self.partial.isEmpty,
                now.timeIntervalSince(self.requestBornAt) > 120 {
-                self.swapRecognition(flushPending: false)
+                self.swapRecognition(flushPending: false, cause: .silenceRotation)
                 return
+            }
+            // A rebuild is not the only way capture comes back. Reaching here
+            // with `suspended` still set means it returned on its own, and a
+            // stop with no matching start reads as a session that never
+            // recovered at all.
+            if self.suspended, self.engine.isRunning {
+                ListenJournal.shared.record(.sessionStarted)
             }
             self.suspended = !self.engine.isRunning
         }
@@ -301,6 +356,14 @@ final class PhoneListener: NSObject, ObservableObject {
         // Rebuilt per request, not cached: this fires on every swap, so a
         // person named in the roster an hour ago is already in the lexicon.
         req.contextualStrings = AnticipyVocabulary.current()
+        // What this audio IS. Unset, the recognizer weighs a general language
+        // model against what is actually continuous conversation; .dictation is
+        // the hint Apple provides for exactly this. Nothing in the app set it.
+        req.taskHint = .dictation
+        // Punctuation from the recognizer rather than from a rule of ours. The
+        // brain reads these lines as sentences, and an unpunctuated wall of
+        // words is one sentence to everything downstream that counts them.
+        req.addsPunctuation = true
         if recognizer?.supportsOnDeviceRecognition == true {
             req.requiresOnDeviceRecognition = true
         }
@@ -309,6 +372,9 @@ final class PhoneListener: NSObject, ObservableObject {
         cursor.reset()
         partial = ""
         pendingSince = nil
+        // Nothing has been heard on THIS request yet. A stale timestamp here
+        // would date the new task's silence from the old task's speech.
+        lastPartialAt = nil
         everEmittedThisTask = false
 
         orphanLock.lock()
@@ -338,6 +404,11 @@ final class PhoneListener: NSObject, ObservableObject {
                     // recogniser now believes, so a collapse needs no special
                     // case and no magic number.
                     self.partial = result.bestTranscription.formattedString
+                    // Stamped where a revision actually arrives. This is the
+                    // evidence that tells "still talking, the clock ran out"
+                    // (a cut) from "stopped talking" (a finished thought), and
+                    // without it the flush can only ever report the second.
+                    self.lastPartialAt = Date()
                     // Show the cursor EVERY hypothesis, not just the ones we
                     // flush on. That is what lets it notice the recognizer
                     // throwing away a decode window and hand back the words
@@ -348,7 +419,7 @@ final class PhoneListener: NSObject, ObservableObject {
                     if let banked = update.banked?
                         .trimmingCharacters(in: .whitespacesAndNewlines),
                         !banked.isEmpty, !self.enrolling {
-                        self.deliver(banked)
+                        self.deliver(banked, reason: nil)
                     }
                     if result.isFinal {
                         // A final usually just polishes wording, so a couple of
@@ -356,8 +427,10 @@ final class PhoneListener: NSObject, ObservableObject {
                         // with speech never sent at all. That is not a polish,
                         // it is the whole monologue, and gating it away is how
                         // a continuous talker's words reached nobody.
-                        self.flushTail()
-                        self.swapRecognition(flushPending: false)
+                        self.flushTail(reason: .final)
+                        // A final arriving mid-conversation is Apple's task
+                        // limit landing, not the speaker stopping.
+                        self.swapRecognition(flushPending: false, cause: .taskLimit)
                     } else if update.changed || update.didReset {
                         self.scheduleSilenceFlush()
                     }
@@ -365,14 +438,18 @@ final class PhoneListener: NSObject, ObservableObject {
                     // The recognizer died. Whatever was heard is real speech —
                     // emit it, then take a fresh one; buffered audio carries
                     // across the seam.
-                    self.swapRecognition(flushPending: true)
+                    self.swapRecognition(flushPending: true, cause: .error)
                 }
             }
         }
     }
 
     /// Send the words heard but not yet sent, as one line.
-    private func flushTail() {
+    ///
+    /// `reason` is not bookkeeping. It is the difference between "he finished a
+    /// sentence" and "the clock cut him off mid-sentence" — the one thing this
+    /// object knows for certain about a line, and the thing it used to discard.
+    private func flushTail(reason: TranscriptFlushPolicy.Reason) {
         silenceFlush?.cancel()
         pendingSince = nil
         // All-or-nothing: the cursor either hands over everything unsent or
@@ -382,14 +459,20 @@ final class PhoneListener: NSObject, ObservableObject {
         guard let line = cursor.takePending()?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !line.isEmpty else { return }
-        deliver(line)
+        deliver(line, reason: reason)
     }
 
     /// The one way a line leaves this object. Banked words — speech the
     /// recognizer was about to discard — travel exactly the same path as an
     /// ordinary flush, so they get the same speaker verdict and the same
     /// enrollment protection instead of a second, subtly different route.
-    private func deliver(_ line: String) {
+    ///
+    /// `reason` is nil for those banked words: no timer fired and the
+    /// recognizer did not finalise, a decode window was simply thrown away.
+    /// `now` is the instant the flush produced this line, and it is what the
+    /// backend records as when the words were spoken.
+    private func deliver(_ line: String, reason: TranscriptFlushPolicy.Reason?,
+                         at now: Date = Date()) {
         // A voice sample is not something he said. Never emit it.
         guard !enrolling else { return }
         // ...and neither is the last sentence said a second time. Not losing
@@ -400,20 +483,30 @@ final class PhoneListener: NSObject, ObservableObject {
         if let last = lastDelivered,
            TranscriptFlushPolicy.isEchoOfPrevious(
                line, previous: last.text,
-               apart: Date().timeIntervalSince(last.at),
+               apart: now.timeIntervalSince(last.at),
                window: flushPolicy.echoWindow) {
             return
         }
-        lastDelivered = (line, Date())
+        lastDelivered = (line, now)
         everEmittedThisTask = true
+        // A CUT is the only thing marked as carrying on from what came before.
+        // A gap means the sentence ended, and chaining the next, unrelated
+        // sentence onto a finished one reads as one rambling thought nobody
+        // ever had. This is mechanism, not meaning: it says which timer fired.
+        let continuesPrevious = reason == .ceiling
+        // The word COUNT, never the words. The journal is exportable from
+        // Settings and the events collection already holds the speech itself.
+        ListenJournal.shared.record(
+            .flushed(reason: reason?.rawValue ?? "banked",
+                     words: line.split(whereSeparator: { $0.isWhitespace }).count))
         // Judge the voice behind THIS line before the window moves on. Done
         // here rather than on the audio thread: embedding takes tens of
         // milliseconds and must never stall capture.
         if let speaker, let onSpeaker {
             let tag = speaker.tagForLatestUtterance()
-            onSpeaker(line, tag)
+            onSpeaker(line, tag, now, continuesPrevious)
         } else {
-            onLine?(line)
+            onLine?(line, now, continuesPrevious)
         }
     }
 
@@ -430,14 +523,23 @@ final class PhoneListener: NSObject, ObservableObject {
         let since = pendingSince ?? Date()
         pendingSince = since
         // A continuous talker re-arms this debounce forever. The ceiling is
-        // what makes that survivable: waiting words go out on their own.
-        if flushPolicy.mustFlushNow(pendingSince: since) {
-            flushTail()
+        // what makes that survivable: waiting words go out on their own. The
+        // reason they went out now travels with them, so a cut can be linked
+        // to the line before it instead of published as a whole thought.
+        //
+        // This runs on a fresh partial, so the recognizer is still revising:
+        // the only answer possible here is the ceiling, or none.
+        if let reason = flushPolicy.flushReason(pendingSince: since,
+                                                lastPartialAt: lastPartialAt,
+                                                now: Date()) {
+            flushTail(reason: reason)
             return
         }
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.isListening else { return }
-            self.flushTail()
+            // The timer surviving long enough to fire IS the pause: every
+            // partial cancels it. So these words are a finished thought.
+            self.flushTail(reason: .gap)
         }
         silenceFlush = work
         DispatchQueue.main.asyncAfter(deadline: .now() + utteranceGap, execute: work)
@@ -445,9 +547,18 @@ final class PhoneListener: NSObject, ObservableObject {
 
     /// Retire the current recognition task and start a clean one. Audio keeps
     /// being captured into the orphan buffer throughout and is replayed.
-    private func swapRecognition(flushPending: Bool) {
+    ///
+    /// `cause` is recorded, because "the recognizer was replaced" with no
+    /// trigger is the useless half of the report: a route change, Apple's task
+    /// limit, an error and the 120s rotation are indistinguishable afterwards.
+    private func swapRecognition(flushPending: Bool, cause: ListenEvent.SwapCause) {
+        ListenJournal.shared.record(.recognizerSwapped(cause: cause))
         silenceFlush?.cancel()
-        if flushPending { flushTail() }
+        // Whatever forced this swap ended the recognition task, so `.final` is
+        // the honest label for the words it was still holding. It carries no
+        // parent: a forced swap publishes what it has rather than guessing at
+        // a link to a sentence it cannot know was unfinished.
+        if flushPending { flushTail(reason: .final) }
         orphanLock.lock()
         acceptingAudio = false
         orphanLock.unlock()
@@ -476,6 +587,12 @@ final class PhoneListener: NSObject, ObservableObject {
     }
 
     func stop() {
+        // Recorded only when a session was actually running. Sign-out calls
+        // stop() unconditionally, and a journal full of stops that ended
+        // nothing is a journal that hides the one that ended something.
+        if isListening {
+            ListenJournal.shared.record(.sessionStopped(cause: .owner))
+        }
         isListening = false
         suspended = false
         watchdog?.invalidate()
@@ -490,7 +607,14 @@ final class PhoneListener: NSObject, ObservableObject {
         // Emit whatever was still in flight — pressing Stop must never be the
         // thing that deletes what you just said.
         let tail = pendingTail.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tail.isEmpty { onLine?(tail) }
+        if !tail.isEmpty {
+            ListenJournal.shared.record(
+                .flushed(reason: TranscriptFlushPolicy.Reason.final.rawValue,
+                         words: tail.split(whereSeparator: { $0.isWhitespace }).count))
+            // Stamped as the words leave, not when they are pushed: the push
+            // behind this one may not happen until the network is back.
+            onLine?(tail, Date(), false)
+        }
         task?.finish()
         request = nil
         task = nil

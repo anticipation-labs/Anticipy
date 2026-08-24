@@ -462,10 +462,19 @@ final class AnticipyBackend {
     /// The signed-in account these writes belong to, when there is one.
     var accountID: String = ""
 
+    /// Push one event, and say which row it became.
+    ///
+    /// The returned id is what a LATER line names as its parent when the clock
+    /// cut a sentence in half. It is empty when the row was created but the
+    /// response could not be read: the write DID happen, so that case must
+    /// never be treated as a failure or the same words are posted twice.
+    @discardableResult
     func pushEvent(kind: String, text: String, decision: String? = nil,
                    importance: Int? = nil,
                    goal: String? = nil, speaker: String? = nil,
-                   explicit: Bool = false, source: String? = nil) async throws {
+                   explicit: Bool = false, source: String? = nil,
+                   capturedAt: Date? = nil,
+                   parentLine: String? = nil) async throws -> String {
         var body: [String: Any] = [
             "device_id": deviceID, "kind": kind, "text": text,
             "decision": decision ?? "", "goal": goal ?? "",
@@ -476,15 +485,39 @@ final class AnticipyBackend {
         // PocketBase's `created`, which is the moment the network delivered
         // the row, so a flushed backlog looked like a burst of unrelated
         // fragments seconds apart. Omi ships this exact bug (their #6551).
-        // Stamped here, at the moment the line is finished, because this is
-        // the last place that knows. The server treats an implausible stamp
-        // as absent, so a device with a wrong clock degrades to today's
-        // behaviour rather than reordering his day.
-        // `capture_started_at` is the column the rest of the system already
-        // names for this — it was provisioned long ago and no build ever wrote
-        // to it, which is why everything downstream fell back to `created`.
-        // Writing the existing name rather than a second one of my own.
-        body["capture_started_at"] = ISO8601DateFormatter.anticipyUTC.string(from: Date())
+        //
+        // This used to call `Date()` right here, which is PUSH time, so the
+        // offline retry queue re-stamped every buffered line at the moment the
+        // signal came back and reintroduced the exact reordering the paragraph
+        // above claims to fix. Only the caller that produced the line knows
+        // when the words were finished, so it passes that instant in and this
+        // method transmits what it is given.
+        //
+        // `capture_started_at` is the canonical column — the worker reads it
+        // first and accepts `spoken_at` as an alternate name, so both are
+        // written and that rollout tolerance stays meaningful rather than
+        // decorative. `capture_ended_at` is the same instant: the phone
+        // honestly knows ONE moment, the one the flush happened at, and
+        // claiming a start it never measured would be inventing precision.
+        //
+        // The server treats an implausible stamp as absent, so a device with a
+        // wrong clock degrades to yesterday's behaviour rather than reordering
+        // someone's day. Omitted entirely when the caller does not know, since
+        // an event posted at the moment it happens is already described by
+        // `created` and a guessed stamp is worse than an absent one.
+        if let capturedAt {
+            let stamp = ISO8601DateFormatter.anticipyUTC.string(from: capturedAt)
+            body["capture_started_at"] = stamp
+            body["spoken_at"] = stamp
+            body["capture_ended_at"] = stamp
+        }
+        // THIS LINE CARRIES ON FROM THAT ONE. Set only when the 8s ceiling cut
+        // a sentence in half, which is mechanism the phone knows for certain:
+        // it says which timer fired, never what the words mean. The column
+        // already exists (migration 1700000020) and nothing reads it yet, so
+        // this is additive on the wire — `LINKS_ON` is untouched and no brain
+        // behaviour changes today.
+        if let parentLine, !parentLine.isEmpty { body["parent_line"] = parentLine }
         // The ONLY thing the voice check ever sends: one short word about
         // who spoke ("owner", "other:v2", "other:Sarah"). The voiceprint it
         // came from never leaves the phone, and neither does the audio.
@@ -509,7 +542,14 @@ final class AnticipyBackend {
         // at all, which is why a brand-new account opened the app to a stranger's
         // transcripts — seen for real in the simulator against production.
         if !accountID.isEmpty { body["owner_ref"] = accountID }
-        try await post("api/collections/events/records", body: body)
+        let data = try await post("api/collections/events/records", body: body)
+        // Best effort, and deliberately NOT a throw. The row exists by the
+        // time this runs, so failing here would send the caller down its retry
+        // path and post the same speech a second time. A line whose id cannot
+        // be read simply cannot be named as a parent.
+        guard let row = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let id = row["id"] as? String else { return "" }
+        return id
     }
 
     /// Queue an errand, and say which row it became.

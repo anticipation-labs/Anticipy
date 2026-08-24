@@ -32,11 +32,18 @@ fi
 
 # Every capture path must say where it came from, because the default is
 # .typed — an unlabelled capture call site is a buzzing phone.
-if ! code | grep -q 'heard(line, from: .phoneMic)'; then
+#
+# Matched without the closing paren on purpose. These two call sites now also
+# carry when the words were spoken and whether the clock cut them out of the
+# middle of a sentence, and pinning the whole argument list made a legitimate
+# addition read as the wiring being torn out. What this check is about is the
+# SOURCE label; tests/test_pendant_transcription_wiring.py already learned the
+# same lesson about its own line.
+if ! code | grep -q 'heard(line, from: .phoneMic'; then
     echo "The phone-mic callback does not name itself as the phone mic."
     exit 2
 fi
-if ! code | grep -q 'heard(line, speaker: tag, from: .phoneMic)'; then
+if ! code | grep -q 'heard(line, speaker: tag, from: .phoneMic'; then
     echo "The voice-tagged phone-mic callback does not name its source."
     exit 2
 fi
