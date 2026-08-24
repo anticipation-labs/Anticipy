@@ -138,7 +138,7 @@ struct TranscriptFlushPolicyTests {
         // ------------------------------------------------- why the flush fired
         // The ceiling ended the silent loss, but it ends a LINE as well, so
         // continuous speech was cut every 8 seconds wherever the sentence
-        // happened to be. On the recorded call of 2026-08-24, 54% of the
+        // happened to be. On the recorded call of 2026-08-23, 54% of the
         // delivered lines were four words or fewer. Nothing here changes WHEN
         // the words go out; it only tells the caller which of the two events
         // just happened, so a mid-sentence cut can be linked instead of
@@ -166,6 +166,27 @@ struct TranscriptFlushPolicyTests {
         check("a finished thought is never reported as a cut",
               policy.flushReason(pendingSince: p0,
                                  lastPartialAt: p0.addingTimeInterval(6.3),
+                                 now: p0.addingTimeInterval(9)) == .gap)
+        // The ceiling has a boundary of its own, and it must include the
+        // instant it names: at exactly maxHold the words have waited the whole
+        // hold, and a flush one tick later than promised is a flush the
+        // speaker can still outrun.
+        check("the ceiling reports a cut from the instant it expires",
+              policy.flushReason(pendingSince: p0,
+                                 lastPartialAt: p0.addingTimeInterval(policy.maxHold),
+                                 now: p0.addingTimeInterval(policy.maxHold)) == .ceiling)
+        check("a hair under the ceiling is still nobody's business",
+              policy.flushReason(pendingSince: p0,
+                                 lastPartialAt: p0.addingTimeInterval(policy.maxHold - 0.01),
+                                 now: p0.addingTimeInterval(policy.maxHold - 0.01)) == nil)
+        // No partial time at all. The caller that cannot say when it last
+        // heard something is told the silence ran the whole wait, so this
+        // reads as a finished thought rather than a cut. That is the safe
+        // direction, and it is also a trap worth pinning: because the ceiling
+        // is longer than the gap, a caller passing nil gets .gap for every
+        // input that exists and never sees a cut at all.
+        check("no partial time means the whole wait was silence",
+              policy.flushReason(pendingSince: p0, lastPartialAt: nil,
                                  now: p0.addingTimeInterval(9)) == .gap)
         // The reason is additive. The ceiling itself must answer exactly as it
         // did before, because PhoneListener still asks it this question.

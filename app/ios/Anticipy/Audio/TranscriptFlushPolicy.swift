@@ -85,7 +85,7 @@ extension TranscriptFlushPolicy {
     ///
     /// The ceiling above ended the silent loss, but it also ends a LINE, so
     /// someone talking without pausing gets cut every eight seconds wherever
-    /// the sentence happens to be. On the call recorded 2026-08-24, 54% of the
+    /// the sentence happens to be. On the call recorded 2026-08-23, 54% of the
     /// lines that arrived were four words or fewer. A reader cannot tell those
     /// shards from real one-word answers, because the phone threw away the one
     /// thing it knew for certain: that it was the clock, not the speaker, that
@@ -112,6 +112,19 @@ extension TranscriptFlushPolicy {
     ///   - lastPartialAt: when the recognizer last revised its hypothesis.
     ///     Nil means nothing has been heard since the wait began, which is
     ///     silence of exactly that length.
+    ///
+    ///     Read that consequence before passing nil, because it is larger than
+    ///     it looks: the ceiling is longer than the gap, so a nil partial makes
+    ///     the measured silence equal to the whole wait, and every wait long
+    ///     enough to reach the ceiling is by then already long enough to be a
+    ///     gap. Passing nil therefore does not make .ceiling rare. It makes
+    ///     .ceiling UNREACHABLE, for every input there is. The answer is always
+    ///     .gap or nil, no flush is ever reported as a cut, nothing downstream
+    ///     is ever linked, and no test anywhere goes red to say so. A caller
+    ///     that wants cuts marked must track and pass the real time of the last
+    ///     partial. The fallback is deliberately this way round: it fails to
+    ///     today's behaviour, which publishes every line as a finished thought,
+    ///     rather than guessing a cut and chaining unrelated sentences.
     func flushReason(pendingSince: Date?, lastPartialAt: Date?, now: Date) -> Reason? {
         guard let pendingSince else { return nil }
         let silence = now.timeIntervalSince(lastPartialAt ?? pendingSince)
