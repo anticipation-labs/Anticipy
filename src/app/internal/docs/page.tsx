@@ -14,61 +14,11 @@ interface DocItem {
 }
 
 const DOCS: DocItem[] = [
-  // Hardware docs - now internal pages
-  {
-    title: "Firmware Design Doc",
-    description: "Complete hardware spec: ESP32-S3, block diagram, pin assignments, state machine, audio pipeline, API contract",
-    category: "Hardware",
-    href: "/internal/docs/hardware",
-    badge: "Full spec",
-  },
-  {
-    title: "PCB Schematic",
-    description: "Full pin mapping: U1 (XIAO), MIC1 (INMP441), LED1 (SK6812), U2 (TP4056), all passives, net summary, design notes",
-    category: "Hardware",
-    href: "/internal/docs/schematic",
-    badge: "All components",
-  },
-  {
-    title: "PCB Assembly Guide",
-    description: "Step-by-step hand-solder instructions, pre-battery continuity checks, power-on test sequence, QA checklist",
-    category: "Hardware",
-    href: "/internal/docs/assembly",
-    badge: "10 functional tests",
-  },
-  {
-    title: "Packaging Design",
-    description: "Box specs (100×70×35mm matte black rigid), branding, quick-start card, accessories, print specs, sustainability",
-    category: "Hardware",
-    href: "/internal/docs/packaging",
-    badge: "$2.97 at 1k units",
-  },
-  {
-    title: "Manufacturing Order Guide",
-    description: "JLCPCB, PCBWay, Seeed Fusion, MacroFab, Bittele (Toronto) - 7-day sample checklist with direct order links",
-    category: "Hardware",
-    href: "/internal/docs/manufacturing",
-    badge: "~$37 USD/unit",
-  },
-  {
-    title: "3D Case Design",
-    description: "OpenSCAD parametric case, 38×25×11mm. Print at JLCPCB 3D or Shapeways/Xometry for titanium premium.",
-    category: "Hardware",
-    href: "https://raw.githubusercontent.com/omize10/Anticipy/main/firmware/case/anticipy_pendant.scad",
-    external: true,
-  },
   {
     title: "3D Product Render",
     description: "Interactive 3D render for presentations and investor decks",
     category: "Hardware",
     href: "/internal/render",
-    external: true,
-  },
-  {
-    title: "KiCad Project Files",
-    description: "KiCad schematic (.kicad_sch) and project files for PCB layout",
-    category: "Hardware",
-    href: "https://github.com/omize10/Anticipy/blob/main/firmware/pcb/",
     external: true,
   },
   {
@@ -80,13 +30,6 @@ const DOCS: DocItem[] = [
   },
 
   // Research docs - now internal pages
-  {
-    title: "Bill of Materials",
-    description: "All 16 components with verified prices and direct buy links. ~$77 CAD prototype. 72% under $100 CAD budget.",
-    category: "Research",
-    href: "/internal/docs/bom",
-    badge: "$77 CAD",
-  },
   {
     title: "Competitive Analysis",
     description: "8 competitors: Humane (dead), Rabbit R1, Meta Ray-Ban, Plaud, Limitless (acquired), Friend (backlash), Bee AI (Amazon). $310B market by 2033.",
