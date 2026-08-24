@@ -147,4 +147,32 @@ extension TranscriptFlushPolicy {
         // flush on every partial and shred every sentence into words.
         return nil
     }
+
+    /// Do words that first appeared at `wordsAppearedAt` still carry on from
+    /// the cut made at `cutAt`?
+    ///
+    /// A cut means the clock ended a line while the speaker was still going,
+    /// so the words that follow it IMMEDIATELY are the rest of that sentence.
+    /// This answers what "immediately" means, and it is not decoration: a
+    /// caller holding "the last flush was a cut" as a bare flag has no way to
+    /// stop holding it. A cut that emptied the pending words, followed by a
+    /// long silence inside the same recognition task, left that flag set with
+    /// nothing to clear it, and the brand-new thought spoken minutes later was
+    /// published as a continuation of a sentence nobody was still saying. That
+    /// is the same false head edge the gap-wins precedence above exists to
+    /// prevent, arriving through silence instead of through ordering.
+    ///
+    /// Measured from when the words APPEARED, never from when the flush got
+    /// round to them: a continuous talker's next ceiling is a whole `maxHold`
+    /// after the last one, so judging by delivery time would throw away every
+    /// true edge in exactly the monologue this exists for.
+    ///
+    /// Nil `cutAt` means nothing was cut, so nothing continues.
+    func cutContinues(cutAt: Date?, wordsAppearedAt: Date) -> Bool {
+        guard let cutAt else { return false }
+        // The same standard that ends an utterance anywhere else here. A pause
+        // this long is a new thought, whether it lands before a flush or after
+        // one.
+        return wordsAppearedAt.timeIntervalSince(cutAt) < utteranceGap
+    }
 }

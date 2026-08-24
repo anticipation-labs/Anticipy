@@ -195,6 +195,40 @@ struct TranscriptFlushPolicyTests {
               && !policy.mustFlushNow(pendingSince: p0,
                                       now: p0.addingTimeInterval(policy.maxHold - 0.01)))
 
+        // ---------------------------------------------- does a cut still run on
+        // Nothing was cut, so nothing carries on. The first line of a session
+        // has to answer this and must never be linked to anything.
+        check("no cut means no continuation",
+              !policy.cutContinues(cutAt: nil, wordsAppearedAt: p0))
+        // A continuous talker: the ceiling cut him off and he kept going. The
+        // next words are the rest of that sentence.
+        check("words that follow a cut at once carry on from it",
+              policy.cutContinues(cutAt: p0, wordsAppearedAt: p0.addingTimeInterval(0.3)))
+        // The reported residual: a cut took every pending word, then five
+        // minutes of silence, then a brand-new thought. Marking that as a
+        // continuation chains an unrelated sentence onto one from minutes ago.
+        check("a new thought after a long silence carries on from nothing",
+              !policy.cutContinues(cutAt: p0, wordsAppearedAt: p0.addingTimeInterval(300)))
+        // The boundary is the same pause that ends an utterance everywhere
+        // else. At exactly the gap the utterance is over by the policy's own
+        // standard, so the words after it start something.
+        check("at exactly the gap the cut is over",
+              !policy.cutContinues(cutAt: p0,
+                                   wordsAppearedAt: p0.addingTimeInterval(policy.utteranceGap)))
+        check("a hair inside the gap still continues",
+              policy.cutContinues(cutAt: p0,
+                                  wordsAppearedAt: p0.addingTimeInterval(policy.utteranceGap - 0.01)))
+        // The edge this rule must NOT destroy. A monologue cut at the ceiling
+        // is cut again a whole maxHold later, so the second fragment is
+        // delivered 8s after the first. Judged on when its words APPEARED it
+        // still continues; judged on when it was delivered, every true edge in
+        // a monologue would be thrown away.
+        check("a monologue's next ceiling is still a continuation",
+              policy.cutContinues(cutAt: p0,
+                                  wordsAppearedAt: p0.addingTimeInterval(0.2))
+              && p0.addingTimeInterval(policy.maxHold + 0.2)
+                  .timeIntervalSince(p0) > policy.utteranceGap)
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {

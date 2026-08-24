@@ -36,6 +36,37 @@ if ! grep -q 'lastPartialAt: lastPartialAt' "$listener"; then
     echo "published as a finished thought, and mid-sentence cuts stay orphans."
     exit 2
 fi
+# And a cut that is never allowed to expire is its own defect. The mark has to
+# be READ through the policy: holding it as a bare flag left it true through a
+# silence and chained a brand-new thought onto a sentence from minutes before.
+# `source` was written for weeks and read by nothing, and no test noticed.
+if ! grep -q 'let continuesPrevious = flushPolicy.cutContinues' "$listener"; then
+    echo "PhoneListener no longer asks whether a cut still runs on."
+    echo "Nothing then stops the mark surviving a silence, and the next new"
+    echo "thought goes out chained to a sentence nobody was still saying."
+    exit 2
+fi
+# ...and it has to be judged on when the words APPEARED, not on when the flush
+# got round to them. A continuous talker's next ceiling is a whole maxHold
+# after the last one, so measuring from delivery time makes every link in a
+# monologue expire before it is asked about: zero edges, no failure anywhere.
+if ! grep -q 'let appeared = pendingSince ?? Date()' "$listener"; then
+    echo "PhoneListener no longer knows when the words it is flushing appeared."
+    echo "Judged from delivery time instead, a cut expires before the fragment"
+    echo "that continues it arrives, and no mid-sentence cut is ever linked."
+    exit 2
+fi
+# ...and a voice sample must not be a pause in a sentence. Enrollment is
+# twelve seconds of "read this out loud", but a cancelled one is over in half a
+# second, which is inside the gap — so the mark is closed by name here rather
+# than left to the clock. The awk range pins it inside that function, in the
+# same shape run_heard_tests.sh compares a declaration with.
+if ! awk '/func startForEnrollment/,/^    }/' "$listener" | grep -q 'cutAt = nil'; then
+    echo "Enrollment no longer closes an open mid-sentence cut."
+    echo "The first real sentence after a voice sample can then go out chained"
+    echo "to whatever the clock interrupted before the sample began."
+    exit 2
+fi
 if ! grep -q 'cursor.observe' "$listener"; then
     echo "PhoneListener never shows the cursor every hypothesis."
     echo "Without observe(), a discarded decode window takes its words with it."

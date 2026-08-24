@@ -122,20 +122,27 @@ final class PhoneListener: NSObject, ObservableObject {
     /// Whether this recognition task has sent anything yet — see the final
     /// handler, where it decides a polish from a whole unsent monologue.
     private var everEmittedThisTask = false
-    /// Whether the flush that produced the LAST emitted line was a cut.
+    /// WHEN the clock last cut a line off mid-sentence, or nil if it has not.
     ///
-    /// The direction is the whole point and is easy to write backwards.
-    /// `.ceiling` describes how a line ENDED: the clock ran out while the
-    /// recognizer was still revising. It says nothing about how that line
-    /// BEGAN. The line that carries on from a cut is therefore the NEXT one,
-    /// so the marker is read here and written afterwards.
+    /// Two lessons live in this one property, and both were bugs.
     ///
-    /// Marking the ceiling-flushed line itself was the bug this replaced: the
-    /// head of a monologue got chained onto whatever unrelated sentence came
-    /// before it, the tail was orphaned, and for the commonest shape (one cut,
-    /// then a pause) every edge produced was false. That false head edge is
-    /// the exact link `flushReason`'s gap-wins precedence exists to prevent.
-    private var lastFlushWasCut = false
+    /// WHICH line carries the mark. `.ceiling` describes how a line ENDED: the
+    /// clock ran out while the recognizer was still revising. It says nothing
+    /// about how that line BEGAN, so the line that carries on from a cut is the
+    /// NEXT one. Marking the ceiling-flushed line itself chained the head of a
+    /// monologue onto whatever unrelated sentence came before it, orphaned the
+    /// tail, and for the commonest shape (one cut, then a pause) produced only
+    /// false edges.
+    ///
+    /// HOW LONG the mark lasts. A bare "the last flush was a cut" flag has no
+    /// way to stop being true: a cut takes every pending word, so if the
+    /// speaker then goes quiet without the recognition task ending, no flush
+    /// and no new task ever clears it, and the brand-new thought spoken minutes
+    /// later went out as a continuation of a sentence nobody was still saying.
+    /// Keeping the INSTANT instead of a flag lets `flushPolicy.cutContinues`
+    /// answer that with the same pause that ends an utterance everywhere else,
+    /// and it is checked at the one place the mark is read.
+    private var cutAt: Date?
 
     /// A pause this long ends an utterance. 2.6s, not shorter: people pause
     /// mid-thought ("I'll send the invoice… tomorrow"), and chopping there
@@ -412,12 +419,12 @@ final class PhoneListener: NSObject, ObservableObject {
         cursor.reset()
         partial = ""
         pendingSince = nil
-        // A fresh recognition task starts a fresh chain. Carrying a cut across
-        // the seam would link the first line of the new task to a sentence
-        // that ended up to two minutes earlier (the 120s silence rotation is
-        // one of the swaps that lands here), and a false edge is worse than a
-        // missed one: nothing downstream can unpick it.
-        lastFlushWasCut = false
+        // `cutAt` is deliberately NOT cleared here. Speech can cross a swap
+        // seam — the orphan buffer exists to replay it — and a cut whose words
+        // continue half a second later on a new task is a true link. The rule
+        // that ends it is silence, not the task boundary, and cutContinues
+        // measures that on its own.
+
         // Nothing has been heard on THIS request yet. A stale timestamp here
         // would date the new task's silence from the old task's speech.
         lastPartialAt = nil
@@ -465,7 +472,12 @@ final class PhoneListener: NSObject, ObservableObject {
                     if let banked = update.banked?
                         .trimmingCharacters(in: .whitespacesAndNewlines),
                         !banked.isEmpty, !self.enrolling {
-                        self.deliver(banked, reason: nil)
+                        // Banked words are older than the ones still pending,
+                        // so the pending mark is the earliest honest answer to
+                        // "when did these appear". Absent one, they appeared
+                        // now, which continues nothing.
+                        self.deliver(banked, reason: nil,
+                                     wordsAppearedAt: self.pendingSince ?? Date())
                     }
                     if result.isFinal {
                         // A final usually just polishes wording, so a couple of
@@ -497,6 +509,12 @@ final class PhoneListener: NSObject, ObservableObject {
     /// object knows for certain about a line, and the thing it used to discard.
     private func flushTail(reason: TranscriptFlushPolicy.Reason) {
         silenceFlush?.cancel()
+        // Read before it is cleared. Whether these words carry on from a cut
+        // depends on when they STARTED waiting, not on when the flush got round
+        // to them: a continuous talker's next ceiling is a whole maxHold after
+        // the last one, so judging by delivery time would throw away every true
+        // link in exactly the monologue this is for.
+        let appeared = pendingSince ?? Date()
         pendingSince = nil
         // All-or-nothing: the cursor either hands over everything unsent or
         // nothing at all. The old take(minNewWords:) advanced its record and
@@ -505,7 +523,7 @@ final class PhoneListener: NSObject, ObservableObject {
         guard let line = cursor.takePending()?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !line.isEmpty else { return }
-        deliver(line, reason: reason)
+        deliver(line, reason: reason, wordsAppearedAt: appeared)
     }
 
     /// The one way a line leaves this object. Banked words — speech the
@@ -515,10 +533,12 @@ final class PhoneListener: NSObject, ObservableObject {
     ///
     /// `reason` is nil for those banked words: no timer fired and the
     /// recognizer did not finalise, a decode window was simply thrown away.
-    /// `now` is the instant the flush produced this line, and it is what the
-    /// backend records as when the words were spoken.
+    /// `wordsAppearedAt` is when this line's words first went unsent, which is
+    /// what decides whether they carry on from a cut. `now` is the instant the
+    /// flush produced the line, and it is what the backend records as when the
+    /// words were spoken.
     private func deliver(_ line: String, reason: TranscriptFlushPolicy.Reason?,
-                         at now: Date = Date()) {
+                         wordsAppearedAt: Date, at now: Date = Date()) {
         // A voice sample is not something he said. Never emit it.
         guard !enrolling else { return }
         // ...and neither is the last sentence said a second time. Not losing
@@ -535,15 +555,18 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         lastDelivered = (line, now)
         everEmittedThisTask = true
-        // WHICH line carries the mark. `.ceiling` says how THIS line ended:
-        // the clock ran out while he was still talking. The line that carries
-        // on from a cut is the NEXT one, so the flag is read from the previous
-        // flush here and written for the next one below. A gap or a final
-        // means the sentence ended, and chaining the following, unrelated
-        // sentence onto a finished one reads as one rambling thought nobody
-        // ever had. This is mechanism, not meaning: it says which timer fired.
-        let continuesPrevious = lastFlushWasCut
-        lastFlushWasCut = reason == .ceiling
+        // WHICH line carries the mark, and for HOW LONG. `.ceiling` says how
+        // THIS line ended: the clock ran out while he was still talking. The
+        // line that carries on from a cut is the NEXT one, so the mark is read
+        // here and written for the next line below. It only reaches words that
+        // followed the cut immediately — a cut that empties the pending words
+        // and is followed by silence is answered by nothing, and chaining a
+        // new thought onto a finished sentence reads as one rambling thought
+        // nobody ever had. This is mechanism, not meaning: it says which timer
+        // fired and how long ago.
+        let continuesPrevious = flushPolicy.cutContinues(cutAt: cutAt,
+                                                         wordsAppearedAt: wordsAppearedAt)
+        cutAt = reason == .ceiling ? now : nil
         // The word COUNT, never the words. The journal is exportable from
         // Settings and the events collection already holds the speech itself.
         ListenJournal.shared.record(
@@ -635,6 +658,13 @@ final class PhoneListener: NSObject, ObservableObject {
     func startForEnrollment() {
         wasListeningBeforeEnrollment = isListening
         enrolling = true
+        // A voice sample is not a continuation of anything. Whatever the clock
+        // cut off before this cannot be carried on by the first real sentence
+        // after it, and the twelve seconds in between are not a pause in a
+        // thought — they are "read this out loud". Said here rather than left
+        // to the silence rule, because a cancelled enrollment can be over in
+        // half a second and the mark would survive it.
+        cutAt = nil
         if !isListening { start() }
     }
 
@@ -670,11 +700,15 @@ final class PhoneListener: NSObject, ObservableObject {
                          words: tail.split(whereSeparator: { $0.isWhitespace }).count))
             // Stamped as the words leave, not when they are pushed: the push
             // behind this one may not happen until the network is back.
-            // A parting tail that follows a cut really does carry on from it,
-            // so it is marked like any other line: read the previous flush,
-            // then close the chain, because nothing follows this one.
-            onLine?(tail, Date(), lastFlushWasCut)
-            lastFlushWasCut = false
+            //
+            // A parting tail that followed a cut immediately really does carry
+            // on from it; one spoken after a long silence does not, so it is
+            // judged by the same rule as every other line. Then the mark is
+            // closed, because nothing follows this one.
+            onLine?(tail, Date(),
+                    flushPolicy.cutContinues(cutAt: cutAt,
+                                             wordsAppearedAt: pendingSince ?? Date()))
+            cutAt = nil
         }
         task?.finish()
         request = nil
