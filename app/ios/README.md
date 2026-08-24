@@ -23,10 +23,13 @@ cards, and the Chrome extension is what actually acts.
 - `Anticipy/Audio/TranscriberClient.swift` — Deepgram realtime STT websocket, pendant audio only
 - `Anticipy/Backend/AnticipyBackend.swift` — pairing/events/jobs (PocketBase)
 - `Anticipy/Views/ContentView.swift` — Listen switch, transcript, confirm-card UI
-- `Anticipy/Brain/BrainClient.swift` — DEAD, and worth knowing before you trust it. It still
-  compiles into the target and its own header still claims phone-side OpenRouter triage, but
-  nothing in the app ever constructs it: `grep -rn 'BrainClient(' app/ios` returns nothing.
-  Triage moved server-side. Believe `brain/worker.py`, not this file.
+
+There is no `Anticipy/Brain/`. It held `BrainClient.swift` — a phone-side
+OpenRouter triage client with its own copy of the system prompt, hardcoded to
+`deepseek/deepseek-v3.2` — which had zero call sites and still compiled into
+every binary, so it sat in the dSYMs of builds b18 through b30 looking live.
+Deleted 2026-08-24. Triage is server-side and always was by then: `brain/worker.py`
+owns it. Do not re-create a second copy of the prompt contract here.
 
 ## Build (on the Mac)
 1. `cd app/ios && ./build_on_mac.sh`

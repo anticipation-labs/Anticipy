@@ -261,16 +261,50 @@ class LLM:
                                                 now_line(self.owner_zone))
                               if part)
         if self.gemini_api_key:
-            # The direct Gemini path uses explicit CachedContent, not this
-            # mechanism, so it keeps the original single-string shape.
-            return self._gemini(f"{grounding}\n\n{system}", user, temperature)
+            # THE GROUNDING GOES LAST HERE TOO, for the identical reason
+            # spelled out above: a prompt cache is keyed on an exact PREFIX,
+            # so a sentence carrying the current minute in FRONT of a
+            # 3,090-token instruction misses on every call, forever. This
+            # path prepended it until 2026-08-24 while claiming in a comment
+            # that it used "explicit CachedContent" instead. There is no
+            # CachedContent call anywhere in brain/ and never has been, so
+            # that comment excused a live regression instead of describing a
+            # mechanism — which is why the measured saving above was real on
+            # OpenRouter and imaginary here.
+            #
+            # aux is honoured here too. Before this, ANTICIPY_AUX_MODEL was
+            # silently unreachable whenever GEMINI_API_KEY was set, because
+            # this branch returns before the aux-aware one below it: every
+            # mechanical call paid the judgement model's rate and nothing
+            # said so.
+            return self._gemini(f"{system}\n\n{grounding}", user, temperature,
+                                model=self._gemini_model_for(aux))
         if self.live:
             return self._openrouter(system, user, temperature, grounding,
                                     model=(AUX_MODEL if (aux and AUX_MODEL) else self.model))
         return LLMResult(text=self._heuristic(system, user), used_model="heuristic", mode="heuristic")
 
-    def _gemini(self, system: str, user: str, temperature: float) -> LLMResult:
+    def _gemini_model_for(self, aux: bool) -> str:
+        """Which Gemini model serves this call.
+
+        ANTICIPY_AUX_MODEL is written as an OpenRouter slug
+        ("google/gemini-2.5-flash-lite") because that is the path it was
+        measured on, while the direct endpoint wants the bare id. That
+        endpoint also serves Google models only, so a slug naming any other
+        vendor is not something this path can honour: fall back to the main
+        model rather than send a name that 404s a real decision.
+        """
+        if not (aux and AUX_MODEL):
+            return self.gemini_model
+        vendor, _, bare = AUX_MODEL.rpartition("/")
+        if vendor and vendor.lower() != "google":
+            return self.gemini_model
+        return bare or self.gemini_model
+
+    def _gemini(self, system: str, user: str, temperature: float,
+                model: str = "") -> LLMResult:
         """Call Gemini directly without exposing its credential downstream."""
+        model = model or self.gemini_model
         payload = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
@@ -289,7 +323,7 @@ class LLM:
             "x-goog-api-key": self.gemini_api_key,
             "Content-Type": "application/json",
         }
-        url = GEMINI_URL.format(model=self.gemini_model)
+        url = GEMINI_URL.format(model=model)
         with httpx.Client(timeout=60) as c:
             r = c.post(url, headers=headers, json=payload)
             r.raise_for_status()
@@ -298,9 +332,9 @@ class LLM:
         text = "".join(str(part.get("text") or "") for part in parts if isinstance(part, dict))
         if not text:
             raise ValueError("Gemini returned no text")
-        _record(self.gemini_model, system, user,
+        _record(model, system, user,
                 (data.get("usageMetadata") or {}), "gemini")
-        return LLMResult(text=text, used_model=self.gemini_model, mode="gemini")
+        return LLMResult(text=text, used_model=model, mode="gemini")
 
     # A prompt cache only pays for itself above a provider minimum (Gemini
     # wants roughly a thousand tokens). Below that the multipart shape is pure

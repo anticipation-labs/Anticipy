@@ -10,10 +10,17 @@
 // The one unauthenticated surface left is the pairing bootstrap, because a
 // fresh device has no token yet:
 //   - an agent may REGISTER itself (create an agents record, never pre-paired)
-//   - a device may LOOK UP an agent/pendant by its short-lived pair code
+//   - a device may LOOK UP an agent/pendant by its pair code (counted and
+//     refused past a ceiling — six digits is a guessable secret, see
+//     `pairLookup` below)
 //   - a device may CLAIM a not-yet-paired record (flip owner/paired once)
-// Knowing the 6-digit code on screen is the proof of presence; a record that
-// is already paired can never be re-claimed or re-read without the token.
+// Knowing the 6-digit code on screen is the proof of presence. An already
+// paired record can never be re-claimed, and its code is no longer a way to
+// read it either. The earlier version of this sentence said a paired record
+// could not be re-read at all, which was never true and still isn't: a fresh
+// app install finds its own paired agent by naming the high-entropy owner id
+// it already holds, and a paired record's last_seen/browser stay tokenlessly
+// writable (see the claim branch for why).
 routerUse((e) => {
   const token = $os.getenv("ANTICIPY_SERVICE_TOKEN");
   if (!token) return e.next();
@@ -46,18 +53,183 @@ routerUse((e) => {
     catch (_) { return ""; }
   };
 
+  // SIX DIGITS, AND NOBODY WAS COUNTING THE GUESSES.
+  //
+  // Both pair-code branches below — the signed-in one and the tokenless
+  // bootstrap — answer "which record wears this code?" for anyone who asks,
+  // and until now they answered it as often as they were asked. Six digits is
+  // a million codes; a script walking them ten a second walks all of them in
+  // a day, and a hit on a live code is somebody else's browser claimed
+  // against the guesser's account (the attack traced in
+  // tests/test_pairing_claim_guard.py). The anchored filter and the perPage
+  // cap further down stop one request returning the whole table; neither of
+  // them costs an attacker anything per attempt. This does.
+  //
+  // Same shape as password_reset.pb.js:16-19, the only other guessable
+  // six-digit secret in the tree: count the FAILED attempts in a bounded
+  // window and refuse once the ceiling is hit. A successful pairing spends
+  // nothing, so an ordinary person is untouched — the code is on the screen in
+  // front of them, the phone auto-submits at six digits, and a fumbled entry
+  // costs one attempt out of ten.
+  //
+  // A hit on an ALREADY PAIRED record is a failure, not a pairing. Neither
+  // claim path will re-claim one (both require paired to be false), so the
+  // only thing a guesser gets from it is the row itself: owner id, owner_ref,
+  // agent_id. That is also how the header of this file came to claim, wrongly,
+  // that a paired record "can never be re-claimed or re-read without the
+  // token" — the re-read half was untrue until this branch existed. Refusing
+  // it costs the phone nothing: typing an already-paired code has always ended
+  // as a thrown error there, because the claim that follows the lookup is
+  // refused (AnticipyBackend.swift:399 -> .unreachable), and it means the
+  // all-time set of minted codes is not worth walking. Only the codes on
+  // screen right now are worth anything.
+  //
+  // A MISS still falls through to PocketBase, which answers an empty list.
+  // The phone needs that to say "That code didn't match" instead of "I can't
+  // reach Anticipy right now" (SettingsView.swift:270-284); telling somebody
+  // their correct code is wrong, or their wrong code is an outage, is how they
+  // give up. The refusal only appears at the ceiling.
+  //
+  // WHERE THE COUNTER LIVES: e.app.store(), PocketBase's own app-wide
+  // key/value store, which is shared across the isolated hook runtimes —
+  // measured on 0.30.4 against a local rig, set in one request and read in the
+  // next. Not a collection: a row per guess is an attacker-driven disk fill
+  // dressed as a defence, and the volume filling is already an outage this
+  // service has had. Buckets are plain strings, "<windowStartMs>|<failures>",
+  // because only exported primitives are safe to hand between runtimes.
+  //
+  // WHAT THE KEY IS WORTH: e.realIP() is the caller's address when a trusted
+  // proxy header is configured and the connecting address otherwise, so behind
+  // Railway's edge every caller currently shares one bucket. That
+  // over-throttles rather than under-throttles — legitimate pairings never
+  // spend it — and the second, larger all-callers ceiling covers the opposite
+  // case: a configured trusted-proxy header is caller-controlled, so per-IP
+  // buckets would be free to mint, and that ceiling is what still bounds the
+  // walk. It also bounds how many keys this can leave in the store.
+  //
+  // HONEST SCOPE: this makes the walk slow and loud, it does not end it. The
+  // code itself is permanent once minted (agent_auth.pb.js:19-25) and the
+  // popup shows it until the install re-registers, so a patient attacker still
+  // has a rate-limited walk against however many codes are live. The cure is a
+  // code that expires with a popup that refreshes it, which is a change to the
+  // pairing ceremony and not this.
+  const pairLookup = (collection, code) => {
+    const WINDOW_MS = 10 * 60 * 1000;
+    const MAX_PER_IP = 10;
+    const MAX_ALL = 60;
+    const PREFIX = "anticipy_pair_fails:";
+    const ALL_KEY = "anticipy_pair_fails_all";
+
+    let store = null;
+    try { store = e.app.store(); } catch (_) {}
+    if (!store) {
+      // Refusing is the honest failure. Serving lookups that nobody is
+      // counting is the exact hole this closes, and a pairing that stops
+      // working gets reported in minutes where a silently absent throttle
+      // gets reported never.
+      console.log("pair-code lookup: no app store to count guesses in — refusing");
+      return e.json(503, {
+        error: "pairing is briefly unavailable",
+        detail: "the server cannot count pair code attempts right now",
+      });
+    }
+
+    const now = Date.now();
+    const bucket = (key) => {
+      const raw = String(store.get(key) || "");
+      const bar = raw.indexOf("|");
+      const startedAt = bar > 0 ? parseInt(raw.slice(0, bar), 10) : 0;
+      const fails = bar > 0 ? parseInt(raw.slice(bar + 1), 10) : 0;
+      // A bucket that is missing, unparseable or older than the window starts
+      // again from now. Fixed window, not sliding: one read and one write per
+      // failed attempt, and a guesser cannot spend less by pacing himself.
+      if (!startedAt || isNaN(startedAt) || isNaN(fails) || now - startedAt >= WINDOW_MS) {
+        return { key: key, startedAt: now, fails: 0, rolled: true };
+      }
+      return { key: key, startedAt: startedAt, fails: fails, rolled: false };
+    };
+
+    let ip = "";
+    try { ip = String(e.realIP() || ""); } catch (_) {}
+    const mine = bucket(PREFIX + (ip || "unknown"));
+    const all = bucket(ALL_KEY);
+    if (mine.fails >= MAX_PER_IP || all.fails >= MAX_ALL) {
+      return e.json(429, {
+        error: "too many pair code attempts",
+        detail: "wait a few minutes, then read the current code off the extension popup",
+      });
+    }
+
+    let found = null;
+    try {
+      found = e.app.findFirstRecordByFilter(
+        collection, "pair_code = {:code}", { code: code });
+    } catch (_) {}
+    if (found && !found.getBool("paired")) return e.next();
+
+    // Two concurrent failures can read the same count and one increment is
+    // lost. That costs a guess, not the ceiling, and the alternative is a lock
+    // on the pairing path for a defence measured in tens.
+    const spend = (b) => {
+      try { store.set(b.key, String(b.startedAt) + "|" + (b.fails + 1)); } catch (_) {}
+    };
+    spend(mine);
+    spend(all);
+    // Stale per-IP buckets would otherwise sit in memory until the process
+    // restarts. Swept only when the all-callers window has just rolled over,
+    // so this walk happens at most once every ten minutes and never on the
+    // path somebody pairing takes.
+    if (all.rolled) {
+      try {
+        for (const k of Object.keys(store.getAll() || {})) {
+          if (k.indexOf(PREFIX) !== 0 || k === mine.key) continue;
+          if (bucket(k).rolled) store.remove(k);
+        }
+      } catch (_) {}
+    }
+    if (!found) return e.next();
+    return e.json(403, {
+      error: "that pair code is already paired",
+      detail: "read the current code off the extension popup",
+    });
+  };
+
   // A Chrome install authenticates as one hidden random credential and may
   // touch only its own agent row and its owner's jobs. It never receives the
   // server-wide service token.
   const agentId = e.request.header.get("X-Anticipy-Agent-ID") || "";
   const agentToken = e.request.header.get("X-Anticipy-Agent-Token") || "";
-  if (agentId && agentToken.length >= 40) {
+  if (agentId) {
+    // A CREDENTIAL THAT DOES NOT RESOLVE IS A REFUSAL, NOT A SHRUG.
+    //
+    // This branch was written as "can this credential do the narrow thing?"
+    // and never as "was this credential valid?", so an empty lookup fell out
+    // of `if (agent)` below and kept walking DOWN the ladder into the
+    // anonymous branches. A wrong token, a revoked credential, a deleted
+    // agent row and somebody guessing ids all reached the tokenless pairing
+    // bootstrap at the bottom of this file and were handed the anonymous
+    // surface: a FAILED authentication treated exactly like NO
+    // authentication. Silently, too, which is the shape recorded at
+    // HANDOFF.md:116-118 — an agent that looks alive while every real read
+    // comes back 403, and nothing anywhere saying which of the two it was.
+    //
+    // So sending `X-Anticipy-Agent-ID` at all now COMMITS the caller to that
+    // identity: it resolves, or the request ends here. Nothing changes for a
+    // caller that sends no agent headers at all — a fresh unpaired install
+    // holds no credential yet, and claiming one anonymously is the bootstrap's
+    // whole reason to exist.
     let agent = null;
-    try {
-      agent = e.app.findFirstRecordByFilter(
-        "agents", "agent_id = {:id} && agent_token = {:token}",
-        { id: agentId, token: agentToken });
-    } catch (_) {}
+    // A token shorter than 40 characters cannot match any row: that is the
+    // column's own minimum (pb_migrations/1700000026_agent_tokens.js:12). So
+    // an id arriving with a short or missing token is not a second policy,
+    // it is this same failed lookup with the query skipped.
+    if (agentToken.length >= 40) {
+      try {
+        agent = e.app.findFirstRecordByFilter(
+          "agents", "agent_id = {:id} && agent_token = {:token}",
+          { id: agentId, token: agentToken });
+      } catch (_) {}
+    }
     if (agent) {
       const ownerRef = agent.getString("owner_ref");
       if (path === agentsBase + "/" + agent.id && method === "PATCH") {
@@ -151,6 +323,14 @@ routerUse((e) => {
       }
       return e.json(403, { error: "agent is not allowed to access that record" });
     }
+    // A THROWN lookup and an EMPTY one are not the same event, and the code
+    // above deliberately does not tell them apart: the throw is an
+    // infrastructure failure, the empty result is a proven-bad credential.
+    // They get the same answer because "I cannot prove this caller is who
+    // they say" is a no either way, and a guard that fails open when the
+    // database hiccups is a guard you open by making the database hiccup.
+    console.log("guard: unrecognized agent credential from " + agentId);
+    return e.json(403, { error: "agent credential is not recognized" });
   }
 
   // ---- the front door ----
@@ -212,9 +392,15 @@ routerUse((e) => {
 
       // Pair-code lookup is deliberately pre-owner. The subsequent claim is
       // allowed only onto the signed-in account and only while still unpaired.
+      // Throttled like the tokenless one: signing up is open (the branch above
+      // lets anyone create an owners record), so an account is not a cost an
+      // enumerator would notice. Same anchors, same whole-filter match — the
+      // only change is that the six digits are captured so the counter can
+      // tell a pairing from a guess.
       if (!recordId && method === "GET" && (collection === "agents" || collection === "pendants")) {
         const filter = e.request.url.query().get("filter") || "";
-        if (/^\s*pair_code\s*=\s*"\d{6}"\s*$/.test(filter)) return e.next();
+        const pair = filter.match(/^\s*pair_code\s*=\s*"(\d{6})"\s*$/);
+        if (pair) return pairLookup(collection, pair[1]);
       }
       if (recordId && method === "PATCH" && (collection === "agents" || collection === "pendants")) {
         let rec = null;
@@ -275,7 +461,8 @@ routerUse((e) => {
     // future hole in the filter check cannot become a bulk export.
     const perPage = parseInt(e.request.url.query().get("perPage") || "30", 10);
     if (perPage > 50) return e.json(403, { error: "forbidden" });
-    if (/^\s*pair_code\s*=\s*"\d{6}"\s*$/.test(filter)) return e.next();
+    const pair = filter.match(/^\s*pair_code\s*=\s*"(\d{6})"\s*$/);
+    if (pair) return pairLookup(path === agentsBase ? "agents" : "pendants", pair[1]);
     // A fresh app install needs its own paired agent back to bootstrap its
     // token; the owner id is a high-entropy device identifier, so naming it
     // is itself proof of ownership. Anchored, and restricted to the shape an

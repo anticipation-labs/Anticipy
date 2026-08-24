@@ -616,9 +616,19 @@ struct HomeView: View {
                                         .padding(.bottom, Theme.Space.tight)
                                 }
                                 if let stale = session.staleExtensionVersion {
+                                    // These three fragments shipped fused: the version
+                                    // interpolation ran straight into the next sentence, so the
+                                    // banner read "press Reload to get 0.11.0until then it's
+                                    // working from old instructions." Nobody saw it for three
+                                    // minor versions because the version pin had rotted shut
+                                    // (AnticipyApp.swift:104) and a banner that can never fire
+                                    // can never be proofread by using the product -- fixing the
+                                    // pin on 2026-08-24 is what exposed it. Every fragment but
+                                    // the last must end in a space;
+                                    // tests/test_extension_version_pin.py holds that seam now.
                                     Text("Chrome is running the old extension (\(stale)). "
-                                         + "Open chrome://extensions and press Reload to get \(AnticipySession.expectedExtensionVersion)"
-                                         + "until then it's working from old instructions.")
+                                         + "Open chrome://extensions and press Reload to get \(AnticipySession.expectedExtensionVersion). "
+                                         + "Until then it's working from old instructions.")
                                         .font(.system(size: 15))
                                         .foregroundStyle(Theme.accent)
                                         .padding(.bottom, Theme.Space.tight)

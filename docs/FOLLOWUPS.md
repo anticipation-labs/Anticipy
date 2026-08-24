@@ -15,4 +15,43 @@
 5. Steady >=3-lines/180s ambience (a TV) can sustain the meeting latch;
    the armed-duration disarm log makes this measurable — read it after a
    few home evenings.
-6. Law 3: every one of these, when fixed, is fixed only when verified live.
+6. `agent_auth.pb.js:20-24` treats ANY exception from
+   `findFirstRecordByFilter` as "this code is free", so a transient DB
+   error can mint a duplicate pair code and the phone claims whichever
+   row comes back first — pairing to the wrong browser. Both honest
+   fixes (matching PocketBase's not-found error, or a unique-index
+   migration) are bigger than the throttle ticket that found it.
+7. The pair-code throttle keys on `e.realIP()`. Behind Railway with no
+   trusted proxy configured that is the connecting address, so every
+   caller shares one bucket: ten failed guesses from anyone delays all
+   pairing for ten minutes. Correct at one owner, a landmine at scale.
+   Configure the trusted proxy header, or key on something better, before
+   the second owner.
+8. LOCAL-FIRST is violated in shipped code. `TranscriberClient.swift:27-29`
+   streams raw pendant Opus to `wss://api.deepgram.com`, while
+   `design/LOCAL-FIRST.md` rule 1 says raw audio never leaves a device and
+   its own scoreboard asserts the pendant path is "law-abiding by design —
+   phone does ALL processing". Latent only because the firmware is
+   BUILT_AND_VERIFIED_NOT_FLASHED. The law-abiding replacement is already
+   written and unplugged (`LocalTranscriber.swift`, never instantiated,
+   whose header claims a Settings toggle that does not exist). Decide —
+   restore the law with a phone-side Opus decoder, or amend the law and
+   say so — BEFORE the pendant goes live, not after.
+9. `_GO_AHEAD_RE` (`brain/anticipy_core.py:1025-1028`), gating :1372, is a
+   regex deciding that the owner's words MEAN consent. That is meaning, in
+   code: a standing LAW 1 violation. The fix is LAW 5 — a model with
+   conversation context decides consent — never a wider regex.
+10. `brain/llm.py:263-266` returns `_gemini(...)` before the `aux` branch,
+   so with `GEMINI_API_KEY` set `ANTICIPY_AUX_MODEL` is unreachable AND the
+   grounding is prepended again, reversing the measured 5x prompt-cache
+   saving the comment directly above it describes. Dormant today (no Gemini
+   key configured) but it is a trap, and the comment claims an "explicit
+   CachedContent" mechanism that exists nowhere in `brain/`.
+11. The conversation link graph is built and dark: `LINKS_ON` defaults off
+   (`brain/worker.py:2445`) and `parent_line` has no reader. Phase 3 of
+   `design/NO-MORE-TIMERS.md` is already built as `proof/score_links.py`
+   (timer arm vs link arm over 244 real logged lines) and has never been
+   run. One live-key run decides whether to switch or delete. Do neither
+   blind.
+
+Law 3 binds every item above: each one is fixed only when verified live.

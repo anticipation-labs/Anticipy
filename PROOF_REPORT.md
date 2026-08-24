@@ -45,11 +45,23 @@ claims an owner-scoped job, acts in a real Chrome, and reports back.
   owner linked → pendant pushed a transcript event → app received it over the
   realtime stream in under a second. **PASS**
 
-### 4. Audio pipeline on REAL pendant data
-`proof: python app/core/audio_pipeline.py ~/audio_dump.bin ...`
-- Your actual 66-second BLE capture from the pendant: 6,629 frames reassembled,
-  Opus-decoded, **0 bad frames** → clean WAV. This is the exact code path the
-  phone app uses.
+### 4. Audio pipeline on REAL pendant data — CODE DELETED, RESULT IS PROVENANCE
+This section used to read `proof: python app/core/audio_pipeline.py
+~/audio_dump.bin ...`, and what it recorded stands: Omar's real 66-second BLE
+capture, 6,629 frames reassembled, Opus-decoded, **0 bad frames** → clean WAV.
+
+`app/core/audio_pipeline.py` was deleted 2026-08-24. Nothing imported it — not
+the app, not a gate, not a test — and by then its closing claim ("the exact
+code path the phone app uses") was simply false. The phone reassembles frames
+in `app/ios/Anticipy/BLE/OpusFrameAssembler.swift`, which is in the Xcode
+target, wired into `PendantManager`, and hammered at 10M packets by
+`sh app/ios/Tests/run_audio_stress.sh`. The Swift is also the
+stronger of the two: it checks BLE packet continuity, caps a frame at 4096
+bytes, and drops the in-flight frame across a reconnect, none of which the
+Python did — so keeping the Python around as a "reference" would have meant
+pointing at the weaker implementation. The command could not have been re-run
+here in any case: it needs `opuslib` and `soundfile`, and this repo carries no
+dependency manifest that installs either.
 
 ### 5. Chrome extension, loaded unpacked, acting in a real Chrome
 `proof: python proof/test_extension.py`

@@ -101,9 +101,17 @@ final class AnticipySession: ObservableObject {
     /// question itself rather than making him ask a person.
     @Published var staleExtensionVersion: String? = nil
 
-    /// The extension version this build of the app needs. Bumped with the
-    /// extension; a mismatch is a fact, not a guess.
-    static let expectedExtensionVersion = "0.8.3"
+    /// The extension version this build of the app needs. A mismatch is a
+    /// fact, not a guess — but the number is hand-maintained, and on
+    /// 2026-08-24 it was found still reading 0.8.3 while the extension had
+    /// shipped 0.11.0. Three minor versions of silent drift, because the
+    /// failure mode here is silence: staleExtension() speaks only when Chrome
+    /// is BEHIND this literal, so a pin left in the past cannot fire at all,
+    /// and a whole fleet on 0.9.x looks identical to a fleet that is current.
+    /// tests/test_extension_version_pin.py now reads extension/manifest.json,
+    /// this literal, and the mirror in Tests/StaleExtensionTests.swift, and
+    /// goes red when any of the three disagree. Bump all three together.
+    static let expectedExtensionVersion = "0.11.0"
 
     /// The extension reports itself as "Chrome/128.0.0.0 ext/0.8.2" in the
     /// agent record's browser field. Returns what Chrome is running when it

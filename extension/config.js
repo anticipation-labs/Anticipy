@@ -30,6 +30,10 @@ let inFlight = null;
 // would silently revert an override the owner just set.
 let generation = 0;
 let listening = false;
+// A read that FAILED is not an answer, and the fallback it forces has to be
+// audible. Said once per worker: after any successful read `resolved` is true
+// and the failure path below is unreachable for the rest of this worker's life.
+let warnedFailedRead = false;
 
 // `chrome` is genuinely absent in situations that matter, and none of them is a
 // bug: the offline suites import parts of this module graph before installing
@@ -57,6 +61,36 @@ function watchOverride(store) {
   });
 }
 
+// Both shapes of "storage did not answer" land here: a read that rejects, and
+// a `get` that throws straight back at the caller instead of returning a
+// promise (an invalidated worker context does exactly that). Neither is an
+// ANSWER, so neither may be cached as one — `resolved` stays false and the
+// next call retries.
+function failedRead(e) {
+  // An override, once observed, is never reverted by a later failed read:
+  // `resolved` is true from then on and backendBase() returns at its first line
+  // without reading again. Written out rather than left implicit because that
+  // guarantee currently rests entirely on that early return, and a silent
+  // revert to production is the one failure in this file nobody notices until
+  // it turns up in a real job row.
+  if (resolved) return cached;
+  // The evidence that this hazard is real and not theoretical:
+  // proof/chrome_arm.mjs cannot launch a test browser at all without
+  // `--host-resolver-rules=MAP <production host> ~NOTFOUND`, because a fresh
+  // profile POSTs /agent/register from onInstalled before any script can write
+  // chrome.storage. Production is still the correct answer for a real install
+  // with nothing configured, so it stays the answer here — but a dev whose
+  // override vanished into a failed read finds out in the worker console
+  // instead of in a production job row.
+  if (!warnedFailedRead) {
+    warnedFailedRead = true;
+    console.warn("Anticipy: could not read backendUrl from storage "
+      + `(${String(e).slice(0, 160)}) - falling back to ${DEFAULT_BASE}. `
+      + "any dev override is NOT in effect until a read succeeds");
+  }
+  return DEFAULT_BASE;
+}
+
 export async function backendBase() {
   if (resolved) return cached;
   const store = storageArea();
@@ -66,25 +100,40 @@ export async function backendBase() {
   watchOverride(store);
   if (!inFlight) {
     const gen = generation;
-    inFlight = store.local.get("backendUrl")
-      .then(({ backendUrl }) => {
-        if (gen !== generation) return cached;
-        cached = strip(backendUrl) || DEFAULT_BASE;
-        resolved = true;
-        return cached;
-      })
-      // Storage unreachable is not a reason to fail a job: keep what we have and
-      // leave the cache UNRESOLVED so the next call retries.
-      .catch(() => cached)
-      .finally(() => { inFlight = null; });
+    // `get` is called synchronously, inside the try rather than behind a
+    // then(): the snapshot a read commits has to be the one taken when the
+    // read STARTED, which is what makes the generation check above meaningful.
+    try {
+      inFlight = store.local.get("backendUrl")
+        .then(({ backendUrl }) => {
+          if (gen !== generation) return cached;
+          cached = strip(backendUrl) || DEFAULT_BASE;
+          resolved = true;
+          return cached;
+        })
+        // Storage unreachable is not a reason to fail a job: keep serving a
+        // usable URL rather than throwing at every call site that builds a
+        // request out of one.
+        .catch(failedRead)
+        .finally(() => { inFlight = null; });
+    } catch (e) {
+      return failedRead(e);
+    }
   }
   return inFlight;
 }
 
 // For the few places that cannot await — a synchronous log line, a template
-// built inside a non-async callback. Best-effort by definition: it returns the
-// last resolved value, or production before the first read lands. Never use it
-// to build a request that a dev override must reach.
+// built inside a non-async callback. Best-effort by construction, and the
+// contract is exactly this: before the first read lands it returns
+// DEFAULT_BASE, i.e. PRODUCTION, and it cannot tell a caller that that is what
+// happened. It is safe for a log line and unsafe for a request, so a caller
+// that must honour a dev override has to await backendBase() instead — the
+// warm read at the bottom of this file makes that await cheap after boot.
+// Nothing in the extension calls this today (background.js, agent_loop.js,
+// popup.js and onboarding.js all await backendBase()); it exists for the
+// non-async callback case, and a new caller should read the two sentences
+// above before becoming the first one.
 export function backendBaseSync() {
   return cached;
 }

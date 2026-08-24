@@ -177,6 +177,39 @@ guarantee on the evidence of one occurrence in 306 runs, and it needs its own
 validation run rather than a confident patch. **This is the one thing worth your
 decision.**
 
+**CORRECTION, 2026-08-24 — this was fixed, and the paragraph above called the
+shot.** The repair landed in `cf4b5e3f` as `submissionDigest`
+(`extension/agent_loop.js:2920`), and it is a digest of the form's *values*
+exactly as predicted: `["submission", page, form action, sorted field
+values]`. It is deliberately not `url + formAction`, for the reason given
+above, and the comment block at `:2886-2918` records that reason where the
+next reader will hit it. Both gates consult it — the click path at `:5181`
+and `:5196`, the Enter path at `:5420` and `:5434` — and both add the key
+they sent to the SAME `performedExternalEffects` set (`:3905`, written at
+`:5282` and `:5507`), which is the thing the two per-control signatures could
+never do. A form owning no editable field abstains rather than collapsing to
+page+action, so step 3 of the permit wizard is still governed by the absolute
+per-control block.
+
+What was still missing until today was the gate leg. The end-to-end suite
+`extension/tests/test_commit_once.mjs` drives both halves through
+`runAgentGoal`; the key itself was unpinned, so an edit to `submissionDigest`
+could pass the battery. `extension/tests/test_one_submission_two_keys.mjs`
+now pins it: the two gate shapes from `book-party-six` produce one key, the
+three-step wizard produces three, an abstention returns `""` and is never
+read as a match, and digits stay in the digest while `stableControlLabel`
+keeps stripping them. Proved to bite — collapsing the digest to page plus
+form action turns the wizard case red in both suites.
+
+Still owed, per LAW 3: none of this has been re-measured live. The `form`
+family number above (43.6%) predates both fixes and the next battery run is
+what replaces it. One shape is also unverified either way — a submit button
+associated to its form by the `form="…"` attribute while sitting outside it
+reports the same form action to both gates but resolves a different field
+scope in `controlContext` (`:2832-2844`), which would give the two paths two
+keys again. It is written down at case 7 of the new suite; it needs a live
+page to confirm or dismiss, not a patch.
+
 ---
 
 ## 4. Extension — 7,510 assertions, five identical passes
@@ -253,8 +286,12 @@ machine.** Neither is CPU-bound alone; together they are.
 
 ## 7. Open
 
-1. **The double booking.** Diagnosed to the line, fix deliberately not applied
-   — see §3. Needs your call.
+1. **The double booking.** Fixed in `cf4b5e3f` as a value digest shared by both
+   commit gates, and pinned by `extension/tests/test_one_submission_two_keys.mjs`
+   — see the 2026-08-24 correction in §3. What is still open is the LIVE leg:
+   the fix has never been measured against a battery run, and one form shape
+   (a submit button bound to its form by `form="…"` from outside it) is
+   unverified in either direction.
 2. **`form` at 43.6%.** Consistent across 39 runs; the permit flow hands back
    instead of committing. Worth its own session.
 3. **`thinking_aloud` at 27% settled failure.** The one remaining register-level

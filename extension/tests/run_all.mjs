@@ -57,6 +57,10 @@ const suites = [
   "test_owner_profile_needs_owner.mjs",
   "test_account_delete_flow.mjs",
   "test_hook_scope_trap.mjs",
+  "test_guard_agent_credential.mjs",
+  "test_config_backend_base.mjs",
+  "test_one_submission_two_keys.mjs",
+  "test_pair_code_throttle.mjs",
 ];
 // A suite listed TWICE runs twice and inflates the number in the pass line —
 // and that number is exactly what a person reads to decide whether coverage

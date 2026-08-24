@@ -14,7 +14,6 @@
 		1C9C98C649D0B723997B9A85 /* TranscriptFlushPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */; };
 		400041E5EB5F764473B76A1E /* ContextAskSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D918825F71DB13464C228B73 /* ContextAskSheet.swift */; };
 		4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00793646933CBDFE4070BF5 /* PendantManager.swift */; };
-		45D9F3C3D9B3BAEDDED3DC28 /* BrainClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E82F42600D1770EAC8F97FD /* BrainClient.swift */; };
 		4F03FCC48BC0DC5F44A9B300 /* OpusFrameAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2EB04173AB9206E285D54 /* OpusFrameAssembler.swift */; };
 		50977946CB5AA8BC1A644622 /* Interview.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB2A40B487A55305B6FC7A2 /* Interview.swift */; };
 		559F9FEC6235905176009C57 /* VoiceEnrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */; };
@@ -71,7 +70,6 @@
 		4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassControls.swift; sourceTree = "<group>"; };
 		57259004332BAAB061719DF1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */ = {isa = PBXFileReference; path = "speaker-embedding.onnx"; sourceTree = "<group>"; };
-		5E82F42600D1770EAC8F97FD /* BrainClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainClient.swift; sourceTree = "<group>"; };
 		70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyApp.swift; sourceTree = "<group>"; };
 		714D2B06ED11248D1924DC9A /* SupervisedReadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupervisedReadView.swift; sourceTree = "<group>"; };
 		7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFinale.swift; sourceTree = "<group>"; };
@@ -137,7 +135,6 @@
 				39BEFC6359012480717E6A18 /* Audio */,
 				2C9A6E1AEB59FB1A3CB72A4D /* Backend */,
 				150AFB746FC5EE0BA3326D77 /* BLE */,
-				C36BD2C310F472780C59B1BF /* Brain */,
 				063094A8D9088415CCE84AA3 /* Resources */,
 				4C31658F3AFE696FA8FAB8EA /* Views */,
 			);
@@ -215,14 +212,6 @@
 				008EC9F3B3E9368F8EBD22BF /* Anticipy.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		C36BD2C310F472780C59B1BF /* Brain */ = {
-			isa = PBXGroup;
-			children = (
-				5E82F42600D1770EAC8F97FD /* BrainClient.swift */,
-			);
-			path = Brain;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -310,7 +299,6 @@
 				087F60BA4678D677DDBC3474 /* AppTheme.swift in Sources */,
 				FF9C51D6755044E050520ADE /* AuthView.swift in Sources */,
 				6620D110891CC9F096396E66 /* BoundedOpusQueue.swift in Sources */,
-				45D9F3C3D9B3BAEDDED3DC28 /* BrainClient.swift in Sources */,
 				8E57577FB951B85FBF9F584F /* CaptureSourcePolicy.swift in Sources */,
 				993491F4C18D27922491739D /* ContentView.swift in Sources */,
 				400041E5EB5F764473B76A1E /* ContextAskSheet.swift in Sources */,

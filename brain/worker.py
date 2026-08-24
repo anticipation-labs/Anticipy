@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
 
+import httpx
 import requests
 
 from . import pb
@@ -2702,6 +2703,137 @@ def release_stranded_claims(owner_ref: str = "", older_than_minutes: int = 10) -
     return freed
 
 
+# ---- WHEN SHE CANNOT HEAR, THE WORDS MUST WAIT — NOT DIE.
+#
+# The transcript loop used to answer every exception the same way: stamp the
+# event "error" and move on. fetch_unprocessed only ever selects decision="",
+# so that stamp is a TOMBSTONE — the line is never retried, and nothing
+# anywhere says so. A model outage therefore ate spoken lines permanently:
+# OpenRouter answers 402 the moment the credit runs out, brain/llm.py calls
+# raise_for_status with no retry and no fallback, Brain.triage only catches a
+# JSON parse error, so the HTTP error lands here — once per line, for as long
+# as the balance is zero. An hour of a person's day, gone, with a log line on
+# Railway as the only trace.
+#
+# The recovery mechanism already existed and was being thrown away.
+# release_stranded_claims (above) hands back anything left at "processing",
+# because a restart mid-understanding used to strand a line forever. An
+# outage is the SAME CLASS of event as a restart: nothing is wrong with the
+# words, the machine that understands them was briefly absent. So an
+# unreachable model no longer stamps anything. The claim stands, the sweep
+# returns the line ten minutes later, and it is heard when the model is back.
+#
+# The distinction is by exception TYPE, which is structure — transport, not
+# meaning (HARNESS-LAWS.md LAW 1). It deliberately does NOT read the message
+# text: "is this error retryable" answered by string matching on a provider's
+# prose is exactly the pattern-match this repo has spent three months
+# removing.
+#
+# Everything NOT on this list keeps the tombstone, and must. A KeyError in
+# our own parsing is deterministic: the same words through the same code fail
+# identically forever, so leaving it claimed would retry it every ten minutes
+# for the life of the account and hold the head of the queue while it did.
+_UNREACHABLE = (
+    requests.exceptions.RequestException,   # PocketBase and Twilio (requests)
+    httpx.HTTPError,                        # the model (httpx): status, timeout, transport
+    ConnectionError,
+    TimeoutError,
+    OSError,                                # DNS, socket, and the rest of the plumbing
+)
+
+
+def unreachable_model(exc: BaseException) -> bool:
+    """Was this a machine we could not reach, rather than a defect in us?"""
+    return isinstance(exc, _UNREACHABLE)
+
+
+# How many spoken lines in a row may vanish into an outage before he is told.
+# One failure is a blip and telling him about it is its own kind of noise;
+# three in a row is a state he needs to know he is in, because the product's
+# whole promise is that talking is enough.
+DEAF_STREAK_BEFORE_TELLING = 3
+DEAF_STREAK = 0
+# The dedupe key for the notice. A goal, not a sentence, because that is what
+# already_raised keys on — and a fixed one, because "the model is down" is one
+# condition however many lines it swallows.
+DEAF_GOAL = "cannot reach the model"
+
+
+def note_heard(ok: bool) -> None:
+    """One line's worth of evidence about whether she can hear at all."""
+    global DEAF_STREAK
+    DEAF_STREAK = 0 if ok else DEAF_STREAK + 1
+
+
+def record_failure(event_id: str, line: str, exc: BaseException) -> str:
+    """One heard line failed. Does it wait, or does it die?
+
+    Extracted from main()'s loop for the same reason handle_inbound was:
+    anything that drives this function is testing what production runs. The
+    decision inline was untestable, and a guard nobody can drive is a guard
+    that gets gutted by the next edit with every source-level assertion still
+    passing.
+
+    Returns "held" or "error", which is also what the log says.
+    """
+    if unreachable_model(exc):
+        # Stamp NOTHING. The claim stands, release_stranded_claims hands the
+        # line back in ten minutes, and she hears it when the model returns.
+        # Marking it here is what made an outage permanent.
+        note_heard(False)
+        print(f"heard: {line!r} -> could not reach the model ({exc}) "
+              f"— holding the line for a retry")
+        return "held"
+    mark_processed(event_id, "error")
+    print(f"heard: {line!r} -> error: {exc}")
+    return "error"
+
+
+def report_deafness(anticipy) -> None:
+    """Say so when the words are being kept rather than understood.
+
+    Not composed. Every other notice in this file asks _voice() for the
+    sentence and keeps a fixed string as the fallback — but the one condition
+    this reports is the model being unreachable, so the compose is a request
+    we already know fails, and paying for it would be the can_reach_owner bug
+    with a new name. Twilio is a different vendor and stays up when the model
+    does not, so the text still goes out.
+
+    Deduped the way report_stalled_work is: the durable record first, so a
+    redeploy mid-outage does not re-announce it, and the process-local key as
+    well, so a PocketBase write outage cannot make every pass believe nothing
+    was said. The dedupe key is a fixed GOAL string, not the sentence:
+    already_raised falls back to comparing message text when the goal is
+    empty, and _content_words("") is empty, so an empty goal would make the
+    durable half silently never fire. Its 24h default is deliberate here — an
+    outage lasting longer than a day earns one more mention, not silence.
+
+    There is no all-clear message: the lines she kept are heard when the sweep
+    returns them, and acting on them IS the all-clear. A second text saying
+    "I'm back" would be her talking about herself.
+    """
+    try:
+        if DEAF_STREAK < DEAF_STREAK_BEFORE_TELLING:
+            return
+        if not can_reach_owner(anticipy):
+            return
+        if already_raised(DEAF_GOAL, decision="deaf"):
+            return
+        if sent_moments_ago("deaf"):
+            return
+        said = ("something's wrong on my end and i'm not understanding what "
+                "you say right now. i'm keeping every line and i'll catch up "
+                "the moment it's back.")
+        if not anticipy.notify_owner(said):
+            print("deafness notice: send failed, not recording it")
+            return
+        mark_sent("deaf")
+        post_event("anticipy_says", said, decision="deaf", goal=DEAF_GOAL)
+        print(f"deaf: {DEAF_STREAK} lines held, told him")
+    except Exception as e:
+        print(f"deafness report failed: {e}")
+
+
 def ask_about_stuck_jobs(anticipy, convo) -> None:
     """Text the owner about anything the browser handed back, once each.
 
@@ -3198,9 +3330,9 @@ def main() -> None:
                                         may_say=SPEAK_ONCE,
                                         explicit=bool(ev.get("explicit")))
                 except Exception as e:
-                    mark_processed(ev["id"], "error")
-                    print(f"heard: {line!r} -> error: {e}")
+                    record_failure(ev["id"], line, e)
                     continue
+                note_heard(True)
                 # Store the link. A self-link (points at its own id) is the
                 # "starts something new" answer, and it is written down just
                 # as explicitly as a continuation — the difference between
@@ -3289,6 +3421,11 @@ def main() -> None:
             # And when nothing can run at all, say that too rather than
             # leaving a task queued behind a browser that is not open.
             report_stalled_work(anticipy)
+
+            # And when she cannot understand the words at all, say THAT — the
+            # lines are being kept, not lost, and he is owed the difference
+            # between "she's quiet" and "she can't hear me".
+            report_deafness(anticipy)
 
             # Nightly, while he sleeps: distill the day's episodes into
             # profile facts (roadmap §1). Incremental and idempotent — a
