@@ -703,13 +703,20 @@ final class PhoneListener: NSObject, ObservableObject {
             //
             // A parting tail that followed a cut immediately really does carry
             // on from it; one spoken after a long silence does not, so it is
-            // judged by the same rule as every other line. Then the mark is
-            // closed, because nothing follows this one.
+            // judged by the same rule as every other line.
             onLine?(tail, Date(),
                     flushPolicy.cutContinues(cutAt: cutAt,
                                              wordsAppearedAt: pendingSince ?? Date()))
-            cutAt = nil
         }
+        // Outside the branch on purpose: nothing follows this session whether a
+        // tail went out or not, and the state a ceiling flush leaves behind is
+        // exactly an EMPTY tail — it took every pending word. Toggling Listen
+        // off in that window and straight back on used to carry the mark into
+        // the new session, and the new session's first line went out naming the
+        // old session's last line as the sentence it carried on from. A
+        // recognition task deliberately does not clear this (speech crosses a
+        // swap seam); a session ending is the one boundary nothing crosses.
+        cutAt = nil
         task?.finish()
         request = nil
         task = nil

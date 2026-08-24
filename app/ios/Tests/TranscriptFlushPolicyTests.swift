@@ -218,16 +218,18 @@ struct TranscriptFlushPolicyTests {
         check("a hair inside the gap still continues",
               policy.cutContinues(cutAt: p0,
                                   wordsAppearedAt: p0.addingTimeInterval(policy.utteranceGap - 0.01)))
-        // The edge this rule must NOT destroy. A monologue cut at the ceiling
-        // is cut again a whole maxHold later, so the second fragment is
-        // delivered 8s after the first. Judged on when its words APPEARED it
-        // still continues; judged on when it was delivered, every true edge in
-        // a monologue would be thrown away.
-        check("a monologue's next ceiling is still a continuation",
-              policy.cutContinues(cutAt: p0,
-                                  wordsAppearedAt: p0.addingTimeInterval(0.2))
-              && p0.addingTimeInterval(policy.maxHold + 0.2)
-                  .timeIntervalSince(p0) > policy.utteranceGap)
+        // The edge this rule must NOT destroy, and the reason the caller has to
+        // pass the right instant. A monologue cut at the ceiling is cut again a
+        // whole maxHold later, so the second fragment's words APPEAR a moment
+        // after the cut but are DELIVERED eight seconds after it. Those two
+        // instants give opposite answers here, which is the point: judged on
+        // appearance the fragment continues the cut, judged on delivery every
+        // true edge in a monologue is thrown away. The check asks both.
+        let wordsAppeared = p0.addingTimeInterval(0.2)
+        let wordsDelivered = wordsAppeared.addingTimeInterval(policy.maxHold)
+        check("a fragment is judged on when its words appeared, not when it went out",
+              policy.cutContinues(cutAt: p0, wordsAppearedAt: wordsAppeared)
+              && !policy.cutContinues(cutAt: p0, wordsAppearedAt: wordsDelivered))
 
         // ------------------------------------------------------------------ result
         print("")

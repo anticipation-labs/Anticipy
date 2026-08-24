@@ -67,6 +67,17 @@ if ! awk '/func startForEnrollment/,/^    }/' "$listener" | grep -q 'cutAt = nil
     echo "to whatever the clock interrupted before the sample began."
     exit 2
 fi
+# ...and a session ending closes the mark whether or not a tail went out. The
+# state a ceiling flush leaves behind is an EMPTY tail — it took every pending
+# word — so a clear that lives inside the `if !tail.isEmpty` branch is exactly
+# the one that never runs when it matters. The indent is part of the pattern:
+# nested one level deeper is back inside that branch.
+if ! awk '/func stop\(\)/,/^    }/' "$listener" | grep -q '^        cutAt = nil$'; then
+    echo "stop() no longer closes an open mid-sentence cut on every path."
+    echo "Toggle Listen off just after a ceiling flush and back on, and the new"
+    echo "session's first line goes out naming the old session's last line."
+    exit 2
+fi
 if ! grep -q 'cursor.observe' "$listener"; then
     echo "PhoneListener never shows the cursor every hypothesis."
     echo "Without observe(), a discarded decode window takes its words with it."
