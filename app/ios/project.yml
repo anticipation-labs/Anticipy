@@ -3,6 +3,14 @@ options:
   bundleIdPrefix: ai.anticipy
   deploymentTarget:
     iOS: "16.0"
+# Pinned by REVISION, not tag or version: no sherpa-onnx tag contains
+# Package.swift, so a from/exactVersion pin cannot resolve at all. The hash
+# matches swiftpm/Package.resolved, which already carried this pin while the
+# target linked nothing.
+packages:
+  SherpaOnnx:
+    url: https://github.com/k2-fsa/sherpa-onnx
+    revision: 00ad9a19a63751a6c4b12050a00eacfeb204814e
 settings:
   base:
     MARKETING_VERSION: "1.1.0"
@@ -99,7 +107,17 @@ settings:
     # leading item looked right for exactly the reason this one looked wrong: it
     # brings no surface of its own. GlassyIconStyle stays where a glyph has to
     # supply its own affordance, like the send arrow on the compose line.
-    CURRENT_PROJECT_VERSION: "75"
+    #
+    # 76: the speaker engine is actually linked, and the recognizer knows its
+    # own name. SpeakerTagger.swift, VoiceEnrollView.swift and a 25MB
+    # embedding model have shipped in every build while the target's
+    # packageProductDependencies was an EMPTY LIST - the code that runs them
+    # could never load, so speaker stayed blank on every event. And both
+    # recognition request sites now hand SFSpeechRecognizer contextualStrings
+    # (AnticipyVocabulary.swift): the shipped model heard "anticipy growth
+    # ... dot com" as "anticipate growth there's something.com" and she
+    # offered to buy the misspelling of her own product.
+    CURRENT_PROJECT_VERSION: "76"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -137,6 +155,9 @@ targets:
     platform: iOS
     sources:
       - Anticipy
+    dependencies:
+      - package: SherpaOnnx
+        product: sherpa-onnx
     info:
       path: Anticipy/Info.plist
       properties:

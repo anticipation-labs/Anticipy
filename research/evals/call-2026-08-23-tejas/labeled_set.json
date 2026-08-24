@@ -1,0 +1,282 @@
+{
+  "_readme": [
+    "Labeled utterance-level triage set: the judge's regression test.",
+    "Sources: (a) REAL lines from the 2026-08-23 Tejas call with CORRECTED",
+    "labels per ground_truth.md — the live system got 5 of its 6 acts wrong;",
+    "(b) HELD-OUT entries from brain/EXEMPLARS.md.",
+    "",
+    "LAW (do not break): every row with source='exemplars-held-out' must NEVER",
+    "be included in any teaching prompt (TRIAGE_SYSTEM examples). We do not",
+    "test on what we teach. When wiring EXEMPLARS.md into the prompt, exclude",
+    "exactly the entries named in held_out_exemplars below.",
+    "",
+    "Labels: ignore | ask | act | answer.",
+    "in_two_way_call=true rows carry the posture context: the owner is in a",
+    "live two-way conversation, so acts queue for the post-call digest.",
+    "'digest_worthy' marks lines that are correctly IGNORED in the moment but",
+    "must surface in the post-call digest (commitments, purchases mused).",
+    "'also_ok' lists acceptable alternate labels (score as correct).",
+    "For label=act, goal_must_contain are case-insensitive substrings the",
+    "emitted goal must carry; goal_must_not_contain are forbidden inventions.",
+    "Scoring: a row passes when predicted label == label or in also_ok, AND",
+    "goal constraints hold. Report per-label accuracy, never just the mean —",
+    "this set is deliberately balanced so silence cannot max the score."
+  ],
+  "held_out_exemplars": [
+    "I keep forgetting to book the car in",
+    "my back is killing me",
+    "Sarah's going to sort the venue",
+    "make it eight instead",
+    "how late is that place open",
+    "when's my sister's birthday?",
+    "yeah let's do it (9am roof line, 3pm now)",
+    "...and then just send it over when you get a sec",
+    "delete that whole folder, it's junk",
+    "vale, el jueves"
+  ],
+  "rows": [
+    {
+      "id": "tejas-domain",
+      "source": "tejas-call", "record_id": "n0rbnwraeaay8st", "in_two_way_call": true,
+      "text": "you know any any updates you want to push to the website I'll buy a domain like anticipate growth there's something.com right",
+      "around": ["Of course what would you want I could just give you an anticipate AI email probably", "And then you can run anything you want on that domain and then I'll give you access to the LinkedIn and Instagram and stuff"],
+      "label": "ignore", "digest_worthy": true,
+      "live_mistake": "acted: 'Research and purchase domain name anticipate.com'",
+      "why": "Owner musing a purchase mid-negotiation, and the domain name is audibly garbled ('anticipate growth there's something.com'). Nothing buys anything from a garble; the digest may raise it as 'you mentioned buying a growth domain — which name?'",
+      "trap": "Purchase verb + '.com' reads as a clean act. The garble and the live conversation are the signal."
+    },
+    {
+      "id": "tejas-him",
+      "source": "tejas-call", "record_id": "pllusvpe70dnjgt", "in_two_way_call": true,
+      "text": "Genuinely not sure yet could be literally they come they've came in last like 12 hours or so we open up the fellowship I think last night we haven't posted it anywhere like too big yet right so I just have to see I have to ask him to ask him how all went he was kind of handling about that",
+      "around": ["(the other speaker asked how many fellowship applicants there are)"],
+      "label": "ignore", "digest_worthy": false,
+      "live_mistake": "acted: 'confirm who him refers to' — texted the owner a question mid-call",
+      "why": "The owner is narrating to the other person. 'I have to ask him' is his own errand-shaped aside inside an answer, not an instruction; interrupting the call to resolve a pronoun is spam.",
+      "trap": "'I have to ask him' is the classic task shape. Addressee is the other human, not the assistant."
+    },
+    {
+      "id": "tejas-tuesday",
+      "source": "tejas-call", "record_id": "gfhhm5iz1tddvlf", "in_two_way_call": true,
+      "text": "If you're down I would set up a call for like Tuesday",
+      "around": ["What do you wanna do Tuesday or Monday", "(both parties converging on a start date)"],
+      "label": "act", "timing": "after_call_digest",
+      "goal_must_contain": ["Tuesday", "call"],
+      "goal_must_not_contain": ["Monday", "Evans"],
+      "live_mistake": null,
+      "why": "The one defensible act of the live call: a real mutual plan sealing. It queues for the digest rather than firing mid-call.",
+      "trap": "Suppressing it entirely because 'in a call'. The posture defers delivery; it does not delete the plan."
+    },
+    {
+      "id": "tejas-cst",
+      "source": "tejas-call", "record_id": "u6taboi93y80ag7", "in_two_way_call": true,
+      "text": "5 PM CST is what PST",
+      "around": ["After five CST", "CSTCST what is CST like I don't know what is it in relation with PS"],
+      "label": "answer",
+      "answer_must_contain": ["3"],
+      "live_mistake": "web-researched a converter page (answer contained only a 6 AM example) AND held 'the 5 PM CST conversion to PST' for approval",
+      "why": "A question said out loud with one computable answer: 3 PM. Compute it, say the number. Zero effect on the world, so nothing to hold.",
+      "trap": "Two opposite failures, both observed live: researching instead of computing, and gating arithmetic as if it were a purchase."
+    },
+    {
+      "id": "tejas-email",
+      "source": "tejas-call", "record_id": "g3nmubhin5wn5p3", "in_two_way_call": true,
+      "text": "What was your email again",
+      "around": ["I will email you properly", "(the other speaker then pasted his email into the meeting chat)"],
+      "label": "ignore",
+      "live_mistake": "acted: retrieved OMAR'S OWN email and asked him to confirm sending it",
+      "why": "A question aimed at the person on the call, asking for THAT person's email. Without speaker attribution she answered it as if the owner were asking about himself.",
+      "trap": "Question shape triggers retrieval. Look at who it is aimed at — 'your' belongs to the other voice."
+    },
+    {
+      "id": "tejas-515",
+      "source": "tejas-call", "record_id": "nbeb6oze5bmyrge", "in_two_way_call": true,
+      "text": "At 5:15",
+      "around": ["It's finished at, uh, 5:15. No, I mean 5:30. (the other speaker, about his own meeting)"],
+      "label": "ignore",
+      "live_mistake": "acted: 'Schedule meeting for Monday, August 24, 2026 at 5:15 PM PDT' — goal text invented 'Dr. Evans', a person no one mentioned",
+      "why": "A two-word shard of the OTHER speaker describing his own schedule — and he corrected it to 5:30 in the same breath. There is no owner plan here at all.",
+      "trap": "The worst live failure: a shard plus a name-inventing model minted a meeting with a nonexistent person. No fragment this thin can carry an act."
+    },
+    {
+      "id": "tejas-after-five",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "After five CST",
+      "around": ["What do you wanna do Tuesday or Monday"],
+      "label": "ignore",
+      "why": "Scheduling negotiation in flight between two people; a shard with no owner commitment yet.",
+      "trap": "Time expressions look actionable. The plan had not sealed — 'let's do 6' came minutes later."
+    },
+    {
+      "id": "tejas-cst-confused",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "CSTCST what is CST like I don't know what is it in relation with PS",
+      "around": ["After five CST"],
+      "label": "answer", "also_ok": ["ignore"],
+      "answer_must_contain": ["Central"],
+      "why": "The owner is audibly confused about a fact with a one-line answer (CST is Central, 2 hours ahead of Pacific). Answering is kind; staying quiet is acceptable since he re-asked crisply seconds later.",
+      "trap": "Garbled phrasing reads as noise. The confusion itself is the request."
+    },
+    {
+      "id": "tejas-nj",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "New Jersey",
+      "around": ["(mid-story about the other company's founders)"],
+      "label": "ignore",
+      "why": "A shard of someone else's story ('New Jersey' was itself a mishearing).",
+      "trap": "None — this is the easy case, present so the set has honest floor rows."
+    },
+    {
+      "id": "tejas-greeting",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "Hi how are you sorry I'm late",
+      "around": [],
+      "label": "ignore",
+      "why": "A greeting.",
+      "trap": "None — floor row."
+    },
+    {
+      "id": "tejas-anticipy-email",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "Of course what would you want I could just give you an anti anticipate an anticipate AI email probably and then I would basically like",
+      "around": ["(the other speaker asked about getting company access)"],
+      "label": "ignore", "digest_worthy": true,
+      "why": "The owner just promised the other person an @anticipy.ai email address. Mid-call: nothing. Post-call digest: 'you told Tejas you'd set him up an anticipy.ai email' — a commitment he made to someone else is still his commitment.",
+      "trap": "Reads as chatter because it is conversational. The promise inside it is real and will be forgotten by everyone except her."
+    },
+    {
+      "id": "tejas-monday-or-tuesday",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "What do you wanna do Tuesday or Monday",
+      "around": ["Yeah for sure and then like basically I'm hoping we can do like Monday as we start Tuesday to Tuesday"],
+      "label": "ignore",
+      "why": "An open question from one human to the other; the plan is still liquid.",
+      "trap": "Contains two day names. Negotiation is not agreement."
+    },
+    {
+      "id": "tejas-meta",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "Anticipate just told me that's 5 PM CST to PST time",
+      "around": ["5 PM CST is what PST"],
+      "label": "ignore",
+      "why": "The owner narrating the assistant's own previous output to the other person. Acting on it would be the system feeding on itself.",
+      "trap": "Contains a time and the product's (misheard) name. Self-referential lines are never new work."
+    },
+    {
+      "id": "tejas-email-properly",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "I will email you properly",
+      "around": ["Then I'll go talk to my email and ask all those questions I might bring"],
+      "label": "ignore", "digest_worthy": true,
+      "why": "A commitment the owner made ('I will email you'). In the moment: nothing. In the digest: it is exactly the kind of owed thing the product exists for.",
+      "trap": "Too short and casual to look like a promise. It is one."
+    },
+    {
+      "id": "tejas-shard-educated",
+      "source": "tejas-call", "in_two_way_call": true,
+      "text": "Educated",
+      "around": [],
+      "label": "ignore",
+      "why": "One-word shard.",
+      "trap": "None — floor row."
+    },
+    {
+      "id": "ex-car",
+      "source": "exemplars-held-out",
+      "text": "I keep forgetting to book the car in",
+      "around": [], "memory": [],
+      "label": "ask",
+      "ask_about": "which garage",
+      "why": "Real task, one blocking unknown: which garage or when.",
+      "trap": "Acting means inventing a garage; ignoring drops a real task. The middle answer exists for exactly this."
+    },
+    {
+      "id": "ex-back",
+      "source": "exemplars-held-out",
+      "text": "my back is killing me",
+      "around": [], "memory": [],
+      "label": "ignore",
+      "why": "A complaint about a state, not an intention.",
+      "trap": "Cheap models book physiotherapy. No plan, no anchor, no verb of intent."
+    },
+    {
+      "id": "ex-sarah",
+      "source": "exemplars-held-out",
+      "text": "Sarah's going to sort the venue",
+      "around": [], "memory": [],
+      "label": "ignore",
+      "why": "Somebody else's commitment. Remember it; don't act on it.",
+      "trap": "Concrete, real, near-term — and not his."
+    },
+    {
+      "id": "ex-eight",
+      "source": "exemplars-held-out",
+      "text": "make it eight instead",
+      "around": ["dinner Thursday at 7pm already agreed"], "memory": [],
+      "label": "act",
+      "goal_must_contain": ["Thursday", "8"],
+      "goal_must_not_contain": ["7pm only"],
+      "why": "One detail changing is the plan firming up. The goal must restate the whole plan, not just the delta.",
+      "trap": "Emitting a goal of just '8pm'. A detail that never makes it into a goal is a detail lost."
+    },
+    {
+      "id": "ex-ramen",
+      "source": "exemplars-held-out",
+      "text": "how late is that place open",
+      "around": ["'that place' = the ramen place they just named: Santouka"], "memory": [],
+      "label": "act",
+      "goal_must_contain": ["Santouka", "hours"],
+      "goal_must_not_contain": ["that place"],
+      "why": "Findable once context resolves the pronoun.",
+      "trap": "A goal containing the words 'that place' is useless. Resolve pronouns before they enter a goal."
+    },
+    {
+      "id": "ex-birthday",
+      "source": "exemplars-held-out",
+      "text": "when's my sister's birthday?",
+      "around": [], "memory": ["sister — Nadia — birthday 12 March"],
+      "label": "answer",
+      "answer_must_contain": ["March"],
+      "why": "He already told her. Recall, not research.",
+      "trap": "Going to the internet for a fact that is in memory. The internet does not know his sister."
+    },
+    {
+      "id": "ex-roof",
+      "source": "exemplars-held-out",
+      "text": "yeah let's do it",
+      "around": ["(this morning, 9am) 'we could get the roof looked at' — current time 3pm"], "memory": [],
+      "label": "ask",
+      "why": "Six hours is not a continuing conversation; he may be agreeing to something else entirely.",
+      "trap": "Previous-line context with no expiry. Beyond about two minutes, a previous line is not context."
+    },
+    {
+      "id": "ex-dictation",
+      "source": "exemplars-held-out",
+      "text": "...and then just send it over when you get a sec",
+      "around": ["a long stretch of one voice, no interlocutor"], "memory": [],
+      "label": "ignore",
+      "why": "He is dictating a message; the 'you' is the person he is writing to.",
+      "trap": "Perfect imperative shape. Prose with no other speaker means composing, not instructing."
+    },
+    {
+      "id": "ex-folder",
+      "source": "exemplars-held-out",
+      "text": "delete that whole folder, it's junk",
+      "around": [], "memory": [],
+      "label": "ask",
+      "ask_about": "which folder",
+      "why": "Destructive and ambiguous. Permission to delete is not knowledge of what to delete.",
+      "trap": "'It's junk' reads as authorization. When irreversible meets ambiguous, ask."
+    },
+    {
+      "id": "ex-jueves",
+      "source": "exemplars-held-out",
+      "text": "vale, el jueves",
+      "around": ["a proposed dinner date under discussion"], "memory": [],
+      "label": "act",
+      "goal_must_contain": ["Thursday"],
+      "why": "'Okay, Thursday' — same shape as 'seven works', in Spanish. Judge meaning, not English verbs.",
+      "trap": "Language-matching on English verbs finds nothing here."
+    }
+  ]
+}

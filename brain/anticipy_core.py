@@ -28,6 +28,7 @@ import requests
 from . import pb
 
 from .asking import ask_line
+from .compute import compute_answer
 from .llm import LLM, now_line, owner_tz
 from .memory import Memory
 from .workflow import (Consequence, approve as approve_plan,
@@ -121,6 +122,14 @@ _IRREVERSIBLE_RE = re.compile(
 # world without their word, while an over-hold costs one tap.
 _READ_ONLY_RE = re.compile(
     r"^\s*(research|compar\w*|look\s*up|find|check(?!\s*out)\w*|search\w*|read\w*|"
+    # Computing is the purest read-only there is — nothing leaves the
+    # owner's world when a number is worked out. This list had no word for
+    # it, so on 2026-08-23 "Convert 5 PM CST to PST" fell through the
+    # fallback and a TIMEZONE CONVERSION was held for his approval — the
+    # exact approval-fatigue failure the is_consequential docstring warns
+    # about. Effect channel, not vocabulary: convert/calculate/compute
+    # goals cannot be consequential.
+    r"convert\w*|calculat\w*|comput\w*|"
     r"summar\w*|gather\w*|browse|price|monitor|watch|list|"
     r"open(?!\s+(?:an?\s+)?account)|go\s+to|visit|navigat\w*|show|load|"
     # "Plan the weekend at Earls" is PREPARATION — options, hours, logistics
@@ -518,6 +527,65 @@ def is_consequential(goal: str, params: dict | None = None,
         return False
     # Overheard: default to holding — only explicitly read-only runs unattended.
     return not _READ_ONLY_RE.search(g)
+
+
+_HONORIFIC_RE = re.compile(r"\b(?:Dr|Mr|Mrs|Ms|Prof)\.?\s+([A-Z][a-z]\w*)")
+_SENTENCE_START_RE = re.compile(r'(?:^|[.!?]\s+|[:;]\s+|["“]\s*)([A-Z][a-z]\w*)')
+
+
+def invented_names(said: str, context: dict) -> list:
+    """Name-shaped tokens in an outgoing text that appear nowhere in what the
+    voice model was given. The mouth-side twin of unsupported_names(), which
+    guards GOALS: on 2026-08-23 the goal was clean and the TEXT invented
+    "Dr. Evans", so the goal guard never saw it and a human being who does
+    not exist went to the owner's phone.
+
+    Only TitleCase words are name-shaped. ALLCAPS is an acronym (PST, ASAP)
+    and stays; a sentence-opener is capitalized by grammar, not identity, and
+    stays — except behind an honorific, where "Dr. Whoever" is a person
+    claim wherever it sits. The allowed vocabulary is the whole context dict:
+    everything she was told, and nothing else."""
+    if not said:
+        return []
+    hay = json.dumps(context, ensure_ascii=False).lower() + " " + NAME.lower()
+    openers = set(_SENTENCE_START_RE.findall(said))
+    suspects = []
+    for m in re.finditer(r"\b[A-Z][a-z]\w*\b", said):
+        w = m.group(0)
+        behind_honorific = bool(_HONORIFIC_RE.search(
+            said[max(0, m.start() - 6):m.end()]))
+        if len(w) <= 2 or (w in openers and not behind_honorific):
+            continue
+        suspects.append(w)
+    out = []
+    for w in dict.fromkeys(suspects):
+        low = w.lower().rstrip("'s").rstrip("s")
+        if w.lower() not in hay and low not in hay:
+            out.append(w)
+    return out[:4]
+
+
+def shard_too_thin(line: str, decision, explicit: bool = False) -> bool:
+    """TAPE (HARNESS-LAWS.md Law 2). Expiry: segment-granularity triage —
+    the day the judge reads closed conversations instead of raw lines,
+    shards stop existing as decision units and this function is DELETED.
+    overnight/tejas_gate.py leg 2 tracks it.
+
+    Until then: "At 5:15" — two words of the OTHER person describing his own
+    schedule — minted a calendar meeting on 2026-08-23 (event
+    nbeb6oze5bmyrge). 54% of that call's lines were four words or less. A
+    line that thin, judged with no thread to hang it on, may be remembered;
+    it may not act and it may not raise a card.
+
+    What survives, deliberately: an explicit owner instruction (he typed
+    it), and a terse confirmation the model itself linked to an established
+    thread ("seven works" with continues>=1) — killing those would undo the
+    firming-up lane that catches real plans."""
+    if explicit or decision.decision not in ("act", "ask"):
+        return False
+    if (decision.continues or 0) >= 1:
+        return False
+    return len(re.findall(r"[\w']+", line or "")) <= 4
 
 
 def goal_tokens(text: str) -> set:
@@ -1479,6 +1547,17 @@ class Anticipy:
         # addressee logged beside it says why, and any quiet job carries
         # lane=ambient so the whole story is auditable.
         if addressee in AMBIENT_ADDRESSEES and decision.decision in ("act", "ask"):
+            # A shard cannot mint a meeting. Remembered above like every
+            # line; acted on, never. See shard_too_thin's docstring for the
+            # recorded failure and this tape's expiry.
+            if shard_too_thin(line, decision, explicit):
+                self._prev = (line, time.time())
+                return {"memory": mem, "decision": Decision(
+                    decision="ignore", goal="",
+                    reason=(f"{addressee}-directed: a shard with no thread "
+                            f"to continue — remembered, not acted on: "
+                            f"{decision.goal!r}"),
+                    addressee=addressee), "anticipy_says": None}
             # A goal of pure whitespace is no goal at all — a blank card must
             # never be prepared, held, or texted about.
             goal = (decision.goal or "").strip() or None
@@ -1503,7 +1582,27 @@ class Anticipy:
                     and ends_in_the_world(self.llm, line, goal):
                 consequential = True
             quiet_research = bool(goal) and not consequential
-            if quiet_research:
+            # Arithmetic she can do in her head never becomes a job. The
+            # recorded failure: "5 PM CST is what PST" wanted the number 3
+            # and instead spawned a web-research card whose only time was a
+            # 6 AM example. compute_answer() is deterministic and returns
+            # None for everything it is not sure of, so a miss here falls
+            # through to the research lane exactly as before. The one text
+            # this sends is the answer itself — same voice discipline as
+            # every other ambient text (may_say verdict, then a real send
+            # or nothing recorded as said).
+            computed = compute_answer(goal) if quiet_research else None
+            if computed:
+                verdict = self._may_say(may_say, computed, goal, "ambient_act")
+                if verdict and verdict != "defer" \
+                        and self.notify_owner(computed):
+                    handled = computed
+                decision = Decision(
+                    decision="ignore", goal=goal,
+                    reason=(f"{addressee}-directed: computed the answer "
+                            "directly — nothing to research"),
+                    addressee=addressee)
+            elif quiet_research:
                 # Free to do, lands on her desk — queued unheld, said nowhere.
                 params = {"source": line, "now": self._now_line(), "lane": "ambient"}
                 params = self._keeping(params, mem.get("commitment_id"))
@@ -2192,6 +2291,20 @@ class Anticipy:
         try:
             res = self.llm.chat(VOICE_SYSTEM, json.dumps(context), temperature=0.7)
             text = res.text.strip().strip('"')
+            # A NAME she never heard is an invention, exactly like the digits
+            # the guard below this one already strips. On 2026-08-23 the
+            # voice pass, asked to "name the actual thing (the person)" at
+            # temperature 0.7 about a goal that named nobody, wrote
+            # "meeting with Dr. Evans" — a human being who does not exist —
+            # and it went to his phone. The context dict handed to the model
+            # IS the complete allowed vocabulary; a name-shaped token from
+            # outside it means the composition is discarded and the caller's
+            # plain template speaks instead. Degraded wording over invented
+            # people, every time.
+            if text and invented_names(text, context):
+                print(f"voice invented {invented_names(text, context)!r} — "
+                      "template speaks instead")
+                return None
             return text or None
         except Exception:
             return None

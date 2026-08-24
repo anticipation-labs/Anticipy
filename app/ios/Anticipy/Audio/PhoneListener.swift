@@ -298,6 +298,9 @@ final class PhoneListener: NSObject, ObservableObject {
     private func startRecognition() {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
+        // Rebuilt per request, not cached: this fires on every swap, so a
+        // person named in the roster an hour ago is already in the lexicon.
+        req.contextualStrings = AnticipyVocabulary.current()
         if recognizer?.supportsOnDeviceRecognition == true {
             req.requiresOnDeviceRecognition = true
         }

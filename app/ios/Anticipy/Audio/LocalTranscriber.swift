@@ -18,6 +18,9 @@ final class LocalTranscriber: NSObject {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = true
+        // Same lexicon as PhoneListener: the pendant's transcripts must not
+        // spell "Anticipy" differently from the phone's.
+        request.contextualStrings = AnticipyVocabulary.current()
         self.request = request
         task = recognizer?.recognitionTask(with: request) { [weak self] result, _ in
             guard let self, let result, result.isFinal else { return }
