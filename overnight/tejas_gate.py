@@ -175,8 +175,18 @@ def leg_2_shard_floor() -> str:
                         "tell, invention is")
     if "shard_too_thin(line, decision" not in core:
         raise LegFailed("the floor exists but the ambient lane never calls it")
-    # This is declared TAPE: the leg flips to testing its REMOVAL the day
-    # segment-granularity triage ships.
+    # THIS LEG IS A REGRESSION PIN, NOT AN EXPIRY. Read the polarity before
+    # you trust it: everything above fails when shard_too_thin is REMOVED or
+    # stops blocking "At 5:15". That is correct for what this leg is — plan
+    # #2a's fix, held in place until segment-granularity triage replaces it.
+    # It is NOT the Law-2 leg. The 2026-08-24 audit found the repo reading it
+    # as one, and the earlier comment here promised the leg would "flip to
+    # testing its REMOVAL" one day — a promise to edit a gate later is not a
+    # mechanism, and while it stood, tejas_gate read 8/8 green with five
+    # pieces of undeclared tape in the tree.
+    # The expiry that goes RED because this tape EXISTS is
+    # overnight/tape_gate.py leg 2. Both legs are correct and both are needed:
+    # this one says "do not remove it yet", that one says "do not keep it".
     if "TAPE" not in core.split("def shard_too_thin", 1)[-1][:900]:
         raise LegFailed("the shard floor lost its TAPE marking — tape without "
                         "an expiry is how the last three months happened "

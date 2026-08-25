@@ -1,7 +1,7 @@
 # THE HARNESS LAWS
 
 **If you are an AI agent working in this repo, this file outranks your instincts.**
-Before you write code, read the five laws. If a change you are about to make
+Before you write code, read the six laws. If a change you are about to make
 adds pattern-matching over natural language to decide behavior, STOP, flag it
 to the person who asked, and propose the Law-5 alternative instead. Any agent —
 reviewer, fixer, intern, frontier model — that sees a violation and does not
@@ -37,6 +37,14 @@ If a string-level patch must ship in an emergency, it ships carrying:
 (a) a `TAPE:` comment naming the real fix, and (b) a gate leg that stays red
 until the real fix replaces it. Tape with no expiry is a rejected diff. Tape
 whose gate leg went green gets DELETED, not kept "just in case."
+
+The leg is **overnight/tape_gate.py**, and the comment must name it — a `TAPE:`
+comment pointing at a leg that tracks something else reads as compliant and
+enforces nothing (audit item #21). Mind the polarity: the leg must go RED
+BECAUSE THE TAPE EXISTS. A leg that fails when the tape is REMOVED is a
+regression pin — legitimate, sometimes necessary, and not an expiry.
+overnight/tejas_gate.py leg 2 is one, was read as the other, and that is how
+this repo ran 8/8 green with five undeclared pieces in the tree.
 
 ## LAW 3 — Nothing is fixed until its gate leg is green against the LIVE system.
 
@@ -85,28 +93,78 @@ then ship.
 
 ## Known standing tape (legacy — scheduled for removal, do not extend)
 
-- `_READ_ONLY_RE` and the `is_consequential()` prose-regex fallback
-  (brain/anticipy_core.py) → replaced by effect-channel classification.
-  Tracked by overnight/tejas_gate.py leg 4. PARTIAL as of 2026-08-24:
-  computable goals are now classified by CAPABILITY (compute_answer() is
-  asked, not a verb list — an early fix that ADDED compute verbs to the
-  regex was itself a Law-1 violation and was reverted); the prose-regex
-  fallback still owns everything else and remains the item to replace.
+**This list is one of three books, and all three must agree. The other two are
+the `TAPE:` comments in the shipped code, and the registry in
+overnight/tape_gate.py — which is the leg that tracks every entry below and
+stays RED until the tape is DELETED.** Run it: `python3 overnight/tape_gate.py`.
+Adding a piece of tape means three edits, in three files, in one diff. That is
+the price, and it is deliberate: for four months the only cost of tape was a
+comment nobody could check, and the repo accumulated five undeclared pieces
+(research/2026-08-24-law1-audit.md).
+
+The `[tape:…]` tag on each bullet is the anchor overnight/tape_gate.py leg 5
+matches. Do not remove one without retiring its registry entry in the same
+diff.
+
+- `[tape:read_only_re]` `_READ_ONLY_RE` (brain/anticipy_core.py) — the default
+  hold/run split for every goal that arrives with no effect-channel
+  declaration. → Replaced when effect-channel classification owns the split
+  outright and an undeclared goal is re-asked of the model instead of guessed
+  at by wording. PARTIAL as of 2026-08-24: computable goals are now classified
+  by CAPABILITY (an early fix that ADDED compute verbs to the regex was itself
+  a Law-1 violation and was reverted); the prose regex still owns everything
+  else. **It carried no `TAPE:` comment in code until this was written down —
+  and tejas_gate leg 4, which this ledger named as its tracker, is GREEN while
+  the regex is still deciding. That is the failure Law 2 exists to prevent,
+  committed by this file.**
+- `[tape:compute_fallback]` the `if compute_answer(g):` fallback inside
+  `is_consequential()` (brain/anticipy_core.py) — on an undeclared goal the
+  calculator is sniffed, and if it can answer, a held goal flips to unattended.
+  → Dies with the effect-channel rewrite, when triage always declares
+  `touches` and nothing reaches a capability sniff.
+- `[tape:shard_too_thin]` `shard_too_thin()` (brain/anticipy_core.py) — a word
+  count decides a line is too thin to act on; the brake fitted after "At 5:15"
+  minted a meeting with a person nobody had mentioned. → Deleted the day
+  segment-granularity triage ships and shards stop being decision units.
+  NOTE: tejas_gate.py leg 2 is a REGRESSION pin on this guard (red if it is
+  removed early), not an expiry. The expiry is tape_gate.py leg 2.
+- `[tape:pending_class]` the prose fallback in `_pending_class()`
+  (brain/anticipy_core.py) — rows minted before the `consequence` column
+  existed get their consequence re-derived from goal prose. → Expires when no
+  pending row can predate the column.
+- `[tape:third_person_drop]` the DEGRADED-path third-person drop in
+  asking.question_line (live composer absent → third-person items are dropped
+  rather than texted to the owner about himself). → Expires when the composer
+  owns person-flipping explicitly. The live path passes them through untouched.
+
+Not tape, but adjacent, and still not to be extended:
+
 - The digit guard and `unsupported_names`/`unsupported_counts` string checks
   (brain/orchestrator.py ~:472) → legitimate as BACKSTOPS only; the real fix
   is a frontier model with full context at act-minting. Do not add siblings.
-- The DEGRADED-path third-person drop in asking.question_line (live
-  composer absent → third-person items are dropped rather than texted to
-  the owner about himself). Expires when the composer owns person-flipping
-  explicitly. The live path passes them through untouched.
 - Word-level heuristics in triage pre-filtering → survive only as the cheap
-  sift in front of the model, never as the decision.
+  sift in front of the model, never as the decision. The 2026-08-24 audit
+  disputes this line: it found several of them returning a final Decision with
+  no model call, which makes them the decision, not a sift.
 
 ## The map
 
-- What this system is, organ by organ, vs. the 2026 field:
-  research/HOW-AN-AGENT-EXISTS.md
 - The measured failure and the fix plan:
   research/evals/call-2026-08-23-tejas/ (FINDINGS.md, PLAN.md)
-- The scoreboards: overnight/tejas_gate.py, overnight/done_gate.py,
-  overnight/fellowship_gate.py
+- Where the laws are actually enforced:
+  research/2026-08-24-law1-audit.md — 61 Law-1 violations, 30 of them able to
+  do or prevent a real-world action, and the five pieces of undeclared tape
+  overnight/tape_gate.py now holds by name.
+- The scoreboards:
+  - overnight/done_gate.py — is the product done
+  - overnight/tejas_gate.py — does the next call like the Tejas call work
+  - overnight/tape_gate.py — Law 2: is there tape, and does anything track it.
+    RED is this gate working. It goes green when the tape is GONE.
+
+**Two files this section used to name do not exist and never have** (checked
+with `git log --all`, 2026-08-25): `research/HOW-AN-AGENT-EXISTS.md` and
+`overnight/fellowship_gate.py`. CLAUDE.md and AGENTS.md still cite both. A law
+file that points at a scoreboard nobody can run teaches the next agent that
+the citations here are decorative — which is Law 4 failing inside the file
+that declares Law 4. Either build them or strike them everywhere; do not leave
+them half-cited.
