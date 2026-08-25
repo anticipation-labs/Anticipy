@@ -5,11 +5,12 @@ nonce-delimited block, and is capped at importance 4 because "importance 5 is
 reserved for boundaries the owner stated in their own words" (design/day-zero.md
 §3). That reasoning accounted for IMPORTANCE and forgot RECENCY.
 
-`Memory.profile_facts` ranks on `salience = importance * 0.5 ** (age_days / 30)`
-and there is NO provenance term in it. A supervised read is always the freshest
-thing in the store, so a fresh importance-4 mail fact scores 4.0 and beats the
-owner's own importance-5 interview answer the moment that answer is 30 days old
-(2.5). The client's sanctioned ceiling is 15 facts per source
+`Memory.profile_facts` ranks on importance, then belief, then age, and there
+is NO provenance term anywhere in it. A supervised read is always the freshest
+thing in the store, so a fresh importance-4 mail fact beats the owner's own
+importance-5 interview answer the moment that answer is about 30 days old. The
+importance gate does not save it: that gate bounds what CONFIDENCE may do, and
+this inversion is age. The client's sanctioned ceiling is 15 facts per source
 (`extension/supervised_read.js` FACT_CEILING) and `briefing_facts` takes
 `profile_facts(limit=10)`. 15 > 10, so ONE HONEST READ — no attacker anywhere
 in this — filled the whole briefing window.

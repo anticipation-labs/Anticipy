@@ -15,9 +15,9 @@ On top of the raw graph sits the PROFILE layer (roadmap §1): a consolidation
 pass reads recent episodes and distills the stable facts worth knowing someone
 by — "partner is Sarah", "prefers 7pm dinners" — each with importance (1-5),
 confidence, and the episode ids it came from. Recall consults the profile
-first, ranked importance x recency x relevance, so "my mom is in hospital"
-outranks a grocery mumble instead of weighing the same. Raw episodes are never
-deleted; the profile is a lens, not a replacement.
+first, ranked importance-then-confidence-then-age x relevance, so a core
+fact outranks a grocery mumble instead of weighing the same. Raw episodes are
+never deleted; the profile is a lens, not a replacement.
 """
 from __future__ import annotations
 
@@ -71,6 +71,12 @@ CREATE TABLE IF NOT EXISTS profile_facts (
     confidence REAL NOT NULL DEFAULT 0.6,    -- grows each time the fact re-appears
     source TEXT NOT NULL DEFAULT 'consolidation',  -- consolidation | interview | import | supervised_mail
     provenance TEXT NOT NULL DEFAULT '[]',   -- JSON list of episode ids
+    -- HOW LONG THIS STAYS TRUE, which is a different question from how much
+    -- it matters: 'stable' | 'situation' | NULL for no verdict. Named by the
+    -- model at distillation and only ever compared here — deciding it from
+    -- the words at recall time is the pattern-match on meaning HARNESS-LAW 1
+    -- forbids. See _HALF_LIFE_DAYS for what the ranker does with it.
+    kind TEXT,
     first_seen_ts REAL NOT NULL,
     last_seen_ts REAL NOT NULL
 );
@@ -121,6 +127,7 @@ CREATE INDEX IF NOT EXISTS idx_vetoed_norm ON vetoed_facts(norm);
 # database against a retrofitted one and is what notices when they do.
 _ADDED_COLUMNS = (
     ("episodes", "speaker", "TEXT"),
+    ("profile_facts", "kind", "TEXT"),
 )
 
 # Full-text index so recall searches EVERY episode instead of the newest few.
@@ -164,14 +171,20 @@ reports of finishing something ("sent Priya the deck", "already paid it",
 CONSOLIDATE_SYSTEM = """You distill what someone's assistant should KNOW about them from
 lines overheard during their day. Each input line is "[id] text".
 Reply ONLY with compact JSON:
-{"facts":[{"fact":"...","importance":N,"episode_ids":[id,...]}]}
+{"facts":[{"fact":"...","importance":N,"kind":"stable"|"situation","episode_ids":[id,...]}]}
 A fact is something STABLE — true for weeks, worth knowing them by: who
 matters to them ("partner is Sarah"), preferences ("prefers 7pm dinners"),
 their work ("building Anticipy"), health, routines, ongoing situations
 ("mom is in hospital"). NOT one-off logistics, small talk, or anything that
 is only a task. Write each fact as a short third-person note. importance is
 1-5: 5 = core of their life (family, health, hard boundaries), 3 = a solid
-preference or ongoing project, 1 = mildly useful color. episode_ids lists
+preference or ongoing project, 1 = mildly useful color.
+kind is HOW LONG it stays true, which is a different question from how much it
+matters: "stable" for something that holds for months or years until something
+changes it (an allergy, who their partner is, what they do for a living),
+"situation" for a live state of affairs that will end on its own ("mom is in
+hospital", "the Devon deal closes Friday"). Leave kind out if you are unsure —
+a guess here is worse than no answer. episode_ids lists
 the [id]s of the input lines the fact came from — only ids you were given.
 Nothing worth keeping -> {"facts":[]}."""
 
@@ -195,11 +208,12 @@ _DONE_RE = re.compile(
 # HOW MUCH OF A BOUNDED PROFILE WINDOW MAY BE THINGS NOBODY TYPED: one slot in
 # three, and the rest is RESERVED for what the owner told us.
 #
-# Ranking here is salience = importance x 0.5 ** (age_days / 30) and it carries
-# no provenance term at all, so recency alone inverts authority: a supervised
-# read is always the freshest thing in the store, and a fresh importance-4 mail
-# fact scores 4.0 against 2.5 for the owner's own importance-5 interview answer
-# once that answer is 30 days old. Measured on this store: 2 interview rows aged
+# Ranking here (see profile_facts) carries no provenance term at all, so age
+# alone inverts authority: a supervised read is always the freshest thing in
+# the store, and a fresh importance-4 mail fact out-scores the owner's own
+# importance-5 interview answer once that answer is about 30 days old. The
+# importance gate does not save it — the gate bounds what CONFIDENCE may do,
+# and this inversion is age. Measured on this store: 2 interview rows aged
 # 45 days plus 15 fresh supervised_mail rows made `profile_facts(limit=10)`
 # return 10/10 supervised_mail, which made `Anticipy.briefing`'s `told` list
 # EMPTY and handed BRIEFING_SYSTEM a profile section that was wholly
@@ -215,6 +229,86 @@ _DONE_RE = re.compile(
 # are held) and big enough that a read visibly contributes (3 slots, which is
 # also what the briefing's 400-char fenced block comfortably holds).
 _UNTRUSTED_WINDOW_DIVISOR = 3
+
+
+# HOW FAST A FACT LOSES PROMINENCE, BY WHAT THE MODEL SAID IT IS.
+#
+# One uniform 30-day half-life ran backwards from what anyone intends.
+# `last_seen_ts` refreshes on every restatement, so a live situation gets
+# mentioned constantly and never decayed at all, while a stable fact stated
+# once decayed to nothing. Measured: a 90-day-old importance-5 "allergic to
+# shellfish" scored 0.625 against 3.909 for a 1-day-old importance-4 "mom is
+# in hospital" — a 6x inversion, on the ranker that feeds the briefing and
+# memory_notes, against the one fact in EXEMPLARS-A-LIFE that could hurt him.
+#
+# `stable` does not decay. Prominence for a fact that holds for years is its
+# importance and how sure she is of it; the clock has nothing to say about it.
+# When it stops being TRUE somebody says so and it is retired or vetoed —
+# decay cannot express "no longer true", only "less prominent", and treating
+# the two as one is what produced the inversion.
+#
+# `situation` keeps the 30 days it has always had, and so does an unlabelled
+# row. Making situations decay FASTER would be inventing a number nobody has
+# measured, and it would not fix the case it looks like it fixes: a situation
+# that has resolved is stale rather than faint, and staleness is a
+# supersession problem. Both are listed rather than one defaulting silently,
+# so the ranker is reading the model's answer and not stepping around it.
+_HALF_LIFE_DAYS = {"stable": None, "situation": 30.0}
+_DEFAULT_HALF_LIFE_DAYS = 30.0
+
+# The kinds this store keeps. Anything else the model says — a value it
+# invented, a value from a prompt revision nobody here has seen — is NO
+# VERDICT, for the same reason an unrecognised voice tag is.
+_FACT_KINDS = ("stable", "situation")
+
+# HOW MUCH CONFIDENCE MAY MOVE A FACT: within its importance tier, never out
+# of it. EXEMPLARS-A-LIFE:465 — "Importance gates, confidence orders.
+# Confidence-first ranking buries the shellfish allergy under the coffee
+# order." A plain `x confidence` violates that sentence exactly as much as
+# ignoring confidence did: importance 4 x 0.99 = 3.96 beats importance 5 x
+# 0.60 = 3.00, which IS the allergy under the coffee order.
+#
+# So confidence enters compressed into [_CONFIDENCE_FLOOR, 1]. The floor is
+# above 4/5 because that is the tightest adjacent-tier ratio importance can
+# produce (5 -> 4), so at equal age the weakest belief at one tier still
+# outranks the strongest belief below it. Age is deliberately NOT bounded this
+# way: the doctrine sentence is about confidence, and a fact genuinely does
+# fade.
+_CONFIDENCE_FLOOR = 0.85
+
+# WHERE A BELIEF SETTLES. EXEMPLARS-A-LIFE:467 — "Confidence saturates. Past
+# ~0.95 a re-sighting refreshes last_seen and nothing else, or the profile
+# becomes whatever he says most, not what matters most."
+_CONFIDENCE_SETTLED = 0.95
+_CONFIDENCE_CEILING = 0.99
+# The old step was a flat +0.15, which reached the ceiling from the 0.6
+# consolidation seed in THREE restatements. That made confidence a "seen more
+# than twice" flag rather than a graded belief, and a tie-breaker that is
+# constant for most facts is not a tie-breaker. A proportional step keeps
+# saying something for eight or nine sightings and approaches the ceiling
+# instead of slamming into it.
+_CONFIDENCE_STEP = 0.25
+
+
+def _confidence_band(confidence) -> float:
+    """Confidence as a multiplier that reorders inside an importance tier and
+    can never reach the tier above. See _CONFIDENCE_FLOOR."""
+    try:
+        c = min(1.0, max(0.0, float(confidence)))
+    except (TypeError, ValueError):
+        c = 0.0
+    return _CONFIDENCE_FLOOR + (1.0 - _CONFIDENCE_FLOOR) * c
+
+
+def _fact_kind(kind) -> Optional[str]:
+    return kind if kind in _FACT_KINDS else None
+
+
+def _decay(kind, age_days: float) -> float:
+    half_life = _HALF_LIFE_DAYS.get(_fact_kind(kind), _DEFAULT_HALF_LIFE_DAYS)
+    if half_life is None:
+        return 1.0
+    return 0.5 ** (age_days / half_life)
 
 
 def _provenance_window(facts: list[dict], limit: int) -> list[dict]:
@@ -422,7 +516,7 @@ class Memory:
                  if len(w) > 2 and w.strip(".,!?").lower() not in self._STOP}
         # What she KNOWS about him answers before what she happened to
         # overhear: the distilled profile is consulted first, ranked
-        # importance x recency x relevance, and the raw graph/episode search
+        # importance-then-confidence-then-age x relevance, and the raw search
         # fills whatever window is left (roadmap §1).
         profile = self._profile_recall(words, limit)
         rows = self.db.execute("SELECT id, type, name, status FROM nodes").fetchall()
@@ -598,12 +692,12 @@ class Memory:
         """Raw material for the assistant's 'I overheard…' briefing.
 
         The profile leads: what she KNOWS about him (distilled, ranked by
-        importance x recency) comes before the raw lines she happened to
-        hear, so a briefing is grounded in who he is, not just today's noise.
-        `heard` keeps its exact old shape; `open_loops` gained `speaker` and
-        `owes`, and BRIEFING_SYSTEM is told what they mean — telling the owner
-        he promised something a guest promised is the same lie one layer up
-        from the clock preparing work off it."""
+        importance, then belief, then age) comes before the raw lines she
+        happened to hear, so a briefing is grounded in who he is, not just
+        today's noise. `heard` keeps its exact old shape; `open_loops` gained
+        `speaker` and `owes`, and BRIEFING_SYSTEM is told what they mean —
+        telling the owner he promised something a guest promised is the same
+        lie one layer up from the clock preparing work off it."""
         heard = self.db.execute(
             "SELECT text FROM episodes WHERE ts>=? ORDER BY ts", (since_ts,)
         ).fetchall()
@@ -622,7 +716,8 @@ class Memory:
 
     def remember_fact(self, text: str, importance: int = 4,
                       source: str = "interview", confidence: float = 0.9,
-                      ts: Optional[float] = None) -> int:
+                      ts: Optional[float] = None,
+                      kind: Optional[str] = None) -> int:
         """Seed the profile directly — the day-zero interview (roadmap §8)
         writes what he tells her here, so she is not amnesiac on install.
         Merges into an existing row when it already states the same fact
@@ -651,7 +746,14 @@ class Memory:
                              new_text=text if changed else None, source=source)
             self.db.commit()
             return match
-        fid = self._insert_fact(text, importance, confidence, source, ts, [])
+        # `kind` defaults to no verdict and every ordinary caller leaves it
+        # there. The day-zero interview and the supervised read both land
+        # here, and nothing runs a model over "how long does this stay true"
+        # on either path — so a label would be this code's guess wearing the
+        # model's authority. It is a parameter at all so the consolidation
+        # path and the tests can state a verdict that was actually made.
+        fid = self._insert_fact(text, importance, confidence, source, ts, [],
+                                kind=kind)
         self.db.commit()
         return fid
 
@@ -769,9 +871,19 @@ class Memory:
                 self.db.execute("DELETE FROM vetoed_facts WHERE id=?", (rid,))
 
     def profile_facts(self, limit: Optional[int] = None) -> list[dict]:
-        """The distilled profile, most important-and-fresh first. Salience
-        here is importance x recency (half-life 30 days on last_seen), so a
-        core fact stays near the top for months and stale color sinks.
+        """The distilled profile, most important first.
+
+        Salience is importance GATED, confidence ORDERING inside the gate,
+        and age last — EXEMPLARS-A-LIFE:465, implemented rather than
+        paraphrased. importance sets the tier; `_confidence_band` reorders
+        within it and provably cannot reach the tier above; `_decay` fades a
+        fact at the half-life the model gave its KIND, and a fact called
+        stable does not fade at all.
+
+        What this replaced was `importance * 0.5 ** (age_days / 30)`:
+        confidence was projected one line up and read by nothing anywhere in
+        brain/, and one uniform half-life buried a 90-day-old importance-5
+        allergy under a 1-day-old importance-4 situation by 6x.
 
         A BOUNDED window is split by provenance (`_provenance_window`), not
         simply taken off the top: salience carries no provenance term, so
@@ -782,20 +894,28 @@ class Memory:
         out = []
         for r in self.db.execute(
             "SELECT id, fact, importance, confidence, source, provenance, "
-            "first_seen_ts, last_seen_ts FROM profile_facts"
+            "first_seen_ts, last_seen_ts, kind FROM profile_facts"
         ):
             try:
                 prov = json.loads(r[5] or "[]")
             except Exception:
                 prov = []
             age_days = max(0.0, (now - r[7]) / 86400.0)
+            kind = _fact_kind(r[8])
             out.append({
                 "id": r[0], "fact": r[1], "importance": r[2],
                 "confidence": r[3], "source": r[4], "provenance": prov,
-                "first_seen_ts": r[6], "last_seen_ts": r[7],
-                "salience": r[2] * (0.5 ** (age_days / 30.0)),
+                "first_seen_ts": r[6], "last_seen_ts": r[7], "kind": kind,
+                "salience": (r[2] * _confidence_band(r[3])
+                             * _decay(kind, age_days)),
             })
-        out.sort(key=lambda f: -f["salience"])
+        # Age breaks the tie rather than entering the score. A fact the model
+        # called stable does not decay, so two of them at one importance and
+        # one confidence now score EXACTLY equal — where the old expression
+        # separated everything by microseconds of last_seen. Without this the
+        # order of the profile would fall to whatever order SQLite returned
+        # rows in, which is not an answer to anything.
+        out.sort(key=lambda f: (-f["salience"], -f["last_seen_ts"]))
         return _provenance_window(out, limit) if limit else out
 
     def consolidate(self, now: Optional[float] = None, batch: int = 200) -> dict:
@@ -876,6 +996,9 @@ class Memory:
                     imp = max(1, min(5, int(c.get("importance", 3))))
                 except Exception:
                     imp = 3
+                # Only the two the store knows. A value the model invented is
+                # no verdict, not a new half-life.
+                kind = _fact_kind(c.get("kind"))
                 eps = c.get("episode_ids")
                 # The model writes ids as ints or as digit strings ("[1]" in
                 # the prompt invites both); either way they must resolve to
@@ -899,7 +1022,7 @@ class Memory:
                 if match is not None:
                     self._merge_fact(match, imp, fact_ts, eps,
                                      new_text=text if changed else None,
-                                     source="consolidation")
+                                     source="consolidation", kind=kind)
                     merged += 1
                 else:
                     # Counted only if a row actually landed. _insert_fact
@@ -907,7 +1030,7 @@ class Memory:
                     # writing facts it refused would make the veto invisible
                     # in the one number anybody watches.
                     if self._insert_fact(text, imp, 0.6, "consolidation",
-                                         fact_ts, eps):
+                                         fact_ts, eps, kind=kind):
                         new += 1
             self._state_set("last_episode_id", str(rows[-1][0]))
             self._state_set("last_run_ts", str(now))
@@ -931,8 +1054,8 @@ class Memory:
         ).fetchone()[0]
 
     def _profile_recall(self, words: set[str], limit: int) -> list[dict]:
-        """Profile facts matching the query, ranked by importance x recency
-        x relevance — so "mom is in hospital" beats a grocery mumble even
+        """Profile facts matching the query, ranked by profile_facts'
+        salience x relevance — so a core fact beats a grocery mumble even
         when the mumble is newer and matches more words.
 
         The `limit` slots are split by provenance for the same reason
@@ -960,7 +1083,8 @@ class Memory:
                 # authority, and a meeting title is attacker-controlled text.
                 "source": f.get("source", ""),
             })
-        out.sort(key=lambda f: -f["salience"])
+        # Same tiebreak as profile_facts, and needed here for the same reason.
+        out.sort(key=lambda f: (-f["salience"], -f["ts"]))
         if len(out) < limit:
             # Wording is the model's, not the owner's — "go-to restaurant"
             # answers "usual dinner spot" yet shares no word with it. The
@@ -1065,7 +1189,8 @@ class Memory:
         return None
 
     def _insert_fact(self, text: str, importance: int, confidence: float,
-                     source: str, ts: float, episode_ids: list[int]) -> int:
+                     source: str, ts: float, episode_ids: list[int],
+                     kind: Optional[str] = None) -> int:
         """Returns the new row id, or 0 when the fact is under veto and no row
         was written. The check sits HERE, at the lowest writer, because
         consolidate() inserts without going through remember_fact — a gate at
@@ -1075,14 +1200,15 @@ class Memory:
             return 0
         cur = self.db.execute(
             "INSERT INTO profile_facts(fact, importance, confidence, source, "
-            "provenance, first_seen_ts, last_seen_ts) VALUES (?,?,?,?,?,?,?)",
+            "provenance, kind, first_seen_ts, last_seen_ts) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (text, importance, confidence, source,
-             json.dumps(episode_ids or []), ts, ts))
+             json.dumps(episode_ids or []), _fact_kind(kind), ts, ts))
         return cur.lastrowid
 
     def _merge_fact(self, fact_id: int, importance: int, ts: float,
                     episode_ids: list[int], new_text: Optional[str] = None,
-                    source: str = "") -> None:
+                    source: str = "", kind: Optional[str] = None) -> None:
         """A restatement is evidence, not a new row: bump confidence, keep
         the higher importance, extend provenance, refresh last_seen. The
         original wording stays — churning the text on every restatement
@@ -1095,9 +1221,22 @@ class Memory:
         provenance can end up sitting in a row labelled with another."""
         row = self.db.execute(
             "SELECT importance, confidence, provenance, last_seen_ts, fact, "
-            "source FROM profile_facts WHERE id=?", (fact_id,)).fetchone()
+            "source, kind FROM profile_facts WHERE id=?", (fact_id,)).fetchone()
         if not row:
             return
+        # A ROW WITH NO STABILITY VERDICT CAN STILL GET ONE.
+        #
+        # Without this the column would be inert for everything that already
+        # exists: every fact in every owner's database predates it, merges are
+        # the common path for a fact that keeps coming up, and a row that never
+        # gets re-INSERTED would never be labelled however many times the model
+        # judged it. Filling a blank is not overwriting a verdict — an existing
+        # label stands, the same instinct that keeps the original wording
+        # through a merge, because churning either makes the profile
+        # impossible to audit.
+        if _fact_kind(kind) and not _fact_kind(row[6]):
+            self.db.execute("UPDATE profile_facts SET kind=? WHERE id=?",
+                            (_fact_kind(kind), fact_id))
         if new_text:
             # GUARD 1 — THE VETO SURVIVES A MERGE.
             #
@@ -1144,7 +1283,7 @@ class Memory:
         self.db.execute(
             "UPDATE profile_facts SET importance=?, confidence=?, "
             "provenance=?, last_seen_ts=? WHERE id=?",
-            (max(row[0], importance), min(0.99, row[1] + 0.15),
+            (max(row[0], importance), _bumped(row[1]),
              json.dumps(prov), max(row[3], ts), fact_id))
 
     def _state_get(self, key: str, default: str = "") -> str:
@@ -1265,6 +1404,28 @@ class Memory:
                 print(f"memory: extraction model unusable, falling back to "
                       f"rules ({type(e).__name__}: {str(e)[:120]})")
         return _rule_extract(text)
+
+
+def _bumped(confidence) -> float:
+    """One more sighting of a fact she already believes.
+
+    A flat +0.15 reached the 0.99 ceiling from the 0.6 consolidation seed in
+    three restatements, which made confidence a "seen more than twice" flag
+    rather than a graded belief — and now that the ranker READS it, a
+    tie-breaker that is constant for most facts is not a tie-breaker.
+
+    Above _CONFIDENCE_SETTLED nothing moves, which is EXEMPLARS-A-LIFE:467
+    written out: "past ~0.95 a re-sighting refreshes last_seen and nothing
+    else, or the profile becomes whatever he says most, not what matters
+    most." The caller still refreshes last_seen either way.
+    """
+    try:
+        c = float(confidence)
+    except (TypeError, ValueError):
+        c = 0.0
+    if c >= _CONFIDENCE_SETTLED:
+        return c
+    return c + (_CONFIDENCE_CEILING - c) * _CONFIDENCE_STEP
 
 
 def _speaker_verdict(speaker) -> Optional[str]:

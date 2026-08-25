@@ -158,9 +158,9 @@ def _worker_events(monkeypatch, events, kind="read_fact"):
 
 
 def test_a_mail_fact_can_never_carry_importance_5(monkeypatch):
-    """5 is reserved for a boundary the owner stated in their own words. Recall
-    is ranked importance x recency and a briefing takes the top ten, so a fact
-    nobody typed must never outrank one they did."""
+    """5 is reserved for a boundary the owner stated in their own words.
+    Importance is the first term recall ranks on and a briefing takes the top
+    ten, so a fact nobody typed must never outrank one they did."""
     m = Memory()
     _worker_events(monkeypatch, [
         _Event(id="a", text="Marcus Bell is a client; a proposal is in flight.",

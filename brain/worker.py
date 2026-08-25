@@ -355,7 +355,7 @@ def ingest_profile_events(memory, owner_ref: str = "") -> int:
             source = claimed if claimed in ("interview", "import") else "import"
             # Importance rides on the event too, because the questions are not
             # equal: a boundary ("never touch my bank") must outrank the thing
-            # it is a boundary on, and recall is ranked on importance x recency.
+            # it is a boundary on, and importance is the first term recall ranks on.
             # A missing or absurd value degrades to 4, which is what every
             # calendar and contacts import is.
             try:
@@ -402,7 +402,7 @@ READ_FACT_MAX_IMPORTANCE = 4
 # row exists (CLAUDE-ONBOARDING.md:19-20 — safety gates in code).
 #
 # It does not, and cannot, fix ranking: 15 honest facts still out-rank the
-# owner's older answers on `salience = importance x recency`. That is fixed
+# owner's older answers, because age crosses importance tiers. That is fixed
 # where the window is taken (`memory._provenance_window`). This bounds VOLUME,
 # which matters on its own because recall here is FTS5 keyword matching with no
 # embeddings (brain/memory.py:9) — fifty facts do not make her smarter, they

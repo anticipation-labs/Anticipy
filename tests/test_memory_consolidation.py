@@ -158,7 +158,7 @@ def test_importance_outranks_recency_within_profile():
     profile = [f for f in out if f["src_type"] == "profile"]
     assert len(profile) == 2
     assert "farmers market" in profile[0]["fact"], \
-        "importance x recency: an old core fact beats fresh color"
+        "importance leads the ranking: an old core fact beats fresh color"
 
 
 def test_recall_without_profile_is_unchanged():
