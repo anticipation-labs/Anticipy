@@ -4223,16 +4223,38 @@ export async function runAgentGoal(goal, opts) {
   // the MVP spec calls the moat, and it is why the shape key strips numbers and
   // dates (see learn.js taskShape) — "the March bill" and "the April bill" are
   // one procedure.
-  let procedure = null;
-  if (plan && plan.unfamiliar) {
-    const shape = taskShape(goal);
-    procedure = await recallProcedure(shape, chrome.storage.local);
-    if (procedure) {
-      console.log(`agent: already know how -> ${procedure.steps.length} steps (learned once)`);
-    } else {
-      procedure = await learnProcedure(plan.learn, { deps: learnDeps(apiKey, model) });
-      if (procedure) await rememberProcedure(shape, procedure, chrome.storage.local);
-    }
+  // READING THE CACHE COSTS NOTHING, SO IT IS NOT BEHIND A JUDGEMENT.
+  //
+  // Both halves of this used to sit behind `plan.unfamiliar` — the decision to
+  // SPEND on research and the decision to READ what we already know. They are
+  // not the same question and they do not cost the same thing. A recall is a
+  // storage read; it was gated on the most expensive-to-get-wrong judgement in
+  // this file, produced by a prompt written to bias toward "no", and skipped
+  // entirely whenever `plan` was null (a caller-supplied start URL, a resume).
+  //
+  // What that cost, precisely: a cached procedure was silently discarded
+  // whenever the second run's planner happened to feel familiar — which is
+  // MORE likely on the second run than the first, because that is what having
+  // done a thing once feels like. "Paid for once" failed in exactly the case
+  // it exists for, invisibly. recallRecipe twenty lines above never had this
+  // defect; it is keyed on shape and asks nobody's opinion.
+  //
+  // So: recall unconditionally, on the shape, and gate only the spend. The
+  // first thing the spend consults is now a FACT — is there a live cached
+  // answer for this shape — rather than an opinion about familiarity.
+  // (HANDS 1 spec §5.2, §8.3.)
+  let procedure = await recallProcedure(shape, chrome.storage.local);
+  if (procedure) {
+    console.log(`agent: already know how -> ${procedure.steps.length} steps (learned once)`);
+  } else if (plan && plan.unfamiliar) {
+    // TODO(HANDS 1 §5.4): this second condition is still a model self-report,
+    // and the spec says the spend belongs on the server gate — keyed on
+    // `touches`, before the browser may claim the job (brain/research.py
+    // research_gate, wired at anticipy_core.py:3427). Until that is wired,
+    // this stays as the browser's own fallback; it decides only whether to
+    // SPEND, never what is recalled, and it can no longer lose knowledge.
+    procedure = await learnProcedure(plan.learn, { deps: learnDeps(apiKey, model) });
+    if (procedure) await rememberProcedure(shape, procedure, chrome.storage.local);
   }
   // A researched start_url is MODEL OUTPUT DISTILLED FROM WEB PAGES, which is
   // the most hostile input this product accepts. It gets exactly the treatment
