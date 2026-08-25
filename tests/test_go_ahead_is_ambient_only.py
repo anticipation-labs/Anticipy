@@ -53,7 +53,12 @@ def _brain(monkeypatch):
         return "Book dinner at Earls tomorrow at 7 PM"
 
     monkeypatch.setattr(a, "_release_freshest_held", release)
-    monkeypatch.setattr(a, "_spoken_answer_to_parked_work", lambda _l: None)
+    # **kw, not a pinned signature: the real method grew a `speaker`
+    # argument, and a double that refuses unknown keywords turns that
+    # into a TypeError inside hear() — the same trap llm_fakes.py
+    # documents on FakeLLM.chat.
+    monkeypatch.setattr(a, "_spoken_answer_to_parked_work",
+                        lambda _l, **_kw: None)
     monkeypatch.setattr(a, "_decide", lambda *_a, **_k: __import__(
         "brain.orchestrator", fromlist=["Decision"]).Decision(
             decision="ignore", goal=None, reason="nothing actionable",
@@ -67,6 +72,31 @@ def test_a_yes_said_into_a_phone_call_releases_nothing(monkeypatch):
     assert released == [], \
         "his agreement with the caller must not book the dinner"
     assert out["decision"].decision != "act"
+
+
+def test_a_yes_in_a_NAMED_other_voice_releases_nothing(monkeypatch):
+    """The fourth shape, and the one this guard was closest to already.
+
+    A named other voice is the strongest not-him evidence the roster ever
+    produces — but hear() stripped the name off the tag a hundred lines AFTER
+    this comparison ran, so "other:Sarah" did not equal "other" here and the
+    guard never saw it. The verdict existed and arrived too late to be read,
+    which is the same shape as the promise attribution this rides in with.
+    Bare "other" was already caught; this is the case that was not."""
+    a, released = _brain(monkeypatch)
+    out = a.hear(GO_AHEAD, context=THE_DINNER, speaker="other:Sarah")
+    assert released == [], \
+        "a go-ahead in somebody else's named voice must not release a card"
+    assert out["decision"].decision != "act"
+
+
+def test_a_yes_in_an_UNPLACEABLE_voice_still_releases(monkeypatch):
+    """The control. "other:v215" is the roster failing to place a voice, not
+    placing a different one — 195 identities on 200 lines. Treating it as
+    evidence would take the shortcut away from almost every real line."""
+    a, released = _brain(monkeypatch)
+    out = a.hear(GO_AHEAD, context=THE_DINNER, speaker="other:v215")
+    assert released == [GO_AHEAD]
 
 
 def test_a_yes_texted_back_is_the_sms_lane_s_to_judge(monkeypatch):

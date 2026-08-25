@@ -412,6 +412,61 @@ def _fact_words(text: str) -> set:
 # briefing comparing against "import" by hand.
 _UNTRUSTED_SOURCES = {"import", "supervised_mail", "supervised_professional"}
 
+
+def _someone_elses(loop: dict) -> bool:
+    """Has anything POSITIVELY said this open loop is not the owner's?
+
+    Two independent labels, neither derived from the words: `speaker` is the
+    phone's voice verdict on the line the promise came out of, `owes` is
+    triage's verdict on whose obligation the sentence expressed. Either one
+    saying "other" is enough; both being absent is the ordinary case and means
+    nothing at all.
+
+    A MISSING KEY IS NOT A VERDICT. Every commitment recorded before these
+    existed has neither, and every live line today has no voice verdict —
+    reading absence as "not his" would silently retire the whole store.
+    """
+    return "other" in (loop.get("speaker"), loop.get("owes"))
+
+
+def _resolve_speaker(speaker) -> tuple:
+    """The phone's raw voice tag, reduced to the roster's vocabulary:
+    ("owner"|"other"|None, name-or-None).
+
+    Lifted out of the middle of hear() because it was being asked too late.
+    hear() writes the line to memory a hundred lines before this ran, so the
+    store only ever saw the raw tag and had no way to read it — the verdict
+    was computed and discarded one call before the place that needed it, which
+    is the 8849df15 shape. Asked once, at the top, both callers see the same
+    answer.
+
+    A NAME is evidence and an AUTO-GENERATED ID IS NOT A PERSON. "other:v215"
+    means the roster could not place this voice, so it filed a new one, and
+    failing to recognise a voice is not the same thing as recognising a
+    different one. Passed through as "other" it became strong evidence,
+    because the triage prompt rightly treats a first-person commitment from
+    someone who is NOT the owner as that person's promise — so his own to-dos
+    were handed to a stranger. Both of the "I have to email Priya" lines she
+    ignored were tagged other:v210 and other:v215.
+
+    Measured on 200 real tagged lines: 195 distinct identities, 97% of them
+    seen exactly once, and the owner recognised twice. He has never enrolled,
+    so there is no voiceprint to match against and every utterance becomes a
+    new stranger. A signal that wrong is worse than no signal, and no verdict
+    is the state the honesty wall was built for.
+    """
+    if speaker == "owner":
+        return "owner", None
+    if isinstance(speaker, str) and speaker.startswith("other"):
+        _, _, who = speaker.partition(":")
+        who = who.strip()
+        # A bare local id ("v2") names nobody; a real name does. Bare "other"
+        # is the roster saying it is confident this is not him; a NAME is that
+        # plus who. Both are evidence.
+        if not who or not re.fullmatch(r"v\d+", who):
+            return "other", (who or None)
+    return None, None
+
 # The untrusted share of a memory_notes budget: one third, matching
 # memory._UNTRUSTED_WINDOW_DIVISOR so there is ONE number to reason about for
 # "how much of a prompt may be things nobody typed".
@@ -893,7 +948,12 @@ never the same opening twice. Say "heard" or "caught", never "overheard" —
 you're their partner, not an eavesdropper. Never invent things that aren't in
 the notes. Every item carries a status — only say something is done if its
 status is "done"; declined or cancelled items were NOT done; anything else is
-at most "in progress" or "waiting on you". No emojis, no bullets."""
+at most "in progress" or "waiting on you". An open loop may also carry
+"speaker" or "owes" saying whose promise it was: "other" means SOMEBODY ELSE
+made it in front of them, so never say they promised it — mention it as the
+other person's if it is worth mentioning at all. Null or missing means nobody
+knows, which is the ordinary case; say nothing about it either way.
+No emojis, no bullets."""
 
 
 @dataclass
@@ -1224,6 +1284,21 @@ class Anticipy:
         # Per-line, and only for this line: see the note on _capture_source in
         # __init__ for why one process can never have two lines in flight.
         self._capture_source = (capture_source or "").strip()
+        # WHO SPOKE IS ASKED BEFORE THE LINE IS REMEMBERED, not after.
+        #
+        # This used to be resolved just above _decide(), which is after every
+        # one of the four ingest() calls below, so memory was handed the raw
+        # tag it has no vocabulary for and stored nothing. A guest's "I'll send
+        # you the deck" therefore became an open commitment indistinguishable
+        # from the owner's own, and clock_tick could mint a browser job off it.
+        #
+        # One consequence of asking early is deliberate and is a tightening:
+        # the bare-go-ahead guard below reads `speaker != "other"`, and a
+        # NAMED other voice ("other:Sarah") used to slip past it purely
+        # because the name had not been stripped yet. The strongest possible
+        # not-him evidence was the one shape that guard could not see. It sees
+        # it now — same argument as 00d9a90f, one layer earlier.
+        speaker, speaker_name = _resolve_speaker(speaker)
         # Keep one separate raw-line cursor for recognizer repair. `_prev` is
         # intentionally cleared after an acted line so the model cannot turn
         # that action into a duplicate on the next turn. That same clearing
@@ -1264,7 +1339,7 @@ class Anticipy:
         # quiet research would violate their words. Remember the line, expose
         # the boundary in the audit verdict, and do not send it to triage.
         if non_action_content:
-            mem = self.memory.ingest(line)
+            mem = self.memory.ingest(line, speaker=speaker)
             return {"memory": mem, "decision": Decision(
                 decision="ignore", goal="",
                 reason="explicitly labelled quotation/example, not an action",
@@ -1286,7 +1361,7 @@ class Anticipy:
         # recently, and the line must either supply what it named or dispute
         # the premise. Anything else goes to triage untouched.
         if not explicit and not dictated:
-            answered = self._spoken_answer_to_parked_work(line)
+            answered = self._spoken_answer_to_parked_work(line, speaker=speaker)
             if answered:
                 return answered
         # Owner questions are answered, not triaged: a briefing request goes
@@ -1295,7 +1370,7 @@ class Anticipy:
         if self._BRIEFING_RE.search(line):
             # Remember it either way — the early return used to skip ingest,
             # so anything phrased like a briefing request left no trace.
-            mem = self.memory.ingest(line)
+            mem = self.memory.ingest(line, speaker=speaker)
             said = self.status_report() if re.search(
                 r"open|left|outstanding|pending|status|stand", line, re.I) \
                 else self.briefing()
@@ -1316,11 +1391,11 @@ class Anticipy:
                 and not self._IMPERATIVE_RE.match(recall_line):
             answer = self._answer_from_memory(recall_line)
             if answer:
-                mem = self.memory.ingest(line)
+                mem = self.memory.ingest(line, speaker=speaker)
                 return {"memory": mem, "decision": Decision(
                     decision="answer", goal=None, reason="memory recall"),
                     "anticipy_says": answer}
-        mem = self.memory.ingest(line)
+        mem = self.memory.ingest(line, speaker=speaker)
         if not explicit and explicitly_for_memory(line):
             self._prev = (line, time.time())
             return {"memory": mem, "decision": Decision(
@@ -1405,46 +1480,6 @@ class Anticipy:
         # pre-filter above already marked unmistakable dictation.
         last_a = self._last_addressee
         prev_addressee = last_a[0] if last_a and time.time() - last_a[1] < 120 else None
-        # The phone's verdict, in the roster's vocabulary: "owner",
-        # "other" (a person it cannot place), or "other:<who>" where <who>
-        # is a stable local voice id or a name he has taught it ("Sarah").
-        # Anything else — "unknown", empty, a garbled value from a build we
-        # have never seen — is NO VERDICT, and no verdict must change
-        # nothing at all.
-        speaker_name = None
-        if speaker == "owner":
-            pass
-        elif isinstance(speaker, str) and speaker.startswith("other"):
-            _, _, who = speaker.partition(":")
-            who = who.strip()
-            # A bare local id ("v2") names nobody; a real name does.
-            if not who or not re.fullmatch(r"v\d+", who):
-                # Bare "other" is the roster saying it is confident this is
-                # not him. A NAME is that plus who. Both are evidence.
-                speaker_name = who or None
-                speaker = "other"
-            else:
-                # AN AUTO-GENERATED ID IS NOT A PERSON. "other:v215" means the
-                # roster could not place this voice, so it filed a new one —
-                # and failing to recognise a voice is not the same thing as
-                # recognising a different one.
-                #
-                # Passed through as "other" it became strong evidence, because
-                # the triage prompt rightly treats a first-person commitment
-                # from someone who is NOT the owner as that person's promise.
-                # So his own to-dos were being handed to a stranger. Both of
-                # the "I have to email Priya" lines she ignored were tagged
-                # other:v210 and other:v215.
-                #
-                # Measured on 200 real tagged lines: 195 distinct identities,
-                # 97% of them seen exactly once, and the owner recognised
-                # twice. He has never enrolled, so there is no voiceprint to
-                # match against and every utterance becomes a new stranger. A
-                # signal that wrong is worse than no signal, and no verdict is
-                # the state the honesty wall was built for.
-                speaker = None
-        else:
-            speaker = None
         # A meeting arming kills the parked question: its moment is gone,
         # and the digest-vs-question double-send in one worker pass was a
         # reviewed failure. Held cards survive meetings; questions do not.
@@ -1459,6 +1494,26 @@ class Anticipy:
                                 mid_conversation=in_conversation(context),
                                 in_meeting=in_meeting,
                                 explicit=explicit)
+        # WHOSE PROMISE IS THIS? TRIAGE JUST SAID, SO WRITE IT DOWN.
+        #
+        # ingest() ran before _decide(), so the commitment node was created
+        # before anyone had judged whose it was, and `owes` was then consumed
+        # for this line's routing and thrown away. hear() itself already
+        # refuses to mint a job for somebody else's promise (below) — but the
+        # loop it leaves behind is unmarked, sits in open_loops() forever, and
+        # clock_tick reads open_loops() directly. So the refusal lasted one
+        # line and the clock could mint the same work an hour later.
+        #
+        # This is a stored model verdict compared later, not a reading of the
+        # words: the judgement was made by a model with the whole conversation
+        # in front of it, which is where HARNESS-LAW 1 says it belongs.
+        #
+        # It is also the half that fires TODAY. The voice roster covers 0% of
+        # live lines; `owes` comes back on every line that reaches triage.
+        if mem.get("commitment_id"):
+            self.memory.attribute_commitment(
+                mem["commitment_id"],
+                "other" if decision.owes == "other" else None)
         # A speech recognizer commonly finalizes at punctuation: "Send Jonah
         # this exact message:" arrives first, then the quoted body after the
         # speaker's agreement marker. The model can classify both fragments as
@@ -1601,6 +1656,12 @@ class Anticipy:
                            f"started: {decision.goal!r}",
                     addressee=addressee, owes="other"),
                     "anticipy_says": None}
+            # He IS a party, so the loop is his after all. The mark written
+            # above came off triage's first answer and this question exists
+            # precisely to reverse it — leaving it set would fence a loop on a
+            # verdict the code has already withdrawn.
+            if mem.get("commitment_id"):
+                self.memory.attribute_commitment(mem["commitment_id"], None)
 
         # The ambient lane (roadmap §7.1): speech not aimed at her — another
         # person, a dictation machine — is remembered, and researched quietly
@@ -2767,7 +2828,8 @@ class Anticipy:
             return False
         return False
 
-    def _spoken_answer_to_parked_work(self, line: str) -> Optional[dict]:
+    def _spoken_answer_to_parked_work(self, line: str,
+                                      speaker: Optional[str] = None) -> Optional[dict]:
         """Route a spoken reply to the one job that is waiting on a question.
 
         Returns the ordinary hear() shape when it lands, else None so the
@@ -2827,7 +2889,7 @@ class Anticipy:
         if not acted or str(acted).startswith("failed"):
             return None
         print(f"spoken answer reached parked job {job['id']}: {line[:60]!r}")
-        mem = self.memory.ingest(line)
+        mem = self.memory.ingest(line, speaker=speaker)
         return {"memory": mem, "decision": Decision(
             decision="answer", goal=job.get("goal", ""),
             reason="answered a question the browser was waiting on",
@@ -3362,6 +3424,25 @@ class Anticipy:
         if goal and not any(_CLOCK_ACTION_SOURCE_RE.search(
                 str(loop.get("source") or "")) for loop in selected):
             print(f"clock: reminder has no owner-authored task — dropping model goal {goal!r}")
+            goal = None
+        # AND WHOSE PROMISE WAS IT? The check above asks whether a sentence is
+        # SHAPED like an obligation; it cannot ask whose. A guest saying "I'll
+        # send you the pitch deck tomorrow" passes it word for word, so an
+        # overheard promise became an open loop and the clock prepared browser
+        # work for it — the owner chased about something somebody else said.
+        #
+        # Seatbelt-shaped, and the same shape as the _UNTRUSTED_SOURCES fence:
+        # it compares stored labels (the phone's voice verdict, triage's own
+        # `owes`) against a value, and reads no words at all.
+        #
+        # Only a POSITIVE not-his verdict fences, and it fences the ACTION
+        # only — `say` survives, so she can still raise it, and whether raising
+        # somebody else's promise is worth doing stays a judgement for the
+        # model that has the loop and the quote in front of it. No verdict
+        # changes nothing: 0% of live lines carry a voice verdict, and every
+        # loop already in every owner's database predates both labels.
+        if goal and any(_someone_elses(loop) for loop in selected):
+            print(f"clock: this promise is not his — dropping model goal {goal!r}")
             goal = None
         # The caller owns the durable "have I already brought this up?" check —
         # it needs the record of what actually went out, which lives in the

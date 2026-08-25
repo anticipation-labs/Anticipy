@@ -33,7 +33,14 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS episodes (
     id INTEGER PRIMARY KEY,
     ts REAL NOT NULL,
-    text TEXT NOT NULL
+    text TEXT NOT NULL,
+    -- WHOSE MOUTH THIS CAME OUT OF: 'owner', 'other', or NULL for no verdict.
+    -- The phone computes it per line and hear() already had it; until this
+    -- column existed it was dropped one call before memory saw the words, so
+    -- a guest's "I'll send you the deck" became an open commitment of the
+    -- owner's and the clock could mint a browser job off it.
+    -- NULL is not 'owner'. See _speaker_verdict and _ADDED_COLUMNS.
+    speaker TEXT
 );
 CREATE TABLE IF NOT EXISTS nodes (
     id INTEGER PRIMARY KEY,
@@ -92,6 +99,29 @@ CREATE TABLE IF NOT EXISTS vetoed_facts (
 );
 CREATE INDEX IF NOT EXISTS idx_vetoed_norm ON vetoed_facts(norm);
 """
+
+# COLUMNS ADDED AFTER OWNERS ALREADY HAD A memory.db ON DISK.
+#
+# `CREATE TABLE IF NOT EXISTS` reaches an old database with a new TABLE — that
+# is how `vetoed_facts` shipped — and it can NEVER reach one with a new COLUMN,
+# because the table already exists and the whole statement is skipped. A column
+# declared only in SCHEMA therefore exists for new owners and for nobody else,
+# and this store is one SQLite file per owner (brain/supervisor.py:93), so
+# "nobody else" is every owner the product already has.
+#
+# `ALTER TABLE ... ADD COLUMN` is the only mechanism SQLite offers, and there
+# was none in this repo before this list. It is meant to be re-run: every
+# Memory() open replays it, and the second one raises "duplicate column name",
+# which is the steady state rather than a failure.
+#
+# Each column is written down TWICE — in SCHEMA so a fresh database is created
+# correct in one statement, and here so an existing one catches up. Two
+# declarations of one column can drift; the shape-parity leg in
+# tests/test_memory_knows_who_spoke.py compares PRAGMA table_info of a fresh
+# database against a retrofitted one and is what notices when they do.
+_ADDED_COLUMNS = (
+    ("episodes", "speaker", "TEXT"),
+)
 
 # Full-text index so recall searches EVERY episode instead of the newest few.
 # Kept separate because it is optional: if this SQLite build lacks FTS5, the
@@ -225,6 +255,7 @@ class Memory:
     def __init__(self, path: str | Path = ":memory:", llm=None):
         self.db = sqlite3.connect(str(path))
         self.db.executescript(SCHEMA)
+        self._retrofit_columns()
         try:
             self.db.executescript(FTS_SCHEMA)
             # Backfill an existing database once, so memory recorded before
@@ -242,11 +273,46 @@ class Memory:
             pass  # no FTS5 in this build; _search_episodes falls back to LIKE
         self.llm = llm  # optional LLM extractor; falls back to rules
 
+    def _retrofit_columns(self) -> None:
+        """Bring an existing owner's database up to _ADDED_COLUMNS.
+
+        The except is narrow on purpose. "duplicate column name" means the
+        column is already there and there is nothing to do — the ordinary case
+        on every open after the first. A locked, read-only or damaged file
+        raises the same exception class, and swallowing THAT would leave the
+        store permanently one column short while every later read of it failed
+        somewhere far from here with no clue why. So the column is checked for
+        afterwards, and an open that could not produce it fails loudly."""
+        for table, column, decl in _ADDED_COLUMNS:
+            try:
+                self.db.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+            except sqlite3.OperationalError:
+                cols = {r[1] for r in self.db.execute(
+                    f"PRAGMA table_info({table})").fetchall()}
+                if column not in cols:
+                    raise
+        self.db.commit()
+
     # ------------------------------------------------------------- ingest
 
-    def ingest(self, text: str, ts: Optional[float] = None) -> dict:
+    def ingest(self, text: str, ts: Optional[float] = None,
+               speaker: Optional[str] = None) -> dict:
+        """`speaker` is the phone's LOCAL voice verdict for this line, in the
+        roster's vocabulary: "owner", "other", or nothing at all. It is stored,
+        never inferred — attribution is a fact about where a line came FROM,
+        and reading it back out of the words would be the pattern-match on
+        meaning HARNESS-LAW 1 forbids.
+
+        The default is no verdict, and no verdict is a distinct third state
+        that changes nothing. Live coverage of the voice roster is 0%, so a
+        store that read "unattributed" as "not his" would refuse to prepare
+        work off every line the product has ever heard."""
         ts = ts or time.time()
-        cur = self.db.execute("INSERT INTO episodes(ts, text) VALUES (?, ?)", (ts, text))
+        speaker = _speaker_verdict(speaker)
+        cur = self.db.execute(
+            "INSERT INTO episodes(ts, text, speaker) VALUES (?, ?, ?)",
+            (ts, text, speaker))
         episode_id = cur.lastrowid
         ex = self._extract(text)
 
@@ -266,9 +332,13 @@ class Memory:
             # and nothing could answer "why do I believe this?". Loops with no
             # source are exactly the ones she invented; open_loops() surfaces
             # the quote so the clock can refuse to raise anything unevidenced.
+            # `speaker` rides in the SAME attrs blob as source_episode, so
+            # attribution needs no nodes-table migration at all. It is the
+            # promise's own record of whose mouth it came out of, which is
+            # what open_loops() reports and the clock refuses to act on.
             commitment_id = self._upsert_node(
                 "commitment", ex.commitment, ts, status="open",
-                attrs={"source_episode": episode_id})
+                attrs={"source_episode": episode_id, "speaker": speaker})
             if ex.commitment_to and ex.commitment_to in node_ids:
                 self._add_edge(commitment_id, "committed_to",
                                node_ids[ex.commitment_to], episode_id, ts)
@@ -449,7 +519,22 @@ class Memory:
 
         Each carries `source`: the exact thing he said that created it, or None
         when the promise predates provenance or was never grounded in speech.
-        Callers that are about to INTERRUPT him should require a source."""
+        Callers that are about to INTERRUPT him should require a source.
+
+        Each also carries two independent attributions, and neither is derived
+        from the words:
+
+          `speaker` — the phone's voice verdict on the line this promise came
+            out of. Precise when it exists; it exists for almost nothing.
+          `owes` — triage's own verdict on whose obligation the sentence
+            expressed, written back by hear() after _decide(). Produced by a
+            model with the whole conversation in front of it, on every line
+            that reaches triage, which is why it is the one that fires today.
+
+        Both are None for every promise recorded before this existed, and None
+        means NO VERDICT — never "the owner's". A caller that reads a missing
+        key as "somebody else's" retires every loop in every existing owner's
+        database at once."""
         rows = self.db.execute(
             "SELECT id, name, created_ts, attrs FROM nodes "
             "WHERE type='commitment' AND status='open' ORDER BY created_ts"
@@ -457,16 +542,53 @@ class Memory:
         out = []
         for r in rows:
             try:
-                eid = (json.loads(r[3] or "{}") or {}).get("source_episode")
+                attrs = json.loads(r[3] or "{}") or {}
             except Exception:
-                eid = None
+                attrs = {}
+            eid = attrs.get("source_episode")
             src = None
             if eid:
                 ep = self.db.execute(
                     "SELECT text FROM episodes WHERE id=?", (eid,)).fetchone()
                 src = ep[0] if ep else None
-            out.append({"id": r[0], "what": r[1], "ts": r[2], "source": src})
+            out.append({"id": r[0], "what": r[1], "ts": r[2], "source": src,
+                        "speaker": _speaker_verdict(attrs.get("speaker")),
+                        "owes": attrs.get("owes") or None})
         return out
+
+    def attribute_commitment(self, commitment_id: Optional[int],
+                             owes: Optional[str]) -> None:
+        """Record triage's verdict on whose obligation a promise is.
+
+        ingest() runs BEFORE _decide(), so the commitment node exists before
+        anybody has judged whose it is; this is hear() coming back to say. Same
+        bug family as the dropped voice verdict and as 8849df15 — the answer
+        was computed and thrown away one call before the place that needed it.
+
+        `owes=None` CLEARS the mark, and that direction matters as much as
+        setting it: owner_is_party() exists to reverse triage's over-eager
+        "somebody else took this on" — it was wrong six for six on a dinner the
+        owner had plainly agreed to — and a reversal that never reached the
+        store would leave the loop fenced on a verdict the code had already
+        withdrawn."""
+        if not commitment_id:
+            return
+        row = self.db.execute(
+            "SELECT attrs FROM nodes WHERE id=? AND type='commitment'",
+            (commitment_id,)).fetchone()
+        if not row:
+            return
+        try:
+            attrs = json.loads(row[0] or "{}") or {}
+        except Exception:
+            attrs = {}
+        if owes:
+            attrs["owes"] = str(owes)
+        else:
+            attrs.pop("owes", None)
+        self.db.execute("UPDATE nodes SET attrs=? WHERE id=?",
+                        (json.dumps(attrs), commitment_id))
+        self.db.commit()
 
     def resolve(self, commitment_id: int, status: str = "done"):
         self.db.execute("UPDATE nodes SET status=? WHERE id=?", (status, commitment_id))
@@ -477,8 +599,11 @@ class Memory:
 
         The profile leads: what she KNOWS about him (distilled, ranked by
         importance x recency) comes before the raw lines she happened to
-        hear, so a briefing is grounded in who he is, not just today's
-        noise. `heard` and `open_loops` keep their exact old shape."""
+        hear, so a briefing is grounded in who he is, not just today's noise.
+        `heard` keeps its exact old shape; `open_loops` gained `speaker` and
+        `owes`, and BRIEFING_SYSTEM is told what they mean — telling the owner
+        he promised something a guest promised is the same lie one layer up
+        from the clock preparing work off it."""
         heard = self.db.execute(
             "SELECT text FROM episodes WHERE ts>=? ORDER BY ts", (since_ts,)
         ).fetchall()
@@ -1140,6 +1265,22 @@ class Memory:
                 print(f"memory: extraction model unusable, falling back to "
                       f"rules ({type(e).__name__}: {str(e)[:120]})")
         return _rule_extract(text)
+
+
+def _speaker_verdict(speaker) -> Optional[str]:
+    """The two values this store keeps about who spoke, and nothing else.
+
+    "owner" and "other" are the roster's vocabulary. Everything else — None, a
+    literal "unknown", a per-voice id like "other:v215", a value from a build
+    nobody here has seen — is NO VERDICT and is stored as NULL.
+
+    "other:v215" in particular is the roster failing to place a voice, not
+    placing a different one: 200 tagged lines produced 195 distinct
+    identities, 97% seen exactly once, and the owner recognised twice. Passing
+    that through as evidence would hand the owner's own to-dos to a stranger,
+    which is the failure hear() already normalises it away to avoid.
+    """
+    return speaker if speaker in ("owner", "other") else None
 
 
 def _extract_json(text: str) -> str:
