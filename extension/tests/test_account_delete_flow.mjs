@@ -85,6 +85,19 @@ const SCHEMA = {
   agent_llm_audit: ["owner_ref"],
   agent_audit_sessions: ["owner_ref"],
   events: ["owner_ref", "text"],
+  // Added 2026-08-25. The `evidence` collection shipped in migration
+  // 1700000045 and account_delete.pb.js has purged it since 0d2ee640, but this
+  // harness never learned the collection existed — so every delete in this file
+  // threw "no such collection: evidence" and 24 checks failed. The PRODUCT was
+  // right and the model of it was stale, which is the more dangerous way round:
+  // a red suite on the erasure path reads as "deletion is broken" and invites
+  // somebody to relax the very checks that would have caught a real break.
+  //
+  // A photograph of a page the owner was logged into is the densest single
+  // thing this product holds about anybody, its owner_ref is a TEXT column with
+  // no cascade, and deleting the record is what removes the stored FILE from
+  // the volume. It belongs in this harness more than most rows here do.
+  evidence: ["owner_ref", "job", "effect_key", "image", "share_expires", "fetches"],
   purges: ["owner_ref", "legacy_uuid", "memory_purged", "requested_at"],
 };
 
@@ -169,9 +182,16 @@ const A_LEGACY = "device-uuid-aaaa-0001"; // the phone's pre-account id
 const B = "bbbbbbbbbbbbbbb";              // a stranger
 const B_LEGACY = "device-uuid-bbbb-0002";
 
+// Mirrors OWNER_TABLES in backend/pb_hooks/account_delete.pb.js, INCLUDING its
+// order — evidence before events, because the hook puts the largest table last
+// so a timeout lands on the cheapest thing to retry. `evidence` was missing here
+// from 0d2ee640 until 2026-08-25: the hook purged it, this mirror did not know
+// it existed, and the divergence read as 24 failing checks on the erasure path.
+// A test that models the product has to be updated WITH the product, or it
+// starts arguing for the version it remembers.
 const OWNER_TABLES = [
   "jobs", "segments", "agents", "owner_profile",
-  "pendants", "agent_llm_audit", "agent_audit_sessions", "events",
+  "pendants", "agent_llm_audit", "agent_audit_sessions", "evidence", "events",
 ];
 
 // Per-table rows for A, deliberately spread across owner_ref, the account id in
@@ -197,6 +217,14 @@ const seedRows = () => ({
   ],
   pendants: [{ owner_ref: A }, { owner_ref: B }],
   agent_llm_audit: [{ owner_ref: A }, { owner_ref: A }, { owner_ref: B }],
+  // A photograph of a page the owner was logged into. owner_ref is a TEXT
+  // column with no cascade, so nothing but this handler would ever remove it —
+  // and deleting the record is what removes the stored FILE from the volume.
+  evidence: [
+    { owner_ref: A, job: "job-1", effect_key: "eff-1", image: "shot-1.png" },
+    { owner_ref: A, job: "job-2", effect_key: "eff-2", image: "shot-2.png" },
+    { owner_ref: B, job: "job-9", effect_key: "eff-9", image: "shot-9.png" },
+  ],
   agent_audit_sessions: [{ owner_ref: A }, { owner_ref: B }],
   events: [
     { owner_ref: A, text: "the private sentence" },
@@ -208,7 +236,8 @@ const seedRows = () => ({
 
 const EXPECTED_A = {
   jobs: 4, segments: 1, agents: 1, owner_profile: 2,
-  pendants: 1, agent_llm_audit: 2, agent_audit_sessions: 1, events: 4,
+  pendants: 1, agent_llm_audit: 2, agent_audit_sessions: 1,
+  evidence: 2, events: 4,
 };
 
 // One request through the real handler.
