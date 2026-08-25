@@ -52,9 +52,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests  # noqa: E402
 
+from zoneinfo import ZoneInfo  # noqa: E402
+
 from brain.worker import (  # noqa: E402
     CLOCK_QUIET_END,
     CLOCK_QUIET_START,
+    CLOCK_TZ,
     STUCK_ASKS_CEILING,
     UNINVITED_TEXTS_PER_DAY,
     _brain_fingerprint,
@@ -96,23 +99,53 @@ def fetch(collection: str, params: dict) -> list[dict]:
 
 
 def parse_ts(value: str) -> dt.datetime | None:
-    """PocketBase hands back 'YYYY-MM-DD HH:MM:SS.mmmZ' — tolerate both forms."""
+    """PocketBase hands back 'YYYY-MM-DD HH:MM:SS.mmmZ' — tolerate both forms.
+
+    Always returns an AWARE datetime in UTC. PocketBase stores `created` in
+    UTC and the trailing Z is sometimes absent, so a naive parse used to hand
+    back a datetime carrying no zone at all — which `.astimezone()` then reads
+    as the zone of whatever laptop happened to run the checker. Anchoring it
+    here means every caller below is converting from a known clock.
+    """
     if not value:
         return None
     v = value.replace("Z", "+00:00").replace(" ", "T", 1)
     try:
-        return dt.datetime.fromisoformat(v)
+        parsed = dt.datetime.fromisoformat(v)
     except ValueError:
         return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
 
 
-def evaluate_rules(said: list[dict]) -> list[tuple[str, str, str]]:
+def owner_zone(zones: dict | None, owner_ref: str):
+    """The zone the BRAIN judged this owner's hours in.
+
+    One worker process per account, and each sets CLOCK_TZ from that owner's
+    profile (worker.py's owner-context refresh). An owner with no timezone on
+    file leaves their worker on the module default, so an unknown owner falls
+    back to exactly the same CLOCK_TZ rather than to UTC — otherwise the
+    checker judges by a clock the brain never used.
+    """
+    name = (zones or {}).get((owner_ref or "").strip())
+    if not name:
+        return CLOCK_TZ
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return CLOCK_TZ
+
+
+def evaluate_rules(said: list[dict],
+                   zones: dict | None = None) -> list[tuple[str, str, str]]:
     """Judge a list of anticipy_says rows against the rules the brain promises.
 
     Pure: no network, no clock beyond the timestamps in the rows themselves. The
     fetching lives in main(), so these rules can be driven with synthetic events
     in tests/test_brain_liveness.py — a checker that has never been shown to
     fail is indistinguishable from one that cannot.
+
+    `zones` maps owner_ref -> IANA name, because the two rules below are about
+    the OWNER'S hours and `created` is UTC. See owner_zone().
     """
     out: list[tuple[str, str, str]] = []
 
@@ -136,12 +169,23 @@ def evaluate_rules(said: list[dict]) -> list[tuple[str, str, str]]:
     # Scoped to clock-initiated messages, which are uninvited BY DEFINITION. A
     # blocked errand of his own may legitimately text early (ex 21), so counting
     # those here would raise a false alarm — their bound is the ceiling above.
+    #
+    # IN HIS HOURS, NOT THE SERVER'S. `created` is UTC; the promise is in the
+    # owner's zone, because that is the clock worker.py's guard uses
+    # (datetime.fromtimestamp(now, CLOCK_TZ).hour). Comparing a UTC hour to an
+    # owner-local constant asks a different question: Vancouver is UTC-7 in
+    # summer, so everything sent 15:00-00:59 local read as "night". On
+    # 2026-08-24 that reported two breaches — 21:34 and 17:31 his time, both
+    # legal — and concluded the deployed brain was not this brain.
     night = []
     for e in said:
         if e.get("decision") != "clock":
             continue
         ts = parse_ts(e.get("created", ""))
-        if ts and (ts.hour >= CLOCK_QUIET_START or ts.hour < CLOCK_QUIET_END):
+        if not ts:
+            continue
+        local = ts.astimezone(owner_zone(zones, e.get("owner_ref", "")))
+        if local.hour >= CLOCK_QUIET_START or local.hour < CLOCK_QUIET_END:
             night.append(e)
     check(f"nothing uninvited between {CLOCK_QUIET_START}:00 and "
           f"{CLOCK_QUIET_END}:00 (ex 69)",
@@ -149,12 +193,19 @@ def evaluate_rules(said: list[dict]) -> list[tuple[str, str, str]]:
           f"{len(night)} sent in quiet hours" if night else "quiet hours respected")
 
     # ---- ex 28 / ex 112: the daily uninvited budget is absolute -------------
-    per_day: dict[str, int] = defaultdict(int)
+    # Bucketed by HIS midnight for the same reason, and worker.py counts the
+    # day the same way (`datetime.now(CLOCK_TZ).replace(hour=0, ...)`). On a
+    # UTC boundary one Vancouver day splits across two dates, so a day spent
+    # exactly at the limit reads as two quiet ones — the same defect wearing
+    # the opposite sign, and the direction that hides a real breach.
+    per_day: dict[tuple[str, str], int] = defaultdict(int)
     for e in said:
         if e.get("decision") == "clock":
             ts = parse_ts(e.get("created", ""))
             if ts:
-                per_day[ts.date().isoformat()] += 1
+                ref = (e.get("owner_ref") or "").strip()
+                local = ts.astimezone(owner_zone(zones, ref))
+                per_day[(ref, local.date().isoformat())] += 1
     busiest = max(per_day.values()) if per_day else 0
     check(f"no more than {UNINVITED_TEXTS_PER_DAY} uninvited message(s) a day (ex 28)",
           busiest <= UNINVITED_TEXTS_PER_DAY,
@@ -203,7 +254,23 @@ def main() -> int:
     if not said:
         note("no messages in the window, so no rule could be broken", "not a pass")
 
-    rows.extend(evaluate_rules(said))
+    # The owner's own hours are what the quiet-hours and per-day rules are
+    # about, so read the same profile column the worker reads. A failure here
+    # must not fail the run: every unknown owner falls back to CLOCK_TZ, which
+    # is what their worker would also have used with no timezone on file.
+    zones: dict[str, str] = {}
+    try:
+        for p in fetch("owner_profile", {"perPage": 500}):
+            ref = (p.get("owner_ref") or "").strip()
+            tzname = (p.get("timezone") or "").strip()
+            if ref and tzname:
+                zones[ref] = tzname
+        note("owner hours read from their profiles",
+             f"{len(zones)} zone(s); the rest use {CLOCK_TZ}")
+    except Exception as e:
+        note("could not read owner timezones", f"{str(e)[:60]} — using {CLOCK_TZ}")
+
+    rows.extend(evaluate_rules(said, zones))
 
     # The fingerprint cannot be fetched: worker.py prints it at startup and
     # publishes it nowhere. So state the expected value and how to compare it,

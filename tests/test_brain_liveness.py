@@ -19,6 +19,10 @@ from brain.worker import STUCK_ASKS_CEILING, UNINVITED_TEXTS_PER_DAY  # noqa: E4
 from overnight.is_the_brain_live import evaluate_rules  # noqa: E402
 
 
+# `created` is UTC, exactly as PocketBase stores it. The quiet-hours and
+# per-day rules are judged in the OWNER'S zone (CLOCK_TZ, default
+# America/Vancouver = UTC-7 in August), so a fixture hour is NOT the hour the
+# rule sees. Every timestamp below is UTC with its local time in a comment.
 def says(created, decision, goal="", text="lorem", notified=True):
     return {"kind": "anticipy_says", "created": created, "decision": decision,
             "goal": goal, "text": text, "notified": notified}
@@ -29,8 +33,8 @@ def says(created, decision, goal="", text="lorem", notified=True):
 CLEAN = [
     says("2026-08-18 09:12:00", "needs_user", "book the dentist", "Need a date."),
     says("2026-08-18 14:40:00", "needs_user", "book the dentist", "Still need a date."),
-    says("2026-08-18 10:05:00", "clock", "bins out", "Bins tonight."),
-    says("2026-08-18 18:30:00", "clock", "call mum", "You said you'd call her."),
+    says("2026-08-18 17:05:00", "clock", "bins out", "Bins tonight."),   # 10:05 local
+    says("2026-08-18 18:30:00", "clock", "call mum", "You said you'd call her."),  # 11:30 local
     says("2026-08-18 11:00:00", "done", "book the dentist", "Booked for Tuesday."),
 ]
 
@@ -85,7 +89,7 @@ def test_rewording_the_obstacle_does_not_launder_the_count():
 
 
 def test_a_clock_nudge_at_three_in_the_morning_screams():
-    night = CLEAN + [says("2026-08-19 03:14:00", "clock", "bins", "Bins.")]
+    night = CLEAN + [says("2026-08-19 10:14:00", "clock", "bins", "Bins.")]  # 03:14 local
     assert verdict(evaluate_rules(night), "uninvited between") == "FAIL"
 
 
@@ -93,13 +97,13 @@ def test_his_own_blocked_errand_early_is_not_a_quiet_hours_breach():
     # docs ex 21: "6:59 a.m., HIS booking is blocked on one answer -> text now.
     # His own errand outranks the clock." Counting that as uninvited would make
     # the checker wrong about the product, not just noisy.
-    early = CLEAN + [says("2026-08-19 06:59:00", "needs_user",
+    early = CLEAN + [says("2026-08-19 13:59:00", "needs_user",   # 06:59 local
                           "confirm the booking", "One answer and it's held.")]
     assert verdict(evaluate_rules(early), "uninvited between") == "PASS"
 
 
 def test_a_fourth_uninvited_message_in_one_day_screams():
-    busy = CLEAN + [says(f"2026-08-18 1{i}:00:00", "clock", f"g{i}", f"nudge {i}")
+    busy = CLEAN + [says(f"2026-08-18 {17 + i}:00:00", "clock", f"g{i}", f"nudge {i}")
                     for i in range(UNINVITED_TEXTS_PER_DAY + 1)]
     assert verdict(evaluate_rules(busy), "uninvited message") == "FAIL"
 
@@ -109,7 +113,7 @@ def test_the_budget_is_per_day_not_per_window():
     # window would flag a system behaving correctly over a long read.
     two_days = []
     for day in ("2026-08-17", "2026-08-18"):
-        two_days += [says(f"{day} 1{i}:00:00", "clock", f"g{i}", f"nudge {day} {i}")
+        two_days += [says(f"{day} {17 + i}:00:00", "clock", f"g{i}", f"nudge {day} {i}")
                      for i in range(UNINVITED_TEXTS_PER_DAY)]
     assert verdict(evaluate_rules(two_days), "uninvited message") == "PASS"
 
@@ -121,9 +125,100 @@ def test_the_same_sentence_twice_screams():
 
 
 def test_a_message_marked_never_delivered_screams():
-    lost = CLEAN + [says("2026-08-18 12:00:00", "clock", "g", "t", notified=False)]
+    lost = CLEAN + [says("2026-08-18 19:00:00", "clock", "g", "t", notified=False)]  # 12:00 local
     rows = evaluate_rules(lost)
     assert verdict(rows, "never landed") == "FAIL"
     # And it must not appear at all on a clean day, or it is noise rather than
     # a finding.
     assert [r for r in evaluate_rules(CLEAN) if "never landed" in r[1]] == []
+
+
+# --------------------------------------------------------------------------
+# THE CLOCK THE ROWS ARE IN IS NOT THE CLOCK THE PROMISE IS IN.
+#
+# PocketBase stamps `created` in UTC. The quiet-hours promise is in the
+# OWNER'S hours: brain/worker.py compares `datetime.fromtimestamp(now,
+# CLOCK_TZ).hour` against CLOCK_QUIET_START/END, and CLOCK_TZ is the owner's
+# own zone (worker.py:3078 sets it from their profile). Comparing a UTC hour
+# to an owner-local constant is not a rounding error, it is a different
+# question — America/Vancouver is UTC-7 in summer, so every message sent
+# between 15:00 and 00:59 local reads as "night" to a UTC checker.
+#
+# Live on 2026-08-24 this reported "2 sent in quiet hours" and concluded the
+# deployed brain was not this brain. Both rows were legal: 21:34 and 17:31
+# America/Vancouver. A checker that cries wolf for ten hours of every day
+# teaches everyone to ignore the one morning it is right.
+# --------------------------------------------------------------------------
+
+def owned(created, decision, owner_ref="owner-van", **kw):
+    row = says(created, decision, **kw)
+    row["owner_ref"] = owner_ref
+    return row
+
+
+VANCOUVER = {"owner-van": "America/Vancouver"}
+
+
+def test_an_evening_nudge_is_not_a_quiet_hours_breach():
+    # 04:34Z is 21:34 in Vancouver — the owner is awake and this is legal.
+    # This is one of the two rows that raised the false alarm.
+    evening = [owned("2026-08-24 04:34:00.000Z", "clock", goal="the draft",
+                     text="Did you get a chance to send it?")]
+    assert verdict(evaluate_rules(evening, VANCOUVER), "uninvited between") == "PASS"
+
+
+def test_an_afternoon_nudge_is_not_a_quiet_hours_breach():
+    # 00:31Z is 17:31 in Vancouver. The other false-alarm row.
+    afternoon = [owned("2026-08-24 00:31:00.000Z", "clock", goal="the Amy deal",
+                       text="Did you follow up?")]
+    assert verdict(evaluate_rules(afternoon, VANCOUVER), "uninvited between") == "PASS"
+
+
+def test_a_nudge_at_one_in_the_morning_HIS_time_still_screams():
+    # 08:00Z is 01:00 in Vancouver — genuinely the middle of his night. The
+    # timezone fix must not buy quiet by going blind.
+    night = [owned("2026-08-24 08:00:00.000Z", "clock", goal="bins", text="Bins.")]
+    assert verdict(evaluate_rules(night, VANCOUVER), "uninvited between") == "FAIL"
+
+
+def test_two_owners_in_different_zones_are_judged_in_their_own_hours():
+    # One worker process per account, each with its own CLOCK_TZ. 06:30Z is
+    # 23:30 in Vancouver (a breach) and 02:30 in Berlin (also a breach); but
+    # 14:00Z is 07:00 Vancouver (a breach, before 08:00) and 16:00 Berlin
+    # (fine). A single zone for everyone gets one of them wrong.
+    zones = {"van": "America/Vancouver", "ber": "Europe/Berlin"}
+    berlin_afternoon = [owned("2026-08-24 14:00:00.000Z", "clock",
+                              owner_ref="ber", goal="g", text="Berlin 16:00.")]
+    assert verdict(evaluate_rules(berlin_afternoon, zones), "uninvited between") == "PASS"
+    vancouver_dawn = [owned("2026-08-24 14:00:00.000Z", "clock",
+                            owner_ref="van", goal="g", text="Vancouver 07:00.")]
+    assert verdict(evaluate_rules(vancouver_dawn, zones), "uninvited between") == "FAIL"
+
+
+def test_the_daily_budget_buckets_by_HIS_midnight_not_UTC():
+    # UTC-7 means a Vancouver day straddles two UTC dates. Three nudges across
+    # one Vancouver afternoon/evening are ONE day at the limit, not two days.
+    # Bucketing on the UTC date splits them and reports a compliant day as two
+    # quiet ones — the mirror image of the same defect.
+    day = [owned("2026-08-24 18:00:00.000Z", "clock", goal="a", text="1"),   # 11:00 local
+           owned("2026-08-25 01:00:00.000Z", "clock", goal="b", text="2"),   # 18:00 local
+           owned("2026-08-25 03:00:00.000Z", "clock", goal="c", text="3")]   # 20:00 local
+    rows = evaluate_rules(day, VANCOUVER)
+    assert verdict(rows, "uninvited message") == "PASS"
+    detail = [r for r in rows if "uninvited message" in r[1]][0][2]
+    assert "busiest day: 3" in detail, f"all three are one local day, got {detail!r}"
+
+
+def test_an_owner_with_no_timezone_on_file_uses_the_workers_own_default():
+    # fetch_owner_timezone returning nothing leaves the worker on CLOCK_TZ's
+    # default, so the checker must fall back the same way or it judges by a
+    # clock the brain never used.
+    from brain.worker import CLOCK_TZ
+    import datetime as _dt
+    # 08:00Z: night in Vancouver (01:00), which is the shipped default.
+    unknown = [owned("2026-08-24 08:00:00.000Z", "clock", owner_ref="nobody",
+                     goal="g", text="t")]
+    expect = "FAIL" if _dt.datetime(2026, 8, 24, 8, tzinfo=_dt.timezone.utc)\
+        .astimezone(CLOCK_TZ).hour >= 22 or _dt.datetime(
+            2026, 8, 24, 8, tzinfo=_dt.timezone.utc).astimezone(CLOCK_TZ).hour < 8 else "PASS"
+    assert verdict(evaluate_rules(unknown, {}), "uninvited between") == expect
