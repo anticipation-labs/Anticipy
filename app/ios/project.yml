@@ -141,7 +141,19 @@ settings:
     # excluded and said out loud. No threshold, no verdict: there is no measured
     # drain in this repo to draw a line from, and a rule written while the sense
     # is unmeasured is tape by Law 5's definition.
-    CURRENT_PROJECT_VERSION: "77"
+    #
+    # 78: the echo guard stops judging duplicates by elapsed time. Every line
+    # leaves the phone either on a partial or one utterance gap after the last
+    # one, so two lines the silence timer delivers are ALWAYS further apart
+    # than the gap — a recognizer re-rendering an utterance and a person saying
+    # it again alike. Both floors measured at 2.61s through the real cursor, so
+    # no width of window ever separated them: twelve seconds ate the tester's
+    # second attempt, 2.6 let the recorded 2026-08-17 duplicate back on the
+    # feed. It is armed on the cursor's LINEAGE BREAK instead, which is a fact
+    # the phone already held and never passed on, and the three word-similarity
+    # thresholds that decided whether the owner's words reached the system at
+    # all (law1-audit #54) are gone with it.
+    CURRENT_PROJECT_VERSION: "78"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

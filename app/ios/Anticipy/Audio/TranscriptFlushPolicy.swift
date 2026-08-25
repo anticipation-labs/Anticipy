@@ -40,88 +40,109 @@ struct TranscriptFlushPolicy {
         return now.timeIntervalSince(pendingSince) >= maxHold
     }
 
-    /// How long after a line is sent a near-copy of it is still the same AUDIO
-    /// arriving twice, rather than a person saying the thing again.
+    /// Is this line the recognizer handing back audio it already decoded?
     ///
-    /// It is the utterance gap, not a number of its own, and the reason is
-    /// arithmetic rather than taste. Two separately-flushed lines are two
-    /// lines because a pause of at least `utteranceGap` ended the first one —
-    /// and the second line then costs however many seconds it takes to say.
-    /// So a person who repeats themselves cannot land the second delivery any
-    /// sooner than the gap plus the length of what they said, whatever they
-    /// do. A recognizer handing back audio it already decoded pays neither
-    /// cost: the words exist already.
+    /// Not losing words cost this: the recognizer revises, and a flush on the
+    /// ceiling followed by a replaced decode window can deliver ONE sentence
+    /// twice in slightly different words. Live 2026-08-17: "Yeah I know where
+    /// it is" then "Yeah I know it is". Nothing was lost — it was said once,
+    /// and a transcript that repeats itself reads as broken to the person
+    /// watching it. It is not cosmetic either: every duplicate runs the whole
+    /// downstream act once more.
     ///
-    /// Both ends of that are measured, not assumed. `run_flush_policy_tests.sh`
-    /// drives the real cursor and the real flush clock over every speaking
-    /// rate and every pause that can produce two lines of one phrase, and the
-    /// closest a genuine repeat ever lands is 3.4 seconds — four words at five
-    /// words a second with the shortest pause that still makes two lines. The
-    /// recorded machine duplicate of 2026-08-17 landed at 2.0 seconds. The gap
-    /// sits between them and a check goes red if it stops doing so.
+    /// TIME CANNOT ANSWER THIS, and the version that tried made the defect
+    /// worse. Every line leaves the phone either on a partial callback or one
+    /// `utteranceGap` after the last partial, because the silence flush is a
+    /// debounce that each partial re-arms. So two lines delivered by that
+    /// timer are ALWAYS more than `utteranceGap` apart — the machine's second
+    /// rendering and the person's second attempt alike, for the same reason.
+    /// Driven through the real cursor and the real flush clock, both land at
+    /// 2.61s at their closest, and the checks below measure exactly that. The
+    /// two populations share a floor, so no width of window separates them:
+    /// widening it eats more genuine repeats, narrowing it lets more
+    /// duplicates through, in the same proportion and in the same band. Twelve
+    /// seconds ate the tester's second attempt with no trace anywhere
+    /// (research/2026-08-24-why-voice-tests-dont-complete.md: three
+    /// utterances, two rows, and the one that vanished was the middle one).
+    /// 2.6 seconds — the gap itself — let the recorded 2026-08-17 duplicate
+    /// straight back in, because a gap flush cannot land any closer than that.
     ///
-    /// It was twelve seconds, which is above that floor, and the cost was
-    /// root-caused on 2026-08-24 in
-    /// research/2026-08-24-why-voice-tests-dont-complete.md: a tester saying a
-    /// phrase, watching for the row, and saying it again got ONE row for two
-    /// utterances, with no trace of the second anywhere. Three attempts, two
-    /// rows, and the one that vanished was the middle one. Saying it again to
-    /// see whether it worked is the single most common thing a person does
-    /// when checking a microphone, and it was the one thing this guard was
-    /// guaranteed to eat.
+    /// What DOES separate them is a fact the machine holds rather than one
+    /// inferred from the words. Words already sent can only come back as
+    /// unsent words when the cursor has LOST the record of having sent them:
+    /// a decode window replaced mid-task (`TranscriptCursor.Update.didReset`),
+    /// or a recognition task swapped out and its held audio replayed into a
+    /// fresh one (`cursor.reset()` in `startRecognition`). A person repeating
+    /// themselves inside one task breaks nothing — the record still describes
+    /// the text, the cursor places the boundary past it, and the repeat
+    /// arrives as ordinary new words. That is `lineageBrokeAt`, and it is
+    /// measured, not argued: on every shape of the recorded duplicate the
+    /// break is raised, on the tester's three attempts and on the tightest
+    /// batched repeat there is it is not, and 250 words of continuous speech
+    /// raise it zero times.
     ///
-    /// Reaching past the gap is also this policy contradicting itself. A pause
-    /// that long ends an utterance everywhere else in this file — it is what
-    /// `flushReason` calls `.gap` and what `cutContinues` refuses to reach
-    /// across. A window wider than that calls the same line a new utterance
-    /// and a repeat of the last one in the same breath.
-    var echoWindow: TimeInterval { utteranceGap }
+    /// `wordsAppearedAt` is what stops the arming outliving the break. Audio
+    /// held across a seam is replayed into the new request at once, so a
+    /// re-rendering's words appear in the same breath as the break, while
+    /// someone who speaks again a minute later is a minute past it. Judged on
+    /// when the words APPEARED and never on when the flush got round to them:
+    /// delivery time is the thing the debounce pushes past the gap, which is
+    /// precisely how the last version made itself unreachable.
+    func isEchoOfPrevious(_ line: String, previous: String,
+                          lineageBrokeAt: Date?, wordsAppearedAt: Date) -> Bool {
+        // Lineage intact. The cursor still knows what it sent, so nothing it
+        // is handing over now was handed over before.
+        guard let brokeAt = lineageBrokeAt else { return false }
+        let age = wordsAppearedAt.timeIntervalSince(brokeAt)
+        // Words that predate the break were never delivered — they are the
+        // ones the cursor banked BECAUSE the window died under them. Words
+        // that first appeared a whole utterance after it were spoken, not
+        // replayed: the replay is synchronous with the seam.
+        guard age >= 0, age < utteranceGap else { return false }
+        return Self.addsNoWord(line, beyond: previous)
+    }
 
-    /// Is this line the same audio arriving a second time?
+    /// Does `line` contain no word that `previous` did not already contain, in
+    /// the order `previous` had them?
     ///
-    /// Not losing words cost something: the recognizer revises, and a flush
-    /// on the ceiling followed by a banked window can deliver the SAME
-    /// sentence twice in slightly different words. Live 2026-08-17, two
-    /// seconds apart: "Yeah I know where it is" then "Yeah I know it is".
-    /// Nothing was lost — it was said once, and a transcript that repeats
-    /// itself reads as broken to the person watching it.
+    /// This is the whole word test, and it is deliberately not a similarity
+    /// score. What it replaced carried three numbers — a four-word floor, "no
+    /// more than two novel words", "at least 70% of the words shared" — which
+    /// together decided whether a line "says little the last one did not".
+    /// That is a reading of what the words MEAN. It is item #54 of
+    /// research/2026-08-24-law1-audit.md, severity H, and the most upstream
+    /// meaning-decision in the system: a line it drops is delivered nowhere at
+    /// all, not to the backend, not to the brain, not to the screen. Two of
+    /// those three numbers could be moved and all 41 checks stayed green.
     ///
-    /// The words cannot be what decides this, and that is the whole design.
-    /// A recognizer re-rendering an utterance and a person deliberately
-    /// repeating one produce the same words on purpose; comparing them can
-    /// only ever guess, and the guess it made was the wrong one for every
-    /// manual test anybody ran. `window` is what decides, on the one thing the
-    /// two events genuinely differ in — whether there was time to say it
-    /// again. The word comparison below only runs INSIDE that window, where no
-    /// person could have re-spoken four words, and its job there is narrowed
-    /// to recognising one utterance in two renderings.
+    /// Subsumption asks a transport question instead, with no number in it. A
+    /// second rendering of one utterance drops words and respells them; it
+    /// does not invent them. So a line contributing even one word of its own
+    /// is a line the recognizer had not already given us, and it goes out.
+    /// One-directional on purpose — restating a sentence and carrying on with
+    /// it adds words, and those words are the whole point of the line.
     ///
-    /// Judged on shared words rather than characters, because the difference
-    /// between two hypotheses of one sentence is usually a word appearing or
-    /// vanishing. Deliberately conservative: real repetition ("yeah yeah
-    /// yeah", "no no no") is short and identical, and dropping a genuinely
-    /// new sentence is far worse than letting one echo through.
-    ///
-    /// `window` carries no default. It was twelve, nothing passed it, and the
-    /// number outlived every reason anyone had for it.
-    static func isEchoOfPrevious(_ line: String, previous: String,
-                                 apart: TimeInterval,
-                                 window: TimeInterval) -> Bool {
-        if apart > window { return false }
+    /// The known miss is a re-rendering that SPLITS a word: "it is" coming
+    /// back as "it's" tokenizes to a word ("s") the first rendering never had,
+    /// so that duplicate survives. That is the safe direction — dropping a
+    /// genuinely new sentence is far worse than letting one echo through — and
+    /// it is pinned by a check rather than left to be rediscovered.
+    static func addsNoWord(_ line: String, beyond previous: String) -> Bool {
         let words = { (s: String) -> [String] in
             s.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
                 .map(String.init)
         }
         let new = words(line), old = words(previous)
-        // Too short to judge: "yes", "yeah", "ok" repeat naturally and often.
-        if new.count < 4 || old.count < 4 { return false }
-        // A brand-new longer thought that merely begins the same way is not
-        // an echo — only something that says little the last one did not.
-        let oldSet = Set(old)
-        let shared = new.filter { oldSet.contains($0) }.count
-        let novel = new.count - shared
-        if novel > 2 { return false }
-        return Double(shared) / Double(new.count) >= 0.7
+        // Nothing to judge. An empty line is never sent anyway, and answering
+        // "yes" here would make emptiness its own justification for a drop.
+        guard !new.isEmpty else { return false }
+        var i = 0
+        for w in new {
+            while i < old.count, old[i] != w { i += 1 }
+            guard i < old.count else { return false }
+            i += 1
+        }
+        return true
     }
 }
 

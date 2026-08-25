@@ -231,7 +231,27 @@ final class PhoneListener: NSObject, ObservableObject {
     private let flushPolicy = TranscriptFlushPolicy()
     /// The last line actually handed over, so the same sentence arriving
     /// again in different words can be recognised as itself.
-    private var lastDelivered: (text: String, at: Date)?
+    ///
+    /// It carried the instant it went out as well, for an elapsed-time
+    /// comparison that no longer exists and could not have worked: see
+    /// `TranscriptFlushPolicy.isEchoOfPrevious`. Keeping a timestamp nothing
+    /// reads is how the next reader concludes there is still a window here.
+    private var lastDelivered: String?
+    /// WHEN the cursor last lost its record of what it had already sent, or
+    /// nil once that break has been answered.
+    ///
+    /// This is the ONLY thing that can tell a recognizer re-rendering an
+    /// utterance from a person saying it again, and the phone has always known
+    /// it and never passed it on. Words already sent can come back as unsent
+    /// words in exactly two ways — a decode window replaced under them
+    /// (`update.didReset`) or a recognition task retired and its held audio
+    /// replayed into a fresh one (`cursor.reset()` below) — and both of those
+    /// are events here, not inferences about wording. A person repeating
+    /// themselves inside one task breaks nothing.
+    ///
+    /// Cleared by the next delivery, whatever that delivery is: one break
+    /// answers for one line. It is not a mode.
+    private var lineageBrokeAt: Date?
     /// Whether this recognition task has sent anything yet — see the final
     /// handler, where it decides a polish from a whole unsent monologue.
     private var everEmittedThisTask = false
@@ -789,6 +809,13 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         requestBornAt = Date()
         lastResultAt = Date()
+        // Everything the cursor knew about what it had already sent dies here,
+        // and the orphan buffer below then replays the audio it was holding
+        // into the new request. That pairing IS the duplicate: the same speech
+        // decoded a second time by a cursor with no record of the first. Mark
+        // the break before the replay, so the line it produces is judged
+        // against it.
+        lineageBrokeAt = Date()
         cursor.reset()
         partial = ""
         pendingSince = nil
@@ -852,6 +879,14 @@ final class PhoneListener: NSObject, ObservableObject {
                         self.deliver(banked, reason: nil,
                                      wordsAppearedAt: self.pendingSince ?? Date())
                     }
+                    // AFTER the banked line, never before it. Banked words are
+                    // words the cursor is handing over BECAUSE the window died
+                    // under them — they were never sent, and arming the guard
+                    // in front of them would suppress the one delivery that
+                    // exists to stop speech being lost. The line at risk is
+                    // the NEXT one: the replaced window's own text, which is
+                    // the already-sent audio decoded again.
+                    if update.didReset { self.lineageBrokeAt = Date() }
                     if result.isFinal {
                         // A final usually just polishes wording, so a couple of
                         // new words is noise — EXCEPT when the task is ending
@@ -925,19 +960,30 @@ final class PhoneListener: NSObject, ObservableObject {
                          wordsAppearedAt: Date, at now: Date = Date()) {
         // A voice sample is not something he said. Never emit it.
         guard !enrolling else { return }
-        // ...and neither is the last sentence said a second time. Not losing
-        // words cost this: the recognizer revises, so a ceiling flush and a
-        // banked window can hand over ONE sentence twice in slightly
-        // different words. Live 2026-08-17, two seconds apart: "Yeah I know
-        // where it is" then "Yeah I know it is".
+        // ...and neither is the last sentence handed over a second time. Not
+        // losing words cost this: the recognizer revises, so a replaced decode
+        // window can hand over ONE sentence twice in slightly different words.
+        // Live 2026-08-17: "Yeah I know where it is" then "Yeah I know it is".
+        //
+        // The question is asked on the break, not on the clock. Every line
+        // leaves here either on a partial or one utterance gap after the last
+        // one, so a duplicate the silence timer delivers is ALWAYS further
+        // apart than the gap — and so is a person saying it again. Elapsed
+        // time cannot tell those two apart at any width; `lineageBrokeAt` can,
+        // because only one of them happens with the cursor's send record gone.
+        let broke = lineageBrokeAt
+        // One break answers for one line, whether or not that line survives.
+        // Read and cleared here rather than left standing, because a flag with
+        // nothing to clear it is a mode: the swap that armed it would go on
+        // eating repeats until the next one.
+        lineageBrokeAt = nil
         if let last = lastDelivered,
-           TranscriptFlushPolicy.isEchoOfPrevious(
-               line, previous: last.text,
-               apart: now.timeIntervalSince(last.at),
-               window: flushPolicy.echoWindow) {
+           flushPolicy.isEchoOfPrevious(line, previous: last,
+                                        lineageBrokeAt: broke,
+                                        wordsAppearedAt: wordsAppearedAt) {
             return
         }
-        lastDelivered = (line, now)
+        lastDelivered = line
         everEmittedThisTask = true
         // WHICH line carries the mark, and for HOW LONG. `.ceiling` says how
         // THIS line ended: the clock ran out while he was still talking. The
@@ -1112,6 +1158,10 @@ final class PhoneListener: NSObject, ObservableObject {
         // recognition task deliberately does not clear this (speech crosses a
         // swap seam); a session ending is the one boundary nothing crosses.
         cutAt = nil
+        // Same boundary, same reason. A break armed by a swap moments before
+        // Stop must not be answered by the first line of the NEXT session,
+        // which is a fresh sentence nobody has heard yet.
+        lineageBrokeAt = nil
         task?.finish()
         request = nil
         task = nil

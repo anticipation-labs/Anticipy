@@ -97,7 +97,90 @@ if ! grep -q 'cursor.takePending' "$listener"; then
     echo "PhoneListener does not take pending words all-or-nothing."
     exit 2
 fi
-echo "PhoneListener observes every hypothesis, banks lost windows, and holds no word floor"
+
+# ---------------------------------------------------------------- the lineage
+# The echo guard is armed by a fact only PhoneListener holds: the cursor lost
+# its record of what it had already sent. TranscriptFlushPolicyTests compiles
+# the policy and the cursor and CANNOT SEE this file, so unwiring any line
+# below leaves all 48 checks green while duplicates go back on the feed. That
+# is the shape of defect this suite was written blind to last time.
+#
+# Read from a copy with the comment lines stripped, because every sentence
+# below is also written in the prose around the code it describes, and a leg
+# satisfied by the comment explaining it enforces nothing.
+code="$out/PhoneListener.nocomments.swift"
+grep -vE '^[[:space:]]*//' "$listener" > "$code"
+
+# The call is read with the spaces and newlines squeezed out, as one string.
+# Read line by line, three of these legs passed while the thing they name was
+# gone: `deliver` also asks `cutContinues(cutAt:wordsAppearedAt:)`, so a leg
+# grepping the deliver body for `wordsAppearedAt: wordsAppearedAt` was answered
+# by a DIFFERENT call four lines below the one it meant to read.
+call=$(awk '/private func deliver/,/^    }/' "$code" | tr -d ' \n')
+if ! printf '%s' "$call" | grep -q 'flushPolicy.isEchoOfPrevious(line,previous:last,'; then
+    echo "PhoneListener no longer asks the policy whether a line is a duplicate."
+    exit 2
+fi
+# ...and it asks with the lineage break, not with an elapsed time. Every line
+# leaves here either on a partial or one utterance gap after the last one, so
+# two timer-delivered lines are ALWAYS further apart than the gap — a machine
+# re-render and a person saying it again alike. A window of any width holds
+# both or neither, which is how the 2.6s window let the recorded 2026-08-17
+# duplicate back onto the feed while still eating the tester's second attempt.
+if ! printf '%s' "$call" | grep -q 'lineageBrokeAt:broke,'; then
+    echo "PhoneListener judges duplicates without the lineage break."
+    echo "Elapsed time cannot separate a re-decoded sentence from a person"
+    echo "repeating themselves: the debounce gives both the same floor."
+    exit 2
+fi
+# ...and on when the words APPEARED, which is what stops the mark reaching a
+# sentence spoken a minute after the swap that armed it. Pinned ADJACENT to the
+# lineage argument, so only this call can answer for it.
+if ! printf '%s' "$call" | grep -q 'lineageBrokeAt:broke,wordsAppearedAt:wordsAppearedAt)'; then
+    echo "PhoneListener no longer says when the words it is judging appeared."
+    echo "Measured from delivery time the arming never expires, and the next"
+    echo "repeat after any task rotation is deleted with no trace."
+    exit 2
+fi
+# One break answers for one line. A mark with nothing to clear it is a mode:
+# the swap that armed it would go on eating repeats until the next swap.
+if ! awk '/private func deliver/,/^    }/' "$code" | grep -q '^        lineageBrokeAt = nil$'; then
+    echo "PhoneListener never closes the lineage break it opened."
+    exit 2
+fi
+# A retired recognition task takes the cursor's record with it and its held
+# audio is replayed into the new one. That pairing IS the duplicate.
+#
+# The indent is load-bearing, and not for tidiness: `startRecognition` encloses
+# the whole recognition callback, so an awk range over it also contains
+# `self.lineageBrokeAt = Date()` from the in-task branch. A leg written without
+# the anchors passed with this line deleted, answered by the one nested inside
+# the closure below it.
+if ! awk '/private func startRecognition/,/^    }/' "$code" \
+     | grep -q '^        lineageBrokeAt = Date()$'; then
+    echo "PhoneListener does not mark the lineage break at a task seam."
+    echo "The recorded 2026-08-17 duplicate arrives that way and goes on the feed."
+    exit 2
+fi
+# ...and so does a decode window replaced mid-task, which is the commoner half.
+if ! grep -qE 'update\.didReset.*self\.lineageBrokeAt = Date\(\)' "$code"; then
+    echo "PhoneListener ignores the cursor telling it the window was replaced."
+    exit 2
+fi
+# ORDER, and it is load-bearing: banked words are words the cursor is handing
+# over BECAUSE the window died under them. They were never sent. Arming in
+# front of them suppresses the one delivery that exists to stop speech being
+# lost — the 12-second sentence collapsing to "Of August".
+banked_line=$(grep -n 'self.deliver(banked' "$code" | head -1 | cut -d: -f1)
+arm_line=$(grep -nE 'update\.didReset.*self\.lineageBrokeAt = Date\(\)' "$code" \
+           | head -1 | cut -d: -f1)
+if [ -z "$banked_line" ] || [ -z "$arm_line" ] || [ "$arm_line" -lt "$banked_line" ]; then
+    echo "PhoneListener arms the echo guard before it hands over banked words."
+    echo "Those words were never sent; suppressing them deletes real speech."
+    exit 2
+fi
+echo "PhoneListener observes every hypothesis, banks lost windows, holds no word floor,"
+echo "and judges duplicates on the lineage break rather than on elapsed time"
 
 swiftc -O \
     "$app/Audio/TranscriptCursor.swift" \
