@@ -26,6 +26,7 @@ from . import pb
 from . import research
 
 from .anticipy_core import Anticipy, goal_tokens
+from .evidence import picture_for_done_text
 from .memory import Memory
 from . import sorter
 from .segmenter import SegmentStore, parse_ts, place_turn
@@ -61,6 +62,35 @@ CLOCK_STATE = os.environ.get("ANTICIPY_CLOCK_STATE", "/data/clock_state.json")
 CONSOLIDATE_MIN_GAP_SECONDS = 20 * 3600
 CONSOLIDATE_MAX_BATCHES = 10          # bounds one night's model spend
 CONSOLIDATE_RETRY_SECONDS = 30 * 60   # a failing model retries gently, not per tick
+
+# ---- day zero's hello, held rather than dropped (stranger_gate leg 6)
+# Quiet hours are ten hours long, so a held welcome is a NIGHT, not a queue.
+# A worker that was down for days must not open with "your very first minutes
+# with me" to somebody who onboarded on Tuesday; past this, the hold is
+# stamped and logged instead of sent.
+WELCOME_HOLD_MAX_SECONDS = 24 * 3600
+
+
+def _in_quiet_hours(now: float) -> bool:
+    """Is it the night the rest of this worker already keeps?
+
+    The clock lane, the night digest, the overheard FYIs, the parked question
+    and the ambient acts all refuse to initiate between CLOCK_QUIET_START and
+    CLOCK_QUIET_END. This is that same night, read through the same two
+    constants — deliberately not a second, parallel notion of one.
+
+    HARNESS-LAWS law 1 is not in play here: a threshold on the CLOCK decides
+    WHEN a text may leave, never what any text MEANS. No word is being
+    classified; the sentence is composed by the model either way.
+
+    ONE TIMEZONE, and it is CLOCK_TZ. Every worker process is bound to exactly
+    one account, and the 60-second profile beat rewrites CLOCK_TZ from that
+    owner's own profile zone, so in a supervised worker this is the owner's
+    night. Where the profile carries no zone it stays ANTICIPY_TZ, the server
+    default — a stranger in that state is judged by the server's clock.
+    """
+    hour = datetime.fromtimestamp(now, CLOCK_TZ).hour
+    return CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END
 
 
 def owner_filter(anticipy) -> str:
@@ -233,7 +263,10 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
         onboarding), so a long-standing owner editing their settings is
         never suddenly 'welcomed';
       - one durable stamp per number in the clock state file, so a redeploy
-        can never re-send it.
+        can never re-send it;
+      - not in the middle of the night. People set up new things late, and
+        this is the ONE message that goes to somebody who has never heard
+        from her before — the first impression cannot be a 1am buzz.
     Returns True when a welcome actually went out."""
     now = now if now is not None else time.time()
     phone = anticipy.owner_phone
@@ -250,13 +283,54 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
             if created else 0
     except Exception:
         return False
-    if not ts or now - ts > 3600:
+    # A hello held during last night's quiet hours is still owed. It lives in
+    # the clock state file beside the welcomed stamp, so a restart between the
+    # hold and the morning loses neither the debt nor the once-ever rule.
+    #
+    # Read defensively. supervisor.py:45 records a real incident where a kill
+    # landed mid-write and "a half-written clock_state.json read back as the
+    # permissive default"; this beat also refreshes the phone, the zone and
+    # the name, so a TypeError raised here over a malformed key would cost
+    # far more than one hello.
+    raw_held = state.get("welcome_held")
+    held = dict(raw_held) if isinstance(raw_held, dict) else {}
+    held_ts = held.get(digits)
+    if not isinstance(held_ts, (int, float)):
+        held_ts = None
+    fresh = bool(ts) and now - ts <= 3600
+    if not fresh and held_ts is None:
         # An old profile only means the stamp file was lost — mark it so the
         # check never runs again, but say nothing.
         state.setdefault("welcomed_phones", []).append(digits)
         _save_clock_state(state)
         return False
-    first = (items[0].get("first_name") or "").strip()
+    if held_ts is not None and now - held_ts > WELCOME_HOLD_MAX_SECONDS:
+        # The morning this was held for has been and gone — the worker was
+        # down through it. Introducing herself days late is its own "WHAT?",
+        # so this one is retired. LOUDLY: the whole point of holding is that
+        # a first impression is never dropped in silence.
+        held.pop(digits, None)
+        state["welcome_held"] = held
+        state.setdefault("welcomed_phones", []).append(digits)
+        _save_clock_state(state)
+        print(f"welcome dropped, held past its morning: …{digits[-4:]} "
+              f"({int((now - held_ts) / 3600)}h)")
+        return False
+    if _in_quiet_hours(now):
+        # NOT NOW IS NOT NEVER. Returning False here without recording the
+        # debt would trade one bad first impression for no first impression
+        # at all: by morning the profile is hours old, the young-profile
+        # guardrail above rejects it, and the stranger never hears from the
+        # product she just installed. So the hold is written down, and the
+        # 60-second beat that calls this function delivers it when the night
+        # ends — nothing new to schedule.
+        if held_ts is None:
+            held[digits] = ts
+            state["welcome_held"] = held
+            _save_clock_state(state)
+            print(f"welcome held for morning (quiet hours): …{digits[-4:]}")
+        return False
+    first = (items[0].get("first_name") or "").strip() if items else ""
     said = anticipy._voice({
         "situation": "their very first minutes with you — they just finished "
                      "onboarding and saved their number; introduce yourself "
@@ -271,6 +345,10 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
     if not anticipy.notify_owner(said):
         return False
     state.setdefault("welcomed_phones", []).append(digits)
+    # Debt paid. Cleared in the same write as the stamp, so no restart can
+    # land between the two and re-deliver a hello that already went out.
+    held.pop(digits, None)
+    state["welcome_held"] = held
     _save_clock_state(state)
     post_event("anticipy_says", said, decision="welcome", goal="",
                owner_ref=getattr(anticipy, "owner_ref", ""),
@@ -3310,10 +3388,6 @@ def main() -> None:
                 if entered and entered != anticipy.owner_phone:
                     anticipy.owner_phone = entered
                     print(f"owner phone updated from the app: …{entered[-4:]}")
-                # Day zero: a brand-new owner's first proactive touch — one
-                # welcome, stamped durably, never repeated.
-                if anticipy.owner_phone:
-                    maybe_welcome_new_owner(anticipy, _clock_state())
                 # Same beat for the zone: somebody travels, or onboards after
                 # the worker started, and every prompt should follow them
                 # without a redeploy.
@@ -3325,6 +3399,17 @@ def main() -> None:
                     except Exception:
                         pass
                     print(f"owner timezone updated from the app: {zone}")
+                # Day zero: a brand-new owner's first proactive touch — one
+                # welcome, stamped durably, never repeated, and never in the
+                # middle of their night.
+                #
+                # AFTER the zone, not before. This is the only decision in the
+                # worker whose FIRST evaluation is the one that matters, and
+                # its quiet-hours guard reads CLOCK_TZ. Called above the zone
+                # refresh, a stranger's very first beat was judged against
+                # ANTICIPY_TZ — the server's night, not theirs.
+                if anticipy.owner_phone:
+                    maybe_welcome_new_owner(anticipy, _clock_state())
                 # And the name, on the same beat and for the same reason: a
                 # worker that started before onboarding finished otherwise
                 # composes for the whole day without knowing who it is
