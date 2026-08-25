@@ -696,9 +696,26 @@ class Memory:
         # renewal closes in 3 weeks" and DELETED it.
         #
         # Closed class only — articles, prepositions, particles, pronouns,
-        # auxiliaries, conjunctions. Nothing here is a name, and nothing here
-        # carries a claim: "no" is deliberately absent, because negation is
-        # exactly the difference between two facts.
+        # auxiliaries, conjunctions. Nothing here is a name.
+        #
+        # THIS LIST IS A SEARCH FILTER AND IT IS NOT SAFE TO COMPARE FACTS
+        # WITH. A previous version of this comment claimed "nothing here
+        # carries a claim: 'no' is deliberately absent, because negation is
+        # exactly the difference between two facts" — while "not" sat
+        # nineteen lines above it, and while "is"/"was" and "are"/"were" sat
+        # here as pairs whose difference is a live fact against a dead one.
+        # Measured through the real store: "Priya is my partner" then "Priya
+        # is not my partner" both reduced to {priya, partner}, scored 1.00,
+        # and the denial was merged into the assertion with zero model calls
+        # while the assertion's confidence rose 0.6 -> 0.6975 (Law-1 audit
+        # item #44).
+        #
+        # Curating the list is not the fix and cannot be: the words below
+        # EARN their place in a search, where "not" and "was" are noise, and
+        # the next reviewer only has to reach for a different one. What was
+        # wrong was a comparator ruling on a difference it had deleted. See
+        # `_near_identical_wording`, which is now the only route from a word
+        # score to a modelless "same" and refuses to cross a dropped word.
         "a", "an", "as", "at", "by", "in", "of", "on", "to", "up",
         "am", "be", "is", "do", "he", "i", "it", "me", "my", "we", "us",
         "or", "so", "if",
@@ -1286,7 +1303,8 @@ class Memory:
                 "id": r[0],
                 "fact": (r[1] if retired_ts is None
                          else _retired_note(r[1], retired_ts, now)),
-                # THE FACT AS HE SAID IT, beside the fact as she would say it.
+                # THERE IS NO SECOND WORDING KEY HERE, AND THAT IS THE POINT.
+                #
                 # `fact` is a RENDERING — for a retired row it carries the
                 # whole "no longer true — retired N days ago:" sentence — and
                 # anything that MATCHES against it is matching seven words
@@ -1297,11 +1315,25 @@ class Memory:
                 # true" came back with the dead address at salience 4.70 as
                 # the only relevant thing in a store that holds no "true".
                 #
-                # So the two are separate keys and the sinks divide by use:
-                # anything SHOWN to a model reads `fact`, so the retirement
-                # can never be dropped by accident; anything that SEARCHES
-                # reads `text`. See tests/test_library_recall_matches_the_fact.
-                "text": r[1],
+                # The first fix for that hung the bare wording off a sibling
+                # key, `"text": r[1]` — which is the exact shape RULING 2
+                # forbids twenty lines up ("not hung off a sibling key. A
+                # sibling key is how briefing_facts once laundered `source`").
+                # Measured by a reviewer: one line added to
+                # `_profile_recall.line()` — `"text": f["text"],` — carried
+                # the un-retired wording into every row recall() returns and
+                # the whole suite stayed green, with
+                # `f.get('fact') or f.get('text')` already written and waiting
+                # at brain/orchestrator.py:1244.
+                #
+                # So the search material does not leave this method. The one
+                # reader, `_profile_recall`, reads it out of the store by row
+                # id into a local (see `_bare_wording`). A key that does not
+                # exist cannot be projected into a prompt by a refactor, and
+                # the leg that holds this is
+                # tests/test_library_no_bare_wording_leaves_the_profile.py —
+                # which names no key, and fails on any value carrying a dead
+                # fact's wording without its retirement.
                 "importance": r[2],
                 "confidence": r[3], "source": r[4], "provenance": prov,
                 "first_seen_ts": r[6], "last_seen_ts": r[7], "kind": kind,
@@ -1523,6 +1555,22 @@ class Memory:
             "SELECT COUNT(*) FROM episodes WHERE id>?", (episode_id,)
         ).fetchone()[0]
 
+    def _bare_wording(self) -> dict[int, str]:
+        """{row id: the fact exactly as it was stored}, for SEARCHING only.
+
+        This is the material `_profile_recall` counts query words over. It is
+        fetched here, into a caller's local, instead of riding out on the
+        public rows, because a retired row's bare wording is the one string
+        RULING 2 exists to keep out of a prompt — and a key on a dict that
+        goes to prompts is one `f.get('text')` away from being in one.
+
+        A row present in `profile_facts` and missing here cannot happen: same
+        connection, same table, no write in between. If it ever did, that fact
+        would score relevance 0 and reach recall only through the padding
+        branch — it would go quiet, not wrong."""
+        return {rid: fact for rid, fact in
+                self.db.execute("SELECT id, fact FROM profile_facts")}
+
     def _profile_recall(self, words: set[str], limit: int,
                         retired: str = RETIRED_EXCLUDED) -> list[dict]:
         """Profile facts matching the query, ranked by profile_facts'
@@ -1559,13 +1607,20 @@ class Memory:
                 "source": f.get("source", ""),
             }
 
+        # THE STORED WORDING, READ HERE AND NOWHERE ELSE. Relevance is a claim
+        # that the QUESTION is about this fact, so it must be counted over
+        # what HE said — not over the retirement sentence this module wraps a
+        # dead row in, which would let "is that still true" score every dead
+        # row in the store on words nobody ever spoke.
+        #
+        # It is a LOCAL, not a key on the rows below, because the rows below
+        # go to prompts: see the note in `profile_facts` where the sibling key
+        # used to be. Nothing but `rel` may read this dict.
+        bare = self._bare_wording()
+
         out = []
         for f in self.profile_facts(retired=retired):
-            # `text`, not `fact`: relevance is a claim that the QUESTION is
-            # about this fact, and it must be counted over what he said, not
-            # over the retirement sentence this module wraps a dead row in.
-            # See the `text` key in profile_facts for the measurement.
-            blob = f["text"].lower()
+            blob = bare.get(f["id"], "").lower()
             rel = sum(1 for w in words if w in blob)
             if not rel:
                 continue
@@ -1649,6 +1704,79 @@ class Memory:
         "8" carry the whole meaning of a time.
         """
         return {w for w in _fact_tokens(text) if w not in self._STOP}
+
+    def _dropped_words(self, text: str) -> set:
+        """The other half of `_compare_words` — the tokens it threw away.
+
+        Kept beside the score rather than discarded, because a comparator that
+        cannot see a word must not rule on a sentence that turns on it."""
+        return {w for w in _fact_tokens(text) if w in self._STOP}
+
+    # The wording score that has always been here. It lives beside the only
+    # method allowed to read it so the two cannot drift into two thresholds.
+    _NEAR_IDENTICAL = 0.8
+
+    def _near_identical_wording(self, a: str, b: str, *,
+                                subject_only: bool = False) -> bool:
+        """THE ONLY ROUTE FROM A WORD SCORE TO "same fact" WITH NO MODEL.
+
+        Both deterministic shortcuts in `_relate_fact` come through here, and
+        they come through here TOGETHER on purpose: the hole this closes was
+        reopenable through either one, and a guard written at one call site is
+        a guard the next branch walks around.
+
+        THE GUARD: the tokens `_compare_words` REMOVED are part of the wording
+        too, so if the two texts do not drop the same ones, this is not
+        "near-identical wording" — it is a difference this tier cannot see,
+        and it says so by refusing. The pair falls through to the model, which
+        is where HARNESS-LAW 1 puts the question of what two sentences mean.
+
+        Measured, on the shipped code, through ingest -> consolidate:
+
+            "Priya is my partner" / "Priya is not my partner"      -> "same"
+            "Dana is coming to dinner" / "Dana is not coming ..."  -> "same"
+            "the Devon renewal is signed" / "... is not signed"    -> "same"
+            "Priya is my partner" / "Priya was my partner"         -> "same"
+
+        every one of them with the model asked ZERO times, the denial merged
+        into the assertion, and the assertion's confidence RISING because the
+        contradiction landed as evidence for it.
+
+        NO WORD IS CLASSIFIED HERE and no list decides meaning. The rule is
+        structural and it is about the COMPARISON, not about the sentence:
+        rule only where you can see. That is why deleting "not" from `_STOP`
+        was rejected as the fix — it closes three sentences and leaves the
+        family open, and "not" genuinely belongs in a SEARCH stop list.
+
+        `subject_only` is the changed-number branch: digits are dropped from
+        both sides so a differing number does not push the score down by
+        exactly the thing being tested for. See `_relate_fact`.
+
+        WHY `_same_as` DOES NOT USE THIS, written down so the omission reads
+        as a decision rather than an oversight. The two checks point opposite
+        ways. Here, over-matching MERGES two facts and destroys one — the safe
+        failure is to ask. In `_same_as` the answer drives a veto: deleting
+        what the owner tapped away and refusing to re-derive it, where
+        over-matching blocks a bit too much and UNDER-matching lets a
+        reworded re-derivation back in one refresh later, which is the failure
+        that gesture exists to prevent. Adding this guard there would make a
+        vetoed "a proposal is in flight" stop matching "a proposal in flight".
+        A guard that is right for a merge is wrong for a forget.
+        """
+        # NOT a multiset: a stuttered function word ("the renewal is is
+        # signed") is the same wording, while a function word PRESENT on one
+        # side and ABSENT on the other is the difference between two facts.
+        if self._dropped_words(a) != self._dropped_words(b):
+            return False
+        wa, wb = self._compare_words(a), self._compare_words(b)
+        if subject_only:
+            wa = {w for w in wa if not w.isdigit()}
+            wb = {w for w in wb if not w.isdigit()}
+        # An empty side means the score is not a measurement of anything —
+        # the pair goes to the model like every other unanswerable pair.
+        if not wa or not wb:
+            return False
+        return len(wa & wb) / len(wa | wb) >= self._NEAR_IDENTICAL
 
     def _relate_fact(self, text: str,
                      ts: Optional[float] = None) -> tuple:
@@ -1753,10 +1881,8 @@ class Memory:
                 # tested for — "dinner with Sarah at 6" vs "at 8" scores 0.50
                 # on the full set and would read as two unrelated facts,
                 # which is the opposite error to the one being fixed.
-                subj_a = {w for w in cand_words if not w.isdigit()}
-                subj_b = {w for w in fwords if not w.isdigit()}
-                if subj_a and subj_b and (
-                        len(subj_a & subj_b) / len(subj_a | subj_b)) >= 0.8:
+                if self._near_identical_wording(text, fact,
+                                                subject_only=True):
                     self._last_match_changed_detail = True
                     return rid, "same"
                 # NOT `continue` any more, and this is load-bearing. Dropping
@@ -1769,7 +1895,7 @@ class Memory:
                 # below merging them and throwing the new number away, which is
                 # why that branch is now an elif.
                 pass
-            elif cand_words and fwords and overlap >= 0.8:
+            elif self._near_identical_wording(text, fact):
                 return rid, "same"  # near-identical wording; no model needed
             # A RETIRED ROW IS NEVER PUT TO THE MODEL. The question the prompt
             # asks — which of these is true now — has no answer about a fact

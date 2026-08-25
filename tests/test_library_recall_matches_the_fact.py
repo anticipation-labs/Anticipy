@@ -41,7 +41,25 @@ column mix-up.
 The general leg is `test_no_word_of_the_retirement_wrapper_ever_scores`: it
 derives the wrapper's whole vocabulary from `_retired_note` itself, so adding
 a word to that sentence later re-arms this test instead of quietly widening
-the hole again.
+the hole again. `_wrapper_words` takes EVERY token the renderer adds — it used
+to filter to `len(w) > 2 and w.isalpha()`, which silently dropped a day count
+or a bracketed marker from the derived set and made that promise false for
+anything but plain words.
+
+WHAT THE FIX DELIBERATELY GIVES UP, stated here because nothing else in the
+tree records it. After it, no query can reach a retired fact by asking about
+RETIREMENT ITSELF: "what is no longer true", "what did you retire recently",
+"is that still true" all score every dead row 0.0. A dead row now arrives only
+by its OWN wording, or through the salience-0 padding branch that sorts it
+last and drops it first. That is a real narrowing and it is the intended one —
+matching a fact on boilerplate this module wrote is not evidence the question
+was about that fact — but a future agent looking for "why did asking about
+retirement stop working" should find the answer here.
+
+AND THE BLAST RADIUS IS SMALLER THAN IT LOOKS. `_profile_recall` already
+sorted dead rows last before this fix, and no sink reads `salience`, so the
+delta is not ordering — it is WHICH ROWS SURVIVE A FULL RECALL WINDOW. When
+the window is not full, the same rows come back either way.
 """
 from __future__ import annotations
 
@@ -86,13 +104,21 @@ def _wrapper_words(now: float) -> set:
     Three ages, because the sentence branches on them ("today", "yesterday",
     "N days ago") and a word that only appears in one branch is still a word
     the owner never said. The fact passed in is a nonsense token so that
-    nothing of the FACT's own wording is mistaken for the wrapper's."""
+    nothing of the FACT's own wording is mistaken for the wrapper's.
+
+    NOTHING IS FILTERED OUT OF THIS SET. It used to keep only
+    `len(w) > 2 and w.isalpha()`, which is the derivation quietly making the
+    same call the code under test makes — so a day count ("30") or a bracketed
+    marker added to the wrapper later would have been dropped here and would
+    NOT have re-armed the test, which is the one thing this leg promises. A
+    token `recall` itself declines to seed on simply asks nothing and passes;
+    that costs a case, where dropping it costs the guarantee."""
     words = set()
     for age in (0.0, 1 * DAY, 30 * DAY):
         rendered = _retired_note("zzqqxx", now - age, now)
         words |= {w.strip(".,!?:—-").lower()
                   for w in rendered.replace("zzqqxx", " ").split()}
-    return {w for w in words if len(w) > 2 and w.isalpha()}
+    return {w for w in words if w}
 
 
 # ------------------------------------------------------------ the measured bug
@@ -122,6 +148,20 @@ def test_a_word_only_the_store_wrote_does_not_make_a_dead_fact_relevant():
     # scoring it is the claim that it answers the question.
     assert all(h["salience"] == 0.0 for h in dead), \
         [(round(h["salience"], 3), h["fact"]) for h in dead]
+
+
+def test_the_derived_vocabulary_is_every_token_the_wrapper_adds():
+    """Guard on the leg below, because that leg is only as general as its
+    derivation. Every token `_retired_note` writes around the fact must be in
+    the set — including the day count, which `w.isalpha()` used to drop."""
+    now = time.time()
+    derived = _wrapper_words(now)
+    for age in (0.0, 1 * DAY, 30 * DAY):
+        rendered = _retired_note("zzqqxx", now - age, now)
+        for raw in rendered.replace("zzqqxx", " ").split():
+            token = raw.strip(".,!?:—-").lower()
+            if token:
+                assert token in derived, (rendered, token, sorted(derived))
 
 
 def test_no_word_of_the_retirement_wrapper_ever_scores():
@@ -167,9 +207,36 @@ def test_a_live_fact_scores_exactly_as_it_did():
 
 
 def test_the_action_lane_is_unchanged_and_still_holds_nothing_dead():
+    """The PROFILE half of the action-lane guard — the WHERE clause in
+    `profile_facts`. It does not reach the episode layer; see the leg below,
+    which does, and which this one was once wrongly credited with covering."""
     now = time.time()
     m, _ = _moved_store(now)
     for q in ("is that still true", "what was our maple address"):
         hits = m.recall(q, retired=RETIRED_EXCLUDED)
         assert all(h.get("retired_ts") is None for h in hits), (q, hits)
         assert not any("Maple" in h["fact"] for h in hits), (q, hits)
+
+
+def test_the_dead_address_cannot_come_back_through_the_raw_episode_either():
+    """The OTHER half of the same guard: `dead_episodes` in `recall`.
+
+    A retired fact's source episode is that fact in undistilled form, and it
+    carries no retirement marker at all — `heard: "Our place at 4 Maple St."`
+    reads as a live instruction on its way to filled[gap] -> params[key].
+
+    The queries above never exercise this: the episode scores 1 hit and the
+    layer needs 2, so forcing `dead_episodes = set()` left every leg in this
+    file green. "maple place" scores 2 and reaches it. MEASURED here — in the
+    speech lane the same query returns `heard: "Our place at 4 Maple St."`, so
+    the row genuinely exists and is genuinely being filtered, not merely
+    absent."""
+    now = time.time()
+    m, _ = _moved_store(now)
+
+    quoted = m.recall("maple place", retired=RETIRED_QUOTED)
+    assert any(h["fact"].startswith('heard:') and "Maple" in h["fact"]
+               for h in quoted), quoted
+
+    hits = m.recall("maple place", retired=RETIRED_EXCLUDED)
+    assert not any("Maple" in h["fact"] for h in hits), hits
