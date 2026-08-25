@@ -7,10 +7,9 @@ options:
 # Package.swift, so a from/exactVersion pin cannot resolve at all. The hash
 # matches swiftpm/Package.resolved, which already carried this pin while the
 # target linked nothing.
-packages:
-  SherpaOnnx:
-    url: https://github.com/k2-fsa/sherpa-onnx
-    revision: 00ad9a19a63751a6c4b12050a00eacfeb204814e
+# NO PACKAGES. The one that used to be here is sherpa-onnx, and it is out for
+# the second time — see the target's `dependencies` note below for why, and for
+# exactly what it costs and how to put it back.
 settings:
   base:
     MARKETING_VERSION: "1.1.0"
@@ -162,8 +161,22 @@ settings:
     # the `self.`, and `(facts, lastSessionFacts) = (self.partial, "")`, a shape
     # it did not recognise and therefore read as harmless. It is a
     # `ListenSessionFacts` now: no `+=`, no `.append`, no tuple assignment that
-    # compiles at all, and one construction the gate reads argument by argument.
-    CURRENT_PROJECT_VERSION: "79"
+    # compiles at all.
+    #
+    # 80: and the scan that read that construction argument by argument is GONE,
+    # because a fifth review pass wrote eight more leaks past the layer beneath
+    # the rules — the finder, the derivation, the allowlist. ListenEvent now
+    # declares no String payload at all: a flush reason, a post detail, the
+    # session facts and the dropped-buffer count are Ints, Bools and closed
+    # enums, and describe() chooses every word that reaches disk. The gate asks
+    # whether the payloads are closed instead of which strings to chase.
+    #
+    # 81: sherpa-onnx unlinked again. Builds 76-80 delivered ZERO rows to
+    # production; 75 delivered 313 and stopped at the minute it was replaced.
+    # 81 is the first build since 75 without the speaker frameworks, so it is
+    # also the experiment: a row from 81 says the linkage was the cause, and
+    # silence from 81 says look at the session instead.
+    CURRENT_PROJECT_VERSION: "81"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -201,9 +214,54 @@ targets:
     platform: iOS
     sources:
       - Anticipy
-    dependencies:
-      - package: SherpaOnnx
-        product: sherpa-onnx
+    # NO DEPENDENCIES, and this is the second time sherpa-onnx has been taken
+    # out of this line. Read 9069765a before putting it back.
+    #
+    # 2026-08-08, commit 9069765a, by controlled experiment:
+    #
+    #     build 47   SherpaOnnxC.framework + onnxruntime.framework   VANISHED (x2)
+    #     build 48   no embedded frameworks, nothing else changed    VALID in 2 min
+    #
+    # One variable. Builds 46 and 47 uploaded cleanly and then ceased to exist —
+    # accepted, then rejected DURING App Store Connect processing, which is the
+    # one failure mode that is invisible here: the notice goes to the Apple ID
+    # address and ZERO emails from apple.com have ever arrived in the mailbox we
+    # can read. That commit concluded "SherpaOnnx stays out", and set a
+    # precondition for ever re-adding it: READ THE PROCESSING REJECTION FIRST.
+    #
+    # Build 76 (commit 6e277694, 2026-08-24 03:48Z) put it back without that
+    # rejection ever having been read. It came back as a Swift package rather
+    # than as hand-embedded frameworks, but that is the same payload by another
+    # route: the resolved pins were sherpa-onnx AND onnxruntime-libs 1.27.1, and
+    # onnxruntime-libs is a BINARY xcframework — the identical framework build
+    # 47 died carrying. docs/BRIEF.html records the consequence independently:
+    # "TestFlight rejects builds with the speaker frameworks silently during
+    # processing. Build 76 installs by cable; distribution needs this solved."
+    #
+    # The last transcript row production ever received arrived at 03:34:24Z,
+    # FOURTEEN MINUTES before that commit. Builds 76-80 have delivered zero rows
+    # of any kind, ever. That correlation is why this is coming out again; it is
+    # NOT proof, and the honest limit is stated plainly: 9069765a's mechanism is
+    # a DISTRIBUTION failure, and it explains a build that never reached the
+    # phone. It does not explain a build that is running on a phone and not
+    # POSTing. Both are still open until somebody looks at the device.
+    #
+    # WHAT THIS COSTS, so the trade is not silent: on-device speaker
+    # recognition. `SpeakerTagger` is behind `#if canImport(SherpaOnnx)`, so it
+    # compiles clean without this and `VoiceEmbedderFactory.make()` returns nil.
+    # design/LOCAL-FIRST.md wants that feature to exist. Two things say it is
+    # not what is being lost today: it was measured on 2026-08-06 as ACTIVELY
+    # HARMFUL (195 distinct identities across 200 lines, 97% seen exactly once,
+    # the owner recognised twice, Priya's lines tagged as a stranger), and
+    # `overnight/stranger_gate.py` leg 5 records speaker at 0% across 221
+    # production events with the cause "enrollment unreachable" — the invite is
+    # only in Settings, so nobody ever enrolls and the extractor never runs.
+    # A feature nothing reaches costs nothing to unlink.
+    #
+    # PUTTING IT BACK is one `packages:` block and one `dependencies:` entry.
+    # speaker-embedding.onnx and PrivacyInfo.xcprivacy are still in the tree, so
+    # nothing else has to be rebuilt — but read the Apple ID mailbox first, the
+    # way 9069765a asked and 6e277694 did not.
     info:
       path: Anticipy/Info.plist
       properties:
