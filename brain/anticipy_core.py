@@ -2096,9 +2096,23 @@ class Anticipy:
             # The EFFECTIVE hold: triage's flag OR the policy layer. The owner
             # must be told whenever the job is actually held, or held jobs
             # would sit silently forever.
+            #
+            # `touches` MUST be handed over. The ambient lane has always passed
+            # it; this lane dropped it, and that omission was the confirmation
+            # gate standing open. Read the order inside is_consequential: the
+            # deny-list, then touches=="world", then `if explicit: return
+            # False`. With no declaration an explicit ask is released the
+            # instant its verb is absent from the deny-list — and that list is
+            # a word list, so it only knows the verbs somebody thought of.
+            # "grab us a table at Earls at 7" matches nothing in it, so a typed
+            # errand triage had ALREADY judged world-changing was queued
+            # unheld: no card, no tap, no text. The model's answer was right
+            # and was discarded one call before it was used.
             held = (decision.needs_confirmation
                     or decision.goal in IRREVERSIBLE
-                    or is_consequential(decision.goal, params, explicit=explicit))
+                    or is_consequential(decision.goal, params,
+                                        explicit=explicit,
+                                        touches=decision.touches))
             # Was this already waiting on him before he said it again? The
             # queue has deduped identical goals since the five-copies incident,
             # but the TEXT went out every single time regardless — which is why
