@@ -41,6 +41,13 @@ sh "$HERE/run_battery_tests.sh"
 sh "$HERE/run_watchdog_policy_tests.sh"
 sh "$HERE/run_resume_policy_tests.sh"
 sh "$HERE/run_control_policy_tests.sh"
+# The call sense. A call is a hole in the day where the ears go deaf, and today
+# it looks exactly like silence: this decides, from CallKit's call list and the
+# clock alone, when the microphone is gone to a call, when it is back, and where
+# the conversation boundaries were. Its law legs live in the runner — no
+# duration threshold, no identity, and no claim about FaceTime that a device has
+# not made.
+sh "$HERE/run_call_presence_tests.sh"
 sh "$HERE/run_interruption_contract_tests.sh"
 # Not a logic suite: it asks whether the build number still identifies these
 # bytes. Last, because it is the one leg that reads git rather than source, and

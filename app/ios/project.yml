@@ -264,7 +264,27 @@ settings:
     # Tests/EndTheErrandTests.swift: any ONE clause leading with a stop ends the
     # errand whatever the others say, so "already sent, the code is 4821"
     # discards the code the parked run is waiting on.
-    CURRENT_PROJECT_VERSION: "85"
+    # 86: the app carries a decision about phone calls for the first time.
+    #
+    # `Audio/CallPresencePolicy.swift` folds CallKit's call list and the clock
+    # into three answers: whether a call has the microphone, when to stop
+    # fighting for it and when to try again, and where the conversation
+    # boundaries were. A call is a hole in the day where the ears go deaf, and
+    # until now that hole was indistinguishable from silence — `suspended` says
+    # the microphone is gone and never why, never when, never whether it is over.
+    #
+    # NOT THE RECORDER THE CARD ASKED FOR, and it never can be: no third-party
+    # iOS app can record the audio of a phone call or a FaceTime, which is
+    # refused by the OS and already measured in this tree as the 0 Hz guard at
+    # PhoneListener.swift:439. docs/superpowers/specs/2026-08-25-ios-call-recorder.md
+    # carries the sources; research/2026-08-25-call-detection.md carries what
+    # detection alone buys and what the card has to be re-scoped to.
+    #
+    # THE BYTES MOVE AND THE BEHAVIOUR DOES NOT. The policy compiles into the
+    # binary and nothing calls it yet: the CXCallObserver adapter that would feed
+    # it is the next step, and it is named as owed rather than implied to be
+    # done. This number moves because the bytes did, which is the whole rule.
+    CURRENT_PROJECT_VERSION: "86"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
