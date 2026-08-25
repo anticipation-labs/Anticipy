@@ -390,29 +390,60 @@ final class PhoneListener: NSObject, ObservableObject {
                 ListenJournal.shared.record(
                     .noted("dropped \(dropped) buffers while swapping"))
             }
-            // A dead engine is a failure, not a route change. This is the one
-            // stall the watchdog was built to catch.
-            if !self.engine.isRunning { self.recoverAudio(cause: .error); return }
-            if self.task == nil { self.startRecognition(); return }
-            let now = Date()
-            // Audio stopped flowing with no notification: also a failure.
-            if now.timeIntervalSince(self.lastBufferAt) > 6 {
+            // WHAT to do is decided in ListenWatchdogPolicy, which reads
+            // clocks and nothing else, so every ordering below can be shown to
+            // fail with swiftc alone. This body only carries the decision out.
+            //
+            // `interrupted: self.suspended` — `suspended` is this object's
+            // answer to "the microphone is not ours right now", set by the
+            // interruption notification and by the 0 Hz guard that refuses to
+            // tap a silenced input. It is exactly the state in which every
+            // other signal here is a lie.
+            let action = ListenWatchdogPolicy.decide(
+                engineRunning: self.engine.isRunning,
+                hasTask: self.task != nil,
+                interrupted: self.suspended,
+                lastBufferAt: self.lastBufferAt,
+                lastResultAt: self.lastResultAt,
+                lastPartialAt: self.lastPartialAt,
+                requestBornAt: self.requestBornAt,
+                hasPending: !self.pendingTail.isEmpty,
+                now: Date())
+            switch action {
+            case .standDown:
+                // Retry the engine, leave the recognition task alone. Not a
+                // no-op: `recoverAudio` is what used to run here, and it ends
+                // in `swapRecognition`, so a call minted a fresh
+                // SFSpeechRecognitionTask every 4 seconds for its whole
+                // length. Standing down entirely would kill that churn and
+                // also remove the only thing that notices a call ENDING when
+                // iOS never delivers `.ended` — it sometimes doesn't. The
+                // retry costs nothing: it returns at the 0 Hz guard.
+                self.engine.stop()
+                self.configureAndStartEngine()
+                return
+            case .rebuild:
+                // A dead engine, or audio that stopped flowing with no
+                // notification. Both are failures, and neither is a route
+                // change.
                 self.recoverAudio(cause: .error)
                 return
-            }
-            // Recognizer went silent mid-utterance: words on screen, nothing
-            // arriving for 8s (a healthy one streams continuously).
-            if !self.pendingTail.isEmpty, now.timeIntervalSince(self.lastResultAt) > 8 {
-                // Apple's task-duration limit is the known reason a healthy
-                // recognizer stops streaming without ever finalising.
-                self.swapRecognition(flushPending: true, cause: .taskLimit)
+            case .startRecognition:
+                self.startRecognition()
                 return
-            }
-            // Rotate only in true silence — nothing pending, nothing to lose.
-            if self.pendingTail.isEmpty, self.partial.isEmpty,
-               now.timeIntervalSince(self.requestBornAt) > 120 {
+            case .swap(let cause):
+                // Flushes, deliberately: this is the leg reached with words
+                // still unsent, and they cross the seam rather than dying with
+                // the task.
+                self.swapRecognition(flushPending: true, cause: cause)
+                return
+            case .rotate:
+                // The one swap that must NOT flush. It is only ever reached in
+                // true silence, so there is nothing to carry across.
                 self.swapRecognition(flushPending: false, cause: .silenceRotation)
                 return
+            case .nothing:
+                break
             }
             // A rebuild is not the only way capture comes back. Reaching here
             // with `suspended` still set means it returned on its own, and a
@@ -562,6 +593,17 @@ final class PhoneListener: NSObject, ObservableObject {
         guard let line = cursor.takePending()?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !line.isEmpty else { return }
+        // These words have been SENT. The live caption at ContentView:1026
+        // renders `partial` verbatim, so leaving it standing keeps showing the
+        // owner speech that already went out as a line — the caption and the
+        // record disagreeing about what is still in flight. Cleared here rather
+        // than in `deliver`, because the cursor is what actually took the
+        // words, and `deliver` can decline to send (enrolling, an echo of the
+        // previous line) after they are already gone from it.
+        //
+        // `TranscriptCursor` is untouched: it tracks the consumed prefix on its
+        // own and never reads this string.
+        partial = ""
         deliver(line, reason: reason, wordsAppearedAt: appeared)
     }
 
