@@ -205,7 +205,8 @@ def test_exact_message_dialogue_outranks_a_false_dictation_guess(monkeypatch):
     assert result["decision"].decision == "act"
     assert result["decision"].addressee == "person"
     assert queued == [("Send Malik Martin this exact message: "
-                       "The revised numbers are ready for review.", {"hold": True})]
+                       "The revised numbers are ready for review.",
+                       {"hold": True, "touches": None})]
 
 
 def test_generic_progressive_split_preserves_every_raw_detail():

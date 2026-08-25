@@ -82,8 +82,8 @@ def build(monkeypatch, triage, alive=True):
     a = Anticipy(memory=mem, llm=ScriptedLLM(triage), owner_id="own1",
                  backend_url="http://127.0.0.1:1")
     a._pending_jobs = lambda: []
-    a._same_pending = lambda goal: None
-    a._refines_pending = lambda goal: None
+    a._same_pending = lambda goal, **_k: None
+    a._refines_pending = lambda goal, **_k: None
     a.notify_owner = lambda m, channel="sms": True
     return a, posted
 
@@ -168,7 +168,7 @@ def test_an_overheard_plan_that_merged_still_says_it_is_on_her_desk(monkeypatch)
         "decision": "act", "goal": "book a table at Earls for 7 PM tomorrow",
         "addressee": "person", "owes": "owner", "reason": "plan made aloud"})
     a._pending_jobs = lambda: [{"id": "job-existing"}]
-    a._same_pending = lambda goal: "job-existing"
+    a._same_pending = lambda goal, **_k: "job-existing"
     a._merge_into = lambda *a_, **k: None
     out = a.hear("seven works, let's do Earls tomorrow")
     assert out["decision"].decision == "ignore"
@@ -205,8 +205,8 @@ def test_the_clock_stays_quiet_when_its_prepared_work_never_landed(monkeypatch):
     sent = []
     a.notify_owner = lambda m, channel="sms": sent.append(m) or True
     a._pending_jobs = lambda: []
-    a._same_pending = lambda goal: None
-    a._refines_pending = lambda goal: None
+    a._same_pending = lambda goal, **_k: None
+    a._refines_pending = lambda goal, **_k: None
     assert a.clock_tick(now=2000) is None, \
         "nothing was queued, so there is nothing true to say"
     assert sent == []

@@ -53,7 +53,13 @@ def test_a_buffered_line_remembers_whose_words_it_is():
 
 
 def test_the_queue_is_never_flushed_into_someone_elses_account():
-    flush = APP.split("private func flushUnsent() async {", 1)[1][:900]
+    # This sliced the first 900 characters, which used to reach the account
+    # guard. The 2026-08-24 flush rewrite put the parent-chain comment block
+    # ahead of the loop and pushed the guard past the window — the guard was
+    # still in the code; the test had stopped looking at it. Scope to the
+    # whole function body instead, the way the other splits in this file do.
+    flush = APP.split("private func flushUnsent() async {", 1)[1] \
+               .split("\n    }", 1)[0]
     assert "!accountID.isEmpty" in flush, "no owner, no flush"
     assert "line.account == accountID" in flush, (
         "only lines captured by THIS account may be posted to it")

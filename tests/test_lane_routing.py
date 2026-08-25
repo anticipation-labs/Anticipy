@@ -61,7 +61,7 @@ def _queue(monkeypatch, goal, key="test-key"):
 
     monkeypatch.setattr(core.pb, "post", fake_post)
     a = Anticipy(owner_id="own1")
-    monkeypatch.setattr(a, "_same_pending", lambda goal: None)
+    monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
     a._queue_job(goal, {"source": "test", "now": "now"})
     return posted
 
@@ -111,7 +111,7 @@ def test_an_sms_ask_is_marked_on_the_job(monkeypatch):
                         lambda url, **kw: (posted.update(kw.get("json") or {}),
                                            R())[1])
     a = Anticipy(owner_id="own1")
-    monkeypatch.setattr(a, "_same_pending", lambda goal: None)
+    monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
     # No LLM: the deterministic path acts on a fresh commitment.
     out = a.hear("I'll send you the pitch deck after this call.",
                  channel="sms")
@@ -134,6 +134,6 @@ def test_a_pendant_line_carries_no_channel(monkeypatch):
                         lambda url, **kw: (posted.update(kw.get("json") or {}),
                                            R())[1])
     a = Anticipy(owner_id="own1")
-    monkeypatch.setattr(a, "_same_pending", lambda goal: None)
+    monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
     a.hear("I'll send you the pitch deck after this call.")
     assert "channel" not in json.loads(posted["params"])

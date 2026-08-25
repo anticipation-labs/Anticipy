@@ -158,8 +158,8 @@ def build(llm):
     a = Anticipy(memory=mem, llm=llm, backend_url="http://127.0.0.1:1")
     a._queue_job = lambda *a_, **k: "job1"
     a._pending_jobs = lambda: []
-    a._same_pending = lambda goal: None
-    a._refines_pending = lambda goal: None
+    a._same_pending = lambda goal, **_k: None
+    a._refines_pending = lambda goal, **_k: None
     a.notify_owner = lambda m, channel="sms": {"ok": 1}
     return a
 

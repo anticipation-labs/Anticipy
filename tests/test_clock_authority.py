@@ -30,7 +30,7 @@ class LLM:
 def _run(source):
     a = Anticipy(memory=Memory(source), llm=LLM(), owner_phone=None)
     queued = []
-    a._queue_job = lambda goal, params, hold=False: queued.append(
+    a._queue_job = lambda goal, params, hold=False, **_k: queued.append(
         (goal, params, hold)) or "job"
     out = a.clock_tick(now=2000)
     return out, queued

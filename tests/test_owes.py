@@ -43,12 +43,12 @@ def build(triage):
     a = Anticipy(memory=mem, llm=ScriptedLLM(triage),
                  backend_url="http://127.0.0.1:1")
     a.queued, a.texts = [], []
-    a._queue_job = lambda goal, params, hold=False, explicit=False: (
+    a._queue_job = lambda goal, params, hold=False, **_k: (
         a.queued.append({"goal": goal, "hold": hold, "params": params})
         or f"job{len(a.queued)}")
     a._pending_jobs = lambda: []
-    a._same_pending = lambda goal: None
-    a._refines_pending = lambda goal: None
+    a._same_pending = lambda goal, **_k: None
+    a._refines_pending = lambda goal, **_k: None
     a.notify_owner = lambda m, channel="sms": (a.texts.append(m), {"ok": 1})[1]
     return a
 

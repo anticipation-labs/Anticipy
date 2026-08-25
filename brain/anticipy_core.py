@@ -1774,7 +1774,8 @@ class Anticipy:
                 # A firming-up plan merges into its existing card inside
                 # _queue_job; only a genuinely NEW card earns the one text.
                 before = {j.get("id") for j in self._pending_jobs()}
-                job_id = self._queue_job(goal, params, hold=True)
+                job_id = self._queue_job(goal, params, hold=True,
+                                         touches=decision.touches)
                 fresh = bool(job_id) and job_id not in before
                 if fresh:
                     self.loops.append(LoopRecord(
@@ -2005,8 +2006,10 @@ class Anticipy:
         if (decision.decision == "act" and decision.goal
                 and not explicitly_new_task(line)):
             try:
-                already = (self._same_pending(decision.goal)
-                           or self._refines_pending(decision.goal))
+                already = (self._same_pending(decision.goal,
+                                              touches=decision.touches)
+                           or self._refines_pending(decision.goal,
+                                                    touches=decision.touches))
                 # And the plan she is already holding, IF it is this plan. The
                 # first cut skipped on any open plan at all, which let the
                 # Priya email past unasked. Deleting the check outright then
@@ -2124,7 +2127,8 @@ class Anticipy:
             # and each miss was one more text about the same dinner.
             before_ids = {j.get("id") for j in self._pending_jobs()}
             job_id = self._queue_job(decision.goal, params, hold=held,
-                                     explicit=explicit)
+                                     explicit=explicit,
+                                     touches=decision.touches)
             # A WRITE THAT NEVER LANDED IS NOT A DUPLICATE.
             #
             # This line used to read every falsy answer as "she has already
@@ -2950,7 +2954,8 @@ class Anticipy:
         return params
 
     def _queue_job(self, goal: str, params: dict, hold: bool = False,
-                   explicit: bool = False) -> Optional[str]:
+                   explicit: bool = False,
+                   touches: str | None = None) -> Optional[str]:
         # A held card supersedes the parked question: the plan the fragment
         # was asking about has since completed itself, and the card's own
         # one-text asks whatever is still missing. Two question texts for
@@ -3119,7 +3124,8 @@ class Anticipy:
                     self._open_plan = (sibling_id, time.time(), goal)
                     return sibling_id
 
-        existing = None if declared_new_task else self._same_pending(goal)
+        existing = None if declared_new_task else self._same_pending(
+            goal, touches=touches)
         if existing:
             # Same card — but a correction ("make it 7 not 8") arrives as the
             # same plan with a changed detail, and returning without writing
@@ -3141,7 +3147,8 @@ class Anticipy:
         # is half the length), so his desk filled up with one card per turn of
         # the conversation. When the new goal contains the pending one, she
         # has simply learned more: improve that card in place.
-        refined = None if declared_new_task else self._refines_pending(goal)
+        refined = None if declared_new_task else self._refines_pending(
+            goal, touches=touches)
         if refined:
             current = next((j for j in self._pending_jobs()
                             if j.get("id") == refined), None)
@@ -3411,7 +3418,26 @@ class Anticipy:
             return None
         return {"say": say, "goal": goal, "loop_ids": loop_ids}
 
-    def _same_pending(self, goal: str) -> Optional[str]:
+    @staticmethod
+    def _pending_class(job: dict) -> bool:
+        """Is this pending row world-changing? ASK THE ROW, not its wording.
+
+        Every card minted since the workflow columns landed carries
+        `consequence`, decided once at mint with the model's declaration in
+        hand. Re-deriving it from the goal text asks the prose question all
+        over again about work that was already classified — and prose is
+        exactly what the effect channel exists to stop deciding this.
+
+        TAPE: the prose fallback below is for rows minted before the column
+        existed. It expires when no pending row can predate it, and it is
+        covered by the same leg that tracks _READ_ONLY_RE's removal.
+        """
+        stored = str(job.get("consequence") or "").strip()
+        if stored:
+            return stored == "consequential"
+        return is_consequential(job.get("goal") or "")
+
+    def _same_pending(self, goal: str, touches: str | None = None) -> Optional[str]:
         """Is this same thing already waiting on the owner? Compared on
         meaningful words, because the model phrases the same intent slightly
         differently each time it hears it.
@@ -3424,14 +3450,22 @@ class Anticipy:
         is how, on 2026-08-04, a whole dinner plan came to nothing: she
         researched the restaurant, he said "book it", and _queue_job handed
         back the research job's id and created nothing. A job that changes his
-        world can never be deduped against one that only reads."""
+        world can never be deduped against one that only reads.
+
+        `touches` is the model's declaration about the INCOMING goal, and it
+        has to arrive here or the partition re-opens that scar through the one
+        door the declaration was built to close. Measured on this tree:
+        "research the Vienna trip for the team in March" and "plan the Vienna
+        trip for the team in March" overlap 0.80, and prose calls BOTH
+        read-only — so a plan triage had declared world-changing dedupes into
+        the lookup and is never created."""
         want = goal_tokens(goal)
         if not want:
             return None
-        want_consequential = is_consequential(goal)
+        want_consequential = is_consequential(goal, touches=touches)
         for j in self._pending_jobs():
             other = j.get("goal") or ""
-            if is_consequential(other) != want_consequential:
+            if self._pending_class(j) != want_consequential:
                 continue
             have = goal_tokens(other)
             if not have:
@@ -3792,7 +3826,8 @@ class Anticipy:
         except Exception:
             return []
 
-    def _refines_pending(self, goal: str) -> Optional[str]:
+    def _refines_pending(self, goal: str,
+                         touches: str | None = None) -> Optional[str]:
         """Is this a better-informed version of something already pending?
 
         Asymmetric on purpose. _same_pending asks "are these the same size and
@@ -3803,14 +3838,18 @@ class Anticipy:
         park location tomorrow at 7 PM", plus the details that make it doable.
         Only within one consequence class, and only when the newcomer is
         genuinely richer — otherwise a vague line arriving late would drag a
-        good card backwards."""
+        good card backwards.
+
+        Same partition as _same_pending and the same duty to honour the
+        declaration: fixing only one of the two leaves the plan exactly one
+        longer sentence away from vanishing into a lookup."""
         want = goal_tokens(goal)
         if not want:
             return None
-        want_consequential = is_consequential(goal)
+        want_consequential = is_consequential(goal, touches=touches)
         for j in self._pending_jobs():
             other = j.get("goal") or ""
-            if is_consequential(other) != want_consequential:
+            if self._pending_class(j) != want_consequential:
                 continue
             have = goal_tokens(other)
             if not have or len(want) <= len(have):

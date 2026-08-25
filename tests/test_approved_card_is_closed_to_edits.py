@@ -68,8 +68,8 @@ def test_a_queued_booking_is_not_rewritten_by_the_next_thing_he_says(monkeypatch
     # The word tests all agree these are one plan — that is the trap, not the
     # bug. Approval, not similarity, is what ends the editing window.
     monkeypatch.setattr(a, "_same_plan", lambda *_a: True)
-    monkeypatch.setattr(a, "_same_pending", lambda _g: None)
-    monkeypatch.setattr(a, "_refines_pending", lambda _g: None)
+    monkeypatch.setattr(a, "_same_pending", lambda _g, **_k: None)
+    monkeypatch.setattr(a, "_refines_pending", lambda _g, **_k: None)
 
     assert a._queue_job(FRIDAY, {"source": "also dinner Friday"},
                         hold=True) == "job2", \
