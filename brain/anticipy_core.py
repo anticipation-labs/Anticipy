@@ -37,7 +37,8 @@ from .workflow import (Consequence, approve as approve_plan,
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            AMBIENT_ADDRESSEES, AUTHORED_ADDRESSEES,
                            NOT_HIS, check_sufficiency, fill_gaps_from_memory,
-                           owner_is_party, ends_in_the_world,
+                           party_verdict, PARTY_YES, PARTY_UNASKED,
+                           PARTY_UNANSWERED, ends_in_the_world,
                            unsupported_names,
                            unsupported_counts, read_into_a_machine,
                            not_speech_evidence,
@@ -922,6 +923,9 @@ of an open loop is NOT a reason to speak — most reviews should conclude
 Given the local time and your open loops (each with its age), decide whether
 to reach out NOW. If yes, write the text in your own warm human voice —
 short, specific, one question at most.
+If you set a goal you MUST list in loop_ids the id of every open loop that
+goal rests on — the work cannot be prepared without knowing whose promise it
+serves, so a goal naming no loops is discarded.
 Reply ONLY with compact JSON:
 {{"initiate":true|false,"say":"<the text, or null>","goal":"<job goal to prepare, or null>","loop_ids":[<ids you are acting on>],"reason":"<8 words>"}}"""
 
@@ -1567,9 +1571,45 @@ class Anticipy:
         # measured wrong in one direction only — six for six filing the
         # owner's own dinner under the friend who said "I'll text you a time"
         # — so its own second opinion is the weakest possible reason to drop a
-        # fence. owner_is_party(), a model asked ONLY that question, is the
-        # single thing that may withdraw the mark, and it withdraws it by
-        # stopping it being written at all.
+        # fence. party_verdict(), a model asked ONLY that question, is the
+        # single thing that may withdraw the mark. It normally withdraws it by
+        # stopping it being written at all — and when an earlier hearing
+        # already wrote one, by the one named erase path in the store,
+        # withdraw_attribution(), with the reason recorded.
+        #
+        # A FENCE WITH NO WAY DOWN IS NOT A FENCE, IT IS A WALL. For one commit
+        # there was no way down at all: the reversal returned a bare bool, so a
+        # timeout, a 5xx, a rate limit and an unparseable reply all arrived here
+        # as the same False a model saying "no, he is not a party" arrives as —
+        # and that False wrote a mark nothing anywhere could clear. Reproduced
+        # on the recorded dinner line: hearing 1's party call times out and the
+        # mark is written; hearing 2's call WORKS and says he is a party — mark
+        # unchanged; hearing 3 has triage itself say "owner" — mark unchanged;
+        # the briefing is handed owes="other" and told never to say he promised
+        # it, forever, because nothing ever closes a guest-attributed
+        # commitment. One flaky call, and his own dinner belongs to his friend
+        # for good.
+        #
+        # So the reversal now answers with four states and this block treats
+        # them as four different things:
+        #
+        #   PARTY_YES        -> he IS a party. Do not write, and withdraw any
+        #                       mark an earlier hearing left. This is the
+        #                       deliberate recovery the previous fix removed
+        #                       without replacing.
+        #   PARTY_NO         -> a real "no". Write the mark, exactly as before.
+        #   PARTY_UNASKED    -> nothing to ask (no goal, no llm, dead model, or
+        #                       an explicit line, below). The documented inert
+        #                       mode: write the mark, exactly as before, so no
+        #                       non-live deployment changes at all.
+        #   PARTY_UNANSWERED -> a LIVE model was asked and no readable answer
+        #                       came back. WRITE NOTHING and withdraw nothing.
+        #                       Nothing about the world was learned, and the
+        #                       paragraph below already decided this case: the
+        #                       write takes the HIGHER of the two bars, and a
+        #                       call that failed does not clear a bar. The
+        #                       cheaper harm is taken deliberately — see the
+        #                       residual named at the end of this block.
         #
         # THE REVERSAL RUNS ON EVERY DECISION, not only on act/ask. The mark
         # has two readers whose costs point opposite ways. clock_tick refuses
@@ -1580,8 +1620,9 @@ class Anticipy:
         # his friend, or drops it from the briefing entirely. That is a false
         # statement to the owner about his own life, so the write takes the
         # HIGHER of the two bars. Asked at most once per line and reused for
-        # the routing decision below; with no live model owner_is_party()
-        # returns False, so every non-live path behaves exactly as before.
+        # the routing decision below; with no live model party_verdict()
+        # returns PARTY_UNASKED, so every non-live path behaves exactly as
+        # before.
         commitment_id = mem.get("commitment_id")
         triage_says_other = decision.owes == "other"
         # The routing branch below asks the same question. Compute it once
@@ -1589,12 +1630,54 @@ class Anticipy:
         # model call on the path that already paid for one.
         routing_asks_it = (triage_says_other and not explicit
                            and decision.decision in ("act", "ask"))
-        owner_is_a_party = bool(
-            triage_says_other and (commitment_id or routing_asks_it)
-            and owner_is_party(self.llm, line,
-                               decision.goal or mem.get("commitment") or ""))
-        if commitment_id and triage_says_other and not owner_is_a_party:
-            self.memory.attribute_commitment(commitment_id, "other")
+        # AN EXPLICIT LINE IS EXEMPT FROM THE REVERSAL, HERE AS WELL AS BELOW.
+        # `routing_asks_it` excludes explicit lines on the principle the
+        # routing branch states in full — "he is the one asking, and no second
+        # opinion overrides him" — and the write did not honour it: a
+        # commitment on an explicit line still paid for a party call, and a
+        # True still suppressed the mark. Reproduced: explicit=True with
+        # owner_is_party True gave owes=None on one model call, False gave
+        # owes="other" on one model call. Failure scenario: he texts her "Bob
+        # said he'll send the deck tomorrow — keep an eye on it." Triage is
+        # RIGHT that Bob owes it. The reversal, shown only the line and the
+        # task, answers True because it is his deck — the mark is suppressed
+        # and that night the clock mints a browser job to draft the deck email.
+        # He is chased about Bob's promise through the one path the code says
+        # must not be second-guessed. On an explicit line triage's verdict
+        # stands as written, and the call is not made at all.
+        asks_the_reversal = (triage_says_other and not explicit
+                             and (commitment_id or routing_asks_it))
+        party = (party_verdict(self.llm, line,
+                               decision.goal or mem.get("commitment") or "")
+                 if asks_the_reversal else PARTY_UNASKED)
+        owner_is_a_party = party == PARTY_YES
+        if commitment_id and triage_says_other:
+            if party == PARTY_YES:
+                # The ordinary case withdraws nothing, because the mark was
+                # never written. This fires when an EARLIER hearing wrote one
+                # off a call that could not be answered — the way down.
+                if self.memory.withdraw_attribution(
+                        commitment_id,
+                        "the reversal, asked on its own, says the owner is a "
+                        f"party to this plan: {line!r}"):
+                    print("hear: withdrew an attribution the reversal reversed "
+                          f"-> {line!r}")
+            elif party == PARTY_UNANSWERED:
+                # NOT A VERDICT, SO NOT A WRITE. Neither marked nor unmarked:
+                # a failed call may not raise a fence and may not lower one.
+                print("hear: the reversal went unanswered — leaving the "
+                      f"attribution exactly as it stands for {line!r}")
+            else:
+                self.memory.attribute_commitment(commitment_id, "other")
+        # NAMED RESIDUAL, not hidden: on PARTY_UNANSWERED a guest's promise
+        # that no earlier hearing marked is left unmarked, so a later
+        # clock_tick is free to prepare work from it. That is the cheaper of
+        # the two harms this block already ranked, and it is bounded: hear()
+        # itself still refuses to act on the line (the routing branch below
+        # reads owner_is_a_party, which PARTY_UNANSWERED leaves False), and the
+        # next hearing of the same sentence re-asks and can mark it for real. A
+        # write would be the other harm — unbounded, unrecoverable, and stated
+        # to the owner as fact about his own life.
         # The EFFECTIVE addressee — the one her behaviour actually keys on,
         # written back so the event record shows what was applied. An
         # explicit line (he texted/typed it AT her) is assistant by
@@ -1700,6 +1783,12 @@ class Anticipy:
             # question with the same line and the same task, so asking again
             # would be a second model call that can disagree with the verdict
             # the store was just written from.
+            # Only PARTY_YES flips it. PARTY_UNANSWERED — a live call that
+            # failed — leaves this branch fencing exactly as PARTY_UNASKED
+            # does, so a flaky model never turns somebody else's promise into
+            # his errand. The store is the only reader that treats those two
+            # differently, and it does so in the direction that cannot become
+            # permanent.
             if not owner_is_a_party:
                 self._prev = (line, time.time())
                 # goal="" for the same reason as above: she is tracking, not
@@ -1710,12 +1799,13 @@ class Anticipy:
                            f"started: {decision.goal!r}",
                     addressee=addressee, owes="other"),
                     "anticipy_says": None}
-            # He IS a party, so the loop is his after all — and there is
-            # nothing to undo, because the attribution block above asked this
-            # same question before writing and therefore never wrote the mark.
-            # A clearing call here would be a second way to pop `owes`, which
-            # is the mechanism C1 turned on the fence: any pop reachable from
-            # hear() erases a verdict a previous hearing was right about.
+            # He IS a party, so the loop is his after all — and the undo, if
+            # an earlier hearing needed one, has already happened above via
+            # withdraw_attribution(). There is deliberately no clearing call
+            # HERE: a pop written inline at a routing branch is the mechanism
+            # that destroyed the fence, reachable from any path that happens to
+            # arrive with a falsy verdict. One named erase, one caller, one
+            # recorded reason.
 
         # The ambient lane (roadmap §7.1): speech not aimed at her — another
         # person, a dictation machine — is remembered, and researched quietly
@@ -3476,6 +3566,17 @@ class Anticipy:
         if not fresh:
             return None
         from datetime import datetime as _dt
+        # THE FENCE MUST RANGE OVER THE LOOPS THE MODEL WAS ACTUALLY SHOWN.
+        # The payload has always been capped at ten while every check below
+        # ran over the whole of `fresh`, so loop eleven — which the model
+        # cannot have acted on, because it never saw it — voted on whether
+        # loop one's goal was somebody else's. Reproduced: eleven open loops,
+        # ten of them his and shown, an eleventh guest promise beyond the cap;
+        # `all()` sees a mixed set, the unnamed branch does not fence, and the
+        # guest-derived goal is prepared. One name, used by the payload and by
+        # both checks, so the set the model reasons over and the set the fence
+        # reasons over cannot drift apart again.
+        shown = fresh[:10]
         payload = {
             # Owner-local, not container-UTC — must agree with the grounded
             # now-line every prompt already carries.
@@ -3489,7 +3590,7 @@ class Anticipy:
                  # summary is what keeps her from drifting into a topic he
                  # never raised.
                  "he_said": l["source"]}
-                for l in fresh[:10]
+                for l in shown
             ],
         }
         try:
@@ -3503,8 +3604,32 @@ class Anticipy:
         goal = raw.get("goal")
         if goal in ("", "null"):
             goal = None
-        loop_ids = [int(i) for i in raw.get("loop_ids", []) if str(i).isdigit()]
-        selected = [l for l in fresh if not loop_ids or l["id"] in loop_ids]
+        # NAMING NOTHING AND NAMING SOMETHING UNREADABLE ARE NOT THE SAME
+        # THING, and collapsing them is how the fence below stopped firing.
+        # `raw.get("loop_ids", [])` plus the isdigit() filter silently turns
+        # [3.0] or ["seven"] into [] — the exact value a model that named no
+        # loops at all produces. `selected` then becomes EVERY fresh loop and
+        # the goal falls into the unnamed branch, whose all() only fences when
+        # every open loop in the store is somebody else's. Reproduced on a
+        # two-loop store (one his, one a guest's) with loop_ids [3.0] and with
+        # ["seven"]: the guest-derived goal was prepared both times.
+        #
+        # A reply we cannot read is not a reply. We do not know which loops the
+        # work rests on, so we do not guess — the goal is dropped and the `say`
+        # survives, which is the cheap side of the asymmetry this method
+        # already lives by. This is NOT a stricter operator over the store: it
+        # fences on our own inability to read the answer, not on other loops'
+        # verdicts, so it cannot resurrect "one guest promise disables every
+        # goal forever".
+        raw_ids = raw.get("loop_ids") or []
+        if not isinstance(raw_ids, list):
+            raw_ids = [raw_ids]
+        loop_ids = [int(i) for i in raw_ids if str(i).isdigit()]
+        if goal and raw_ids and not loop_ids:
+            print("clock: loop_ids named loops I cannot read "
+                  f"({raw_ids!r}) — dropping model goal {goal!r}")
+            goal = None
+        selected = [l for l in shown if not loop_ids or l["id"] in loop_ids]
         if goal and not any(_CLOCK_ACTION_SOURCE_RE.search(
                 str(loop.get("source") or "")) for loop in selected):
             print(f"clock: reminder has no owner-authored task — dropping model goal {goal!r}")
@@ -3563,11 +3688,31 @@ class Anticipy:
         # toward not acting; the direction that means "don't act" is opposite
         # in the two, so the operators are opposite too.
         #
-        # KNOWN RESIDUAL, named rather than hidden: in the unnamed branch a
-        # store holding both his loops and a guest's cannot say which one the
-        # goal came from, so a guest-derived goal can still get through there.
-        # Closing it needs the model to say which loop it acted on, not a
-        # stricter operator here — a stricter operator only reproduces I2.
+        # KNOWN RESIDUAL, named rather than hidden and now measured: in the
+        # unnamed branch a store holding both his loops and a guest's cannot
+        # say which one the goal came from, so a guest-derived goal still gets
+        # through there — and because any owner who uses the product has at
+        # least one loop of his own, all() means the unnamed branch effectively
+        # never fences on a real store. That is not a bug in the operator: the
+        # alternative, any() over loops nobody named, is the "one guest promise
+        # disables every goal every night forever" failure the test below
+        # pins. Closing it needs the model to SAY which loop it acted on,
+        # which is why CLOCK_SYSTEM now requires loop_ids rather than merely
+        # accepting them, and why an unreadable loop_ids above drops the goal
+        # instead of falling quietly into this branch. Whether the model
+        # actually obeys the requirement is not knowable from the repo — it
+        # waits on LIVE.
+        # `named` reads `fresh` and `selected` reads `shown`, ON PURPOSE and
+        # not by drift. `selected` feeds a permissive test — the authority
+        # floor, and the unnamed branch's all() — so widening it past what the
+        # model saw LIFTS fences, which is the defect above. `named` feeds
+        # any(), a ceiling, so widening it can only ADD a refusal: if the model
+        # names a loop beyond the payload cap and that loop is somebody else's,
+        # the job would still be keyed to loop_ids[0], and refusing is the
+        # right answer. Narrowing this one to `shown` was tried and reverted —
+        # it is unfalsifiable in the fail-open direction, so no check could
+        # ever prove it, and shipping a change no check can catch is the thing
+        # this wave exists to stop.
         named = [loop for loop in fresh if loop["id"] in loop_ids]
         rests_on_someone_elses = (
             any(_someone_elses(loop) for loop in named) if named

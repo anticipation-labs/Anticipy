@@ -30,6 +30,8 @@ import sqlite3
 
 from brain.anticipy_core import Anticipy
 from brain.memory import Memory
+from brain.orchestrator import (Decision, PARTY_YES, PARTY_NO, PARTY_UNASKED,
+                                PARTY_UNANSWERED)
 
 GUEST_LINE = "I'll send you the pitch deck tomorrow morning."
 
@@ -143,11 +145,16 @@ def test_hear_with_no_verdict_stores_none(monkeypatch):
     assert m.open_loops()[0]["speaker"] is None
 
 
-def _triaging_brain(monkeypatch, owes, party=False, decision="act",
+def _triaging_brain(monkeypatch, owes, party=PARTY_NO, decision="act",
                     goal="send the pitch deck"):
     """hear() with triage scripted. `_decide` is stubbed rather than driven
     through a fake model because the verdict under test is what hear() DOES
-    with `owes`, not how the model arrives at it."""
+    with `owes`, not how the model arrives at it.
+
+    `party` is one of the four PARTY_* states, never a bool. It used to be a
+    bool, and that is precisely the bug C1 turned out to be: a test that can
+    only say True or False cannot say "the call failed", so no test in this
+    file could express the case that broke the fence."""
     import brain.anticipy_core as core
     from brain.orchestrator import Decision
     m = Memory(":memory:")
@@ -156,8 +163,17 @@ def _triaging_brain(monkeypatch, owes, party=False, decision="act",
     monkeypatch.setattr(a, "_decide", lambda *a_, **k_: Decision(
         decision=decision, goal=goal, reason="scripted",
         addressee="person", owes=owes))
-    monkeypatch.setattr(core, "owner_is_party", lambda *a_, **k_: party)
+    _script_party(monkeypatch, core, party)
     return a, m
+
+
+def _script_party(monkeypatch, core, party):
+    """Script the reversal. Guards against the bool it used to be: `True`
+    silently means neither PARTY_YES nor PARTY_NO under the new contract, and
+    a test that passed one would go quietly green testing nothing."""
+    assert party in (PARTY_YES, PARTY_NO, PARTY_UNASKED, PARTY_UNANSWERED), \
+        f"party must be one of the four PARTY_* states, got {party!r}"
+    monkeypatch.setattr(core, "party_verdict", lambda *a_, **k_: party)
 
 
 def _retriage(monkeypatch, a, owes, decision="act", goal="send the pitch deck"):
@@ -178,7 +194,7 @@ def test_hear_writes_triages_verdict_back_onto_the_promise(monkeypatch):
 
 
 def test_hear_clears_the_mark_when_the_owner_turns_out_to_be_a_party(monkeypatch):
-    a, m = _triaging_brain(monkeypatch, owes="other", party=True)
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_YES)
     a.hear(GUEST_LINE)
     assert m.open_loops()[0]["owes"] is None, \
         "the loop stayed fenced on a verdict owner_is_party had withdrawn"
@@ -214,13 +230,236 @@ def test_a_second_hearing_with_no_verdict_does_not_unmark_the_promise(monkeypatc
 def test_a_later_contrary_triage_verdict_does_not_unmark_it_either(monkeypatch):
     """Triage is measured wrong in exactly one direction here — six for six
     filing the owner's own dinner under the friend — so its own second opinion
-    is the weakest possible reason to drop a fence. owner_is_party(), asked
+    is the weakest possible reason to drop a fence. party_verdict(), asked
     that one question alone, is the only thing that may withdraw the mark."""
     a, m = _triaging_brain(monkeypatch, owes="other")
     a.hear(GUEST_LINE)
     _retriage(monkeypatch, a, owes="owner")
     a.hear(GUEST_LINE)
     assert m.open_loops()[0]["owes"] == "other"
+
+
+# ------------- C1, the other way round: the fence that could not be lowered
+#
+# The fix above was right and incomplete. It removed the accidental way down
+# without building the deliberate one, and `owner_is_party` returned a bare
+# bool — so a timeout, a 5xx, a rate limit and an unparseable reply all came
+# back as the same False that a model saying "no, he is not a party" comes
+# back as, and that False wrote a mark nothing could clear. Reproduced on the
+# recorded dinner line before the fix:
+#
+#     hearing 1 (party call FAILED -> False):  owes = other
+#     hearing 2 (party call WORKS  -> True):   owes = other
+#     hearing 3 (triage itself says 'owner'):  owes = other
+#     briefing sees: other
+#
+# One flaky call and the owner's own dinner belonged to his friend in every
+# briefing forever, because nothing ever closes a guest-attributed commitment.
+#
+# THE ROOT IS TESTED AT THE ROOT. Every hear() leg below scripts
+# `core.party_verdict`, so not one of them ever runs the real function — and
+# the entire fix rests on it answering PARTY_UNANSWERED rather than PARTY_NO
+# when a call blows up. Mutation-proven: collapsing PARTY_UNANSWERED back into
+# PARTY_NO inside party_verdict — which IS the original bug, exactly — left
+# every hear() leg green. A check that cannot fail is not a check.
+
+
+class _PartyLLM:
+    """A live model whose one reply is under the test's control."""
+    live = True
+
+    def __init__(self, text=None, raises=None):
+        self._text, self._raises = text, raises
+
+    def chat(self, *_a, **_k):
+        if self._raises:
+            raise self._raises
+        class R:
+            text = self._text
+        return R()
+
+
+def _party(**kw):
+    from brain.orchestrator import party_verdict
+    return party_verdict(_PartyLLM(**kw), GUEST_LINE, "send the pitch deck")
+
+
+def test_a_party_call_that_raises_is_unanswered_not_a_no():
+    """THE ROOT CHECK FOR C1. A timeout, a 5xx and a rate limit all arrive
+    here as an exception, and returning PARTY_NO for them is what wrote a
+    permanent, unremovable mark off a transient fault."""
+    for boom in (TimeoutError("gateway timeout"),
+                 RuntimeError("429 rate limited"),
+                 ValueError("500 from the provider")):
+        assert _party(raises=boom) == PARTY_UNANSWERED, \
+            f"{boom!r} was recorded as the model saying 'no, not a party'"
+
+
+def test_a_reply_that_cannot_be_read_is_unanswered_not_a_no():
+    """A live model that replied without the key, with a non-boolean, or with
+    prose did not say "no" — it said nothing this code can read. Same
+    treatment as the timeout, for the same reason."""
+    for text in ("not json at all", "{}", '{"owner_is_party": null}',
+                 '{"owner_is_party": "yes"}', '{"other_key": true}', "[]"):
+        assert _party(text=text) == PARTY_UNANSWERED, f"read a verdict out of {text!r}"
+
+
+def test_a_real_answer_is_still_a_real_answer():
+    assert _party(text='{"owner_is_party": true}') == PARTY_YES
+    assert _party(text='{"owner_is_party": false}') == PARTY_NO
+
+
+def test_nothing_to_ask_is_a_different_state_from_a_call_that_failed():
+    """The distinction the whole fix turns on. No live model is the documented
+    inert mode and must keep writing triage's verdict exactly as it always
+    did; a LIVE model that could not answer must not write at all. Collapsing
+    these two puts the product back on one of the two bugs whichever way it
+    is collapsed."""
+    from brain.orchestrator import party_verdict
+    assert party_verdict(None, GUEST_LINE, "send the pitch deck") == PARTY_UNASKED
+    assert party_verdict(_PartyLLM(text="{}"), GUEST_LINE, "") == PARTY_UNASKED
+
+    class _Dead:
+        live = False
+        def chat(self, *_a, **_k):
+            raise AssertionError("a dead model must never be called")
+    assert party_verdict(_Dead(), GUEST_LINE, "send the pitch deck") == PARTY_UNASKED
+
+
+def test_the_four_party_states_are_four_distinct_values():
+    """Cheap, and it catches the one-character edit that makes every leg above
+    pass while meaning nothing."""
+    assert len({PARTY_YES, PARTY_NO, PARTY_UNASKED, PARTY_UNANSWERED}) == 4
+
+
+def test_hear_calls_the_real_reversal_and_not_a_stale_alias():
+    """The legs below script `core.party_verdict`. If hear() ever called
+    something else — a stale import, a renamed sibling — every one of them
+    would go green while testing nothing at all."""
+    import brain.anticipy_core as core
+    import brain.orchestrator as orch
+    assert core.party_verdict is orch.party_verdict
+
+
+def test_a_reversal_that_could_not_be_answered_writes_no_verdict(monkeypatch):
+    """THE CHECK THAT WOULD HAVE CAUGHT C1. A live model was asked and the
+    call blew up. Nothing about the world was learned, so nothing is written:
+    the block's own stated rule is that the write takes the HIGHER of its two
+    readers' bars, and a call that failed does not clear a bar. This is the
+    one leg the old bool signature made impossible to write — a test that can
+    only say True or False cannot say "the call failed"."""
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_UNANSWERED)
+    a.hear(GUEST_LINE)
+    assert m.open_loops()[0]["owes"] is None, \
+        ("a timeout was recorded as a verdict — and since nothing can clear "
+         "it, the owner's own plan is his friend's in every briefing forever")
+
+
+def test_a_failed_reversal_may_not_lower_a_fence_either(monkeypatch):
+    """The same rule pointed the other way, and the half that keeps this fix
+    from becoming the bug it replaces. A failed call is not evidence the
+    promise is his, so it must not touch a mark an earlier hearing wrote."""
+    a, m = _triaging_brain(monkeypatch, owes="other")
+    a.hear(GUEST_LINE)
+    assert m.open_loops()[0]["owes"] == "other"
+    _script_party(monkeypatch, _core(), PARTY_UNANSWERED)
+    a.hear(GUEST_LINE)
+    assert m.open_loops()[0]["owes"] == "other", \
+        "a call that failed erased a verdict a working call had got right"
+
+
+def test_a_mark_written_without_a_real_no_can_be_withdrawn_later(monkeypatch):
+    """THE FENCE CAN BE LOWERED. Hearing 1 has no live model to ask, so the
+    documented inert path writes triage's verdict — and triage is measured
+    wrong six for six in exactly this direction. Hearing 2 reaches a live
+    model, which says on its own that the owner IS a party. That is the only
+    verdict allowed to withdraw a mark, and it now does."""
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_UNASKED,
+                           decision="say", goal=None)
+    a.hear(GUEST_LINE)
+    assert m.open_loops()[0]["owes"] == "other"
+    _script_party(monkeypatch, _core(), PARTY_YES)
+    a.hear(GUEST_LINE)
+    assert m.open_loops()[0]["owes"] is None, \
+        ("the mark is unlowerable: a working reversal saying he is a party "
+         "cannot undo one written when nothing was asked")
+
+
+def test_a_withdrawal_is_recorded_on_the_promise_not_just_applied(monkeypatch):
+    """A silent erase is indistinguishable from a promise nobody ever judged,
+    and that ambiguity is what made the erase a weapon last time. The store
+    keeps that a verdict was made and taken back, and why."""
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_UNASKED,
+                           decision="say", goal=None)
+    a.hear(GUEST_LINE)
+    _script_party(monkeypatch, _core(), PARTY_YES)
+    a.hear(GUEST_LINE)
+    attrs = json.loads(m.db.execute(
+        "SELECT attrs FROM nodes WHERE id=?",
+        (m.open_loops()[0]["id"],)).fetchone()[0])
+    assert attrs.get("owes_withdrawn", {}).get("reason"), \
+        "the verdict vanished with no record that anything was withdrawn"
+    assert attrs["owes_withdrawn"]["ts"] > 0
+
+
+def test_a_withdrawal_survives_the_same_sentence_being_heard_again():
+    """The withdrawal record rides in the SAME attrs blob as `owes`, so it
+    rests on _upsert_node updating only last_seen_ts and never rewriting
+    attrs. That property was verified by reading and pinned by nothing; it is
+    load-bearing for two features now, so it is pinned here. If it ever
+    changes, a re-heard sentence silently resurrects a verdict that was
+    deliberately taken back."""
+    m = Memory(":memory:")
+    mem = m.ingest(GUEST_LINE)
+    m.attribute_commitment(mem["commitment_id"], owes="other")
+    assert m.withdraw_attribution(mem["commitment_id"], "the reversal says he "
+                                  "is a party") is True
+    again = m.ingest(GUEST_LINE)
+    assert again["commitment_id"] == mem["commitment_id"], \
+        "the same sentence produced a second node — the premise is gone"
+    assert m.open_loops()[0]["owes"] is None, \
+        "re-hearing the sentence resurrected a withdrawn verdict"
+    attrs = json.loads(m.db.execute(
+        "SELECT attrs FROM nodes WHERE id=?",
+        (mem["commitment_id"],)).fetchone()[0])
+    assert attrs.get("owes_withdrawn", {}).get("reason")
+
+
+def _core():
+    import brain.anticipy_core as core
+    return core
+
+
+# ------------------------------------- the named erase, at its own layer
+
+
+def test_withdrawing_an_attribution_needs_a_reason(monkeypatch):
+    """The difference between this method and the falsy-argument erase it
+    replaces is not the SQL. It is that a caller must know they are erasing:
+    a correction with no reason is reachable from every path that happens to
+    hold an empty variable, which is exactly how the last one fired."""
+    m = Memory(":memory:")
+    mem = m.ingest(GUEST_LINE)
+    m.attribute_commitment(mem["commitment_id"], owes="other")
+    assert m.withdraw_attribution(mem["commitment_id"], "") is False
+    assert m.withdraw_attribution(mem["commitment_id"], "   ") is False
+    assert m.withdraw_attribution(mem["commitment_id"], None) is False
+    assert m.open_loops()[0]["owes"] == "other", \
+        "a reasonless call erased the verdict — the old bug under a new name"
+
+
+def test_withdrawing_reports_whether_it_actually_removed_anything():
+    """A caller must not be able to read "there was nothing to withdraw" as
+    "the withdrawal worked" — that is how a fix goes green while doing
+    nothing."""
+    m = Memory(":memory:")
+    mem = m.ingest(GUEST_LINE)
+    assert m.withdraw_attribution(mem["commitment_id"], "no mark yet") is False
+    m.attribute_commitment(mem["commitment_id"], owes="other")
+    assert m.withdraw_attribution(
+        mem["commitment_id"], "the reversal says he is a party") is True
+    assert m.open_loops()[0]["owes"] is None
+    assert m.withdraw_attribution(None, "no id at all") is False
 
 
 def _clock_against(memory, loop_id):
@@ -279,6 +518,72 @@ def test_that_clock_really_would_have_minted_the_job_without_the_mark(monkeypatc
     assert queued == ["draft the pitch deck email"]
 
 
+def test_the_clock_starts_working_again_once_a_stuck_mark_is_withdrawn(
+        monkeypatch):
+    """THE BEHAVIOURAL LEG FOR THE LOWERING, asserted where the owner feels
+    it. A mark written with no live model to ask made clock_tick refuse this
+    loop permanently. After a working reversal withdraws it, his own work is
+    prepared again — which is the whole difference between a fence and a
+    wall, and it is not visible from the stored field alone."""
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_UNASKED,
+                           decision="say", goal=None)
+    a.hear(GUEST_LINE)
+    stuck, _ = _clock_against(m, m.open_loops()[0]["id"])
+    assert (stuck or {}).get("goal") is None, "control: the fence was up"
+
+    _script_party(monkeypatch, _core(), PARTY_YES)
+    a.hear(GUEST_LINE)
+    out, queued = _clock_against(m, m.open_loops()[0]["id"])
+    assert out["goal"] == "draft the pitch deck email", \
+        "the fence stayed up after the only verdict allowed to lower it"
+    assert queued == ["draft the pitch deck email"]
+
+
+# ----------------------------------- I2: an explicit line is not second-guessed
+
+
+def test_an_explicit_line_is_not_second_guessed_by_the_reversal(monkeypatch):
+    """THE CHECK THAT WOULD HAVE CAUGHT I2. The routing branch exempts
+    explicit lines on a stated principle — "he is the one asking, and no
+    second opinion overrides him" — and the write did not honour it.
+    Reproduced before the fix:
+
+        explicit=True  owner_is_party=True  -> owes=None    party calls=1
+        explicit=True  owner_is_party=False -> owes='other' party calls=1
+
+    Failure scenario: he texts her "Bob said he'll send the deck tomorrow —
+    keep an eye on it." Triage is RIGHT that Bob owes it. The reversal, shown
+    only the line and the task, says True because it is his deck, the mark is
+    suppressed, and that night the clock mints a browser job to draft the deck
+    email — through the one path the code says must not be second-guessed."""
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_YES)
+    a.hear(GUEST_LINE, explicit=True)
+    assert m.open_loops()[0]["owes"] == "other", \
+        ("a second opinion overrode the owner on a line he typed AT her — "
+         "and the clock is now free to prepare Bob's promise as his errand")
+
+
+def test_an_explicit_line_does_not_even_pay_for_the_reversal(monkeypatch):
+    """The mark being right is not enough — it must be right for the stated
+    reason. If the call still fires, the exemption is a coincidence of which
+    way the model answered, and it reverts the first time it answers the
+    other way."""
+    import brain.anticipy_core as core
+    calls = []
+    m = Memory(":memory:")
+    a = Anticipy(memory=m, llm=None, owner_id="t", owner_phone=None)
+    monkeypatch.setattr(a, "_queue_job", lambda *a_, **k_: "job")
+    monkeypatch.setattr(a, "_decide", lambda *a_, **k_: Decision(
+        decision="act", goal="send the pitch deck", reason="scripted",
+        addressee="assistant", owes="other"))
+    monkeypatch.setattr(core, "party_verdict",
+                        lambda *a_, **k_: calls.append(1) or PARTY_NO)
+    a.hear(GUEST_LINE, explicit=True)
+    assert calls == [], \
+        "the reversal was asked about a line the owner typed at her himself"
+
+
+
 # ------------------------- I3: the mark reaches the briefing, so it takes the
 #                               higher of its two readers' bars
 #
@@ -297,7 +602,7 @@ def test_a_say_verdict_asks_the_reversal_before_marking_the_promise(monkeypatch)
     agreed to; triage files it under the friend and decides to SAY something.
     owner_is_party is the model that gets this right, and it must be asked
     before the store — and therefore the briefing — believes triage."""
-    a, m = _triaging_brain(monkeypatch, owes="other", party=True,
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_YES,
                            decision="say", goal=None)
     a.hear(GUEST_LINE)
     assert m.open_loops()[0]["owes"] is None, \
@@ -306,10 +611,31 @@ def test_a_say_verdict_asks_the_reversal_before_marking_the_promise(monkeypatch)
 
 
 def test_an_ignore_verdict_asks_the_reversal_too(monkeypatch):
-    a, m = _triaging_brain(monkeypatch, owes="other", party=True,
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_YES,
                            decision="ignore", goal=None)
     a.hear(GUEST_LINE)
     assert m.open_loops()[0]["owes"] is None
+
+
+def test_an_ignore_verdict_still_marks_a_promise_that_really_is_the_guests(
+        monkeypatch):
+    """THE NEGATIVE CONTROL THE `ignore` LEG WAS MISSING. Its `say` sibling
+    has had one since it was written; this one asserted only that the mark was
+    ABSENT, which is equally true if the write never fires for `ignore` at
+    all. Mutation-proven: gating the write on `decision.decision != "ignore"`
+    left the whole file green.
+
+    That is not a cosmetic gap. `ignore` is the lane where OVERHEARD GUEST
+    SPEECH ACTUALLY LANDS — a guest says "I'll send you the pitch deck
+    tomorrow", triage routes it ambient as `ignore` with owes="other", and
+    ingest() has already created the commitment. An unmarked commitment there
+    is the original brief's failure, on the busiest path to it."""
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_NO,
+                           decision="ignore", goal=None)
+    a.hear(GUEST_LINE)
+    assert m.open_loops()[0]["owes"] == "other", \
+        ("the ambient lane wrote no mark, so the clock is free to mint the "
+         "browser job from a promise somebody else made")
 
 
 def test_a_say_verdict_still_marks_a_promise_that_really_is_the_guests(monkeypatch):
@@ -317,7 +643,7 @@ def test_a_say_verdict_still_marks_a_promise_that_really_is_the_guests(monkeypat
     writing the mark must not lower the fence. owner_is_party says no, so the
     guest's promise is marked exactly as before, on a decision that never
     reached the reversal at all until now."""
-    a, m = _triaging_brain(monkeypatch, owes="other", party=False,
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_NO,
                            decision="say", goal=None)
     a.hear(GUEST_LINE)
     assert m.open_loops()[0]["owes"] == "other"
@@ -327,7 +653,7 @@ def test_the_briefing_never_sees_an_attribution_the_code_has_withdrawn(monkeypat
     """The sink, asserted at the sink. briefing_facts() is what BRIEFING_SYSTEM
     is handed, so this is the leg that says the owner is not told his own
     dinner was somebody else's."""
-    a, m = _triaging_brain(monkeypatch, owes="other", party=True,
+    a, m = _triaging_brain(monkeypatch, owes="other", party=PARTY_YES,
                            decision="say", goal=None)
     a.hear(GUEST_LINE)
     loop = m.briefing_facts(since_ts=0)["open_loops"][0]
@@ -529,6 +855,97 @@ def test_a_loop_from_before_attribution_existed_still_prepares_work():
     out = a.clock_tick(now=2000)
     assert out["goal"] == "draft the pitch deck email"
     assert queued
+
+
+# ------------- I4: the fence must range over the loops the model was SHOWN,
+#                   and an unreadable answer is not an answer
+#
+# The payload has always been capped at ten loops while every check below ran
+# over the whole of `fresh`, so a loop the model could not have acted on —
+# because it never saw it — voted on whether the goal was somebody else's, and
+# on whether any quote licensed preparing work at all. And `raw.get("loop_ids",
+# [])` plus the isdigit() filter turned [3.0] or ["seven"] silently into [],
+# the same value a model that named nothing produces, dropping the goal into
+# the unnamed branch whose all() only fences when EVERY open loop in the store
+# belongs to somebody else.
+
+
+def test_the_not_his_fence_only_ranges_over_the_loops_the_model_was_shown():
+    """THE CHECK THAT WOULD HAVE CAUGHT I4's first half. Ten guest promises
+    are shown; an eleventh loop, his own, sits beyond the cap where the model
+    never saw it. The goal can only have come from a loop the model was shown,
+    and every one of those is somebody else's. Before the fix the hidden loop
+    made `all()` false and the guest-derived job was prepared."""
+    guests = [_loop(i, f"guest promise {i}", f"I'll send you thing {i}.",
+                    owes="other") for i in range(1, 11)]
+    hidden = _loop(99, "book the Earls table",
+                   "I need to book the Earls table", owes="owner")
+    out, queued = _clock_over(guests + [hidden], "draft the pitch deck email")
+    assert out["goal"] is None, \
+        ("a loop beyond the ten the model was shown lifted the fence on a "
+         "goal it could not possibly have come from")
+    assert queued == []
+
+
+def test_a_loop_the_model_never_saw_cannot_authorise_preparing_work():
+    """The same drift in the authority check one block up, which reads the
+    same set. Ten shown loops carry no owner-authored obligation; an eleventh,
+    beyond the cap, does. Before the fix that invisible quote licensed work the
+    model had no evidence for."""
+    bland = [_loop(i, f"loop {i}", f"the weather was fine on day {i}.")
+             for i in range(1, 11)]
+    authored = _loop(99, "book the table", "I need to book the Earls table")
+    out, queued = _clock_over(bland + [authored], "draft the pitch deck email")
+    assert out["goal"] is None, \
+        "a quote the model never saw authorised the work it prepared"
+    assert queued == []
+
+
+def test_loop_ids_that_cannot_be_read_drop_the_goal_instead_of_guessing():
+    """THE CHECK THAT WOULD HAVE CAUGHT I4's second half. The model named
+    loops and we cannot tell which. That is not "it named nothing" — it is an
+    answer we cannot read, and the honesty wall this whole file stands on says
+    an answer nobody gave is not an answer. Reproduced before the fix on the
+    ordinary two-loop store: both malformed shapes prepared the guest's job."""
+    # Every shape here must be unreadable for the RIGHT reason. "7" as a bare
+    # string is not one of them: it coerces to a readable [7], and the goal
+    # would then be dropped by the not-his fence instead — the assertion would
+    # pass while testing nothing, which is the disease this wave exists to
+    # find. Loop 1 is the OWNER's, so if any shape here were readable as [1]
+    # the goal would survive and this leg would go red.
+    for mangled in ([3.0], ["seven"], [None], ["1x"], [{"id": 1}]):
+        out, queued = _clock_over([HIS, GUESTS], "draft the pitch deck email",
+                                  loop_ids=mangled)
+        assert out["goal"] is None, \
+            f"an unreadable loop_ids ({mangled!r}) was guessed at, not refused"
+        assert queued == []
+        assert out["say"], "the fence takes the action, never her voice"
+
+
+def test_an_unreadable_loop_ids_is_not_read_as_naming_nothing():
+    """The distinction, stated where it can regress. A model that named
+    nothing keeps the permissive unnamed branch — that is the leg above this
+    one, and it must not be collateral damage. Same store, same goal, the only
+    difference being whether the field was present and unreadable."""
+    named_nothing, queued = _clock_over(
+        [HIS, GUESTS], "book the Earls table for Friday", loop_ids=None)
+    assert named_nothing["goal"] == "book the Earls table for Friday"
+    assert queued == ["book the Earls table for Friday"]
+    unreadable, queued = _clock_over(
+        [HIS, GUESTS], "book the Earls table for Friday", loop_ids=[3.0])
+    assert unreadable["goal"] is None
+
+
+def test_the_clock_prompt_requires_the_loops_a_goal_rests_on():
+    """The residual the unnamed branch leaves open cannot be closed by a
+    stricter operator here — that only rebuilds "one guest promise disables
+    every goal forever". It closes when the MODEL says which loop it acted on,
+    so the prompt has to ask for that rather than merely accept it. Whether it
+    obeys is not knowable from the repo; it waits on LIVE."""
+    from brain.anticipy_core import CLOCK_SYSTEM
+    assert "loop_ids" in CLOCK_SYSTEM
+    assert "MUST" in CLOCK_SYSTEM, \
+        "the prompt accepts loop_ids without ever asking for them"
 
 
 # ------------------------------------------------------------- the migration

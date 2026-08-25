@@ -1278,23 +1278,70 @@ NOT a party to any work here.
 Reply ONLY with compact JSON: {"owner_is_party": true|false}"""
 
 
-def owner_is_party(llm, line: str, goal: str) -> bool:
+# FOUR ANSWERS, BECAUSE THERE ARE FOUR THINGS THAT CAN HAPPEN — and the two
+# that are not answers at all must stop wearing the costume of "no".
+#
+# This used to return `bool`, and every failure — no goal, no model, a dead
+# model, a timeout, a 5xx, a rate limit, an unparseable reply — came back as
+# the same `False` a model saying "no, he is not a party" comes back as. Its
+# one caller writes a permanent, unremovable mark on that `False`, so ONE
+# flaky call filed the owner's own dinner under his friend in every briefing
+# forever: reproduced on the recorded dinner line, where a single timeout on
+# hearing 1 left `owes="other"` through a WORKING call on hearing 2 that said
+# "yes, he is a party" and through triage itself saying "owner" on hearing 3.
+#
+# So the two non-answers are told apart from each other as well as from "no",
+# because they mean opposite things to the caller:
+#
+#   PARTY_UNASKED     — there was nothing to ask. No goal, no llm, or a model
+#                       that is not live. This is the documented inert mode:
+#                       0% of deployments without a live model get a reversal
+#                       and they never did, so the caller must behave exactly
+#                       as it did before this question existed.
+#   PARTY_UNANSWERED  — a LIVE model was asked and no readable answer came
+#                       back. Nothing about the world was learned. This is a
+#                       transient fault, and the caller must not carve it into
+#                       the store as if it were a verdict.
+#
+# Only an explicit true still flips anything, and now only an explicit false
+# is a "no".
+PARTY_YES = "yes"
+PARTY_NO = "no"
+PARTY_UNASKED = "unasked"
+PARTY_UNANSWERED = "unanswered"
+
+
+def party_verdict(llm, line: str, goal: str) -> str:
     """The tiebreaker for owes="other". Asked as its own question because
     triage answers it wrong when both are bundled: shown the full mush of a
     dinner he plainly agreed to, it fixates on "I'll text you a time" and
     files the whole plan under the friend — measured six for six on the live
     2026-08-09 conversation. The same model, asked ONLY this, gets it right.
-    Only an explicit true flips anything; absent, malformed, or dead-model
-    replies leave the inert behavior exactly as it was."""
+
+    Returns one of PARTY_YES / PARTY_NO / PARTY_UNASKED / PARTY_UNANSWERED —
+    never a bool, because the caller's decision differs in all four cases and
+    a bool can only carry two of them. An answer nobody gave is not an answer,
+    the same wall `_speaker_verdict`, `_fact_kind` and `attribute_commitment`
+    already stand behind."""
     if not goal or not llm or not getattr(llm, "live", False):
-        return False
+        return PARTY_UNASKED
     try:
         res = llm.chat(PARTY_SYSTEM,
                        f"HEARD: {line}\n\nTASK: {goal}", temperature=0.0)
         raw = json.loads(_extract_json(res.text))
-    except Exception:
-        return False
-    return raw.get("owner_is_party") is True
+    except Exception as exc:
+        print(f"party: the reversal question went unanswered — {exc!r}")
+        return PARTY_UNANSWERED
+    answer = raw.get("owner_is_party") if isinstance(raw, dict) else None
+    if answer is True:
+        return PARTY_YES
+    if answer is False:
+        return PARTY_NO
+    # A live model that replied without the key, or with something that is not
+    # a boolean, did not say "no" — it said nothing this code can read. It gets
+    # the same treatment as the timeout, for the same reason.
+    print(f"party: unreadable reply to the reversal question -> {raw!r}")
+    return PARTY_UNANSWERED
 
 
 WORLD_SYSTEM = """A transcript line was overheard, and one task was extracted

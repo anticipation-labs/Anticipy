@@ -771,13 +771,16 @@ class Memory:
 
         So absence is treated the way `_speaker_verdict` and `_fact_kind` treat
         it, and for the same reason: an answer nobody gave is not an answer.
-        Reversal is not lost by this — owner_is_party() reverses triage's
+        Reversal is not lost by this — party_verdict() reverses triage's
         over-eager "somebody else took this on" (wrong six for six on a dinner
         the owner had plainly agreed to) BEFORE hear() ever writes the mark, so
-        a withdrawn verdict never reaches the store to need erasing. There is
-        deliberately no erase path at all: a correction that genuinely has to
-        remove a stored verdict should arrive as its own named method with its
-        own recorded reason, not as a falsy argument to this one."""
+        in the ordinary case a withdrawn verdict never reaches the store. This
+        method still has no erase path, and never will: a correction that
+        genuinely has to remove a stored verdict arrives as `withdraw_
+        attribution()` below, with its own recorded reason, not as a falsy
+        argument to this one. That sentence lived in this docstring and nowhere
+        else for one commit, and a fence with no lowering mechanism is what it
+        cost — HARNESS-LAW 4, in one paragraph."""
         if not commitment_id or not owes:
             return
         row = self.db.execute(
@@ -793,6 +796,61 @@ class Memory:
         self.db.execute("UPDATE nodes SET attrs=? WHERE id=?",
                         (json.dumps(attrs), commitment_id))
         self.db.commit()
+
+    def withdraw_attribution(self, commitment_id: Optional[int],
+                             reason: str) -> bool:
+        """THE ONE NAMED PATH THAT REMOVES A STORED `owes` VERDICT.
+
+        A fence needs a way down or it is not a fence, it is a wall. The commit
+        that stopped `attribute_commitment(id, None)` popping the mark was
+        right — every later hearing of the same sentence came back through it
+        and erased a verdict an earlier, better-informed pass was right about
+        — but it removed the accidental way down without building the
+        deliberate one, and left the decision to build it sitting in a
+        docstring. One `owner_is_party` call that timed out then filed the
+        owner's own dinner under his friend in every briefing, forever.
+
+        THE DIFFERENCE FROM THE ERASE THAT WAS REMOVED is not the SQL, which
+        is nearly the same. It is who may reach it and what they must bring:
+
+          * `reason` is REQUIRED and is recorded. A correction with no reason
+            is the falsy argument wearing a new name, and would be reachable
+            from every code path that happens to have an empty variable — the
+            exact shape of the bug. Refusing without one means an erase can
+            only be written by somebody who knew they were erasing.
+          * The withdrawal is KEPT, not just applied: `owes_withdrawn` holds
+            the reason and when, so the store can say "this verdict was made
+            and then taken back", which is a different fact from "no verdict
+            was ever made". A silent erase looks identical to a promise nobody
+            ever judged.
+          * Its only caller is the reversal saying a POSITIVE yes — never
+            triage's second opinion (measured wrong in exactly this direction),
+            never absence, and never a call that failed. `hear()` holds that
+            gate; this method holds the ledger.
+
+        Returns whether a verdict was actually removed, so a caller cannot
+        mistake "there was nothing to withdraw" for "the withdrawal worked".
+        """
+        if not commitment_id or not str(reason or "").strip():
+            return False
+        row = self.db.execute(
+            "SELECT attrs FROM nodes WHERE id=? AND type='commitment'",
+            (commitment_id,)).fetchone()
+        if not row:
+            return False
+        try:
+            attrs = json.loads(row[0] or "{}") or {}
+        except Exception:
+            attrs = {}
+        if not attrs.get("owes"):
+            return False
+        attrs.pop("owes", None)
+        attrs["owes_withdrawn"] = {"reason": str(reason).strip(),
+                                   "ts": time.time()}
+        self.db.execute("UPDATE nodes SET attrs=? WHERE id=?",
+                        (json.dumps(attrs), commitment_id))
+        self.db.commit()
+        return True
 
     def resolve(self, commitment_id: int, status: str = "done"):
         self.db.execute("UPDATE nodes SET status=? WHERE id=?", (status, commitment_id))
