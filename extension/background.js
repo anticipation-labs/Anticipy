@@ -1154,6 +1154,69 @@ async function runJob(job) {
   }
 }
 
+// WHAT THE AGENT MAY TREAT AS A VALUE THE OWNER GAVE.
+//
+// Rendered into the step prompt as FACTS ALREADY GIVEN, which tells the model
+// to set form fields to these — so what lands here is not cosmetic. Extracted
+// from the run options so the rule can be stated once and tested directly;
+// inline, the only way to check it was to read the call site.
+//
+// Three exclusions, each paid for:
+//
+//   * UNDERSCORE-PREFIXED KEYS are this system's own bookkeeping (`_workflow`,
+//     `_execution_journal`, `_doing`, `_offer_ref`) and were never something a
+//     person said. `_offer_ref` is what makes this load-bearing rather than
+//     tidy: it is the proof that a consent question was OURS, and the one
+//     model that must never be able to reproduce it is precisely the step
+//     model this block is rendered for.
+//   * owner_answer* — the answer's content already reaches the model inside
+//     the approved scope ("They answered: ..."), where it is authority.
+//     Handing the same raw sentence over as a "fact" is how it got typed
+//     verbatim into OpenTable's Special Requests box (live, 2026-08-15).
+//   * the named bookkeeping keys, and `memory`: background knowledge, NOT a
+//     given fact. Without that line a short recollection (<200 chars) falls
+//     through into FACTS ALREADY GIVEN and the model sets form fields to it.
+export function ownerFactsFromParams(params) {
+  const p = params && typeof params === "object" ? params : {};
+  const NEVER = ["source", "say", "now", "lane", "missing", "authorized",
+                 "approved_scope", "needed", "start_url", "task", "assumption",
+                 "note", "memory", "resume_tab", "resume_session"];
+  const ownerAnswer = (k) => /^owner_answer/i.test(String(k));
+  const bookkeeping = (k) => String(k).startsWith("_");
+  if (p._workflow?.facts && typeof p._workflow.facts === "object") {
+    return Object.fromEntries(Object.entries(p._workflow.facts)
+      .filter(([k]) => !ownerAnswer(k) && !bookkeeping(k)));
+  }
+  return Object.fromEntries(Object.entries(p)
+    .filter(([k, v]) => !bookkeeping(k) && !NEVER.includes(k) && !ownerAnswer(k)
+      && (typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+      && String(v).length < 200));
+}
+
+// WHAT A PARKED JOB REMEMBERS ABOUT THE QUESTION IT IS PARKED ON.
+//
+// `_offer_ref` is the consent offer's ref (side_trip.js `mintOfferRef`), and
+// it is written on EVERY needs_user hand-back — the minted value when the run
+// handed back one of our own consent offers, and "" when it handed back
+// anything else. The empty write is the load-bearing half: a ref that outlived
+// its question is a ref the step model can quote back out of the approved
+// scope, having read it there, and forge a question with.
+//
+// The resume stamp is separate and conditional, because a tabless park has no
+// tab to point at. Gating the ref on the same condition — which is what the
+// shape of this patch invites — would leave stale refs alive on every tabless
+// park.
+export function handBackParamsPatch(out, parkedSession) {
+  const patch = {
+    _offer_ref: typeof out?.offerRef === "string" ? out.offerRef : "",
+  };
+  if (out && out.tabId != null) {
+    patch.resume_tab = out.tabId;
+    patch.resume_session = parkedSession;
+  }
+  return patch;
+}
+
 async function runJobInner(job, params) {
   // THE FIRST BRANCH, ABOVE EVERYTHING. A supervised read may never fall
   // through into the executor below: the rewrite three lines down turns any
@@ -1208,6 +1271,21 @@ async function runJobInner(job, params) {
       const resumeTabId = await resumableTabId(params);
       const out = await runAgentGoal(params.task, {
         apiKey: openrouterKey,
+        // WHICH QUESTION THIS JOB IS PARKED ON, if it is parked on one of our
+        // consent offers. Minted by the run that handed the offer back, stored
+        // here, and checked against the question the brain quotes into
+        // approved_scope. This is NOT an authorization flag and cannot become
+        // one: with a matching ref and no answer, or an answer a model reads as
+        // no, both mailbox doors stay shut. What it settles is only "was the
+        // question the owner answered OURS" — which used to be settled by
+        // testing his quoted question for a sentence AGENT_SYSTEM instructs the
+        // step model to write, and a reviewer opened the owner's Gmail through
+        // exactly that gap on 2026-08-24.
+        //
+        // Params is the right home because of who cannot write here: the owner's
+        // words land in approved_scope, and the step model emits actions, not
+        // params. Neither can put a value in this key.
+        offerRef: typeof params._offer_ref === "string" ? params._offer_ref : "",
         startUrl: params.start_url || undefined,
         resumeTabId,
         stillLive: () => jobStillLive(job.id, job.lease_token),
@@ -1251,26 +1329,7 @@ async function runJobInner(job, params) {
         // answered: ..."), where it is authority. Handing the same raw
         // sentence over as a "fact" is how it got typed verbatim into
         // OpenTable's Special Requests box (live, 2026-08-15).
-        facts: (params._workflow?.facts && typeof params._workflow.facts === "object")
-          ? Object.fromEntries(Object.entries(params._workflow.facts)
-              .filter(([k]) => !/^owner_answer/i.test(k)))
-          : Object.fromEntries(Object.entries(params)
-              .filter(([k, v]) => !["source", "say", "now", "lane", "missing",
-                                    "authorized", "approved_scope", "needed",
-                                    "start_url", "task", "assumption", "note",
-                                    // Background knowledge, NOT a given fact.
-                                    // Without this line a short recollection
-                                    // (<200 chars) falls through into
-                                    // FACTS ALREADY GIVEN, which tells the
-                                    // model to set form fields to it — the
-                                    // exact confusion the separate memory
-                                    // block exists to prevent.
-                                    "memory",
-                                    "resume_tab", "resume_session"].includes(k)
-                                  && !/^owner_answer/i.test(k)
-                                  && (typeof v === "string" || typeof v === "number"
-                                      || typeof v === "boolean")
-                                  && String(v).length < 200)),
+        facts: ownerFactsFromParams(params),
         // WHAT THE BRAIN REMEMBERED, stamped on the row by
         // Anticipy._queue_job. A string, already injection-filtered and length
         // capped brain-side (brain/anticipy_core.py memory_notes) — kept as an
@@ -1387,8 +1446,15 @@ async function runJobInner(job, params) {
             effectUncertain: !!job.effect_uncertain,
             // The session stamp travels with the tab id: it is what lets the
             // resume prove the id still points at the tab we parked.
-            ...(out.tabId != null && canonicalState === "needs_user"
-              ? { paramsPatch: { resume_tab: out.tabId, resume_session: parkedSession } } : {}),
+            // WRITTEN ON EVERY needs_user, INCLUDING WITH NO TAB. `_offer_ref`
+            // carries the offer this job is now parked on — and an empty string
+            // when the hand-back was not one of our offers, which is how a ref
+            // is stopped from outliving its question. Gating that clear on
+            // `out.tabId != null`, the way the resume stamp is gated, would
+            // leave a stale ref alive on any tabless park, and a stale live ref
+            // is one the step model can quote back out of the approved scope.
+            ...(canonicalState === "needs_user"
+              ? { paramsPatch: handBackParamsPatch(out, parkedSession) } : {}),
             ...(canonicalState === "succeeded" ? {
               summary: result || "completed",
               verified: out.receipt?.verified === true,
@@ -1397,9 +1463,9 @@ async function runJobInner(job, params) {
           })
         : {
             status, result,
-            ...(out.tabId != null && status === "needs_user"
+            ...(status === "needs_user"
               ? { params: JSON.stringify({
-                  ...params, resume_tab: out.tabId, resume_session: parkedSession }) } : {}),
+                  ...params, ...handBackParamsPatch(out, parkedSession) }) } : {}),
           };
       job = await updateJob(job.id, { ...transition, result }, job.lease_token);
       // The job row keeps needs_user (the phone offers Try again on it), but

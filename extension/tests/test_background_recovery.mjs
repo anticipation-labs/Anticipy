@@ -108,10 +108,26 @@ await new Promise((r) => setTimeout(r, 10));
 
 // The stamp is worthless unless it is written next to the tab id, and it must
 // never reach the model as a 'fact' about the errand.
-assert.ok(/paramsPatch: \{ resume_tab: out\.tabId, resume_session: parkedSession \}/.test(source),
-  "the parked tab id must be written together with the session that owns it");
-assert.ok(/"resume_tab", "resume_session"/.test(source),
-  "the session stamp is bookkeeping, not a fact about the task");
+//
+// RUN THE RULE, DO NOT LOOK FOR IT. Both halves used to be regexes over
+// background.js source, and both went red the moment the expressions they
+// matched were lifted into named functions — a check pinned to an
+// implementation's shape rather than to what it does.
+{
+  const { handBackParamsPatch, ownerFactsFromParams } = await import("../background.js");
+  const patch = handBackParamsPatch({ status: "needs_user", tabId: 847 }, "sess-A");
+  assert.equal(patch.resume_tab, 847,
+    "the parked tab id must be written on a hand-back that kept a tab");
+  assert.equal(patch.resume_session, "sess-A",
+    "the parked tab id must be written together with the session that owns it");
+  const tabless = handBackParamsPatch({ status: "needs_user" }, "sess-A");
+  assert.ok(!("resume_tab" in tabless) && !("resume_session" in tabless),
+    "a hand-back with no tab must not stamp one");
+  assert.deepEqual(
+    ownerFactsFromParams({ resume_tab: 847, resume_session: "sess-A", party_size: 4 }),
+    { party_size: 4 },
+    "the session stamp is bookkeeping, not a fact about the task");
+}
 console.log("PASS 3: the session stamp is persisted with the tab id and kept out of facts");
 
 // ---- 4. Lease lost is not "you called this off" ---------------------------

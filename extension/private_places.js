@@ -67,7 +67,7 @@
 // So the offer is always put, even when he plainly asked. That costs exactly
 // one message on a request he already made. A wrong yes reads his mail.
 
-import { inboxFor, lastAskedAndAnswered } from "./side_trip.js";
+import { inboxFor, lastAskedAndAnswered, offerCarriesRef } from "./side_trip.js";
 
 // ---------------------------------------------------------------------------
 // Layer 2 — host shape
@@ -241,6 +241,14 @@ export function privatePlace(url, ownerProfile = null) {
 // the owner sees, the recogniser keeps matching the old wording, and every yes
 // he gives is thrown away — a failure nobody notices because it only ever
 // refuses. side_trip.js carries the same property for the same reason.
+//
+// IT IS NOT WHAT PROVES THE QUESTION WAS OURS. Nothing stops the step model
+// composing this sentence and the host beside it — `asked` is `job.result`,
+// and a model-authored hand-back puts free-form prose there. What proves it is
+// side_trip.js's offer ref, minted when this module's offer is handed back and
+// recorded where neither the owner's channel nor the step model can write.
+// Read the block above `mintOfferRef` for the reproduction that made that
+// necessary; the same defect existed on both doors and the ref closes both.
 export const PLACE_OFFER_MARK = "Want me to open it?";
 
 /**
@@ -287,10 +295,14 @@ export function refusalToOpen(place) {
  * that drifts sideways between places is the same bug as consent that drifts
  * forward in time.
  */
-export function placeOfferAnswered(scope, place) {
+export function placeOfferAnswered(scope, place, offerRef) {
   if (!place) return null;
   const pair = lastAskedAndAnswered(scope);
   if (!pair) return null;
+  // THE REF FIRST, because it is the only one of the three an attacker cannot
+  // write. The mark and the host are what tell one of OUR questions from
+  // another one of OUR questions; they say nothing about whose question it is.
+  if (!offerCarriesRef(pair.asked, offerRef)) return null;
   if (!pair.asked.includes(PLACE_OFFER_MARK)) return null;
   if (!pair.asked.includes(place.host)) return null;
   return pair;
@@ -313,10 +325,10 @@ export function placeOfferAnswered(scope, place) {
  * already answered, so "never asked" and everything else lead to different
  * sentences.
  */
-export async function placeConsent({ scope, place, judge } = {}) {
+export async function placeConsent({ scope, place, offerRef, judge } = {}) {
   if (!place) return { granted: false, why: "never asked" };
   if (place.stance === "refuse") return { granted: false, why: "declined" };
-  const pair = placeOfferAnswered(scope, place);
+  const pair = placeOfferAnswered(scope, place, offerRef);
   if (!pair) return { granted: false, why: "never asked" };
   if (typeof judge !== "function") return { granted: false, why: "undecidable" };
   let verdict;

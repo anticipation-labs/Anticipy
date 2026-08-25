@@ -84,4 +84,57 @@ function freshWorld() {
   console.log("PASS 3: leftover-tab sweep spared the tab being resumed");
 }
 
+// ---- 4. What ELSE crosses the park: the consent offer's ref --------------
+//
+// A parked run's tab is its state; `_offer_ref` is the other half — WHICH
+// QUESTION it is parked on. It is what proves, on the resume, that the question
+// the owner answered was one of this extension's own consent offers rather than
+// prose the step model composed while reading a page. A reviewer opened the
+// owner's Gmail through exactly that gap on 2026-08-24 (side_trip.js,
+// `mintOfferRef`), so the two rules below are load-bearing, not bookkeeping:
+//
+//   * it is WRITTEN on a hand-back that put one of our offers;
+//   * it is CLEARED on every other hand-back, including a tabless one — a ref
+//     that outlives its question is one the step model can read out of the
+//     approved scope and forge a question with;
+//   * it never reaches the step model as a "fact".
+{
+  const { handBackParamsPatch, ownerFactsFromParams } = await import("../background.js");
+  const REF = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
+
+  const put = handBackParamsPatch({ status: "needs_user", offerRef: REF, tabId: 7 }, "sess-1");
+  assert.equal(put._offer_ref, REF, "a hand-back that put our offer must record its ref");
+  assert.equal(put.resume_tab, 7, "and still stamp the tab it parked");
+  assert.equal(put.resume_session, "sess-1");
+
+  const other = handBackParamsPatch({ status: "needs_user", tabId: 7 }, "sess-1");
+  assert.equal(other._offer_ref, "",
+    "a hand-back that is NOT our offer must CLEAR the ref, not leave the last one live");
+
+  const tabless = handBackParamsPatch({ status: "needs_user" }, "");
+  assert.equal(tabless._offer_ref, "",
+    "a tabless park must clear it too — gating the clear on the tab leaves stale refs alive");
+  assert.ok(!("resume_tab" in tabless), "and must not stamp a tab that does not exist");
+
+  for (const junk of [null, undefined, 12345, { toString: () => REF }, ["x"]]) {
+    assert.equal(handBackParamsPatch({ status: "needs_user", offerRef: junk }, "").
+      _offer_ref, "", `a non-string offerRef (${typeof junk}) must be recorded as cleared`);
+  }
+
+  // FACTS ALREADY GIVEN is rendered into the step prompt. A ref that leaked in
+  // there would be handed to the one model that must never reproduce it.
+  const facts = ownerFactsFromParams({
+    _offer_ref: REF, _doing: "looking", _workflow: { plan_id: "p" },
+    party_size: 4, time: "7pm", approved_scope: "...", memory: "he likes window seats",
+    owner_answer_1: "West van", resume_tab: 7,
+  });
+  assert.ok(!JSON.stringify(facts).includes(REF), `the ref must never reach the model: ${JSON.stringify(facts)}`);
+  assert.deepEqual(facts, { party_size: 4, time: "7pm" },
+    `only values the owner gave are facts: ${JSON.stringify(facts)}`);
+  const wf = ownerFactsFromParams({ _workflow: { facts: { location: "West Vancouver", _offer_ref: REF, owner_answer: "x" } } });
+  assert.deepEqual(wf, { location: "West Vancouver" },
+    `the workflow branch excludes the same keys: ${JSON.stringify(wf)}`);
+  console.log("PASS 4: the offer ref crosses the park, is cleared otherwise, and never reaches the model");
+}
+
 console.log("test_resume_tab: all passed");

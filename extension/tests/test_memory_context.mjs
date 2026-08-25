@@ -78,14 +78,21 @@ console.log("PASS: memory rides outside the approval-digested plan");
 // GIVEN, whose prompt text says "set form fields to these". A short
 // recollection is under the 200-char cut, so without an explicit exclusion it
 // lands there and becomes typeable by the back door.
-const factsExclusions = worker.slice(
-  worker.indexOf("facts: (params._workflow?.facts"),
-  worker.indexOf("initialEvidenceJournal:"),
-);
-assert.ok(
-  /"memory",/.test(factsExclusions),
-  "memory must be excluded from the facts fallback sweep",
-);
+//
+// RUN THE RULE, DO NOT LOOK FOR IT. This used to slice background.js between
+// two source landmarks and grep the slice for `"memory",`; it went red the
+// moment the expression was lifted into a named function, having never once
+// exercised the behaviour it is named for.
+{
+  const { installChrome } = await import("./chrome_mock.mjs");
+  installChrome();
+  const { ownerFactsFromParams } = await import("../background.js");
+  const facts = ownerFactsFromParams({ memory: MEMORY, party_size: 4, time: "7:30 PM" });
+  assert.ok(!("memory" in facts) && !JSON.stringify(facts).includes("Coal Harbour"),
+    `memory must be excluded from the facts fallback sweep: ${JSON.stringify(facts)}`);
+  assert.deepEqual(facts, { party_size: 4, time: "7:30 PM" },
+    "...and the values he actually gave must still get through");
+}
 console.log("PASS: memory cannot leak into FACTS ALREADY GIVEN");
 
 // ---------------------------------------- 4. the prompt says choose, not fill

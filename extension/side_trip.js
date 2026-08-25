@@ -199,7 +199,10 @@ export function tripRefusedReason(url, { authorized, purpose } = {}) {
 // correctly leaves open the question of where the boolean comes from. It must
 // NOT come from a params flag: a flag is something another process set, and
 // "another process decided I may read your inbox" is exactly the sentence this
-// product cannot afford to be true.
+// product cannot afford to be true. That rule is unchanged by the offer ref
+// below — a ref proves WHICH QUESTION WAS PUT, and nothing else. It cannot
+// authorise anything on its own: with a ref and no answer, or a ref and an
+// answer a model reads as no, the mailbox stays shut.
 //
 // WHAT WAS HERE UNTIL 2026-08-24, and why it is gone. Consent was two word
 // lists — an affirmative vocabulary and a mailbox vocabulary — that had to
@@ -220,11 +223,8 @@ export function tripRefusedReason(url, { authorized, purpose } = {}) {
 // "did this person agree?" — a question about what a human meant. So it is
 // split into the two questions it actually is:
 //
-//   1. WAS THE OFFER PUT TO HIM? Structural, and answerable from our own
-//      machine-written frame. When he answers a parked question the brain
-//      writes `You stopped and asked: "<our sentence>". They answered:
-//      "<his words>"` into approved_scope (brain/conversation.py:1576-1580).
-//      Recognising a sentence THIS MODULE WROTE is parsing our own format.
+//   1. WAS THE OFFER PUT TO HIM? Structural, and answerable from a record ONLY
+//      THIS MODULE CAN HAVE WRITTEN — see the offer ref below.
 //   2. DID HIS ANSWER MEAN YES? Handed whole — with the question it answers —
 //      to a model. Nothing here reads his words.
 //
@@ -233,17 +233,138 @@ export function tripRefusedReason(url, { authorized, purpose } = {}) {
 // Failing closed costs one message asking him to paste the code. Failing open
 // reads somebody's mail without being asked.
 
+// ---------------------------------------------------------------------------
+// THE OFFER REF — what makes question (1) answerable at all
+// ---------------------------------------------------------------------------
+//
+// WHAT WAS HERE UNTIL 2026-08-24 (the second time), and why it is gone.
+// Question (1) was decided by testing whether the quoted question contained
+// INBOX_OFFER_MARK, on the stated grounds that it was "recognising a sentence
+// THIS MODULE WROTE". That premise was false in the shipped system, and a
+// reviewer drove the consequence end to end.
+//
+// `asked` is `job.result` — and `job.result` for a model-authored hand-back is
+// `decision.reason`, free-form step-model prose written while reading a page
+// (agent_loop.js, the `needs_user` branch). AGENT_SYSTEM then instructs the
+// step model, in capitals, to offer to go and read anything "sent somewhere
+// they control … a document, a reference number … or an account they are
+// signed into". So the model is actively steered to compose questions of this
+// exact shape about targets that are not the mailbox. It parked with a
+// sentence of its own about an order summary on the next page, ending in the
+// mark word for word; the owner answered "sure, but only the summary — do not go poking around
+// anywhere else", the structural half passed, and mail.google.com was opened
+// and read. A page can steer that prose too, so the sentence is not merely
+// ours-by-coincidence; it is writable by an attacker.
+//
+// The difference between READING OUR OWN FORMAT — which is safe — and MATCHING
+// A SENTENCE ANYONE CAN PRODUCE is that our own format has to contain
+// something no one else can produce. So the offer now carries one:
+//
+//   * `mintOfferRef()` mints 128 bits of CSPRNG randomness when — and only
+//     when — this module's offer is actually handed back.
+//   * `stampOffer()` puts it in the sentence he reads, so the brain quotes it
+//     back inside the frame's `asked` half, verbatim, with everything else.
+//   * The loop returns it to background.js, which records it in the JOB'S
+//     PARAMS. That channel is not reachable by the owner's words (they land in
+//     approved_scope) and not writable by the step model (it emits actions,
+//     not params), and background.js CLEARS it on every hand-back that is not
+//     one of our offers — so a ref never outlives the question it was minted
+//     for, and a forged sentence carrying a ref copied out of the scope has no
+//     live ref to match.
+//   * `offerCarriesRef()` checks it on the way in. No ref, a short ref, a
+//     malformed ref, or a ref the quoted question does not carry: NOT ASKED,
+//     and the model is never consulted.
+//
+// A ref is NOT consent and cannot become consent: it answers "which question
+// was put", never "what did he mean". Question (2) is still a model reading
+// his whole answer, and it is still the only thing that can say yes.
+
 // The mark of our own offer, defined once and used both to BUILD the sentence
 // he sees (offerToFetch) and to RECOGNISE it coming back in the frame. Two
 // copies would let somebody reword the question while the recogniser kept
 // matching the old wording, and every yes he gave would be silently thrown
 // away — the failure mode that is invisible because it only ever refuses.
+//
+// It is NOT what proves the question was ours; the ref is. The mark is what
+// tells the two doors apart, so a yes about a private place is never read as a
+// yes about the mailbox and the other way round.
 export const INBOX_OFFER_MARK = "Want me to go and read it?";
+
+// 16 bytes, hex. The owner sees this on the end of the sentence, which is a
+// real cost in a product whose whole promise is not spending his attention —
+// but the alternative is a shorter token, and the thing this proves is worth
+// more than the four words of tidiness. Guessing is not a strategy against
+// 128 bits, and the step model gets one hand-back to try.
+const REF_LEN = 32;
+const REF_ALPHABET = "0123456789abcdef";
+
+/**
+ * A fresh offer ref, or "" when this runtime has no CSPRNG.
+ *
+ * "" IS A REAL ANSWER AND MUST STAY ONE. Math.random() is not an option: a
+ * predictable ref is a forgeable ref, and a forgeable ref is the defect this
+ * exists to close. With no CSPRNG the offer goes out unstamped, no answer to
+ * it can ever be read as consent, and the run asks him to paste the code —
+ * one message, which is the correct price of not knowing.
+ */
+export function mintOfferRef() {
+  const source = globalThis.crypto;
+  if (!source || typeof source.getRandomValues !== "function") return "";
+  const bytes = source.getRandomValues(new Uint8Array(REF_LEN / 2));
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
+
+// A ref shaped the way we mint them, or "". Deliberately not a regex and
+// deliberately not a substring test: `offerCarriesRef("...", "")` returning
+// true would make every unstamped sentence consent-bearing, which is the
+// fail-open version of this whole change.
+//
+// A STRING, NOT SOMETHING STRINGABLE. `String(x)` on an object calls its
+// `toString`, so `{ toString: () => theRef }` used to pass here and grant. The
+// only legitimate source is a JSON params field, which is a string or absent;
+// anything else arriving is a bug or an attempt, and both are refusals.
+function usableRef(ref) {
+  if (typeof ref !== "string") return "";
+  if (ref.length !== REF_LEN) return "";
+  for (const ch of ref) if (!REF_ALPHABET.includes(ch)) return "";
+  return ref;
+}
+
+/** The sentence he reads, carrying the ref. Unstamped if there is no ref. */
+export function stampOffer(text, ref) {
+  const usable = usableRef(ref);
+  const sentence = String(text || "");
+  return usable ? `${sentence} [ref ${usable}]` : sentence;
+}
+
+/** Does this quoted question carry THIS run's live ref? */
+export function offerCarriesRef(asked, ref) {
+  const usable = usableRef(ref);
+  if (!usable) return false;
+  return String(asked || "").includes(`[ref ${usable}]`);
+}
 
 // The brain's frame, verbatim. The only regex on this path, and it reads our
 // format, never his vocabulary.
+//
+// THE ANSWER RUNS TO THE FRAME'S OWN TAIL, NOT TO THE NEXT QUOTE. It used to
+// stop at the first `"` inside the reply, and a truncated answer is not a
+// smaller answer — it is a different one, because a retraction lives at the
+// END of a sentence:
+//
+//     yes — actually wait, "cancel that", no, leave my mail alone
+//       → the judge was handed:  `yes — actually wait, `
+//
+// A model reads that as agreement. His retraction never arrived. So the
+// terminator is the frame's own tail — `" — that answer is final`, written by
+// brain/conversation.py — or, for the iOS writer (AnticipyApp.swift), which
+// omits that tail, the closing `".` immediately before the end of the scope or
+// the start of the next appended segment. Both shapes exist in the wild and
+// both are read here.
 const ASKED_AND_ANSWERED =
-  /You stopped and asked:\s*"([\s\S]*?)"\.\s*They answered:\s*"([\s\S]*?)"/g;
+  /You stopped and asked:\s*"([\s\S]*?)"\.\s*They answered:\s*"([\s\S]*?)"(?:\s*[—–-]\s*that answer is final|\.?(?=\s*(?:$|You stopped and asked:|They changed:)))/g;
 
 /**
  * The LAST question this job parked on and the words he replied, or null.
@@ -272,10 +393,21 @@ export function lastAskedAndAnswered(scope) {
 /**
  * The same pair, but only when the question was OUR inbox offer — so a scope
  * carrying any other parked question never reaches the model at all.
+ *
+ * `offerRef` is this run's live ref, recorded in the job's params when the
+ * offer was handed back. THE REF IS CHECKED FIRST AND IT IS THE ONE THAT
+ * MATTERS: without it, "was the offer put to him" collapses into "does this
+ * sentence contain a sentence anyone can write", which is what shipped and
+ * what a reviewer used to open the owner's Gmail. The mark is checked too, but
+ * only to tell this door from the private-places door — both stamp refs into
+ * the same params slot, and the last question asked is the only one either can
+ * be answering.
  */
-export function inboxOfferAnswered(scope) {
+export function inboxOfferAnswered(scope, offerRef) {
   const pair = lastAskedAndAnswered(scope);
-  if (!pair || !pair.asked.includes(INBOX_OFFER_MARK)) return null;
+  if (!pair) return null;
+  if (!offerCarriesRef(pair.asked, offerRef)) return null;
+  if (!pair.asked.includes(INBOX_OFFER_MARK)) return null;
   return pair;
 }
 
@@ -295,9 +427,13 @@ export function inboxOfferAnswered(scope) {
  * `why` is not decoration: the caller must not re-put a question he has
  * already answered, so "never asked" and everything else lead to different
  * sentences.
+ *
+ * `offerRef` is the ref recorded when the offer was handed back. Omitting it
+ * refuses everything — which is correct: a caller that cannot say which
+ * question it put has not established that any question was put.
  */
-export async function inboxConsent({ scope, judge } = {}) {
-  const pair = inboxOfferAnswered(scope);
+export async function inboxConsent({ scope, offerRef, judge } = {}) {
+  const pair = inboxOfferAnswered(scope, offerRef);
   if (!pair) return { granted: false, why: "never asked" };
   if (typeof judge !== "function") return { granted: false, why: "undecidable" };
   let verdict;

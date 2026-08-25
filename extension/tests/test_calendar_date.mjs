@@ -194,5 +194,72 @@ for (const [said, offset] of RESCHEDULES) {
     site);
 }
 
+// ---------------------------------------------------------------------------
+// 5. EVERY DAY OF EVERY MONTH IS READ AS THE DAY IT SAYS.
+//
+// The day pattern was `([12]?\d|3[01])`. Regex alternation is leftmost-first
+// and nothing anchors the end of it, so on "August 30" the FIRST branch
+// matched "3" and `3[01]` was never reached: every 30th and 31st of every
+// month was read as the 3rd. The guard then asked the model about a day the
+// errand never mentioned, got a correct NO, and blocked the cell — and a block
+// adds the index to `deadIdx`, so the day he actually asked for disappeared
+// from every later map. Audit #69's exact failure, from the order of two
+// alternatives.
+//
+// It hid because every cell in this suite is built from TODAY. The 30th only
+// appears in `dayAt(5)` on the 25th of a month, and that is the day it was
+// found — five days later or earlier and the suite was green over a live bug.
+// So this section does not use today at all: it walks all twelve months and
+// all thirty-one days and asserts the guard judged the day printed on the cell.
+// ---------------------------------------------------------------------------
+{
+  const ALL_MONTHS = ["January", "February", "March", "April", "May", "June",
+                      "July", "August", "September", "October", "November", "December"];
+  const wrong = [];
+  let judged = 0;
+  for (const month of ALL_MONTHS) {
+    const last = month === "February" ? 28
+      : ["April", "June", "September", "November"].includes(month) ? 30 : 31;
+    for (let day = 1; day <= last; day++) {
+      const label = `${month} ${day}`;
+      const seen = [];
+      const judge = async (a) => { judged++; seen.push(a.named); return "YES"; };
+      const out = await unapprovedCalendarClick(
+        { action: "click", index: 6 },
+        { overlay: true, elements: `[6] <button> ${label} [calendar=${label}] @(10,10)` },
+        `book the ${label} appointment`, judge);
+      if (seen[0] !== label || out.blocked !== false) wrong.push(`${label} -> ${seen[0]}`);
+    }
+  }
+  check("every day of every month is judged as the day printed on the cell",
+    wrong.length === 0, JSON.stringify(wrong.slice(0, 8)));
+  check("...and every one of them actually reached the model",
+    judged === 365, String(judged));
+
+  // The other label shape the guard reads, on the two days that were broken.
+  for (const [month, day] of [["August", 30], ["December", 31], ["March", 30]]) {
+    const seen = [];
+    const judge = async (a) => { seen.push(a.named); return "YES"; };
+    await unapprovedCalendarClick({ action: "click", index: 6 },
+      { overlay: true,
+        elements: `[6] <gridcell> Tuesday, ${month} ${day} @(10,10)` },
+      `book the ${month} ${day} appointment`, judge);
+    check(`the weekday label shape reads ${month} ${day} whole too`,
+      seen[0] === `${month} ${day}`, JSON.stringify(seen));
+  }
+
+  // A day that is not a day is not a date cell — it must not be read as its
+  // first digit and judged as some other day.
+  for (const label of ["August 45", "August 99", "February 30"]) {
+    const seen = [];
+    const judge = async (a) => { seen.push(a.named); return "NO"; };
+    const out = await unapprovedCalendarClick({ action: "click", index: 6 },
+      { overlay: true, elements: `[6] <button> ${label} [calendar=${label}] @(10,10)` },
+      "book something", judge);
+    check(`${label} is not a date cell, and is never judged as one`,
+      out.blocked === false && seen.length === 0, JSON.stringify(seen));
+  }
+}
+
 if (failures) { console.error(`test_calendar_date: ${failures} failed`); process.exit(1); }
 console.log("test_calendar_date: all passed");

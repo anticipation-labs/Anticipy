@@ -103,7 +103,37 @@ console.log('ok');
 
 
 def test_owner_answers_never_ride_along_as_typed_facts():
-    assert "/^owner_answer/i.test(k)" in BACKGROUND
+    # The raw answer blob got typed verbatim into OpenTable's "Add Special
+    # Request" box because it was handed to the step model as a FACT. It must
+    # not be: its content already reaches the model inside the approved scope,
+    # where it is authority rather than a value to put in a field.
+    #
+    # Asserted by running the rule, not by finding its source. This test used
+    # to look for the literal `/^owner_answer/i.test(k)` in background.js and
+    # went red the moment that expression was lifted into a named function --
+    # a check pinned to the shape of an implementation rather than to what it
+    # does, which is the defect audit #64 was about.
+    import json
+    import subprocess
+    out = subprocess.run(
+        ["node", "--input-type=module", "-e", """
+// background.js is a service worker; the suite's own mock supplies the
+// chrome globals it touches at import time.
+import { installChrome } from '%s/extension/tests/chrome_mock.mjs';
+installChrome();
+const { ownerFactsFromParams } = await import('%s/extension/background.js');
+const facts = ownerFactsFromParams({
+  owner_answer_v4: 'I need a name. Okay Omar. Email is o@x.com.',
+  owner_answer: 'West van',
+  _offer_ref: 'a1b2c3d4e5f60718293a4b5c6d7e8f90',
+  approved_scope: 'They answered: ...', memory: 'he likes window seats',
+  party_size: 4, time: '7:30 PM',
+});
+console.log(JSON.stringify(facts));
+""" % (ROOT, ROOT)], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    facts = json.loads(out.stdout.strip().splitlines()[-1])
+    assert facts == {"party_size": 4, "time": "7:30 PM"}, facts
 
 
 # ------------------------------------------------------------- failure 4
@@ -220,12 +250,27 @@ def test_the_answer_fills_required_facts_even_with_odd_keys(monkeypatch):
 
 # ------------------------------------------------- questions reach the owner
 
-def test_needs_user_questions_are_never_swallowed_into_fallback():
-    gate = LOOP.split('decision.action === "needs_user"')[1][:1400]
-    assert "questionShaped" in gate
-    assert "pageFailure" in gate
-    # fallback requires BOTH not-a-question AND an explicit page failure
-    assert "!questionShaped && pageFailure" in gate
+# THIS TEST'S PROPERTY MOVED, and the test is deliberately not replaced here.
+#
+# It asserted the literal `"!questionShaped && pageFailure"` appeared in
+# agent_loop.js. Commit c30157ee (audit #64) deleted `questionShaped` -- a word
+# list deciding whether the owner is ever asked a question at all -- because it
+# swallowed five ordinary sentences into fallback navigation, including "The
+# 7pm slot is fully booked and I need to know whether 8pm is acceptable before
+# I commit", after which the run reported "booked" on a table nobody agreed to.
+# A model judgement replaced it. So this test failed BECAUSE the law-1
+# violation it was written around is gone, and updating the string to match the
+# new source would recreate exactly the defect it was meant to catch: a check
+# pinned to an implementation's shape that a rename silently voids.
+#
+# The property -- needs_user questions are never swallowed into fallback -- now
+# lives in extension/tests/test_question_reaches_him.mjs, sections 1 to 3,
+# where it is asserted BEHAVIOURALLY: the whole loop is driven with a fallback
+# source present and each of the five swallowed sentences, and the check is
+# that the sentence reaches the owner unchanged and the run does not go on to
+# claim it finished. That suite is registered in extension/tests/run_all.mjs.
+# It is not delegated to from here because it drives the loop about a dozen
+# times and takes ~17s, against 0.29s for this whole file.
 
 
 # ------------------------------------------- one conversation, one card
