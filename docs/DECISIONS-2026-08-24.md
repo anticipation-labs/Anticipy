@@ -180,3 +180,61 @@ Made while landing PHONE-AS-PENDANT Stage 0 Task 1 (`5f98baa2`).
 3. **`clear()` clears the files too.** Not in the plan. A person who taps clear
    and still has a copy on disk was not told the truth about what clearing
    means, and this is the one screen that promises exportability. **Stands.**
+
+---
+
+## RULING 3 — HANDS 2 is NOT built. The owner said so, and the code already said so.
+
+**Decided by the owner, 2026-08-24**, on the evidence in
+`research/2026-08-24-api-ladder.md`. Recorded here rather than left in a chat,
+per LAW 4, because this card will look attractive again in a month.
+
+**The card asks to "use APIs whenever connected." Three places in the shipped
+code refuse that route by name**, and this ruling does not overturn them:
+
+- `extension/supervised_read.js:47-52` — *"there is no OAuth here, no Gmail API,
+  no LinkedIn API, no network call to a provider of any kind… which is the whole
+  argument of `design/day-zero.md` §2, and the reason `gmail.readonly` (a Google
+  RESTRICTED scope: CASA assessment, ~$540–$4,500+/yr, re-certified annually)
+  never enters the picture."*
+- `design/day-zero.md:122` — *"The API route is a subscription to an audit."*
+- `ContextGrant.swift`.
+
+**Three of the four named candidates fail LOCAL-FIRST outright.** Composio,
+Arcade Cloud and Pipedream Connect each hold the owner's refresh token and proxy
+his mail — custody and transit both. Only native per-service OAuth survives,
+plus Arcade self-hosted (Helm/K8s, enterprise).
+
+**Composio fails on evidence as well as on law:** the 2026-05-21 breach
+exfiltrated roughly 5,001 GitHub OAuth tokens and 5,241 API keys, through a
+Composio employee's Gmail token, across Gmail / Calendar / Slack / Notion /
+Drive connections.
+
+**The finding that reframes the card:** a platform does not save the expensive
+half. Composio's and Arcade's own documentation requires bring-your-own OAuth
+app in production, so Google verification and any CASA obligation stay ours
+either way. **The trade is a vendor in the trust path for a few hundred lines of
+token vault** — which is a bad trade at any price.
+
+**And the card's premise does not hold.** "An API is always faster, cheaper and
+safer" is false three ways. Safer is the important one: **no Gmail scope is
+narrower than the whole mailbox**, so `supervised_read.js`'s thirty-second lease
+on one page the owner opened himself is NARROWER than the narrowest API scope.
+Slack gives non-Marketplace apps one `conversations.history` a minute at fifteen
+objects. Airlines, OpenTable, utilities and government forms have no API at all.
+Cheaper is unmeasured and probably false for exactly the repeated chores this
+card exists to serve, because `recipes.js` already replays run 3 and later with
+no model in the loop.
+
+**If this is ever revisited** it is native OAuth, `calendar.events` first and
+`gmail.send` second — both *sensitive* scopes (3–5 day verification, no security
+assessment), never restricted ones. The one-day experiment that would settle it
+is in §7 of the research: two arms on one errand, measuring the custody bill for
+holding a single refresh token. If that half runs past a day, that is the answer.
+
+**Carried forward, and it is the more urgent half:**
+`backend/pb_hooks/transcription_token.pb.js` is LIVE IN PRODUCTION minting
+credentials against `api.deepgram.com/v1/auth/grant` — for the one vendor
+`LOCAL-FIRST` names and kills. That is what "server-side vendor credential
+broker" looks like once it has shipped, and it should close before the pattern
+is ever extended to owner tokens. See `research/2026-08-24-deepgram-leak.md`.
