@@ -123,6 +123,16 @@ _IRREVERSIBLE_RE = re.compile(
 # Goals that only READ the world. Anything not clearly read-only is held —
 # the safe default, because a missed verb means something leaves the owner's
 # world without their word, while an over-hold costs one tap.
+#
+# A verb list deciding whether a goal leaves the owner's world is a
+# pattern-match on meaning, which Law 1 gives to a model. THE REAL FIX is the
+# effect channel: the model declares `touches` (compute|read|world) at triage
+# and is_consequential reads THAT. This regex is only the fallback for goals
+# arriving without a declaration, and when no live path can produce one it is
+# DELETED — not softened, not shortened.
+#
+# TAPE: (HARNESS-LAWS.md Law 2) audit item #22. Retired by the leg in
+# `overnight/tape_gate.py`, which stays red while the text below exists.
 _READ_ONLY_RE = re.compile(
     r"^\s*(research|compar\w*|look\s*up|find|check(?!\s*out)\w*|search\w*|read\w*|"
     r"summar\w*|gather\w*|browse|price|monitor|watch|list|"
@@ -604,9 +614,17 @@ def is_consequential(goal: str, params: dict | None = None,
         return False
     if touches in ("compute", "read"):
         return False
-    # No declaration (older outputs, retries that fell back). The calculator
-    # is consulted as a FALLBACK only — it dies with the effect-channel
-    # rewrite, tracked in HARNESS-LAWS.md.
+    # TAPE: (HARNESS-LAWS.md Law 2) audit item #19.
+    # WHAT IT IS: with no declared `touches`, the calculator is asked whether
+    # it can answer the goal, and a yes is read as "this only computes". That
+    # is a capability check standing in for a declaration.
+    # THE REAL FIX: the effect-channel rewrite — every goal arrives with
+    # `touches` decided by the model at triage, and this branch becomes
+    # unreachable and is DELETED.
+    # THE LEG THAT RETIRES IT: `overnight/tape_gate.py`. It named
+    # HARNESS-LAWS.md before, which reads as compliant and enforces nothing:
+    # the laws file is where the rule lives, not the check that fails while
+    # the tape does.
     if compute_answer(g):
         return False
     # Overheard: default to holding — only explicitly read-only runs unattended.
@@ -651,7 +669,12 @@ def invented_names(said: str, context: dict) -> list:
 
 def shard_too_thin(line: str, decision, explicit: bool = False,
                    context: Optional[list] = None) -> bool:
-    """TAPE (HARNESS-LAWS.md Law 2). Expiry: segment-granularity triage —
+    """TAPE: (HARNESS-LAWS.md Law 2) audit item #20. THE LEG THAT RETIRES IT
+    IS `overnight/tape_gate.py` — leg 2 is red while this function exists.
+    Naming only the laws file, as this docstring did until 2026-08-25, reads
+    as compliant and enforces nothing.
+
+    Expiry: segment-granularity triage —
     the day the judge reads closed conversations instead of raw lines,
     shards stop existing as decision units and this function is DELETED.
     overnight/tejas_gate.py leg 2 tracks it.
@@ -3966,9 +3989,16 @@ class Anticipy:
         over again about work that was already classified — and prose is
         exactly what the effect channel exists to stop deciding this.
 
-        TAPE: the prose fallback below is for rows minted before the column
-        existed. It expires when no pending row can predate it, and it is
-        covered by the same leg that tracks _READ_ONLY_RE's removal.
+        TAPE: (HARNESS-LAWS.md Law 2) audit item #21. The prose fallback
+        below is for rows minted before the `consequence` column existed. It
+        expires when no pending row can predate that column, and then the
+        `return` beneath is DELETED.
+
+        THE LEG THAT RETIRES IT: `overnight/tape_gate.py`. This comment used
+        to say it was "covered by the same leg that tracks _READ_ONLY_RE's
+        removal" — which is this audit's OWN item #21, the failure of a marker
+        that points at a neighbour instead of at the check. A declaration has
+        to name the thing that goes red, or nothing tracks it.
         """
         stored = str(job.get("consequence") or "").strip()
         if stored:

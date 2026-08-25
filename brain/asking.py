@@ -213,9 +213,15 @@ def question_line(missing, third_person_ok: bool = False) -> str:
     exists to open. Only the DEGRADED path (no live model, raw template to
     his phone) drops third-person items: silence beats being addressed
     about yourself in the third person, a recorded wording failure.
-    TAPE (HARNESS-LAWS.md Law 2): this degraded-path drop expires when the
-    composer owns person-flipping explicitly; tracked in the standing-tape
-    list."""
+    TAPE: (HARNESS-LAWS.md Law 2) audit item #50. A pronoun list deciding a
+    question is ABOUT somebody else, and dropping it — meaning judged by a
+    regex, failing in the direction that costs most: a question the owner
+    needed is thrown away and nothing records that it existed. It expires when
+    the composer owns person-flipping explicitly, reading the `addressee` and
+    `owes` verdicts the model already put on the row instead of scanning its
+    own sentence. THE LEG THAT RETIRES IT: `overnight/tape_gate.py`. It said
+    "tracked in the standing-tape list" before, which is audit item #21's own
+    failure — a marker naming a place rather than a check that goes red."""
     items = [m for m in (missing or []) if isinstance(m, str)]
     if not third_person_ok:
         items = [m for m in items if not _THIRD_PERSON_RE.search(m)]
