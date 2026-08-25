@@ -347,3 +347,26 @@ does not restore an untracked file; the sharper version of that rule is that on 
 *tracked* file it restores HEAD, which is worse, because it looks like it worked.
 Everything after that point was backed up with `cp` first and restored from the
 copy. Eight mutations, no further loss.
+
+---
+
+## 8. The served bytes, and the half of the staleness this does not close
+
+Editing `extension/` makes `backend/pb_public/*.zip` — what users actually
+install — stale against the source. Rebuilt with `sh extension/build-zip.sh`
+(commit 4, below), and verified by unzipping rather than by byte count: the
+packed `learn.js` carries `cleanProcedure` and the packed `agent_loop.js` carries
+the downlink.
+
+**The version is still 0.11.0, and that is the half left open.**
+`staleExtension()` compares NUMBERS, so an install already on 0.11.0 cannot see
+that the 0.11.0 it holds is different code — which is the exact shape of the
+2026-08-11 failure (0.3.3 served against 0.3.9 in source, with the documented
+repair path *downgrading* him into bugs he had just been told were fixed).
+Closing it means bumping three hand-copied values —
+`extension/manifest.json`, `app/ios/Anticipy/AnticipyApp.swift`,
+`app/ios/Tests/StaleExtensionTests.swift`, held together by
+`tests/test_extension_version_pin.py` — and that is a release decision, in the
+iOS app, well outside this task. **Flagged, not taken.** Until it is taken, §6's
+leg 4 (a run's history saying `the server looked this up before handing it over`)
+can only be checked on a fresh install.
