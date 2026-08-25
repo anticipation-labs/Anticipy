@@ -71,3 +71,30 @@ staged. Use it every time. The other agent's work stays staged and untouched.
 Check `git status --porcelain` before committing: if files outside your brief
 are staged, someone else is mid-task in this tree and a bare commit will take
 them.
+
+**`git commit -- <path>` only works on TRACKED files.** A new file must be
+`git add`ed first, then committed path-limited. Otherwise you get
+`pathspec ... did not match any file(s) known to git` and, if you are not
+reading exit codes, you conclude you committed when you did not.
+
+## Three traps that cost real work on 2026-08-25
+
+All three share a shape: the failure is silent and the surviving output looks
+like success.
+
+**`git checkout -- <file>` does not restore an untracked file.** It fails, and
+in a mutate-test-restore loop that failure is easy to miss — the mutations then
+STACK, the second landing on top of the first, and every result after that
+point is measuring a file nobody intended. Back new files up with `cp` first.
+
+**In zsh, a `&&` chain ABORTS when a glob matches nothing.** An audit's
+`unzip ... && check ...` one-liner silently no-oped: unzip never ran, the
+checker walked an empty directory, and it reported a clean bill of health on a
+bundle it had never opened. Run the steps separately and check each exit code.
+
+**Read the exit code of the command, not of the pipeline's last stage.**
+`sh run_tests.sh 2>&1 | tail -6; echo $?` reports `tail`'s status, which is
+essentially always 0, so a suite exiting 2 reads as green. Capture with
+`out=$(sh run_tests.sh 2>&1); rc=$?`. This is how a red privacy gate — one that
+had correctly detected its own blindness and refused to pass — was reported as
+"both suites green".
