@@ -1549,14 +1549,75 @@ final class AnticipySession: ObservableObject {
         return fields
     }
 
-    /// Deterministic, not model-judged: does this answer END the errand?
-    /// Returns the honest result line to store, or nil to proceed normally.
+    /// Does this answer END the errand? Three phrase lists on the phone say so.
+    /// Returns the result line to store, or nil to proceed normally.
     ///
-    /// Ending an errand is not a cheap guess: it writes the job cancelled and
-    /// files the owner's own sentence as the evidence they called it off, so a
-    /// wrong hit puts words in their mouth in the ledger. Returning nil is not
-    /// "act blindly" — the answer rides up as a fact on the plan and the brain
-    /// reads it. So anything short of an unmistakable stop goes there.
+    /// THIS IS NOT A DESIGN. It is registered tape, and the paragraphs below
+    /// are the argument for why it is still here rather than deleted — read
+    /// them before you extend it, because the answer is "do not".
+    ///
+    /// WHAT IT DOES WRONG. `whole`, `declines` and `handled` decide what the
+    /// owner's words MEAN with no model anywhere near them, and on a hit this
+    /// writes the job cancelled and files the owner's own sentence as the
+    /// evidence they called it off — while the brain never sees the line at
+    /// all. That is Law 1's canonical shape (audit item #55, severity H) and
+    /// it fires on exactly the step a manual voice test has to exercise. The
+    /// `handled` list is the worst of the three: "I already booked it" is not
+    /// a cancellation, it is a FACT about the world, and the brain has a place
+    /// for it (`Conversation._remember_about_owner`). This eats it instead.
+    ///
+    /// THE FIX IS TO DELETE THE WHOLE FUNCTION. Nothing else calls it: the one
+    /// consumer is `AnswerRoutePolicy.route`, where its only job is to
+    /// short-circuit `.toTheBrain`. Delete it, drop `endsTheErrand` from the
+    /// policy and `.endTheErrand` from `Route`, and every typed answer becomes
+    /// one `app_reply` event — which is the path the product already claims to
+    /// have (brief ex 120, and the comment in `confirm()` below).
+    ///
+    /// WHY THAT WAS NOT DONE HERE. Deleting it could not be shown SAFE from
+    /// inside app/ios/, and a cancellation that silently never happens is a
+    /// job running against the owner's wishes — worse than this violation.
+    /// What was traced, 2026-08-25:
+    ///   * The brain CAN cancel a stuck job. `Conversation._open_work` unions
+    ///     `_blocked()` (status needs_user) into the cancel pool for exactly
+    ///     this case; its docstring names the 2026-08-02 failure where both
+    ///     tasks were blocked and neither could be called off by text.
+    ///   * The round trip is fine. `pushEvent(app_reply)` -> the worker loop
+    ///     (`POLL_SECONDS = 2`) -> `handle_inbound` -> `on_reply` -> `_cancel`,
+    ///     then this app's own 3s refresh. Seconds, not minutes.
+    ///   * BUT the brain's fallback cannot reach this card. When its model is
+    ///     unreachable or returns malformed JSON, `_classify` decides on a
+    ///     regex whose `has_pending` reads `_pending()` — status
+    ///     awaiting_confirm ONLY. A stuck card is needs_user. So with no
+    ///     awaiting_confirm job in flight, "forget it" comes back as
+    ///     intent=chat with "Nothing's queued up on my end right now" and the
+    ///     errand keeps running, having told the owner it was never there.
+    ///     That regression is in brain/conversation.py, not in this file.
+    ///   * Offline buys this rule NOTHING, so there is no offline argument for
+    ///     keeping it. Both routes are network writes through `write(job:)`:
+    ///     ending it is a `setJobFields`, sending it is a `pushEvent`, and
+    ///     neither is queued. The disk-backed `unsent` buffer is `heard()`'s
+    ///     alone and only ever posts kind `transcript`. Offline, both designs
+    ///     fail identically and the card says so.
+    ///   * A genuine stop is still one tap away either way: "Not now" is on
+    ///     this same card, runs `decline()`, and is deterministic, local and
+    ///     model-free. This rule duplicates a button in prose.
+    /// WHAT WOULD SETTLE IT: a brain-side test showing `on_reply` cancels a
+    /// needs_user job from an `app_reply` with the model DOWN, plus one live
+    /// run of it. Neither is possible today — Law 3, the ears have been dead
+    /// since build 75, and brain/ is another owner's file.
+    ///
+    /// KNOWN COST WHILE IT STANDS, measured here and pinned in
+    /// Tests/EndTheErrandTests.swift as `costs(...)`: the clause splitter
+    /// re-opens the substring hole the comments below claim to have closed,
+    /// one level up. Any ONE clause that leads with a stop ends the errand,
+    /// whatever the other clauses say — so "already sent, the code is 4821"
+    /// throws away the code the parked run is waiting on, and "cancel it, and
+    /// book the 8pm instead" cancels without booking. It cannot be repaired by
+    /// more rules: telling explanation ("never mind, I'll call them myself")
+    /// from instruction is a meaning question, which is the whole point.
+    ///
+    // TAPE: (HARNESS-LAWS.md Law 2) audit item #55. Retired by the leg in
+    // `overnight/tape_gate.py`, which stays red while the text below exists.
     // ANCHOR: end-of-errand decision. Everything down to the END marker is
     // compiled and exercised on its own by Tests/run_end_errand_tests.sh, so
     // it must stay pure Foundation and self-contained.

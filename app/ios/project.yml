@@ -239,7 +239,32 @@ settings:
     # with zero call sites and wants AVAudioPCMBuffer while the pendant emits
     # Opus Data, with no Opus decoder in the target. That decoder is the real
     # work and it is NOT started here.
-    CURRENT_PROJECT_VERSION: "84"
+    #
+    # 85 — answerThatEndsTheErrand is now DECLARED TAPE, not a design.
+    #
+    # Nothing it does changed. What changed is that the three phrase lists
+    # deciding a typed answer MEANS "call this errand off" — writing the job
+    # cancelled and filing the owner's own sentence as proof they cancelled it,
+    # while the brain never sees the line — now ship the only way Law 2 allows:
+    # a `TAPE:` comment in AnticipyApp.swift, an entry in overnight/tape_gate.py
+    # whose leg 2 is RED until the text is gone, and a bullet in HARNESS-LAWS.md.
+    # Law-1 audit item #55, severity H.
+    #
+    # It was NOT deleted, and the comment on the rule says why in full: the
+    # brain can already cancel a needs_user job (Conversation._open_work unions
+    # _blocked() for exactly this case) but its OFFLINE fallback cannot — with
+    # the model unreachable, _classify reads _pending(), which is
+    # awaiting_confirm only, so a "forget it" typed at a stuck card comes back
+    # "Nothing's queued up on my end right now" while the errand runs on. That
+    # trade is a cancellation that silently does not happen, and it is worse
+    # than the violation. The fix is one change in brain/conversation.py, then
+    # this function goes.
+    #
+    # The measured cost of leaving it is pinned as costs(...) in
+    # Tests/EndTheErrandTests.swift: any ONE clause leading with a stop ends the
+    # errand whatever the others say, so "already sent, the code is 4821"
+    # discards the code the parked run is waiting on.
+    CURRENT_PROJECT_VERSION: "85"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

@@ -5,6 +5,26 @@ import Foundation
 // as the reason they called it off. Getting this wrong is not cosmetic: the
 // ledger then reads as if they stopped work they never stopped.
 //
+// READ THIS BEFORE YOU READ A SINGLE ASSERTION. The rule under test is
+// REGISTERED TAPE — a Law-1 violation shipping under Law 2 with a marker in
+// AnticipyApp.swift, an entry in overnight/tape_gate.py and a bullet in
+// HARNESS-LAWS.md. Nothing below is a statement that this is how answers
+// SHOULD be routed. A suite that pins a violation in place while reading as a
+// specification is a known failure mode in this repo — it has been found four
+// times — so every section here says which of three things it is:
+//
+//   proceeds(...)  the invariant that SURVIVES the fix. When the tape is
+//                  deleted every one of these still holds, trivially, because
+//                  everything goes to the brain. Keep them.
+//   ends(...)      what the tape currently catches. These are a REGRESSION PIN
+//                  on the tape (Law 2 is explicit that a pin is not an
+//                  expiry — the expiry is tape_gate leg 2). They die WITH the
+//                  tape, in the same diff.
+//   costs(...)     what the tape gets WRONG today, measured 2026-08-25 and
+//                  written down rather than argued about. Every one is a live
+//                  answer being destroyed. They die with the tape too, and
+//                  their disappearance is the point of deleting it.
+//
 // The rule is NOT duplicated here. run_end_errand_tests.sh lifts the real
 // source out of AnticipyApp.swift between its ANCHOR markers and compiles it
 // into `EndOfErrand`, so these cases run against the shipping code and there is
@@ -28,6 +48,21 @@ enum Cases {
         checks += 1
         if EndOfErrand.answerThatEndsTheErrand(answer) == nil {
             failures.append("\(why)\n      \u{201C}\(answer)\u{201D} was let through as an instruction")
+        }
+    }
+
+    /// The rule ends the errand here AND IT IS WRONG TO. A measured cost of
+    /// the tape, pinned so it cannot drift unnoticed and cannot be forgotten
+    /// when the removal is argued.
+    ///
+    /// If this fails because you DELETED the rule: that is the fix landing.
+    /// Delete this whole section — it is a record of damage, never a
+    /// requirement. If it fails because you edited the phrase lists, you have
+    /// changed the blast radius of tape that is supposed to be on its way out.
+    static func costs(_ answer: String, _ lost: String) {
+        checks += 1
+        if EndOfErrand.answerThatEndsTheErrand(answer) == nil {
+            failures.append("no longer eaten — if the tape is gone, delete this case\n      \u{201C}\(answer)\u{201D} (was losing: \(lost))")
         }
     }
 
@@ -69,10 +104,19 @@ enum Cases {
                  "conditional, whichever order the clauses arrive in")
 
         // ------------------------------------------------------------------
-        // Real stops must still land — including the long ones the word cap
-        // used to throw away.
+        // WHAT THE TAPE CURRENTLY CATCHES — a regression pin on the tape, not
+        // a specification of correct routing. Law 2 is explicit that a pin is
+        // not an expiry; the expiry is tape_gate leg 2, and it is red. These
+        // cases exist so the phrase lists cannot be quietly widened or
+        // narrowed while they are on their way out, and they are deleted in
+        // the same diff that deletes the rule.
+        //
+        // `ends("no", …)` used to head this list. It has moved down to
+        // costs(): a stuck card's ordinary shape is a yes/no question, so a
+        // bare "no" is at least as likely to be an ANSWER as a cancellation,
+        // and calling that a stop the tape "must still land" was this suite
+        // asserting the violation was correct.
         // ------------------------------------------------------------------
-        ends("no", "the bare no")
         ends("Never mind.", "punctuation and case are not content")
         ends("nevermind", "written as one word")
         ends("stop it", "the bare form of a phrase that also appears mid-sentence")
@@ -105,6 +149,55 @@ enum Cases {
         let called = EndOfErrand.answerThatEndsTheErrand("forget it")
         expect(called?.hasPrefix("You called it off") == true,
                "a decline must not be filed as him having done it: \(called ?? "nil")")
+
+        // ------------------------------------------------------------------
+        // THE COST OF THE TAPE, MEASURED. Not hypotheticals — every line here
+        // was run against the shipping rule on 2026-08-25.
+        //
+        // The comments on the rule argue that position saves it: a stop leads
+        // its clause and only filler may follow, so "leave it with the
+        // concierge" is an instruction and survives. That is true INSIDE a
+        // clause. It is false across them. The answer is split on , ; : ! ? and
+        // dashes, and `clauses.contains(where:)` ends the errand if ANY ONE
+        // clause leads with a stop — whatever the other clauses say. So the
+        // substring-anywhere bug the comments describe killing is still here,
+        // one level up, and it destroys exactly the information a parked run
+        // is parked for.
+        //
+        // It cannot be repaired with another rule: separating explanation
+        // ("never mind, I'll call them myself") from instruction ("cancel it,
+        // and book the 8pm instead") is a question about MEANING, which is the
+        // reason this whole function is registered tape.
+        // ------------------------------------------------------------------
+        costs("already sent, the code is 4821",
+              "the verification code the parked run is stopped for")
+        costs("handled it, but they need the card number",
+              "he is saying it is BLOCKED, and the job is cancelled instead")
+        costs("took care of it: use gate 7",
+              "the gate number, and the errand")
+        costs("already booked, table for 4 under Cruz",
+              "the party size and the name the booking is under")
+        costs("already did it \u{2014} confirmation is XR44Q",
+              "the confirmation number; an em dash splits clauses too")
+        costs("cancel it, and book the 8pm instead",
+              "the instruction to book the 8pm — cancelled, never booked")
+        costs("drop it, book Earls instead",
+              "the replacement errand, in the same breath as the stop")
+
+        // A yes/no question is the ordinary shape of a stuck card ("Should I
+        // use the Visa ending 4412?"). A bare "no" answers it. The rule reads
+        // the same three letters as a cancellation, because "no" sits in
+        // `whole` — and the brain's own notes record a bare \bno\b cancelling
+        // a held booking, which is the identical mistake one process over.
+        costs("no", "an answer to her yes/no question, read as a cancellation")
+
+        // The line between `whole` (exact answer only) and `declines` (may
+        // lead a clause) is invisible from outside and changes the outcome.
+        // Pinned as a pair so the arbitrariness is on the record, not so it
+        // is preserved.
+        ends("stop", "bare, it is in `whole`")
+        proceeds("ok stop", "one filler word in front of it and `whole` misses")
+        ends("ok stop it", "but `stop it` is in `declines`, so this one dies")
 
         // An empty or punctuation-only answer decides nothing.
         proceeds("", "an empty answer is not a stop")
