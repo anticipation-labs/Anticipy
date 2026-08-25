@@ -402,6 +402,23 @@ def leg_5_one_card() -> str:
 # not Omar, on their own accounts, carried through a real day. Signed, dated,
 # in overnight/done_proof.json. Without it the answer is NOT DONE, forever,
 # no matter how green legs 1-5 are.
+#
+# WHAT THIS LEG DELIBERATELY DOES NOT CHECK, and where that lives instead.
+# A stranger's week has prerequisites a machine can check without spending
+# anybody's week: the extension has to be downloadable at the version the app
+# demands, a phone number from outside North America has to survive sign-up,
+# onboarding has to belong to the account rather than to the phone, and so on.
+# On 2026-08-24 an audit walked that week through the code and found nine dead
+# ends before a stranger was ever asked (research/2026-08-24-cold-stranger-
+# walkthrough.md); the mechanical half of it is now overnight/stranger_gate.py,
+# nine legs, two of which read production.
+#
+# Those checks are NOT folded in here, on purpose. This leg has exactly one
+# claim — a real person lived it — and a leg that failed for nine other reasons
+# would stop meaning that, would drag a network dependency into the whole
+# scoreboard, and would go on failing after the proof was signed. The two
+# gates are read together: stranger_gate says whether it is worth ASKING
+# somebody, this leg says whether somebody actually DID it.
 # --------------------------------------------------------------------------
 REQUIRED_PROOF = ("stranger_name", "date", "their_own_accounts",
                   "real_things_done", "signed_by")
@@ -413,7 +430,15 @@ def leg_6_stranger() -> str:
         raise LegFailed(
             "no cold stranger has ever onboarded on their own accounts and "
             "been carried through a real day. This is the finish line and it "
-            "has not happened")
+            "has not happened.\n"
+            "        Before you spend somebody's week, run "
+            "`python3 overnight/stranger_gate.py` — it holds the prerequisites "
+            "a machine can check (the extension being downloadable at the "
+            "version the app demands, a foreign phone number surviving "
+            "sign-up, onboarding belonging to the account, enrollment being "
+            "offered at all) and two of its legs read LIVE, not the tree. "
+            "Every one of them ends a stranger's day before this leg could "
+            "ever be signed, so a red there is a week you would waste")
     try:
         proof = json.load(open(path))
     except Exception as e:
