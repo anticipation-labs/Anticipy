@@ -32,6 +32,7 @@
 		732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */; };
 		73A1C82CB7B99AB4795A3598 /* FirstRunOwnership.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC43B1EEB7B717196947EE8E /* FirstRunOwnership.swift */; };
 		78EE68DCD42670CAD7886BDC /* GlassControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */; };
+		7B0222C65B8F9DDFC8855FEF /* EnrollmentOfferPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */; };
 		7E48A45EE188911B2EFB7A66 /* TranscriberClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3C23460620BAF04806F594 /* TranscriberClient.swift */; };
 		84AE67C98C92B710BDD9A786 /* ContextGrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0ADEE2467BA67E3131CEC1 /* ContextGrant.swift */; };
 		859C9A2572940C9366F344A8 /* ListenResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */; };
@@ -39,11 +40,13 @@
 		8EBF95ED1C7E5C562D44A86A /* AnswerRoutePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */; };
 		946396466F25E501C639DFF1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8095C94E5CB8E9048543E8B5 /* PrivacyInfo.xcprivacy */; };
 		993491F4C18D27922491739D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7686379B8FF9FE21D398381F /* ContentView.swift */; };
+		9AD34E051260F373C845DFB3 /* EnrollmentInvite.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FAF817396F0334028162D23 /* EnrollmentInvite.swift */; };
 		9D99735C613237B976EDFB95 /* PendantBatteryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C300D8A79FC68733630D6 /* PendantBatteryPolicy.swift */; };
 		A0C6AC3D27BE2A2D7D82A6D4 /* OnboardingFinale.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */; };
 		A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */; };
 		ABAB1EE3B1D325D6B3600473 /* ConversationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B72B7E633EA125C09A7923 /* ConversationCard.swift */; };
 		ACABFE3C263343D8760C012E /* TranscriptCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD1CE1C9359C9DF75AA38DE /* TranscriptCursor.swift */; };
+		AEFEBCEF687B0E15744B4F03 /* JobReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = E468B3BEC49CF56CD1534BED /* JobReceipt.swift */; };
 		BB4CB3D71899B31D2887B1B8 /* DiallingCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC63113A7DFEF69864A019F5 /* DiallingCode.swift */; };
 		BED64104EF9A77E836CD99FA /* VoiceRoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */; };
 		C4189246299602D02840F0D1 /* InterviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 279CD122187AC50931E7FBAB /* InterviewView.swift */; };
@@ -83,6 +86,8 @@
 		57259004332BAAB061719DF1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		57AEC26D9D9B455416E10BED /* ListenControlPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenControlPolicy.swift; sourceTree = "<group>"; };
 		5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */ = {isa = PBXFileReference; path = "speaker-embedding.onnx"; sourceTree = "<group>"; };
+		6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentOfferPolicy.swift; sourceTree = "<group>"; };
+		6FAF817396F0334028162D23 /* EnrollmentInvite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentInvite.swift; sourceTree = "<group>"; };
 		70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyApp.swift; sourceTree = "<group>"; };
 		714D2B06ED11248D1924DC9A /* SupervisedReadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupervisedReadView.swift; sourceTree = "<group>"; };
 		7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFinale.swift; sourceTree = "<group>"; };
@@ -108,6 +113,7 @@
 		DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenResumePolicy.swift; sourceTree = "<group>"; };
 		E0B72B7E633EA125C09A7923 /* ConversationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationCard.swift; sourceTree = "<group>"; };
 		E2204C09ACF068DDA67C8698 /* LifeContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeContext.swift; sourceTree = "<group>"; };
+		E468B3BEC49CF56CD1534BED /* JobReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobReceipt.swift; sourceTree = "<group>"; };
 		E94C340A3EF64050C750BCD7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeardGroup.swift; sourceTree = "<group>"; };
 		EDB2A40B487A55305B6FC7A2 /* Interview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interview.swift; sourceTree = "<group>"; };
@@ -175,6 +181,7 @@
 			children = (
 				347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */,
 				BE0AB97746861DA294983C3B /* AnticipyBackend.swift */,
+				E468B3BEC49CF56CD1534BED /* JobReceipt.swift */,
 				F1277C9D57923BEE65E84A60 /* JobReceiptPolicy.swift */,
 			);
 			path = Backend;
@@ -187,6 +194,7 @@
 				FF1F2984E276ABD5C6A5B495 /* BatteryReadingPolicy.swift */,
 				C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */,
 				BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */,
+				6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */,
 				57AEC26D9D9B455416E10BED /* ListenControlPolicy.swift */,
 				A66BCAC2FE553220A46D105D /* ListenJournal.swift */,
 				DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */,
@@ -211,6 +219,7 @@
 				7686379B8FF9FE21D398381F /* ContentView.swift */,
 				D918825F71DB13464C228B73 /* ContextAskSheet.swift */,
 				E0B72B7E633EA125C09A7923 /* ConversationCard.swift */,
+				6FAF817396F0334028162D23 /* EnrollmentInvite.swift */,
 				4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */,
 				EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */,
 				279CD122187AC50931E7FBAB /* InterviewView.swift */,
@@ -320,12 +329,15 @@
 				1741E2E9969BA00F175A514B /* ContextTrigger.swift in Sources */,
 				ABAB1EE3B1D325D6B3600473 /* ConversationCard.swift in Sources */,
 				BB4CB3D71899B31D2887B1B8 /* DiallingCode.swift in Sources */,
+				9AD34E051260F373C845DFB3 /* EnrollmentInvite.swift in Sources */,
+				7B0222C65B8F9DDFC8855FEF /* EnrollmentOfferPolicy.swift in Sources */,
 				73A1C82CB7B99AB4795A3598 /* FirstRunOwnership.swift in Sources */,
 				78EE68DCD42670CAD7886BDC /* GlassControls.swift in Sources */,
 				E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */,
 				A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */,
 				50977946CB5AA8BC1A644622 /* Interview.swift in Sources */,
 				C4189246299602D02840F0D1 /* InterviewView.swift in Sources */,
+				AEFEBCEF687B0E15744B4F03 /* JobReceipt.swift in Sources */,
 				65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */,
 				CC601CF895488D6287CAE43B /* LifeContext.swift in Sources */,
 				ED4C192DBA74F48570C51171 /* ListenControlPolicy.swift in Sources */,
@@ -411,7 +423,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 82;
+				CURRENT_PROJECT_VERSION = 83;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -490,7 +502,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 82;
+				CURRENT_PROJECT_VERSION = 83;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

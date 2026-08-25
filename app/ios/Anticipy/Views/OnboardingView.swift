@@ -55,6 +55,18 @@ struct OnboardingView: View {
     // Microphone
     @State private var micAsked = false
 
+    /// The voice invite, raised once the four beats are cleared. NOT a fifth
+    /// beat: `design/day-zero.md:237-239` already removed one page from this
+    /// walkthrough for exceeding the ~70-second budget, so the four keep their
+    /// names, their count and their progress track, and this is a screen after
+    /// them rather than inside them.
+    ///
+    /// Raised only when `EnrollmentOfferPolicy` says it can work. On the
+    /// shipping build sherpa-onnx is unlinked, `SpeakerTagger.available` is
+    /// false, and this stays false forever — first run costs a stranger nothing
+    /// it cannot pay back. See EnrollmentInvite for the whole argument.
+    @State private var inviting = false
+
     /// Four beats. The browser was a fifth until `design/day-zero.md:237-239`
     /// took it out of first run; nothing here may exceed the ~70-second budget
     /// in `CONSUMER-FEEL-DIRECTION-2026-08-03.md` §5.
@@ -93,6 +105,37 @@ struct OnboardingView: View {
             guard previous == Step.phone, newStep != Step.phone else { return }
             savePhoneOnLeaving()
         }
+        // ENROLMENT, OFFERED AT LAST. Until this existed the app presented
+        // VoiceEnrollView from exactly one place - a sheet three scrolls down
+        // in Settings - and `speaker` sat at 0% across 221 production events
+        // with the cause recorded as "enrollment unreachable".
+        //
+        // Whichever way it ends, onFinished() runs: nothing about learning a
+        // voice may be able to strand somebody outside the app.
+        .fullScreenCover(isPresented: $inviting) {
+            EnrollmentInvite(onDone: {
+                inviting = false
+                onFinished()
+            })
+            .environmentObject(session)
+        }
+    }
+
+    /// The last beat is cleared. Offer the voice invite if it can actually
+    /// work, otherwise end the walkthrough exactly as it always did.
+    ///
+    /// The policy is asked here, once, rather than re-derived from
+    /// `speakerTagger.available` at each of the two exits below - which is how
+    /// two exits come to disagree about whether a tour is over.
+    @MainActor
+    private func finish() {
+        if EnrollmentOfferPolicy.presents(
+            engineAvailable: session.speakerTagger.available,
+            hasOwnerProfile: session.speakerTagger.hasOwnerProfile) {
+            inviting = true
+            return
+        }
+        onFinished()
     }
 
 
@@ -205,7 +248,7 @@ struct OnboardingView: View {
                     if step == Step.phone {
                         phoneSkipped = true
                         savePhoneOnLeaving()
-                        onFinished()
+                        finish()
                         return
                     }
                     withAnimation(Theme.spring) { step += 1 }
@@ -273,7 +316,7 @@ struct OnboardingView: View {
         } else {
             // The last step is cleared. Say so and let the caller write it
             // down; nothing about the celebration can strand anyone now.
-            onFinished()
+            finish()
         }
     }
 

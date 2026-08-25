@@ -13,6 +13,18 @@ sh "$HERE/run_end_errand_tests.sh"
 sh "$HERE/run_reset_message_tests.sh"
 sh "$HERE/run_line_source_tests.sh"
 sh "$HERE/run_capture_source_tests.sh"
+# The three stranger-gate legs that live in this tree: whose first run this is,
+# whether enrolment is ever offered, and whether the card shows the receipt the
+# server actually verified.
+#
+# Placed HERE, early, deliberately: `set -eu` stops this file at the first
+# failure, and run_watchdog_policy_tests.sh below is red on a compile error
+# (ListenSessionFacts is not passed to its swiftc invocation), so everything
+# after it is unreachable today. That is pre-existing and not fixed here, but a
+# suite nobody can reach is a suite nobody has.
+sh "$HERE/run_first_run_tests.sh"
+sh "$HERE/run_enrollment_offer_tests.sh"
+sh "$HERE/run_job_receipt_tests.sh"
 sh "$HERE/run_stale_extension_tests.sh"
 sh "$HERE/run_reachable_number_tests.sh"
 sh "$HERE/run_notifier_tests.sh"

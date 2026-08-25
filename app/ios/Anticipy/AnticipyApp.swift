@@ -6,7 +6,10 @@ import SwiftUI
 struct AnticipyApp: App {
     @StateObject private var pendant = PendantManager()
     @StateObject private var session = AnticipySession()
-    @AppStorage("hasOnboarded") private var hasOnboarded = false
+    /// WHOSE first run this is, not merely whether one happened. The key is
+    /// declared in FirstRunOwnership because the account lifecycle clears it
+    /// and two copies of the string would be a clear that clears nothing.
+    @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
     /// LIGHT UNLESS YOU CHOSE DARK. This line used to read
     /// `.preferredColorScheme(.dark)` a few lines down, which is why the app
     /// was dark for everybody with no way out of it.
@@ -654,6 +657,24 @@ final class AnticipySession: ObservableObject {
     /// claim endpoint is idempotent; repeating it is the recovery mechanism.
     func resumeSignedInAccount() async {
         guard isSignedIn else { return }
+        // THE PRE-UPGRADE FLAG. A phone updating to this build has
+        // hasOnboarded = true and no owner recorded, because the owner key did
+        // not exist when it was written. That state is unambiguous: the tour
+        // can only be completed from behind the sign-in door, so the only
+        // account that could have earned it is the one signed in now. Stamping
+        // it is a fact, not a guess — and clearing it instead would make every
+        // existing owner redo first run for a bug that was never theirs.
+        switch FirstRunOwnership.resuming(account: accountID,
+                                          onboardedAccount: onboardedAccount,
+                                          hasOnboarded: hasOnboarded) {
+        case .keep:
+            break
+        case .adopt:
+            onboardedAccount = accountID
+        case .replay:
+            hasOnboarded = false
+            onboardedAccount = accountID
+        }
         await backend.claimLegacy(legacyUUID: ownerID)
         await reportTimeZone()
         await refresh()
@@ -1097,6 +1118,16 @@ final class AnticipySession: ObservableObject {
     @AppStorage("accountID") var accountID = ""
     var isSignedIn: Bool { !accountID.isEmpty && !authToken.isEmpty }
 
+    /// THE TOUR FLAG AND ITS OWNER. Same two keys AnticipyApp routes on — see
+    /// FirstRunOwnership, which owns both the strings and the decision.
+    ///
+    /// Written from here rather than from the view because sign-in is where the
+    /// person holding the phone can change, and the view has no idea that
+    /// happened. AnticipyApp's own @AppStorage observes the same keys, so
+    /// clearing the flag here re-routes the app to the tour on the next frame.
+    @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
+    @AppStorage(FirstRunOwnership.ownerKey) private var onboardedAccount = ""
+
     /// Make an account. The device's existing `ownerID` rides up as
     /// `legacy_uuid`, so everything already stamped with it — jobs, profile,
     /// segments — belongs to this account instead of being orphaned the moment
@@ -1136,6 +1167,31 @@ final class AnticipySession: ObservableObject {
             let (token, id) = try await backend.authWithPassword(email: email, password: password)
             authToken = token
             accountID = id
+            // WHOSE TOUR FLAG IS ON THIS PHONE? This is the ONE moment the
+            // person holding it can change, and sign-UP reaches it too
+            // (signUp ends in signIn).
+            //
+            // Synchronous, and deliberately with no `await` between it and the
+            // line above: `AnticipyApp.task(id: session.isSignedIn)` fires
+            // `resumeSignedInAccount` the moment accountID lands, and resuming
+            // would ADOPT a flag this call is about to clear.
+            //
+            // Cable install is the only way onto a device today, so a phone
+            // that somebody else has opened is the normal case, not the edge
+            // one. Before this, the stranger's sign-up landed straight on the
+            // feed: no microphone primer, listening never started, nothing
+            // heard all week.
+            switch FirstRunOwnership.arriving(account: id,
+                                              onboardedAccount: onboardedAccount,
+                                              hasOnboarded: hasOnboarded) {
+            case .keep:
+                break
+            case .adopt:
+                onboardedAccount = id
+            case .replay:
+                hasOnboarded = false
+                onboardedAccount = id
+            }
             // The account email is already a verified fact from the auth
             // boundary. Carry it straight into onboarding/profile defaults;
             // otherwise a new customer sees the literal placeholder

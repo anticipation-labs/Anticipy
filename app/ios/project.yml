@@ -183,7 +183,36 @@ settings:
     # unchanged and now rides on 82: it is still the first build since 75
     # without the speaker frameworks, so a row from it says the linkage was the
     # cause, and silence from it says look at the session instead.
-    CURRENT_PROJECT_VERSION: "82"
+    # 83: the three stranger-gate legs that were in this tree.
+    #
+    # The tour belongs to the ACCOUNT. `hasOnboarded` was one boolean for the
+    # whole phone and nothing in the account lifecycle touched it, so a
+    # stranger handed a phone anybody had already opened this app on signed up
+    # and landed straight on the feed — no microphone primer, listening never
+    # started, nothing heard all week. Cable install is the only way onto a
+    # device today, so a previously-used phone is the NORMAL case.
+    # FirstRunOwnership decides it at sign-in and the pre-upgrade flag is
+    # adopted rather than cleared, so no existing owner redoes first run.
+    #
+    # Enrolment is OFFERED. It had exactly one presentation site — a sheet
+    # three scrolls down in Settings — which is why `speaker` is 0% across 221
+    # production events with the cause recorded as "enrollment unreachable".
+    # First run now raises the invite once the four beats are cleared. IT DOES
+    # NOT DO SO IN THIS BUILD: sherpa-onnx is still unlinked, so
+    # SpeakerTagger.available is false, EnrollmentOfferPolicy answers `.cannot`
+    # and nothing is shown — twelve seconds of reading that cannot produce a
+    # profile is worse than not asking. Re-link the engine and the invite is
+    # already standing in front of every new person. `speaker` stays at 0%
+    # until then, and no amount of onboarding moves it.
+    #
+    # And the done card shows the RECEIPT. The backend has refused to mark any
+    # job done without `verified: true` and non-empty evidence since
+    # workflow_guard.pb.js:662, and the app rendered `result` — free text the
+    # browser composed about its own success — while the evidence the server
+    # checked sat unread in the same row. `hasReceipt` now means the server
+    # verified this, bound to the row's own effect_key, and the proof index is
+    # on the card. Moment 31: done without proof doesn't exist.
+    CURRENT_PROJECT_VERSION: "83"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

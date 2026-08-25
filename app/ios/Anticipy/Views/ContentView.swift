@@ -1886,7 +1886,10 @@ struct DoneCard: View {
                     // underneath in grey footnote with a three-line clamp - the
                     // one thing the person opened the app for, rendered as the
                     // small print under a restated question.
-                    let card = JobReceiptPolicy.doneCard(goal: job.humanGoal, result: job.result)
+                    let card = JobReceiptPolicy.doneCard(goal: job.humanGoal,
+                                                        result: job.result,
+                                                        receipt: job.receipt,
+                                                        effectKey: job.effect_key)
                     Text(card.lead)
                         .font(.callout.weight(.medium))
                         .foregroundStyle(card.hasReceipt ? Theme.text : Theme.text2)
@@ -1901,6 +1904,23 @@ struct DoneCard: View {
                         Text(context)
                             .font(.footnote)
                             .foregroundStyle(Theme.muted)
+                    }
+                    // THE PROOF, not the claim. The server refuses to mark any
+                    // job done without a verified receipt naming non-empty
+                    // evidence, and until now the app decoded none of it: the
+                    // card led with whatever sentence the browser composed
+                    // about its own success while the checked thing sat unread
+                    // in the same row. Moment 31: done without proof doesn't
+                    // exist - so the card either shows the proof or says it
+                    // hasn't got any.
+                    if let proof = card.proof {
+                        ReceiptProof(proof: proof)
+                    }
+                    if let unproven = card.unproven {
+                        Label(unproven, systemImage: "questionmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
                     Text(job.humanGoal)
@@ -1978,6 +1998,94 @@ struct DoneCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Theme.Space.base)
+    }
+}
+
+/// WHAT WAS CHECKED, under the sentence that claims it.
+///
+/// The backend refuses to move any job to `done` without a receipt carrying
+/// `verified: true` and a non-empty `evidence` array, and the phone decoded
+/// none of it until now - so the promise of this card ("done requires
+/// evidence tied to the exact effect", ex 44) was kept entirely on the server
+/// and shown to nobody.
+///
+/// One quiet line by default: where it was checked, and whether there is a
+/// photograph. The full proof index is one tap behind that, verbatim and
+/// unedited - ex 126 forbids paraphrasing what the engine came back with, and
+/// evidence is held to the same rule. A person who wants to audit a booking
+/// six weeks later needs the entries as they were written, not a summary of
+/// them.
+private struct ReceiptProof: View {
+    let proof: JobReceiptPolicy.Proof
+    @State private var showing = false
+
+    /// The site, not the URL. A confirmation URL is a 300-character query
+    /// string; the host is the part that answers "where did this happen".
+    /// The whole URL is still one tap away in the list below.
+    private var host: String? {
+        guard let url = proof.url, let parsed = URL(string: url),
+              let host = parsed.host else { return nil }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
+    /// Where the claim was checked, in the receipt's own words. Never
+    /// composed from anything but what the row holds.
+    private var checkedOn: String? {
+        let where_ = proof.title ?? host
+        guard let where_ else { return nil }
+        return "Checked on \(where_)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.seal")
+                    .font(.caption)
+                    .foregroundStyle(Theme.accent)
+                    .accessibilityHidden(true)
+                Text(checkedOn ?? "Checked before I called it done")
+                    .font(.caption)
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if proof.photographed {
+                // The one entry nothing else in the product can reconstruct.
+                Label("There's a photo of the finished page",
+                      systemImage: "photo")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.muted)
+            }
+            Button {
+                Haptics.tap()
+                withAnimation(.easeInOut(duration: 0.2)) { showing.toggle() }
+            } label: {
+                Label(showing ? "Hide the proof" : "Show me the proof",
+                      systemImage: showing ? "chevron.up" : "chevron.down")
+            }
+            .buttonStyle(.ghost)
+            if showing {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(proof.items, id: \.self) { item in
+                        Text(item)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(Theme.muted)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let at = proof.recordedAt {
+                        Text("Recorded \(at)")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.muted)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: Theme.Radius.small,
+                                             style: .continuous)
+                    .fill(Theme.surface))
+            }
+        }
+        .accessibilityElement(children: .contain)
     }
 }
 

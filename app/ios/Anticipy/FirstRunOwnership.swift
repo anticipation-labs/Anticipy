@@ -40,6 +40,21 @@ import Foundation
 /// signs in, `arriving` has already cleared the flag.
 enum FirstRunOwnership {
 
+    /// THE TWO KEYS, DECLARED ONCE.
+    ///
+    /// `AnticipyApp` binds `@AppStorage` to these and the account lifecycle
+    /// writes them. A second copy of the string is precisely how a rename
+    /// leaves behind a clear that silently clears nothing — the accident
+    /// `overnight/stranger_gate.py`'s `swift_string_behind` was written to
+    /// catch, after moving this key into an `OnboardingKeys` constant turned
+    /// leg 4 green while the value stayed one string for the whole phone.
+    ///
+    /// `flagKey` keeps its historical name deliberately: every phone already
+    /// running the product has its tour recorded under it, and renaming the key
+    /// would show first run again to every existing owner.
+    static let flagKey = "hasOnboarded"
+    static let ownerKey = "onboardedAccount"
+
     /// What to do with the tour flag. `replay` means clear it — the person
     /// about to use this phone has not been shown first run.
     enum Decision: Equatable {
