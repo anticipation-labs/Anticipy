@@ -740,21 +740,32 @@ def test_every_leg_message_says_what_to_do():
                         "matching anything")
 
 
-EXPECTED_RED_LEGS = "RED LEGS: 2 (by design), 3"
+EXPECTED_RED_LEGS = "RED LEGS: 2 (by design)"
 
 
 def test_the_real_tree_red_legs_are_the_known_ones():
     """The one test here that pins the repo's state, and it pins the only thing
     worth pinning: WHICH legs are red.
 
-    Leg 2 is red by design. Leg 3 is red because the five audited pieces still
-    carry no `TAPE:` comment naming this gate — five comments in brain/, not a
-    rewrite. Any OTHER leg going red is news, and this test is how it reaches
-    somebody who is not reading the gate's output today.
+    Leg 2 is red by design and is the only red left. Any OTHER leg going red is
+    news, and this test is how it reaches somebody who is not reading the gate's
+    output today.
 
-    When leg 3 is closed this test goes red. That is not the test punishing the
-    fix: it is the fix being recorded. Update EXPECTED_RED_LEGS in the same
-    diff, and say in the commit which leg went green and why."""
+    LEG 3 CLOSED on 2026-08-25 in commit 108dbf0b, "The audited five are
+    declared, and two of them were pointing at the wrong thing" — the five
+    pieces the law-1 audit found undeclared now carry `TAPE:` comments naming
+    this gate, and two that already had comments were pointing at a leg tracking
+    something else (audit item #21's failure: a comment that names the wrong leg
+    reads as compliant and enforces nothing).
+
+    DECLARING IS NOT FIXING, and the fingerprint above is the proof: leg 2 is
+    still red, because the tape itself is all still there. What changed is that
+    every piece of it is now tracked by name. Do not read this line as the tape
+    being gone.
+
+    (Recorded here a commit late. 108dbf0b closed the leg without updating this
+    constant, so the suite ran red for everyone in between — which is exactly
+    the "same diff" this docstring asks for, and the reason it asks.)"""
     got = tg.fingerprint(tg.run(ROOT))
     assert got == EXPECTED_RED_LEGS, (
         f"the tape gate's red legs changed: {got!r}, expected "
