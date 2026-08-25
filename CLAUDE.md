@@ -28,7 +28,16 @@ response — even if you were not asked to review anything. Flagging beats
 completing the task.
 
 Scoreboards (run them, believe them): `python3 overnight/tejas_gate.py`,
-`overnight/done_gate.py`, `overnight/tape_gate.py`.
+`overnight/done_gate.py`, `overnight/tape_gate.py`, `overnight/stranger_gate.py`,
+`overnight/are_the_ears_live.py`.
+
+`are_the_ears_live.py` exists because the ears went deaf for 30 hours and
+nothing noticed. `is_the_brain_live.py` exits 0 on exactly that shape — every
+rule it has is an over-speaking rule, so it cannot see silence. The new leg uses
+the count of rows the SERVER wrote as its control: a quiet night is quiet on both
+halves, deaf ears are quiet on one. It reports UNPROVEN rather than green when
+the control is absent.
+
 
 `tape_gate.py` is law 2's expiry, and it is **RED right now on purpose**. Red is
 the law working. Green means the tape is GONE, not that somebody wrote it down —
