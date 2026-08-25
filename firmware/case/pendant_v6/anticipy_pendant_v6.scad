@@ -46,8 +46,8 @@ PART    = "both";
 BATT    = "500";
 MECH    = "friction";
 PINS    = false;
-XTRA_L  = 20.0;     // extra internal cavity length (user: "2 cm taller")
-XTRA_W  = 10.0;     // extra internal cavity width  (user: "1 cm wider")
+XTRA_L  = 13.0;     // extra internal cavity length (v6.4: outer length -12 mm)
+XTRA_W  = 5.0;      // extra internal cavity width  (v6.4: outer width -5 mm)
 LID_CLR = 0.30;      // per-side lip clearance (v6.3: loosened — halves jammed)
 fit_clr = (MECH == "friction") ? LID_CLR - 0.05 : LID_CLR;  // friction grips tighter
 $fn = $preview ? 48 : 128;
@@ -77,7 +77,7 @@ em      = outer_w/2 - (gr - lip_t - LID_CLR);
 outer_l = cav_l + 2*em;
 outer_t = front_d + back_d + 2*face;
 zc      = (front_d - back_d)/2;
-cx      = 0;
+cx      = -2.0;     // cavity biased toward USB end: keeps chain hole clear of the lip groove
 
 chain_d = 10.6;                   // v6.3: passes 6 mm chain loose, 10 mm max
 chain_x = outer_l/2 - chain_d/2 - 2.0;  // 2.0 mm plan wall to the outer edge
@@ -230,8 +230,9 @@ module coupon() {   // lip-fit test: bar = the real lip wall; 3 slots
 }
 
 /* ---------- output ---------- */
-if (PART == "front") front_half();
-if (PART == "back")  rotate([180, 0, 0]) back_half();
+// exports are cavity-opening-UP: drop on the plate and print with NO supports
+if (PART == "front") rotate([180, 0, 0]) front_half();
+if (PART == "back")  back_half();
 if (PART == "coupon") coupon();
 if (PART == "both") {
     front_half();

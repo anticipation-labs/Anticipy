@@ -90,6 +90,9 @@ super glue). Changes:
   the loaded spool, not a requirement. Black hides layer lines but shows dust;
   silver matches the titanium product look.
 - 0.12 mm layers, 3 walls, 4 top/5 bottom shells, 15 % gyroid infill.
+- v6.4: outer size reduced to 86.0 × 32.7 × 22.7 mm (−12 mm long, −5 mm wide,
+  same height); cavity biased 2 mm toward the USB end so the bigger chain hole
+  still clears the lip groove. STLs now export cavity-opening-up.
 - Both halves print **cavity-opening-UP (dome on the plate), NO supports**.
   Flipped this way the cavity ceiling becomes the floor, so there is no
   bridge and nothing is ever printed inside the bays. (The first silver
