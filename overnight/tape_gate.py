@@ -630,6 +630,7 @@ class ClosedTape:
 CORE = "brain/anticipy_core.py"
 ASKING = "brain/asking.py"
 IOS_APP = "app/ios/Anticipy/AnticipyApp.swift"
+SEGMENTER = "brain/segmenter.py"
 
 KNOWN_TAPE = [
     Tape(
@@ -761,6 +762,31 @@ KNOWN_TAPE = [
     #
     # `home` and `marker_home` stay None: the regex is module-level, the text
     # appears exactly once in the tree, and the fix is its deletion.
+    Tape(
+        tid="_ANAPHORIC",
+        rel=SEGMENTER,
+        find="_ANAPHORIC = re.compile(",
+        what="an opener word list — so|anyway|okay|right|back to|where were "
+             "we|and|but|it|that|they|he|she … — together with a >=2 "
+             "content-word overlap count and a <8-word length test, decides "
+             "whether two turns are ABOUT THE SAME THING. That is the "
+             "conversation-boundary question settled by wording",
+        real_fix="the band-3 question ('did this pick the previous subject "
+                 "back up?') is asked of a model, ON ITS OWN and in four "
+                 "states, with `escalate` kept as the honest no-verdict — the "
+                 "shape party_verdict and ends_in_the_world already use. Then "
+                 "the regex, the >=2 overlap count and the <8-word test are "
+                 "ALL DELETED. Not done in the registering diff because the "
+                 "live verdict reaches only `parent_segment`, a column nothing "
+                 "in the tree reads (measured: "
+                 "tests/test_segmenter_link_tape.py), so a model call on every "
+                 "ingested turn buys nothing live today — and Law 3 forbids "
+                 "claiming otherwise while the ears are dead. That test goes "
+                 "RED the day the verdict reaches hear(), which is the day "
+                 "this trade stops holding and the model call is owed.",
+        audit_item=None,
+        ledger_needle="[tape:anaphoric_link]",
+    ),
 ]
 
 # --------------------------------------------------------------------------

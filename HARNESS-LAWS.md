@@ -170,6 +170,27 @@ diff.
   cancellation that silently does not happen, which is worse. First entry in
   this ledger that is not one of the audited five and not in brain/; see the
   comment on its registry entry for why it carries no `audit_item`.
+- `[tape:anaphoric_link]` `_ANAPHORIC` and the band-3 prefilter in
+  `decide_link` (brain/segmenter.py) — an opener word list
+  (`so|anyway|okay|right|back to|where were we|and|but|it|that|they|he|she…`),
+  a `>=2` content-word overlap count and a `<8 words` length test together
+  decide whether two turns are ABOUT THE SAME THING. Meaning settled by
+  wording. Flagged 2026-08-25 by the EARS turn-envelope spec (§9 item 1, §12
+  item 4), which named it and declined to defend it; not one of the audited
+  five, so it carries no `audit_item`. → Deleted the day that one question is
+  asked of a model, on its own and in four states, with `escalate` kept as the
+  honest no-verdict.
+  **What a wrong verdict can reach today, measured rather than assumed**: in
+  the LIVE path (`place_turn`) the verdict sets only `parent_segment`, and
+  nothing in the tree reads that column — a fresh segment is created either
+  way, and which segment a turn is stamped into is decided by `should_close`,
+  a clock rule. `recent_turns` → `convo_context` → `hear()` is real and live,
+  but it reads `events.segment`, so it is downstream of the clock, not of this
+  regex. In `segment_all` — the pure entry point done_gate leg 2 measures —
+  the same verdict IS the boundary. Both halves are pinned in
+  tests/test_segmenter_link_tape.py, whose blast-radius test goes RED the day
+  the verdict reaches `hear()` and the case for registering rather than fixing
+  is void.
 
 Not tape, but adjacent, and still not to be extended:
 
