@@ -209,8 +209,15 @@ function report(file, kind, expr,   g) {
 }
 AWK
 # `source.wireName` is the wire name of an event source — "voice", "photo" — and
-# is the one journal value that is neither a literal nor a count.
-rogue=$(printf '%s\n' "$calls" | SAFE_EXPRESSIONS='^(source\.wireName)$' \
+# is one of the two journal values that are neither a literal nor a count.
+#
+# `facts` is the other: the session-facts sentence, held in a variable because
+# it is compared with the last one recorded before being written. Naming it here
+# would be a hole if it were taken on trust, so it is not — rule 3b below puts
+# every line that BUILDS it through the same interpolation allowlist as any
+# journal literal, which is the check it would have got had it been written out
+# at the call.
+rogue=$(printf '%s\n' "$calls" | SAFE_EXPRESSIONS='^(source\.wireName|facts)$' \
     awk -f "$out/journalstrings.awk" | sort -u)
 if [ -n "$rogue" ]; then
     echo "A journal write hands over a value this gate has not been told is safe:"
@@ -256,6 +263,24 @@ if [ -n "$rogue" ]; then
     echo "the owner said, it does not belong in the journal at all."
     exit 2
 fi
+# 3b. AND WHAT BUILDS THE ONE VALUE THAT IS A VARIABLE. `facts` is allowlisted
+#     by name above; here it has to earn it. Every line that assigns to it goes
+#     through the interpolation allowlist, so the sentence the dedupe compares
+#     can never say anything a journal literal could not have said directly.
+factsbuild=$(grep -nE 'facts (=|\+=)' "$listener" | grep -vE '^[0-9]+:[[:space:]]*//' \
+    | sed "s|^|$listener\t|")
+rogue=$(printf '%s\n' "$factsbuild" | awk -f "$out/interpolations.awk" | sort -u \
+    | ALLOWED="$allowed" awk -F'\t' 'BEGIN { ok = "^(" ENVIRON["ALLOWED"] ")$" } $2 !~ ok')
+if [ -n "$rogue" ]; then
+    echo "The session-facts sentence is built from something this gate has not"
+    echo "been told is safe:"
+    printf '%s\n' "$rogue"
+    echo ""
+    echo "It reaches the journal under the name \`facts\`, which the allowlist"
+    echo "above accepts on the strength of this check. A build line that splits"
+    echo "across a continuation this grep cannot see is the same hole."
+    exit 2
+fi
 echo "every journal write is a count, a status or an allowlisted system fact"
 
 # And the safe reduction must still be the thing standing between them.
@@ -267,23 +292,31 @@ if ! grep -q 'postFailureShape(error)' "$session"; then
 fi
 
 # ------------------------------------------------------------ the noted spam
-# EVERY WRITE ABOVE THE 0 Hz GUARD OBEYS THE SAME DEDUPE THE GUARD ITSELF DOES.
-# The two `.noted` calls in configureAndStartEngine sat three lines above a
-# guard whose own comment reads "Recorded once per outage, not once per watchdog
-# tick: the 4s watchdog retries this path for as long as the call lasts, and a
-# journal that spends all 400 of its lines saying the same thing has evicted the
-# session it was meant to explain." They did not obey it. Measured: 15 identical
-# lines a minute, 30 in low power; the ring fully evicted in 27 minutes and both
-# 256 KB files in about five hours, so the one interruption line that explains
-# the day rotates away and the screen reports a blank, healthy day.
+# NO WRITE ABOVE THE 0 Hz GUARD MAY REPEAT ITSELF. The two `.noted` calls in
+# configureAndStartEngine sat three lines above a guard whose own comment reads
+# "Recorded once per outage, not once per watchdog tick: the 4s watchdog retries
+# this path for as long as the call lasts, and a journal that spends all 400 of
+# its lines saying the same thing has evicted the session it was meant to
+# explain." They did not obey it. Measured: 15 identical lines a minute, 30 in
+# low power; the ring fully evicted in 27 minutes and both 256 KB files in about
+# five hours, so the one interruption line that explains the day rotates away
+# and the screen reports a blank, healthy day.
+#
+# THIS LEG USED TO REQUIRE `if !suspended`, and that was the wrong instrument
+# for the right rule. It bought silence for the whole outage, including the tick
+# capture comes BACK — the one moment these facts are worth having, because that
+# is when the session may have become something else (a call that began on
+# Bluetooth ending on speaker). Comparing against the last line recorded kills
+# the 210 repetitions and keeps every sentence that is new, so the rule below
+# now asks for the comparison rather than for the flag.
 pre=$(awk '/private func configureAndStartEngine/,/guard format.sampleRate/' "$listener" \
     | grep -vE '^[[:space:]]*//')
 if printf '%s\n' "$pre" | grep -q 'ListenJournal.shared.record'; then
-    guarded=$(printf '%s\n' "$pre" | grep -n 'if !suspended' | head -1 | cut -d: -f1)
+    guarded=$(printf '%s\n' "$pre" | grep -n '!= lastSessionFacts' | head -1 | cut -d: -f1)
     firstwrite=$(printf '%s\n' "$pre" | grep -n 'ListenJournal.shared.record' | head -1 | cut -d: -f1)
     if [ -z "$guarded" ] || [ "$guarded" -gt "$firstwrite" ]; then
-        echo "configureAndStartEngine writes to the journal before it knows the"
-        echo "microphone is ours, and outside the 'if !suspended' dedupe."
+        echo "configureAndStartEngine writes to the journal without first asking"
+        echo "whether it has already said this."
         echo "The 4s watchdog calls this method on every tick of a phone call, so"
         echo "an unguarded write here is fifteen identical lines a minute and the"
         echo "whole ring gone in twenty-seven — including the one line that says"
@@ -291,7 +324,7 @@ if printf '%s\n' "$pre" | grep -q 'ListenJournal.shared.record'; then
         exit 2
     fi
 fi
-echo "the session facts are recorded once per outage, not once per watchdog tick"
+echo "the session facts are recorded when they change, not once per watchdog tick"
 
 # THE TAP CLOSURE STAYS JOURNAL-FREE. It runs on the audio thread, and the
 # journal now writes to a FILE. A record() call in there would park audio

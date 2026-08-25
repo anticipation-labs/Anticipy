@@ -68,8 +68,29 @@ fi
 # then produces nothing and leg 6 does not rescue it until the quiet passes 120s.
 # Asserted on source shape, like the rule above it, because nothing in a pure
 # suite can see a call site.
-arm=$(awk '/case \.standDown:/,/case \.rebuild:/' "$listener")
-if ! printf '%s' "$arm" | grep -vE '^[[:space:]]*//' | grep -q 'swapRecognition'; then
+#
+# THROUGH `retryCapture` OR INLINE, either is fine, but the swap must be behind
+# a check that capture actually came back. Three paths are the same moment —
+# this tick, `.ended` arriving, and the owner opening the app — and they now
+# share one body, so this leg follows the arm into it rather than insisting the
+# call be spelled out here. Swapping unconditionally is its own defect: it
+# cancels a working task to mint one over an input a call still holds.
+arm=$(awk '/case \.standDown:/,/case \.rebuild:/' "$listener" | grep -vE '^[[:space:]]*//')
+retry=$(awk '/private func retryCapture/,/^    }$/' "$listener" | grep -vE '^[[:space:]]*//')
+if printf '%s' "$arm" | grep -q 'retryCapture'; then
+    swapper="$retry"
+else
+    swapper="$arm"
+fi
+if printf '%s' "$swapper" | grep -q 'swapRecognition' \
+   && ! printf '%s' "$swapper" | grep -q 'suspended'; then
+    echo "The watchdog swaps the recognition request without checking that the"
+    echo "microphone came back. For the length of a call that is a fresh"
+    echo "SFSpeechRecognitionTask every four seconds, none of which can hear"
+    echo "anything, and a working one cancelled to make each of them."
+    exit 2
+fi
+if ! printf '%s' "$swapper" | grep -q 'swapRecognition'; then
     echo "The watchdog stands down without ever refreshing the recognition request."
     echo "A call that ends on a different route hands the new tap's format to a"
     echo "request whose format was fixed by its first buffer. The recognizer"

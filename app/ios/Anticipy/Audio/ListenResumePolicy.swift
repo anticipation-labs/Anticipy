@@ -17,9 +17,16 @@ import Foundation
 ///
 /// - `isListening` means **the owner wants me listening**. It is set by
 ///   `begin()` and cleared only by `stop()` — a human decision, both ways.
-/// - `suspended` means **the microphone is not ours right now**. It is set by
-///   the interruption notification and by the 0 Hz guard that refuses to tap a
-///   silenced input, and cleared when capture comes back.
+/// - `suspended` means **the microphone is not ours right now**. Two places
+///   write it, and the list is open at one of them on purpose: the interruption
+///   notification sets it, and `configureAndStartEngine` reconciles it on every
+///   attempt — true at the 0 Hz guard that refuses to tap a silenced input, and
+///   true again for ANY failed `engine.start()`, whatever the reason, which is
+///   journalled as `.unrecoveredFailure`. So the answer below has to be right
+///   for a microphone lost in a way nobody has enumerated, not only for a phone
+///   call. It is: `.retakeMicrophone` is what all of them need. The flag is
+///   cleared by that same reconciliation when the engine comes up, and by
+///   `stop()`.
 ///
 /// The state that needed action — wanted, nominally listening, microphone
 /// actually gone — is the state the old guard answered "nothing" to. Anyone
@@ -49,11 +56,26 @@ struct ListenResumePolicy {
         guard wantsListening else { return .nothing }
 
         // Nothing is listening: launch, or a return after iOS reclaimed the
-        // process. Above the `suspended` line deliberately — the last state
-        // written before a termination can easily be "the microphone was
-        // gone", and `retakeMicrophone()` guards on `isListening`, so
-        // answering it here would return immediately and silently. A no-op
-        // that looks like a fix is precisely the failure this file closes.
+        // process.
+        //
+        // ABOVE THE `suspended` LINE DELIBERATELY, and not for the reason this
+        // comment used to give. It said the state arises because "the last
+        // state written before a termination can easily be 'the microphone was
+        // gone'" — nothing writes it anywhere. `suspended` is a plain in-memory
+        // `@Published Bool` with no `@AppStorage` and no `UserDefaults` behind
+        // it, unlike `keepListening`, so a fresh process always starts it
+        // false; and in-process every writer of `suspended = true` runs only
+        // while `isListening` is true, and `stop()` clears both. The pair
+        // `(!isListening, suspended)` is therefore UNREACHABLE today.
+        //
+        // The ordering stays because it costs nothing and the alternative
+        // fails silently: `retakeMicrophone()` guards on `isListening`, so
+        // answering `.retakeMicrophone` to a state where nothing is listening
+        // would return immediately and do nothing at all — a no-op that looks
+        // like a fix, which is precisely the failure this file exists to
+        // close. Anyone who later persists `suspended`, or writes it from a
+        // path that runs with listening off, gets the answer that works
+        // instead of the one that quietly does not.
         if !isListening { return .start }
 
         // Wanted, still nominally listening, and the input belongs to

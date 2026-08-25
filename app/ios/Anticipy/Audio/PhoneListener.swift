@@ -41,7 +41,60 @@ final class PhoneListener: NSObject, ObservableObject {
     @Published var authorized = true
     /// True while the user wants listening but the mic is down (interruption,
     /// route change) and recovery is in progress. The UI must say so.
-    @Published var suspended = false
+    ///
+    /// IT OWNS THE BACKGROUND ASSERTION, and that is why the observer is here
+    /// rather than at the notification that seems to be about interruptions.
+    /// The assertion is running time bought for getting the microphone back, so
+    /// it is worth holding for exactly as long as the microphone is gone — and
+    /// this is the one line every route to "gone" and back passes through.
+    ///
+    /// Keyed on the notification instead, it leaked both ways. `.began` took it
+    /// and only `.ended` released it, but `suspended` also clears in
+    /// `configureAndStartEngine` when the engine comes back up: Siri dismissed
+    /// with no `.ended` delivered (iOS sometimes sends none) left listening
+    /// healthy and an assertion held over nothing — and at the next
+    /// backgrounding iOS grants and burns ~30s of background execution on an
+    /// app that has nothing to do with it. And releasing it ON
+    /// `.ended` spent it a beat too early: a call ending with the phone in a
+    /// pocket finds an input still reporting 0 Hz, `suspended` goes straight
+    /// back to true, and the app is left with no audio flowing and no assertion
+    /// — suspended by iOS, watchdog frozen, listening gone until somebody opens
+    /// the app. The thirty seconds this buys was exactly the window that retry
+    /// needed.
+    @Published var suspended = false {
+        didSet {
+            // Edges only. `configureAndStartEngine` assigns this on every
+            // watchdog tick of a call, and re-taking an assertion each time
+            // would hand back a fresh thirty seconds forever — which is not
+            // what iOS grants, and orphans an identifier per tick.
+            guard suspended != oldValue else { return }
+            // Every writer of this flag is on the main queue (the two
+            // notification observers are registered with `queue: .main`, the
+            // watchdog Timer runs on the main runloop, and `begin()`/`stop()`
+            // are called from the UI), which is where UIApplication expects
+            // these two calls.
+            if suspended {
+                beginBackgroundAssertion()
+            } else {
+                endBackgroundAssertion()
+            }
+        }
+    }
+
+    /// Is she actually hearing you at this moment?
+    ///
+    /// `isListening` is the owner's standing wish and stays true for the whole
+    /// of a phone call, so a screen that asks it gets "yes" while a call holds
+    /// the input. Four places asked it that way — both breathing dots, the
+    /// settings headline, the briefing's idle line — and all four spoke over a
+    /// microphone something else was holding. A fifth, the wave bars, wrote
+    /// `isListening && !suspended` by hand and was the only one right, which is
+    /// the whole argument for this being one name instead of an expression
+    /// copied per view.
+    var capturing: Bool {
+        ListenControlPolicy.capturing(isListening: isListening,
+                                      suspended: suspended)
+    }
 
     /// A finished line, the instant the flush produced it, and whether it
     /// carries on from the line before it.
@@ -106,6 +159,12 @@ final class PhoneListener: NSObject, ObservableObject {
     private var orphanBuffers: [AVAudioPCMBuffer] = []
     private let orphanLock = NSLock()
     private var acceptingAudio = false
+
+    /// The last session-facts sentence actually recorded, so the same one is
+    /// not written again. Cleared by `stop()`: a new session is a new thing to
+    /// describe, and the churn this guards against is per-watchdog-tick, not
+    /// per-session.
+    private var lastSessionFacts = ""
 
     private var lastBufferAt = Date()
     private var lastResultAt = Date()
@@ -267,24 +326,42 @@ final class PhoneListener: NSObject, ObservableObject {
         // mode here: it changes what the OS will let a background app do, and
         // a day that died on a throttled phone otherwise looks like a bug.
         //
-        // GUARDED BY `suspended`, exactly as the 0 Hz stop below is, and for
-        // exactly the reason its comment gives. These two writes sat three lines
-        // ABOVE that guard and obeyed nothing: while a call holds the microphone
-        // the 4s watchdog calls this method on every tick, so they wrote 15
-        // identical lines a minute — 30 in low power. Measured: the 400-line
-        // ring is fully evicted in 27 minutes and the two 256 KB files in about
-        // five hours of outage, so the one `.sessionStopped(cause:
-        // .interruption)` line that explains the whole day rotates away and the
-        // screen folds ~4,500 `.noted` events into `sessions 0 / listening none
-        // / longest silence none / words 0`. A blank, healthy-looking report on
-        // a dead day, produced by the instrument built to make that day visible.
-        if !suspended {
-            ListenJournal.shared.record(.noted(
-                "session category: \(session.category.rawValue) "
-                + "mode: \(session.mode.rawValue)"))
-            if ProcessInfo.processInfo.isLowPowerModeEnabled {
-                ListenJournal.shared.record(.noted("low power mode on"))
-            }
+        // WRITTEN WHEN IT CHANGES, not on a flag. These lines sat unguarded and
+        // obeyed nothing: while a call holds the microphone the 4s watchdog
+        // calls this method on every tick, so they wrote 15 identical lines a
+        // minute — 30 in low power. Measured: the 400-line ring is fully evicted
+        // in 27 minutes and the two 256 KB files in about five hours of outage,
+        // so the one `.sessionStopped(cause: .interruption)` line that explains
+        // the whole day rotates away and the screen folds ~4,500 `.noted` events
+        // into `sessions 0 / listening none / longest silence none / words 0`. A
+        // blank, healthy-looking report on a dead day, produced by the
+        // instrument built to make that day visible.
+        //
+        // A `!suspended` gate killed that churn and one more thing with it: the
+        // line on the tick the call ENDS, which is the single moment these facts
+        // are worth having, because that is when the session may have come back
+        // as something else — a call that began on Bluetooth ending on speaker.
+        // Comparing to the last line recorded kills 210 repetitions of one
+        // sentence and keeps every sentence that is new. When nothing changed,
+        // silence is right: `.sessionStarted` already says capture came back,
+        // and repeating an unchanged fact adds nothing.
+        //
+        // ON ONE LINE, and the low power clause on one more, because
+        // `run_journal_tests.sh` puts every line that builds this string
+        // through the same interpolation allowlist it puts journal literals
+        // through. `facts` is a name that gate has been told is safe; a
+        // continuation line it could not see is how that name would stop
+        // being safe.
+        var facts = "session category: \(session.category.rawValue) mode: \(session.mode.rawValue)"
+        // Folded into the same sentence rather than journalled beside it: it is
+        // a fact about the same session, and two strings would need two
+        // change-detectors to say one thing. Low power changes what iOS will
+        // let a background app do, and a day that died on a throttled phone
+        // otherwise looks like a bug.
+        if ProcessInfo.processInfo.isLowPowerModeEnabled { facts += " · low power mode on" }
+        if facts != lastSessionFacts {
+            lastSessionFacts = facts
+            ListenJournal.shared.record(.noted(facts))
         }
 
         let input = engine.inputNode
@@ -359,23 +436,26 @@ final class PhoneListener: NSObject, ObservableObject {
             guard let self, self.isListening else { return }
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             if raw.flatMap(AVAudioSession.InterruptionType.init) == .began {
-                // BEFORE `suspended`, because the moment capture stops is the
-                // moment iOS is entitled to freeze this process — and a frozen
-                // process cannot take an assertion, hear `.ended`, or run a
-                // watchdog tick. Short interruptions are the ones this saves.
-                self.beginBackgroundAssertion()
                 ListenJournal.shared.record(.sessionStopped(cause: .interruption))
+                // The background assertion is taken by this line, not beside
+                // it: `suspended`'s observer owns it, so the running time is
+                // bought by the same statement that admits the microphone is
+                // gone and cannot be ordered wrongly relative to it.
                 self.suspended = true   // honest: the mic is gone right now
             } else {
                 // Ended (or unknown): take it back. The session was handed
                 // away and handed back, and the input we get back may not be
-                // the one we had.
+                // the one we had — so a request whose format was fixed by its
+                // first buffer is no use, and `retryCapture` mints a new one
+                // ONLY if capture actually came back.
                 //
-                // The assertion is released here whatever happens next: it has
-                // done its job the instant `.ended` was delivered, and holding
-                // one that iOS then expires is how an app gets terminated.
-                self.endBackgroundAssertion()
-                self.recoverAudio(cause: .routeChange)
+                // Nothing is released here. `.ended` is a claim about the
+                // interruption, not about the microphone: the route may not
+                // have settled, in which case the retry below returns at the
+                // 0 Hz guard, `suspended` stays true, and the assertion this
+                // path used to end is the only thing keeping the app running
+                // for the next attempt.
+                self.retryCapture(cause: .routeChange)
             }
         }
         nc.addObserver(forName: AVAudioSession.routeChangeNotification,
@@ -401,10 +481,11 @@ final class PhoneListener: NSObject, ObservableObject {
 
     /// Ask iOS for a little more running time while the microphone is gone.
     ///
-    /// Ends any assertion already held first. A second `.began` with no
-    /// `.ended` between them (Siri during a call, a second call waiting) would
-    /// otherwise overwrite the identifier, and an identifier nothing can end
-    /// any more is one iOS eventually terminates the app over.
+    /// Called from one place, `suspended`'s observer, and only on the edge
+    /// where it becomes true. The `endBackgroundAssertion()` below it is
+    /// insurance rather than a live path: an identifier overwritten without
+    /// being ended can never be ended, and iOS terminates an app over that, so
+    /// it is not left resting on an argument about who calls this.
     private func beginBackgroundAssertion() {
         endBackgroundAssertion()
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "listen-interruption") { [weak self] in
@@ -415,11 +496,13 @@ final class PhoneListener: NSObject, ObservableObject {
         }
     }
 
-    /// Idempotent on purpose, because two paths race to end the same
-    /// assertion in either order: the expiration handler, and `.ended`
-    /// arriving. Apple's contract is that an identifier is ended once, by the
-    /// holder; ending one iOS has already reclaimed is outside it. The guard
-    /// is what makes "just call it, from anywhere" safe.
+    /// Idempotent on purpose, because two paths end the same assertion in
+    /// either order: iOS running out of patience (the expiration handler), and
+    /// the microphone coming back (`suspended` clearing). A long call reaches
+    /// both, thirty seconds apart. Apple's contract is that an identifier is
+    /// ended once, by the holder; ending one iOS has already reclaimed is
+    /// outside it. The guard is what makes "just call it" safe on the second
+    /// of those.
     private func endBackgroundAssertion() {
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
@@ -442,22 +525,43 @@ final class PhoneListener: NSObject, ObservableObject {
     /// it here would be a line with no failure behind it.
     func retakeMicrophone() {
         guard isListening else { return }
-        // Recorded HERE rather than left to `recoverAudio`, which suppresses
-        // its own swap line whenever `suspended` is already set — a dedupe that
-        // exists for the 4-second watchdog retry, which would otherwise write
-        // one identical line per tick for the length of a call. This path runs
-        // once, when a person opens the app, and its count is the whole point
-        // of `.appReturned` existing: it says how often listening only came
-        // back because somebody looked at their phone. Suppressed, the cause
-        // could never appear in the journal or the tally at all.
-        //
-        // The condition mirrors `recoverAudio`'s `alreadyDown` exactly, so this
-        // records when that one would not, and stays silent when it will —
-        // one line either way, never two.
-        if suspended {
-            ListenJournal.shared.record(.recognizerSwapped(cause: .appReturned))
-        }
-        recoverAudio(cause: .appReturned)
+        retryCapture(cause: .appReturned)
+    }
+
+    /// Try the engine again, and mint a new recognition request ONLY if capture
+    /// actually came back.
+    ///
+    /// The shared body of every "the microphone may be ours again" moment: the
+    /// watchdog's stand-down tick, `.ended` arriving, and the owner opening the
+    /// app. Not `recoverAudio`, which swaps unconditionally — that is right for
+    /// a failure it is repairing, and wrong here, where the input may still
+    /// belong to a call and the swap would cancel a task to mint one that can
+    /// hear nothing.
+    ///
+    /// WHY THE JOURNAL LINE IS ON THE FAR SIDE OF THE GUARD, and this is
+    /// finding 3 of the review. `.appReturned` answers "how often did she only
+    /// come back because he opened the app?" — the honest measure of how much
+    /// of the interruption hole is still open. Recorded on ATTEMPT, a ten-minute
+    /// call the owner glanced at six times wrote six lines claiming listening
+    /// came back and cancelled six recognition tasks to build six more that
+    /// could hear nothing, while it came back zero times. The count read the
+    /// flattering way, and every one of those visits cost a working task.
+    /// `swapRecognition` writes the line, so it is written by the same
+    /// statement that does the thing it describes.
+    private func retryCapture(cause: ListenEvent.SwapCause) {
+        guard isListening else { return }
+        engine.stop()
+        configureAndStartEngine()
+        // Still not ours. `configureAndStartEngine` reconciles `suspended`
+        // itself and only clears it when the engine really came up, so this is
+        // the honest answer to "did that work" — nothing is recorded, the
+        // recognition task is left alone, and the next tick tries again.
+        guard !suspended else { return }
+        // The tap just installed carries the CURRENT route's format, and a live
+        // request's format was fixed by its first buffer. A call that starts on
+        // Bluetooth and ends on speaker would otherwise feed the new tap into
+        // the old request and the recognizer would produce nothing.
+        swapRecognition(flushPending: true, cause: cause)
     }
 
     /// Bring the whole capture chain back after whatever iOS did to it.
@@ -536,24 +640,15 @@ final class PhoneListener: NSObject, ObservableObject {
                 // iOS never delivers `.ended` — it sometimes doesn't. For as
                 // long as the call lasts the retry writes nothing to the
                 // journal and returns at the 0 Hz guard.
-                self.engine.stop()
-                self.configureAndStartEngine()
                 // ...AND ON THE ONE TICK IT SUCCEEDS, THE REQUEST HAS TO GO
-                // TOO. `configureAndStartEngine` reconciles `suspended` itself
-                // and only clears it when the engine actually came up, so
-                // reaching here with it clear means the microphone is ours
-                // again as of this tick. The tap it just installed carries the
-                // CURRENT route's format, and a live request's format was fixed
-                // by its first buffer — `recoverAudio` says exactly this: "the
-                // new route may differ, so start fresh". A call that starts on
-                // Bluetooth and ends on speaker would otherwise feed the new
-                // tap into the old request, the recognizer would produce
-                // nothing, and leg 6 would not rescue it until the quiet passed
-                // 120 seconds. That is up to two more minutes of the deafness
-                // this whole watchdog exists to end, after the call is over.
-                if !self.suspended {
-                    self.swapRecognition(flushPending: true, cause: .routeChange)
-                }
+                // TOO, which is `retryCapture`'s whole shape: rebuild, and swap
+                // only if the rebuild worked. Without the swap, a call that
+                // starts on Bluetooth and ends on speaker feeds the new tap
+                // into the old request, the recognizer produces nothing, and
+                // leg 6 does not rescue it until the quiet passes 120 seconds —
+                // up to two more minutes of the deafness this watchdog exists
+                // to end, after the call is over.
+                self.retryCapture(cause: .routeChange)
                 return
             case .rebuild:
                 // A dead engine, or audio that stopped flowing with no
@@ -910,12 +1005,13 @@ final class PhoneListener: NSObject, ObservableObject {
             ListenJournal.shared.record(.sessionStopped(cause: .owner))
         }
         isListening = false
-        suspended = false
         // Toggling Listen off during a call is the path that reaches here with
-        // an assertion still held. Without this line it would sit until iOS
-        // expired it — not a termination, the expiration handler ends it, but
+        // an assertion still held, and this line is what hands it back — the
+        // observer on `suspended` ends it. Left held it would sit until iOS
+        // expired it: not a termination, the expiration handler ends it, but
         // background time charged to an app with nothing left to do.
-        endBackgroundAssertion()
+        suspended = false
+        lastSessionFacts = ""
         watchdog?.invalidate()
         watchdog = nil
         silenceFlush?.cancel()

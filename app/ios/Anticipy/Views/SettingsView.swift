@@ -596,7 +596,17 @@ struct SettingsView: View {
 
     private var listeningState: String {
         if session.micBlocked { return "I can't hear anything right now." }
-        if session.listener.isListening { return "I'm listening on this phone." }
+        // ABOVE the `capturing` line, and it has to be: `isListening` is the
+        // owner's standing wish and stays true for the whole of a phone call,
+        // so this screen's headline — her own first-person voice, on the page
+        // about what she hears — read "I'm listening on this phone." while
+        // something else held the input. The promise underneath is one the app
+        // keeps: the 4s watchdog retries the engine on every tick of an outage,
+        // and this screen is in the foreground while it is being read.
+        if session.listener.suspended {
+            return "Something else has the microphone right now. I'll take it back the moment it's free."
+        }
+        if session.listener.capturing { return "I'm listening on this phone." }
         if let ends = pauseEnds { return "Paused. I'll start listening again at \(clock(ends))." }
         return "I'm not listening."
     }

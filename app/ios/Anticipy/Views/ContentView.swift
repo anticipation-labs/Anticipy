@@ -948,10 +948,16 @@ struct HomeView: View {
             HStack(spacing: 12) {
                 Button {
                     Haptics.engage()
-                    if session.listener.isListening {
-                        session.stopListening()
-                    } else {
-                        session.startListening()
+                    // The action and the words above it come from ONE answer,
+                    // which is the finding: the label was made honest during an
+                    // interruption ("Waiting for the microphone") while the tap
+                    // stayed keyed on `isListening` — true for the whole of a
+                    // call — so the biggest type on the screen became a status
+                    // sentence on a control that ends the day.
+                    switch listenFace.tap {
+                    case .start: session.startListening()
+                    case .stop: session.stopListening()
+                    case .nothing: break
                     }
                 } label: {
                     // The switch that turns the entire product on wears the
@@ -960,10 +966,11 @@ struct HomeView: View {
                     // colour. The champagne capsule was the last bespoke
                     // background on this screen.
                     HStack(spacing: Theme.Space.snug) {
-                        if session.listener.isListening {
+                        switch listenFace.glyph {
+                        case .breathingDot:
                             BreathingDot(size: 10)
-                        } else {
-                            Image(systemName: listenButtonIcon)
+                        case .symbol(let name):
+                            Image(systemName: name)
                                 .font(.system(size: 18, weight: .medium))
                         }
                         // THE ONE CONTROL THAT KEEPS ITS OWN TYPE. 14pt on the
@@ -971,7 +978,7 @@ struct HomeView: View {
                         // footnote, and a label that sets its own font wins
                         // over the style's default by design — see
                         // GlassCTAStyle. Everything else takes the 14/600.
-                        Text(listenButtonLabel)
+                        Text(listenFace.label)
                             .font(Theme.display(22))
                             .tracking(-0.2)
                     }
@@ -979,12 +986,15 @@ struct HomeView: View {
                 }
                 .buttonStyle(.glass)
                 // A tap that iOS will instantly refuse is worse than no
-                // button: it reads as the app being broken.
-                .disabled(micNeedsHelp)
+                // button: it reads as the app being broken. `.nothing` is the
+                // policy saying exactly that, so the disable and the label it
+                // wears cannot disagree.
+                .disabled(listenFace.tap == .nothing)
                 .accessibilityHint(micNeedsHelp ? "Unavailable until the microphone is switched back on in Settings." : "")
                 Spacer()
-                // A listening app shows a waveform, never a spinner.
-                if session.listener.isListening && !session.listener.suspended {
+                // A listening app shows a waveform, never a spinner — and only
+                // while there is something to draw it from.
+                if session.listener.capturing {
                     WaveBars()
                 }
             }
@@ -1062,19 +1072,19 @@ struct HomeView: View {
         }
     }
 
-    private var listenButtonLabel: String {
-        if micNeedsHelp { return "Microphone is off" }
-        // Above the `isListening` line, because `suspended` is only ever set
-        // while `isListening` is true — the switch is on and the input is
-        // somewhere else. "Listening with phone" over a microphone a call
-        // holds is the biggest type on the screen saying the wrong thing.
-        if session.listener.suspended { return "Waiting for the microphone" }
-        return session.listener.isListening ? "Listening with phone" : "Listen with phone"
-    }
-
-    private var listenButtonIcon: String {
-        if micNeedsHelp { return "mic.slash" }
-        return session.listener.isListening ? "mic.fill" : "mic"
+    /// What the control says, what tapping it does, and what sits beside the
+    /// words — one answer, from `ListenControlPolicy`.
+    ///
+    /// The label and the icon were computed properties, the action and the dot
+    /// were written into the button, and the label drifted onto a different
+    /// question from the action: "Waiting for the microphone" is a true
+    /// sentence about the moment, and the tap under it was `stopListening()`.
+    /// What is happening is said by the banner below, the wave bars beside, and
+    /// the briefing above — none of them a control.
+    private var listenFace: ListenControlPolicy.Face {
+        ListenControlPolicy.face(micBlocked: micNeedsHelp,
+                                 isListening: session.listener.isListening,
+                                 suspended: session.listener.suspended)
     }
 
     private func submitTyped() {
@@ -1098,8 +1108,10 @@ struct HomeView: View {
                     .tracking(-0.5)
                     .foregroundStyle(Theme.accent)
                 // Breathing means "she is doing something right now". A
-                // connected pendant is not that: it captures nothing.
-                if session.listener.isListening || !handling.isEmpty {
+                // connected pendant is not that: it captures nothing. Neither
+                // is a microphone a call is holding — this dot sat pulsing
+                // directly above "Something else has the microphone right now."
+                if session.listener.capturing || !handling.isEmpty {
                     BreathingDot(size: 7)
                 }
             }
@@ -1173,8 +1185,18 @@ struct HomeView: View {
             // directly above a status bar reading "Pendant · listening".
             // Demoing the pendant, the product contradicted itself on one
             // screen and took the pendant's side away.
-            parts.append(session.listener.isListening || session.pendantCapturing
-                         ? idleLine : offLine)
+            if session.listener.capturing || session.pendantCapturing {
+                parts.append(idleLine)
+            } else if !session.listener.isListening {
+                parts.append(offLine)
+            }
+            // AND NEITHER SENTENCE WHILE A CALL HAS THE MICROPHONE. `idleLine`
+            // is "All quiet on my end. I've got the watch." — a claim to be
+            // covering something, appended to the sentence that has just said
+            // she is not. `offLine` is no better: it tells the owner to tap the
+            // listening control, which is the one tap that would end the day.
+            // The first sentence already said the whole truth, and a briefing
+            // is allowed to be one sentence long.
         }
         return parts.joined(separator: " ")
     }

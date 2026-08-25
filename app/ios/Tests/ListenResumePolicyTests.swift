@@ -77,13 +77,22 @@ struct ListenResumePolicyTests {
                                         isListening: true,
                                         suspended: true) == .retakeMicrophone)
 
-        // -------------------------------------- 5. terminated during the call
-        // iOS reclaimed the app mid-call and the owner opened it again, so this
-        // process never started listening but the last state written said the
-        // microphone was gone. `.start` has to win: `retakeMicrophone()` guards
-        // on `isListening` and would return immediately, so answering
-        // `.retakeMicrophone` here would be a silent no-op — the exact shape of
-        // the failure this file exists to close.
+        // ------------------------------------- 5. a state nothing reaches yet
+        // This arm used to be justified as "iOS reclaimed the app mid-call and
+        // the last state written said the microphone was gone". NOTHING WRITES
+        // IT. `suspended` is a plain in-memory `@Published Bool` — no
+        // `@AppStorage`, no `UserDefaults`, unlike `keepListening` — so a fresh
+        // process always starts it false, and in-process every writer of
+        // `suspended = true` runs only while `isListening` is true, with
+        // `stop()` clearing both. This pair is unreachable today.
+        //
+        // It is checked anyway, because the ordering that produces it is
+        // defensive and the failure it defends against is silent:
+        // `retakeMicrophone()` guards on `isListening` and would return
+        // immediately, so `.retakeMicrophone` here would be a no-op that looks
+        // like a fix — the exact shape of the failure this file exists to
+        // close. The day somebody persists `suspended`, this check is what says
+        // the answer is still the one that does something.
         check("listening is off, so it starts even though the microphone was taken",
               ListenResumePolicy.decide(wantsListening: true,
                                         isListening: false,

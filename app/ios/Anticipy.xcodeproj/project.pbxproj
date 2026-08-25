@@ -50,6 +50,7 @@
 		DADE2F027C1013968D052B37 /* sherpa-onnx in Frameworks */ = {isa = PBXBuildFile; productRef = 18E77196B32C3DF5E3B7DFE6 /* sherpa-onnx */; };
 		DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F02D4F43DF4322168E31300 /* Notifier.swift */; };
 		E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A935B05F51033496D5EF92C9 /* HapticEngine.swift */; };
+		ED4C192DBA74F48570C51171 /* ListenControlPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AEC26D9D9B455416E10BED /* ListenControlPolicy.swift */; };
 		F575AF0873EA378927B6B04B /* ListenTally.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AEAC7CF712A4733733AB7C1 /* ListenTally.swift */; };
 		F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */; };
 		FE3F2EC49604E6841F2D92F4 /* PendantRadioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */; };
@@ -76,6 +77,7 @@
 		4F02D4F43DF4322168E31300 /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
 		4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassControls.swift; sourceTree = "<group>"; };
 		57259004332BAAB061719DF1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		57AEC26D9D9B455416E10BED /* ListenControlPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenControlPolicy.swift; sourceTree = "<group>"; };
 		5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */ = {isa = PBXFileReference; path = "speaker-embedding.onnx"; sourceTree = "<group>"; };
 		70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyApp.swift; sourceTree = "<group>"; };
 		714D2B06ED11248D1924DC9A /* SupervisedReadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupervisedReadView.swift; sourceTree = "<group>"; };
@@ -186,6 +188,7 @@
 				9EA3914C2F3E611680CF7A63 /* AnticipyVocabulary.swift */,
 				C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */,
 				BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */,
+				57AEC26D9D9B455416E10BED /* ListenControlPolicy.swift */,
 				A66BCAC2FE553220A46D105D /* ListenJournal.swift */,
 				DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */,
 				1AEAC7CF712A4733733AB7C1 /* ListenTally.swift */,
@@ -327,6 +330,7 @@
 				C4189246299602D02840F0D1 /* InterviewView.swift in Sources */,
 				65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */,
 				CC601CF895488D6287CAE43B /* LifeContext.swift in Sources */,
+				ED4C192DBA74F48570C51171 /* ListenControlPolicy.swift in Sources */,
 				0A4F7E4B9727318D39265E30 /* ListenJournal.swift in Sources */,
 				859C9A2572940C9366F344A8 /* ListenResumePolicy.swift in Sources */,
 				F575AF0873EA378927B6B04B /* ListenTally.swift in Sources */,
