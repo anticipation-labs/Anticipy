@@ -68,7 +68,10 @@ final class ListenJournal {
     /// `backend/start.sh` exists in this repo because a disposable log filled a
     /// volume and took production down. On a phone that would be someone's
     /// storage instead, which is worse, because they cannot see why.
-    private let fileURL: URL?
+    /// Readable so Settings can hand the file to a ShareLink. The screen that
+    /// does that is what makes this class's own 'exportable from Settings'
+    /// comments true.
+    let fileURL: URL?
     private let rotateAtBytes: Int
 
     private let stamp: ISO8601DateFormatter = {
@@ -121,6 +124,61 @@ final class ListenJournal {
             return (older + live)
                 .split(separator: "\n", omittingEmptySubsequences: true)
                 .map(String.init)
+        }
+    }
+
+    /// The day as typed events, so a tally can be folded over a record that
+    /// OUTLIVED THE PROCESS — which is the whole point, because the day worth
+    /// reading is usually the one that ended when the app did.
+    ///
+    /// This parses our own format, which is plumbing rather than meaning: the
+    /// case name is the second field precisely because `describe` was written
+    /// to be greppable. The risk is drift between writing and reading, so
+    /// `ListenJournalTests` round-trips EVERY case through describe and back;
+    /// a new case or a reworded line cannot land without failing that check.
+    var persistedEvents: [(Date, ListenEvent)] {
+        persistedLines.compactMap(Self.parse)
+    }
+
+    static func parse(_ line: String) -> (Date, ListenEvent)? {
+        let parts = line.components(separatedBy: "  ")
+        guard parts.count >= 2 else { return nil }
+        let reader = ISO8601DateFormatter()
+        reader.formatOptions = [.withInternetDateTime]
+        guard let when = reader.date(from: parts[0]) else { return nil }
+        let body = parts.dropFirst().joined(separator: "  ")
+        guard let name = body.split(separator: " ").first.map(String.init)
+        else { return nil }
+
+        func after(_ marker: String) -> String? {
+            guard let r = body.range(of: marker) else { return nil }
+            return String(body[r.upperBound...])
+                .trimmingCharacters(in: .whitespaces)
+        }
+
+        switch name {
+        case "sessionStarted":
+            return (when, .sessionStarted)
+        case "sessionStopped":
+            guard let raw = after("cause: "),
+                  let cause = ListenEvent.StopCause(rawValue: raw) else { return nil }
+            return (when, .sessionStopped(cause: cause))
+        case "recognizerSwapped":
+            guard let raw = after("cause: "),
+                  let cause = ListenEvent.SwapCause(rawValue: raw) else { return nil }
+            return (when, .recognizerSwapped(cause: cause))
+        case "flushed":
+            guard let reason = after("reason: "),
+                  let words = body.split(separator: " ").dropFirst().first
+                      .flatMap({ Int($0) }) else { return nil }
+            return (when, .flushed(reason: reason, words: words))
+        case "posted":
+            let ok = body.contains("accepted")
+            let detail = after(ok ? "accepted" : "failed")?
+                .trimmingCharacters(in: CharacterSet(charactersIn: ", ")) ?? ""
+            return (when, .posted(ok: ok, detail: detail))
+        default:
+            return nil
         }
     }
 

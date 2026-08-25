@@ -24,6 +24,7 @@
 		644DB43B78A19265EFFC8F0D /* AnticipyVocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EA3914C2F3E611680CF7A63 /* AnticipyVocabulary.swift */; };
 		65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1277C9D57923BEE65E84A60 /* JobReceiptPolicy.swift */; };
 		6620D110891CC9F096396E66 /* BoundedOpusQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */; };
+		68D70E24AEE5564D0E6516E3 /* ListeningDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 098931E67CC0A16625780FF6 /* ListeningDiagnosticsView.swift */; };
 		6B99B2021748028CD2676754 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57259004332BAAB061719DF1 /* Theme.swift */; };
 		732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */; };
 		78EE68DCD42670CAD7886BDC /* GlassControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */; };
@@ -55,6 +56,7 @@
 
 /* Begin PBXFileReference section */
 		008EC9F3B3E9368F8EBD22BF /* Anticipy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Anticipy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		098931E67CC0A16625780FF6 /* ListeningDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListeningDiagnosticsView.swift; sourceTree = "<group>"; };
 		0B0C300D8A79FC68733630D6 /* PendantBatteryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantBatteryPolicy.swift; sourceTree = "<group>"; };
 		10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakerTagger.swift; sourceTree = "<group>"; };
 		11B56391BC84404B937B150F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -203,6 +205,7 @@
 				4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */,
 				EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */,
 				279CD122187AC50931E7FBAB /* InterviewView.swift */,
+				098931E67CC0A16625780FF6 /* ListeningDiagnosticsView.swift */,
 				7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */,
 				3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */,
 				E94C340A3EF64050C750BCD7 /* SettingsView.swift */,
@@ -320,6 +323,7 @@
 				CC601CF895488D6287CAE43B /* LifeContext.swift in Sources */,
 				0A4F7E4B9727318D39265E30 /* ListenJournal.swift in Sources */,
 				F575AF0873EA378927B6B04B /* ListenTally.swift in Sources */,
+				68D70E24AEE5564D0E6516E3 /* ListeningDiagnosticsView.swift in Sources */,
 				732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */,
 				DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */,
 				A0C6AC3D27BE2A2D7D82A6D4 /* OnboardingFinale.swift in Sources */,

@@ -231,6 +231,34 @@ struct ListenJournalTests {
         check("an unopenable sink never costs us the in-memory journal",
               noFile.entries.count == 1 && noFile.persistedLines.isEmpty)
 
+        // ------------------------------------------------------------ 9. round trip
+        // The tally folds over events read BACK from the file, so writing and
+        // reading must agree. They are two functions that can drift, and the
+        // drift would be silent: a reworded line still looks fine to a person
+        // and simply stops counting. Every case goes out and comes back.
+        let everyCase: [ListenEvent] = [
+            .sessionStarted,
+            .sessionStopped(cause: .interruption),
+            .sessionStopped(cause: .owner),
+            .recognizerSwapped(cause: .taskLimit),
+            .recognizerSwapped(cause: .silenceRotation),
+            .flushed(reason: "ceiling", words: 40),
+            .flushed(reason: "gap", words: 1),
+            .posted(ok: true, detail: "queued line sent"),
+            .posted(ok: false, detail: "requeued, offline"),
+            .posted(ok: true, detail: ""),
+        ]
+        let dirD = tempDir()
+        let trip = ListenJournal(limit: 100,
+                                 fileURL: dirD.appendingPathComponent("j.log"))
+        for e in everyCase { trip.record(e, at: t0) }
+        let readBack = trip.persistedEvents.map { $0.1 }
+        check("every event written can be read back as the same event",
+              readBack == everyCase)
+        check("and the times come back too",
+              trip.persistedEvents.allSatisfy {
+                  Int($0.0.timeIntervalSince1970) == Int(t0.timeIntervalSince1970) })
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {

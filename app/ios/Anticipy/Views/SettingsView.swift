@@ -59,6 +59,18 @@ struct SettingsView: View {
                     .font(.callout)
                     .foregroundStyle(Theme.text)
 
+                // Ships in RELEASE, unlike the haptics panel further down. The
+                // stranger week is a release build on somebody else's phone,
+                // and the day worth reading is the day something went wrong on
+                // it. A DEBUG-only diagnostic cannot be read from the one
+                // device whose behaviour is in question.
+                NavigationLink {
+                    ListeningDiagnosticsView()
+                } label: {
+                    Text("Find out what listening actually did")
+                }
+                .arrowRow()
+
                 if session.micBlocked {
                     Text("iPhone has microphone access switched off for me. It won't ask again. Only you can turn it back on.")
                         .font(.caption)
