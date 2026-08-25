@@ -1190,13 +1190,16 @@ struct HomeView: View {
             } else if !session.listener.isListening {
                 parts.append(offLine)
             }
-            // AND NEITHER SENTENCE WHILE A CALL HAS THE MICROPHONE. `idleLine`
-            // is "All quiet on my end. I've got the watch." — a claim to be
-            // covering something, appended to the sentence that has just said
-            // she is not. `offLine` is no better: it tells the owner to tap the
-            // listening control, which is the one tap that would end the day.
-            // The first sentence already said the whole truth, and a briefing
-            // is allowed to be one sentence long.
+            // AND NEITHER SENTENCE WHILE A CALL HAS THE MICROPHONE, which the
+            // two arms above manage between them. `idleLine` is "All quiet on
+            // my end. I've got the watch." — a claim to be covering something,
+            // stacked on the sentence that has just admitted she is not — so it
+            // is gated on `capturing` and not on the wish. `offLine` is the
+            // other arm, and it cannot be reached from here at all: it sits
+            // behind `!isListening`, and a listener that is merely suspended is
+            // still listening. So the suspended case falls out of both and says
+            // nothing more, which is the whole intent. The first sentence
+            // already said the truth, and a briefing may be one sentence long.
         }
         return parts.joined(separator: " ")
     }

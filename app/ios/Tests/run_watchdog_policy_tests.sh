@@ -47,7 +47,19 @@ fi
 # to answer that argument. What it may never do again is decide from the text.
 # Asserted on source shape, the way run_journal_tests.sh asserts the audio tap
 # closure stays journal-free.
+#
+# THE RANGE IS ANCHORED ON A FUNCTION NAME, so its rename would hand this rule
+# an empty string to search, and a search of nothing finds no `self.partial` and
+# reports success. That is the shape that let a renamed `configureAndStartEngine`
+# walk a journal regression past `run_interruption_contract_tests.sh`.
 body=$(awk '/private func startWatchdog/,/^    }$/' "$listener")
+if [ -z "$body" ]; then
+    echo "This gate can no longer find startWatchdog's body."
+    echo "The rule below then searches an empty string, finds nothing, and calls"
+    echo "that a pass — so the watchdog would be free to decide on the transcript"
+    echo "text again, which is how a deaf recognizer stayed invisible all day."
+    exit 2
+fi
 if printf '%s' "$body" | grep -vE '^[[:space:]]*//' \
     | grep -qE 'self\.partial([^A-Za-z]|$)'; then
     echo "The watchdog is deciding on the transcript text again."
@@ -75,8 +87,26 @@ fi
 # share one body, so this leg follows the arm into it rather than insisting the
 # call be spelled out here. Swapping unconditionally is its own defect: it
 # cancels a working task to mint one over an input a call still holds.
-arm=$(awk '/case \.standDown:/,/case \.rebuild:/' "$listener" | grep -vE '^[[:space:]]*//')
-retry=$(awk '/private func retryCapture/,/^    }$/' "$listener" | grep -vE '^[[:space:]]*//')
+#
+# BOTH RANGES ARE CHECKED BEFORE THEY ARE READ. An empty `arm` still fails this
+# leg — through the "never refreshing" branch, which would be the wrong sentence
+# for the real problem — and an empty `retry` while `arm` calls `retryCapture`
+# does the same. Neither says "the scan lost its anchor", so both say it now.
+arm=$(awk '/case \.standDown:/,/case \.rebuild:/' "$listener" | sed '/^[[:space:]]*\/\//d')
+retry=$(awk '/private func retryCapture/,/^    }$/' "$listener" | sed '/^[[:space:]]*\/\//d')
+if [ -z "$arm" ]; then
+    echo "This gate can no longer find the watchdog's \`.standDown\` arm."
+    echo "Everything below reads that block, so a lost anchor produces a verdict"
+    echo "about an empty string rather than about the code."
+    exit 2
+fi
+if printf '%s' "$arm" | grep -q 'retryCapture' && [ -z "$retry" ]; then
+    echo "The \`.standDown\` arm calls retryCapture, and this gate cannot find it."
+    echo "The guarantee this leg is about — the request is swapped only once"
+    echo "capture is back — lives inside that function, so it would be checked"
+    echo "against nothing at all."
+    exit 2
+fi
 if printf '%s' "$arm" | grep -q 'retryCapture'; then
     swapper="$retry"
 else

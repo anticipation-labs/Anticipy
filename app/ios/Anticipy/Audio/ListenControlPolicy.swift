@@ -90,14 +90,22 @@ struct ListenControlPolicy {
 
     /// Is she actually hearing you at this moment?
     ///
-    /// One line, in one place, because it was four lines in four places and
-    /// three of them were wrong: both breathing dots, the settings headline
-    /// ("I'm listening on this phone.") and the briefing's idle line ("All
-    /// quiet on my end. I've got the watch.") each spelled this out of
-    /// `isListening` alone. `isListening` is the owner's standing WISH and it
-    /// stays true for the whole of a phone call, so all four spoke over a
-    /// microphone something else was holding — the settings headline in her own
-    /// first-person voice, directly above the sentence admitting it.
+    /// `isListening` is the owner's standing WISH and it stays true for the
+    /// whole of a phone call, so four screens spelling this out of it spoke
+    /// over a microphone something else was holding: the listening control's
+    /// own dot, the greeting dot, the settings headline ("I'm listening on this
+    /// phone.") — in her own first-person voice, directly above the sentence
+    /// admitting it — and the briefing's idle line ("All quiet on my end. I've
+    /// got the watch."). One line, in one place, so they cannot drift again.
+    ///
+    /// A FIFTH SITE ASKS `isListening` AND SHOULD KEEP ASKING IT: onboarding's
+    /// "I'm listening. Thank you." answers whether PERMISSION landed, not
+    /// whether the microphone is ours this second, and moving it here would
+    /// drop someone who had just granted the microphone into the copy that asks
+    /// them to grant it. `run_control_policy_tests.sh` scopes its scan away
+    /// from that file for the same reason and says so there. The count is spelt
+    /// out because the previous version of this note said four places and left
+    /// the fifth unmentioned, which reads as a closed count that is open.
     static func capturing(isListening: Bool, suspended: Bool) -> Bool {
         isListening && !suspended
     }

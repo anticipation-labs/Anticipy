@@ -32,6 +32,12 @@
 #        back, and minted six recognition tasks that could hear nothing, while
 #        it came back zero times.
 #
+#   1b.  The observer acts on the EDGE. Without that guard the watchdog's
+#        assignment every four seconds ends the assertion and takes a new one,
+#        so the ~30s iOS is prepared to grant becomes a grant renewed 150 times
+#        across a ten-minute call. Nothing leaks and nothing looks wrong, which
+#        is why it needs a rule rather than a reader.
+#
 #   4.   The session-facts line was gated on `!suspended`, which also silenced
 #        it on the tick a call ENDS — the one moment the facts are worth having,
 #        because the route may have changed underneath.
@@ -51,11 +57,24 @@ grep -v '^ *//' "$f" > "$code"
 # The body of a brace block that starts at the first line matching $1 and ends
 # at the first line that is exactly $2. Ranges, not brace counting: every block
 # below closes at a known indent.
+#
+# AND A BLOCK THAT DID NOT STOP WHERE IT SHOULD SAYS SO, instead of handing the
+# rules a larger piece of the file to be satisfied by. An empty block passing
+# every rule and an over-wide block passing every rule are the same defect from
+# two sides: rule 5 asks whether a `.noted(` inside `configure` is guarded, and
+# a `configure` that swallowed the next method as well can be satisfied by a
+# guard that has nothing to do with it. Reindent the closing brace and the range
+# runs on to the next line of the same shape — the next member declaration if
+# there is one, the end of the file if there is not. Both are reported.
 block() {
     awk -v start="$1" -v end="$2" '
-        $0 ~ start { inb = 1 }
-        inb { print }
-        inb && $0 == end { exit }
+        $0 ~ start { inb = 1; opened = NR }
+        inb { buf = buf $0 "\n" }
+        inb && NR > opened && $0 ~ /^    (private )?(func |var |let |@Published )/ {
+            print "OVERRAN"; exit
+        }
+        inb && $0 == end { printf "%s", buf; closed = 1; exit }
+        END { if (inb && !closed) print "UNCLOSED" }
     ' "$code"
 }
 
@@ -64,6 +83,50 @@ interruption_observer=$(block 'interruptionNotification' '        }')
 retake=$(block 'func retakeMicrophone' '    }')
 retry=$(block 'func retryCapture' '    }')
 configure=$(block 'func configureAndStartEngine' '    }')
+
+# A BLOCK THAT CAME BACK EMPTY IS A RULE THAT CANNOT FAIL. Every rule below
+# reads one of these five strings and asks what is inside it, and `case "" in
+# *X*)` matches nothing — so a renamed function does not fail this file, it
+# empties it and leaves the success sentence at the bottom printing.
+#
+# Measured, by a reviewer: rename `configureAndStartEngine` to
+# `rebuildCaptureChain` and restore the pre-fix churn — an unguarded
+# `.noted(facts)` on every watchdog tick, fifteen identical lines a minute, the
+# 400-line ring gone in twenty-seven — and this file printed "the facts are
+# written when they change" and exited 0. The habit already existed here: rule 4
+# guarded `retryCapture` with exactly this check, and an empty `suspended`
+# observer happens to fail rule 1 anyway because rule 1 demands a match. It was
+# the three asking only what a block does NOT contain — the interruption
+# observer, the retake, and `configure` — that had nothing to fail on.
+need() {
+    case "$2" in
+        "") echo "This gate can no longer find $1 in PhoneListener.swift."
+            echo "$3"
+            echo "Every rule about it below now reads an empty string, matches nothing"
+            echo "and passes." ;;
+        *UNCLOSED*|*OVERRAN*)
+            echo "This gate found $1 in PhoneListener.swift and not the end of it."
+            echo "$3"
+            echo "The block runs past the next declaration, or off the end of the"
+            echo "file, so every rule about it below is answered by whatever the rest"
+            echo "of PhoneListener happens to contain rather than by that block." ;;
+        *)  return 0 ;;
+    esac
+    echo "Point the scan at the new name or the new shape, or delete the rule and"
+    echo "say why the failure it was written for cannot happen any more."
+    fail=1
+}
+need "the \`suspended\` observer" "$suspended_observer" \
+     "That observer is where the background assertion is taken and released."
+need "the interruption observer" "$interruption_observer" \
+     "That observer is the one place forbidden to touch the assertion."
+need "retakeMicrophone()" "$retake" \
+     "That is the path a person triggers by opening the app mid-call."
+need "retryCapture()" "$retry" \
+     "That is the shared body all three 'the mic may be back' paths go through."
+need "configureAndStartEngine()" "$configure" \
+     "That is the method the 4s watchdog re-enters for the length of a call."
+[ "$fail" = "0" ] || exit 1
 
 # 1. THE ASSERTION HAS THE SAME LIFETIME AS THE FLAG. `suspended` means the
 #    microphone is not ours; the assertion is the running time bought to get it
@@ -83,6 +146,26 @@ case "$suspended_observer" in
        echo "Capture came back and the assertion is still held with no interruption in"
        echo "progress. iOS grants ~30s of background execution to an app with nothing"
        echo "left to do, and eventually stops granting it."
+       fail=1 ;;
+esac
+
+# 1b. AND ON THE EDGE, NOT ON EVERY WRITE. `configureAndStartEngine` assigns
+#     `suspended` on every one of the 4-second watchdog's ticks, so without the
+#     edge guard a ten-minute call re-enters `beginBackgroundAssertion()` 150
+#     times. Each entry ends the identifier it is holding and takes a fresh one,
+#     so nothing leaks and nothing looks wrong — and the roughly thirty seconds
+#     iOS is willing to grant has quietly become a grant renewed every four
+#     seconds for as long as the call lasts. The cap the assertion exists to
+#     respect, removed with no symptom, past a green gate. Rules 1 and 2 above
+#     only ask that both calls appear somewhere inside this observer, which they
+#     still would.
+case "$suspended_observer" in
+    *"guard suspended != oldValue"*) ;;
+    *) echo "The \`suspended\` observer acts on every write, not on the edge."
+       echo "The watchdog assigns this flag every four seconds for the whole of a"
+       echo "call, so each tick ends the assertion and takes another one: a 30s"
+       echo "grant renewed 150 times over a ten-minute call, which is not what iOS"
+       echo "grants and not what the comment above the observer promises."
        fail=1 ;;
 esac
 
@@ -117,12 +200,10 @@ esac
 # 4. ...AND THE RETAKE ITSELF ONLY REBUILDS THE REQUEST WHEN THERE IS SOMETHING
 #    TO HEAR. A fresh SFSpeechRecognitionTask over an input a call still holds
 #    is a task that can hear nothing, and the old one is cancelled to make it.
-[ -n "$retry" ] || {
-    echo "There is no shared retry between the watchdog's stand-down and the owner"
-    echo "coming back. Both are 'the microphone may be ours again' and both must"
-    echo "swap the request only if it actually is."
-    fail=1
-}
+# `retryCapture` existing at all is asserted by `need` above, which is where
+# that check moved when the other four blocks got the same guard. There is no
+# shared retry between the watchdog's stand-down and the owner coming back
+# without it, and both are "the microphone may be ours again".
 case "$retry" in
     *'guard !suspended'*) ;;
     *) echo "retryCapture() swaps the recognition request without checking that"

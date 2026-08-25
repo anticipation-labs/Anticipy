@@ -164,10 +164,20 @@ function glue(e,   out, i, n, c, inStr) {
   gsub(/[ \t+]/, "", out)
   return out
 }
+# THE FILE AND THE EXPRESSION TOGETHER, never the expression alone. A bare name
+# on the allowlist is a pass handed to every file at once, and `facts` is an
+# ordinary enough English word that five other bindings here already carry it:
+# the context facts in `sendContextFacts`, the supervised reader's list and the
+# interview workflow's dictionary in AnticipyApp.swift, and two more in
+# SupervisedReadView.swift. None of those is a String today, which is the only
+# reason none of them can be journalled — a type accident, standing in for a
+# rule. A reviewer added a method to AnticipyApp.swift whose body was `let facts
+# = words` and `ListenJournal.shared.record(.noted(facts))`, and this gate
+# exited 0. The pair is what was reasoned about, so the pair is what is written.
 function report(file, kind, expr,   g) {
   g = glue(expr)
   if (g == "") return
-  if (g ~ ENVIRON["SAFE_EXPRESSIONS"]) return
+  if ((file "#" g) ~ ENVIRON["SAFE_EXPRESSIONS"]) return
   print file "\t" kind "\t" expr
 }
 {
@@ -208,16 +218,16 @@ function report(file, kind, expr,   g) {
   }
 }
 AWK
-# `source.wireName` is the wire name of an event source — "voice", "photo" — and
-# is one of the two journal values that are neither a literal nor a count.
+# TWO PAIRS, and each one names the file it was reasoned about in.
 #
-# `facts` is the other: the session-facts sentence, held in a variable because
-# it is compared with the last one recorded before being written. Naming it here
-# would be a hole if it were taken on trust, so it is not — rule 3b below puts
-# every line that BUILDS it through the same interpolation allowlist as any
-# journal literal, which is the check it would have got had it been written out
-# at the call.
-rogue=$(printf '%s\n' "$calls" | SAFE_EXPRESSIONS='^(source\.wireName|facts)$' \
+# `AnticipyApp.swift#source.wireName` — the wire name of an event source,
+# "voice" or "photo", chosen from a fixed set on the device.
+#
+# `PhoneListener.swift#facts` — the session-facts sentence, held in a variable
+# because it is compared with the last one recorded before being written. That
+# one is a promise, not a fact, and rule 3b below is what pays for it.
+safe_values='/AnticipyApp\.swift#source\.wireName$|/Audio/PhoneListener\.swift#facts$'
+rogue=$(printf '%s\n' "$calls" | SAFE_EXPRESSIONS="$safe_values" \
     awk -f "$out/journalstrings.awk" | sort -u)
 if [ -n "$rogue" ]; then
     echo "A journal write hands over a value this gate has not been told is safe:"
@@ -225,12 +235,18 @@ if [ -n "$rogue" ]; then
     echo ""
     echo "What goes in the journal leaves the phone when the log is shared, and"
     echo "the diagnostics screen ships in RELEASE. Write a literal sentence with"
-    echo "a count or a status interpolated into it, or name the expression in"
-    echo "this file and say why it can never carry what the owner said."
+    echo "a count or a status interpolated into it, or name the FILE AND the"
+    echo "expression in this file and say why it can never carry what the owner"
+    echo "said. A name on its own is a pass for every file that has a variable"
+    echo "by that name, which is how \`facts\` in AnticipyApp.swift got one."
     exit 2
 fi
-# 3. AND EVERY INTERPOLATION INSIDE THOSE LITERALS.
-allowed='dropped|session\.category\.rawValue|session\.mode\.rawValue|Self\.postFailureShape\(error\)'
+# 3. AND EVERY INTERPOLATION INSIDE THOSE LITERALS. Paired with a file for the
+#    same reason rule 2 is: `dropped` is a bare name, and `TranscriptCursor`
+#    has a `dropped` of its own that counts WORDS cut from a transcript. This
+#    list may not hand that one a pass on the strength of an argument made
+#    about a buffer counter in another file.
+allowed='/Audio/PhoneListener\.swift#(dropped|session\.category\.rawValue|session\.mode\.rawValue)$|/AnticipyApp\.swift#Self\.postFailureShape\(error\)$'
 cat > "$out/interpolations.awk" <<'AWK'
 {
   tab = index($0, "\t")
@@ -252,7 +268,7 @@ AWK
 # Through ENVIRON rather than -v: awk expands escape sequences in a -v value,
 # so the backslashes this regex is made of never survive the assignment.
 rogue=$(printf '%s\n' "$calls" | awk -f "$out/interpolations.awk" | sort -u \
-    | ALLOWED="$allowed" awk -F'\t' 'BEGIN { ok = "^(" ENVIRON["ALLOWED"] ")$" } $2 !~ ok')
+    | ALLOWED="$allowed" awk -F'\t' '($1 "#" $2) !~ ENVIRON["ALLOWED"]')
 if [ -n "$rogue" ]; then
     echo "A journal write interpolates something this gate has not been told is safe:"
     printf '%s\n' "$rogue"
@@ -263,24 +279,152 @@ if [ -n "$rogue" ]; then
     echo "the owner said, it does not belong in the journal at all."
     exit 2
 fi
-# 3b. AND WHAT BUILDS THE ONE VALUE THAT IS A VARIABLE. `facts` is allowlisted
-#     by name above; here it has to earn it. Every line that assigns to it goes
-#     through the interpolation allowlist, so the sentence the dedupe compares
-#     can never say anything a journal literal could not have said directly.
-factsbuild=$(grep -nE 'facts (=|\+=)' "$listener" | grep -vE '^[0-9]+:[[:space:]]*//' \
-    | sed "s|^|$listener\t|")
-rogue=$(printf '%s\n' "$factsbuild" | awk -f "$out/interpolations.awk" | sort -u \
-    | ALLOWED="$allowed" awk -F'\t' 'BEGIN { ok = "^(" ENVIRON["ALLOWED"] ")$" } $2 !~ ok')
-if [ -n "$rogue" ]; then
-    echo "The session-facts sentence is built from something this gate has not"
-    echo "been told is safe:"
-    printf '%s\n' "$rogue"
-    echo ""
-    echo "It reaches the journal under the name \`facts\`, which the allowlist"
-    echo "above accepts on the strength of this check. A build line that splits"
-    echo "across a continuation this grep cannot see is the same hole."
-    exit 2
-fi
+# 3b. AND EVERY NAME ON EITHER LIST EARNS ITS PLACE, LINE BY LINE.
+#
+#     Two of the entries above are variables — `facts` and `dropped` — so the
+#     only thing standing between them and an exportable log is whatever gave
+#     them their value. THE VERSION OF THIS RULE THAT SHIPPED DID NOT CHECK
+#     THAT. It grepped one file for `facts (=|+=)` and ran the matches through
+#     the INTERPOLATION check alone. A reviewer walked past it twice and both
+#     leaks exited 0:
+#
+#       facts += self.partial          no `\(`, so the interpolation pass had
+#                                      nothing to look at, and `glue()` — the
+#                                      machinery invented at rule 2 for exactly
+#                                      a value carrying "no named danger and no
+#                                      interpolation at all" — was never run on
+#                                      a build line at all.
+#       facts.append(self.partial)     the grep did not even match it.
+#
+#     A third, `let facts = words` in any other file, was never this rule's to
+#     catch — the grep only ever opened PhoneListener.swift — and is closed by
+#     the (file, name) pairing at rule 2 instead. This rule is what makes the
+#     PhoneListener half of that pair mean anything:
+#
+#       - every non-comment line of that file naming the identifier must be a
+#         shape this scan can read — a value given to it, a plain read of it, or
+#         a journal write spending it. A method called ON it is none of those;
+#       - every value given to it goes through BOTH passes a journal literal
+#         gets, `journalstrings.awk` and `interpolations.awk`, by being handed
+#         to those exact two scripts. "Checked as if it had been written out at
+#         the call" is now a property of the code below, not a claim in a
+#         comment;
+#       - a value continued on the next line is READ TO ITS END and checked
+#         whole. `var facts = "…" ⏎ + self.partial` was the one hole the old
+#         rule's own comment admitted it had, and admitting it is not closing
+#         it. What still cannot be read to an end fails;
+#       - finding nothing fails. An exception whose subject has been renamed
+#         away is a check reporting on an empty search, and the twin of this
+#         file's churn leg — anchored on `configureAndStartEngine`, and proved
+#         by a reviewer to say nothing useful once that name moved.
+cat > "$out/namelines.awk" <<'AWK'
+function stripped(l,  t) { t = l; sub(/^[ \t]*/, "", t); return t }
+# The whole file first, because a value may be continued on the lines after the
+# one that starts it and a scan reading one line at a time cannot follow that.
+{ src[NR] = $0 }
+END {
+  name = ENVIRON["NAME"]
+  bare = "(^|[^A-Za-z0-9_.])" name "([^A-Za-z0-9_]|$)"
+  touch = "(^|[^A-Za-z0-9_.])" name "[ \t]*[.[]"
+  inout = "&" name "([^A-Za-z0-9_]|$)"
+  for (i = 1; i <= NR; i++) {
+    s = src[i]
+    if (stripped(s) ~ /^\/\//) continue
+    if (s !~ bare) continue
+    seen++
+    # A VALUE GIVEN TO IT, asked first so that a write and a journal call
+    # sharing one line cannot hide behind the call.
+    v = ""
+    if (match(s, "(^|[^A-Za-z0-9_.])" name "[ \t]*\\+?=")) {
+      v = substr(s, RSTART + RLENGTH)
+      if (substr(v, 1, 1) == "=") v = ""   # a comparison, not a write
+    }
+    if (v != "") {
+      assigns++
+      # Swift continues an expression on the next line when that line opens
+      # with an operator, so `+ self.partial` under a literal is part of this
+      # value and is read in here rather than left unexamined.
+      for (j = i + 1; j <= NR; j++) {
+        t = stripped(src[j])
+        if (t ~ /^\/\//) continue
+        if (t !~ /^[+.?:,)]/) break
+        v = v " " t
+      }
+      # `if <cond> { facts += "…" }` is how the low power clause is written, so
+      # the block's closing brace arrives with the value and is not part of it.
+      sub(/[ \t]*}[ \t]*$/, "", v)
+      sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
+      tmp = v; quotes = gsub(/"/, "", tmp)
+      if (v == "" || quotes % 2 == 1 || v ~ /[+(,][ \t]*$/)
+        print "BAD\t" FILENAME ":" i ": " s "\tthe value cannot be read to an end"
+      else
+        print "VALUE\t" v
+      continue
+    }
+    # SPENT ON THE JOURNAL. Rules 1-3 above read those calls in full, across
+    # the continuations this classification does not try to follow.
+    if (s ~ /ListenJournal\.shared\.record\(|\.noted\(|detail:/) { spent++; continue }
+    # READ AND NOTHING ELSE is all that is left. A method called on it or an
+    # inout pass is a write whose inside this scan cannot see.
+    if (s ~ touch || s ~ inout)
+      print "BAD\t" FILENAME ":" i ": " s "\tsomething is done to it that this scan cannot follow"
+  }
+  if (seen == 0) print "BAD\t" FILENAME "\tno line in this file names it at all"
+  else if (assigns == 0) print "BAD\t" FILENAME "\tnothing in this file gives it a value"
+  else if (spent == 0) print "BAD\t" FILENAME "\tit never reaches a journal write from here"
+}
+AWK
+# What may GIVE one of those names a value. A literal needs no entry — `glue()`
+# reduces it to nothing — so this list only ever holds the non-literal sources,
+# and it is short on purpose. `orphanDropped` is the audio thread's count of
+# buffers it could not hand to a request: an Int, incremented in the tap closure
+# and zeroed by the watchdog that drains it, and nothing else touches it.
+safe_builds='/Audio/PhoneListener\.swift#self\.orphanDropped$'
+earn_name() {
+    _file=$1; _name=$2
+    _lines=$(NAME="$_name" awk -f "$out/namelines.awk" "$_file")
+    _bad=$(printf '%s\n' "$_lines" \
+        | awk -F'\t' '$1 == "BAD" { print substr($0, index($0, "\t") + 1) }')
+    if [ -n "$_bad" ]; then
+        echo "\`$_name\` reaches the journal as a value, and this gate accepts it"
+        echo "only on the strength of what gives it that value. A line naming it"
+        echo "is not a shape this scan can read:"
+        printf '%s\n' "$_bad"
+        echo ""
+        echo "What the scan cannot read, it cannot call free of speech. Give the"
+        echo "value on one line, or write the sentence out at the journal call and"
+        echo "let the literal rules above judge it there."
+        exit 2
+    fi
+    _values=$(printf '%s\n' "$_lines" | awk -v f="$_file" -F'\t' \
+        '$1 == "VALUE" { print f "\t.noted(" substr($0, index($0, "\t") + 1) ")" }')
+    _rogue=$(printf '%s\n' "$_values" | SAFE_EXPRESSIONS="$safe_builds" \
+        awk -f "$out/journalstrings.awk" | sort -u)
+    if [ -n "$_rogue" ]; then
+        echo "\`$_name\` is given a value this gate has not been told is safe:"
+        printf '%s\n' "$_rogue"
+        echo ""
+        echo "It reaches the journal under that name, so this is the check the"
+        echo "value would have got had it been written out at the call site."
+        echo "\`facts += self.partial\` is what walks through when it is missing:"
+        echo "no named danger, no interpolation, the owner's own words in a log"
+        echo "the Settings screen will mail to anybody on one tap."
+        exit 2
+    fi
+    _rogue=$(printf '%s\n' "$_values" | awk -f "$out/interpolations.awk" | sort -u \
+        | ALLOWED="$allowed" awk -F'\t' '($1 "#" $2) !~ ENVIRON["ALLOWED"]')
+    if [ -n "$_rogue" ]; then
+        echo "\`$_name\` is given a value interpolating something this gate has not"
+        echo "been told is safe:"
+        printf '%s\n' "$_rogue"
+        echo ""
+        echo "The same rule as a journal literal, because that is what this value"
+        echo "becomes the moment it is recorded."
+        exit 2
+    fi
+}
+earn_name "$listener" facts
+earn_name "$listener" dropped
 echo "every journal write is a count, a status or an allowlisted system fact"
 
 # And the safe reduction must still be the thing standing between them.
@@ -309,8 +453,24 @@ fi
 # Bluetooth ending on speaker). Comparing against the last line recorded kills
 # the 210 repetitions and keeps every sentence that is new, so the rule below
 # now asks for the comparison rather than for the flag.
+#
+# ANCHORED ON A FUNCTION NAME, AND THEREFORE GUARDED AGAINST ITS RENAME. A
+# reviewer renamed `configureAndStartEngine` to `rebuildCaptureChain` and put
+# the pre-fix churn back — an unguarded `.noted(facts)` on every watchdog tick.
+# The awk range matched nothing, `pre` came back empty, and `set -e` killed this
+# script on the empty pipeline: exit 1, no output, the regression that evicts
+# the ring in 27 minutes reported as a shell accident. Emptiness is now the
+# finding it always was, with a sentence attached.
 pre=$(awk '/private func configureAndStartEngine/,/guard format.sampleRate/' "$listener" \
-    | grep -vE '^[[:space:]]*//')
+    | sed '/^[[:space:]]*\/\//d')
+if [ -z "$pre" ]; then
+    echo "This gate can no longer find configureAndStartEngine's opening lines."
+    echo "The rule below then reads an empty string, finds no journal write in it"
+    echo "and says so cheerfully. If the method was renamed, rename it here too;"
+    echo "the thing being protected is the 4s watchdog path that writes fifteen"
+    echo "identical lines a minute for the length of a phone call."
+    exit 2
+fi
 if printf '%s\n' "$pre" | grep -q 'ListenJournal.shared.record'; then
     guarded=$(printf '%s\n' "$pre" | grep -n '!= lastSessionFacts' | head -1 | cut -d: -f1)
     firstwrite=$(printf '%s\n' "$pre" | grep -n 'ListenJournal.shared.record' | head -1 | cut -d: -f1)
@@ -333,6 +493,13 @@ echo "the session facts are recorded when they change, not once per watchdog tic
 # by the watchdog from the main queue instead. Asserted on source shape,
 # the way run_flush_policy_tests.sh asserts its own.
 tap=$(awk '/installTap\(onBus: 0/,/^        }$/' "$listener")
+if [ -z "$tap" ]; then
+    echo "This gate can no longer find the audio tap closure."
+    echo "An empty block contains no ListenJournal call, so the rule below would"
+    echo "pass without reading anything — the audio thread free to park behind a"
+    echo "disk write again, vouched for by a green line of output."
+    exit 2
+fi
 if printf '%s' "$tap" | grep -q 'ListenJournal'; then
     echo "The audio tap closure now writes to the journal."
     echo "That closure runs on the audio thread and the journal touches a file."

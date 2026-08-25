@@ -68,19 +68,38 @@ grep -q 'ListenControlPolicy.capturing(' "$pl" || {
 #    and moving it to `capturing` would drop somebody who had just granted the
 #    microphone into the copy that asks them to grant it. Same words, different
 #    question, and a rule that cannot tell them apart would be a worse rule.
+#    AND THE MATCHED LINE ITSELF IS ONE OF THE LINES TESTED. It was not. This
+#    rule read the three lines ABOVE the indicator and never `$0`, so the whole
+#    condition written on one line with the dot slipped through untouched. A
+#    reviewer wrote
+#      `if session.listener.isListening || !handling.isEmpty { BreathingDot(size: 7) }`
+#    over ContentView's greeting dot: twelve checks passed, this scan said
+#    nothing, exit 0 — and the dot pulses directly above "Something else has the
+#    microphone right now." for the whole of every call, which is the exact site
+#    the commit message names. `idle_ungated` below already tested `$0`; the
+#    inconsistency between two sibling rules was one term wide.
 hits=$(awk '
     /^ *\/\// { next }
     /BreathingDot\(|WaveBars\(/ {
-        if (p1 ~ /listener\.isListening/ || p2 ~ /listener\.isListening/ || p3 ~ /listener\.isListening/)
+        found++
+        if ($0 ~ /listener\.isListening/ || p1 ~ /listener\.isListening/ || p2 ~ /listener\.isListening/ || p3 ~ /listener\.isListening/)
             printf "%s:%d:%s\n", FILENAME, NR, $0
     }
-    { p3 = p2; p2 = p1; p1 = $0 }' "$content" "$settings")
-if [ -n "$hits" ]; then
-    echo "A live-listening indicator is gated on \`isListening\`, which is true for"
-    echo "the whole of a phone call. Ask \`listener.capturing\`:"
-    echo "$hits"
-    fail=1
-fi
+    { p3 = p2; p2 = p1; p1 = $0 }
+    END { if (found == 0) print "NO INDICATOR FOUND" }' "$content" "$settings")
+case "$hits" in
+    "NO INDICATOR FOUND")
+        echo "This scan can no longer find a BreathingDot or WaveBars in the two"
+        echo "views it reads. It was about to pass by looking at nothing, which is"
+        echo "how a renamed anchor turns a rule into a green line of output."
+        echo "Rename the indicator here too."
+        fail=1 ;;
+    ?*)
+        echo "A live-listening indicator is gated on \`isListening\`, which is true for"
+        echo "the whole of a phone call. Ask \`listener.capturing\`:"
+        echo "$hits"
+        fail=1 ;;
+esac
 
 # 3. HER OWN VOICE. Two sentences claim, in the first person, that she is
 #    hearing you: the headline of the listening/privacy screen, and the idle
@@ -92,19 +111,29 @@ grep -q 'listener.capturing' "$sv" || {
     echo "while a call holds the input."
     fail=1
 }
+#    Anchored on the name `idleLine`, so its rename empties the scan: no use
+#    site, nothing to test, and a rule about a sentence nobody can find reads as
+#    a rule that passed. The count below is what makes that a failure instead.
 idle_ungated=$(awk '
     /^ *\/\// { next }
     /idleLine/ && !/private var idleLine/ {
+        found++
         if ($0 !~ /listener\.capturing/ && p1 !~ /listener\.capturing/ && p2 !~ /listener\.capturing/)
             print "ungated"
     }
-    { p2 = p1; p1 = $0 }' "$content")
-[ -z "$idle_ungated" ] || {
-    echo "The briefing's idle line is not gated on \`capturing\`. \"I've got the"
-    echo "watch\" over a microphone something else is holding is the claim the"
-    echo "sentence above it has just denied."
-    fail=1
-}
+    { p2 = p1; p1 = $0 }
+    END { if (found == 0) print "NO IDLE LINE FOUND" }' "$content")
+case "$idle_ungated" in
+    "NO IDLE LINE FOUND")
+        echo "This scan can no longer find anywhere that USES \`idleLine\`, so it was"
+        echo "about to report on an empty search. Point it at the new name."
+        fail=1 ;;
+    ?*)
+        echo "The briefing's idle line is not gated on \`capturing\`. \"I've got the"
+        echo "watch\" over a microphone something else is holding is the claim the"
+        echo "sentence above it has just denied."
+        fail=1 ;;
+esac
 
 [ "$fail" = "0" ] || exit 1
 

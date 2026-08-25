@@ -85,12 +85,23 @@ final class PhoneListener: NSObject, ObservableObject {
     ///
     /// `isListening` is the owner's standing wish and stays true for the whole
     /// of a phone call, so a screen that asks it gets "yes" while a call holds
-    /// the input. Four places asked it that way — both breathing dots, the
-    /// settings headline, the briefing's idle line — and all four spoke over a
-    /// microphone something else was holding. A fifth, the wave bars, wrote
-    /// `isListening && !suspended` by hand and was the only one right, which is
-    /// the whole argument for this being one name instead of an expression
+    /// the input. FIVE places asked it that way, not four. Four of them speak
+    /// about the microphone and were wrong — the listening control's own dot,
+    /// the home screen's greeting dot, the settings headline, the briefing's
+    /// idle line — and they ask this instead. The wave bars wrote
+    /// `isListening && !suspended` by hand and were the only site already
+    /// right, which is the whole argument for one name over an expression
     /// copied per view.
+    ///
+    /// THE FIFTH IS ONBOARDING'S "I'm listening. Thank you.", AND IT STAYS ON
+    /// `isListening`. It sits in the `isListening` arm of a three-way branch
+    /// about whether PERMISSION landed, so answering it with `capturing` would
+    /// drop somebody who had just granted the microphone into the copy that
+    /// asks them to grant it. The same words asking a different question.
+    /// `run_control_policy_tests.sh` scopes its scan to the two other view
+    /// files for that reason, and its comment there says so — this count is
+    /// written out because a closed count that is quietly open is how the
+    /// previous version of this note read.
     var capturing: Bool {
         ListenControlPolicy.capturing(isListening: isListening,
                                       suspended: suspended)
@@ -346,12 +357,21 @@ final class PhoneListener: NSObject, ObservableObject {
         // silence is right: `.sessionStarted` already says capture came back,
         // and repeating an unchanged fact adds nothing.
         //
-        // ON ONE LINE, and the low power clause on one more, because
-        // `run_journal_tests.sh` puts every line that builds this string
-        // through the same interpolation allowlist it puts journal literals
-        // through. `facts` is a name that gate has been told is safe; a
-        // continuation line it could not see is how that name would stop
-        // being safe.
+        // `facts` IS A NAME `run_journal_tests.sh` HAS BEEN TOLD IS SAFE, and
+        // it is told that about this FILE and this name together — never the
+        // bare word, which five other bindings in AnticipyApp.swift and
+        // SupervisedReadView.swift already carry. The gate then earns that
+        // exception rather than taking it: every line here that gives this
+        // variable a value goes through both checks a journal literal gets —
+        // the one reducing an expression to whatever survives outside its
+        // quotes, and the interpolation allowlist. `facts += self.partial`
+        // fails the first,
+        // `facts += " heard \(self.partial)"` fails the second, and
+        // `facts.append(...)` fails as a shape the scan cannot follow at all.
+        //
+        // The earlier version of this note claimed the interpolation check
+        // alone; a reviewer wrote the plain concatenation and it shipped green.
+        // Nothing below is trusted because it looks safe.
         var facts = "session category: \(session.category.rawValue) mode: \(session.mode.rawValue)"
         // Folded into the same sentence rather than journalled beside it: it is
         // a fact about the same session, and two strings would need two
