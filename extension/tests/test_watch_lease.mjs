@@ -10,7 +10,7 @@
 //
 // THE POINT OF THE EXEMPTION IS ITS EVIDENCE. `research_lane.pb.js` refuses
 // every browser claim on a read-only lane; `supervised_read` is allowed through
-// it. `side_trip.js:194-198` is the standing rule on what may authorise that:
+// it. `side_trip.js`'s consent block is the standing rule on what may authorise that:
 // NOT a flag, because a flag "is something another process set, and 'another
 // process decided I may read your inbox' is exactly the sentence this product
 // cannot afford to be true." So the checks below spend most of their weight on

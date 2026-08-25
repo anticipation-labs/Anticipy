@@ -189,6 +189,12 @@ export function tripRefusedReason(url, { authorized, purpose } = {}) {
 // WHO SAYS THE AGENT MAY OPEN SOMEBODY'S MAIL? Only that somebody, answering
 // this module's own question, read by a model that can see both halves.
 //
+// THIS IS ONE DOOR OF TWO. It guards the side trip's own new tab. The main
+// step loop can walk the WORKING tab into the same mailbox, and until
+// 2026-08-24 nothing stopped it; `private_places.js` is the other lock, built
+// to the same shape as this one and reusing this file's frame parser so there
+// is one copy of that pattern rather than two that can drift apart.
+//
 // `runSideTrip` takes `authorized` as a boolean and refuses without it, which
 // correctly leaves open the question of where the boolean comes from. It must
 // NOT come from a params flag: a flag is something another process set, and
@@ -240,7 +246,7 @@ const ASKED_AND_ANSWERED =
   /You stopped and asked:\s*"([\s\S]*?)"\.\s*They answered:\s*"([\s\S]*?)"/g;
 
 /**
- * The question we parked on and the words he replied, or null.
+ * The LAST question this job parked on and the words he replied, or null.
  *
  * THE LAST PAIR ONLY. A job can park more than once; if his most recent answer
  * was about which card to use, an inbox offer he agreed to three questions ago
@@ -248,17 +254,29 @@ const ASKED_AND_ANSWERED =
  * in time is how "he said yes once" becomes a standing permission nobody
  * granted.
  *
- * Returns null unless the question was OUR inbox offer, so a scope carrying
- * any other parked question never reaches the model at all.
+ * Exported because private_places.js needs exactly this and nothing else, and
+ * a second copy of the frame regex is the one duplication that must not exist:
+ * the brain could reword its frame and one of the two copies would silently
+ * stop recognising consent while the other kept granting it. One regex, in the
+ * module whose test pins it.
  */
-export function inboxOfferAnswered(scope) {
+export function lastAskedAndAnswered(scope) {
   const text = String(scope || "");
   if (!text.trim()) return null;
   const pairs = [...text.matchAll(ASKED_AND_ANSWERED)];
   if (!pairs.length) return null;
   const [, asked, answer] = pairs[pairs.length - 1];
-  if (!asked.includes(INBOX_OFFER_MARK)) return null;
   return { asked, answer };
+}
+
+/**
+ * The same pair, but only when the question was OUR inbox offer — so a scope
+ * carrying any other parked question never reaches the model at all.
+ */
+export function inboxOfferAnswered(scope) {
+  const pair = lastAskedAndAnswered(scope);
+  if (!pair || !pair.asked.includes(INBOX_OFFER_MARK)) return null;
+  return pair;
 }
 
 /**

@@ -397,7 +397,7 @@ function fakeDeps({
 {
   // THE LEASE IS RE-READ, NOT CACHED. It is checked before the first action
   // and again before every one after it — the same shape as `stoppedNow()`
-  // before an irreversible action in `agent_loop.js:5211`.
+  // before an irreversible action in `agent_loop.js` (`stoppedNow()`).
   const { deps, log } = fakeDeps({
     moves: [{ action: "scroll", say: "Reading on." }, { action: "done" }],
   });
@@ -407,7 +407,7 @@ function fakeDeps({
 }
 {
   // NO LEASE READER AT ALL is a refusal, not an assumption. This is the
-  // `side_trip.js:189-198` rule: authorisation may not come from a flag, and
+  // `side_trip.js` consent-block rule: authorisation may not come from a flag, and
   // the absence of proof is not proof.
   const { deps, log } = fakeDeps({});
   delete deps.leaseUntil;

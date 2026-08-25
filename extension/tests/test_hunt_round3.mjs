@@ -48,7 +48,7 @@ const selectBlock = src.slice(
 assert.ok(selectBlock.length > 500, "the select action block was found");
 assert.ok(/unquotedCode\(\s*\n?\s*decision\.option/.test(selectBlock),
   "the one-time-code guard must cover the select path too");
-assert.ok(/isAuthored\(decision\.option, goal, scope\)/.test(selectBlock),
+assert.ok(/await composedByTheAgent\(decision\.option,/.test(selectBlock),
   "composed text written through select must still be shown to the owner");
 assert.ok(/fieldRejects\(tab\.id, decision\.index\)/.test(selectBlock),
   "the field's own constraint validation must run on the select path");
@@ -165,16 +165,37 @@ const pickerState = { overlay: true, elements: [
 ].join("\n") };
 const cancelAndRebook =
   `Cancel the ${cancelled.month} ${cancelled.number} booking and book tomorrow instead`;
-assert.equal(unapprovedCalendarClick({ action: "click", index: 5 }, pickerState, cancelAndRebook),
-  "", "tomorrow's cell is approved by the owner's own relative wording");
-assert.match(unapprovedCalendarClick({ action: "click", index: 7 }, pickerState, cancelAndRebook),
-  new RegExp(`${unrelated.month} ${unrelated.number}`),
+// AUDIT #69, fixed 2026-08-24. The finding this scenario was written for is
+// now the whole guard: the day is resolved structurally, and WHICH day he
+// asked for is read by a model — because "tomorrow" was the only relative
+// wording the old arithmetic could reach, and "the Tuesday after next" or "a
+// week on Friday" blocked the cell he meant while leaving the cancelled date
+// clickable. Here the model plays the part it plays live.
+const meantTomorrow = async ({ named }) =>
+  (named === `${soon.month} ${soon.number}` ? "YES" : "NO");
+assert.equal((await unapprovedCalendarClick({ action: "click", index: 5 }, pickerState,
+  cancelAndRebook, meantTomorrow)).blocked, false,
+  "tomorrow's cell is approved by the owner's own relative wording");
+assert.equal((await unapprovedCalendarClick({ action: "click", index: 7 }, pickerState,
+  cancelAndRebook, meantTomorrow)).reason.includes(`${unrelated.month} ${unrelated.number}`), true,
   "a date the task never names is still refused");
-// The whole point of the finding: before the fix the ONLY approved cell here
-// was the booking being cancelled, so the guard steered the run into
-// rebooking exactly the date the owner was getting rid of.
-assert.equal(unapprovedCalendarClick({ action: "click", index: 6 }, pickerState, cancelAndRebook),
-  "", "the explicitly named date stays clickable — it has to be, to cancel it");
+// The whole point of the original finding: before it, the ONLY approved cell
+// here was the booking being cancelled, so the guard steered the run into
+// rebooking exactly the date the owner was getting rid of. That is fixed by
+// tomorrow's cell being reachable, NOT by making the cancelled one
+// unreachable — cancelling an appointment means opening its own day in the
+// picker, and this guard cannot see which step of the errand a click belongs
+// to. So both days the errand refers to stay clickable and the day it never
+// mentions does not.
+const bothDaysNamed = async ({ named }) =>
+  ([`${soon.month} ${soon.number}`, `${cancelled.month} ${cancelled.number}`]
+    .includes(named) ? "YES" : "NO");
+assert.equal((await unapprovedCalendarClick({ action: "click", index: 6 },
+  pickerState, cancelAndRebook, bothDaysNamed)).blocked, false,
+  "the explicitly named date stays clickable — it has to be, to cancel it");
+assert.equal((await unapprovedCalendarClick({ action: "click", index: 7 },
+  pickerState, cancelAndRebook, bothDaysNamed)).blocked, true,
+  "and the day the errand never mentions is still refused");
 assert.equal(calendarCellDate(2, 30), "", "February 30 is not a date");
 assert.match(calendarCellDate(new Date().getMonth() + 1, 15), /^\d{4}-\d{2}-15$/,
   "a real cell resolves to a concrete dated day");
@@ -255,20 +276,32 @@ console.log("PASS 12: a re-map cannot silently re-point a submit at another elem
 // --- 13. rearranged words can invert the owner's meaning -----------------
 // "Tell the clinic I will NOT attend at 3pm, ask to move it to Friday" ->
 // "Hi, I will attend at 3pm on Friday and look forward to it" — every token
-// is the owner's, the overlap sails past 0.6, and the message went out in
-// their name saying the opposite.
+// is the owner's, and until 2026-08-24 a 0.6 overlap ratio waved it through
+// and the message went out in their name saying the opposite.
+//
+// AUDIT #66: the ratio also waved through inversions that KEEP the negation
+// ("Friday morning but not Thursday afternoon" -> "Thursday afternoon but not
+// Friday morning"), which the negation escape hatch could never catch, because
+// nothing was missing — the meaning had simply been swapped. That is what a
+// sentence MEANS, so a model reads it. test_authored_draft.mjs owns the
+// boundary; these pin that the inversion no longer walks past on its own.
 const inverted = "Hi, I will attend at 3pm on Friday and I look forward to it";
-assert.ok(isAuthored(inverted,
-  "Tell the clinic I will not attend at 3pm, ask to move it to Friday", ""),
+const SAYS = (v) => ({ judge: async () => v });
+assert.ok(await isAuthored(inverted,
+  "Tell the clinic I will not attend at 3pm, ask to move it to Friday", "", SAYS("COMPOSED")),
   "a dropped negation is composition, whatever the token overlap says");
-assert.ok(!isAuthored("I will not attend at 3pm and would like to move it to Friday",
+assert.ok(await isAuthored(
+  "Hi, I can do Thursday afternoon but not Friday morning, thanks.", "send a message",
+  "Tell the clinic I can do Friday morning but not Thursday afternoon.", SAYS("COMPOSED")),
+  "an inversion that KEEPS the negation is composition too — the escape hatch missed these");
+assert.ok(await isAuthored(inverted,
   "Tell the clinic I will not attend at 3pm, ask to move it to Friday", ""),
-  "keeping the negation keeps it the owner's own words");
-assert.ok(!isAuthored(
+  "and with no model to read it, it is shown rather than sent");
+assert.ok(!(await isAuthored(
   "noise cancelling headphones under 400 dollars for travel and commuting on long flights",
   "Research the best noise cancelling headphones under 400 dollars for travel and "
-  + "commuting on long flights", ""),
-  "and a goal with no negation in it is untouched by this");
+  + "commuting on long flights", "", SAYS("COMPOSED"))),
+  "his own words, verbatim, are carried and never reach the model");
 console.log("PASS 13: an inverted message is shown before it goes out");
 
 // --- 14. the end-of-run sweep closed the owner's own tabs ----------------

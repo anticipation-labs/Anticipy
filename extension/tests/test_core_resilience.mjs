@@ -225,20 +225,24 @@ const state = {
     "[10] <button> Next month @(30,10)",
   ].join("\n"),
 };
+// AUDIT #69, fixed 2026-08-24: the day is resolved from our own page map and
+// the clock (structural), and WHICH day he asked for is read by a model. The
+// old arithmetic could not reach "the Tuesday after next" and blocked the cell
+// he meant. test_calendar_date.mjs owns that boundary; what is pinned here is
+// that the structural half still finds the cell and that non-date controls are
+// left alone.
 const authority = "Depart September 17, 2026 and return September 21, 2026.";
-assert.match(unapprovedCalendarClick({ action: "click", index: 8 }, state, authority), /August 17/);
-assert.equal(unapprovedCalendarClick({ action: "click", index: 9 }, state, authority), "");
-assert.equal(unapprovedCalendarClick({ action: "click", index: 10 }, state, authority), "");
-const rangeState = {
-  overlay: true,
-  elements: [
-    "[30] <button> Thursday, October 29 [calendar=October 29] @(10,10)",
-    "[31] <button> Tuesday, November 3 [calendar=November 3] @(20,10)",
-  ].join("\n"),
-};
-const rangeAuthority = "Events between August 20 and October 31, 2026.";
-assert.equal(unapprovedCalendarClick({ action: "click", index: 30 }, rangeState, rangeAuthority), "");
-assert.match(unapprovedCalendarClick({ action: "click", index: 31 }, rangeState, rangeAuthority), /November 3/);
+const onlySept17 = async ({ named }) => (named === "September 17" ? "YES" : "NO");
+assert.match((await unapprovedCalendarClick({ action: "click", index: 8 }, state, authority, onlySept17)).reason,
+  /August 17/);
+assert.equal((await unapprovedCalendarClick({ action: "click", index: 9 }, state, authority, onlySept17)).blocked, false);
+assert.equal((await unapprovedCalendarClick({ action: "click", index: 10 }, state, authority, onlySept17)).blocked, false,
+  "a month-navigation control carries no date and is never judged");
+// FAIL CLOSED, WITHOUT DELETING THE CELL. A guard that cannot tell one day
+// from another must not remove them one at a time.
+const cannotTell = await unapprovedCalendarClick({ action: "click", index: 9 }, state, authority);
+assert.equal(cannotTell.blocked, true, "no model, no click");
+assert.equal(cannotTell.undecidable, true, "and the caller is told not to delete the cell");
 console.log("PASS 4: picker clicks cannot silently change an explicit date");
 
 const here = dirname(fileURLToPath(import.meta.url));

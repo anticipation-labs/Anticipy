@@ -940,7 +940,7 @@ async function claimSupervisedRead(ownerRef, agentId) {
 }
 
 // What a supervised read is allowed to do with Chrome. Deliberately a NARROWER
-// set than `sideTripDeps` (`agent_loop.js:3531`), which may click one link: a
+// set than `sideTripDeps` (in `agent_loop.js`), which may click one link: a
 // read may not click at all, so no clicking dep is passed and none exists.
 function supervisedReadDeps(job, { apiKey, model, ownerRef, agentId }) {
   // Pages settle before they are read. Same constant idea as the side trip's
@@ -988,7 +988,8 @@ function supervisedReadDeps(job, { apiKey, model, ownerRef, agentId }) {
     closeTab: async (tabId) => { try { await chrome.tabs.remove(tabId); } catch (_) { /* gone */ } },
     // RE-READ FROM THE ROW, EVERY TIME. Not cached, not passed in as a param:
     // cached supervision is not supervision, and a params flag would mean
-    // "another process decided I may read your inbox" (`side_trip.js:189-198`).
+    // "another process decided I may read your inbox" (`side_trip.js`, "WHO SAYS
+    // THE AGENT MAY OPEN SOMEBODY'S MAIL").
     // A row that has been deleted throws, and the module reads a throw as
     // "nobody is watching" — fail closed.
     leaseUntil: async () => (await fetchJob(job.id)).watching_until,

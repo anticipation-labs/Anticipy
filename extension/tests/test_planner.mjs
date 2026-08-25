@@ -27,7 +27,7 @@ globalThis.chrome = globalThis.chrome || {
   runtime: {}, debugger: {}, tabGroups: {}, notifications: {}, alarms: {},
 };
 
-const { planRun, planBlock, pageFingerprint, isAuthored, AUTHORED_WORDS } = await import(join(ext, "agent_loop.js"));
+const { planRun, planBlock, pageFingerprint, isAuthored } = await import(join(ext, "agent_loop.js"));
 
 let pass = 0, fail = 0;
 const realFetch = globalThis.fetch;
@@ -166,38 +166,59 @@ check(submitBlock > 0 && loopSrc.indexOf("delete actionCounts[sig]", submitBlock
 // She composed a whole email and pressed Send under his name. Told as a RULE
 // in the agent prompt this changed nothing — measured, 3 of 3 still clicked
 // Send. So it is a stop, and these pin where the line sits.
+//
+// AUDIT #66, fixed 2026-08-24. This stop used to be a 12-word floor and a 0.6
+// novelty ratio. Owner: "Tell the clinic I can do Friday morning but not
+// Thursday afternoon." Composed: "Hi, I can do Thursday afternoon but not
+// Friday morning, thanks." Every token is his, the overlap is ~1.0, the
+// negation IS kept — so the ratio said "not composition", no draft was shown,
+// and the swapped appointment went out in his name. Five everyday sentences
+// did this on the shipped function. test_authored_draft.mjs owns that boundary
+// in full; what is pinned here is the contract the loop stands on.
 const EMAIL = "Hi Priya, just wanted to follow up on the invoice. Could you let me know the status when you get a chance? Thanks, Omar";
-check(isAuthored(EMAIL, "Email Priya about the invoice", ""),
+const COMPOSED = async () => "COMPOSED";
+check(await isAuthored(EMAIL, "Email Priya about the invoice", "", { judge: COMPOSED }),
       "a composed message body is HERS and must be shown");
-check(!isAuthored("Omar Ebrahim", "Book dinner for two at Cactus Club tomorrow at 7 PM", ""),
-      "his own name typed into a form is not composition");
-check(!isAuthored("7:00 PM", "Book dinner for two at 7pm", ""), "a time is not composition");
-check(!isAuthored("omarkebrahim@gmail.com", "Email omarkebrahim@gmail.com the invoice", ""),
-      "an address he gave is not composition");
-check(!isAuthored("noise cancelling headphones under 400 dollars",
-                  "Research noise cancelling headphones under 400 dollars", ""),
-      "a search built from his own goal is not composition");
+check(await isAuthored(EMAIL, "Email Priya about the invoice", ""),
+      "...and with no model to read it, it is still shown rather than sent");
+check(!(await isAuthored("Omar Ebrahim", "Book dinner for two at Cactus Club tomorrow at 7 PM",
+                         "", { profile: { first_name: "Omar Ebrahim" }, judge: COMPOSED })),
+      "his own name, verbatim from his profile, never reaches a model at all");
+check(!(await isAuthored("noise cancelling headphones under 400 dollars",
+                         "Research noise cancelling headphones under 400 dollars", "",
+                         { judge: COMPOSED })),
+      "a search built from his own goal is carried, whatever a model would say");
+check(!(await isAuthored("omarkebrahim@gmail.com", "Email omarkebrahim@gmail.com the invoice",
+                         "", { judge: COMPOSED })),
+      "an address he gave is carried, verbatim");
 // LONG but still his: caught by mutation testing. Every other "not
 // composition" case here is short, so making isAuthored return true for
 // anything long left the suite green while breaking the actual distinction.
-check(!isAuthored(
+check(!(await isAuthored(
         "noise cancelling headphones under 400 dollars for travel and commuting on long flights",
         "Research the best noise cancelling headphones under 400 dollars for travel and "
-        + "commuting on long flights", ""),
-      "a LONG value made of his own words is still not composition");
-check(!isAuthored("book a table for two", "book a table for two at seven", ""),
-      "anything short is never composition");
-check(isAuthored("Dear Sir or Madam, I am writing to enquire about the availability of your "
+        + "commuting on long flights", "", { judge: COMPOSED })),
+      "a LONG value made of his own words, verbatim, is still not composition");
+// SHORT IS NO LONGER A FREE PASS. "Cancel my 3pm" is four words and is a
+// message; the 12-word floor waved every one of those straight through.
+check(await isAuthored("Please cancel it, thanks", "cancel my appointment", "",
+                       { judge: COMPOSED }),
+      "a SHORT sentence the agent wrote is composition — the word floor is gone");
+check(await isAuthored("Dear Sir or Madam, I am writing to enquire about the availability of your "
                  + "premises for a private event later this month, and would welcome a call.",
-                 "ask about venue hire", ""),
-      "long prose she invented is composition even when the goal is short");
-check(AUTHORED_WORDS >= 10, "the threshold sits past anything he could have dictated as a field");
+                 "ask about venue hire", "", { judge: COMPOSED }),
+      "prose she invented is composition");
+// FAIL CLOSED. Not being able to decide shows him the draft.
+check(await isAuthored("Hi, I can do Thursday afternoon but not Friday morning, thanks.",
+                       "send a message",
+                       "Tell the clinic I can do Friday morning but not Thursday afternoon."),
+      "with no model to read it, the inversion is shown rather than sent");
 
 const loop2 = readFileSync(join(ext, "agent_loop.js"), "utf8");
-check(/if \(!draftShown && isAuthored\(decision\.text, goal, scope\)\)/.test(loop2),
+check(/if \(!draftShown && await composedByTheAgent\(decision\.text,/.test(loop2),
       "the stop is wired into the type path");
 check(/draftShown = true;/.test(loop2), "and it only ever fires once per run");
-const stopIdx = loop2.indexOf("if (!draftShown && isAuthored");
+const stopIdx = loop2.indexOf("if (!draftShown && await composedByTheAgent(decision.text,");
 const enterIdx = loop2.indexOf("await pressEnter(tab.id);", stopIdx);
 check(stopIdx > 0 && enterIdx > stopIdx, "it stops BEFORE the keystroke that commits");
 
