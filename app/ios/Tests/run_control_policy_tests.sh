@@ -68,38 +68,46 @@ grep -q 'ListenControlPolicy.capturing(' "$pl" || {
 #    and moving it to `capturing` would drop somebody who had just granted the
 #    microphone into the copy that asks them to grant it. Same words, different
 #    question, and a rule that cannot tell them apart would be a worse rule.
-#    AND THE MATCHED LINE ITSELF IS ONE OF THE LINES TESTED. It was not. This
-#    rule read the three lines ABOVE the indicator and never `$0`, so the whole
-#    condition written on one line with the dot slipped through untouched. A
-#    reviewer wrote
-#      `if session.listener.isListening || !handling.isEmpty { BreathingDot(size: 7) }`
-#    over ContentView's greeting dot: twelve checks passed, this scan said
-#    nothing, exit 0 — and the dot pulses directly above "Something else has the
-#    microphone right now." for the whole of every call, which is the exact site
-#    the commit message names. `idle_ungated` below already tested `$0`; the
-#    inconsistency between two sibling rules was one term wide.
+#    AND EMPTINESS IS ASKED PER FILE, NOT ACROSS THE PAIR. `found` was one
+#    counter for both files and `END` fires once for the two of them, so an
+#    anchor lost in ContentView was invisible for as long as SettingsView still
+#    had one — and SettingsView has a `WaveBars()` of its own that has nothing
+#    to do with the greeting dot. A reviewer renamed ContentView's indicators to
+#    `PulseDot`/`PulseBars` and put the pre-fix regression back on the greeting
+#    dot: `if session.listener.isListening || !handling.isEmpty`, exit 0, "all 12
+#    checks passed", ContentView unread from end to end. That is the eleventh
+#    fail-open rule found in this repo, and it was inside a rule written to close
+#    fail-open rules. The file list comes off ARGV so adding a third file cannot
+#    quietly opt it out, and the three-line window is cleared at each file
+#    boundary rather than carrying the previous file's tail across it.
 hits=$(awk '
+    FNR == 1 { p1 = ""; p2 = ""; p3 = "" }
     /^ *\/\// { next }
     /BreathingDot\(|WaveBars\(/ {
-        found++
+        found[FILENAME] = 1
         if ($0 ~ /listener\.isListening/ || p1 ~ /listener\.isListening/ || p2 ~ /listener\.isListening/ || p3 ~ /listener\.isListening/)
-            printf "%s:%d:%s\n", FILENAME, NR, $0
+            printf "UNGATED\t%s:%d:%s\n", FILENAME, NR, $0
     }
     { p3 = p2; p2 = p1; p1 = $0 }
-    END { if (found == 0) print "NO INDICATOR FOUND" }' "$content" "$settings")
-case "$hits" in
-    "NO INDICATOR FOUND")
-        echo "This scan can no longer find a BreathingDot or WaveBars in the two"
-        echo "views it reads. It was about to pass by looking at nothing, which is"
-        echo "how a renamed anchor turns a rule into a green line of output."
-        echo "Rename the indicator here too."
-        fail=1 ;;
-    ?*)
-        echo "A live-listening indicator is gated on \`isListening\`, which is true for"
-        echo "the whole of a phone call. Ask \`listener.capturing\`:"
-        echo "$hits"
-        fail=1 ;;
-esac
+    END { for (i = 1; i < ARGC; i++) if (!(ARGV[i] in found)) printf "EMPTY\t%s\n", ARGV[i] }
+    ' "$content" "$settings")
+empty=$(printf '%s\n' "$hits" | awk -F'\t' '$1 == "EMPTY" { print $2 }')
+ungated=$(printf '%s\n' "$hits" | awk -F'\t' '$1 == "UNGATED" { print $2 }')
+if [ -n "$empty" ]; then
+    echo "This scan can no longer find a BreathingDot or WaveBars in:"
+    printf '%s\n' "$empty"
+    echo "It was about to pass over that file by looking at nothing, which is how"
+    echo "a renamed anchor turns a rule into a green line of output. The other"
+    echo "file having one of its own is not an answer: they are different dots."
+    echo "Rename the indicator here too."
+    fail=1
+fi
+if [ -n "$ungated" ]; then
+    echo "A live-listening indicator is gated on \`isListening\`, which is true for"
+    echo "the whole of a phone call. Ask \`listener.capturing\`:"
+    printf '%s\n' "$ungated"
+    fail=1
+fi
 
 # 3. HER OWN VOICE. Two sentences claim, in the first person, that she is
 #    hearing you: the headline of the listening/privacy screen, and the idle
@@ -114,15 +122,19 @@ grep -q 'listener.capturing' "$sv" || {
 #    Anchored on the name `idleLine`, so its rename empties the scan: no use
 #    site, nothing to test, and a rule about a sentence nobody can find reads as
 #    a rule that passed. The count below is what makes that a failure instead.
+#    Counted PER FILE, off ARGV, for the reason its sibling above is: one file
+#    makes global and per-file the same answer today, and the moment a second
+#    one is added they stop being the same and nobody re-reads the END block.
 idle_ungated=$(awk '
+    FNR == 1 { p1 = ""; p2 = "" }
     /^ *\/\// { next }
     /idleLine/ && !/private var idleLine/ {
-        found++
+        found[FILENAME] = 1
         if ($0 !~ /listener\.capturing/ && p1 !~ /listener\.capturing/ && p2 !~ /listener\.capturing/)
             print "ungated"
     }
     { p2 = p1; p1 = $0 }
-    END { if (found == 0) print "NO IDLE LINE FOUND" }' "$content")
+    END { for (i = 1; i < ARGC; i++) if (!(ARGV[i] in found)) print "NO IDLE LINE FOUND" }' "$content")
 case "$idle_ungated" in
     "NO IDLE LINE FOUND")
         echo "This scan can no longer find anywhere that USES \`idleLine\`, so it was"

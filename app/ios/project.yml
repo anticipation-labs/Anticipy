@@ -153,7 +153,17 @@ settings:
     # the phone already held and never passed on, and the three word-similarity
     # thresholds that decided whether the owner's words reached the system at
     # all (law1-audit #54) are gone with it.
-    CURRENT_PROJECT_VERSION: "78"
+    #
+    # 79: the session-facts line stops being a mutable String. It was
+    # `var facts = "…"` with a `+=` under it inside an 1,100-line file, and the
+    # only thing between it and an exportable log was a text scan reading every
+    # line that gave it a value. A reviewer wrote two working leaks past that
+    # scan — `self.facts += self.partial`, which the scan could not see through
+    # the `self.`, and `(facts, lastSessionFacts) = (self.partial, "")`, a shape
+    # it did not recognise and therefore read as harmless. It is a
+    # `ListenSessionFacts` now: no `+=`, no `.append`, no tuple assignment that
+    # compiles at all, and one construction the gate reads argument by argument.
+    CURRENT_PROJECT_VERSION: "79"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

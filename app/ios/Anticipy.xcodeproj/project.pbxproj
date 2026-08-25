@@ -15,6 +15,7 @@
 		18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0AB97746861DA294983C3B /* AnticipyBackend.swift */; };
 		1C9C98C649D0B723997B9A85 /* TranscriptFlushPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */; };
 		400041E5EB5F764473B76A1E /* ContextAskSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D918825F71DB13464C228B73 /* ContextAskSheet.swift */; };
+		434BC104FF3BF99836CFD0FF /* ListenSessionFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E42FAE41F167B3CDF925213 /* ListenSessionFacts.swift */; };
 		4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00793646933CBDFE4070BF5 /* PendantManager.swift */; };
 		4C31B09D72A9D889801DACB7 /* ListenWatchdogPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A992D0567130EEE3198554 /* ListenWatchdogPolicy.swift */; };
 		4F03FCC48BC0DC5F44A9B300 /* OpusFrameAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E2EB04173AB9206E285D54 /* OpusFrameAssembler.swift */; };
@@ -75,6 +76,7 @@
 		3BC4BDEF755D6F5BC4138F18 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		46B2C841F09576CCA3A85B50 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4E42FAE41F167B3CDF925213 /* ListenSessionFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenSessionFacts.swift; sourceTree = "<group>"; };
 		4F02D4F43DF4322168E31300 /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
 		4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassControls.swift; sourceTree = "<group>"; };
 		57259004332BAAB061719DF1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -194,6 +196,7 @@
 				57AEC26D9D9B455416E10BED /* ListenControlPolicy.swift */,
 				A66BCAC2FE553220A46D105D /* ListenJournal.swift */,
 				DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */,
+				4E42FAE41F167B3CDF925213 /* ListenSessionFacts.swift */,
 				1AEAC7CF712A4733733AB7C1 /* ListenTally.swift */,
 				B7A992D0567130EEE3198554 /* ListenWatchdogPolicy.swift */,
 				2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */,
@@ -337,6 +340,7 @@
 				ED4C192DBA74F48570C51171 /* ListenControlPolicy.swift in Sources */,
 				0A4F7E4B9727318D39265E30 /* ListenJournal.swift in Sources */,
 				859C9A2572940C9366F344A8 /* ListenResumePolicy.swift in Sources */,
+				434BC104FF3BF99836CFD0FF /* ListenSessionFacts.swift in Sources */,
 				F575AF0873EA378927B6B04B /* ListenTally.swift in Sources */,
 				4C31B09D72A9D889801DACB7 /* ListenWatchdogPolicy.swift in Sources */,
 				68D70E24AEE5564D0E6516E3 /* ListeningDiagnosticsView.swift in Sources */,
@@ -416,7 +420,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 78;
+				CURRENT_PROJECT_VERSION = 79;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -495,7 +499,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 78;
+				CURRENT_PROJECT_VERSION = 79;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

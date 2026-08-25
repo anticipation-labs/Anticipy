@@ -66,11 +66,23 @@ grep -v '^ *//' "$f" > "$code"
 # guard that has nothing to do with it. Reindent the closing brace and the range
 # runs on to the next line of the same shape — the next member declaration if
 # there is one, the end of the file if there is not. Both are reported.
+#
+# WHAT COUNTS AS THE NEXT MEMBER was `^    (private )?(func |var |let |@Published )`
+# and therefore missed most of them: `fileprivate`, `internal`, `public`, `open`,
+# `final`, `static`, `override`, `class func`, `init`, `subscript`, any other
+# attribute, and every member written at an indent other than four. Each of those
+# was a declaration an over-wide range could run straight through — the exact
+# defect OVERRAN was added to catch, with the keyword changed. The stop is now
+# the SHAPE of a declaration at an indent no deeper than the one the block opened
+# at, so a sibling member stops the range whatever it is spelled and however far
+# in it is written.
 block() {
     awk -v start="$1" -v end="$2" '
-        $0 ~ start { inb = 1; opened = NR }
+        function indentOf(l,   m) { m = l; sub(/[^ \t].*$/, "", m); return length(m) }
+        $0 ~ start { inb = 1; opened = NR; openIndent = indentOf($0) }
         inb { buf = buf $0 "\n" }
-        inb && NR > opened && $0 ~ /^    (private )?(func |var |let |@Published )/ {
+        inb && NR > opened && indentOf($0) <= openIndent && \
+            $0 ~ /^[ \t]*(@[A-Za-z]+([ \t]*\([^)]*\))?[ \t]+)*((private|fileprivate|internal|public|open|final|static|class|override|lazy|weak|unowned|nonisolated|mutating|nonmutating|convenience|required|dynamic|indirect)[ \t]+)*(func|var|let|init|subscript|deinit|struct|enum|extension)([ \t({<:?]|$)/ {
             print "OVERRAN"; exit
         }
         inb && $0 == end { printf "%s", buf; closed = 1; exit }

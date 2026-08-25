@@ -171,11 +171,15 @@ final class PhoneListener: NSObject, ObservableObject {
     private let orphanLock = NSLock()
     private var acceptingAudio = false
 
-    /// The last session-facts sentence actually recorded, so the same one is
-    /// not written again. Cleared by `stop()`: a new session is a new thing to
+    /// The last session facts actually recorded, so the same ones are not
+    /// written again. Cleared by `stop()`: a new session is a new thing to
     /// describe, and the churn this guards against is per-watchdog-tick, not
     /// per-session.
-    private var lastSessionFacts = ""
+    ///
+    /// The VALUE, not the sentence it renders as — comparing two
+    /// `ListenSessionFacts` is the compiler's job, and holding a String here
+    /// would put a second mutable transcript-shaped variable back in this file.
+    private var lastSessionFacts: ListenSessionFacts?
 
     /// The last battery reading actually recorded, so the same one is not
     /// written again. The thing that reads the battery is the 4-second
@@ -396,31 +400,35 @@ final class PhoneListener: NSObject, ObservableObject {
         // silence is right: `.sessionStarted` already says capture came back,
         // and repeating an unchanged fact adds nothing.
         //
-        // `facts` IS A NAME `run_journal_tests.sh` HAS BEEN TOLD IS SAFE, and
-        // it is told that about this FILE and this name together — never the
-        // bare word, which five other bindings in AnticipyApp.swift and
-        // SupervisedReadView.swift already carry. The gate then earns that
-        // exception rather than taking it: every line here that gives this
-        // variable a value goes through both checks a journal literal gets —
-        // the one reducing an expression to whatever survives outside its
-        // quotes, and the interpolation allowlist. `facts += self.partial`
-        // fails the first,
-        // `facts += " heard \(self.partial)"` fails the second, and
-        // `facts.append(...)` fails as a shape the scan cannot follow at all.
+        // A VALUE, NOT A SENTENCE BUILT UP IN A LOCAL. This used to be
+        // `var facts = "…"` with a `+=` under it, and the entire privacy claim
+        // rested on `run_journal_tests.sh` reading every line that gave that
+        // local a value. A reviewer wrote two working leaks past that reading:
+        // `self.facts += self.partial` (the scan could not see a write through
+        // `self.`) and `(facts, lastSessionFacts) = (self.partial, "")` (a shape
+        // it did not recognise, and therefore read as a harmless mention). Both
+        // are scan failures now, and neither COMPILES any more:
+        // `ListenSessionFacts` is not a String, so there is no `+=`, no
+        // `.append` and no tuple assignment that can put a transcript into it.
         //
-        // The earlier version of this note claimed the interpolation check
-        // alone; a reviewer wrote the plain concatenation and it shipped green.
-        // Nothing below is trusted because it looks safe.
-        var facts = "session category: \(session.category.rawValue) mode: \(session.mode.rawValue)"
-        // Folded into the same sentence rather than journalled beside it: it is
-        // a fact about the same session, and two strings would need two
-        // change-detectors to say one thing. Low power changes what iOS will
-        // let a background app do, and a day that died on a throttled phone
-        // otherwise looks like a bug.
-        if ProcessInfo.processInfo.isLowPowerModeEnabled { facts += " · low power mode on" }
+        // Low power is folded into the same VALUE rather than journalled beside
+        // it: it is a fact about the same session, and two records would need
+        // two change-detectors to say one thing.
+        //
+        // `facts.sentence` IS AN EXPRESSION `run_journal_tests.sh` HAS BEEN TOLD
+        // IS SAFE, about this FILE and this expression together — never a bare
+        // word, which five other bindings in AnticipyApp.swift and
+        // SupervisedReadView.swift already carry. The gate earns that exception
+        // rather than taking it, in two places: the construction below is read
+        // whole and its argument list must match the allowlist character for
+        // character, and `ListenSessionFacts.sentence`'s body goes through the
+        // same two passes a journal literal gets.
+        let facts = ListenSessionFacts(category: session.category.rawValue,
+                                       mode: session.mode.rawValue,
+                                       lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled)
         if facts != lastSessionFacts {
             lastSessionFacts = facts
-            ListenJournal.shared.record(.noted(facts))
+            ListenJournal.shared.record(.noted(facts.sentence))
         }
 
         let input = engine.inputNode
@@ -1121,7 +1129,7 @@ final class PhoneListener: NSObject, ObservableObject {
         // expired it: not a termination, the expiration handler ends it, but
         // background time charged to an app with nothing left to do.
         suspended = false
-        lastSessionFacts = ""
+        lastSessionFacts = nil
         lastBatteryReading = nil
         watchdog?.invalidate()
         watchdog = nil
