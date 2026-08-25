@@ -1483,8 +1483,31 @@ def leg_7_receipt_is_what_is_shown(root: str = ROOT) -> str:
 # LEG 8 — THE DONE-TEXT CAN CARRY THE PHOTO IT PROMISES
 #
 # WIRE IT ALL's verify loop is act -> evidence -> done-text WITH PHOTO. There
-# is no photo. `VoiceArm.text` posts From, To and Body; `MediaUrl` appears
-# nowhere in any .py, .js or .swift in this repository.
+# is no photo. `VoiceArm.text` posts From, To and Body, and no send path in
+# the product can carry media.
+#
+# Say that precisely, because the loose version of it was WRONG by 2026-08-25
+# and an audit caught it: "MediaUrl appears nowhere in any .py, .js or .swift"
+# is false — the string is in five files across two languages. Every one of
+# them is a test fixture or a comment (tests/test_evidence_host.py,
+# tests/test_stranger_gate.py, backend/pb_hooks/evidence.pb.js), and none is a
+# send path, so the LEG was right the whole time and only this sentence was
+# not. A gate whose prose is refutable teaches the next reader that its
+# verdicts are too, which is expensive in a repo where the gates are the only
+# thing anyone is told to believe.
+#
+# KNOWN SHORTCUT IN THIS LEG, not yet closed (found 2026-08-25 while specifying
+# docs/superpowers/specs/2026-08-25-mouth-photo-receipt.md): this leg reads
+# `brain/voice_arm.py:text`, but production does not reach that function
+# directly. brain/worker.py:3238 always constructs a `Conversation`, so the
+# live path is worker -> notify_owner (anticipy_core.py:2862) -> reach_out ->
+# say -> TwilioTransport.send -> voice.text. The direct voice.text call at
+# anticipy_core.py:2873 is a fallback the worker never takes. So widening
+# `text()` alone turns this leg GREEN while the shipped path still sends no
+# photo — a leg that cannot fail, in new clothes, which is this repo's most
+# repeated failure. The leg must read the whole chain, and a LIVE leg must
+# read `num_media` off Twilio's own message records, which a mock cannot
+# fabricate.
 #
 # The anchor here is not a name this gate invented: MediaUrl is Twilio's own
 # parameter, and it is the only way an image reaches a phone over the channel
@@ -1589,8 +1612,12 @@ def leg_8_done_text_can_carry_the_photo(root: str = ROOT) -> str:
             "the outgoing text has no way to carry a picture. "
             f"{VOICE_ARM}'s text() posts From, To and Body and nothing else, "
             "and `MediaUrl` — Twilio's own parameter, the only way an image "
-            "reaches a phone on this channel — appears in no .py, .js or "
-            ".swift in the repository.\n"
+            "reaches a phone on this channel — is in no send path in the "
+            "product. (It IS in five files: test fixtures and comments in "
+            "tests/test_evidence_host.py, tests/test_stranger_gate.py and "
+            "backend/pb_hooks/evidence.pb.js. This leg reads the POST payload "
+            "out of the syntax tree, so a comment cannot retire it — one once "
+            "did.)\n"
             "        WIRE IT ALL step 1 describes the loop as act -> evidence "
             "-> done-text WITH PHOTO. Two of those three exist: the browser "
             "captures evidence and workflow_guard.pb.js refuses `done` without "
