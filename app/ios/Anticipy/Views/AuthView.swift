@@ -140,12 +140,27 @@ struct AuthView: View {
                 field("Email", text: $email, focus: .email, kind: .email)
                 field("Password", text: $password, focus: .password, kind: .newPassword)
                 field("Your number", text: $phone, focus: .phone, kind: .phone)
+                    // THE COUNTRY IS IN THE FIELD, NOT IN THE APP'S HEAD.
+                    // `e164` no longer guesses a country from a bare ten
+                    // digits, because guessing wrote a US number onto a
+                    // London stranger's account. So the field arrives with
+                    // this phone's own dialling code already in it — visible,
+                    // and one tap to change if iOS's region is not where they
+                    // live. Empty-check first: nothing here overwrites a
+                    // number the keyboard's own autofill put in.
+                    .task { if phone.isEmpty { phone = DiallingCode.forThisPhone() } }
                 // Two small rewards before commitment instead of one silent
                 // refusal: the rules turn champagne, with a tick in the hand,
                 // the moment each is satisfied.
                 ruleLine("A real email", satisfied: email.contains("@"))
                 ruleLine("Eight characters or more", satisfied: password.count >= 8)
-                ruleLine("A number I can text", satisfied: Self.looksReachable(phone))
+                // Says "country code and all" whether or not it is satisfied.
+                // The rule used to read "A number I can text", which is the
+                // one thing a refused number still looks like: ten digits of
+                // a real London number sit there failing a rule they appear
+                // to pass, with the reason nowhere on screen.
+                ruleLine("A number I can text, country code and all",
+                         satisfied: reachable)
                 Text("Your number is how I reach you when something needs your word, and how you get back in if you forget your password.")
                     .font(.system(size: 15))
                     .lineSpacing(2)
@@ -302,6 +317,21 @@ struct AuthView: View {
         return !digits.allSatisfy { $0 == digits.first }   // 0000000000
     }
 
+    /// THE ONE PREDICATE THE RULE LINE AND THE BUTTON BOTH READ.
+    ///
+    /// They were the same thing only for as long as `e164` accepted whatever
+    /// `looksReachable` accepted. It no longer does — a bare ten-digit number
+    /// with no country code is refused now instead of being quietly moved to
+    /// the United States — so a rule line reading `looksReachable` alone would
+    /// tick champagne, with the tick in the hand, over a number the Start
+    /// button will not accept and nothing on screen would say why. And a Start
+    /// button reading `looksReachable` alone would create the account with NO
+    /// number on it: `signUp` passes `e164(phone)` straight through, and nil
+    /// there is an account that can never be texted, made silently, at the door.
+    private var reachable: Bool {
+        Self.looksReachable(phone) && session.e164(phone) != nil
+    }
+
     private var canGo: Bool {
         switch mode {
         // A NUMBER IS NOT OPTIONAL, BECAUSE IT IS THE ONLY WAY OUT.
@@ -316,8 +346,7 @@ struct AuthView: View {
         // The copy under this field already promises "your number is how I
         // reach you when something needs your word". This makes that true.
         case .signUp:
-            return email.contains("@") && password.count >= 8
-                && Self.looksReachable(phone)
+            return email.contains("@") && password.count >= 8 && reachable
         case .signIn: return email.contains("@") && !password.isEmpty
         case .forgot: return email.contains("@")
         case .code:   return resetCode.count >= 4 && password.count >= 8

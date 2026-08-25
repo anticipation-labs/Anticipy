@@ -601,7 +601,16 @@ struct OnboardingView: View {
                         .animation(Theme.spring, value: session.e164(phone) != nil)
                 )
                 // Already told us at the door? Confirm, don't re-interrogate.
-                .task { if phone.isEmpty { phone = session.ownerPhone } }
+                // Otherwise start from this phone's own dialling code, so the
+                // country is in front of the person rather than assumed behind
+                // them — `e164` refuses to guess one now, and a blank field
+                // plus a refusal is a dead end wearing a different hat.
+                .task {
+                    if phone.isEmpty {
+                        phone = session.ownerPhone.isEmpty
+                            ? DiallingCode.forThisPhone() : session.ownerPhone
+                    }
+                }
                 .onChange(of: phone) { _ in
                     phoneSaved = false
                     phoneSaveFailed = false
@@ -617,7 +626,7 @@ struct OnboardingView: View {
                     .transition(.scale.combined(with: .opacity))
                     .onAppear { Haptics.tap() }
             } else if !phone.isEmpty {
-                Text("That doesn't look like a full number yet.")
+                Text("That doesn't look like a full number yet — country code and all.")
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.muted)
             }
