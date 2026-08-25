@@ -5367,9 +5367,19 @@ export async function runAgentGoal(goal, opts) {
           await recordCleanRun(shape, goal, runTrace);
           // MILESTONE: the page as it stood when the claim was BELIEVED —
           // after verifyDone re-read it, not when the model announced it.
-          await captureMilestone("verified-done", tab.id, state.url);
+          // A FLOOR, NOT A FALLBACK. Take the frame THIS exit captured, never
+          // whatever `milestoneShot` happens to be holding: it is a running
+          // "newest successful capture", so a verified-done that comes back
+          // blank used to ship the earlier before-commit frame — a photograph
+          // of the UNSUBMITTED FORM — as the proof a booking completed, while
+          // the mark beside it honestly read `shot:verified-done(none)`.
+          // Receipt truthful, picture lying, owner's text saying "Table
+          // booked". Brief moment 31 is "Done without proof doesn't exist";
+          // a proof of the WRONG MOMENT is worse than none, because none is
+          // visible and this is not. No frame here means no photo.
+          const doneShot = await captureMilestone("verified-done", tab.id, state.url);
           return { status: "done", result: claimedResult, tabId: tab.id,
-            evidenceShot: milestoneShot,
+            evidenceShot: doneShot,
             receipt: { verified: true,
               evidence: [...(verdict.evidence || []), ...milestoneMarks] } };
         }
@@ -5723,9 +5733,12 @@ export async function runAgentGoal(goal, opts) {
                 // The SECOND done exit. Both get the milestone, for the same
                 // reason recordCleanRun is a function rather than two copies:
                 // a second exit is where the one that was updated is not.
-                await captureMilestone("verified-done", tab.id, state.url);
+                // Same floor as the first exit. This is the one a REPEAT run
+                // reaches, which makes it the more likely to inherit a stale
+                // frame, not the less.
+                const doneShot = await captureMilestone("verified-done", tab.id, state.url);
                 return { status: "done", result: lastDoneClaim, tabId: tab.id,
-                  evidenceShot: milestoneShot,
+                  evidenceShot: doneShot,
                   receipt: { verified: true,
                     evidence: [...(verdict.evidence || []), ...milestoneMarks] } };
               }

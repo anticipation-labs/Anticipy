@@ -19,6 +19,7 @@
 //      in a text column forever.
 //
 // Run: node extension/tests/test_evidence_capture.mjs
+import { readFile } from "node:fs/promises";
 import { installChrome } from "./chrome_mock.mjs";
 
 const harness = installChrome();
@@ -259,6 +260,38 @@ function scripted(actions) {
   // The receipt is what gets JSON.stringify'd into a PocketBase text column.
   check("no image bytes ride the receipt into the job row",
     !JSON.stringify(out.receipt).includes("data:image"));
+}
+
+// --- THE SUBSTITUTION: a done exit must ship the frame IT took
+//
+// `milestoneShot` is a running "newest successful capture". Both done exits
+// called `captureMilestone(...)`, IGNORED what it returned, and read that
+// running variable instead. So a verified-done capture that came back blank
+// shipped the earlier before-commit frame — a photograph of the UNSUBMITTED
+// FORM — as the proof a booking completed, while the mark beside it honestly
+// read `shot:verified-done(none)`. Receipt truthful, picture lying, and the
+// owner's text saying "Table booked".
+//
+// Brief moment 31 is "Done without proof doesn't exist". A proof of the WRONG
+// MOMENT is worse than none, because none is visible and this is not.
+//
+// WHY THIS IS A SOURCE CHECK AND NOT A DRIVEN RUN, said plainly rather than
+// dressed up: reproducing it needs a run where before-commit succeeds AND
+// verified-done fails, and `captureMilestone("before-commit", ...)` does not
+// fire in any scenario this harness can build — every driven attempt produced
+// exactly one milestone (`verified-done`), so no stale frame ever existed and
+// the assertions passed with the bug still in. That version of this test could
+// not fail, which is the defect it exists to prevent, so it was thrown away
+// rather than shipped green. This check CAN fail: put `milestoneShot` back at
+// either exit and it goes red immediately.
+{
+  const src = await readFile(new URL("../agent_loop.js", import.meta.url), "utf8");
+  const doneExits = [...src.matchAll(/evidenceShot:\s*(\w+)/g)].map((m) => m[1]);
+  check("every done exit ships a frame from its OWN capture, not a running one",
+    doneExits.length >= 2 && doneExits.every((v) => v !== "milestoneShot"));
+  check("...and each one actually binds the return of its captureMilestone call",
+    /const doneShot = await captureMilestone\("verified-done"/.test(src)
+    && (src.match(/const doneShot = await captureMilestone/g) || []).length >= 2);
 }
 
 // --- the camera comes back blank: a hidden tab that will not render
