@@ -154,8 +154,19 @@ process.stdout.write(JSON.stringify({ outcome, status, body, threw, queried }));
 
 # --------------------------------------------------------------- plan builders
 
-def act(act_type="local_draft", reach="local_store", executor="anticipy_store"):
-    return ActDeclaration(act_type=act_type, reach=reach, executor=executor)
+# `None` is a MEANINGFUL value for `target` — an act that never said what it
+# will address — so the helper cannot use it to mean "give me the usual one".
+_KEEP = object()
+
+
+def target_ref(provenance=Provenance.MINTED_BY_US.value, ref="draft_id"):
+    return UndoInput(name="draft_id", provenance=provenance, ref=ref)
+
+
+def act(act_type="local_draft", reach="local_store", executor="anticipy_store",
+        target=_KEEP):
+    return ActDeclaration(act_type=act_type, reach=reach, executor=executor,
+                          target=target_ref() if target is _KEEP else target)
 
 
 def undo_plan(*, act_type="local_draft", inputs=None, held=None, steps=None):
@@ -365,11 +376,13 @@ def test_the_guard_does_not_read_field_names_in_either_direction():
         held={"owner_supplied": {}})))
     refused(flattering, Refusal.UNRESOLVED_REFERENCE)
 
-    alarming = drive(shelf2_plan(undo=undo_plan(
-        inputs=(UndoInput(name="{{confirmation_number}}",
-                          provenance="minted_by_us",
-                          ref="{{confirmation_number}}"),),
-        held={"minted_by_us": {"{{confirmation_number}}": DRAFT_ID}})))
+    alarming = drive(shelf2_plan(
+        act=act(target=target_ref(ref="{{confirmation_number}}")),
+        undo=undo_plan(
+            inputs=(UndoInput(name="{{confirmation_number}}",
+                              provenance="minted_by_us",
+                              ref="{{confirmation_number}}"),),
+            held={"minted_by_us": {"{{confirmation_number}}": DRAFT_ID}})))
     assert alarming["outcome"] == "next", (
         "a reference the guard already holds was refused because of what it "
         f"is called: {alarming}")
@@ -668,6 +681,7 @@ def test_an_approval_with_neither_words_nor_a_gesture_is_still_refused():
     (lambda g: dict(g, scope_digest="something-else"), "bound to another scope"),
     (lambda g: dict(g, plan_id="wf-9999"), "bound to another plan"),
     (lambda g: dict(g, actor=""), "unauthenticated"),
+    (lambda g: dict(g, actor="somebody-else"), "made by somebody else"),
     (lambda g: dict(g, kind="shrug"), "an unrecognised kind"),
     (lambda g: "a string", "not an object"),
 ])
@@ -728,3 +742,455 @@ def test_the_provenance_vocabulary_agrees_across_the_two_layers():
     for tag in PROVENANCE_TAGS:
         assert f'"{tag}"' in js, f"{tag} is a provenance Python knows and the " \
                                  "database does not"
+
+
+# ============================================================================
+# REPAIR ROUND, 2026-08-25.  An adversarial pass refused this work, and every
+# finding below is a case of ONE class:
+#
+#     A CHECK KEYED ON ONE TRANSITION IS NOT A CHECK ON THE OTHER PATHS THE
+#     SAME ROW CAN TAKE, AND THE CALLER PICKS THE PATH.
+#
+# Every leg in this file was keyed on `nextStatus === "queued"`.  A POST has
+# no `old`, so the transition table at the top of the hook is never consulted
+# — and `backend/pb_migrations/1700000001_jobs.js` sets `createRule: ""`, so
+# any caller can POST.  A row CREATED already in `running` was therefore asked
+# for no undo plan, no announcement, no admitted act type, and — for ordinary
+# consequential work — no approval at all.  The layer whose own first line
+# calls it the final authority did not run.
+#
+# The repair is not "also check running".  It is that a create has its own
+# entry table (a new row has exactly two legal starting statuses, and every
+# later status must be reached by a PATCH the table does police), and that the
+# legs which read only THIS row's stored plan re-run wherever the work is
+# live.  The legs that read OTHER rows deliberately do not: re-running a
+# cross-row leg mid-flight turns another row's progress into a 409 on this
+# one, and a 409 blocks even the write that would park or fail it.
+# ============================================================================
+
+def create(plan, *, status="running", state="running", headers=None,
+           embedded_patch=None, lineage=()):
+    """POST the row into existence already in `status`.
+
+    The request Python would never make and the database never refused.
+    """
+    embedded = plan.as_dict()
+    if embedded_patch:
+        embedded = embedded_patch(embedded)
+    embedded = dict(embedded, state=state)
+    row = dict(plan.job_fields())
+    row.update({
+        "goal": plan.goal, "owner_ref": plan.owner_ref,
+        "status": status, "workflow_state": state,
+        "reconciliation": "", "effect_uncertain": False, "claimed_by": "",
+        "approval": (json.dumps(embedded["approval"])
+                     if embedded.get("approval") else ""),
+        "receipt": (json.dumps(embedded["receipt"])
+                    if embedded.get("receipt") else ""),
+    })
+    if status == "running":
+        # The running leg wants an actor and an unexpired lease, so the
+        # bypass has to carry one; that is the only thing it has to carry.
+        embedded["lease"] = {"token": "lease-1", "actor_id": "agent-7",
+                             "acquired_at": NOW.isoformat(),
+                             "expires_at": "2099-01-01T00:00:00+00:00",
+                             "attempt": 1}
+        row.update({"lease_token": "lease-1", "claimed_by": "agent-7",
+                    "lease_until": "2099-01-01T00:00:00+00:00"})
+    row["params"] = json.dumps({"_workflow": embedded})
+    scenario = {
+        "path": "/api/collections/jobs/records",
+        "method": "POST", "body": row, "old": None,
+        "lineage": list(lineage), "lineageThrows": False,
+        "lineageNonsense": False, "headers": headers or {},
+    }
+    proc = subprocess.run(
+        ["node", "-e", HARNESS, "--", json.dumps(scenario), str(HOOKS)],
+        capture_output=True, text=True, timeout=60)
+    if proc.returncode != 0:
+        raise AssertionError(f"harness failed: {proc.stderr[-3000:]}")
+    out = json.loads(proc.stdout)
+    assert out["threw"] is None, out["threw"]
+    return out
+
+
+def test_an_unadmitted_shelf2_act_cannot_be_created_already_running():
+    """THE FINDING, reproduced exactly.  `gmail_draft` reaching into `world`
+    through `browser_agent`, with no undo plan and no announcement obligation
+    — the row every leg above exists to refuse — was ACCEPTED, because it
+    never asked to be queued."""
+    p = shelf2_plan(act=act(act_type="gmail_draft", reach="world",
+                            executor="browser_agent"),
+                    undo=None, announce=None)
+    out = create(p)
+    assert out["outcome"] == "json", (
+        "an unadmitted, undo-less, unannounced Shelf 2 act was created "
+        f"already running and the guard asked it for nothing: {out}")
+
+
+@pytest.mark.parametrize("status,state", [
+    ("running", "running"),
+    ("needs_user", "needs_user"),
+    ("done", "succeeded"),
+    ("failed", "failed"),
+    ("cancelled", "cancelled"),
+])
+def test_no_status_past_the_two_entry_points_can_be_created(status, state):
+    """The CLASS, not the instance.  Patching `running` alone leaves the same
+    door open for every other status, and for every leg anyone keys on a
+    transition later.  A new row starts where Python can start it and nowhere
+    else — `LEGACY_STATUS` maps every state `new_plan` can produce onto
+    exactly `awaiting_confirm` and `queued`.
+
+    The CAUSE is asserted, not merely a refusal: `done` was already refused
+    for having no receipt, and a test that accepts any 409 would have passed
+    on the day the hole was open."""
+    out = create(shelf2_plan(), status=status, state=state)
+    assert out["outcome"] == "json", (
+        f"a job was created directly in {status}: {out}")
+    assert detail(out) == f"work cannot be created in {status}", (
+        f"{status} was refused, but not for being an illegal entry point: "
+        f"{detail(out)!r}")
+
+
+def test_the_two_legal_entry_points_still_work():
+    """The protection this must not spend.  Creating work is how work starts."""
+    out = create(shelf2_plan(), status="queued", state="queued")
+    assert out["outcome"] == "next", out
+    parked = shelf2_plan(undo=None)
+    out = create(parked, status="awaiting_confirm", state="awaiting_approval")
+    assert out["outcome"] == "next", out
+
+
+def test_a_shelf2_act_created_queued_still_faces_every_leg():
+    """The entry table is a floor, not a replacement: the one status a create
+    may enter that can act is `queued`, and it goes through the same legs a
+    PATCH does."""
+    out = create(shelf2_plan(undo=None), status="queued", state="queued")
+    refused(out, Refusal.NO_UNDO_PLAN)
+
+
+def test_work_created_outside_running_may_not_carry_a_lease():
+    """Same class, one field over: 'non-running work may not retain an
+    execution lease' was keyed on the OLD row being running, so a create
+    skipped it and a queued row could be born holding execution authority."""
+    p = shelf2_plan()
+    embedded = dict(p.as_dict(), state="queued")
+    embedded["lease"] = {"token": "lease-1", "actor_id": "agent-7",
+                         "acquired_at": NOW.isoformat(),
+                         "expires_at": "2099-01-01T00:00:00+00:00",
+                         "attempt": 1}
+    row = dict(p.job_fields())
+    row.update({
+        "goal": p.goal, "owner_ref": p.owner_ref, "status": "queued",
+        "workflow_state": "queued", "reconciliation": "",
+        "effect_uncertain": False, "claimed_by": "agent-7",
+        "approval": "", "receipt": "", "lease_token": "lease-1",
+        "lease_until": "2099-01-01T00:00:00+00:00",
+        "params": json.dumps({"_workflow": embedded}),
+    })
+    scenario = {
+        "path": "/api/collections/jobs/records", "method": "POST",
+        "body": row, "old": None, "lineage": [], "lineageThrows": False,
+        "lineageNonsense": False, "headers": {},
+    }
+    proc = subprocess.run(
+        ["node", "-e", HARNESS, "--", json.dumps(scenario), str(HOOKS)],
+        capture_output=True, text=True, timeout=60)
+    out = json.loads(proc.stdout)
+    assert out["threw"] is None, out["threw"]
+    assert out["outcome"] == "json", (
+        f"a queued row was created already holding an execution lease: {out}")
+    assert detail(out) == "non-running work may not retain an execution lease", out
+
+
+# ------------------------------- the legs that read this row re-run when live
+
+def patch_running(plan, *, embedded_patch=None, headers=None, bump=0,
+                  lineage=()):
+    """PATCH a job that is already RUNNING, holding its real lease.
+
+    This is the path the executor takes, and it is the path no leg in this
+    file was ever driven down.
+    """
+    from brain.workflow import claim
+    running = claim(plan, expected_version=plan.version, actor_id="agent-7",
+                    lease_seconds=10 ** 9, now=NOW)
+    before = row_for(running)
+    before["claimed_by"] = running.lease.actor_id
+    row = row_for(running, embedded_patch=embedded_patch)
+    row["claimed_by"] = running.lease.actor_id
+    if bump:
+        embedded = json.loads(row["params"])["_workflow"]
+        embedded["version"] = int(embedded["version"]) + bump
+        row["params"] = json.dumps({"_workflow": embedded})
+        row["workflow_version"] = int(row["workflow_version"]) + bump
+    body = {k: v for k, v in row.items() if k != "id"}
+    hdrs = {"X-Anticipy-Lease": running.lease.token}
+    hdrs.update(headers or {})
+    scenario = {
+        "path": f"/api/collections/jobs/records/{JOB_ID}",
+        "method": "PATCH", "body": body, "old": before,
+        "lineage": list(lineage), "lineageThrows": False,
+        "lineageNonsense": False, "headers": hdrs,
+    }
+    proc = subprocess.run(
+        ["node", "-e", HARNESS, "--", json.dumps(scenario), str(HOOKS)],
+        capture_output=True, text=True, timeout=60)
+    if proc.returncode != 0:
+        raise AssertionError(f"harness failed: {proc.stderr[-3000:]}")
+    out = json.loads(proc.stdout)
+    assert out["threw"] is None, out["threw"]
+    return out
+
+
+def rewritten_undo(w):
+    """The undo the executor would rather have: same shape, its own values."""
+    return dict(w, undo=dict(
+        w["undo"],
+        steps=["do nothing at all"],
+        held={"minted_by_us": {"draft_id": "an-id-we-never-minted"}}))
+
+
+def test_a_running_shelf2_job_that_changes_nothing_is_still_allowed():
+    """The protection this must not spend: an executor has to be able to
+    heartbeat and finish."""
+    out = patch_running(shelf2_plan())
+    assert out["outcome"] == "next", out
+
+
+def test_an_executor_cannot_rewrite_the_undo_plan_after_admission():
+    """§7.2.1: 'An executor that could mint its own undo could mint its own
+    anything.'  The refusal that says so enumerates ROW COLUMNS — goal, scope,
+    effect, version, approval — and the undo plan is not a row column.  It
+    lives in `params._workflow`, which the same executor's lease lets it
+    write."""
+    out = patch_running(shelf2_plan(), embedded_patch=rewritten_undo,
+                        headers={"X-Anticipy-Agent-ID": "agent-7"})
+    assert out["outcome"] == "json", (
+        "the executor rewrote the undo plan of the act it was running: "
+        f"{out}")
+    assert detail(out) == "an executor cannot rewrite or approve its plan", out
+
+
+@pytest.mark.parametrize("patch,label", [
+    (rewritten_undo, "the undo plan"),
+    (lambda w: dict(w, act=dict(w["act"], reach="world")), "the declared reach"),
+    (lambda w: dict(w, announce=dict(w["announce"], owner_ref="somebody-else")),
+     "the announcement obligation"),
+    (lambda w: dict(w, lineage_seq=99), "its position in the lineage"),
+], ids=["undo", "reach", "announce", "lineage_seq"])
+def test_the_shelf2_block_cannot_be_changed_without_a_new_version(patch, label):
+    """The whole block, not the one field the finding named.  `goal`, `scope`
+    and `effect` already had this rule — 'changing a plan requires a new
+    workflow version' — and the four fields the middle shelf actually rests on
+    were outside it because they are not columns."""
+    out = patch_running(shelf2_plan(), embedded_patch=patch)
+    assert out["outcome"] == "json", f"{label} was changed in place: {out}"
+    assert detail(out) == "changing a plan requires a new workflow version", out
+
+
+def test_a_shelf2_leg_runs_again_where_the_act_actually_happens():
+    """And with an honest new version, the legs run again.  Every check in
+    `shelf2Refusal` reads only this row's own stored plan, so re-running it at
+    `running` costs one parse and closes the class the create bypass belongs
+    to."""
+    out = patch_running(shelf2_plan(), bump=1,
+                        embedded_patch=lambda w: dict(w, undo=None))
+    refused(out, Refusal.NO_UNDO_PLAN)
+
+
+# ------------------------------------------- §5.2's floor is not a graveyard
+
+def test_a_refused_act_still_runs_once_he_actually_taps():
+    """§5.2: 'the work goes to Shelf 3 and waits for a tap.'  That is the
+    reason refusing is described as cheap.
+
+    tests/test_shelf2_admissible.py:524 asserts this exact path — and stops at
+    the Python layer.  Past it, `_shelf2_lane` changes only `state`, so the
+    row still says `reversible_local`, and this file's legs ran on every
+    queued transition carrying that consequence with no exemption for an
+    approval.  The tap landed on a 409 he could never see, and the work was
+    not demoted; it was destroyed."""
+    parked = shelf2_plan(undo=None)
+    assert parked.state.value == "awaiting_approval", parked.reason
+    tapped = approve(parked, expected_version=parked.version,
+                     owner_words="yeah, draft it anyway", now=NOW)
+    out = drive(tapped)
+    assert out["outcome"] == "next", (
+        "he tapped and the database refused the work anyway; Shelf 3 is "
+        f"where refused work goes to WAIT, not to die: {out}")
+
+
+def test_the_stand_down_needs_an_approval_bound_to_this_exact_version():
+    """The floor is not spent by it.  A stale approval is not an approval, so
+    the Shelf 2 legs still have to be earned — and the refusal names the
+    Shelf 2 cause, not the approval one, because that is what was actually
+    wrong with the row."""
+    parked = shelf2_plan(undo=None)
+    tapped = approve(parked, expected_version=parked.version,
+                     owner_words="yeah, draft it anyway", now=NOW)
+    out = drive(tapped, embedded_patch=lambda w: dict(
+        w, approval=dict(w["approval"], plan_version=99)))
+    refused(out, Refusal.NO_UNDO_PLAN)
+
+
+def test_an_unapproved_refused_act_is_still_refused():
+    """The original polarity, restated after the widening: no tap, no lane."""
+    refused(drive(shelf2_plan(undo=None)), Refusal.NO_UNDO_PLAN)
+
+
+# ------------------------------------------- §7.4 needs an ORDER, not a number
+
+def test_an_act_cannot_be_admitted_at_a_position_another_act_already_holds():
+    """§7.4 orders by `lineage_seq`, and nothing allocated one.  Two acts at
+    the same position make `a.at > seq` false for BOTH, so the law written to
+    stop undo(A)/undo(B) composing wrongly is simply not consulted."""
+    out = drive(shelf2_plan(plan_id="wf-0002", lineage_seq=1),
+                lineage=[lineage_act(1, "done")])
+    refused(out, Refusal.UNORDERED_LINEAGE)
+
+
+def test_an_act_cannot_be_admitted_behind_an_act_that_is_already_there():
+    """Monotonicity, for the same reason: a new act that claims an EARLIER
+    position than one already in the lineage is asserting a history that did
+    not happen."""
+    out = drive(shelf2_plan(plan_id="wf-0003", lineage_seq=1),
+                lineage=[lineage_act(2, "done")])
+    refused(out, Refusal.UNORDERED_LINEAGE)
+
+
+def test_an_act_after_everything_in_its_lineage_is_admitted():
+    out = drive(shelf2_plan(plan_id="wf-0003", lineage_seq=3),
+                lineage=[lineage_act(1, "done"), lineage_act(2, "done")])
+    assert out["outcome"] == "next", out
+
+
+def test_a_row_re_entering_the_lane_does_not_collide_with_itself():
+    """Recovery re-queues the same row.  It must not read as a second act
+    standing at its own position."""
+    out = drive(shelf2_plan(plan_id="wf-0001", lineage_seq=1),
+                lineage=[lineage_act(1, "running", plan_id="wf-0001")])
+    assert out["outcome"] == "next", out
+
+
+def test_an_undo_cannot_be_ordered_against_a_lineage_that_has_no_order():
+    """And the backstop for rows minted before the rule: two `done` acts both
+    sitting at seq 1, and the compensating plan for the first was ADMITTED
+    while the second — which ran after it, against the same draft — was
+    invisible to the ordering."""
+    out = drive(compensating(act_seq=1),
+                lineage=[lineage_act(1, "done", plan_id="wf-0001"),
+                         lineage_act(1, "done", plan_id="wf-0002")])
+    refused(out, Refusal.UNORDERED_LINEAGE)
+
+
+# ------------------------- correspondence, not presence: the act's own target
+
+def test_the_guard_refuses_an_undo_that_addresses_another_id():
+    """The same finding as the Python layer, at the layer that decides.  The
+    undo is provenance-clean, resolves, and satisfies `binds` — and the value
+    it resolves to is not the draft this act will make."""
+    out = drive(shelf2_plan(
+        act=act(target=target_ref(ref="draft_id")),
+        undo=undo_plan(
+            inputs=(UndoInput(name="draft_id", provenance="minted_by_us",
+                              ref="some_other_id"),),
+            held={"minted_by_us": {"draft_id": DRAFT_ID,
+                                   "some_other_id": "another-uuid"}})))
+    refused(out, Refusal.UNDO_MISSES_THE_TARGET)
+
+
+def test_the_guard_refuses_an_act_that_never_said_what_it_addresses():
+    refused(drive(shelf2_plan(act=act(target=None))),
+            Refusal.ACT_TARGET_UNBOUND)
+
+
+def test_the_guard_refuses_a_target_the_admitted_set_does_not_record():
+    out = drive(shelf2_plan(
+        act=act(target=target_ref(provenance="owner_supplied", ref="their_id")),
+        undo=undo_plan(
+            inputs=(UndoInput(name="draft_id", provenance="minted_by_us",
+                              ref="draft_id"),
+                    UndoInput(name="their_id", provenance="owner_supplied",
+                              ref="their_id")),
+            held={"minted_by_us": {"draft_id": DRAFT_ID},
+                  "owner_supplied": {"their_id": "not-ours"}})))
+    refused(out, Refusal.ACT_TARGET_UNBOUND)
+
+
+def test_the_guard_refuses_a_target_that_does_not_resolve():
+    """Isolated on purpose: the undo's own input resolves and satisfies
+    `binds`, so the ONLY thing wrong with this row is that the act named a
+    target it does not yet hold.  §11 counts by cause, and "the act addresses
+    something that does not exist yet" is a different fact about the world
+    from "the undo addresses something else"."""
+    out = drive(shelf2_plan(
+        act=act(target=target_ref(ref="confirmation_reference")),
+        undo=undo_plan(
+            inputs=(UndoInput(name="draft_id", provenance="minted_by_us",
+                              ref="draft_id"),),
+            held={"minted_by_us": {"draft_id": DRAFT_ID}})))
+    refused(out, Refusal.UNRESOLVED_REFERENCE)
+
+
+# -------------------------- the parity leg, in the direction it never checked
+
+def js_literal(name):
+    """The array `name` is bound to in the hook, as data.
+
+    A source read, in a test, of a deterministic gate — the third place
+    pattern-matching is legal (Law 1).  It exists because the members of the
+    admitted set are a constant in two files while the set has one member, and
+    §6.4 licenses that only for as long as a reader can check it in one diff.
+    """
+    raw = (HOOKS / "workflow_guard.pb.js").read_text()
+    js = "\n".join(line.split("//", 1)[0] for line in raw.splitlines())
+    marker = f"{name} = "
+    start = js.index(marker) + len(marker)
+    depth = 0
+    for i in range(start, len(js)):
+        if js[i] == "[":
+            depth += 1
+        elif js[i] == "]":
+            depth -= 1
+            if depth == 0:
+                return json.loads(js[start:i + 1])
+    raise AssertionError(f"{name} is not an array literal in the hook")
+
+
+def test_the_admitted_set_is_equal_across_the_layers_not_merely_contained():
+    """THE MUTATION THAT SURVIVED.  The old leg iterated the PYTHON set and
+    asserted each name appeared SOMEWHERE in the JavaScript.  It never asked
+    the reverse, so the enforcing layer could be widened —
+
+        SHELF2_ACT_TYPES = ["local_draft", "gmail_send"]
+        SHELF2_REACH     = ["local_store", "world"]
+        SHELF2_EXECUTOR  = ["anticipy_store", "browser_agent"]
+        SHELF2_BINDS     = [["minted_by_us"], []]
+
+    — and the entire suite stayed green.  §10.3 says the admitted set is a
+    FLOOR whose growth is a deliberate human act behind §10.1's six
+    conditions; growing it must not be something a scoreboard sleeps through.
+
+    Index-for-index, because parallel arrays misaligned by one pair the right
+    act type with the wrong reach, and substring-anywhere never notices."""
+    from brain.workflow import ADMITTED_ACT_TYPES
+    names = list(ADMITTED_ACT_TYPES)
+    assert js_literal("SHELF2_ACT_TYPES") == names
+    assert js_literal("SHELF2_REACH") == [
+        ADMITTED_ACT_TYPES[n].reach for n in names]
+    assert js_literal("SHELF2_EXECUTOR") == [
+        ADMITTED_ACT_TYPES[n].executor for n in names]
+    assert js_literal("SHELF2_BINDS") == [
+        list(ADMITTED_ACT_TYPES[n].binds) for n in names]
+    assert js_literal("SHELF2_TARGET_PROVENANCE") == [
+        ADMITTED_ACT_TYPES[n].target_provenance for n in names]
+
+
+def test_the_closed_vocabularies_are_equal_across_the_layers():
+    """Same direction, same reason: a tag the database accepts and Python
+    does not is a member of the vocabulary that nobody wrote down."""
+    from brain.workflow import GESTURE_KINDS, PROVENANCE_TAGS
+    assert js_literal("PROVENANCE_TAGS") == list(PROVENANCE_TAGS)
+    assert js_literal("GESTURE_KINDS") == list(GESTURE_KINDS)

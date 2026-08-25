@@ -225,6 +225,16 @@ class Refusal(str, Enum):
     UNKNOWN_PROVENANCE = "shelf2.unknown_provenance"
     UNRESOLVED_REFERENCE = "shelf2.unresolved_reference"
     UNDO_BINDS_NOTHING = "shelf2.undo_binds_nothing"
+    # PRESENCE IS NOT CORRESPONDENCE, and these two are the difference.
+    #
+    # UNDO_BINDS_NOTHING asks whether SOME input carries the provenance the
+    # admitted set requires.  It closed the vacuous empty-inputs case and
+    # nothing more: an undo whose one `minted_by_us` input resolves cleanly to
+    # a uuid the act will never create satisfies it completely, and is a
+    # well-formed undo that cannot undo.  So the act declares the reference it
+    # will address and the undo has to address the SAME one.
+    ACT_TARGET_UNBOUND = "shelf2.act_target_unbound"
+    UNDO_MISSES_THE_TARGET = "shelf2.undo_misses_the_target"
     NO_ANNOUNCE_OBLIGATION = "shelf2.no_announce_obligation"
     ANNOUNCE_LEAVES_THE_OWNER = "shelf2.announce_leaves_the_owner"
     UNORDERED_LINEAGE = "shelf2.unordered_lineage"
@@ -293,6 +303,19 @@ class ActDeclaration:
     act_type: str
     reach: str
     executor: str
+    # WHAT THIS ACT WILL ADDRESS, in the same typed shape the undo's inputs
+    # use — deliberately, so one resolver checks both and so the undo can be
+    # required to bind this exact (provenance, ref) pair.  Without it §6.1's
+    # admission ("the undo is discard our row, needing nothing but an id we
+    # minted") is satisfied by an undo that addresses nothing the act
+    # produces: the id is not required to be the SAME id.
+    #
+    # NO DEFAULT, on purpose.  A caller that forgets it cannot construct an
+    # act at all, which is the only place this can be made unrepresentable
+    # rather than merely detectable.  A STORED row that predates it parses to
+    # None (`from_dict` passes it explicitly) and is refused by name, because
+    # a row that cannot be parsed is a row that can never be recovered.
+    target: Optional[UndoInput]
 
 
 @dataclass(frozen=True)
@@ -370,6 +393,12 @@ class AdmittedAct:
     # can record per act type — which is what §10.3 means by "a membership
     # record that is only a name cannot support the checks §8.5 requires."
     binds: tuple[str, ...] = ()
+    # The provenance this act type's TARGET must carry.  §6.1: "the id must be
+    # CLIENT-minted, which is what makes the reference resolvable before the
+    # draft exists at all."  A target the owner supplied is a row somebody
+    # else made, and "discard our row" is then a sentence about a row that is
+    # not ours.
+    target_provenance: str = ""
     evidence: tuple[str, ...] = ()
 
 
@@ -410,6 +439,7 @@ ADMITTED_ACT_TYPES: Mapping[str, AdmittedAct] = {
         # draft whose id the store assigns on insert fails for a reason that
         # has nothing to do with whose store it is.
         binds=("minted_by_us",),
+        target_provenance="minted_by_us",
         evidence=(
             "docs/superpowers/specs/2026-08-24-shelf-2-redesign.md "
             "§6.1 — admitted by spec, no live receipts yet; §10.1 conditions "
@@ -420,23 +450,34 @@ ADMITTED_ACT_TYPES: Mapping[str, AdmittedAct] = {
 }
 
 
-def _resolves(undo: UndoPlan) -> str:
-    """§5.2's checker.  Resolve every reference; refuse on any that does not.
+def _resolves_one(undo: UndoPlan, item: "UndoInput") -> str:
+    """Resolve one typed reference against the values the plan already holds.
 
     Reads `provenance` and `ref`.  Never reads `name`, never parses `steps`.
+    Shared with the ACT's own target so that both sides of the correspondence
+    are held to the same "known-good BEFORE acting": a reference that can only
+    resolve after the act fails here, now.
     """
+    if not isinstance(item, UndoInput):
+        return Refusal.NO_UNDO_PLAN.value
+    if item.provenance not in PROVENANCE_TAGS:
+        return Refusal.UNKNOWN_PROVENANCE.value
+    bucket = undo.held.get(item.provenance)
+    if not isinstance(bucket, Mapping):
+        return Refusal.UNRESOLVED_REFERENCE.value
+    if item.ref not in bucket:
+        return Refusal.UNRESOLVED_REFERENCE.value
+    if bucket[item.ref] in (None, ""):
+        return Refusal.UNRESOLVED_REFERENCE.value
+    return ""
+
+
+def _resolves(undo: UndoPlan) -> str:
+    """§5.2's checker.  Resolve every reference; refuse on any that does not."""
     for item in undo.inputs:
-        if not isinstance(item, UndoInput):
-            return Refusal.NO_UNDO_PLAN.value
-        if item.provenance not in PROVENANCE_TAGS:
-            return Refusal.UNKNOWN_PROVENANCE.value
-        bucket = undo.held.get(item.provenance)
-        if not isinstance(bucket, Mapping):
-            return Refusal.UNRESOLVED_REFERENCE.value
-        if item.ref not in bucket:
-            return Refusal.UNRESOLVED_REFERENCE.value
-        if bucket[item.ref] in (None, ""):
-            return Refusal.UNRESOLVED_REFERENCE.value
+        why = _resolves_one(undo, item)
+        if why:
+            return why
     return ""
 
 
@@ -461,6 +502,21 @@ def admissible(plan: "Plan") -> str:
         return Refusal.REACH_DISAGREES.value
     if act.executor != admitted.executor:
         return Refusal.EXECUTOR_DISAGREES.value
+    # Still the ACT side, so it runs before the undo plan is read (§5.4): an
+    # act that never said what it will address leaves nothing for the undo to
+    # correspond to, and `binds` collapses back into presence.
+    target = act.target
+    if not isinstance(target, UndoInput):
+        return Refusal.ACT_TARGET_UNBOUND.value
+    if target.provenance not in PROVENANCE_TAGS:
+        return Refusal.UNKNOWN_PROVENANCE.value
+    # NO TRUTHINESS GUARD.  `if admitted.target_provenance and ...` would let
+    # a future member that forgot to record one skip the pin entirely, and the
+    # guard's `targetTag !== SHELF2_TARGET_PROVENANCE[which]` refuses in that
+    # same case — two layers disagreeing about a floor with nobody looking is
+    # exactly the scar `NO_APPROVAL_NEEDED` carries.  An unset pin refuses.
+    if target.provenance != admitted.target_provenance:
+        return Refusal.ACT_TARGET_UNBOUND.value
 
     undo = plan.undo
     if not isinstance(undo, UndoPlan) or not undo.steps:
@@ -475,6 +531,15 @@ def admissible(plan: "Plan") -> str:
     for tag in admitted.binds:
         if tag not in bound:
             return Refusal.UNDO_BINDS_NOTHING.value
+    # CORRESPONDENCE.  The target is a reference like any other, so it must
+    # resolve before the act runs; and the undo must address THAT reference,
+    # not merely one wearing the same provenance tag.
+    unresolved = _resolves_one(undo, target)
+    if unresolved:
+        return unresolved
+    if not any(item.provenance == target.provenance and item.ref == target.ref
+               for item in undo.inputs if isinstance(item, UndoInput)):
+        return Refusal.UNDO_MISSES_THE_TARGET.value
 
     tell = plan.announce
     if not isinstance(tell, Obligation) or not tell.channel.strip():
@@ -718,6 +783,10 @@ class Plan:
                 "act_type": self.act.act_type,
                 "reach": self.act.reach,
                 "executor": self.act.executor,
+                "target": ({"name": self.act.target.name,
+                            "provenance": self.act.target.provenance,
+                            "ref": self.act.target.ref}
+                           if isinstance(self.act.target, UndoInput) else None),
             } if self.act else None),
             "undo": ({
                 "act_type": self.undo.act_type,
@@ -807,6 +876,13 @@ class Plan:
             act_type=str(r.get("act_type") or ""),
             reach=str(r.get("reach") or ""),
             executor=str(r.get("executor") or ""),
+            # Passed EXPLICITLY, including as None: a row written before the
+            # target existed must come back refusable, not unparseable.
+            target=maybe(r.get("target"), lambda t: UndoInput(
+                name=str(t.get("name") or ""),
+                provenance=str(t.get("provenance") or ""),
+                ref=str(t.get("ref") or ""),
+            )),
         ))
         undo = maybe(value.get("undo"), _undo)
         announce = maybe(value.get("announce"), lambda r: Obligation(
@@ -1116,6 +1192,13 @@ def approve_by_gesture(plan: Plan, *, expected_version: int,
         raise WorkflowViolation("unrecognised owner gesture")
     if not gesture.actor.strip():
         raise WorkflowViolation("an owner gesture must be authenticated")
+    # AND IT MUST BE HIS.  "Authenticated" was a non-empty string: any actor
+    # the caller could name — another account, a service identity, an agent id
+    # — bought on the owner's work exactly what the owner's own tap buys.  A
+    # gesture buys what words buy and nothing more, and words are only ever
+    # his words (§7.3).
+    if gesture.actor.strip() != plan.owner_ref:
+        raise WorkflowViolation("a gesture must be made by this plan's owner")
     if (gesture.plan_id != plan.plan_id
             or gesture.plan_version != plan.version
             or gesture.scope_digest != plan.scope_digest):

@@ -256,3 +256,95 @@ def test_the_two_layers_now_agree_on_polarity():
     assert '"read_only"' in js, (
         "the guard must name the SAFE set explicitly, so that everything it "
         "does not recognise is gated rather than exempt")
+
+
+# ============================================================ THE OTHER DOOR
+#
+# Everything above drives a PATCH, and the gate it proves is keyed on the
+# TRANSITION to `queued`. A POST has no `old`, so the transition table in the
+# hook is never consulted — and `backend/pb_migrations/1700000001_jobs.js:19`
+# sets `createRule: ""`, so any caller may POST. A job CREATED already in
+# `running`, carrying an actor and a lease, was asked for no approval at all
+# and was free to act on the world.
+#
+# This is the same failure as the one this file was written for, one layer
+# over: deny-by-default inverted into allow-by-default, this time by choosing
+# a different starting status instead of a different spelling. The fix is the
+# same shape too — enumerate what is LEGAL (a new row starts where
+# `brain/workflow.py`'s `LEGACY_STATUS` can start it and nowhere else) so that
+# anything unrecognised is refused rather than exempt.
+
+def create(consequence: str, *, approval=None, status="running",
+           state="running", lease=True):
+    """POST a job into existence already in `status`."""
+    embedded = {
+        "plan_id": PLAN, "version": 2, "state": state, "goal": GOAL,
+        "consequence": consequence, "lineage_key": "lin-1", "owner_ref": OWNER,
+        "scope_digest": SCOPE, "effect_key": EFFECT, "attempts": 0,
+        "approval": approval, "receipt": None, "lease": None,
+        "required": [], "facts": {},
+    }
+    body = {
+        "workflow_id": PLAN, "workflow_version": 2, "workflow_state": state,
+        "status": status, "consequence": consequence, "goal": GOAL,
+        "lineage_key": "lin-1", "owner_ref": OWNER, "scope_digest": SCOPE,
+        "effect_key": EFFECT, "attempts": 0, "lease_token": "",
+        "approval": json.dumps(approval) if approval else "",
+    }
+    if status == "running" and lease:
+        # The running leg wants an actor and an unexpired lease. That is the
+        # only thing the bypass ever had to carry.
+        embedded["lease"] = {"token": "lease-1", "actor_id": "agent-7",
+                             "acquired_at": "2026-08-25T12:00:00+00:00",
+                             "expires_at": "2099-01-01T00:00:00+00:00",
+                             "attempt": 1}
+        body.update({"lease_token": "lease-1", "claimed_by": "agent-7",
+                     "lease_until": "2099-01-01T00:00:00+00:00"})
+    body["params"] = json.dumps({"_workflow": embedded})
+    scenario = {"path": "/api/collections/jobs/records", "method": "POST",
+                "body": body, "old": None}
+    proc = subprocess.run(
+        ["node", "-e", HARNESS, "--", json.dumps(scenario), str(HOOKS)],
+        capture_output=True, text=True, timeout=60)
+    if proc.returncode != 0:
+        raise AssertionError(f"harness failed: {proc.stderr[-3000:]}")
+    out = json.loads(proc.stdout)
+    assert out["threw"] is None, out["threw"]
+    return out
+
+
+def test_unapproved_consequential_work_cannot_be_created_already_running():
+    """The live unapproved-execution path, driven. No approval, no owner
+    words, no gesture — and a POST put it straight into the status the
+    executor acts from."""
+    out = create("consequential")
+    assert out["outcome"] == "json", (
+        "a consequential job was CREATED already running, with no approval "
+        f"anywhere: {out}")
+    assert out["body"]["detail"] == "work cannot be created in running", out
+
+
+def test_the_create_door_is_shut_for_every_consequence_spelling():
+    """The same enumeration this file exists for: the entry table is a floor,
+    so an unrecognised or misspelled consequence does not find a way round it
+    either."""
+    for word in ("consequential", "consequentia", "", "reversible",
+                 "read_only", "constructor", "__proto__"):
+        out = create(word)
+        assert out["outcome"] == "json", (
+            f"consequence={word!r} was created already running: {out}")
+        assert out["body"]["detail"] == "work cannot be created in running", (
+            f"consequence={word!r} was refused for the wrong reason: {out}")
+
+
+def test_a_job_created_at_an_entry_point_still_faces_the_approval_gate():
+    """The entry table must not become the only check: `queued` IS a legal
+    entry point, and consequential work created there still needs a tap."""
+    out = create("consequential", status="queued", state="queued")
+    assert out["outcome"] == "json", (
+        f"a consequential job was created queued with no approval: {out}")
+    out = create("consequential", status="queued", state="queued",
+                 approval=good_approval())
+    assert out["outcome"] == "next", out
+    out = create("read_only", status="queued", state="queued")
+    assert out["outcome"] == "next", "the research lane still starts"

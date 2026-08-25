@@ -137,17 +137,52 @@ routerUse((e) => {
       && body.scope_digest !== old.getString("scope_digest");
     const changesEffect = body.effect_key != null
       && body.effect_key !== old.getString("effect_key");
-    if ((changesPlan || changesScope || changesEffect) && nextVersion <= oldVersion) {
-      return reject("changing a plan requires a new workflow version");
-    }
+    // THE SHELF 2 BLOCK IS NOT A ROW COLUMN, and that is how it fell out of
+    // both rules below.  `changesPlan/Scope/Effect` each name a COLUMN; the
+    // act declaration, the undo plan, the announcement obligation and the
+    // lineage position all live inside `params._workflow`, which the
+    // executor's own lease lets it write, and none of them appears in the
+    // redundancy list at the top of this file because none of them is a
+    // column there either.
+    //
+    // §7.2.1: "An executor that could mint its own undo could mint its own
+    // anything."  The undo he is promised when the act is announced has to be
+    // the undo that runs, so changing it is changing the plan: it needs a new
+    // version, and an executor may not do it at any version.
+    //
+    // When the OLD block cannot be read this is false — that row was already
+    // broken, and refusing every write to it would strand it running with no
+    // way to park or fail.  What covers that case is the re-run of
+    // `shelf2Refusal` at every live status below, which admits the new block
+    // on its own merits instead of trusting it.
+    let oldEmbedded = null;
+    try {
+      const parsed = JSON.parse(String(old.getString("params") || "{}"));
+      oldEmbedded = parsed && parsed._workflow;
+    } catch (_) { oldEmbedded = null; }
+    const changesShelf2 = !!(oldEmbedded && typeof oldEmbedded === "object") && (
+      !sameJSON(embedded.act, oldEmbedded.act)
+      || !sameJSON(embedded.undo, oldEmbedded.undo)
+      || !sameJSON(embedded.announce, oldEmbedded.announce)
+      || !sameJSON(embedded.undo_of, oldEmbedded.undo_of)
+      || Number(embedded.lineage_seq || 0)
+          !== Number(oldEmbedded.lineage_seq || 0));
     // A browser token is execution authority, never owner authority. It may
     // advance the approved version under its lease; it may not edit scope,
-    // mint approval words, or create a new version for itself.
+    // mint approval words, rewrite the plan it is executing, or create a new
+    // version for itself.  Checked BEFORE the version rule so that "you are
+    // an executor" is the answer an executor gets, whatever else is wrong
+    // with the write — §11 counts refusals by cause.
     const changesApproval = body.approval != null
       && String(body.approval || "") !== old.getString("approval");
     if (agentCaller && (changesPlan || changesScope || changesEffect
-                        || nextVersion !== oldVersion || changesApproval)) {
+                        || changesShelf2 || nextVersion !== oldVersion
+                        || changesApproval)) {
       return reject("an executor cannot rewrite or approve its plan");
+    }
+    if ((changesPlan || changesScope || changesEffect || changesShelf2)
+        && nextVersion <= oldVersion) {
+      return reject("changing a plan requires a new workflow version");
     }
     // A status string is not a claim.  Every write made by a running
     // executor must prove it holds the exact durable lease stored on the row.
@@ -162,6 +197,26 @@ routerUse((e) => {
       if (expired && !["queued", "needs_user", "failed"].includes(nextStatus)) {
         return reject("expired executor may only recover, park, or fail");
       }
+    }
+  } else {
+    // A CREATE HAS NO `old`, SO THE TRANSITION TABLE ABOVE NEVER RUNS.
+    //
+    // Every leg in this file is keyed on a transition, and a POST is not one.
+    // `backend/pb_migrations/1700000001_jobs.js:19` sets `createRule: ""`, so
+    // any caller may POST a row into existence ALREADY IN the status those
+    // legs guard and be asked for nothing at all: a job created `running`
+    // skipped Shelf 2's whole admission and the approval gate that predates
+    // it, which was a live unapproved-execution path, not a new one.
+    //
+    // Patching `running` alone would leave the same door open for every other
+    // status and for every leg anyone keys on a transition later.  So a
+    // create gets its own table.  `LEGACY_STATUS` in brain/workflow.py maps
+    // every state `new_plan` can produce onto exactly these two, and every
+    // later status must be reached by a PATCH the table above does police.
+    // Floor polarity: an unrecognised status is not an entry point either.
+    const ENTRY_STATUSES = ["awaiting_confirm", "queued"];
+    if (ENTRY_STATUSES.indexOf(nextStatus) < 0) {
+      return reject(`work cannot be created in ${nextStatus}`);
     }
   }
   // ========================================================= SHELF 2 =========
@@ -242,6 +297,15 @@ routerUse((e) => {
   // without this an undo plan with NO inputs resolves vacuously and every
   // other leg waves it through.
   const SHELF2_BINDS = [["minted_by_us"]];
+  // WHAT THE ACT ITSELF WILL ADDRESS.  `SHELF2_BINDS` asks whether SOME undo
+  // input carries the right provenance; it closes the vacuous-empty-inputs
+  // case and nothing more.  It cannot ask whether the value that input
+  // resolves to is the id this act will create, because until the act
+  // declared a target nothing named that id — so an undo that resolved
+  // cleanly to a uuid the act never touches passed every leg here.  §6.1's
+  // admission is "the undo is discard our row, needing nothing but an id we
+  // minted", and the whole content of it is that the id is the SAME id.
+  const SHELF2_TARGET_PROVENANCE = ["minted_by_us"];
   const PROVENANCE_TAGS = ["minted_by_us", "owner_supplied", "constant"];
   const GESTURE_KINDS = ["tap"];
   // Claimed, and therefore capable of having left something behind.  A queued
@@ -257,6 +321,8 @@ routerUse((e) => {
     provenance: "shelf2.unknown_provenance",
     unresolved: "shelf2.unresolved_reference",
     bindsNothing: "shelf2.undo_binds_nothing",
+    targetUnbound: "shelf2.act_target_unbound",
+    missesTarget: "shelf2.undo_misses_the_target",
     noTell: "shelf2.no_announce_obligation",
     tellLeaves: "shelf2.announce_leaves_the_owner",
     unordered: "shelf2.unordered_lineage",
@@ -279,6 +345,15 @@ routerUse((e) => {
     if (which < 0) return S2.act;
     if (String(act.reach || "") !== SHELF2_REACH[which]) return S2.reach;
     if (String(act.executor || "") !== SHELF2_EXECUTOR[which]) return S2.executor;
+    // Still the ACT side, so it is settled before the undo plan is read
+    // (§5.4).  An act that never said what it will address leaves the undo
+    // nothing to correspond TO.
+    const target = act.target;
+    if (!plainObject(target)) return S2.targetUnbound;
+    const targetTag = String(target.provenance || "");
+    const targetRef = String(target.ref || "");
+    if (PROVENANCE_TAGS.indexOf(targetTag) < 0) return S2.provenance;
+    if (targetTag !== SHELF2_TARGET_PROVENANCE[which]) return S2.targetUnbound;
 
     // ---- the undo side (§5.2): resolve, never read a name
     const undo = embedded.undo;
@@ -288,16 +363,21 @@ routerUse((e) => {
       return S2.otherAct;
     }
     if (!Array.isArray(undo.inputs)) return S2.noUndo;
-    for (const item of undo.inputs) {
-      if (!plainObject(item)) return S2.noUndo;
-      const tag = String(item.provenance || "");
+    const resolveRef = (tag, ref) => {
       if (PROVENANCE_TAGS.indexOf(tag) < 0) return S2.provenance;
       const bucket = ownValue(undo.held, tag);
       if (!plainObject(bucket)) return S2.unresolved;
-      const value = ownValue(bucket, String(item.ref || ""));
+      const value = ownValue(bucket, ref);
       if (value === undefined || value === null || value === "") {
         return S2.unresolved;
       }
+      return "";
+    };
+    for (const item of undo.inputs) {
+      if (!plainObject(item)) return S2.noUndo;
+      const why = resolveRef(String(item.provenance || ""),
+                             String(item.ref || ""));
+      if (why) return why;
     }
 
     const bound = [];
@@ -305,6 +385,18 @@ routerUse((e) => {
     for (const tag of (SHELF2_BINDS[which] || [])) {
       if (bound.indexOf(tag) < 0) return S2.bindsNothing;
     }
+    // CORRESPONDENCE, not presence.  The target is a reference like any
+    // other, so it is held to the same "known-good BEFORE acting" — a target
+    // that resolves only after the act fails here, now — and the undo has to
+    // address THAT reference, not merely one wearing the same tag.
+    const targetUnresolved = resolveRef(targetTag, targetRef);
+    if (targetUnresolved) return targetUnresolved;
+    let addressed = false;
+    for (const item of undo.inputs) {
+      if (String(item.provenance || "") === targetTag
+          && String(item.ref || "") === targetRef) addressed = true;
+    }
+    if (!addressed) return S2.missesTarget;
 
     // ---- the tell is part of the work (§8.3), and it goes to him alone
     const tell = embedded.announce;
@@ -329,6 +421,70 @@ routerUse((e) => {
   // outcome neither undo promised: undo(A) deletes the draft, undo(B)
   // RESTORES it, and a draft he was told forty seconds ago was gone is back
   // with both receipts honest.
+  //
+  // Reading the lineage is shared by both cross-row legs below.  `why` is a
+  // refusal cause and `acts` is only meaningful when it is empty: a lineage
+  // we cannot read WHOLE is a lineage we cannot order against, and the row we
+  // could not read is exactly where a later act would be hiding.
+  const readLineage = () => {
+    const key = String(rowValue("lineage_key", "") || "");
+    if (!key) return { why: S2.unordered, acts: [] };
+    let rows = null;
+    try {
+      rows = e.app.findRecordsByFilter(
+        "jobs", "lineage_key = {:k} && consequence = {:c}", "-created", 500, 0,
+        { k: key, c: SHELF2 });
+    } catch (_) { rows = null; }
+    if (!rows || typeof rows.length !== "number") {
+      return { why: S2.unreadable, acts: [] };
+    }
+    const acts = [];
+    // NOT an object-as-set: `{}` answers "yes" for `constructor` and every
+    // other inherited name, which is the hazard this file already documents
+    // twice.  An array has no prototype to trip over.
+    const positions = [];
+    for (const row of rows) {
+      let plan = null;
+      try {
+        const parsed = JSON.parse(String(row.getString("params") || "{}"));
+        plan = parsed && parsed._workflow;
+      } catch (_) { return { why: S2.unreadable, acts: [] }; }
+      if (!plainObject(plan)) return { why: S2.unreadable, acts: [] };
+      if (plainObject(plan.undo_of)) continue;   // a compensation is not an act
+      const at = Number(plan.lineage_seq);
+      if (!(at >= 1)) return { why: S2.unreadable, acts: [] };
+      // §7.4 ORDERS BY THIS NUMBER AND NOTHING WAS ALLOCATING IT.  Two acts
+      // at the same position make `a.at > seq` false for BOTH, so the law
+      // written to stop undo(A) and undo(B) composing wrongly is simply never
+      // consulted — the reviewer's proof, and §7.4's own worked example
+      // walking through the rule that exists to stop it.  A lineage with two
+      // acts in one place has no order, so nothing can be ordered against it.
+      if (positions.indexOf(at) >= 0) return { why: S2.unordered, acts: [] };
+      positions.push(at);
+      acts.push({ id: String(plan.plan_id || ""), at: at,
+                  status: String(row.getString("status") || "") });
+    }
+    return { why: "", acts: acts };
+  };
+
+  // §7.4, at ALLOCATION rather than only at undo time: a new act must sit
+  // strictly after every act already in its lineage.  Making the collision
+  // unrepresentable is worth one query, because by the time an undo notices
+  // it the two acts have both already run.
+  const seqRefusal = () => {
+    const at = Number(embedded.lineage_seq);
+    if (!(at >= 1)) return "";          // shelf2Refusal owns that refusal
+    const read = readLineage();
+    if (read.why) return read.why;
+    for (const a of read.acts) {
+      // The same row re-entering the lane — recovery re-queues it — is not a
+      // second act standing at its own position.
+      if (a.id === workflow) continue;
+      if (a.at >= at) return S2.unordered;
+    }
+    return "";
+  };
+
   const orderRefusal = () => {
     const undoOf = embedded.undo_of;
     if (!plainObject(undoOf)) return "";
@@ -336,27 +492,9 @@ routerUse((e) => {
     const target = String(undoOf.plan_id || "");
     const key = String(rowValue("lineage_key", "") || "");
     if (!target || !key || !(seq >= 1)) return S2.unordered;
-    let rows = null;
-    try {
-      rows = e.app.findRecordsByFilter(
-        "jobs", "lineage_key = {:k} && consequence = {:c}", "-created", 500, 0,
-        { k: key, c: SHELF2 });
-    } catch (_) { rows = null; }
-    if (!rows || typeof rows.length !== "number") return S2.unreadable;
-    const acts = [];
-    for (const row of rows) {
-      let plan = null;
-      try {
-        const parsed = JSON.parse(String(row.getString("params") || "{}"));
-        plan = parsed && parsed._workflow;
-      } catch (_) { return S2.unreadable; }
-      if (!plainObject(plan)) return S2.unreadable;
-      if (plainObject(plan.undo_of)) continue;   // a compensation is not an act
-      const at = Number(plan.lineage_seq);
-      if (!(at >= 1)) return S2.unreadable;
-      acts.push({ id: String(plan.plan_id || ""), at: at,
-                  status: String(row.getString("status") || "") });
-    }
+    const read = readLineage();
+    if (read.why) return read.why;
+    const acts = read.acts;
     // Locate the act being compensated before ordering anything against it:
     // an undo that names nothing findable is not the head of its lineage, it
     // is not anywhere.
@@ -372,17 +510,6 @@ routerUse((e) => {
     }
     return "";
   };
-
-  let shelf2Earned = false;
-  if (nextStatus === "queued") {
-    if (consequence === SHELF2) {
-      const why = shelf2Refusal();
-      if (why) return reject(why);
-      shelf2Earned = true;
-    }
-    const outOfOrder = orderRefusal();
-    if (outOfOrder) return reject(outOfOrder);
-  }
 
   // APPROVAL IS THE DEFAULT AND EXEMPTION IS THE EXCEPTION, not the other way
   // round. This read `consequence === "consequential"`, so owner approval was
@@ -405,11 +532,14 @@ routerUse((e) => {
   // for "constructor", "toString" and every other inherited property name, so
   // the obvious lookup hands an attacker an exemption keyword.
   const NO_APPROVAL_NEEDED = ["read_only"];
-  if (nextStatus === "queued" && !shelf2Earned
-      && NO_APPROVAL_NEEDED.indexOf(consequence) < 0) {
+  // Returns "" when a real, version-bound owner authorization is on the row,
+  // and the enumerated reason otherwise.  Extracted from the block it used to
+  // be so that the Shelf 2 legs can ASK the question without answering it:
+  // see the stand-down below.
+  const approvalRefusal = () => {
     let approval = {};
     try { approval = JSON.parse(String(body.approval || (old && old.getString("approval")) || "")); }
-    catch (_) { return reject("consequential work needs parseable approval"); }
+    catch (_) { return "consequential work needs parseable approval"; }
     const scope = String(body.scope_digest || (old && old.getString("scope_digest")) || "");
     // A TAP IS A GESTURE, NOT WORDING.
     //
@@ -426,16 +556,79 @@ routerUse((e) => {
     // become a hole in it.
     const words = String(approval.owner_words || "").trim();
     const gesture = approval.gesture;
+    // AND IT HAS TO BE HIS TAP.  "Authenticated" was a non-empty string, so
+    // any actor a caller could name — another account, a service identity,
+    // the executor's own agent id — bought on his work exactly what his own
+    // tap buys.  `owner_ref` is already required non-empty above, so this
+    // subsumes the emptiness check rather than sitting beside it.
     const tapped = !!(plainObject(gesture)
       && GESTURE_KINDS.indexOf(String(gesture.kind || "")) >= 0
       && String(gesture.actor || "").trim()
+          === String(rowValue("owner_ref", "") || "")
       && String(gesture.plan_id || "") === workflow
       && Number(gesture.plan_version) === nextVersion
       && String(gesture.scope_digest || "") === scope);
     if (approval.plan_id !== workflow || Number(approval.plan_version) !== nextVersion
         || !scope || approval.scope_digest !== scope || (!words && !tapped)) {
-      return reject("approval is not bound to this exact plan version");
+      return "approval is not bound to this exact plan version";
     }
+    return "";
+  };
+
+  // WHERE THE LEGS RUN, and why it is not one status.
+  //
+  // Every leg below used to be keyed on `nextStatus === "queued"`, and the
+  // caller picks the status.  A POST creating the row already `running` was
+  // asked for none of them (the entry table above now refuses that), and a
+  // version-bumped write to a RUNNING row could replace the plan under a leg
+  // that had already run.  So the legs that read only THIS row's own stored
+  // plan re-run wherever the work is live; they are a parse, they cost
+  // nothing, and a check that never runs on a path production can take is not
+  // a check.
+  //
+  // The cross-row legs deliberately do NOT re-run.  Re-asking "has anything
+  // later in the lineage run?" mid-flight turns another row's progress into a
+  // 409 on this one — and a 409 here blocks even the write that would park or
+  // fail it, so the row would hang until its lease expired.  Those are
+  // ADMISSION questions and they are asked once, when the work is admitted.
+  const LIVE_STATUSES = ["queued", "running"];
+  const live = LIVE_STATUSES.indexOf(nextStatus) >= 0;
+
+  let shelf2Earned = false;
+  if (live && consequence === SHELF2) {
+    // THE FLOOR'S RECOVERY PATH, and it is not a hole in the floor.
+    //
+    // §5.2: a refused act "goes to Shelf 3 and waits for a tap", which is the
+    // whole reason refusing is described as cheap.  `_shelf2_lane` in
+    // brain/workflow.py demotes the STATE and leaves the consequence alone —
+    // deliberately, because that value says what the work IS and because
+    // `readLineage` finds acts by it — so a refused act he then approved
+    // arrived here still saying `reversible_local` and was refused again, for
+    // the same reason, forever.  He tapped and a 409 landed where he could
+    // never see it: the work was not demoted, it was destroyed.
+    //
+    // The exemption is not widened by standing down.  `shelf2Earned` stays
+    // FALSE, so the block below still verifies that approval in full — bound
+    // to this plan, this version and this scope, and unmintable by an
+    // executor.  Unapproved work still has to EARN the lane.
+    if (approvalRefusal() !== "") {
+      const why = shelf2Refusal();
+      if (why) return reject(why);
+      shelf2Earned = true;
+    }
+  }
+  if (nextStatus === "queued") {
+    if (consequence === SHELF2 && !plainObject(embedded.undo_of)) {
+      const clash = seqRefusal();
+      if (clash) return reject(clash);
+    }
+    const outOfOrder = orderRefusal();
+    if (outOfOrder) return reject(outOfOrder);
+  }
+  if (live && !shelf2Earned
+      && NO_APPROVAL_NEEDED.indexOf(consequence) < 0) {
+    const why = approvalRefusal();
+    if (why) return reject(why);
   }
   if (nextStatus === "queued" && old && old.getBool("effect_uncertain")) {
     let reconciliation = {};
@@ -458,8 +651,12 @@ routerUse((e) => {
     const until = String(body.lease_until || (old && old.getString("lease_until")) || "");
     if (!lease || !actor || !until) return reject("running work needs an actor and lease");
     if (new Date(until).getTime() <= Date.now()) return reject("running lease must expire in the future");
-  } else if (old && oldStatus === "running") {
-    const lease = String(body.lease_token != null ? body.lease_token : old.getString("lease_token"));
+  } else if (!old || oldStatus === "running") {
+    // `!old` for the same reason the entry table exists: this rule was keyed
+    // on the OLD row being running, so a create skipped it and a queued row
+    // could be born already holding execution authority.
+    const lease = String(body.lease_token != null
+      ? body.lease_token : (old ? old.getString("lease_token") : ""));
     if (lease) return reject("non-running work may not retain an execution lease");
   }
   if (nextStatus === "done") {

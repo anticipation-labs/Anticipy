@@ -59,8 +59,21 @@ OWNER = "owner-a"
 DRAFT_ID = "d4f0c2ee-0000-4000-8000-000000000001"
 
 
-def act(act_type="local_draft", reach="local_store", executor="anticipy_store"):
-    return ActDeclaration(act_type=act_type, reach=reach, executor=executor)
+OTHER_ID = "d4f0c2ee-0000-4000-8000-00000000ffff"
+
+# `None` is a MEANINGFUL value for `target` — an act that never said what it
+# will address — so the helper cannot use it to mean "give me the usual one".
+_KEEP = object()
+
+
+def target_ref(provenance=Provenance.MINTED_BY_US.value, ref="draft_id"):
+    return UndoInput(name="draft_id", provenance=provenance, ref=ref)
+
+
+def act(act_type="local_draft", reach="local_store", executor="anticipy_store",
+        target=_KEEP):
+    return ActDeclaration(act_type=act_type, reach=reach, executor=executor,
+                          target=target_ref() if target is _KEEP else target)
 
 
 def undo_plan(*, act_type="local_draft", inputs=None, held=None, steps=None):
@@ -159,11 +172,13 @@ def test_a_field_whose_name_looks_like_a_placeholder_is_admitted_when_it_resolve
     implementation always fails.  A checker that scanned for `{{...}}` or for
     the word 'confirmation' would refuse this; a checker that RESOLVES sees a
     value it already holds and lets it through."""
-    p = shelf2_plan(undo=undo_plan(
-        inputs=(UndoInput(name="{{confirmation_number}}",
-                          provenance="minted_by_us",
-                          ref="{{confirmation_number}}"),),
-        held={"minted_by_us": {"{{confirmation_number}}": DRAFT_ID}}))
+    p = shelf2_plan(
+        act=act(target=target_ref(ref="{{confirmation_number}}")),
+        undo=undo_plan(
+            inputs=(UndoInput(name="{{confirmation_number}}",
+                              provenance="minted_by_us",
+                              ref="{{confirmation_number}}"),),
+            held={"minted_by_us": {"{{confirmation_number}}": DRAFT_ID}}))
     assert p.state is PlanState.QUEUED, p.reason
     assert admissible(p) == ""
 
@@ -567,3 +582,152 @@ def test_every_refusal_reason_is_enumerated_never_free_text():
         p = shelf2_plan(**kwargs)
         assert p.reason in causes, p.reason
         assert p.reason.startswith("shelf2."), p.reason
+
+
+# ============================================================================
+# REPAIR ROUND, 2026-08-25.  Two findings of ONE family: a field is checked
+# for PRESENCE and never bound to the thing it has to correspond to.
+#
+#   `binds` asks whether SOME undo input carries the right provenance tag.
+#   Nothing asked whether the value it resolves to is the id the act will
+#   actually create — so a provenance-clean, fully resolvable undo addressing
+#   a uuid the act never touches passed every layer.  A well-formed undo that
+#   cannot undo (§5.2, §6.1).
+#
+#   `gesture.actor` was checked for being non-empty.  Nothing asked whether
+#   the person who tapped is the person the plan belongs to — so ANY
+#   authenticated actor's tap approved ANY owner's work (§7.3).
+#
+# Presence is cheap to check and cheap to satisfy.  Correspondence is the
+# thing the design was resting on, in both cases.
+# ============================================================================
+
+def test_an_act_must_say_what_it_will_address():
+    """§6.1's admission reads 'the undo is discard our row, needing nothing
+    but an id we minted' — the id being the SAME id.  An act that never names
+    its target leaves nothing for the undo to correspond TO, so there is no
+    correspondence to check and `binds` degenerates back into presence."""
+    p = shelf2_plan(act=act(target=None))
+    assert p.state is PlanState.AWAITING_APPROVAL, p.reason
+    assert p.reason == Refusal.ACT_TARGET_UNBOUND.value, p.reason
+
+
+def test_an_undo_that_addresses_an_id_the_act_never_touches_is_refused():
+    """The vacuous pass one level up from the empty-inputs one.
+
+    Every existing leg passes: the act type is admitted, the reach and
+    executor agree, the undo has steps, its one input is provenance-tagged
+    `minted_by_us` and RESOLVES, and `binds` is satisfied because that tag is
+    present.  The value it resolves to is simply not the draft this act will
+    create."""
+    p = shelf2_plan(
+        act=act(target=target_ref(ref="draft_id")),
+        undo=undo_plan(
+            inputs=(UndoInput(name="draft_id", provenance="minted_by_us",
+                              ref="some_other_id"),),
+            held={"minted_by_us": {"draft_id": DRAFT_ID,
+                                   "some_other_id": OTHER_ID}}))
+    assert p.state is PlanState.AWAITING_APPROVAL, p.reason
+    assert p.reason == Refusal.UNDO_MISSES_THE_TARGET.value, p.reason
+
+
+def test_an_acts_target_must_resolve_before_the_act_runs():
+    """The target is a reference like any other, so it is held to the same
+    mechanical form of 'known-good BEFORE acting': a target that resolves only
+    after the act fails here, now."""
+    p = shelf2_plan(
+        act=act(target=target_ref(ref="confirmation_reference")),
+        undo=undo_plan(
+            inputs=(UndoInput(name="draft_id", provenance="minted_by_us",
+                              ref="draft_id"),),
+            held={"minted_by_us": {"draft_id": DRAFT_ID}}))
+    assert p.state is PlanState.AWAITING_APPROVAL, p.reason
+    assert p.reason == Refusal.UNRESOLVED_REFERENCE.value, p.reason
+
+
+def test_an_acts_target_carries_the_provenance_the_admitted_set_records():
+    """§6.1: 'the id must be CLIENT-minted, which is what makes the reference
+    resolvable before the draft exists at all.'  A target the OWNER supplied
+    is a row somebody else made, and 'discard our row' is then a sentence
+    about a row that is not ours."""
+    p = shelf2_plan(
+        act=act(target=target_ref(provenance="owner_supplied", ref="their_id")),
+        undo=undo_plan(
+            inputs=(UndoInput(name="draft_id", provenance="minted_by_us",
+                              ref="draft_id"),
+                    UndoInput(name="their_id", provenance="owner_supplied",
+                              ref="their_id")),
+            held={"minted_by_us": {"draft_id": DRAFT_ID},
+                  "owner_supplied": {"their_id": OTHER_ID}}))
+    assert p.state is PlanState.AWAITING_APPROVAL, p.reason
+    assert p.reason == Refusal.ACT_TARGET_UNBOUND.value, p.reason
+
+
+def test_an_acts_target_provenance_is_from_the_closed_vocabulary():
+    p = shelf2_plan(act=act(target=target_ref(provenance="returned_by_provider")))
+    assert p.state is PlanState.AWAITING_APPROVAL, p.reason
+    assert p.reason == Refusal.UNKNOWN_PROVENANCE.value, p.reason
+
+
+def test_the_admitted_set_records_the_provenance_its_target_must_carry():
+    """§10.3: 'a membership record that is only a name cannot support the
+    checks §8.5 requires.'  Correspondence is one of those checks, so the set
+    has to say what the act type's target is."""
+    assert ADMITTED_ACT_TYPES["local_draft"].target_provenance == "minted_by_us"
+
+
+def test_the_act_and_its_target_survive_a_round_trip():
+    """Same requirement §5.4.3 puts on `reach`: a check that runs only in the
+    Python that minted the plan is a comment.  The database re-checks
+    correspondence, so the target has to reach the database."""
+    p = shelf2_plan()
+    back = from_params(put_in_params({}, p))
+    assert back.act == p.act
+    assert back.act.target == target_ref()
+
+
+def test_a_stored_act_with_no_target_parses_and_is_refused_not_raised():
+    """The scar above `_consequence_or_safe`: one malformed row threw out of
+    hear(), the event was marked error and never retried, 'and nothing was
+    ever said to him about any of it.'  A row written before the target
+    existed must come back REFUSED, which is recoverable, never as an
+    exception, which is not."""
+    p = shelf2_plan()
+    blob = put_in_params({}, p)
+    blob["_workflow"]["act"].pop("target")
+    back = from_params(blob)
+    assert back.act is not None, "an act with no target must still parse"
+    assert back.act.target is None
+    assert admissible(back) == Refusal.ACT_TARGET_UNBOUND.value
+
+
+# ------------------------------------------------- §7.3, whose tap was it?
+
+def test_a_gesture_made_by_somebody_who_is_not_the_owner_is_refused():
+    """'Authenticated' was a non-empty string.  Any actor the phone could
+    name — another account, a service identity, an agent id — bought the same
+    approval the owner's own tap buys, on the owner's own work.  A gesture
+    buys exactly what words buy and nothing more, and words are only ever HIS
+    words."""
+    p = shelf2_plan(consequence=Consequence.CONSEQUENTIAL, act=None,
+                    undo=None, announce=None, lineage_seq=0)
+    theirs = Gesture(kind="tap", actor="somebody-else", plan_id=p.plan_id,
+                     plan_version=p.version, scope_digest=p.scope_digest,
+                     made_at=NOW)
+    with pytest.raises(WorkflowViolation):
+        approve_by_gesture(p, expected_version=p.version, gesture=theirs,
+                           now=NOW)
+
+
+def test_the_owners_own_tap_is_still_accepted():
+    """The protection this must not spend: binding the actor must not make
+    the owner's real tap unusable."""
+    p = shelf2_plan(consequence=Consequence.CONSEQUENTIAL, act=None,
+                    undo=None, announce=None, lineage_seq=0)
+    his = Gesture(kind="tap", actor=OWNER, plan_id=p.plan_id,
+                  plan_version=p.version, scope_digest=p.scope_digest,
+                  made_at=NOW)
+    out = approve_by_gesture(p, expected_version=p.version, gesture=his,
+                             now=NOW)
+    assert out.state is PlanState.QUEUED
+    assert out.approved_for_current_version
