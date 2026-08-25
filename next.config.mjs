@@ -134,6 +134,9 @@ const nextConfig = {
       // The little AI on the side. Only the assistant — the old router and
       // research surfaces stay unreachable.
       { source: "/internal/assistant", destination: `${FELLOWSHIP_ORIGIN}/internal/assistant` },
+      // The team notebook.
+      { source: "/internal/notes", destination: `${FELLOWSHIP_ORIGIN}/internal/notes` },
+      { source: "/internal/notes/delete", destination: `${FELLOWSHIP_ORIGIN}/internal/notes/delete` },
       { source: "/internal/fellows", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows` },
       { source: "/internal/fellows/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/remove` },
       // These three existed in the backend and nowhere here, so past the site
