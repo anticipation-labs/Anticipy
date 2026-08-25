@@ -198,20 +198,16 @@ final class AnticipyBackend {
         return r
     }
 
-    /// Exchange the signed-in owner session for a short-lived Deepgram JWT.
-    /// The long-lived vendor key remains server-side and never enters iOS.
-    func transcriptionToken() async throws -> String {
-        var request = writeRequest(
-            baseURL.appendingPathComponent("transcription/token"), method: "POST")
-        request.httpBody = Data("{}".utf8)
-        let data = try await send(request)
-        guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let token = body["access_token"] as? String,
-              !token.isEmpty else {
-            throw BackendError(status: -1)
-        }
-        return token
-    }
+    // NO transcriptionToken(). It exchanged the owner's session for a
+    // short-lived speech-vendor JWT so the phone could open a websocket and
+    // stream the pendant's raw Opus frames to a third party — design/
+    // LOCAL-FIRST.md rule 1 broken by the one function that made it possible.
+    //
+    // The route still exists server-side and answers 410 GONE with its reason
+    // (backend/pb_hooks/transcription_token.pb.js), because a deleted route
+    // answers 404 and a 404 reads as "wrong URL" — something a client retries.
+    // Nothing in this app calls it any more, so the refusal is a backstop
+    // rather than a thing this file has to interpret.
 
     /// Store the owner's number where the brain reads it. Updates the
     /// existing row for this owner rather than piling up duplicates.

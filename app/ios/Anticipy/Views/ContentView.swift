@@ -855,9 +855,11 @@ struct HomeView: View {
     private var pendantLabel: String {
         switch pendant.state {
         case .connected:
-            return session.pendantCapturing
-                ? "Pendant · listening"
-                : "Pendant · starting transcription"
+            // NOT "starting transcription". Nothing is starting: the pendant
+            // has no way to turn sound into words until an on-device
+            // transcriber exists, and a label promising one that never
+            // arrives is the same lie as a Listening label over silence.
+            return "Pendant · can't hear yet"
         case .connecting: return "Pendant connecting"
         case .reconnecting: return "Pendant reconnecting"
         case .warmingUp: return "Turning on Bluetooth"
@@ -870,9 +872,14 @@ struct HomeView: View {
     private var pendantNote: String {
         switch pendant.state {
         case .connected:
-            return session.pendantCapturing
-                ? "Your pendant audio is being securely transcribed by Deepgram. Finalized words come back to Anticipy; the long-lived provider key never enters this phone."
-                : "Your pendant is connected and I'm opening its secure transcription stream. If that service is unavailable, I say so here instead of dropping audio behind a Listening label."
+            // BOTH halves of this used to be false. One said the pendant's
+            // sound was going to a speech vendor; the other promised a stream
+            // that was "opening". design/LOCAL-FIRST.md rule 1 closed that
+            // lane - "RAW AUDIO NEVER LEAVES A DEVICE" - and a privacy promise
+            // left standing after the thing it described is gone is worse than
+            // the violation: it tells someone their audio goes somewhere it
+            // does not, and nothing about where it actually went.
+            return "Your pendant is connected, but I can't turn its sound into words yet - that has to happen on this phone, and I don't have that piece. Nothing from the pendant is recorded or sent anywhere. Your phone's microphone is the ear that works."
         case .warmingUp: return "Bluetooth is still waking up. I'll start looking for your pendant the moment it's ready. Nothing for you to do."
         case .connecting, .reconnecting, .searching: return "I'm looking for your pendant. Listen with phone works right now either way."
         case .unavailable: return "Bluetooth is off, so I can't see the pendant."

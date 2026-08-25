@@ -166,9 +166,16 @@ final class AnticipySession: ObservableObject {
     private var bag = Set<AnyCancellable>()
     private var seenDoneJobIDs = Set<String>()
     let listener = PhoneListener()
-    private let pendantTranscriber = TranscriberClient()
-    private var pendantTokenInFlight = false
-    private var pendantRetryTask: Task<Void, Never>?
+    /// NO PENDANT TRANSCRIBER. `TranscriberClient` was deleted with this
+    /// change: it opened a websocket to a speech vendor and streamed the
+    /// pendant's raw Opus frames to it, which is design/LOCAL-FIRST.md rule 1
+    /// broken in the first line of the list — "RAW AUDIO NEVER LEAVES A
+    /// DEVICE. Not to Deepgram, not to anyone."
+    ///
+    /// There is no replacement field here on purpose. `LocalTranscriber` is
+    /// the intended home and cannot be wired yet (see
+    /// `startPendantTranscription`), and a nil-able `transcriber` property
+    /// sitting here would be a socket-shaped hole waiting to be refilled.
 
     /// Words spoken with no network used to live in a plain in-memory array.
     /// If iOS reclaimed the app before it reconnected, they were gone — from a
@@ -263,12 +270,6 @@ final class AnticipySession: ObservableObject {
         listener.onSpeaker = { [weak self] line, tag, at, continues in
             Task { await self?.heard(line, speaker: tag, from: .phoneMic, at: at,
                                      continuesPrevious: continues) }
-        }
-        pendantTranscriber.onTranscript = { [weak self] line in
-            Task { await self?.heard(line, from: .pendant) }
-        }
-        pendantTranscriber.onConnection = { [weak self] connected in
-            self?.pendantCapturing = connected
         }
         // Re-render views observing the session when the listener changes.
         listener.objectWillChange
@@ -1062,49 +1063,65 @@ final class AnticipySession: ObservableObject {
         keepListening = true
     }
 
-    /// Pendant frames follow a separate, honest path: BLE Opus -> Deepgram
-    /// websocket -> finalized text -> the same durable brain event as phone
-    /// speech. The app receives only a 60-second JWT, never the vendor key.
+    /// THE PENDANT IS MUTE, and this function is where that is true.
+    ///
+    /// It used to fetch a 60-second vendor JWT and open a websocket that
+    /// streamed the pendant's raw Opus frames, undecoded, to a third party.
+    /// design/LOCAL-FIRST.md rule 1, first in the list and quoted in full
+    /// because it names the vendor itself:
+    ///
+    ///     "RAW AUDIO NEVER LEAVES A DEVICE. Not to Deepgram, not to anyone.
+    ///      If a capability needs better ears, find a better local model."
+    ///
+    /// WHAT CLOSING IT COST: nothing that worked. Measured against production
+    /// on 2026-08-25 before the server half was removed — events with
+    /// source="pendant" is ZERO, ever, and the phone microphone had 229. This
+    /// lane never delivered one row in its life.
+    ///
+    /// -- Why there is no token fetch left to fail ---------------------------
+    ///
+    /// `/transcription/token` answers 410 GONE now
+    /// (`backend/pb_hooks/transcription_token.pb.js`), and the old catch block
+    /// called `schedulePendantRetry` on ANY error — so a permanent refusal
+    /// would have spun a three-second reconnect loop forever against a
+    /// connected pendant, spending battery and radio on a decision that is
+    /// never going to change.
+    ///
+    /// The fix is not a status check in front of the retry. A 410 is not an
+    /// outage to be handled gracefully, it is this product refusing to do the
+    /// thing, so the request is GONE rather than guarded: nothing here asks,
+    /// so nothing here has to decide whether the answer was permanent. (If a
+    /// remote transcription lane is ever legitimate again, the rule it needs is
+    /// written down and not re-derived: 410 is a decision, 5xx and a dropped
+    /// connection are outages, and only the second kind may be retried.)
+    ///
+    /// -- What this does instead --------------------------------------------
+    ///
+    /// Drops the frames at the source. `onOpusFrame` is left nil so the BLE
+    /// layer's audio goes nowhere at all — not into a queue, not into a buffer
+    /// that something later decides what to do with. Audio that is never held
+    /// cannot later be sent.
+    ///
+    /// -- What would make it speak ------------------------------------------
+    ///
+    /// An on-device transcriber. `Audio/LocalTranscriber.swift` is the
+    /// intended home and is NOT ready: it is 43 lines with zero call sites, it
+    /// wants `AVAudioPCMBuffer`, the pendant emits Opus `Data`, and there is no
+    /// Opus decoder in this target. That decoder is the real work, and it is
+    /// not started here. Until it exists the pendant is a battery with a
+    /// microphone nobody reads, and the app says so on both screens that
+    /// mention it rather than showing a Listening label over silence.
     func startPendantTranscription(_ pendant: PendantManager) async {
-        guard isSignedIn, pendant.state == .connected,
-              !pendantTokenInFlight, !pendantCapturing else { return }
-        pendantRetryTask?.cancel()
-        let transcriber = pendantTranscriber
-        pendant.onOpusFrame = { frame in transcriber.send(opusFrame: frame) }
-        pendantTranscriber.onNeedsReconnect = { [weak self, weak pendant] in
-            guard let self, let pendant else { return }
-            self.schedulePendantRetry(pendant)
-        }
-        pendantTokenInFlight = true
-        defer { pendantTokenInFlight = false }
-        do {
-            let token = try await backend.transcriptionToken()
-            guard pendant.state == .connected, isSignedIn else { return }
-            pendantTranscriber.connect(accessToken: token)
-        } catch {
-            pendantCapturing = false
-            schedulePendantRetry(pendant)
-        }
-    }
-
-    func stopPendantTranscription(_ pendant: PendantManager) {
-        pendantRetryTask?.cancel()
-        pendantRetryTask = nil
+        // Not a guard on `isSignedIn` or the pendant's state: there is nothing
+        // to start under any condition, and a version of this that returned
+        // early on some paths would leave `onOpusFrame` set on the others.
         pendant.onOpusFrame = nil
-        pendantTranscriber.onNeedsReconnect = nil
-        pendantTranscriber.disconnect()
-        pendantTokenInFlight = false
         pendantCapturing = false
     }
 
-    private func schedulePendantRetry(_ pendant: PendantManager) {
-        guard isSignedIn, pendant.state == .connected else { return }
-        pendantRetryTask?.cancel()
-        pendantRetryTask = Task { [weak self, weak pendant] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled, let self, let pendant else { return }
-            await self.startPendantTranscription(pendant)
-        }
+    func stopPendantTranscription(_ pendant: PendantManager) {
+        pendant.onOpusFrame = nil
+        pendantCapturing = false
     }
 
     /// True when iOS has already been told no and will not ask again — the app

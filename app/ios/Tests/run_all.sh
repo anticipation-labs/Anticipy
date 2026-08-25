@@ -25,6 +25,9 @@ sh "$HERE/run_capture_source_tests.sh"
 sh "$HERE/run_first_run_tests.sh"
 sh "$HERE/run_enrollment_offer_tests.sh"
 sh "$HERE/run_job_receipt_tests.sh"
+# LOCAL-FIRST rule 1, the iOS half: no vendor socket, no vendor credential, no
+# retry loop against a permanent refusal, and copy that says what is true.
+sh "$HERE/run_local_ears_tests.sh"
 sh "$HERE/run_stale_extension_tests.sh"
 sh "$HERE/run_reachable_number_tests.sh"
 sh "$HERE/run_notifier_tests.sh"

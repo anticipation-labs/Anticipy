@@ -212,7 +212,34 @@ settings:
     # checked sat unread in the same row. `hasReceipt` now means the server
     # verified this, bound to the row's own effect_key, and the proof index is
     # on the card. Moment 31: done without proof doesn't exist.
-    CURRENT_PROJECT_VERSION: "83"
+    # 84: the pendant stops sending sound off the phone, and the app stops
+    # telling its owner that it does.
+    #
+    # design/LOCAL-FIRST.md rule 1, first in the list: "RAW AUDIO NEVER LEAVES
+    # A DEVICE. Not to Deepgram, not to anyone." That law was written and then
+    # the product streamed the pendant's raw Opus frames to a speech vendor's
+    # websocket for months, while LOCAL-FIRST.md's own scoreboard said the
+    # phone did all processing and was "law-abiding by design".
+    #
+    # TranscriberClient.swift is deleted, the token exchange is gone from
+    # AnticipyBackend, and startPendantTranscription leaves `onOpusFrame` nil
+    # so frames are dropped where they arrive. It cost nothing that worked:
+    # production events with source="pendant" is ZERO, ever, against 229 from
+    # the phone microphone.
+    #
+    # AND THE COPY. Three sentences told the owner their pendant audio went to
+    # a named vendor; two more promised a stream that was "starting" or "not
+    # live yet". Once the lane closed all five were FALSE, and a false privacy
+    # promise is worse than the violation it described — it says audio goes
+    # somewhere it does not, and nothing about where it went instead. They are
+    # rewritten, not deleted: silence where a promise was is its own failure.
+    #
+    # THE PENDANT IS MUTE UNTIL AN ON-DEVICE TRANSCRIBER EXISTS, and that is
+    # said on both screens that mention it. LocalTranscriber.swift is 43 lines
+    # with zero call sites and wants AVAudioPCMBuffer while the pendant emits
+    # Opus Data, with no Opus decoder in the target. That decoder is the real
+    # work and it is NOT started here.
+    CURRENT_PROJECT_VERSION: "84"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

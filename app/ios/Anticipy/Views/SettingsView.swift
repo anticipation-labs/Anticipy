@@ -11,7 +11,11 @@ struct SettingsView: View {
     @ObservedObject private var haptics = HapticEngine.shared
     #endif
     @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
-    @AppStorage("hasOnboarded") private var hasOnboarded = false
+    /// The same key AnticipyApp routes on and the account lifecycle clears -
+    /// declared once, in FirstRunOwnership. This was a second copy of the raw
+    /// string, which is exactly how a rename leaves a "Replay the welcome
+    /// tour" button that silently replays nothing.
+    @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
     /// When a timed pause is due to end, as seconds since the reference date;
     /// 0 means "not paused". On disk rather than in @State so the deadline
     /// survives walking away from this screen — the promise on the label has
@@ -138,9 +142,11 @@ struct SettingsView: View {
                     }
                 }
                 if pendant.state == .connected {
-                    Text(session.pendantCapturing
-                         ? "Pendant audio goes to Deepgram for live transcription; finalized text then follows the same Anticipy path as phone speech."
-                         : "The pendant is connected, but its transcription stream is not live yet.")
+                    // Said plainly, and permanently, rather than as a state
+                    // that might change on its own. "Not live yet" invited
+                    // somebody to wait for a stream that was never coming
+                    // back: LOCAL-FIRST rule 1 closed that lane for good.
+                    Text("Connected, but it can't hear for me yet. Turning its sound into words has to happen on this phone, and that piece doesn't exist yet - so the pendant records nothing and sends nothing. Your phone's microphone does all the listening.")
                         .font(.caption)
                         .foregroundStyle(Theme.muted)
                 }
@@ -364,7 +370,11 @@ struct SettingsView: View {
                 Text("The words (the text, not the sound) go to my server. That's how I know what you need.")
                     .font(.callout)
                     .foregroundStyle(Theme.text2)
-                Text("If you use a pendant, its Opus audio goes to Deepgram to become text. My backend gives this phone a short-lived token; the Deepgram account key stays on the server.")
+                // This sentence was a PROMISE about where somebody's audio
+                // went, and closing the lane made it false. Deleting it and
+                // leaving silence would be worse still - a stranger reading
+                // this section deserves the current answer, not a blank.
+                Text("Your pendant's sound goes nowhere. It used to be sent away to be turned into words, and it isn't any more: nothing I do with sound leaves this phone. Until I can do that here, on the phone, the pendant can't hear for me.")
                     .font(.callout)
                     .foregroundStyle(Theme.text2)
                 Text("Anyone near you is heard too, and they haven't agreed to any of this. Please tell them, or stop me while they're around.")
