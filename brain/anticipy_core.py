@@ -1364,11 +1364,25 @@ class Anticipy:
         #    new request or chat. A "sounds good" the SMS lane already
         #    declined to treat as a confirmation must not come back through
         #    the ambient door and release the newest card instead.
+        #  - The meeting posture is armed. in_conversation() is a BACK-CHANNEL
+        #    density test and needs a fifth of the recent lines to be almost
+        #    pure agreement; the 2026-08-23 Meet ran at 13% against its 20%
+        #    threshold and never tripped it. That is the whole reason
+        #    meeting_heard exists, and it means a substantive two-way meeting
+        #    is invisible here while being the likeliest room for "okay let's
+        #    do it" to belong to somebody else. The posture already holds
+        #    fresh consequential CARDS for the after-call digest; this was the
+        #    one path that needs no card, because it releases work already
+        #    sitting at the gate — so a yes across the table could have sent
+        #    an email.
         #
-        # Neither case loses the yes: the line falls through to triage with
-        # mid_conversation riding along, which is the honest place to judge it.
+        # None of the three loses the yes: the line falls through to triage
+        # with mid_conversation and the meeting pre-check riding along, which
+        # is the honest place to judge it — and anything minted mid-meeting is
+        # held for the digest anyway. Being wrong here costs one tap; being
+        # wrong the other way costs an action nobody authorised.
         ambient = (not dictated and speaker != "other" and channel != "sms"
-                   and not in_conversation(context))
+                   and not in_meeting and not in_conversation(context))
         if ambient and self._GO_AHEAD_RE.match(line.strip()):
             released = self._release_freshest_held(line)
             if released:
