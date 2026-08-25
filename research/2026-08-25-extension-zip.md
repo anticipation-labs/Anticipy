@@ -151,3 +151,34 @@ every hash comparison above. Anything that reintroduces build-time
 nondeterminism — a timestamp, a filesystem ordering, a temp path in the
 archive — silently turns the strongest available deploy check back into a
 version string.
+
+### A deploy check must prove it actually compared something
+
+Added after the fact, because the near-miss is the same shape as the bug.
+
+Any check of this kind ends in "unzip the artifact, walk the files, compare."
+All three of those steps can silently do nothing, and a loop over nothing
+reports no differences — which is indistinguishable from a clean artifact.
+An audit on 2026-08-24 ran `unzip … && check …`, the unzip never ran, the
+checker walked an empty directory, and it passed the bundle. (In zsh a `&&`
+chain aborts when a glob matches nothing; the failure was invisible because
+nothing printed.)
+
+So the check must assert its own coverage, not just its own verdict:
+
+- run the steps separately and read **each command's** exit code — not the
+  exit code of a pipeline ending in `| tail` or `| head`, which is
+  essentially always 0 and reports the pager's success, not the checker's;
+- after extracting, assert the file count is **nonzero and equal to what the
+  source closure expects** before comparing anything;
+- have the check print `COMPARED=n` alongside its verdict, so "0 differences"
+  can never be read without the number of files that produced it.
+
+The verification behind this document was run that way: `COMPARED=20,
+DIFFERING=0, ORPHANED=0`, against the bytes extracted from the committed git
+object rather than the working tree. As a negative control the same loop was
+pointed at an empty directory and reported `COMPARED=0`, failing its guard —
+confirming the checker distinguishes "nothing wrong" from "nothing checked."
+
+This generalizes past zips. A green leg means the predicate did not fire; it
+does not mean the predicate ran. Coverage is part of the result.
