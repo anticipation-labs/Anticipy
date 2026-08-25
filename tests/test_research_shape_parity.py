@@ -21,6 +21,7 @@ Skipped, loudly, when node is missing — a skipped parity test is a copy nobody
 is checking, and that is worth seeing in the output.
 """
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -101,6 +102,14 @@ URLS = [
     "https://réserver.fr/x",
     "https://xn--rserver-bva.fr/x",
     "ftp://example.com/x",
+    "https://www.wikihow.com/claim-a-warranty",
+    "https://help.example.com/a",
+    "https://help.example.com/b",
+    "https://support.vendor.com/returns",
+    "https://blog.example.net/opinion",
+    "https://www.youtube.com/watch?v=1",
+    "https://en.wikipedia.org/wiki/Warranty",
+    "https://canada.gc.ca/forms",
 ]
 
 
@@ -110,7 +119,7 @@ def _node_says():
         pytest.skip("node is not installed — the parity of the two copies of "
                     "taskShape/isResearchable is NOT being checked in this run")
     driver = (
-        f'import {{ taskShape, isResearchable }} from {json.dumps(LEARN_JS.as_uri())};\n'
+        f'import {{ taskShape, isResearchable, rankSources }} from {json.dumps(LEARN_JS.as_uri())};\n'
         'let input = "";\n'
         'process.stdin.on("data", (c) => { input += c; });\n'
         'process.stdin.on("end", () => {\n'
@@ -118,6 +127,7 @@ def _node_says():
         '  console.log(JSON.stringify({\n'
         '    shapes: cases.goals.map((g) => taskShape(g)),\n'
         '    researchable: cases.urls.map((u) => isResearchable(u)),\n'
+        '    ranked: rankSources(cases.urls),\n'
         '  }));\n'
         '});\n'
     )
@@ -183,3 +193,35 @@ def test_the_word_lists_themselves_have_not_drifted():
         assert theirs == mine, (
             f"{name} has drifted: only in learn.js {sorted(theirs - mine)}, "
             f"only in research.py {sorted(mine - theirs)}")
+
+
+def test_the_source_ranking_is_identical_in_both_languages():
+    """Authority SHAPE, not a vendor list — so it generalises to errands nobody
+    anticipated. A server that ranked differently would read a different second
+    page than the browser and distil a different procedure from the same
+    search, which is the sort of divergence nobody would ever trace back."""
+    theirs = _node_says()["ranked"]
+    mine = research.rank_sources(URLS)
+    assert mine == theirs, f"learn.js -> {theirs}\nresearch.py -> {mine}"
+
+
+def test_the_ranking_corpus_actually_reorders_something():
+    """A parity test over an already-sorted corpus would pass against a
+    function that returns its input."""
+    ranked = research.rank_sources(URLS)
+    kept = [u for u in URLS if research.is_researchable(u)]
+    assert ranked != kept, "the corpus never exercises the ranking"
+    assert len(ranked) < len(kept), "the corpus never exercises one-per-host"
+
+
+def test_the_authority_and_content_farm_lists_have_not_drifted():
+    src = LEARN_JS.read_text()
+    for name, mine in (("AUTHORITATIVE", research._AUTHORITATIVE),
+                       ("LOW_VALUE", research._LOW_VALUE)):
+        block = src.split(f"const {name} = [", 1)[1].split("];", 1)[0]
+        theirs = {m.strip() for m in
+                  re.findall(r"/(.+?)/i", block.replace("\n", " "))}
+        ours = {p.pattern for p in mine}
+        assert theirs == ours, (
+            f"{name} has drifted: only in learn.js {sorted(theirs - ours)}, "
+            f"only in research.py {sorted(ours - theirs)}")
