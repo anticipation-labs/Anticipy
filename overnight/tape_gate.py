@@ -20,6 +20,31 @@ other state — tape present, tape unmarked, tape marked but pointing at a leg
 that tracks something else — is red, and the message says which.
 
 --------------------------------------------------------------------------
+HOW TO READ THE VERDICT — because this gate is red on purpose
+--------------------------------------------------------------------------
+Leg 2 is red permanently, by design, and it runs early. That is a problem for
+every OTHER leg: on 2026-08-24 a review shrank the census, leg 4 fired, and it
+printed as one lowercase line buried under leg 2's twenty-line block with the
+footer still naming leg 2 and the exit code unchanged. Nothing distinguished
+"the expected steady state" from "somebody shrank the census." The census
+tripwire was firing into the noise the gate makes on purpose.
+
+So every leg declares whether its red is EXPECTED, and the verdict is three
+states, not two:
+
+  exit 0  CLEAN            — no tape left anywhere. Celebrate, then delete
+                             this gate's registry (leg 1 will ask you to).
+  exit 1  TAPE OUTSTANDING — leg 2 is red and NOTHING ELSE IS. This is the
+                             steady state. Law 2 is working.
+  exit 2  THE BOOKS DISAGREE — a leg that is not red by design went red. The
+                             footer reprints its whole message, above the
+                             prose, because that is the news.
+
+An unexpected red prints `FAIL`; the by-design red prints `RED `. Never widen
+the by-design set to quiet a leg: the set is the definition of "normal", and
+adding to it is how a gate stops being able to surprise anyone.
+
+--------------------------------------------------------------------------
 HOW THIS AVOIDS BEING SATISFIED BY SILENCE
 --------------------------------------------------------------------------
 A registry of known tape is itself a way to hide tape: if the leg only checks
@@ -34,17 +59,18 @@ So this gate does not claim to detect tape. It makes silence expensive instead,
 by requiring THREE INDEPENDENT BOOKS TO AGREE:
 
   1. THE TREE      — `TAPE:` markers in the shipped organs (brain/, extension/,
-                     app/, backend/, chrome/, proof/, firmware/).
+                     app/, backend/, proof/, firmware/).
   2. THE REGISTRY  — KNOWN_TAPE below, which carries a real expiry PREDICATE
                      per entry, not a promise to edit a gate later.
   3. THE LEDGER    — the "Known standing tape" section of HARNESS-LAWS.md.
 
 A marker in the tree with no registry entry is red (leg 1). A registry entry
 whose tape is gone is red until the entry is retired (leg 1). A registry entry
-whose tape is still present is red, forever, until the real fix lands (leg 2)
-— that is the expiry the law asks for, and it is a predicate this file can
-run, not a sentence somebody meant to honor. A registry entry the ledger never
-heard of is red (leg 5), and vice versa.
+whose tape MOVED is red, loudly (leg 1 — see below). A registry entry whose
+tape is still present is red, forever, until the real fix lands (leg 2) — that
+is the expiry the law asks for, and it is a predicate this file can run, not a
+sentence somebody meant to honor. A registry entry the ledger never heard of is
+red (leg 5), and a ledger bullet this registry never heard of is red too.
 
 Hiding a piece of tape therefore costs three coordinated edits in three files,
 every one of them greppable and reviewable. That is not detection. It is the
@@ -57,13 +83,53 @@ below. Each must be either DECLARED (marker + registry + the marker naming
 this gate) or GONE from the tree. Neither this gate nor a later agent can make
 leg 3 pass by doing nothing, because the nothing is already written down. Leg 4
 guards the census itself: shortening the list to quiet the gate trips a count
-that is declared separately from the list.
+that is declared separately from the list, and trips the audit doc besides.
 
-What this gate does NOT cover, stated out loud so nobody mistakes green for
-safe: tape that was never marked, is not one of the audited five, and nobody
+--------------------------------------------------------------------------
+ONE SCOPE, THREE STATES — the 2026-08-24 refactor hole
+--------------------------------------------------------------------------
+This gate shipped with the disease it was built to catch. `present()` searched
+the whole FILE and `expired()` searched only the enclosing DEF. So an ordinary
+extract-method refactor — move a taped branch into a helper, leave the `TAPE:`
+comment at the old site — made the tape "expired" while it was still in the
+tree and still running. It retired live tape from leg 2 AND leg 3 at once. All
+three books agreed and all three were wrong, and NOBODY SOFTENED A PREDICATE:
+the predicate's scope was wrong. That is subtler than the failure this gate was
+built for, and it is why every entry now resolves through ONE function,
+`Tape.state()`, into one of three states:
+
+  LIVE   the tape is where the registry says it is.        leg 2 RED.
+  MOVED  it is not there, but it IS somewhere else in the shipped organs.
+         RED, in leg 1, naming both places. A move is not a fix, and the
+         gate refuses to guess which one it was — re-point the entry or
+         retire it, in a diff, with a name on it.
+  GONE   the text is nowhere in the shipped organs at all.  leg 2 green
+         for that entry, and leg 1 asks you to retire it.
+
+There is no per-entry `expired=` override any more. That parameter is exactly
+how the two scopes came to disagree; an entry that needs a different expiry
+needs a different `find`, or a new state here with a test behind it.
+
+--------------------------------------------------------------------------
+WHAT THIS GATE CANNOT SEE — stated out loud, so green is never read as safe
+--------------------------------------------------------------------------
+Tape that was never marked, is not one of the audited five, and nobody
 registered. No deterministic gate finds that — finding it is a reading of what
 code MEANS, and that belongs to a model with full context (Law 1, Law 5). The
-mechanism for that is an audit, and leg 4 prints how old the last one is.
+mechanism for that is an audit, and leg 4 pins the last one.
+
+Tape in a file type leg 1 does not read. That hole was real: CODE_EXTS held
+`.h` and not `.c`, so 142 of firmware/'s 235 files were invisible and a
+`/* TAPE: */` in the pendant firmware read as PASS under the leg that enforces
+Law 2. It is closed structurally now rather than by adding one extension: every
+file in a shipped organ must be classified as code (read) or as data
+(declared), and anything UNCLASSIFIED turns leg 1 red until a human files it.
+A shipped organ that yields zero readable files is red for the same reason —
+the header must never print a scan scope the leg does not have.
+
+Tape in `overnight/` and `tests/`. Deliberately excluded: Law 1 exempts gates
+and evals, and both directories discuss tape by nature — this file alone would
+produce a dozen false markers. The exclusion is printed in the gate's output.
 
 Run:  python3 overnight/tape_gate.py
 """
@@ -79,15 +145,39 @@ ROOT = os.path.dirname(HERE)
 LAWS = "HARNESS-LAWS.md"
 AUDIT_DOC = os.path.join("research", "2026-08-24-law1-audit.md")
 
-# The organs that SHIP. overnight/ and tests/ are deliberately excluded from
-# the marker scan: Law 1 exempts gates and evals, and both directories discuss
-# tape by nature — this file alone would produce a dozen false markers. The
-# exclusion is printed in the gate's own output so it is a stated limit rather
-# than a silent one.
-SHIPPED_DIRS = ("brain", "extension", "app", "backend", "chrome", "proof",
-                "firmware")
+# The organs that SHIP. `chrome/` used to be listed here and held exactly one
+# file — a `.metadata` alias map from a chrome-for-testing download. It is a
+# browser download cache, not an organ; the browser arm's code is extension/.
+# A directory in this tuple that leg 1 can read nothing out of is now RED, and
+# that is what removed it: the header printed a scope the leg did not have.
+SHIPPED_DIRS = ("brain", "extension", "app", "backend", "proof", "firmware")
+
+# Files leg 1 READS for markers. Anything a `TAPE:` comment could live in and
+# still ship. `.c` and `.s` are here because firmware/ is 142 C files and 3
+# assembly files and they were invisible until 2026-08-24.
 CODE_EXTS = (".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".swift",
-             ".sh", ".m", ".mm", ".h", ".kt", ".java")
+             ".sh", ".bash", ".zsh", ".m", ".mm", ".h", ".hpp", ".hh", ".c",
+             ".cc", ".cpp", ".cxx", ".s", ".kt", ".java", ".rb", ".go", ".rs",
+             ".html", ".htm", ".css", ".scss")
+CODE_NAMES = frozenset({"Dockerfile", "Makefile", "makefile", "Kconfig",
+                        "CMakeLists.txt", "Procfile"})
+
+# Files leg 1 does NOT read, declared rather than assumed. Every extension in a
+# shipped organ has to be in one list or the other; a third case is red. Data,
+# logs, fixtures, images, archives, signing material, editor and build metadata
+# — none of them can carry a running string-level patch.
+NOT_CODE_EXTS = (
+    ".log", ".jsonl", ".ids", ".json", ".md", ".rst", ".txt", ".csv", ".tsv",
+    ".yml", ".yaml", ".toml", ".ini", ".cfg", ".conf", ".env", ".lock",
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".pdf", ".wav", ".mp3",
+    ".mp4", ".mov", ".ttf", ".otf", ".woff", ".woff2", ".onnx", ".bin",
+    ".hex", ".uf2", ".elf", ".map", ".a", ".o", ".d", ".zip", ".gz", ".tar",
+    ".bak", ".orig", ".rej", ".patch", ".diff", ".overlay", ".dtsi", ".dts",
+    ".plist", ".pbxproj", ".xcworkspacedata", ".xcscheme", ".xcprivacy",
+    ".xcconfig", ".strings", ".storyboard", ".xib", ".entitlements",
+    ".mobileprovision", ".cer", ".p12", ".pem", ".crt", ".resolved",
+    ".xcuserstate", ".pyc", ".pyo", ".so", ".dylib", ".dll", ".class",
+)
 SKIP_DIRS = {".git", "node_modules", "__pycache__", "build", "dist", ".build",
              "DerivedData", "Pods", ".venv", "venv", "vendor", ".next"}
 
@@ -95,7 +185,14 @@ SKIP_DIRS = {".git", "node_modules", "__pycache__", "build", "dist", ".build",
 #   TAPE: the prose fallback below ...          (anticipy_core.py)
 #   TAPE (HARNESS-LAWS.md Law 2): this drop ... (asking.py)
 #   TAPE (HARNESS-LAWS.md Law 2). Expiry: ...   (anticipy_core.py)
-MARKER_RE = re.compile(r"\bTAPE\b[ \t]*(?:\([^)\n]*\))?[ \t]*[:.]")
+#   # TAPE                                      (the rest on the next line)
+#
+# That last form is why `$` is here. A marker split across two comment lines
+# was invisible to this regex while a human grepping `TAPE` found it and read
+# it as declared — which is audit item #21's shape (a declaration that reads
+# compliant and enforces nothing) recreated inside the enforcement. `\bTAPE\b`
+# is case-sensitive, so "duct tape and prayer" still does not fire.
+MARKER_RE = re.compile(r"\bTAPE\b[ \t]*(?:\([^)\n]*\))?[ \t]*(?:[:.]|$)", re.M)
 
 # The marker must name the leg that retires it. This gate IS that leg, so the
 # declaration is checkable: the marker has to point here. audit item #21 is
@@ -124,20 +221,67 @@ def read(root: str, rel: str) -> str:
         return f.read()
 
 
+def is_code(filename: str) -> bool:
+    """Would leg 1 read this file for `TAPE:` markers?"""
+    return (filename in CODE_NAMES
+            or filename.lower().endswith(CODE_EXTS))
+
+
+def is_declared_data(filename: str) -> bool:
+    """Has somebody written down that this file cannot carry tape? Dotfiles
+    are metadata by convention (.DS_Store, .gitkeep, .metadata) and are the
+    one class taken on the convention rather than by extension."""
+    return (filename.startswith(".")
+            or filename.lower().endswith(NOT_CODE_EXTS))
+
+
+def _walk(root: str, d: str):
+    base = os.path.join(root, d)
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames[:] = sorted(n for n in dirnames
+                             if n not in SKIP_DIRS
+                             and not n.endswith(".xcarchive")
+                             and not n.endswith(".framework"))
+        for fn in sorted(filenames):
+            yield os.path.relpath(os.path.join(dirpath, fn), root), fn
+
+
 def iter_shipped_files(root: str, dirs=SHIPPED_DIRS):
     """Every source file in the shipped organs, deepest-first stable order."""
     for d in dirs:
-        base = os.path.join(root, d)
-        if not os.path.isdir(base):
+        if not os.path.isdir(os.path.join(root, d)):
             continue
-        for dirpath, dirnames, filenames in os.walk(base):
-            dirnames[:] = sorted(n for n in dirnames
-                                 if n not in SKIP_DIRS
-                                 and not n.endswith(".xcarchive")
-                                 and not n.endswith(".framework"))
-            for fn in sorted(filenames):
-                if fn.endswith(CODE_EXTS):
-                    yield os.path.relpath(os.path.join(dirpath, fn), root)
+        for rel, fn in _walk(root, d):
+            if is_code(fn):
+                yield rel
+
+
+def scan_reach(root: str, dirs=SHIPPED_DIRS) -> dict:
+    """How much of each shipped organ leg 1 can actually read, and what it
+    cannot classify. This is the leg's own honesty check: a scan scope printed
+    in the header that the code does not have is the I3 failure, where
+    undeclared tape in the pendant firmware was a rejected diff under Law 2 and
+    a PASS under the leg that enforces it."""
+    per_dir: dict[str, tuple[int, int]] = {}
+    unknown: list[str] = []
+    missing: list[str] = []
+    for d in dirs:
+        if not os.path.isdir(os.path.join(root, d)):
+            missing.append(d)
+            continue
+        n_read = n_total = 0
+        for rel, fn in _walk(root, d):
+            n_total += 1
+            if is_code(fn):
+                n_read += 1
+            elif not is_declared_data(fn):
+                unknown.append(rel)
+        per_dir[d] = (n_read, n_total)
+    hollow = [d for d, (r, t) in per_dir.items() if t and not r]
+    return {"per_dir": per_dir, "unknown": unknown, "missing": missing,
+            "hollow": hollow,
+            "read": sum(r for r, _ in per_dir.values()),
+            "total": sum(t for _, t in per_dir.values())}
 
 
 def find_markers(root: str, dirs=SHIPPED_DIRS) -> list[tuple[str, int, str]]:
@@ -148,7 +292,7 @@ def find_markers(root: str, dirs=SHIPPED_DIRS) -> list[tuple[str, int, str]]:
             with open(os.path.join(root, rel), encoding="utf-8",
                       errors="replace") as f:
                 for n, line in enumerate(f, 1):
-                    if MARKER_RE.search(line):
+                    if MARKER_RE.search(line.rstrip()):
                         out.append((rel, n, line.strip()))
         except OSError:
             continue
@@ -186,43 +330,93 @@ def _line_of(source: str, offset: int) -> int:
     return source.count("\n", 0, offset) + 1
 
 
+def _all_offsets(hay: str, needle: str):
+    start = 0
+    while True:
+        i = hay.find(needle, start)
+        if i < 0:
+            return
+        yield i
+        start = i + 1
+
+
 # --------------------------------------------------------------------------
 # THE REGISTRY. One entry per known piece of tape.
 #
-#   present()      — is the tape still in the tree? (registry ↔ tree)
-#   expired()      — has the REAL FIX landed? This is the expiry Law 2 asks
-#                    for, as a predicate this file runs. While it is False the
-#                    gate is RED. That is the whole point.
+#   find           — the TAPE ITSELF, as text. Not an anchor near it: the
+#                    thing whose deletion is the fix.
+#   home           — the def that text lives in, or None for file scope. ONE
+#                    scope answers both "is it present" and "has it expired";
+#                    see the header. Do not add a second one.
 #   marker_home    — the def whose text must carry the `TAPE:` comment, or
-#                    None to look in a window around `find`.
+#                    None to look in a window around `find`. This is a
+#                    DIFFERENT question from `home`: `_THIRD_PERSON_RE` is
+#                    defined at module level and commented in question_line().
 #   audit_item     — the row number in research/2026-08-24-law1-audit.md, for
 #                    the five the audit recorded as undeclared.
 # --------------------------------------------------------------------------
+LIVE, MOVED, GONE = "live", "moved", "gone"
+
+
 class Tape:
-    def __init__(self, tid, rel, find, what, real_fix, marker_home=None,
-                 audit_item=None, expired=None, ledger_needle=None):
+    def __init__(self, tid, rel, find, what, real_fix, home=None,
+                 marker_home=None, audit_item=None, ledger_needle=None):
         self.id = tid
         self.rel = rel
         self.find = find
         self.what = what
         self.real_fix = real_fix
+        self.home = home
         self.marker_home = marker_home
         self.audit_item = audit_item
         self.ledger_needle = ledger_needle or tid
-        self._expired = expired
 
-    def present(self, root: str) -> bool:
-        """The tape is in the tree. A missing FILE is not 'gone' — it is a
-        leg that cannot be tested, and read() turns that into a failure."""
-        return self.find in read(root, self.rel)
+    # -- the one scope ------------------------------------------------------
+    def state(self, root: str, dirs=SHIPPED_DIRS) -> tuple[str, list[str]]:
+        """(LIVE | MOVED | GONE, where). `where` is the sites that decided it:
+        for LIVE the lines inside the entry's home, for MOVED the lines the
+        tape is at instead. A missing FILE is not 'gone' — it is a leg that
+        cannot be tested, and read() turns that into a failure."""
+        src = read(root, self.rel)
+        if self.home:
+            lo, hi = slice_def_span(src, self.home)
+        else:
+            lo, hi = 0, len(src)
+        inside, elsewhere = [], []
+        for i in _all_offsets(src, self.find):
+            line = f"{self.rel}:{_line_of(src, i)}"
+            (inside if lo <= i < hi and hi > lo else elsewhere).append(line)
+        if inside:
+            return LIVE, inside
+        if elsewhere:
+            return MOVED, elsewhere
+        # Not in this file at all. Before calling it gone — which retires the
+        # entry and lets leg 2 go green for it — look in the rest of the
+        # shipped organs. Moving a file is a refactor too.
+        for rel in iter_shipped_files(root, dirs):
+            if rel == self.rel:
+                continue
+            try:
+                with open(os.path.join(root, rel), encoding="utf-8",
+                          errors="replace") as f:
+                    other = f.read()
+            except OSError:
+                continue
+            for i in _all_offsets(other, self.find):
+                elsewhere.append(f"{rel}:{_line_of(other, i)}")
+        return (MOVED, elsewhere) if elsewhere else (GONE, [])
 
-    def expired(self, root: str) -> bool:
-        """The real fix has landed and the tape is gone. Default: the thing
-        `find` points at is no longer in the file."""
-        if self._expired is not None:
-            return self._expired(root)
-        return not self.present(root)
+    def present(self, root: str, dirs=SHIPPED_DIRS) -> bool:
+        """The tape is still in the tree — anywhere. MOVED counts as present,
+        because moved tape is running tape."""
+        return self.state(root, dirs)[0] != GONE
 
+    def expired(self, root: str, dirs=SHIPPED_DIRS) -> bool:
+        """The real fix has landed: the tape's own text is nowhere in the
+        shipped organs. Same scope, same call, same answer as present()."""
+        return self.state(root, dirs)[0] == GONE
+
+    # -- where the comment has to be ---------------------------------------
     def _home_span(self, root: str) -> tuple[str, int, int]:
         src = read(root, self.rel)
         if self.marker_home:
@@ -247,15 +441,7 @@ class Tape:
         return _line_of(src, m.start()) if m else 0
 
     def where(self) -> str:
-        return f"{self.marker_home or self.find}"
-
-
-def _fallback_gone(rel: str, enclosing: str, needle: str):
-    """Expiry for tape that is a BRANCH inside a function rather than a whole
-    symbol: the function survives, the prose fallback inside it does not."""
-    def check(root: str) -> bool:
-        return needle not in slice_def(read(root, rel), enclosing)
-    return check
+        return f"{self.marker_home or self.home or self.find}"
 
 
 CORE = "brain/anticipy_core.py"
@@ -277,7 +463,11 @@ KNOWN_TAPE = [
     Tape(
         tid="is_consequential compute fallback",
         rel=CORE,
+        # `if compute_answer(g):` also appears in job_lane(), which is an
+        # unrelated browser-arm router. home= is what tells the two apart, and
+        # is why deleting THIS one does not leave the entry looking alive.
         find="if compute_answer(g):",
+        home="is_consequential",
         what="the calculator is consulted on an undeclared goal and, if it "
              "can answer, flips a held goal to unattended",
         real_fix="the effect-channel rewrite: triage always declares "
@@ -286,7 +476,6 @@ KNOWN_TAPE = [
         marker_home="is_consequential",
         audit_item=19,
         ledger_needle="[tape:compute_fallback]",
-        expired=_fallback_gone(CORE, "is_consequential", "if compute_answer(g):"),
     ),
     Tape(
         tid="shard_too_thin",
@@ -295,17 +484,21 @@ KNOWN_TAPE = [
         what="a word count decides that a line is too thin to act on — "
              "the brake fitted after \"At 5:15\" minted a meeting with a "
              "person nobody had mentioned (event nbeb6oze5bmyrge)",
+        marker_home="shard_too_thin",
         real_fix="segment-granularity triage: the day the judge reads closed "
                  "conversations instead of raw lines, shards stop existing as "
                  "decision units and the function is DELETED.",
-        marker_home="shard_too_thin",
         audit_item=20,
         ledger_needle="[tape:shard_too_thin]",
     ),
     Tape(
         tid="_pending_class prose fallback",
         rel=CORE,
-        find="def _pending_class(",
+        # The tape is the FALLBACK BRANCH, not the function: _pending_class()
+        # survives the fix, the re-derivation from prose does not. `find` is
+        # therefore the branch, scoped to the def that holds it.
+        find="return is_consequential(job.get(",
+        home="_pending_class",
         what="rows minted before the `consequence` column existed get their "
              "consequence re-derived from goal PROSE, which is the exact "
              "question the effect channel exists to stop asking",
@@ -316,8 +509,6 @@ KNOWN_TAPE = [
         marker_home="_pending_class",
         audit_item=21,
         ledger_needle="[tape:pending_class]",
-        expired=_fallback_gone(CORE, "_pending_class",
-                               "return is_consequential(job.get("),
     ),
     Tape(
         tid="_THIRD_PERSON_RE degraded drop",
@@ -343,20 +534,76 @@ AUDIT_UNDECLARED = (19, 20, 21, 22, 50)
 AUDIT_UNDECLARED_COUNT = 5
 AUDIT_DECLARED_COUNT = 0          # what the audit found properly declared
 
+# The rows leg 4 reads back out of the audit doc. Each is anchored to ONE table
+# row, end to end, so a match cannot wander across the document into some other
+# table's bolded number — and a row that stops matching is RED, never a silent
+# skip. Both are pinned: AUDIT_DECLARED_COUNT had no leg reading it at all,
+# which is its own way of looking thorough while checking nothing.
+CENSUS_ROWS = (
+    ("undeclared", AUDIT_UNDECLARED_COUNT,
+     re.compile(r"^\|[^|\n]*\*\*TAPE,\s*UNDECLARED\*\*[^|\n]*\|"
+                r"\s*\*\*(\d+)\*\*\s*\|\s*$", re.M)),
+    ("properly declared", AUDIT_DECLARED_COUNT,
+     re.compile(r"^\|[^|\n]*\*\*TAPE,\s*properly declared\*\*[^|\n]*\|"
+                r"\s*\*\*(\d+)\*\*\s*\|\s*$", re.M)),
+)
+
 
 # --------------------------------------------------------------------------
-# LEG 1 — NO MARKER THE REGISTRY HAS NEVER HEARD OF, AND NO ENTRY WHOSE
-#         TAPE IS ALREADY GONE.
+# LEG 1 — THE LEG CAN READ THE TREE; NO MARKER THE REGISTRY HAS NEVER HEARD
+#         OF; NO ENTRY WHOSE TAPE HAS MOVED OR IS ALREADY GONE.
 #
-# Both directions, because each direction is a different way to hide. An
-# unregistered marker is tape that shipped without an expiry — a rejected diff
-# by Law 2's own words. An entry whose tape is gone is a ledger that has begun
-# to lie, and a lying ledger is how "tracked by leg 4" survived four months of
-# leg 4 testing something else.
+# Four directions, because each is a different way to hide. A file type the
+# leg cannot read is tape it will never see. An unregistered marker is tape
+# that shipped without an expiry — a rejected diff by Law 2's own words. Tape
+# that MOVED retires itself from two legs at once without anybody softening a
+# predicate. An entry whose tape is gone is a ledger that has begun to lie, and
+# a lying ledger is how "tracked by leg 4" survived four months of leg 4
+# testing something else.
 # --------------------------------------------------------------------------
 def leg_1_markers_are_registered(root: str = ROOT, registry=None,
                                  dirs=SHIPPED_DIRS) -> str:
     registry = KNOWN_TAPE if registry is None else registry
+
+    # (a) Can this leg read what it claims to scan? Everything below is a
+    # statement about files it opened, so this question comes first.
+    reach = scan_reach(root, dirs)
+    if reach["missing"]:
+        raise LegFailed(
+            "SHIPPED_DIRS names " + ", ".join(f"`{d}/`" for d in reach["missing"])
+            + ", and there is no such directory in this tree. The header "
+              "prints that scan scope every run, so the gate is claiming to "
+              "read an organ it never opens. Either the directory moved (point "
+              "SHIPPED_DIRS at it) or it is gone (drop it, and say so in the "
+              "commit).")
+    if reach["hollow"]:
+        details = ", ".join(f"`{d}/` ({reach['per_dir'][d][1]} files, 0 readable)"
+                            for d in reach["hollow"])
+        raise LegFailed(
+            f"this leg can read nothing at all out of {details}. A shipped "
+            "organ that yields zero files is a scan scope on paper only: the "
+            "header says the gate reads it, and a `TAPE:` comment in there "
+            "would be a rejected diff under Law 2 and a PASS under this leg. "
+            "Add the file types to CODE_EXTS, or drop the directory from "
+            "SHIPPED_DIRS if it holds no source (`chrome/` was dropped on "
+            "2026-08-24 for exactly this: one .metadata file from a browser "
+            "download cache).")
+    if reach["unknown"]:
+        shown = reach["unknown"][:8]
+        more = len(reach["unknown"]) - len(shown)
+        raise LegFailed(
+            f"{len(reach['unknown'])} file(s) in the shipped organs are "
+            "neither read for `TAPE:` markers nor declared as non-code, so "
+            "this leg cannot say whether they carry tape:\n        "
+            + "\n        ".join(shown)
+            + (f"\n        ... and {more} more" if more else "")
+            + "\n        Put the extension in CODE_EXTS if it is source — this "
+              "leg then reads it — or in NOT_CODE_EXTS if it is data, logs or "
+              "signing material. Unclassified is red on purpose: on 2026-08-24 "
+              "CODE_EXTS held `.h` and not `.c`, so 142 of firmware/'s 235 "
+              "files were invisible and `/* TAPE: */` in the pendant firmware "
+              "read as PASS under the leg that enforces Law 2.")
+
     markers = find_markers(root, dirs)
     # Claim by LINE, never by file. Matching on the file alone was this leg's
     # own first draft and it was the bug it exists to catch: brain/
@@ -377,12 +624,37 @@ def leg_1_markers_are_registered(root: str = ROOT, registry=None,
             f"{THIS_GATE} has never heard of:\n        "
             + "\n        ".join(orphans)
             + "\n        Law 2: tape with no expiry is a rejected diff. Either "
-              "DELETE the patch, or add a Tape(...) entry to KNOWN_TAPE naming "
-              "the real fix and an expired() predicate that goes true only when "
-              "that fix has landed — and add it to the standing-tape ledger in "
-              f"{LAWS}.")
+              "DELETE the patch, or add a Tape(...) entry to KNOWN_TAPE whose "
+              "`find` is the taped text itself and whose `home` is the def it "
+              "lives in — that pair IS the expiry, and it goes true only when "
+              "the text is gone from the shipped organs — and add it to the "
+              f"standing-tape ledger in {LAWS}.")
 
-    stale = [t.id for t in registry if not t.present(root)]
+    states = {t.id: t.state(root, dirs) for t in registry}
+    moved = [t for t in registry if states[t.id][0] == MOVED]
+    if moved:
+        lines = []
+        for t in moved:
+            lines.append(
+                f"{t.id}: the registry says `{t.find}` lives in "
+                + (f"{t.home}() of {t.rel}" if t.home else t.rel)
+                + ". It is not there. It IS at "
+                + ", ".join(states[t.id][1][:4]) + ".")
+        raise LegFailed(
+            f"{len(moved)} piece(s) of registered tape MOVED out from under "
+            "their registry entry, and moved tape is running tape:\n        "
+            + "\n        ".join(lines)
+            + "\n        Re-point the entry's `find`/`home` at where the code "
+              "is now — or, if the real fix landed and those other sites are "
+              "unrelated code that merely reads the same, retire the entry: "
+              f"drop it from KNOWN_TAPE, drop its bullet from {LAWS}, and lower "
+              "AUDIT_UNDECLARED_COUNT in the same diff.\n        This is red "
+              "because an ordinary extract-method refactor does it without "
+              "anyone touching a predicate. On 2026-08-24 that retired live "
+              "tape from BOTH leg 2 and leg 3 at once: all three books agreed, "
+              "and all three were wrong.")
+
+    stale = [t.id for t in registry if states[t.id][0] == GONE]
     if stale:
         raise LegFailed(
             "the registry names tape that is no longer in the tree: "
@@ -393,8 +665,10 @@ def leg_1_markers_are_registered(root: str = ROOT, registry=None,
               "and lower AUDIT_UNDECLARED_COUNT if it was one of the audited "
               "five. A registry that outlives its tape is the next false "
               "'tracked by leg 4'.")
-    return (f"{len(markers)} marker(s) in the shipped organs, "
-            f"{len(registry)} registered, none orphaned either way")
+    return (f"read {reach['read']} of {reach['total']} files in "
+            + ", ".join(f"{d}/" for d in dirs)
+            + f"; {len(markers)} marker(s), {len(registry)} registered, "
+              "none orphaned, none moved, none stale")
 
 
 # --------------------------------------------------------------------------
@@ -406,25 +680,32 @@ def leg_1_markers_are_registered(root: str = ROOT, registry=None,
 # Here the condition is the other way round: while a registered piece of tape
 # is still in the tree and its real fix has not landed, this is RED. It goes
 # green the day the tape is deleted, and not one day sooner.
+#
+# THIS LEG IS RED BY DESIGN. See BY_DESIGN_RED and the verdict in main().
 # --------------------------------------------------------------------------
-def leg_2_tape_expires(root: str = ROOT, registry=None) -> str:
+def leg_2_tape_expires(root: str = ROOT, registry=None,
+                       dirs=SHIPPED_DIRS) -> str:
     registry = KNOWN_TAPE if registry is None else registry
-    live = [t for t in registry if not t.expired(root)]
+    live = [(t, t.state(root, dirs)) for t in registry]
+    live = [(t, st, where) for t, (st, where) in live if st != GONE]
     if live:
         lines = []
-        for t in live:
-            lines.append(f"{t.id}  ({t.rel})\n"
+        for t, st, where in live:
+            lines.append(f"{t.id}  ({where[0] if where else t.rel})\n"
                          f"          what it decides: {t.what}\n"
-                         f"          real fix:        {t.real_fix}")
+                         f"          real fix:        {t.real_fix}"
+                         + ("\n          MOVED: it is no longer where the "
+                            "registry says it is — see leg 1." if st == MOVED
+                            else ""))
         raise LegFailed(
             f"{len(live)} piece(s) of tape are still load-bearing. This leg is "
             "RED on purpose and stays red until they are gone — that is what "
             "Law 2 means by an expiry:\n        "
             + "\n        ".join(lines)
             + "\n        Do NOT satisfy this leg by softening the predicate. "
-              "expired() names the real fix; the way to green is to land the "
-              "fix and delete the tape, then retire the entry (leg 1 will ask "
-              "you to).")
+              "The predicate is `the taped text is nowhere in the shipped "
+              "organs`; the way to green is to land the real fix and delete "
+              "the tape, then retire the entry (leg 1 will ask you to).")
     return "no tape is left in the tree — every expiry predicate has come true"
 
 
@@ -440,13 +721,14 @@ def leg_2_tape_expires(root: str = ROOT, registry=None) -> str:
 #     name THIS gate — because a comment naming a leg that tracks something
 #     else is audit item #21, and it read as compliant for months.
 # --------------------------------------------------------------------------
-def leg_3_audited_five(root: str = ROOT, registry=None, census_ids=None) -> str:
+def leg_3_audited_five(root: str = ROOT, registry=None, census_ids=None,
+                       dirs=SHIPPED_DIRS) -> str:
     registry = KNOWN_TAPE if registry is None else registry
     census_ids = AUDIT_UNDECLARED if census_ids is None else census_ids
     census = [t for t in registry if t.audit_item in census_ids]
     open_items, gone = [], []
     for t in sorted(census, key=lambda x: x.audit_item):
-        if not t.present(root):
+        if t.state(root, dirs)[0] == GONE:
             gone.append(t.id)
             continue
         home = t.marker_text(root)
@@ -475,13 +757,20 @@ def leg_3_audited_five(root: str = ROOT, registry=None, census_ids=None) -> str:
 
 
 # --------------------------------------------------------------------------
-# LEG 4 — THE CENSUS CANNOT BE SHORTENED QUIETLY, AND THE GATE STATES ITS
-#         OWN COVERAGE.
+# LEG 4 — THE CENSUS CANNOT BE SHORTENED QUIETLY, AND THE THIRD BOOK IS
+#         ACTUALLY READ.
 #
 # The failure mode this prevents is the obvious one: an agent facing a red
 # leg 3 deletes a Tape entry instead of the tape. The count is declared apart
 # from the list, so that edit lands here as a number that stopped matching,
 # with a name on the diff — rather than as one fewer red line nobody counted.
+#
+# It shipped, itself, with the disease: `m is None` skipped the audit-doc check
+# AND STILL PRINTED "the audit doc agrees: 5 undeclared". Renaming one heading
+# in the doc — a formatting edit, no number touched — took the third book
+# offline inside the one leg built to be the tripwire, and it kept vouching.
+# A message that asserts something untrue is worse than no message: this leg
+# now fails when it cannot read the row, and says which row it could not read.
 # --------------------------------------------------------------------------
 def leg_4_census_intact(root: str = ROOT, registry=None) -> str:
     registry = KNOWN_TAPE if registry is None else registry
@@ -501,34 +790,64 @@ def leg_4_census_intact(root: str = ROOT, registry=None) -> str:
             f"AUDIT_UNDECLARED_COUNT says {AUDIT_UNDECLARED_COUNT}. The count "
             "is declared separately on purpose: it is the tripwire on "
             "shortening the census.")
+
     doc = os.path.join(root, AUDIT_DOC)
-    doc_note = "audit doc missing from the tree — census held from this file"
-    if os.path.exists(doc):
-        with open(doc, encoding="utf-8", errors="replace") as f:
-            text = f.read()
-        m = re.search(r"\*\*TAPE, UNDECLARED\*\*.*?\|\s*\*\*(\d+)\*\*\s*\|",
-                      text, re.S)
-        if m and int(m.group(1)) != AUDIT_UNDECLARED_COUNT:
+    if not os.path.exists(doc):
+        raise LegFailed(
+            f"{AUDIT_DOC} is not in this tree. It is the third book — the "
+            "dated record this gate's census is a copy of — and without it "
+            "the only ledger is this file, which is the state that let five "
+            "pieces of tape accumulate. If a newer audit superseded it, point "
+            "AUDIT_DOC at that one in the same diff and carry the counts "
+            "across; do not let the leg run without it.")
+    with open(doc, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    agreed = []
+    for label, pinned, row_re in CENSUS_ROWS:
+        m = row_re.search(text)
+        if m is None:
             raise LegFailed(
-                f"{AUDIT_DOC} now reports {m.group(1)} undeclared pieces of "
-                f"tape; this gate is pinned to {AUDIT_UNDECLARED_COUNT}. One of "
-                "the two was edited. The audit is the dated record — if it grew, "
-                "register the new items here; if it shrank, say which piece was "
-                "closed and how.")
-        doc_note = f"{AUDIT_DOC} agrees: {AUDIT_UNDECLARED_COUNT} undeclared"
+                f"{AUDIT_DOC} is in the tree, but this leg can no longer find "
+                f"the row that states how many pieces of tape were {label}. "
+                "Until 2026-08-24 that made the check SKIP while the leg still "
+                "printed \"the audit agrees\" — so the doc could be edited down "
+                "to any census and this leg kept vouching for a number it had "
+                "not read. It fails instead now.\n        Either the row was "
+                "reformatted (restore it, or re-point CENSUS_ROWS at its new "
+                "shape) or the audit was replaced (point AUDIT_DOC at the new "
+                "one). The row this leg expects looks like:\n        "
+                f"| **TAPE, {label.upper() if label == 'undeclared' else label}"
+                "** (…) | **N** |")
+        if int(m.group(1)) != pinned:
+            raise LegFailed(
+                f"{AUDIT_DOC} now reports {m.group(1)} pieces of tape "
+                f"{label}; this gate is pinned to {pinned}. One of the two was "
+                "edited. The audit is the dated record — if it grew, register "
+                "the new items here; if it shrank, say which piece was closed "
+                "and how.")
+        agreed.append(f"{pinned} {label}")
     return (f"census intact ({AUDIT_UNDECLARED_COUNT} audited items, "
-            f"{len(registry)} registered); {doc_note}")
+            f"{len(registry)} registered); {AUDIT_DOC} agrees: "
+            + ", ".join(agreed))
 
 
 # --------------------------------------------------------------------------
-# LEG 5 — THE LAW'S OWN LEDGER AND THIS REGISTRY SAY THE SAME THING.
+# LEG 5 — THE LAW'S OWN LEDGER AND THIS REGISTRY SAY THE SAME THING, BOTH WAYS.
 #
 # The third book. HARNESS-LAWS.md carries a "Known standing tape" section that
 # a human reads; this file carries the version a machine runs. When they drift,
 # the human one is what the next agent believes, and it was already wrong once:
 # the ledger said _READ_ONLY_RE was "tracked by tejas_gate.py leg 4" while
 # leg 4 was green and the regex was still deciding.
+#
+# Both directions. The docstring said "and vice versa" from the first day; only
+# one direction was implemented, so a `[tape:…]` bullet whose registry entry
+# had been deleted read as compliant — which is the same shape as leg 4's
+# shrinking census, one file over.
 # --------------------------------------------------------------------------
+LEDGER_NEEDLE_RE = re.compile(r"\[tape:[A-Za-z0-9_.-]+\]")
+
+
 def leg_5_ledger_agrees(root: str = ROOT, registry=None) -> str:
     registry = KNOWN_TAPE if registry is None else registry
     laws = read(root, LAWS)
@@ -548,61 +867,140 @@ def leg_5_ledger_agrees(root: str = ROOT, registry=None) -> str:
             f"{LAWS} never mentions: " + ", ".join(missing)
             + ".\n        Both books have to name it, or the next agent reads "
               "the law file, sees four bullets, and believes that is all of it.")
+    registered = {t.ledger_needle for t in registry}
+    unbacked = sorted(set(LEDGER_NEEDLE_RE.findall(section)) - registered)
+    if unbacked:
+        raise LegFailed(
+            f"the standing-tape ledger in {LAWS} carries bullets this registry "
+            "has never heard of: " + ", ".join(unbacked)
+            + ".\n        A ledger bullet with no registry entry is a promise "
+              "with no predicate behind it — the human book says the tape is "
+              "tracked and nothing runs. Either add the Tape(...) entry here, "
+              "or delete the bullet because the tape is gone. (If the entry "
+              "does exist, its `ledger_needle` is not this tag — set it to the "
+              "tag, because the tag is what a human greps for.)")
     if THIS_GATE not in section:
         raise LegFailed(
             f"the standing-tape ledger in {LAWS} does not name `{THIS_GATE}` as "
             "the leg that tracks these. A ledger entry with no leg is the "
             "state Law 2 was written to end.")
-    return f"{len(registry)} entries, and {LAWS}'s ledger names every one"
+    return (f"{len(registry)} entries, and {LAWS}'s ledger names every one — "
+            f"and names nothing this registry does not")
 
 
+# Each leg carries whether its red is EXPECTED. Leg 2 is the only one: it is
+# Law 2's expiry, and it is red until the tape is deleted. Everything else
+# going red is NEWS, and main() reports it as news rather than as one more
+# lowercase line under leg 2's block.
 LEGS = [
-    (1, "EVERY MARKER IS REGISTERED", leg_1_markers_are_registered),
-    (2, "TAPE IS RED WHILE IT LIVES", leg_2_tape_expires),
-    (3, "THE AUDITED FIVE ARE DECLARED OR GONE", leg_3_audited_five),
-    (4, "THE CENSUS CANNOT SHRINK QUIETLY", leg_4_census_intact),
-    (5, "THE LAW'S LEDGER AGREES", leg_5_ledger_agrees),
+    (1, "EVERY MARKER IS REGISTERED", leg_1_markers_are_registered, False),
+    (2, "TAPE IS RED WHILE IT LIVES", leg_2_tape_expires, True),
+    (3, "THE AUDITED FIVE ARE DECLARED OR GONE", leg_3_audited_five, False),
+    (4, "THE CENSUS CANNOT SHRINK QUIETLY", leg_4_census_intact, False),
+    (5, "THE LAW'S LEDGER AGREES", leg_5_ledger_agrees, False),
 ]
+BY_DESIGN_RED = tuple(n for n, _, _, d in LEGS if d)
 
 
-def main() -> int:
+def run(root: str = ROOT) -> list[tuple[int, str, bool, bool, str]]:
+    """Every leg, in order: (num, name, by_design_red, ok, detail_or_message).
+    Split out of main() so tests/test_tape_gate.py can drive the VERDICT and
+    not only the legs — the 2026-08-24 hole was in the verdict."""
+    out = []
+    for num, name, fn, by_design in LEGS:
+        try:
+            out.append((num, name, by_design, True, fn(root)))
+        except LegFailed as e:
+            out.append((num, name, by_design, False, str(e)))
+        except Exception as e:  # noqa: BLE001
+            out.append((num, name, by_design, False, f"gate itself errored: {e}"))
+    return out
+
+
+def verdict(results) -> int:
+    """0 clean, 1 the expected steady state, 2 a leg that is not red by design
+    went red. Two nonzero codes, because one of them is news and the other is
+    Tuesday."""
+    reds = [r for r in results if not r[3]]
+    if not reds:
+        return 0
+    return 1 if all(r[2] for r in reds) else 2
+
+
+def fingerprint(results) -> str:
+    """One short line naming exactly which legs are red, so two runs can be
+    told apart by eye or by diff. This is the other half of the answer to
+    "nothing distinguishes the steady state from somebody shrinking the
+    census": the exit code says WHETHER it changed, this says WHAT changed.
+
+        RED LEGS: 2 (by design), 3          the state on 2026-08-24
+        RED LEGS: 2 (by design), 3, 4       somebody shrank the census
+    """
+    reds = [r for r in results if not r[3]]
+    if not reds:
+        return "RED LEGS: none"
+    return "RED LEGS: " + ", ".join(
+        f"{r[0]} (by design)" if r[2] else str(r[0]) for r in reds)
+
+
+def main(root: str = ROOT) -> int:
     print()
-    print(f"  TAPE GATE    tree: {ROOT}")
+    print(f"  TAPE GATE    tree: {root}")
     print(f"               law:  {LAWS} Law 2 — tape ships only with an expiry")
     print(f"               scan: {', '.join(SHIPPED_DIRS)}  "
           "(overnight/ and tests/ excluded: Law 1 exempts gates)")
+    print(f"               read: RED at leg {', '.join(map(str, BY_DESIGN_RED))}"
+          " is the steady state (exit 1). Exit 2 means a leg")
+    print("                     that is NOT red by design went red — that is "
+          "the news.")
     print("  " + "-" * 62)
-    first = None
-    for num, name, fn in LEGS:
-        try:
-            detail = fn()
-            print(f"  [{num}] PASS  {name}")
-            print(f"        {detail}")
-        except LegFailed as e:
-            mark = "FAIL" if first is None else "fail"
-            print(f"  [{num}] {mark}  {name}")
-            print(f"        {e}")
-            if first is None:
-                first = (num, name, str(e))
-        except Exception as e:  # noqa: BLE001
-            print(f"  [{num}] FAIL  {name}")
-            print(f"        gate itself errored: {e}")
-            if first is None:
-                first = (num, name, f"gate errored: {e}")
+    results = run(root)
+    for num, name, by_design, ok, detail in results:
+        mark = "PASS" if ok else ("RED " if by_design else "FAIL")
+        suffix = "   (red by design — Law 2's expiry)" if by_design and not ok else ""
+        print(f"  [{num}] {mark}  {name}{suffix}")
+        print(f"        {detail}")
     print("  " + "-" * 62)
-    if first is None:
+
+    code = verdict(results)
+    print("  " + fingerprint(results))
+    if code == 0:
         print("  CLEAN — no tape is left in the shipped organs")
         print()
         return 0
-    num, name, _ = first
-    print(f"  TAPE OUTSTANDING — first failing leg: {num} ({name})")
+
+    if code == 2:
+        news = [r for r in results if not r[3] and not r[2]]
+        expected = [r for r in results if not r[3] and r[2]]
+        print("  THE BOOKS DISAGREE — leg "
+              + ", ".join(str(r[0]) for r in news)
+              + (" is" if len(news) == 1 else " are")
+              + " red, and that is not a red this gate")
+        print("  is designed to have. Reprinted here so it is not read as part "
+              "of leg 2:")
+        for num, name, _by, _ok, msg in news:
+            print(f"      [{num}] {name}")
+            for line in msg.splitlines():
+                body = line[8:] if line.startswith(" " * 8) else line.strip()
+                print(f"          {body}" if body else "")
+        if expected:
+            print("  Leg " + ", ".join(str(r[0]) for r in expected)
+                  + " is red too, and always is — that is Law 2's expiry, not")
+            print("  news. Read the leg(s) above it, not that one.")
+    else:
+        live = [r for r in results if not r[3]]
+        print("  TAPE OUTSTANDING — leg "
+              + ", ".join(str(r[0]) for r in live)
+              + " red, and every other book agrees. This is")
+        print("  the steady state: Law 2 has an expiry and it has not come true.")
+
     print("  Red here is the law working. Green means the tape is GONE, not")
     print("  that it was written down. Do not soften a predicate to get there.")
     print("  What this gate cannot see: tape nobody marked, nobody registered,")
     print("  and that is not one of the audited five. Only an audit finds that")
     print(f"  — the last one is {AUDIT_DOC}.")
     print()
-    return 1
+    return code
 
 
 if __name__ == "__main__":
