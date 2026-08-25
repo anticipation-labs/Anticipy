@@ -107,9 +107,49 @@ was=$(git -C "$root" show "$bump:$rel_yml" \
 # Already moved since that commit — the bump is sitting in the working tree,
 # uncommitted, which is exactly where it should be while the change that earned
 # it is still being written.
-if [ "$version" != "$was" ]; then
+#
+# AN INCREASE, NOT MERELY A DIFFERENCE. This tested `!=`, so 79 in the working
+# tree against a history that had reached 80 printed "bumped from 80 and not yet
+# committed" and exited 0 — a DOWNGRADE reported as a bump. It is not exotic:
+# a revert, a rebase, a merge that took the older project.yml, or a second
+# worktree all produce it, AND THIS REPO HAS TWO WORKTREES ON DIVERGENT
+# LINEAGES. Two different apps would then call themselves build 79, which is
+# the exact condition this whole leg exists to prevent, reached through the
+# branch meant to say the condition was handled.
+#
+# Compared as INTEGERS. `[ "$version" -gt "$was" ]` on a non-numeric value is a
+# shell error, not a pass, and `set -e` at the top of this file makes that a
+# red leg — which is the right answer for a version nobody can order.
+case "$version$was" in
+    *[!0-9]*)
+        echo "CURRENT_PROJECT_VERSION is not a plain integer:"
+        echo "  working tree: $version"
+        echo "  last bumped:  $was"
+        echo ""
+        echo "This leg has to ORDER two build numbers to tell a bump from a"
+        echo "downgrade, and it cannot order these. Whatever the scheme is, it"
+        echo "is not one this check can vouch for."
+        exit 2
+        ;;
+esac
+if [ "$version" -gt "$was" ]; then
     echo "build $version, bumped from $was and not yet committed"
     exit 0
+fi
+if [ "$version" -lt "$was" ]; then
+    echo "The build number has gone BACKWARDS: $was in history, $version here."
+    echo ""
+    echo "This is what a revert, a rebase, or a merge that took the older"
+    echo "project.yml leaves behind — and with two worktrees on divergent"
+    echo "lineages it is the ordinary accident, not the exotic one. Build $was"
+    echo "already exists and is not these bytes, so 'which build are you"
+    echo "holding' stops having an answer exactly as it did when nineteen"
+    echo "commits shipped as build 76."
+    echo ""
+    echo "Set CURRENT_PROJECT_VERSION above $was in app/ios/project.yml, say in"
+    echo "its comment what changed, then run:"
+    echo "  cd app/ios && xcodegen generate"
+    exit 2
 fi
 
 # `git diff <commit> -- path` compares the WORKING TREE against that commit, so

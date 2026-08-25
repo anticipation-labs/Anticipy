@@ -256,8 +256,15 @@ def scan(paths):
                         record_case(t, owner, line.strip(), path, lineno)
                     elif what in ("var", "let"):
                         # Computed if the declaration opens a block; a stored
-                        # property never does.
-                        stored = not line.rstrip().endswith("{")
+                        # property never does. A `static` is NEITHER — it is
+                        # type-level state, and counting it as a stored property
+                        # both breaks closedness (a static has no payload type
+                        # to judge) and, worse, would hand `sentence` a licence
+                        # to name it. `Self.stash` interpolated into a renderer
+                        # is one of the attacks this must catch, and it has to
+                        # be caught by the renderer rule, not by accident.
+                        is_static = bool(re.search(r"\bstatic\b", line))
+                        stored = (not line.rstrip().endswith("{")) and not is_static
                         type_text = ""
                         if ":" in line:
                             type_text = split_top(
