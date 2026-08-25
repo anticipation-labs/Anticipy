@@ -13,7 +13,10 @@ class MemoryWithCode:
         self.ingested.append(text)
         return {"commitment_id": None}
 
-    def recall(self, _question, limit=8):
+    # **kw so a new read-lane parameter on Memory.recall (RULING 2's
+    # retired action/speech split) does not turn this stand-in into a
+    # TypeError far from the thing under test.
+    def recall(self, _question, limit=8, **kw):
         return [{"fact": "The pickup code is 668872.",
                  "quote": "the pickup code is 668872"}]
 

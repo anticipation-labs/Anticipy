@@ -155,7 +155,7 @@ def test_with_no_model_at_all_the_kind_half_writes_nothing_and_says_so():
     m.ingest("a line worth distilling", ts=time.time())
     out = m.consolidate()
     assert out == {"ran": False, "reason": "no llm", "episodes": 0,
-                   "new": 0, "merged": 0, "remaining": 0}
+                   "new": 0, "merged": 0, "retired": 0, "remaining": 0}
     assert m.profile_facts() == []
 
 

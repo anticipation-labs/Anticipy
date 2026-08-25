@@ -39,7 +39,13 @@ class Mem:
     def __init__(self, facts):
         self.facts = facts
 
-    def recall(self, query, limit=8):
+    # **kw, not a pinned signature — the same lesson tests/llm_fakes.py
+    # already carries. Memory.recall grew a `retired` lane (RULING 2's
+    # action/speech split) and a double that refuses unknown keywords turns
+    # that into a TypeError swallowed by fill_gaps_from_memory's except, so
+    # every gap silently fell through to asking and the tests below reported
+    # a policy failure that did not exist.
+    def recall(self, query, limit=8, **kw):
         return [{"fact": f} for f in self.facts]
 
 

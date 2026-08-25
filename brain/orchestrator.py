@@ -1188,8 +1188,26 @@ def fill_gaps_from_memory(llm, memory, goal: str, gaps: list) -> tuple:
     if memory is None or llm is None or not getattr(llm, "live", False):
         return {}, list(gaps)
     for gap in gaps:
+        # RETIRED FACTS ARE EXCLUDED HERE, ABSOLUTELY, and the lane is named
+        # rather than left to the default.
+        #
+        # docs/DECISIONS-2026-08-24.md RULING 2: "A retired fact may never be
+        # an INPUT to action." This function is what an input to action looks
+        # like — filled[gap] -> params[key] -> the browser agent's approved
+        # values -> a form it submits. Brief moment 35 is the same sentence
+        # from the owner's side: after "Priya and I broke up", every future
+        # booking stops assuming Priya. A retired fact settling a gap here
+        # books the table for the wrong person, with his card.
+        #
+        # This is the exact asymmetry the untrusted fence above already has:
+        # excluded here, fenced-but-present in the prompt sinks. Retirement
+        # gets the identical shape, which is why the ruling needed no new
+        # machinery. Written out because a default nobody can see is not a
+        # decision anybody made.
+        from .memory import RETIRED_EXCLUDED
         try:
-            facts = memory.recall(f"{goal} {gap}", limit=8)
+            facts = memory.recall(f"{goal} {gap}", limit=8,
+                                  retired=RETIRED_EXCLUDED)
         except Exception:
             facts = []
         # UNTRUSTED FACTS ARE EXCLUDED HERE, not fenced.

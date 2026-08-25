@@ -328,7 +328,7 @@ def test_a_merge_cannot_reinstall_vetoed_wording():
     assert m.forget_fact("the renewal closes in 4 weeks") == 0
     assert [f["fact"] for f in m.profile_facts()] == \
         ["the Devon renewal closes in 3 weeks"]
-    # The second read restates the row with the vetoed detail. _find_same_fact
+    # The second read restates the row with the vetoed detail. _relate_fact
     # matches it (same subject, changed number) and would rewrite.
     m.remember_fact("the Devon renewal closes in 4 weeks", importance=4,
                     source="supervised_mail")

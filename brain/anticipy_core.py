@@ -30,7 +30,7 @@ from . import pb
 from .asking import ask_line, question_line
 from .compute import compute_answer
 from .llm import LLM, now_line, owner_tz
-from .memory import Memory
+from .memory import RETIRED_EXCLUDED, RETIRED_QUOTED, Memory
 from .workflow import (Consequence, approve as approve_plan,
                        cancel as cancel_plan, from_params as workflow_from_params,
                        merge as merge_plan, new_plan, put_in_params)
@@ -953,6 +953,9 @@ at most "in progress" or "waiting on you". An open loop may also carry
 made it in front of them, so never say they promised it — mention it as the
 other person's if it is worth mentioning at all. Null or missing means nobody
 knows, which is the ordinary case; say nothing about it either way.
+A profile note beginning "no longer true — retired ..." is a fact they have
+already CORRECTED. Never state it as though it still holds and never plan
+around it; mention it only as the past, and only if they asked about the past.
 No emojis, no bullets."""
 
 
@@ -2447,7 +2450,15 @@ class Anticipy:
                 in_meeting: bool = False,
                 explicit: bool = False) -> Decision:
         if self.brain:
-            context = self.memory.recall(line, limit=4)
+            # SPEECH LANE (RULING 2): "recall() feeding triage context —
+            # allowed, marked". Triage context is background for a judgement,
+            # never a licence to act, which is the same standing every other
+            # marked block in this prompt has. A retired fact arrives saying so
+            # in its own sentence and ranked below every live one; what triage
+            # may NOT do is turn it into a value, and that door is shut at the
+            # sinks that mint work (fill_gaps_from_memory, _queue_job), not
+            # here.
+            context = self.memory.recall(line, limit=4, retired=RETIRED_QUOTED)
             prompt = line
             # What was already said in THIS conversation. Without it a
             # question lands naked — "what time is the demo day Monday" with
@@ -2606,7 +2617,15 @@ class Anticipy:
         # imported rows are marked here too: an invitation title must be
         # quotable as something on their calendar, never usable as an
         # instruction about how to answer.
-        recalled = [f for f in self.memory.recall(question, limit=8)
+        # SPEECH LANE (docs/DECISIONS-2026-08-24.md RULING 2). This is the §7
+        # broadband answer's sink: "you moved to Rowan Ave in June — the
+        # account probably still shows 4 Maple St" is only answerable if the
+        # retired address is here. It arrives with its retirement written into
+        # the fact's own text, which is the ruling's condition — quotable as
+        # history, never as an unqualified assertion. Retired facts sort below
+        # every live one, so the answer still leads with what is true.
+        recalled = [f for f in self.memory.recall(question, limit=8,
+                                                  retired=RETIRED_QUOTED)
                     # An earlier asking of this same question is not evidence.
                     if (f.get("quote") or "").strip().lower() != q_norm]
         facts = [dict(f, fact=f["fact"] + (f' \u2014 original: "{f["quote"]}"'
@@ -2623,7 +2642,12 @@ class Anticipy:
                     f"You are {NAME}, answering the owner's question over SMS. "
                     "Use ONLY the memory notes given. If the notes contain the "
                     "answer, reply in 1-2 warm, direct sentences quoting the "
-                    "specifics (names, times, things promised). If the notes do "
+                    "specifics (names, times, things promised). A note "
+                    "beginning \"no longer true — retired ...\" is something "
+                    "they have already corrected: never give it as the answer "
+                    "on its own and never state it as still true — name it "
+                    "only as the past, and say it is no longer true in the "
+                    "same sentence. If the notes do "
                     "NOT contain the answer, reply with exactly NO_ANSWER.",
                     json.dumps({"question": question, "memory": facts}),
                 )
@@ -3359,8 +3383,17 @@ class Anticipy:
             # `source` is the authorizing utterance, which the agent already
             # receives as WHAT THEY AGREED TO. Excluded so his own words cannot
             # reappear inside the block labelled "not approved values".
-            recalled = memory_notes(self.memory.recall(goal, limit=6),
-                                    exclude=str(params.get("source") or ""))
+            # ACTION LANE (RULING 2), named rather than defaulted. This block
+            # rides into a browser run that types into real forms, so a retired
+            # fact reaching it is the Priya half of moment 35 with money on it:
+            # "every future suggestion, booking, and reminder stops assuming
+            # Priya." RETIRED_EXCLUDED is already the default of recall(); it
+            # is written out here because this is the sink where getting it
+            # wrong spends his money, and a default is not a decision anybody
+            # can see.
+            recalled = memory_notes(self.memory.recall(
+                goal, limit=6, retired=RETIRED_EXCLUDED),
+                exclude=str(params.get("source") or ""))
         except Exception:
             # Never let a recall failure cost him the errand. Memory is
             # background; the job is the point.

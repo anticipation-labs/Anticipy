@@ -77,6 +77,19 @@ CREATE TABLE IF NOT EXISTS profile_facts (
     -- the words at recall time is the pattern-match on meaning HARNESS-LAW 1
     -- forbids. See _HALF_LIFE_DAYS for what the ranker does with it.
     kind TEXT,
+    -- WHEN THIS STOPPED BEING TRUE, and which row took its place. NULL means
+    -- it is still true. The row is NEVER deleted: "the old facts aren't
+    -- deleted — they're retired" (Brief moment 35), and a chain that can be
+    -- walked backwards is the only way to answer "why did she stop believing
+    -- that?". Deleting is the VETO's job (forget_fact) and means something
+    -- else entirely: stop deriving this at all.
+    --
+    -- Written only after a MODEL says the two facts cannot both be true any
+    -- more (SAME_FACT_SYSTEM's "replaces"). Reading a retirement out of the
+    -- words at recall time — "broke up" retires "partner" — is the
+    -- pattern-match on meaning HARNESS-LAW 1 forbids.
+    retired_ts REAL,
+    retired_by INTEGER,
     first_seen_ts REAL NOT NULL,
     last_seen_ts REAL NOT NULL
 );
@@ -128,6 +141,8 @@ CREATE INDEX IF NOT EXISTS idx_vetoed_norm ON vetoed_facts(norm);
 _ADDED_COLUMNS = (
     ("episodes", "speaker", "TEXT"),
     ("profile_facts", "kind", "TEXT"),
+    ("profile_facts", "retired_ts", "REAL"),
+    ("profile_facts", "retired_by", "INTEGER"),
 )
 
 # Full-text index so recall searches EVERY episode instead of the newest few.
@@ -196,11 +211,49 @@ a small error: it means the fact never fades at all, so "the Devon deal
 closes Friday" outranks fresher facts forever after the deal has closed.
 Leaving it out is the safe answer and costs nothing."""
 
-SAME_FACT_SYSTEM = """Two short notes about the same person. Decide whether they state the
-SAME underlying fact (one restates or updates the other) or genuinely
-different facts. "partner is Sarah" / "his partner's name is Sarah" -> same.
-"prefers 7pm dinners" / "prefers Italian food" -> different.
-Reply ONLY with compact JSON: {"same":true} or {"same":false}."""
+SAME_FACT_SYSTEM = """Two short notes about the same person, each with how long ago it was
+last heard. Decide the RELATION between them. Exactly one of three:
+
+"same" — they state the SAME underlying fact; one restates or updates a
+  detail of the other. "partner is Sarah" / "his partner's name is Sarah".
+"replaces" — they cannot both be true any more, and the newer one has taken
+  the older one's place: a new person in the same role, a move, a breakup, a
+  job change, a place that closed, an explicit renunciation ("never again").
+  "partner is Dana" / "broke up with Dana".
+"different" — genuinely different facts that can both be true at once.
+  "prefers 7pm dinners" / "prefers Italian food".
+
+Say "replaces" only when going on believing the OLDER note would make the
+assistant wrong about this person today. Two facts that merely sit oddly
+together are "different" — a wrongly retired fact is a thing she stops
+knowing about him.
+Reply ONLY with compact JSON, one of:
+{"relation":"same"} {"relation":"replaces"} {"relation":"different"}"""
+
+# THE TWO LANES A RETIRED FACT MAY TRAVEL, and they are not symmetric.
+#
+# docs/DECISIONS-2026-08-24.md RULING 2 settles Brief moment 35 ("they never
+# surface in her voice again") against the §7 broadband entry (where "the
+# superseded fact is the load-bearing one" — she has to name the old address
+# because the broadband company's records still show it):
+#
+#   RETIREMENT GATES ACTION ABSOLUTELY, AND GATES SPEECH CONDITIONALLY.
+#   A retired fact may never be an INPUT to action, nor an unqualified
+#   assertion. It may be QUOTED as history — only with its retirement stated
+#   in the same sentence.
+#
+# So the lane is a parameter of the READ, named at the sink, and the default
+# is the strict one. `fill_gaps_from_memory` turns a recalled fact into a value
+# the browser agent types into a real form; a sink added next month that
+# forgets to think about this gets the lane that cannot spend money.
+#
+# In RETIRED_QUOTED the retirement is written INTO the fact's own text (see
+# _retired_note), not hung off a sibling key. A sibling key is how
+# briefing_facts once laundered `source` — it projected the key away and
+# handed imported text to the prompt as established fact. A prompt-builder
+# cannot drop what is inside the sentence it is rendering.
+RETIRED_EXCLUDED = "excluded"
+RETIRED_QUOTED = "quoted"
 
 # Rule fallback so completion still works with no model available.
 _DONE_RE = re.compile(
@@ -310,6 +363,33 @@ def _confidence_band(confidence) -> float:
 
 def _fact_kind(kind) -> Optional[str]:
     return kind if kind in _FACT_KINDS else None
+
+
+def _days_ago(ts: float, now: float) -> int:
+    """Whole days between two epoch seconds, never negative. Days rather than
+    dates because the store keeps no timezone and the model is being asked
+    which of two facts is the later one, not what the calendar said."""
+    try:
+        return max(0, int((float(now) - float(ts)) // 86400))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _retired_note(fact: str, retired_ts: float, now: float) -> str:
+    """A retired fact, rendered so its retirement travels with it.
+
+    RULING 2 permits a retired fact to be quoted "only with its retirement
+    stated in the same sentence". This is that sentence, built once here so
+    every speech sink states it identically and none of them can render the
+    bare wording by accident — the failure mode is her telling him his partner
+    is Sarah four months after he said they broke up.
+
+    Days, not a date: the store keeps epoch seconds and has no timezone, and
+    "retired 4 months ago" is what makes the reader treat it as history."""
+    days = max(0, int((now - float(retired_ts or 0)) // 86400))
+    when = "today" if days < 1 else (
+        "yesterday" if days == 1 else f"{days} days ago")
+    return f"no longer true — retired {when}: {fact}"
 
 
 def _decay(kind, age_days: float) -> float:
@@ -516,17 +596,28 @@ class Memory:
         "again", "still", "just", "there", "here", "into", "onto", "from",
     }
 
-    def recall(self, query: str, limit: int = 8) -> list[dict]:
+    def recall(self, query: str, limit: int = 8,
+               retired: str = RETIRED_EXCLUDED) -> list[dict]:
         """Relevance-then-time ordered chain of facts connected to the
         entities in `query`. Stopwords never seed matches — otherwise "the"
-        matches every episode and recent noise buries the real answer."""
+        matches every episode and recent noise buries the real answer.
+
+        `retired` is RULING 2's lane, defaulting to the action-safe one: a
+        caller that has not thought about retired facts does not get them.
+        A speech sink that has (`_answer_from_memory`, triage context) asks
+        for RETIRED_QUOTED by name, and what comes back says out loud that it
+        is no longer true.
+
+        Only the PROFILE layer has retirement. Episodes are raw hearing and
+        are never retired — "he said they broke up" is a true record of a
+        thing that was said, whenever it is read."""
         words = {w.strip(".,!?").lower() for w in query.split()
                  if len(w) > 2 and w.strip(".,!?").lower() not in self._STOP}
         # What she KNOWS about him answers before what she happened to
         # overhear: the distilled profile is consulted first, ranked
         # importance-then-confidence-then-age x relevance, and the raw search
         # fills whatever window is left (roadmap §1).
-        profile = self._profile_recall(words, limit)
+        profile = self._profile_recall(words, limit, retired)
         rows = self.db.execute("SELECT id, type, name, status FROM nodes").fetchall()
 
         def seeds_match(name: str) -> bool:
@@ -724,9 +815,17 @@ class Memory:
         # told us from what was imported off a calendar somebody else wrote.
         # Projecting it away here silently laundered attacker-controlled text
         # into a block BRIEFING_SYSTEM reads as established fact.
+        #
+        # SPEECH LANE (RULING 2). A retired fact may be quoted as history, and
+        # the briefing is where the §7 answer comes from — "you moved to Rowan
+        # Ave in June; the account probably still shows 4 Maple St" needs the
+        # dead address to exist. It arrives with "no longer true — retired N
+        # days ago" already inside `fact`, and it sorts below every live fact,
+        # so it can never lead the greeting or evict a live row from the ten.
         profile = [{"fact": f["fact"], "importance": f["importance"],
                     "source": f.get("source", "")}
-                   for f in self.profile_facts(limit=10)]
+                   for f in self.profile_facts(limit=10,
+                                               retired=RETIRED_QUOTED)]
         return {"profile": profile,
                 "heard": [h[0] for h in heard],
                 "open_loops": self.open_loops()}
@@ -758,13 +857,22 @@ class Memory:
             # read and a consolidation pass are exactly the re-derivations the
             # veto exists to stop.
             self._lift_veto(text)
-        match = self._find_same_fact(text)
+        match, relation = self._relate_fact(text, ts)
         changed = self._last_match_changed_detail
-        if match is not None:
+        if match is not None and relation == "same":
             self._merge_fact(match, importance, ts, [],
                              new_text=text if changed else None, source=source)
             self.db.commit()
             return match
+        if match is not None and relation == "replaces":
+            # The day-zero interview corrects a fact ("no — my manager is Tom
+            # now"), and a correction the store files as a second coexisting
+            # row is the whole complaint. `kind` stays whatever the caller
+            # gave, which for this path is nobody's verdict.
+            fid = self._supersede(match, text, importance, confidence, source,
+                                  ts, [], kind=kind)
+            self.db.commit()
+            return fid
         # `kind` defaults to no verdict and every ordinary caller leaves it
         # there. The day-zero interview and the supervised read both land
         # here, and nothing runs a model over "how long does this stay true"
@@ -839,14 +947,14 @@ class Memory:
 
     def _same_as(self, a: str, b: str) -> bool:
         """Do two strings state the same fact? This is the DETERMINISTIC tier
-        of _find_same_fact, factored out because the veto needs exactly this
+        of _relate_fact, factored out because the veto needs exactly this
         notion of sameness and must hold with no model available: a veto that
         only catches character-identical text is defeated by a reword on the
         second read, which is the whole failure it exists to prevent.
 
-        Numbers are NOT decisive here, deliberately unlike _find_same_fact.
+        Numbers are NOT decisive here, deliberately unlike _relate_fact.
         There a changed number is an UPDATE worth keeping ("dinner at 6" ->
-        "at 8", see the comment at _find_same_fact). Here it is the vetoed
+        "at 8", see the comment at _relate_fact). Here it is the vetoed
         fact wearing one new detail ("a proposal is in flight" -> "a $40k
         proposal is in flight") and the owner said not to keep it. Blocking a
         bit too much of what they asked her to forget is the safe direction;
@@ -857,7 +965,7 @@ class Memory:
         wa, wb = self._compare_words(a), self._compare_words(b)
         if not wa or not wb:
             return False
-        # Compared on the SUBJECT — the same reason _find_same_fact compares
+        # Compared on the SUBJECT — the same reason _relate_fact compares
         # subjects when numbers differ: counting the differing numbers pushes
         # the score down by exactly the thing being tested for.
         sa = {w for w in wa if not w.isdigit()}
@@ -889,8 +997,15 @@ class Memory:
             if self._same_as(text, fact):
                 self.db.execute("DELETE FROM vetoed_facts WHERE id=?", (rid,))
 
-    def profile_facts(self, limit: Optional[int] = None) -> list[dict]:
+    def profile_facts(self, limit: Optional[int] = None,
+                      retired: str = RETIRED_EXCLUDED) -> list[dict]:
         """The distilled profile, most important first.
+
+        `retired` is the lane (see RETIRED_EXCLUDED / RETIRED_QUOTED). The
+        default drops retired rows entirely, and because `_profile_recall`,
+        `recall`, `briefing_facts` and every gap-filler read the profile
+        THROUGH this one method, that default is what makes RULING 2's action
+        half hold at one chokepoint instead of at four sinks forever.
 
         Salience is importance GATED, confidence ORDERING inside the gate,
         and age last — EXEMPLARS-A-LIFE:465, implemented rather than
@@ -911,9 +1026,16 @@ class Memory:
         in pure salience order, unchanged — there is no window to protect."""
         now = time.time()
         out = []
+        # The filter is in the WHERE clause, not a list comprehension after
+        # the fact: a bounded window is taken off this list, so a retired row
+        # that reached Python at all would still be occupying a slot the owner
+        # paid for even once it was dropped.
+        where = ("" if retired == RETIRED_QUOTED
+                 else " WHERE retired_ts IS NULL")
         for r in self.db.execute(
             "SELECT id, fact, importance, confidence, source, provenance, "
-            "first_seen_ts, last_seen_ts, kind FROM profile_facts"
+            "first_seen_ts, last_seen_ts, kind, retired_ts, retired_by "
+            f"FROM profile_facts{where}"
         ):
             try:
                 prov = json.loads(r[5] or "[]")
@@ -921,20 +1043,35 @@ class Memory:
                 prov = []
             age_days = max(0.0, (now - r[7]) / 86400.0)
             kind = _fact_kind(r[8])
+            retired_ts = r[9]
             out.append({
-                "id": r[0], "fact": r[1], "importance": r[2],
+                "id": r[0],
+                "fact": (r[1] if retired_ts is None
+                         else _retired_note(r[1], retired_ts, now)),
+                "importance": r[2],
                 "confidence": r[3], "source": r[4], "provenance": prov,
                 "first_seen_ts": r[6], "last_seen_ts": r[7], "kind": kind,
+                "retired_ts": retired_ts, "retired_by": r[10],
                 "salience": (r[2] * _confidence_band(r[3])
                              * _decay(kind, age_days)),
             })
-        # Age breaks the tie rather than entering the score. A fact the model
-        # called stable does not decay, so two of them at one importance and
-        # one confidence now score EXACTLY equal — where the old expression
+        # A RETIRED FACT NEVER LEADS, whatever it scores. This is the measured
+        # bug: "partner is Dana" (importance 5) sat at salience 4.70 against
+        # 2.76 for "broke up with Dana", so the dead fact was the FIRST thing
+        # recall handed to every prompt. Dropping it in the action lane is not
+        # enough — in the quoted lane it would still evict a live fact from a
+        # bounded window, and a four-slot triage window is where that hurts.
+        # Ordering by liveness first is structure (is this row still true?),
+        # not a reading of what either sentence means.
+        #
+        # Age then breaks the tie rather than entering the score. A fact the
+        # model called stable does not decay, so two of them at one importance
+        # and one confidence score EXACTLY equal — where the old expression
         # separated everything by microseconds of last_seen. Without this the
         # order of the profile would fall to whatever order SQLite returned
         # rows in, which is not an answer to anything.
-        out.sort(key=lambda f: (-f["salience"], -f["last_seen_ts"]))
+        out.sort(key=lambda f: (f["retired_ts"] is not None,
+                                -f["salience"], -f["last_seen_ts"]))
         return _provenance_window(out, limit) if limit else out
 
     def consolidate(self, now: Optional[float] = None, batch: int = 200) -> dict:
@@ -945,9 +1082,13 @@ class Memory:
         again next time. With llm=None the pass is skipped entirely: the
         profile just stays empty, nothing crashes.
 
-        Returns counters: {"ran", "episodes", "new", "merged", "remaining"}.
-        ran=False means nothing was written OR advanced (no model, no LIVE
-        model, or the model's output was unusable).
+        Returns counters: {"ran", "episodes", "new", "merged", "retired",
+        "remaining"}. ran=False means nothing was written OR advanced (no
+        model, no LIVE model, or the model's output was unusable). `retired`
+        counts facts this pass RETIRED — a profile that corrects itself rather
+        than only growing — and it is a distinct number because "she still
+        thinks Sarah is his partner" and "she never learned anything" are
+        different failures with the same look from the outside.
 
         THE LIVENESS CHECK BELONGS HERE, not only at the one call site. The
         only thing standing between this method and a dead model was
@@ -962,10 +1103,10 @@ class Memory:
         model the flag behaves exactly as it always has."""
         if not self.llm:
             return {"ran": False, "reason": "no llm", "episodes": 0,
-                    "new": 0, "merged": 0, "remaining": 0}
+                    "new": 0, "merged": 0, "retired": 0, "remaining": 0}
         if not getattr(self.llm, "live", True):
             return {"ran": False, "reason": "llm is not live", "episodes": 0,
-                    "new": 0, "merged": 0, "remaining": 0}
+                    "new": 0, "merged": 0, "retired": 0, "remaining": 0}
         now = now or time.time()
         last = int(self._state_get("last_episode_id", "0") or 0)
         rows = self.db.execute(
@@ -975,7 +1116,7 @@ class Memory:
             self._state_set("last_run_ts", str(now))
             self.db.commit()
             return {"ran": True, "episodes": 0, "new": 0, "merged": 0,
-                    "remaining": 0}
+                    "retired": 0, "remaining": 0}
         try:
             listing = "\n".join(f"[{r[0]}] {r[2]}" for r in rows)
             res = self.llm.chat(CONSOLIDATE_SYSTEM, listing)
@@ -1009,15 +1150,15 @@ class Memory:
                       f"after 3 unusable model replies ({e}) — the profile "
                       f"would otherwise never advance past them")
                 return {"ran": True, "episodes": 0, "new": 0, "merged": 0,
-                        "skipped_batch": [last + 1, skipped],
+                        "retired": 0, "skipped_batch": [last + 1, skipped],
                         "remaining": self._episodes_after(skipped)}
             self.db.commit()
             return {"ran": False, "reason": f"model output unusable: {e}",
                     "strikes": strikes,
-                    "episodes": 0, "new": 0, "merged": 0,
+                    "episodes": 0, "new": 0, "merged": 0, "retired": 0,
                     "remaining": self._episodes_after(last)}
         valid = {r[0]: r[1] for r in rows}  # id -> ts
-        new = merged = 0
+        new = merged = retired = 0
         try:
             for c in cands:
                 if not isinstance(c, dict):
@@ -1051,13 +1192,23 @@ class Memory:
                 if not eps:
                     continue
                 fact_ts = max(valid[e] for e in eps)
-                match = self._find_same_fact(text)
+                match, relation = self._relate_fact(text, fact_ts)
                 changed = self._last_match_changed_detail
-                if match is not None:
+                if match is not None and relation == "same":
                     self._merge_fact(match, imp, fact_ts, eps,
                                      new_text=text if changed else None,
                                      source="consolidation", kind=kind)
                     merged += 1
+                elif match is not None and relation == "replaces":
+                    # Counted separately, and counted only when a row landed:
+                    # `retired` is the number that says the profile is
+                    # CORRECTING itself rather than only growing, and the
+                    # nightly print is the one place anybody would notice
+                    # supersession quietly stopping.
+                    if self._supersede(match, text, imp, 0.6, "consolidation",
+                                       fact_ts, eps, kind=kind):
+                        new += 1
+                        retired += 1
                 else:
                     # Counted only if a row actually landed. _insert_fact
                     # returns 0 for a vetoed fact, and a pass that reports
@@ -1074,7 +1225,8 @@ class Memory:
             self.db.rollback()
             raise
         return {"ran": True, "episodes": len(rows), "new": new,
-                "merged": merged, "remaining": self._episodes_after(rows[-1][0])}
+                "merged": merged, "retired": retired,
+                "remaining": self._episodes_after(rows[-1][0])}
 
     def last_consolidation_ts(self) -> float:
         try:
@@ -1087,7 +1239,8 @@ class Memory:
             "SELECT COUNT(*) FROM episodes WHERE id>?", (episode_id,)
         ).fetchone()[0]
 
-    def _profile_recall(self, words: set[str], limit: int) -> list[dict]:
+    def _profile_recall(self, words: set[str], limit: int,
+                        retired: str = RETIRED_EXCLUDED) -> list[dict]:
         """Profile facts matching the query, ranked by profile_facts'
         salience x relevance — so a core fact beats a grocery mumble even
         when the mumble is newer and matches more words.
@@ -1099,55 +1252,82 @@ class Memory:
         would never reach `memory_notes`."""
         if not words:
             return []
-        out = []
-        for f in self.profile_facts():
-            blob = f["fact"].lower()
-            rel = sum(1 for w in words if w in blob)
-            if not rel:
-                continue
-            out.append({
-                "fact": f'known: {f["fact"]}',
+
+        def line(f: dict, salience: float) -> dict:
+            # "known:" is a claim, so a retired fact does not get it: its text
+            # already opens "no longer true — retired N days ago" and prefixing
+            # that with "known" would hand the prompt both readings at once.
+            # Built in ONE place because the matched and padded branches below
+            # both produce these rows, and two spellings of the same sentence
+            # is how a fact reaches a prompt unmarked.
+            dead = f.get("retired_ts") is not None
+            return {
+                "fact": f["fact"] if dead else f'known: {f["fact"]}',
                 "src_type": "profile", "dst_type": "profile",
                 "ts": f["last_seen_ts"], "quote": None,
                 "importance": f["importance"],
-                "salience": f["salience"] * rel,
+                "salience": salience,
+                "retired_ts": f.get("retired_ts"),
                 # Carried so the caller can tell what the OWNER told us from
                 # what was IMPORTED off a calendar invite somebody else wrote.
                 # Without it every fact reaches the prompt with equal
                 # authority, and a meeting title is attacker-controlled text.
                 "source": f.get("source", ""),
-            })
-        # Same tiebreak as profile_facts, and needed here for the same reason.
-        out.sort(key=lambda f: (-f["salience"], -f["ts"]))
+            }
+
+        out = []
+        for f in self.profile_facts(retired=retired):
+            blob = f["fact"].lower()
+            rel = sum(1 for w in words if w in blob)
+            if not rel:
+                continue
+            out.append(line(f, f["salience"] * rel))
+        # Same tiebreak as profile_facts, and retired-last for the same reason:
+        # a bounded window must not spend a slot on a dead fact while a live
+        # one is waiting.
+        out.sort(key=lambda f: (f["retired_ts"] is not None,
+                                -f["salience"], -f["ts"]))
         if len(out) < limit:
             # Wording is the model's, not the owner's — "go-to restaurant"
             # answers "usual dinner spot" yet shares no word with it. The
             # most important known facts ride along so a paraphrased
             # question still reaches what she actually knows.
             have = {f["fact"] for f in out}
-            # OWNER-TOLD FIRST among the unmatched, then by importance. The key
-            # was -importance alone, and read facts are capped at importance 4
-            # while a consolidated fact is often 3 — so the padding preferred a
-            # stranger's mail, the window below then capped it, and recall came
-            # back SHORT with owner-told rows sitting unused in the store.
+            # LIVE FIRST, then OWNER-TOLD, then importance. Retirement leads
+            # the key for the same reason it leads profile_facts': this branch
+            # pads the window with facts that matched NOTHING in the query, so
+            # without it a retired importance-5 row would be padded in ahead of
+            # a live importance-3 one — the measured bug, rebuilt inside the
+            # block that exists to help paraphrased questions.
+            #
+            # Then owner-told: the key was -importance alone, and read facts
+            # are capped at importance 4 while a consolidated fact is often 3 —
+            # so the padding preferred a stranger's mail, the window below then
+            # capped it, and recall came back SHORT with owner-told rows
+            # sitting unused in the store.
             from .anticipy_core import _UNTRUSTED_SOURCES
-            rest = sorted((f for f in self.profile_facts()
-                           if f"known: {f['fact']}" not in have),
+            rest = sorted((f for f in self.profile_facts(retired=retired)
+                           if line(f, 0.0)["fact"] not in have),
                           key=lambda f: (
+                              f.get("retired_ts") is not None,
                               str(f.get("source") or "") in _UNTRUSTED_SOURCES,
                               -f["importance"]))
             for f in rest[:limit - len(out)]:
-                out.append({
-                    "fact": f'known: {f["fact"]}',
-                    "src_type": "profile", "dst_type": "profile",
-                    "ts": f["last_seen_ts"], "quote": None,
-                    "importance": f["importance"],
-                    "salience": 0.0,
-                    "source": f.get("source", ""),
-                })
+                out.append(line(f, 0.0))
+        # A RETIRED FACT NEVER LEADS — asserted on the FINAL list, because the
+        # padding branch above appends and would otherwise undo it. Measured
+        # while writing this: recall("who is my partner") put "no longer true —
+        # retired yesterday: partner is Dana" FIRST, ahead of the live fact
+        # that replaced it, because the dead row matched the query on the word
+        # "partner" and the live one matched nothing and was padded in behind.
+        # Stable, so order within each class is exactly what the two branches
+        # decided; it only moves dead facts behind live ones. Before
+        # _provenance_window, so a dead fact is also the first thing dropped
+        # when the window is short.
+        out.sort(key=lambda f: f["retired_ts"] is not None)
         return _provenance_window(out, limit)
 
-    # Set by _find_same_fact when the row it matched states the SAME fact
+    # Set by _relate_fact when the row it matched states the SAME fact
     # with a DIFFERENT number — the caller must rewrite the wording rather
     # than keep the stale one.
     _last_match_changed_detail = False
@@ -1162,21 +1342,61 @@ class Memory:
         return {w for w in _fact_tokens(text)
                 if (len(w) > 2 or w.isdigit()) and w not in self._STOP}
 
-    def _find_same_fact(self, text: str) -> Optional[int]:
-        """The existing profile row that states the same fact, or None.
-        Identical-after-normalization needs no model; near matches are
-        LLM-judged same-fact; with no model only the deterministic paths
-        run, so near-identical wording still merges offline."""
+    def _relate_fact(self, text: str,
+                     ts: Optional[float] = None) -> tuple:
+        """How this fact stands to what is already stored: (row_id, relation)
+        where relation is "same", "replaces" or "different".
+
+        THE RELATION IS THE MODEL'S ANSWER, NOT THIS FUNCTION'S. Deciding that
+        "broke up with Dana" retires "partner is Dana" is a judgement about
+        what two sentences MEAN, and HARNESS-LAW 1 puts that with a model that
+        has both of them in front of it. What runs here is a candidate sift in
+        FRONT of the model (which pairs are even worth a question), the
+        deterministic same-wording tiers that already shipped, and nothing
+        else. No verb list, no threshold, decides that a fact is dead.
+
+        THE SIFT HAD TO WIDEN, and this is the measured reason. It used to
+        offer the model only pairs scoring 0.40-0.80 on word overlap.
+        "partner is Dana" and "broke up with Dana" reduce to {partner, dana}
+        and {broke, dana} — overlap 0.33 — so the one pair the whole feature
+        exists for scored BELOW the band and was never asked about. A cheap
+        sift that silently excludes the case is not a sift, it is the
+        decision. Now any shared compare-word makes a pair a candidate and the
+        model is asked about the three closest; the call budget is unchanged
+        (it was already capped at three), the band is not.
+
+        `ts` is the evidence date of the incoming fact and is used for exactly
+        one thing: see the retired-row guard below.
+        """
         self._last_match_changed_detail = False
         norm = " ".join(_fact_tokens(text))
         cand_words = self._compare_words(text)
         cand_nums = _fact_numbers(text)
         near = []
-        for rid, fact in self.db.execute(
-                "SELECT id, fact FROM profile_facts").fetchall():
+        for rid, fact, retired_ts in self.db.execute(
+                "SELECT id, fact, retired_ts FROM profile_facts").fetchall():
+            # A DEAD ROW STOPS BEING A TARGET ONCE SOMETHING NEWER THAN ITS
+            # RETIREMENT SAYS THE SAME THING AGAIN.
+            #
+            # Without this, "actually, we're back together" merges into the
+            # RETIRED "partner is Dana" row: evidence accrues on a corpse,
+            # status is untouched by _merge_fact, the active occupant is never
+            # judged against it, and the owner's correction changes nothing she
+            # says — this card's own bug rebuilt one level down. Skipping the
+            # row lets the loop reach the live occupant, which is what the
+            # model should be judging the restatement against.
+            #
+            # The other direction is deliberately NOT skipped: evidence OLDER
+            # than the retirement is a crash-replayed consolidation batch
+            # (consolidate's cursor does not advance on a model failure, so
+            # episodes are re-read) re-deriving a fact that has since died. It
+            # merges into the retired row and stays retired, which records the
+            # re-derivation without resurrecting it.
+            if retired_ts is not None and ts is not None and ts > retired_ts:
+                continue
             fnorm = " ".join(_fact_tokens(fact))
             if fnorm == norm:
-                return rid
+                return rid, "same"
             fwords = self._compare_words(fact)
             if not cand_words or not fwords:
                 continue
@@ -1204,23 +1424,123 @@ class Memory:
                 if subj_a and subj_b and (
                         len(subj_a & subj_b) / len(subj_a | subj_b)) >= 0.8:
                     self._last_match_changed_detail = True
-                    return rid
-                continue
-            if overlap >= 0.8:
-                return rid          # near-identical wording; no model needed
-            if overlap >= 0.4:
+                    return rid, "same"
+                # NOT `continue` any more, and this is load-bearing. Dropping
+                # the pair here meant a differing number could never be judged
+                # at all: "home is 44 Birch Lane" / "home is 18 Rowan Ave" and
+                # "standup is at 9" / "standup moved to 10" are the shape a
+                # MOVE and a RESCHEDULE actually arrive in, and both were
+                # falling out of candidacy on the strength of the digits.
+                # What must still not happen is the >= 0.8 wording shortcut
+                # below merging them and throwing the new number away, which is
+                # why that branch is now an elif.
+                pass
+            elif overlap >= 0.8:
+                return rid, "same"  # near-identical wording; no model needed
+            # A RETIRED ROW IS NEVER PUT TO THE MODEL. The question the prompt
+            # asks — which of these is true now — has no answer about a fact
+            # that already stopped being true, and a "replaces" verdict against
+            # a corpse would retire something twice. The deterministic tiers
+            # above still see it, which is what keeps a replayed re-derivation
+            # accruing on the dead row instead of coming back to life.
+            if overlap > 0 and retired_ts is None:
                 near.append((overlap, rid, fact))
         if self.llm and near:
+            now = time.time()
             for _overlap, rid, fact in sorted(near, reverse=True)[:3]:
                 try:
-                    res = self.llm.chat(SAME_FACT_SYSTEM,
-                                        json.dumps({"a": fact, "b": text}),
-                                        aux=True)
-                    if json.loads(_extract_json(res.text)).get("same") is True:
-                        return rid
+                    # AGES GO WITH THE FACTS. "partner is Dana" and "broke up
+                    # with Dana" are the same two sentences whichever way round
+                    # they were said; which one has taken the other's place is
+                    # a question about WHEN, and asking it without the dates is
+                    # asking the model to guess. `a` is what is stored, `b` is
+                    # what just arrived.
+                    seen = self.db.execute(
+                        "SELECT last_seen_ts FROM profile_facts WHERE id=?",
+                        (rid,)).fetchone()
+                    res = self.llm.chat(SAME_FACT_SYSTEM, json.dumps({
+                        "a": fact,
+                        "a_last_heard_days_ago": _days_ago(
+                            seen[0] if seen else now, now),
+                        "b": text,
+                        "b_last_heard_days_ago": _days_ago(ts or now, now),
+                    }), aux=True)
+                    relation = json.loads(
+                        _extract_json(res.text)).get("relation")
                 except Exception:
                     continue
-        return None
+                # An answer this store does not know — a value the model
+                # invented, a reply in the old {"same":bool} shape from a
+                # prompt revision nobody here has seen — is NO VERDICT, the
+                # same contract _fact_kind and _speaker_verdict hold. No
+                # verdict leaves the profile exactly as it was.
+                if relation in ("same", "replaces"):
+                    return rid, relation
+        return None, "different"
+
+    def _supersede(self, old_id: int, text: str, importance: int,
+                   confidence: float, source: str, ts: float,
+                   episode_ids: list[int],
+                   kind: Optional[str] = None) -> int:
+        """The model said these two cannot both be true. Land the new fact and
+        retire the one it replaced. Returns the new row id, or 0 if nothing
+        was written.
+
+        NOTHING IS DELETED AND NOTHING IS REWRITTEN. The old row keeps its
+        wording, its importance, its provenance and its episode ids, and gains
+        only a date and a pointer — so "why did she stop believing that?" has
+        an answer, and forget_fact stays the only thing in this store that
+        destroys a fact.
+
+        TWO DETERMINISTIC GUARDS. Both compare labels and timestamps, never
+        words: the model has already said WHETHER one fact replaces the other,
+        and these decide only whether this particular pair is allowed to act
+        on that.
+        """
+        from .anticipy_core import _UNTRUSTED_SOURCES
+        row = self.db.execute(
+            "SELECT last_seen_ts, source FROM profile_facts WHERE id=?",
+            (old_id,)).fetchone()
+        if not row:
+            return 0
+        # GUARD 1 — THE PROVENANCE FENCE. A calendar invite or a mail subject
+        # line is written by whoever sent it. Letting it retire something the
+        # owner said out loud would make "delete his boundary" a thing a
+        # stranger can do by sending him an email — the same exploit
+        # forget_fact's veto fence and _merge_fact's launder guard already
+        # close, arriving through a third door. The fact still lands; it just
+        # does not get to kill anything. Untrusted retiring untrusted is fine,
+        # and SPOKEN retiring imported is the intended direction (he moved,
+        # and the calendar has not caught up).
+        if (str(source or "") in _UNTRUSTED_SOURCES
+                and str(row[1] or "") not in _UNTRUSTED_SOURCES):
+            return self._insert_fact(text, importance, confidence, source, ts,
+                                     episode_ids, kind=kind)
+        new_id = self._insert_fact(text, importance, confidence, source, ts,
+                                   episode_ids, kind=kind)
+        # A VETOED FACT RETIRES NOTHING. _insert_fact returns 0 when the owner
+        # has tapped this fact away, and retiring the old row anyway would turn
+        # the veto into a silent deletion weapon: veto "partner is Maya", say
+        # it once, and "partner is Dana" dies with nothing written in its
+        # place. The owner would be left with neither fact and no gesture that
+        # explains where they went.
+        if not new_id:
+            return 0
+        # GUARD 2 — THE OLDER SIDE LOSES, WHICHEVER WAY IT ARRIVED. consolidate
+        # does not advance its cursor when the model fails, so a batch is
+        # re-read and a fact that has since been replaced can be re-derived
+        # days later. Landing it active would resurrect a dead fact on a
+        # timestamp nobody looked at. When the incoming evidence is the older
+        # side it lands ALREADY retired, pointing at the row that outlived it.
+        if ts >= row[0]:
+            self.db.execute(
+                "UPDATE profile_facts SET retired_ts=?, retired_by=? "
+                "WHERE id=?", (ts, new_id, old_id))
+        else:
+            self.db.execute(
+                "UPDATE profile_facts SET retired_ts=?, retired_by=? "
+                "WHERE id=?", (row[0], old_id, new_id))
+        return new_id
 
     def _insert_fact(self, text: str, importance: int, confidence: float,
                      source: str, ts: float, episode_ids: list[int],

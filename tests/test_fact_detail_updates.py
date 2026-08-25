@@ -1,6 +1,7 @@
 """A fact that changes only in its NUMBER must update, not silently merge.
 
-The failure: _find_same_fact dropped every token of two characters or fewer
+The failure: the candidate sift (now _relate_fact) dropped every token
+of two characters or fewer
 before comparing, so "dinner with Sarah at 6" and "dinner with Sarah at 8"
 compared as identical (overlap 1.00) and merged. _merge_fact deliberately
 keeps the original wording, so the 8 was discarded and the profile went on

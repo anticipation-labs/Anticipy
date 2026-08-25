@@ -46,7 +46,7 @@ BOUNDARY = "They asked me never to touch: anything to do with my bank"
 PARTNER = "His partner is Sarah; their anniversary is in June"
 
 # Fifteen facts one honest mail read could plausibly distil. Distinct SUBJECTS,
-# not "fact 1..15": `_find_same_fact` merges restatements, so numbered variants
+# not "fact 1..15": `_relate_fact` merges restatements, so numbered variants
 # of one sentence collapse into a single row and would silently test nothing.
 MAIL_FACTS = [
     "Marcus Bell runs the renewal desk",
