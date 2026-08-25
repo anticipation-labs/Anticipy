@@ -240,7 +240,7 @@ struct ListenTally: Equatable {
             case .flushed(let reason, let words):
                 tally.flushes += 1
                 tally.wordsFlushed += words
-                tally.flushesByReason[reason, default: 0] += 1
+                tally.flushesByReason[reason.rawValue, default: 0] += 1
                 if !ownerHasItOff {
                     tally.longestSilenceSeconds = max(
                         tally.longestSilenceSeconds,
@@ -280,8 +280,16 @@ struct ListenTally: Equatable {
                 // microphone would otherwise cut the day's one enormous silence
                 // into pieces and delete the finding.
 
-            case .noted(let fact):
-                tally.notes.append(fact)
+            // THE SENTENCE IS BUILT HERE, from a value, and that is the whole
+            // difference. `notes` is still prose for a person to read, but no
+            // call site hands prose in any more: what arrives is a
+            // `ListenSessionFacts` (two closed enums and a Bool) or an Int, and
+            // the words come from this file and `ListenSessionFacts.sentence`.
+            case .sessionFacts(let facts):
+                tally.notes.append(facts.sentence)
+
+            case .buffersDropped(let count):
+                tally.notes.append("dropped \(count) buffers while swapping")
 
             case .posted(let ok, _):
                 if ok { tally.postsAccepted += 1 } else { tally.postsFailed += 1 }
@@ -346,9 +354,14 @@ struct ListenTally: Equatable {
         // cannot collide with `sessionStarted`, whose key is the bare "0".
         case .batteryRead(let percent, let onPower): return "0.\(percent) \(onPower)"
         case .recognizerSwapped(let cause): return "1\(cause.rawValue)"
-        case .flushed(let reason, let words): return "2\(words) \(reason)"
-        case .noted(let fact): return "3\(fact)"
-        case .posted(let ok, let detail): return "4\(ok) \(detail)"
+        case .flushed(let reason, let words): return "2\(words) \(reason.rawValue)"
+        // `.noted` split into these two on 2026-08-25. Both keep the "3" slot
+        // they shared, so a day recorded by an older build sorts against a
+        // newer one the same way; the letter after it is what keeps two events
+        // at one instant from colliding.
+        case .sessionFacts(let facts): return "3a\(facts.sentence)"
+        case .buffersDropped(let count): return "3b\(count)"
+        case .posted(let ok, let detail): return "4\(ok) \(detail.text)"
         case .sessionStopped(let cause): return "5\(cause.rawValue)"
         }
     }

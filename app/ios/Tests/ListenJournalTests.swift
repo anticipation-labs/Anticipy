@@ -42,7 +42,7 @@ struct ListenJournalTests {
         // where a failed session has to be read from.
         let order = ListenJournal(limit: 10)
         order.record(.sessionStarted, at: t0)
-        order.record(.posted(ok: true, detail: "queued"), at: t0.addingTimeInterval(1))
+        order.record(.posted(ok: true, detail: .sentFromQueue), at: t0.addingTimeInterval(1))
         order.record(.sessionStopped(cause: .owner), at: t0.addingTimeInterval(2))
         check("entries come back oldest first",
               order.entries.count == 3
@@ -65,12 +65,12 @@ struct ListenJournalTests {
         // phone is the same mistake at smaller scale, and the newest events are
         // the ones that explain the failure being investigated.
         let bounded = ListenJournal(limit: 3)
-        for i in 0..<10 { bounded.record(.flushed(reason: "r\(i)", words: i), at: t0) }
+        for i in 0..<10 { bounded.record(.flushed(reason: .gap, words: i), at: t0) }
         check("a full journal keeps the newest events and drops the oldest",
               bounded.entries.count == 3
-                  && bounded.entries[0].contains("r7")
-                  && bounded.entries[1].contains("r8")
-                  && bounded.entries[2].contains("r9"))
+                  && bounded.entries[0].contains("7 words")
+                  && bounded.entries[1].contains("8 words")
+                  && bounded.entries[2].contains("9 words"))
 
         // ------------------------------------------------------------ 5. clear
         // Emptying it is only half of clear's job. The ring also has to forget
@@ -86,14 +86,14 @@ struct ListenJournalTests {
         let hadSomethingToClear = !cleared.entries.isEmpty
         cleared.clear()
         let emptyAfterClear = cleared.entries.isEmpty
-        for i in 0..<5 { cleared.record(.flushed(reason: "c\(i)", words: i), at: t0) }
+        for i in 0..<5 { cleared.record(.flushed(reason: .ceiling, words: i), at: t0) }
         let refilled = cleared.entries
         check("clearing empties the journal and resets it, so a refill still keeps the newest",
               hadSomethingToClear && emptyAfterClear
                   && refilled.count == 3
-                  && refilled[0].contains("c2")
-                  && refilled[1].contains("c3")
-                  && refilled[2].contains("c4"))
+                  && refilled[0].contains("2 words")
+                  && refilled[1].contains("3 words")
+                  && refilled[2].contains("4 words"))
 
         // ------------------------------------------------------------ 6. a flush
         // The trigger and the size of a flush are what distinguish "the ceiling
@@ -102,7 +102,7 @@ struct ListenJournalTests {
         // already holds the owner's speech, and a second copy of it in a
         // diagnostic log is a privacy regression under design/LOCAL-FIRST.md.
         let flush = ListenJournal(limit: 10)
-        flush.record(.flushed(reason: "ceiling", words: 12), at: t0)
+        flush.record(.flushed(reason: .ceiling, words: 12), at: t0)
         // "12 words" and not a bare "12": the timestamp on the line is made of
         // digits too, and a check that a passing digit pair satisfies is not
         // checking the word count at all.
@@ -138,10 +138,10 @@ struct ListenJournalTests {
             let mainThread = DispatchQueue(label: "test.main")
             let readerThread = DispatchQueue(label: "test.reader")
             var reads = 0
-            for (tag, queue) in [("audio", audioThread), ("main", mainThread)] {
+            for queue in [audioThread, mainThread] {
                 queue.async(group: group) {
                     for i in 0..<100 {
-                        journal.record(.posted(ok: true, detail: "\(tag)\(i)"), at: t0)
+                        journal.record(.posted(ok: true, detail: .shelved(again: false, failure: .http(status: i))), at: t0)
                     }
                 }
             }
@@ -185,7 +185,7 @@ struct ListenJournalTests {
         let fileA = dirA.appendingPathComponent("listen-journal.log")
         let persisted = ListenJournal(limit: 10, fileURL: fileA)
         persisted.record(.sessionStarted, at: t0)
-        persisted.record(.flushed(reason: "gap", words: 7), at: t0.addingTimeInterval(1))
+        persisted.record(.flushed(reason: .gap, words: 7), at: t0.addingTimeInterval(1))
         check("what was recorded can be read back after the object is gone",
               persisted.persistedLines.count == 2
                   && persisted.persistedLines[0].contains("sessionStarted")
@@ -197,13 +197,13 @@ struct ListenJournalTests {
         let fileB = dirB.appendingPathComponent("listen-journal.log")
         let rolling = ListenJournal(limit: 10_000, fileURL: fileB, rotateAtBytes: 2_048)
         for i in 0..<400 {
-            rolling.record(.posted(ok: true, detail: "line\(i)"), at: t0)
+            rolling.record(.posted(ok: true, detail: .shelved(again: false, failure: .http(status: i))), at: t0)
         }
         let all = rolling.persistedLines
         check("a file past the cap rotates rather than growing without end",
               FileManager.default.fileExists(atPath: fileB.appendingPathExtension("1").path))
         check("the newest line is in the newest file, and survives the rotation",
-              all.last?.contains("line399") == true)
+              all.last?.contains("http 399") == true)
         // COUNTED, not asserted against a name no implementation could produce.
         // This used to check that `listen-journal.log.2` did not exist, and
         // `rotateIfNeeded` only ever writes `.1` — so no change to the rotation
@@ -224,8 +224,8 @@ struct ListenJournalTests {
         let dirC = tempDir()
         let fileC = dirC.appendingPathComponent("listen-journal.log")
         let priv = ListenJournal(limit: 10, fileURL: fileC)
-        priv.record(.flushed(reason: "ceiling", words: 12), at: t0)
-        priv.record(.posted(ok: false, detail: "requeued, offline"), at: t0)
+        priv.record(.flushed(reason: .ceiling, words: 12), at: t0)
+        priv.record(.posted(ok: false, detail: .shelved(again: true, failure: .system(domain: .url, code: -1009))), at: t0)
         // record() is async — it must be, because it is called from the audio
         // thread and now touches a file. So a check that reads the file
         // DIRECTLY has to drain the queue first; any read through the journal
@@ -282,16 +282,23 @@ struct ListenJournalTests {
         //
         // A day that heard everything and delivered nothing is one of the two
         // failures this screen is for, and this turned it into a clean day.
-        // Latent rather than live — today's details are wire names and `http
-        // NNN` shapes — but "no live value happens to contain the word" is not a
-        // property anything enforces.
-        let trap = ListenEvent.posted(ok: false, detail: "not accepted by proxy")
-        let dirE = tempDir()
-        let trapped = ListenJournal(limit: 10,
-                                    fileURL: dirE.appendingPathComponent("j.log"))
-        trapped.record(trap, at: t0)
-        check("a failed post whose detail contains the word 'accepted' does not read back as accepted",
-              trapped.persistedEvents.map { $0.1 } == [trap])
+        //
+        // THE ORIGINAL TRAP NO LONGER COMPILES: `detail` is a `PostDetail`, so
+        // there is no prose to hide the word in. What is checked instead is the
+        // reader, against a LINE — which is the only surface a stale or
+        // hand-edited journal file can still present.
+        check("a failed post is read as failed however its detail reads",
+              ListenJournal.parse(
+                "2026-08-24T09:00:00.000Z  posted  failed, queued, http 403")?.1
+                  == .posted(ok: false, detail: .shelved(again: false,
+                                                         failure: .http(status: 403))))
+        // AND A DETAIL THIS BUILD COULD NEVER HAVE WRITTEN IS DROPPED, not
+        // guessed at. Free prose in that field is evidence the line did not
+        // come from `describe`; reading it back as a successful post is the
+        // 2026-08-24 bug in a different coat.
+        check("a posted line whose detail is prose does not parse at all",
+              ListenJournal.parse(
+                "2026-08-24T09:00:00.000Z  posted  failed, not accepted by proxy") == nil)
 
         // ------------------------------------------------ 10. sub-second stamps
         // `[.withInternetDateTime]` has no fractional part, so two lines written
@@ -354,7 +361,7 @@ struct ListenJournalTests {
 extension ListenEvent {
     enum Kind: CaseIterable {
         case sessionStarted, sessionStopped, recognizerSwapped
-        case flushed, posted, noted, batteryRead
+        case flushed, posted, sessionFacts, buffersDropped, batteryRead
     }
 
     var kind: Kind {
@@ -364,7 +371,8 @@ extension ListenEvent {
         case .recognizerSwapped: return .recognizerSwapped
         case .flushed: return .flushed
         case .posted: return .posted
-        case .noted: return .noted
+        case .sessionFacts: return .sessionFacts
+        case .buffersDropped: return .buffersDropped
         case .batteryRead: return .batteryRead
         }
     }
@@ -385,16 +393,43 @@ extension ListenEvent {
                     .recognizerSwapped(cause: .silenceRotation),
                     .recognizerSwapped(cause: .appReturned)]
         case .flushed:
-            return [.flushed(reason: "ceiling", words: 40),
-                    .flushed(reason: "gap", words: 1)]
+            return [.flushed(reason: .ceiling, words: 40),
+                    .flushed(reason: .gap, words: 1),
+                    .flushed(reason: .final, words: 0),
+                    .flushed(reason: .banked, words: 3)]
+        // Every shape the detail has: a live send from each ear, one off the
+        // queue, and both shelvings — each with a failure whose two halves
+        // render differently. A negative code is in here because NSError codes
+        // are routinely negative and a reader splitting on a space had better
+        // survive the sign.
         case .posted:
-            return [.posted(ok: true, detail: "queued line sent"),
-                    .posted(ok: false, detail: "requeued, offline"),
-                    .posted(ok: true, detail: "")]
-        case .noted:
-            return [.noted("session category: AVAudioSessionCategoryRecord mode: AVAudioSessionModeMeasurement"),
-                    .noted("low power mode on"),
-                    .noted("dropped 600 buffers while swapping")]
+            return [.posted(ok: true, detail: .sentLive(from: .phoneMic)),
+                    .posted(ok: true, detail: .sentLive(from: .typed)),
+                    .posted(ok: true, detail: .sentLive(from: .unrecognised)),
+                    .posted(ok: true, detail: .sentFromQueue),
+                    .posted(ok: false, detail: .shelved(again: false,
+                                                        failure: .http(status: 403))),
+                    .posted(ok: false, detail: .shelved(again: true,
+                                                        failure: .system(domain: .url,
+                                                                         code: -1009))),
+                    .posted(ok: false, detail: .shelved(again: true,
+                                                        failure: .system(domain: .other,
+                                                                         code: 0)))]
+        // Low power on and off, because the sentence grows a suffix for one of
+        // them, and an unrecognised name because that is what a category this
+        // build has never heard of becomes on the way in.
+        case .sessionFacts:
+            return [.sessionFacts(ListenSessionFacts(category: "AVAudioSessionCategoryRecord",
+                                                     mode: "AVAudioSessionModeMeasurement",
+                                                     lowPower: false)),
+                    .sessionFacts(ListenSessionFacts(category: "AVAudioSessionCategoryPlayAndRecord",
+                                                     mode: "AVAudioSessionModeDefault",
+                                                     lowPower: true)),
+                    .sessionFacts(ListenSessionFacts(category: "something new",
+                                                     mode: "something else",
+                                                     lowPower: false))]
+        case .buffersDropped:
+            return [.buffersDropped(count: 600), .buffersDropped(count: 0)]
         // Both power states, and both ends of the range. The false/true pair is
         // where a describe/parse pair drifts — an outcome field read as a
         // substring is exactly how `posted` once turned a delivery failure into

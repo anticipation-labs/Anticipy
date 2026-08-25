@@ -47,7 +47,7 @@ struct ListenTallyTests {
         // is precisely the day worth reading.
         let oneSession: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(60), .flushed(reason: "gap", words: 10)),
+            (at(60), .flushed(reason: .gap, words: 10)),
             (at(300), .sessionStopped(cause: .owner)),
         ]
         let s1 = ListenTally.of(oneSession)
@@ -56,7 +56,7 @@ struct ListenTallyTests {
 
         let stillOpen: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(120), .flushed(reason: "gap", words: 5)),
+            (at(120), .flushed(reason: .gap, words: 5)),
         ]
         check("a session that never closed still counts, up to its last event",
               ListenTally.of(stillOpen).listeningSeconds == 120)
@@ -67,8 +67,8 @@ struct ListenTallyTests {
         // else — the UI still says Listening, and the ring still looks healthy.
         let gapDay: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(30), .flushed(reason: "gap", words: 8)),
-            (at(3_600), .flushed(reason: "gap", words: 4)),   // 3570s of nothing
+            (at(30), .flushed(reason: .gap, words: 8)),
+            (at(3_600), .flushed(reason: .gap, words: 4)),   // 3570s of nothing
             (at(3_630), .sessionStopped(cause: .owner)),
         ]
         check("the longest stretch with nothing heard is reported",
@@ -77,9 +77,9 @@ struct ListenTallyTests {
         // ------------------------------------------------------- 4. words and shards
         let words: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(10), .flushed(reason: "gap", words: 12)),
-            (at(20), .flushed(reason: "ceiling", words: 40)),
-            (at(30), .flushed(reason: "gap", words: 3)),
+            (at(10), .flushed(reason: .gap, words: 12)),
+            (at(20), .flushed(reason: .ceiling, words: 40)),
+            (at(30), .flushed(reason: .gap, words: 3)),
         ]
         let w = ListenTally.of(words)
         check("words and flushes are counted",
@@ -123,9 +123,9 @@ struct ListenTallyTests {
         // a microphone that heard nothing at all, from the outside.
         let posts: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(10), .posted(ok: true, detail: "queued line sent")),
-            (at(20), .posted(ok: false, detail: "requeued, offline")),
-            (at(30), .posted(ok: false, detail: "requeued, offline")),
+            (at(10), .posted(ok: true, detail: .sentFromQueue)),
+            (at(20), .posted(ok: false, detail: .shelved(again: true, failure: .system(domain: .url, code: -1009)))),
+            (at(30), .posted(ok: false, detail: .shelved(again: true, failure: .system(domain: .url, code: -1009)))),
         ]
         let p = ListenTally.of(posts)
         check("posts are split into landed and failed",
@@ -137,7 +137,7 @@ struct ListenTallyTests {
         // legible at a glance rather than requiring the raw lines.
         let deadDay: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(120), .flushed(reason: "gap", words: 30)),
+            (at(120), .flushed(reason: .gap, words: 30)),
             (at(600), .sessionStopped(cause: .interruption)),
         ]
         let dead = ListenTally.of(deadDay)
@@ -155,15 +155,15 @@ struct ListenTallyTests {
         // events shuffled must fold to the same tally.
         let inOrder: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(30), .flushed(reason: "gap", words: 9)),
-            (at(900), .flushed(reason: "ceiling", words: 40)),
+            (at(30), .flushed(reason: .gap, words: 9)),
+            (at(900), .flushed(reason: .ceiling, words: 40)),
             (at(960), .sessionStopped(cause: .interruption)),
         ]
         let shuffled: [(Date, ListenEvent)] = [
             (at(960), .sessionStopped(cause: .interruption)),
-            (at(30), .flushed(reason: "gap", words: 9)),
+            (at(30), .flushed(reason: .gap, words: 9)),
             (at(0), .sessionStarted),
-            (at(900), .flushed(reason: "ceiling", words: 40)),
+            (at(900), .flushed(reason: .ceiling, words: 40)),
         ]
         let straight = ListenTally.of(inOrder)
         let jumbled = ListenTally.of(shuffled)
@@ -189,12 +189,12 @@ struct ListenTallyTests {
         let tieOne: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
             (at(0), .sessionStopped(cause: .interruption)),
-            (at(43_200), .posted(ok: true, detail: "queued line sent")),
+            (at(43_200), .posted(ok: true, detail: .sentFromQueue)),
         ]
         let tieOther: [(Date, ListenEvent)] = [
             (at(0), .sessionStopped(cause: .interruption)),
             (at(0), .sessionStarted),
-            (at(43_200), .posted(ok: true, detail: "queued line sent")),
+            (at(43_200), .posted(ok: true, detail: .sentFromQueue)),
         ]
         check("two events stamped at the same instant fold the same way in either order",
               ListenTally.of(tieOne, now: at(43_200))
@@ -202,15 +202,18 @@ struct ListenTallyTests {
         // Same for two events of the SAME case at one instant: `notes` is an
         // ordered array, so two facts sharing a stamp would otherwise make the
         // whole tally depend on which thread's write landed first.
+        let facts = ListenSessionFacts(category: "AVAudioSessionCategoryRecord",
+                                       mode: "AVAudioSessionModeMeasurement",
+                                       lowPower: true)
         let tieNotes: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(5), .noted("low power mode on")),
-            (at(5), .noted("dropped 600 buffers while swapping")),
+            (at(5), .sessionFacts(facts)),
+            (at(5), .buffersDropped(count: 600)),
         ]
         let tieNotesOther: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(5), .noted("dropped 600 buffers while swapping")),
-            (at(5), .noted("low power mode on")),
+            (at(5), .buffersDropped(count: 600)),
+            (at(5), .sessionFacts(facts)),
         ]
         check("two facts stamped at the same instant come back in the same order either way",
               ListenTally.of(tieNotes) == ListenTally.of(tieNotesOther))
@@ -233,7 +236,7 @@ struct ListenTallyTests {
         // 10hr 58min correctly, the FATAL one reported 58 minutes.
         let callAt0900: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),                             // 08:00
-            (at(120), .flushed(reason: "gap", words: 30)),        // 08:02
+            (at(120), .flushed(reason: .gap, words: 30)),        // 08:02
             (at(3_600), .sessionStopped(cause: .interruption)),   // 09:00
         ]
         let readAt1900 = at(39_600)                               // 19:00
@@ -251,7 +254,7 @@ struct ListenTallyTests {
         // on the stop is what tells the two apart, and it is already recorded.
         let ownerStoppedAt0900: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(120), .flushed(reason: "gap", words: 30)),
+            (at(120), .flushed(reason: .gap, words: 30)),
             (at(3_600), .sessionStopped(cause: .owner)),
         ]
         let off = ListenTally.of(ownerStoppedAt0900, now: readAt1900)
@@ -267,11 +270,11 @@ struct ListenTallyTests {
         // how long it cost.
         let nineDeafHours: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(120), .flushed(reason: "gap", words: 30)),
+            (at(120), .flushed(reason: .gap, words: 30)),
             (at(3_600), .sessionStopped(cause: .interruption)),
             (at(36_000), .recognizerSwapped(cause: .appReturned)),
             (at(36_000), .sessionStarted),
-            (at(36_060), .flushed(reason: "gap", words: 5)),
+            (at(36_060), .flushed(reason: .gap, words: 5)),
         ]
         let recovered = ListenTally.of(nineDeafHours, now: at(39_600))
         check("an interruption nothing recovered from until 18:00 is nine hours of silence, not none",
@@ -298,15 +301,34 @@ struct ListenTallyTests {
         // order and verbatim — they are prose written for a person already.
         let noted: [(Date, ListenEvent)] = [
             (at(0), .sessionStarted),
-            (at(0), .noted("session category: AVAudioSessionCategoryRecord mode: AVAudioSessionModeMeasurement")),
-            (at(1), .noted("low power mode on")),
-            (at(40), .noted("dropped 600 buffers while swapping")),
+            (at(0), .sessionFacts(ListenSessionFacts(category: "AVAudioSessionCategoryRecord",
+                                                     mode: "AVAudioSessionModeMeasurement",
+                                                     lowPower: false))),
+            (at(1), .sessionFacts(ListenSessionFacts(category: "AVAudioSessionCategoryPlayAndRecord",
+                                                     mode: "AVAudioSessionModeDefault",
+                                                     lowPower: true))),
+            (at(40), .buffersDropped(count: 600)),
         ]
         let n = ListenTally.of(noted)
         check("senses facts are kept, in order, verbatim",
               n.notes.count == 3
                   && n.notes[0].contains("AVAudioSessionCategoryRecord")
+                  && n.notes[1].hasSuffix("low power mode on")
                   && n.notes[2] == "dropped 600 buffers while swapping")
+        // A name the closed sets do not know cannot be RECORDED as itself. The
+        // journal's payloads are typed precisely so a transcript handed to this
+        // initializer arrives as the word "unrecognised" — the state a scan
+        // used to have to detect is now one the type cannot hold.
+        let smuggled = ListenTally.of([
+            (at(0), .sessionStarted),
+            (at(0), .sessionFacts(ListenSessionFacts(
+                category: "he said his card number is 4111 1111 1111 1111",
+                mode: "AVAudioSessionModeMeasurement", lowPower: false))),
+        ])
+        check("a category that is not a category cannot be written down as one",
+              smuggled.notes.count == 1
+                  && !smuggled.notes[0].contains("4111")
+                  && smuggled.notes[0].contains("unrecognised"))
         check("a note is not mistaken for something heard",
               n.wordsFlushed == 0 && n.flushes == 0)
 
@@ -327,7 +349,7 @@ struct ListenTallyTests {
         // nothing", which is a different and much more reassuring claim.
         let noBattery = ListenTally.of([
             (at(0), .sessionStarted),
-            (at(600), .flushed(reason: "gap", words: 12)),
+            (at(600), .flushed(reason: .gap, words: 12)),
         ])
         check("a day with no battery readings says so rather than reporting zero spent",
               noBattery.batteryReadings == 0

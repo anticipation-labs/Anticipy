@@ -290,19 +290,25 @@ final class AnticipySession: ObservableObject {
     /// phone all day, which is precisely the twitching the ack rule exists to
     /// prevent; and a line typed while the phone mic was running got no ack at
     /// all. Every call site already knows which of the three this is.
-    enum LineSource {
-        case typed, phoneMic, pendant
+    ///
+    /// A `String`-RAW ENUM, so the wire names are compile-time constants of the
+    /// type rather than the return values of a `switch` nothing enforces. It
+    /// was the latter, and a fifth-pass review named it: `rawValue` on a raw
+    /// enum cannot silently gain a fourth spelling or lose one, while a
+    /// computed property returning literals can be edited to return anything at
+    /// all. Same three words on the wire either way — deliberately NOT
+    /// `String(describing:)`, because renaming a Swift case must never
+    /// re-label a year of history.
+    ///
+    /// `ListenEvent.Origin` carries these same three spellings into the
+    /// journal, and `CaptureSourcePolicy` matches them coming back off the
+    /// wire; `run_journal_tests.sh` checks all three agree.
+    enum LineSource: String {
+        case typed
+        case phoneMic = "phone_mic"
+        case pendant
 
-        /// The stable name that goes on the wire and stays greppable in
-        /// production. Deliberately not `String(describing:)` — renaming a
-        /// Swift case must never silently re-label a year of history.
-        var wireName: String {
-            switch self {
-            case .typed: return "typed"
-            case .phoneMic: return "phone_mic"
-            case .pendant: return "pendant"
-            }
-        }
+        var wireName: String { rawValue }
     }
 
     /// The id of the last transcript row this session created, so a line the
@@ -347,13 +353,15 @@ final class AnticipySession: ObservableObject {
                                         capturedAt: capturedAt,
                                         parentLine: parent)
             if !id.isEmpty { lastTranscriptEventID = id }
-            ListenJournal.shared.record(.posted(ok: true, detail: source.wireName))
+            ListenJournal.shared.record(
+                .posted(ok: true, detail: .sentLive(from: .init(wireName: source.wireName))))
         } catch {
             // A dropped push used to vanish into try? — the line then sat at
             // the top of the feed saying "Thinking…" forever while the brain
             // had never seen it. Queue it (on disk) and keep trying.
             ListenJournal.shared.record(
-                .posted(ok: false, detail: "queued, \(Self.postFailureShape(error))"))
+                .posted(ok: false,
+                        detail: .shelved(again: false, failure: Self.postFailureShape(error))))
             unsent = unsent + [BufferedLine(text: line, explicit: explicit,
                                             speaker: speaker,
                                             source: source.wireName,
@@ -370,12 +378,16 @@ final class AnticipySession: ObservableObject {
     /// body is built from a request whose payload is the words the owner just
     /// said. The journal is exportable from Settings, so anything put in it
     /// leaves the phone on a person's tap (`design/LOCAL-FIRST.md`).
-    static func postFailureShape(_ error: Error) -> String {
+    /// A `ListenEvent.PostFailure` rather than a `String`, since 2026-08-25.
+    /// The words it goes to disk as are chosen inside `ListenJournal`, from two
+    /// Ints and a closed set of five error domains — so this function can no
+    /// longer be the place a sentence gets in, whatever it is handed.
+    static func postFailureShape(_ error: Error) -> ListenEvent.PostFailure {
         if let refusal = error as? AnticipyBackend.BackendError {
-            return "http \(refusal.status)"
+            return .http(status: refusal.status)
         }
         let ns = error as NSError
-        return "\(ns.domain) \(ns.code)"
+        return .system(domain: .init(name: ns.domain), code: ns.code)
     }
 
     /// Re-push anything the network ate, oldest first. Whatever still fails
@@ -414,11 +426,12 @@ final class AnticipySession: ObservableObject {
                 if !id.isEmpty { lastTranscriptEventID = id }
                 // An unreadable id is a broken link, not a guessable one.
                 previousInThisFlush = id
-                ListenJournal.shared.record(.posted(ok: true, detail: "queued line sent"))
+                ListenJournal.shared.record(.posted(ok: true, detail: .sentFromQueue))
             }
             catch {
                 ListenJournal.shared.record(
-                    .posted(ok: false, detail: "requeued, \(Self.postFailureShape(error))"))
+                    .posted(ok: false,
+                            detail: .shelved(again: true, failure: Self.postFailureShape(error))))
                 previousInThisFlush = ""
                 failed.append(line)
             }
@@ -573,13 +586,44 @@ final class AnticipySession: ObservableObject {
     }
 
     /// Normalize what a human typed into the E.164 the SMS layer needs.
-    /// Returns nil when it isn't a complete number yet.
+    /// Returns nil when it isn't a complete, dialable number yet.
+    ///
+    /// IT NEVER INVENTS A COUNTRY, and that is the whole of this function.
+    /// It used to read `if digits.count == 10 { return "+1" + digits }`, so a
+    /// stranger in London typing the ten digits of their own number —
+    /// 2079460958 — had `+12079460958` written to their account at minute two
+    /// of sign-up. A text is the ONLY channel this product has outside the
+    /// app, nothing downstream validates the number, and Twilio's rejection
+    /// reaches a print() on worker stdout and nowhere else. They would have
+    /// finished a whole week without one message and without one error.
+    ///
+    /// The two lines under it were the same bug wearing national dress: the
+    /// UK, France, Germany and most of the world write their own numbers with
+    /// a leading trunk 0 — "020 7946 0958" — and `"+" + digits` turned that
+    /// into `+02079460958`. No country code in E.164 begins with 0, so that
+    /// number cannot be dialled from anywhere on earth.
+    ///
+    /// So: a country code or nothing. `+` is the country code the person
+    /// typed; `00` is how most of the world writes `+` on paper. A bare
+    /// national number is refused, because guessing which of 200 countries it
+    /// belongs to is what broke it. The refusal is not a dead end — the field
+    /// arrives with THIS phone's own dialling code already in it
+    /// (`DiallingCode.forThisPhone`), visible and editable, so the country is
+    /// something the person can see and correct rather than something the app
+    /// decides behind them.
     nonisolated func e164(_ raw: String) -> String? {
-        let digits = raw.filter(\.isNumber)
-        guard digits.count >= 10 else { return nil }
-        if raw.hasPrefix("+") { return "+" + digits }
-        if digits.count == 10 { return "+1" + digits }        // NANP local
-        if digits.count == 11, digits.hasPrefix("1") { return "+" + digits }
+        var digits = raw.filter(\.isNumber)
+        if !raw.hasPrefix("+") {
+            // "00" is the international prefix everywhere it is not "011",
+            // and it is how people write a foreign-qualified number down.
+            guard digits.hasPrefix("00") else { return nil }
+            digits = String(digits.dropFirst(2))
+        }
+        // E.164 is at most 15 digits including the country code, and no
+        // country code starts with 0 — a leading 0 here is a trunk prefix
+        // somebody left on, not a country.
+        guard digits.count >= 8, digits.count <= 15,
+              !digits.hasPrefix("0") else { return nil }
         return "+" + digits
     }
 

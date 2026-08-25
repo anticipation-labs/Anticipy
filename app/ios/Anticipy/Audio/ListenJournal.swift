@@ -18,26 +18,69 @@ import Foundation
 /// A flush is recorded as a word COUNT. The events collection already holds the
 /// owner's speech, and a second copy of it sitting in a diagnostic log is a
 /// privacy regression under `design/LOCAL-FIRST.md`.
+///
+/// -- NO PAYLOAD HERE IS A `String`, AND THAT IS THE WHOLE PRIVACY ARGUMENT --
+///
+/// It used to be a scan's job. `ListenEvent` declared three free-form String
+/// channels — `flushed(reason:)`, `posted(detail:)` and `noted(_:)` — and
+/// `run_journal_tests.sh` proved, expression by expression, that nothing
+/// carrying speech reached any of them. Five hardening passes did that, and
+/// each one closed its findings and leaked at a new layer: two leaks, then
+/// four, then two, then EIGHT (`.superpowers/sdd/privacy-gate-fifth.md`). Every
+/// attack aimed at a RULE bounced — thirteen of them. What kept giving way was
+/// the finder, the derivation and the allowlist: whatever decided WHAT THE
+/// RULES RAN ON.
+///
+/// The one thing that held completely, under five separate attacks, was a TYPE:
+/// `ListenSessionFacts` could not be made to hold a transcript because `+=`,
+/// `.append` and a tuple assignment do not compile against it. So the journal
+/// is now typed the whole way down. Every payload below is an `Int`, a `Bool`,
+/// or a closed enum this file declares; the words on disk are written by
+/// `describe`, from case names chosen here. There is no channel to put a
+/// sentence into, so there is nothing left for a scan to have to catch.
+///
+/// `run_journal_tests.sh` still checks — but what it checks is that this
+/// property HOLDS: `journal_payloads.py` walks every payload type recursively
+/// and fails on the first one that is not closed. A `String` added back to any
+/// case below turns that leg red, and it fails on a type it cannot classify
+/// rather than skipping it, which is the inversion that let four payload
+/// spellings through before.
 enum ListenEvent: Equatable {
     case sessionStarted
     case sessionStopped(cause: StopCause)
     case recognizerSwapped(cause: SwapCause)
-    case flushed(reason: String, words: Int)
-    /// `detail` is a status or an error shape, never transcript text. The
-    /// tempting values at the call site are the wrong ones: `BackendError`
-    /// carries the server's own sentence, and a PocketBase error body is built
-    /// from a request whose payload includes the owner's speech. Spec section 9
-    /// makes this journal exportable from Settings, so anything put here leaves
-    /// the phone on a person's tap. A status code, a queue state or an error
-    /// name is what belongs; the words the owner said never do.
-    case posted(ok: Bool, detail: String)
-    /// A fact about the SENSES — what the audio session actually became, what
-    /// the power mode is, how much audio was dropped. Never speech, and never
-    /// anything derived from speech: the same rule `posted`'s detail carries,
-    /// for the same reason. This exists because three `try?` calls configure
-    /// the audio session and swallow every failure, so the app can report
-    /// "Listening" over a session it never got.
-    case noted(String)
+    /// Which timer cut these words, and how many of them went out. The COUNT,
+    /// never the words.
+    case flushed(reason: FlushReason, words: Int)
+    /// Whether a line reached the server, and the SHAPE of what happened —
+    /// never a sentence. The tempting values at the call site are the wrong
+    /// ones: `BackendError` carries the server's own sentence, and a PocketBase
+    /// error body is built from a request whose payload includes the owner's
+    /// speech. Spec section 9 makes this journal exportable from Settings, so
+    /// anything put here leaves the phone on a person's tap. `PostDetail` is
+    /// what makes "a status code, never the words" a compiler rule instead of
+    /// a comment.
+    case posted(ok: Bool, detail: PostDetail)
+    /// WHAT THE AUDIO SESSION ACTUALLY BECAME. Three `try?` calls configure it
+    /// and swallow every failure, so the app can report "Listening" over a
+    /// session it never got.
+    ///
+    /// This was `.noted(facts.sentence)` — a free String payload holding a
+    /// rendered sentence — and the sentence was vouched for by an allowlist
+    /// entry that a fifth-pass reviewer walked straight past (`f + acts.sentence`
+    /// reduces to the allowlisted `facts.sentence` once `glue()` strips the
+    /// `+`). Carrying the VALUE and rendering it in `describe` removes the
+    /// allowlist entry and the expression that abused it.
+    case sessionFacts(ListenSessionFacts)
+    /// Audio the tap could not hand to a request, coalesced into one line by
+    /// the watchdog that drains the counter.
+    ///
+    /// Also `.noted(...)` until 2026-08-25, interpolating a count the gate
+    /// allowlisted as `self.orphanDropped` WITH NO TYPE CHECK — it was an `Int`
+    /// by convention only, and flipping it to `String` put the transcript
+    /// through the whole allowlisted chain. `count: Int` is that check, made by
+    /// the compiler.
+    case buffersDropped(count: Int)
     /// WHAT LISTENING COSTS, in the only unit the phone can give for free.
     ///
     /// A percentage and whether the phone was on a charger — never a verdict
@@ -47,19 +90,98 @@ enum ListenEvent: Equatable {
     /// seconds, and this journal writing fifteen identical lines a minute) were
     /// both argued about with no number attached.
     ///
-    /// A TYPED CASE RATHER THAN A `.noted` SENTENCE, deliberately. `ListenTally`
-    /// keeps notes verbatim because they are prose written for a person, and
-    /// parsing our own sentences twice is how the writing and the reading drift
-    /// apart. This has to be FOLDED — subtracted from the reading before it —
-    /// so it arrives as two values the compiler can keep honest, and the round
-    /// trip through `describe`/`parse` is a check rather than a hope.
-    ///
-    /// Ints and a Bool, so no wording of the owner's can ever reach it: this is
-    /// the one journal payload whose privacy argument is its type.
+    /// A TYPED CASE RATHER THAN A `.noted` SENTENCE, and the first one here to
+    /// be written that way. It has to be FOLDED — subtracted from the reading
+    /// before it — so it arrives as two values the compiler can keep honest,
+    /// and the round trip through `describe`/`parse` is a check rather than a
+    /// hope. Every case above now follows it.
     case batteryRead(percent: Int, onPower: Bool)
 
     enum StopCause: String, Equatable {
         case owner, interruption, routeChange, authorizationLost, unrecoveredFailure
+    }
+
+    /// Why a flush fired.
+    ///
+    /// `gap`, `ceiling` and `final` are `TranscriptFlushPolicy.Reason`; `banked`
+    /// is the caller's word for "no policy asked for this one". Declared here
+    /// rather than imported because this file must compile under `swiftc` with
+    /// nothing but `ListenSessionFacts.swift` beside it — that standalone
+    /// compile is what makes the instrument used to judge the audio path itself
+    /// verifiable.
+    ///
+    /// It was `reason: String` and the call site passed `reason?.rawValue`. The
+    /// derivation that was supposed to notice it did not: `reason:` was a third
+    /// free-form String nobody had listed, and `reason: line` beside a word
+    /// count of that same line exited 0.
+    enum FlushReason: String, Equatable, CaseIterable {
+        case gap, ceiling, final
+        /// No policy asked; the words were banked at a stop.
+        case banked
+
+        /// From `TranscriptFlushPolicy.Reason?.rawValue`, which is the only
+        /// caller. An unknown word banks rather than inventing a reason — and
+        /// cannot be recorded as itself, which is the point.
+        init(policyRawValue: String?) {
+            self = policyRawValue.flatMap(FlushReason.init(rawValue:)) ?? .banked
+        }
+    }
+
+    /// WHICH EARS heard the line, in the wire spelling the phone stamps on the
+    /// event row (`AnticipySession.LineSource.wireName`, and the constants
+    /// `CaptureSourcePolicy` matches against). `run_journal_tests.sh` checks
+    /// those three spellings still agree with these, because a rename that
+    /// slipped would land every line here as `unrecognised` in silence.
+    enum Origin: String, Equatable, CaseIterable {
+        case typed
+        case phoneMic = "phone_mic"
+        case pendant
+        case unrecognised
+
+        init(wireName: String) {
+            self = Origin(rawValue: wireName) ?? .unrecognised
+        }
+    }
+
+    /// WHAT WENT WRONG, as a shape. Never a message: `BackendError` carries the
+    /// server's own sentence, and a PocketBase error body is built from a
+    /// request whose payload is the words the owner just said.
+    enum PostFailure: Equatable {
+        /// The server refused, with its status.
+        case http(status: Int)
+        /// Anything else, as an `NSError`'s domain and code.
+        case system(domain: ErrorDomain, code: Int)
+    }
+
+    /// The `NSError` domains this app can actually produce, as a closed set.
+    ///
+    /// `NSError.domain` is an arbitrary `String` handed to us by Foundation, so
+    /// passing it through verbatim would put a free String channel back on this
+    /// enum for the sake of five known constants. Anything outside them records
+    /// as `other`: the code still identifies the failure, and no string that
+    /// arrived from outside this file reaches the disk.
+    enum ErrorDomain: String, Equatable, CaseIterable {
+        case url = "NSURLErrorDomain"
+        case cocoa = "NSCocoaErrorDomain"
+        case posix = "NSPOSIXErrorDomain"
+        case osStatus = "NSOSStatusErrorDomain"
+        case mach = "NSMachErrorDomain"
+        case other
+
+        init(name: String) { self = ErrorDomain(rawValue: name) ?? .other }
+    }
+
+    /// What happened to a line on its way to the server.
+    enum PostDetail: Equatable {
+        /// It went up live, from this ear.
+        case sentLive(from: Origin)
+        /// One that had been waiting on disk went up.
+        case sentFromQueue
+        /// A push failed and the line went to disk. `again` distinguishes a
+        /// live push that got queued from a queued one that got requeued —
+        /// the difference between "the network just went" and "it is still
+        /// gone", which is the whole reading of a bad day.
+        case shelved(again: Bool, failure: PostFailure)
     }
     enum SwapCause: String, Equatable {
         case error, taskLimit, routeChange, silenceRotation
@@ -72,6 +194,56 @@ enum ListenEvent: Equatable {
         /// only come back because he opened the app?", which is the honest
         /// measure of how much of the interruption hole is still open.
         case appReturned
+    }
+}
+
+extension ListenEvent.PostFailure {
+    /// The words this shape goes to disk as, and the ONLY place they are
+    /// chosen. Both sides are here so a reworded line and its reader move
+    /// together; `ListenJournalTests` round-trips every one of them.
+    var text: String {
+        switch self {
+        case .http(let status): return "http \(status)"
+        case .system(let domain, let code): return "\(domain.rawValue) \(code)"
+        }
+    }
+
+    init?(text: String) {
+        let fields = text.split(separator: " ")
+        guard fields.count == 2, let number = Int(fields[1]) else { return nil }
+        if fields[0] == "http" { self = .http(status: number); return }
+        guard let domain = ListenEvent.ErrorDomain(rawValue: String(fields[0]))
+        else { return nil }
+        self = .system(domain: domain, code: number)
+    }
+}
+
+extension ListenEvent.PostDetail {
+    var text: String {
+        switch self {
+        case .sentLive(let from): return from.rawValue
+        case .sentFromQueue: return "queued line sent"
+        case .shelved(let again, let failure):
+            return (again ? "requeued, " : "queued, ") + failure.text
+        }
+    }
+
+    init?(text: String) {
+        if text == "queued line sent" { self = .sentFromQueue; return }
+        for (prefix, again) in [("requeued, ", true), ("queued, ", false)]
+        where text.hasPrefix(prefix) {
+            guard let failure = ListenEvent.PostFailure(
+                    text: String(text.dropFirst(prefix.count))) else { return nil }
+            self = .shelved(again: again, failure: failure)
+            return
+        }
+        // A wire name and nothing else. `Origin(rawValue:)` rather than
+        // `Origin(wireName:)`: reading an unknown word back as `.unrecognised`
+        // would let a line that was never written by `describe` parse as if it
+        // had been, and the round-trip check is the only thing keeping the
+        // writing and the reading from drifting apart.
+        guard let origin = ListenEvent.Origin(rawValue: text) else { return nil }
+        self = .sentLive(from: origin)
     }
 }
 
@@ -238,7 +410,13 @@ final class ListenJournal {
                   let cause = ListenEvent.SwapCause(rawValue: raw) else { return nil }
             return (when, .recognizerSwapped(cause: cause))
         case "flushed":
-            guard let reason = after("reason: "),
+            // The reason is read back as a CASE, so a line whose reason is not
+            // one of the four this build can write is dropped rather than
+            // carried. A free `String` here is what let `reason: line` — the
+            // whole utterance, beside a word count of that same utterance —
+            // reach disk and read back as if it had always belonged.
+            guard let raw = after("reason: "),
+                  let reason = ListenEvent.FlushReason(rawValue: raw),
                   let words = body.split(separator: " ").dropFirst().first
                       .flatMap({ Int($0) }) else { return nil }
             return (when, .flushed(reason: reason, words: words))
@@ -253,9 +431,19 @@ final class ListenJournal {
                   let power = after("on power: "),
                   power == "yes" || power == "no" else { return nil }
             return (when, .batteryRead(percent: percent, onPower: power == "yes"))
-        case "noted":
-            let fact = body.dropFirst("noted".count).trimmingCharacters(in: .whitespaces)
-            return (when, .noted(fact))
+        case "sessionFacts":
+            // Read back through the same type that wrote it, so the writer and
+            // the reader cannot drift: `ListenSessionFacts` owns both halves,
+            // and an unknown category or mode fails the line rather than being
+            // kept as itself.
+            let sentence = body.dropFirst(name.count)
+                .trimmingCharacters(in: .whitespaces)
+            guard let facts = ListenSessionFacts(sentence: sentence) else { return nil }
+            return (when, .sessionFacts(facts))
+        case "buffersDropped":
+            guard let count = body.split(separator: " ").dropFirst().first
+                    .flatMap({ Int($0) }) else { return nil }
+            return (when, .buffersDropped(count: count))
         case "posted":
             // THE OUTCOME FIELD, never a substring of the line. This was
             // `body.contains("accepted")`, and a detail is free-form prose, so
@@ -267,8 +455,9 @@ final class ListenJournal {
                 .dropFirst(name.count).trimmingCharacters(in: .whitespaces)
             let outcome = String(rest.prefix(while: { $0 != "," }))
             guard outcome == "accepted" || outcome == "failed" else { return nil }
-            let detail = String(rest.dropFirst(outcome.count))
+            let tail = String(rest.dropFirst(outcome.count))
                 .trimmingCharacters(in: CharacterSet(charactersIn: ", "))
+            guard let detail = ListenEvent.PostDetail(text: tail) else { return nil }
             return (when, .posted(ok: outcome == "accepted", detail: detail))
         default:
             return nil
@@ -339,6 +528,15 @@ final class ListenJournal {
     /// One line per event. The case name is present so a line is greppable, and
     /// the cause or trigger is spelled out because "it stopped" is the useless
     /// half of the report.
+    ///
+    /// THE ONLY PLACE THE JOURNAL CHOOSES WORDS. Every payload reaching here is
+    /// an `Int`, a `Bool` or a closed enum, so every sentence on disk is one
+    /// this file wrote. `run_journal_tests.sh` reads this body and requires
+    /// each value it names to be one its own `case` arm bound — a stored
+    /// property, a static, or anything else reachable from outside is a red
+    /// leg, because that is the shape the fifth-pass review used: a
+    /// `var lastTail` on `ListenJournal`, set from a call site the finder never
+    /// looked at, rendered into a line from right here.
     private static func describe(_ event: ListenEvent) -> String {
         switch event {
         case .sessionStarted:
@@ -348,16 +546,15 @@ final class ListenJournal {
         case .recognizerSwapped(let cause):
             return "recognizerSwapped  a fresh recognizer took over, cause: \(cause.rawValue)"
         case .flushed(let reason, let words):
-            return "flushed  \(words) words sent, reason: \(reason)"
-        case .noted(let fact):
-            return "noted  \(fact)"
+            return "flushed  \(words) words sent, reason: \(reason.rawValue)"
+        case .sessionFacts(let facts):
+            return "sessionFacts  \(facts.sentence)"
+        case .buffersDropped(let count):
+            return "buffersDropped  \(count) buffers dropped while swapping"
         case .batteryRead(let percent, let onPower):
             return "batteryRead  \(percent) percent, on power: \(onPower ? "yes" : "no")"
         case .posted(let ok, let detail):
-            let outcome = ok ? "accepted" : "failed"
-            return detail.isEmpty
-                ? "posted  \(outcome)"
-                : "posted  \(outcome), \(detail)"
+            return "posted  \(ok ? "accepted" : "failed"), \(detail.text)"
         }
     }
 }

@@ -428,7 +428,7 @@ final class PhoneListener: NSObject, ObservableObject {
                                        lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled)
         if facts != lastSessionFacts {
             lastSessionFacts = facts
-            ListenJournal.shared.record(.noted(facts.sentence))
+            ListenJournal.shared.record(.sessionFacts(facts))
         }
 
         let input = engine.inputNode
@@ -674,8 +674,7 @@ final class PhoneListener: NSObject, ObservableObject {
             self.orphanDropped = 0
             self.orphanLock.unlock()
             if dropped > 0 {
-                ListenJournal.shared.record(
-                    .noted("dropped \(dropped) buffers while swapping"))
+                ListenJournal.shared.record(.buffersDropped(count: dropped))
             }
             // WHAT LISTENING COSTS, read on the tick that is already running.
             // No timer of its own: a second repeating timer to measure the draw
@@ -1008,7 +1007,7 @@ final class PhoneListener: NSObject, ObservableObject {
         // The word COUNT, never the words. The journal is exportable from
         // Settings and the events collection already holds the speech itself.
         ListenJournal.shared.record(
-            .flushed(reason: reason?.rawValue ?? "banked",
+            .flushed(reason: ListenEvent.FlushReason(policyRawValue: reason?.rawValue),
                      words: line.split(whereSeparator: { $0.isWhitespace }).count))
         // Judge the voice behind THIS line before the window moves on. Done
         // here rather than on the audio thread: embedding takes tens of
@@ -1145,7 +1144,7 @@ final class PhoneListener: NSObject, ObservableObject {
         let tail = pendingTail.trimmingCharacters(in: .whitespacesAndNewlines)
         if !tail.isEmpty {
             ListenJournal.shared.record(
-                .flushed(reason: TranscriptFlushPolicy.Reason.final.rawValue,
+                .flushed(reason: .final,
                          words: tail.split(whereSeparator: { $0.isWhitespace }).count))
             // Stamped as the words leave, not when they are pushed: the push
             // behind this one may not happen until the network is back.
