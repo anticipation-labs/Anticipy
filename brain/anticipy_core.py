@@ -1494,26 +1494,6 @@ class Anticipy:
                                 mid_conversation=in_conversation(context),
                                 in_meeting=in_meeting,
                                 explicit=explicit)
-        # WHOSE PROMISE IS THIS? TRIAGE JUST SAID, SO WRITE IT DOWN.
-        #
-        # ingest() ran before _decide(), so the commitment node was created
-        # before anyone had judged whose it was, and `owes` was then consumed
-        # for this line's routing and thrown away. hear() itself already
-        # refuses to mint a job for somebody else's promise (below) — but the
-        # loop it leaves behind is unmarked, sits in open_loops() forever, and
-        # clock_tick reads open_loops() directly. So the refusal lasted one
-        # line and the clock could mint the same work an hour later.
-        #
-        # This is a stored model verdict compared later, not a reading of the
-        # words: the judgement was made by a model with the whole conversation
-        # in front of it, which is where HARNESS-LAW 1 says it belongs.
-        #
-        # It is also the half that fires TODAY. The voice roster covers 0% of
-        # live lines; `owes` comes back on every line that reaches triage.
-        if mem.get("commitment_id"):
-            self.memory.attribute_commitment(
-                mem["commitment_id"],
-                "other" if decision.owes == "other" else None)
         # A speech recognizer commonly finalizes at punctuation: "Send Jonah
         # this exact message:" arrives first, then the quoted body after the
         # speaker's agreement marker. The model can classify both fragments as
@@ -1545,6 +1525,73 @@ class Anticipy:
             authority_event_ids = [event for event in
                                    (stitch_prev_event_id, self._source_event_id)
                                    if event]
+        # WHOSE PROMISE IS THIS? TRIAGE JUST SAID — AND ONLY A "NOT HIS" THAT
+        # SURVIVES THE REVERSAL QUESTION IS EVER WRITTEN DOWN.
+        #
+        # ingest() ran before _decide(), so the commitment node was created
+        # before anyone had judged whose it was, and `owes` was then consumed
+        # for this line's routing and thrown away. hear() itself already
+        # refuses to mint a job for somebody else's promise (below) — but the
+        # loop it leaves behind is unmarked, sits in open_loops() forever, and
+        # clock_tick reads open_loops() directly. So the refusal lasted one
+        # line and the clock could mint the same work an hour later.
+        #
+        # This is a stored model verdict compared later, not a reading of the
+        # words: the judgement was made by a model with the whole conversation
+        # in front of it, which is where HARNESS-LAW 1 says it belongs.
+        #
+        # It is also the half that fires TODAY. The voice roster covers 0% of
+        # live lines; `owes` comes back on every line that reaches triage.
+        #
+        # NOTHING IS EVER CLEARED HERE, AND THAT IS THE POINT. This block used
+        # to pass `"other" if decision.owes == "other" else None`, and
+        # attribute_commitment(id, None) POPS the mark. _upsert_node returns
+        # the SAME commitment node whenever the same sentence is extracted
+        # again, so every later hearing whose verdict was not "other" erased
+        # the fence — including `owes is None`, which is exactly what _decide()
+        # falls through to on a triage timeout or an unparseable reply.
+        # Reproduced: the guest says "I'll send you the pitch deck tomorrow
+        # morning", the mark is written and clock_tick refuses; the guest
+        # repeats the sentence (or the worker restarts before mark_processed
+        # and re-polls the same event), triage times out, the mark is popped,
+        # and the clock mints the browser job — the owner chased about
+        # somebody else's promise, which is the original brief's failure
+        # restored. It also contradicted the honesty wall stated sixty lines
+        # below, "No verdict at all changes nothing." Now that sentence is
+        # true here: no verdict writes nothing and erases nothing.
+        #
+        # A LATER CONTRARY VERDICT DOES NOT CLEAR IT EITHER. Triage is
+        # measured wrong in one direction only — six for six filing the
+        # owner's own dinner under the friend who said "I'll text you a time"
+        # — so its own second opinion is the weakest possible reason to drop a
+        # fence. owner_is_party(), a model asked ONLY that question, is the
+        # single thing that may withdraw the mark, and it withdraws it by
+        # stopping it being written at all.
+        #
+        # THE REVERSAL RUNS ON EVERY DECISION, not only on act/ask. The mark
+        # has two readers whose costs point opposite ways. clock_tick refuses
+        # to PREPARE work: a wrong "other" costs one lost job and her `say`
+        # still carries. briefing_facts() feeds BRIEFING_SYSTEM, which is told
+        # "other" means somebody else made the promise and to never say the
+        # owner did: a wrong "other" there tells him his own dinner belongs to
+        # his friend, or drops it from the briefing entirely. That is a false
+        # statement to the owner about his own life, so the write takes the
+        # HIGHER of the two bars. Asked at most once per line and reused for
+        # the routing decision below; with no live model owner_is_party()
+        # returns False, so every non-live path behaves exactly as before.
+        commitment_id = mem.get("commitment_id")
+        triage_says_other = decision.owes == "other"
+        # The routing branch below asks the same question. Compute it once
+        # when either reader needs it, so widening the write costs no extra
+        # model call on the path that already paid for one.
+        routing_asks_it = (triage_says_other and not explicit
+                           and decision.decision in ("act", "ask"))
+        owner_is_a_party = bool(
+            triage_says_other and (commitment_id or routing_asks_it)
+            and owner_is_party(self.llm, line,
+                               decision.goal or mem.get("commitment") or ""))
+        if commitment_id and triage_says_other and not owner_is_a_party:
+            self.memory.attribute_commitment(commitment_id, "other")
         # The EFFECTIVE addressee — the one her behaviour actually keys on,
         # written back so the event record shows what was applied. An
         # explicit line (he texted/typed it AT her) is assistant by
@@ -1646,7 +1693,11 @@ class Anticipy:
             # dinner. Ask that one question on its own — is he a party to
             # this plan? — and only an explicit yes flips it back into his
             # lane. "Leave the flights with me" still stays theirs.
-            if not owner_is_party(self.llm, line, decision.goal or ""):
+            # Already asked, once, at the attribution block above — the same
+            # question with the same line and the same task, so asking again
+            # would be a second model call that can disagree with the verdict
+            # the store was just written from.
+            if not owner_is_a_party:
                 self._prev = (line, time.time())
                 # goal="" for the same reason as above: she is tracking, not
                 # looking, and the feed must not claim otherwise.
@@ -1656,12 +1707,12 @@ class Anticipy:
                            f"started: {decision.goal!r}",
                     addressee=addressee, owes="other"),
                     "anticipy_says": None}
-            # He IS a party, so the loop is his after all. The mark written
-            # above came off triage's first answer and this question exists
-            # precisely to reverse it — leaving it set would fence a loop on a
-            # verdict the code has already withdrawn.
-            if mem.get("commitment_id"):
-                self.memory.attribute_commitment(mem["commitment_id"], None)
+            # He IS a party, so the loop is his after all — and there is
+            # nothing to undo, because the attribution block above asked this
+            # same question before writing and therefore never wrote the mark.
+            # A clearing call here would be a second way to pop `owes`, which
+            # is the mechanism C1 turned on the fence: any pop reachable from
+            # hear() erases a verdict a previous hearing was right about.
 
         # The ambient lane (roadmap §7.1): speech not aimed at her — another
         # person, a dictation machine — is remembered, and researched quietly
@@ -3441,7 +3492,54 @@ class Anticipy:
         # model that has the loop and the quote in front of it. No verdict
         # changes nothing: 0% of live lines carry a voice verdict, and every
         # loop already in every owner's database predates both labels.
-        if goal and any(_someone_elses(loop) for loop in selected):
+        #
+        # WHICH LOOPS DOES THE GOAL REST ON? `selected` is not the answer.
+        # `loop_ids` is not required by CLOCK_SYSTEM and any id that is not a
+        # digit string is dropped, so a model that omits or mangles the field
+        # makes `selected` EVERY fresh loop in the store — and asking `any()`
+        # over the whole store means one guest promise fences every goal the
+        # clock will ever prepare. Reproduced: the owner says "I need to book
+        # the Earls table for Friday" (loop 1, his), a guest at the same
+        # dinner says "I'll send you the pitch deck tomorrow" (loop 7,
+        # owes="other"), the clock acts on the Earls booking and names no
+        # loop_ids — his own booking is dropped. Nothing ever closes a guest's
+        # commitment, so it is dropped again every night, forever.
+        #
+        # So the fence asks about the loops the model actually NAMED, and the
+        # two branches carry different polarities on purpose:
+        #
+        #   named  -> any(). These are the loops the model said it is acting
+        #             on, and the job is keyed to loop_ids[0] below. If even
+        #             one of them is somebody else's promise, the work she
+        #             would prepare serves a promise that is not his.
+        #   unnamed -> all(). The goal rests on a loop nobody identified. If
+        #             every candidate is somebody else's, the goal can only
+        #             have come from somebody else's — that is the original
+        #             brief's single-guest-loop failure and it still fences.
+        #             If even one loop is his, there is no positive verdict
+        #             that THIS goal is not his, and refusing anyway is the
+        #             failure above: a fence that never lifts is a product
+        #             that stops working the first time a guest speaks.
+        #
+        # That is also why the authority check one block up reads `not any()`
+        # over the same set and this one does not. They ask opposite-shaped
+        # questions: that one asks whether ANY loop licenses preparing work at
+        # all (a floor — one owner-authored quote is enough), this one asks
+        # whether the work is positively NOT his (a ceiling — one not-his
+        # verdict among the loops it rests on is enough to refuse). Both err
+        # toward not acting; the direction that means "don't act" is opposite
+        # in the two, so the operators are opposite too.
+        #
+        # KNOWN RESIDUAL, named rather than hidden: in the unnamed branch a
+        # store holding both his loops and a guest's cannot say which one the
+        # goal came from, so a guest-derived goal can still get through there.
+        # Closing it needs the model to say which loop it acted on, not a
+        # stricter operator here — a stricter operator only reproduces I2.
+        named = [loop for loop in fresh if loop["id"] in loop_ids]
+        rests_on_someone_elses = (
+            any(_someone_elses(loop) for loop in named) if named
+            else bool(selected) and all(_someone_elses(loop) for loop in selected))
+        if goal and rests_on_someone_elses:
             print(f"clock: this promise is not his — dropping model goal {goal!r}")
             goal = None
         # The caller owns the durable "have I already brought this up?" check —

@@ -171,7 +171,11 @@ reports of finishing something ("sent Priya the deck", "already paid it",
 CONSOLIDATE_SYSTEM = """You distill what someone's assistant should KNOW about them from
 lines overheard during their day. Each input line is "[id] text".
 Reply ONLY with compact JSON:
-{"facts":[{"fact":"...","importance":N,"kind":"stable"|"situation","episode_ids":[id,...]}]}
+{"facts":[{"fact":"...","importance":N,"episode_ids":[id,...]}]}
+Those three keys are REQUIRED and are the whole of the shape. There is one
+OPTIONAL extra key, "kind":"stable"|"situation", explained at the bottom —
+omit the key entirely unless you are sure, because a guess there is worse
+than no answer.
 A fact is something STABLE — true for weeks, worth knowing them by: who
 matters to them ("partner is Sarah"), preferences ("prefers 7pm dinners"),
 their work ("building Anticipy"), health, routines, ongoing situations
@@ -179,14 +183,18 @@ their work ("building Anticipy"), health, routines, ongoing situations
 is only a task. Write each fact as a short third-person note. importance is
 1-5: 5 = core of their life (family, health, hard boundaries), 3 = a solid
 preference or ongoing project, 1 = mildly useful color.
-kind is HOW LONG it stays true, which is a different question from how much it
-matters: "stable" for something that holds for months or years until something
-changes it (an allergy, who their partner is, what they do for a living),
-"situation" for a live state of affairs that will end on its own ("mom is in
-hospital", "the Devon deal closes Friday"). Leave kind out if you are unsure —
-a guess here is worse than no answer. episode_ids lists
-the [id]s of the input lines the fact came from — only ids you were given.
-Nothing worth keeping -> {"facts":[]}."""
+episode_ids lists the [id]s of the input lines the fact came from — only ids
+you were given.
+Nothing worth keeping -> {"facts":[]}.
+THE OPTIONAL KEY. "kind" is HOW LONG a fact stays true, which is a different
+question from how much it matters: "stable" for something that holds for
+months or years until something changes it (an allergy, who their partner is,
+what they do for a living), "situation" for a live state of affairs that will
+end on its own ("mom is in hospital", "the Devon deal closes Friday"). OMIT
+THE KEY unless the fact is clearly one of those two. A wrong "stable" is not
+a small error: it means the fact never fades at all, so "the Devon deal
+closes Friday" outranks fresher facts forever after the deal has closed.
+Leaving it out is the safe answer and costs nothing."""
 
 SAME_FACT_SYSTEM = """Two short notes about the same person. Decide whether they state the
 SAME underlying fact (one restates or updates the other) or genuinely
@@ -659,13 +667,27 @@ class Memory:
         bug family as the dropped voice verdict and as 8849df15 — the answer
         was computed and thrown away one call before the place that needed it.
 
-        `owes=None` CLEARS the mark, and that direction matters as much as
-        setting it: owner_is_party() exists to reverse triage's over-eager
-        "somebody else took this on" — it was wrong six for six on a dinner the
-        owner had plainly agreed to — and a reversal that never reached the
-        store would leave the loop fenced on a verdict the code had already
-        withdrawn."""
-        if not commitment_id:
+        A NON-VERDICT WRITES NOTHING AND ERASES NOTHING. `owes=None` used to
+        POP the key, and that is what turned this method into the weapon that
+        destroyed the fence it exists to hold. _upsert_node returns the SAME
+        commitment node whenever the same sentence is extracted again, so the
+        second hearing of one guest sentence — the guest repeating himself, or
+        the worker restarting before mark_processed and re-polling the event —
+        arrived here with the no-verdict `owes` that _decide() falls back to on
+        a triage timeout, and unmarked a promise an earlier, better-informed
+        pass had judged correctly. The clock then minted the browser job the
+        mark exists to stop.
+
+        So absence is treated the way `_speaker_verdict` and `_fact_kind` treat
+        it, and for the same reason: an answer nobody gave is not an answer.
+        Reversal is not lost by this — owner_is_party() reverses triage's
+        over-eager "somebody else took this on" (wrong six for six on a dinner
+        the owner had plainly agreed to) BEFORE hear() ever writes the mark, so
+        a withdrawn verdict never reaches the store to need erasing. There is
+        deliberately no erase path at all: a correction that genuinely has to
+        remove a stored verdict should arrive as its own named method with its
+        own recorded reason, not as a falsy argument to this one."""
+        if not commitment_id or not owes:
             return
         row = self.db.execute(
             "SELECT attrs FROM nodes WHERE id=? AND type='commitment'",
@@ -676,10 +698,7 @@ class Memory:
             attrs = json.loads(row[0] or "{}") or {}
         except Exception:
             attrs = {}
-        if owes:
-            attrs["owes"] = str(owes)
-        else:
-            attrs.pop("owes", None)
+        attrs["owes"] = str(owes)
         self.db.execute("UPDATE nodes SET attrs=? WHERE id=?",
                         (json.dumps(attrs), commitment_id))
         self.db.commit()
@@ -927,10 +946,25 @@ class Memory:
         profile just stays empty, nothing crashes.
 
         Returns counters: {"ran", "episodes", "new", "merged", "remaining"}.
-        ran=False means nothing was written OR advanced (no model, or the
-        model's output was unusable)."""
+        ran=False means nothing was written OR advanced (no model, no LIVE
+        model, or the model's output was unusable).
+
+        THE LIVENESS CHECK BELONGS HERE, not only at the one call site. The
+        only thing standing between this method and a dead model was
+        `Memory(path=mem_db, llm=llm if llm.live else None)` three thousand
+        lines into worker.py, and nothing anywhere asserted it. That matters
+        more than it looks: this is the sole writer of `kind`, so it is the
+        precondition for the whole decay half of the ranker — the half that
+        fixes the measured 6x shellfish inversion. If it never runs, that fix
+        is inert and nothing goes red; if it runs against a model that is not
+        live, every night burns a pass on a call that cannot answer. `live` is
+        read defensively (absent -> assumed live) so any stand-in that does not
+        model the flag behaves exactly as it always has."""
         if not self.llm:
             return {"ran": False, "reason": "no llm", "episodes": 0,
+                    "new": 0, "merged": 0, "remaining": 0}
+        if not getattr(self.llm, "live", True):
+            return {"ran": False, "reason": "llm is not live", "episodes": 0,
                     "new": 0, "merged": 0, "remaining": 0}
         now = now or time.time()
         last = int(self._state_get("last_episode_id", "0") or 0)

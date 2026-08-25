@@ -74,14 +74,28 @@ def test_confidence_can_never_lift_a_fact_out_of_its_importance_tier():
 
 def test_the_weakest_belief_at_one_tier_still_beats_the_strongest_below_it():
     """The general form, checked across every adjacent pair rather than at one
-    convenient point: no confidence a fact can hold reaches the tier above."""
+    convenient point: no confidence a fact can hold reaches the tier above.
+
+    THIS LEG USED TO PASS BY INSERTION ORDER AT THE ONE POINT THAT MATTERS.
+    Written with both rows at ts=now and the important one first, setting
+    `_CONFIDENCE_FLOOR` to exactly 0.80 — the 4/5 ratio the constant's own
+    comment names as the limit it must clear — left it green: 5 x 0.80 and
+    4 x 1.00 both come to 4.0, the `-last_seen_ts` tie-break is a tie too,
+    and Python's stable sort handed first place to whichever row went in
+    first. Both defences the sibling at the top of this file uses are applied
+    here now. The weak belief is inserted FIRST, so insertion order argues
+    against the assertion rather than for it, and the important fact is one
+    second OLDER — the production shape, where the thing said most recently
+    is the situation and not the allergy. At the shipped floor of 0.85 the
+    important fact wins on salience (4.25 vs 4.00) and neither crutch is
+    load-bearing; at 0.80 it loses, which is the whole point of the floor."""
     now = time.time()
     for high in (2, 3, 4, 5):
         m = Memory(":memory:")
-        m.remember_fact("the important one", importance=high,
-                        confidence=0.0, ts=now)
         m.remember_fact("the lesser one", importance=high - 1,
                         confidence=1.0, ts=now)
+        m.remember_fact("the important one", importance=high,
+                        confidence=0.0, ts=now - 1)
         assert m.profile_facts()[0]["fact"] == "the important one", high
 
 
@@ -266,6 +280,34 @@ def test_the_prompt_actually_asks_for_it():
     from brain.memory import CONSOLIDATE_SYSTEM
     assert '"kind"' in CONSOLIDATE_SYSTEM
     assert "situation" in CONSOLIDATE_SYSTEM
+
+
+def test_the_prompt_does_not_present_kind_as_part_of_the_required_shape():
+    """ASKING FOR IT AND REQUIRING IT ARE DIFFERENT THINGS, and the schema
+    line is the part of a prompt a model actually obeys. `kind` used to sit in
+    it formatted identically to `fact` and `importance`, with "Leave kind out
+    if you are unsure" arriving four lines later in prose — so a model that
+    always answers had a required-looking slot to fill and would guess.
+
+    A guessed "stable" is not a small error. `_HALF_LIFE_DAYS["stable"] is
+    None`, so `_decay` returns 1.0 and the fact NEVER fades: "the Devon deal
+    closes Friday", labelled stable, outranks fresher facts indefinitely after
+    the deal has closed. Omitting the key falls to the 30-day default, which
+    is the safe answer. No unit test can catch a model guessing and there is
+    no keyed eval of this prompt, so the presentation IS the fix and this leg
+    is what holds it."""
+    from brain.memory import CONSOLIDATE_SYSTEM
+    schema = [line for line in CONSOLIDATE_SYSTEM.splitlines()
+              if line.startswith('{"facts"')]
+    assert len(schema) == 1, CONSOLIDATE_SYSTEM
+    assert '"kind"' not in schema[0], \
+        f"kind is formatted as a required field: {schema[0]}"
+    # Flattened: the prompt is hard-wrapped, so the instruction can and does
+    # straddle a line break.
+    flat = " ".join(CONSOLIDATE_SYSTEM.split())
+    assert "OPTIONAL" in flat, "nothing tells the model the key may be left out"
+    assert "OMIT THE KEY" in flat, \
+        "nothing tells the model what to do when it is not sure"
 
 
 # ------------------------------------------------------------- the migration
