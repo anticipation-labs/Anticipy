@@ -207,6 +207,49 @@ END;
 """
 
 
+# The one relation that says a named human is owed something by the owner.
+# Written in exactly one place, and only while holding a Promisee.
+_ATTRIBUTION = "committed_to"
+
+
+class Promisee(str):
+    """WHO THE MODEL SAID a promise was made to. A name with a source.
+
+    Audit item 43's worst line was `commitment_to = people[0]`: the first
+    capitalised word in the sentence became the person a promise had been made
+    to. Deleting it from `_extract` was not enough — an adversarial pass put it
+    back one layer up, inside `ingest`
+    (`ex.commitment_to or ex.people[0]`), on the live path, and the whole
+    suite stayed green because every test pinning the deleted line runs with
+    no model at all, so `people` is empty and the fabrication never fires.
+
+    A test that merely notices that mutation is one refactor behind the next
+    one. So the promisee is a TYPE, minted at exactly one place — `_promisee`,
+    called on the model's own `commitment_to` field and nowhere else. A name
+    derived from anything else is an ordinary `str`, `Extraction` refuses to
+    carry it and `_add_edge` refuses to write it, loudly. Fabricating an
+    attribution now takes writing `Promisee(...)` around the lie in plain
+    sight, which is the honest ceiling: unrepresentable beats detectable.
+
+    A `str` subclass, so every reader downstream — dict lookups, `!=`,
+    json.dumps, the SQL binder — is untouched.
+    """
+    __slots__ = ()
+
+
+def _promisee(value) -> Optional[Promisee]:
+    """The only door into `Promisee`: the model's own `commitment_to` field.
+
+    Everything that is not a model-supplied name — None, blank, a list, a
+    number, a name lifted off another field — is no promisee, and no promisee
+    writes no attribution. Same wall as `_extractor_verdict` and
+    `_speaker_verdict`: the missing state is kept, never rounded to a guess.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return Promisee(value.strip())
+
+
 @dataclass
 class Extraction:
     """What one episode contributes to the graph."""
@@ -214,8 +257,20 @@ class Extraction:
     places: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)
     commitment: Optional[str] = None   # "send the pitch deck to Sarah"
-    commitment_to: Optional[str] = None  # "Sarah"
+    # A `Promisee`, or nobody. A plain string here is by construction a name
+    # that came from somewhere other than the model's answer to "who was this
+    # promised to?", and that is the fabrication this type exists to refuse.
+    commitment_to: Optional[Promisee] = None  # Promisee("Sarah")
     completed: Optional[str] = None    # "sent Priya the launch plan"
+
+    def __post_init__(self):
+        if self.commitment_to is not None and \
+                not isinstance(self.commitment_to, Promisee):
+            raise TypeError(
+                "Extraction.commitment_to must be a Promisee minted by "
+                "_promisee() from the model's own commitment_to field, not "
+                f"{self.commitment_to!r}. Deriving who a promise was made to "
+                "from any other field is audit item 43 (Law 1).")
 
 
 EXTRACT_SYSTEM = """You extract memory from one line someone said during their day.
@@ -642,7 +697,13 @@ class Memory:
                 self.db.commit()
         except sqlite3.Error:
             pass  # no FTS5 in this build; _search_episodes falls back to LIKE
-        self.llm = llm  # optional LLM extractor; falls back to rules
+        # The extractor. With none, `_extract` returns NO VERDICT and
+        # writes nothing — there is no rule fallback any more, and a comment
+        # promising one is how the last regression got waved through.
+        self.llm = llm
+        # Which fixed no-verdict facts this store has already reported. See
+        # _unread: a configuration fact is said once, an event every time.
+        self._unread_said: set[str] = set()
 
     def procedures(self) -> ProcedureStore:
         """The owner's procedure cache, in the store `brain.research` expects.
@@ -723,11 +784,14 @@ class Memory:
             commitment_id = self._upsert_node(
                 "commitment", ex.commitment, ts, status="open",
                 attrs={"source_episode": episode_id, "speaker": speaker})
-            if ex.commitment_to and ex.commitment_to in node_ids:
-                self._add_edge(commitment_id, "committed_to",
-                               node_ids[ex.commitment_to], episode_id, ts)
+            # WHO IT WAS PROMISED TO comes from the model or from nobody. The
+            # promisee is a type (see Promisee), so the fabrication that used
+            # to live here — and came back here once already, after being
+            # deleted from _extract — cannot be written at this layer at all.
+            promised_to = self._attribute_promise(
+                commitment_id, ex.commitment_to, node_ids, episode_id, ts)
             for name, nid in node_ids.items():
-                if name != ex.commitment_to:
+                if name != promised_to:
                     self._add_edge(commitment_id, "involves", nid, episode_id, ts)
 
         # Saying you DID something closes the promise. Without this, an open
@@ -2413,12 +2477,75 @@ class Memory:
             (type_, name, status, ts, ts, json.dumps(attrs or {})))
         return cur.lastrowid
 
-    def _add_edge(self, src: int, rel: str, dst: int, episode_id: int, ts: float):
+    def _add_edge(self, src: int, rel: str, dst: int, episode_id: int,
+                  ts: float, promisee: Optional[Promisee] = None):
+        # THE LOWEST WRITER REFUSES TOO, so routing around _attribute_promise
+        # is not an escape. `committed_to` is the one relation that says a
+        # named human is owed something, and it may only be written while
+        # holding the model's own answer to who that was (audit item 43).
+        if rel == _ATTRIBUTION and not isinstance(promisee, Promisee):
+            raise TypeError(
+                f"a {_ATTRIBUTION!r} edge needs the Promisee the model named; "
+                f"got {promisee!r}. Attributing a promise to a name derived "
+                "from anything else is the fabrication Law 1 forbids — use "
+                "_attribute_promise().")
         self.db.execute(
             "INSERT INTO edges(src, rel, dst, episode_id, ts) VALUES (?, ?, ?, ?, ?)",
             (src, rel, dst, episode_id, ts))
 
+    def _attribute_promise(self, commitment_id: int, to,
+                           node_ids: dict, episode_id: int,
+                           ts: float) -> Optional[Promisee]:
+        """Point this promise at the person the MODEL said it was made to.
+
+        Returns whoever it was attributed to, or None — and None is the
+        ordinary case, not a failure: the model named nobody, or named
+        somebody who appears in no other field and therefore has no node to
+        point at. Minting one from `people[0]` is what this whole type exists
+        to make impossible.
+        """
+        if to is None:
+            return None
+        if not isinstance(to, Promisee):
+            raise TypeError(
+                f"who a promise was made to must be a Promisee, got {to!r}. "
+                "A name lifted off people/places/topics/the sentence is "
+                "audit item 43 coming back one layer up (Law 1).")
+        if to not in node_ids:
+            return None
+        self._add_edge(commitment_id, _ATTRIBUTION, node_ids[to],
+                       episode_id, ts, promisee=to)
+        return to
+
     # --------------------------------------------------------- extraction
+
+    def _unread(self, why: str, report: str,
+                once: bool = False) -> tuple[Extraction, None]:
+        """No verdict — AND THE REASON SAID OUT LOUD. The only way out of
+        `_extract` without one.
+
+        Four of the five no-verdict exits used to be written by hand, and two
+        of them printed nothing: `not self.llm` (the deployed default on a
+        keyless worker) and a non-live `mode` (what an eval built with no key
+        gets on every line). Those two are the ones that actually fire, so the
+        gap this whole change exists to close — a degraded librarian reading
+        exactly like a quiet day — stayed open on the live paths while the
+        loud paths carried the story. `extracted_by` is the durable half of
+        the answer, but nothing consumes it yet; until the worker half lands,
+        this log line IS the evidence.
+
+        `once` is for a fact that cannot change while this store lives — which
+        endpoint is configured. Saying that per line is log spam, and log spam
+        is what gets tidied away the week before somebody needed it. A raise,
+        a refusal or an unreadable reply is a per-reply EVENT and reports every
+        time: three outages in a day must read as three.
+        """
+        if once:
+            if why in self._unread_said:
+                return Extraction(), None
+            self._unread_said.add(why)
+        print(report)
+        return Extraction(), None
 
     def _extract(self, text: str) -> tuple[Extraction, Optional[str]]:
         """The Extraction, and WHO filled it — "model", or None for no verdict.
@@ -2449,13 +2576,18 @@ class Memory:
         # narrowing it to an identity check would start calling a falsy
         # stand-in that used to be skipped.
         if not self.llm:
-            return Extraction(), None
+            return self._unread(
+                "no_model",
+                "memory: no extraction model configured, this line and every "
+                "line after it goes unread",
+                once=True)
         try:
             res = self.llm.chat(EXTRACT_SYSTEM, text, aux=True)
         except Exception as e:
-            print(f"memory: extraction model unusable, this line goes "
-                  f"unread ({type(e).__name__}: {str(e)[:120]})")
-            return Extraction(), None
+            return self._unread(
+                "raised",
+                f"memory: extraction model unusable, this line goes "
+                f"unread ({type(e).__name__}: {str(e)[:120]})")
 
         # WHICH ENDPOINT ANSWERED, before a single byte of the reply is
         # parsed. A keyless LLM does not raise — it returns the TRIAGE
@@ -2464,9 +2596,18 @@ class Memory:
         # empty Extraction used to be handed over as though a model had read
         # the line. Return before json.loads: a reply to another question is
         # not a weak answer to this one, it is no answer.
-        by = _extractor_verdict(getattr(res, "mode", None))
+        mode = getattr(res, "mode", None)
+        by = _extractor_verdict(mode)
         if by is None:
-            return Extraction(), None
+            # SAID OUT LOUD, and this is the half that actually fires: an eval
+            # or a core built with a keyless LLM lands here on every line, and
+            # until 2026-08-25 it landed silently. Once per store, because
+            # which endpoint is configured is a fixed fact, not an event.
+            return self._unread(
+                f"not_live:{mode!r}",
+                f"memory: extraction endpoint answered as {mode!r}, not a "
+                f"live extraction model — this line goes unread",
+                once=True)
 
         # A live endpoint that answered in prose. _extract_json SYNTHESISES
         # the literal "{}" for a reply with no braces in it, and "{}" parses —
@@ -2475,16 +2616,18 @@ class Memory:
         # stamped with a real verdict. That is the one reading that must never
         # be guessed, because it is the exact shape of a quiet day.
         if not _looks_like_json(getattr(res, "text", "")):
-            print("memory: extraction model answered with no JSON, this line "
-                  "goes unread")
-            return Extraction(), None
+            return self._unread(
+                "no_json",
+                "memory: extraction model answered with no JSON, this line "
+                "goes unread")
 
         try:
             raw = json.loads(_extract_json(res.text))
         except Exception as e:
-            print(f"memory: extraction reply unreadable, this line goes "
-                  f"unread ({type(e).__name__}: {str(e)[:120]})")
-            return Extraction(), None
+            return self._unread(
+                "unreadable",
+                f"memory: extraction reply unreadable, this line goes "
+                f"unread ({type(e).__name__}: {str(e)[:120]})")
 
         def names(key: str) -> list[str]:
             # A bare string where a list was promised iterates per
@@ -2510,7 +2653,10 @@ class Memory:
             places=names("places"),
             topics=names("topics"),
             commitment=one("commitment"),
-            commitment_to=one("commitment_to"),
+            # The ONE door into Promisee, and the reason there is a type:
+            # this is the model's own answer to "who was this promised to?".
+            # Nothing else in the tree may produce one.
+            commitment_to=_promisee(one("commitment_to")),
             # ASKED FOR, DECLARED, CONSUMED — AND NEVER PASSED.
             # EXTRACT_SYSTEM requests `completed`, the dataclass
             # declares it and ingest() acts on it, but this branch

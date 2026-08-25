@@ -25,7 +25,11 @@ if ! grep -q 'message: Self.serverMessage(data)' "$backend"; then
     exit 2
 fi
 
+# CaptureEnvelope comes along because `pushEvent` takes one: it is what decides
+# which capture instant each of the three columns gets, and it is pure
+# Foundation like everything else here.
 swiftc -O \
+    "$app/Audio/CaptureEnvelope.swift" \
     "$backend" \
     "$here/ResetMessageTests.swift" \
     -o "$out/resetmessagetests"

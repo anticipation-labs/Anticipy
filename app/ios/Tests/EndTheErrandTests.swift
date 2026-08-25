@@ -107,9 +107,26 @@ enum Cases {
         // WHAT THE TAPE CURRENTLY CATCHES — a regression pin on the tape, not
         // a specification of correct routing. Law 2 is explicit that a pin is
         // not an expiry; the expiry is tape_gate leg 2, and it is red. These
+        // die in the same diff that deletes the rule.
+        //
+        // WHAT THIS SECTION DOES NOT DO, because it said otherwise until
+        // 2026-08-25 and the claim was measured false. It used to read "these
         // cases exist so the phrase lists cannot be quietly widened or
-        // narrowed while they are on their way out, and they are deleted in
-        // the same diff that deletes the rule.
+        // narrowed while they are on their way out." They cannot do that.
+        // They are eighteen samples of a 116-word vocabulary, and samples do
+        // not fence. Measured: each of the 50 phrases in `whole`, `declines`
+        // and `handled` was deleted in turn and the mutated rule compiled —
+        // 24 of those deletions change what the app does and leave this file
+        // at 48/48, exit 0. Deleting "cancel" from `whole` is one of them, and
+        // a bare typed "cancel" then stops ending anything. Widening is worse
+        // and was equally unseen: one line, "yes", added to `declines` files
+        // the owner's approval as their cancellation, all green.
+        //
+        // The fence is in run_end_errand_tests.sh, which extracts every string
+        // literal from the shipping rule and compares all 116 to a golden
+        // list. That goes red in both directions, for all five lists, and for
+        // the sentences the owner is shown. This section is what the tape
+        // catches; that leg is what the tape is ALLOWED TO SAY.
         //
         // `ends("no", …)` used to head this list. It has moved down to
         // costs(): a stuck card's ordinary shape is a yes/no question, so a

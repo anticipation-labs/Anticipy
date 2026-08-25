@@ -60,7 +60,13 @@ if ! code | grep -q 'heard(line, from: .phoneMic, at: '; then
     echo "to being stamped when the network took it, not when it was said."
     exit 2
 fi
-if ! code | grep -q 'heard(line, speaker: tag, from: .phoneMic, at: '; then
+# Joined, because the call is now wrapped across three lines. Pinning a
+# ONE-LINE spelling made a reformat read as the instant being dropped — the
+# check went red on 2026-08-25 while `at: startedAt` was sitting right there on
+# the next line. What matters is that the voice-tagged callback passes an
+# instant, not how the argument list is laid out.
+joined() { code | tr '\n' ' ' | tr -s ' '; }
+if ! joined | grep -q 'heard(line, speaker: tag, from: .phoneMic, at: '; then
     echo "The voice-tagged phone-mic callback dropped the spoken instant."
     echo "heard() defaults it to now, so the stamp silently becomes push time."
     exit 2

@@ -55,14 +55,30 @@ _STOP = {
 # ingested turn would buy nothing live; Law 3 adds that nothing could be
 # verified live anyway while the ears are dead. In `segment_all` — the pure
 # entry point done_gate leg 2 measures — the same verdict IS the boundary.
-# Both halves are pinned in tests/test_segmenter_link_tape.py, and the first
-# of them goes RED the day the verdict reaches `hear()`, which is the day this
-# trade stops holding.
 #
-# TAPE (HARNESS-LAWS.md Law 2): this list, with decide_link()'s ">=2 overlap"
-# count and "<8 words" test, settles whether two turns mean the SAME THING.
-# REAL FIX: one model question, four-state, `escalate` kept as the no-verdict;
-# then delete all three. Expiry: overnight/tape_gate.py leg 2, RED until gone.
+# BOTH HALVES ARE PINNED in tests/test_segmenter_link_tape.py, and the pins
+# are branch-complete rather than illustrative — the first draft of each was
+# beaten by a reviewer. `test_the_live_verdict_only_moves_parent_segment` runs
+# all four verdicts through EVERY path of `place_turn` and proves the coverage
+# from the compiled function, so a new branch that consults `decide_link` goes
+# red instead of slipping past; `test_nothing_in_the_repo_reads_parent_segment`
+# parses the shipped organs rather than grepping them, so a comment can never
+# be mistaken for a reader and an untracked module cannot hide. The day the
+# verdict reaches `hear()` they go RED, and that is the day this trade stops
+# holding and the model call is owed.
+#
+# WHAT IS TAPED: this opener list, together with decide_link()'s ">=2 overlap"
+# count and its "<8 words" length test, settles whether two turns mean the
+# SAME THING. REAL FIX: one model question, asked on its own and in four
+# states, with `escalate` kept as the honest no-verdict; then all three are
+# deleted.
+#
+# NOTHING GOES BETWEEN THE NEXT LINE AND THE REGEX. overnight/tape_gate.py
+# looks back 400 characters from `_ANAPHORIC` for this marker and no further;
+# tests/test_segmenter_link_tape.py holds it inside 200 and lets nothing but
+# comment lines in between. New prose goes ABOVE this note, never below it.
+# TAPE (HARNESS-LAWS.md Law 2). Expiry: overnight/tape_gate.py leg 2, RED
+# until the tape is gone.
 _ANAPHORIC = re.compile(
     r"^\s*(so|anyway|anyways|okay|ok|right|back to|where were we|and|but|also|"
     r"it|that|they|he|she|those|these|which)\b", re.IGNORECASE)

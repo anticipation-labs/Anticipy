@@ -299,7 +299,7 @@ settings:
     # trust the floor being wrong. The wider set is also the simpler one.
     #
     # 86 exists in history and is not these bytes.
-    CURRENT_PROJECT_VERSION: "87"
+    CURRENT_PROJECT_VERSION: "88"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

@@ -486,7 +486,7 @@ final class AnticipyBackend {
                    importance: Int? = nil,
                    goal: String? = nil, speaker: String? = nil,
                    explicit: Bool = false, source: String? = nil,
-                   capturedAt: Date? = nil,
+                   capture: CaptureEnvelope? = nil,
                    parentLine: String? = nil) async throws -> String {
         var body: [String: Any] = [
             "device_id": deviceID, "kind": kind, "text": text,
@@ -506,23 +506,34 @@ final class AnticipyBackend {
         // when the words were finished, so it passes that instant in and this
         // method transmits what it is given.
         //
-        // `capture_started_at` is the canonical column — the worker reads it
-        // first and accepts `spoken_at` as an alternate name, so both are
-        // written and that rollout tolerance stays meaningful rather than
-        // decorative. `capture_ended_at` is the same instant: the phone
-        // honestly knows ONE moment, the one the flush happened at, and
-        // claiming a start it never measured would be inventing precision.
+        // AND HOW LONG IT TOOK TO SAY. This block used to read "the phone
+        // honestly knows ONE moment, the one the flush happened at" and write
+        // that one instant into all three columns. It was wrong on its own
+        // terms: `PhoneListener.deliver` has always had `wordsAppearedAt` in
+        // scope beside `now` and simply had no way to hand both over.
+        //
+        // Aliasing them is not a harmless approximation. Ordering is a
+        // COMPARISON, which a constant offset preserves; a boundary is a
+        // SUBTRACTION, and subtracting a number from itself is zero — so
+        // `brain/segmenter.py` fell back to `end = start` and every silence
+        // between two turns was measured flush-to-flush, swallowing the whole
+        // speaking duration of the later turn plus the 2.6 s debounce.
+        //
+        // Which column gets which instant is `CaptureEnvelope`'s decision and
+        // not this method's, so there is one rule, in one testable place, for
+        // the live push and the offline flush alike. This method transmits
+        // what it is given.
         //
         // The server treats an implausible stamp as absent, so a device with a
         // wrong clock degrades to yesterday's behaviour rather than reordering
         // someone's day. Omitted entirely when the caller does not know, since
         // an event posted at the moment it happens is already described by
         // `created` and a guessed stamp is worse than an absent one.
-        if let capturedAt {
-            let stamp = ISO8601DateFormatter.anticipyUTC.string(from: capturedAt)
-            body["capture_started_at"] = stamp
-            body["spoken_at"] = stamp
-            body["capture_ended_at"] = stamp
+        if let capture {
+            let clock = ISO8601DateFormatter.anticipyUTC
+            for (column, value) in capture.wireFields(stamp: clock.string(from:)) {
+                body[column] = value
+            }
         }
         // THIS LINE CARRIES ON FROM THAT ONE. Set only when the 8s ceiling cut
         // a sentence in half, which is mechanism the phone knows for certain:

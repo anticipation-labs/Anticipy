@@ -107,18 +107,31 @@ final class PhoneListener: NSObject, ObservableObject {
                                       suspended: suspended)
     }
 
-    /// A finished line, the instant the flush produced it, and whether it
-    /// carries on from the line before it.
+    /// A finished line, BOTH instants that bracket it, and whether it carries
+    /// on from the line before it.
     ///
-    /// The instant travels WITH the words because the push can be much later
+    /// The instants travel WITH the words because the push can be much later
     /// than the speech: a line buffered offline and sent hours afterwards used
     /// to reach the backend stamped with the moment the network came back, so
     /// a whole buffered conversation looked like it happened in one second.
-    var onLine: ((_ line: String, _ capturedAt: Date, _ continuesPrevious: Bool) -> Void)?
+    ///
+    /// TWO Dates, not one, and this is the fix rather than a tidy-up. This
+    /// closure carried a single instant, so `pushEvent` had a single instant to
+    /// write into `capture_started_at`, `spoken_at` and `capture_ended_at`
+    /// alike — three columns, one number, and `end - start` identically zero
+    /// for every row this product has ever stored. `deliver` has had both ends
+    /// in scope the whole time and only one of them could get out.
+    ///
+    /// `startedAt` is when the words first went unsent; `endedAt` is the
+    /// instant the flush produced the line. A caller that passes the flush
+    /// instant for both satisfies this signature and reproduces the entire
+    /// defect, which is what the wiring legs in
+    /// `Tests/run_capture_envelope_tests.sh` are watching for.
+    var onLine: ((_ line: String, _ startedAt: Date, _ endedAt: Date, _ continuesPrevious: Bool) -> Void)?
     /// Who said it, decided on this device. Fires with the same line that
     /// went to `onLine`, carrying "owner" / "other:<who>" — or nil when the
     /// phone cannot honestly say, which the brain reads as no verdict.
-    var onSpeaker: ((_ line: String, _ speaker: String?, _ capturedAt: Date, _ continuesPrevious: Bool) -> Void)?
+    var onSpeaker: ((_ line: String, _ speaker: String?, _ startedAt: Date, _ endedAt: Date, _ continuesPrevious: Bool) -> Void)?
     /// The on-device voice check. Optional: without a model the app runs
     /// exactly as it did before speaker recognition existed.
     var speaker: SpeakerTagger?
@@ -1012,11 +1025,16 @@ final class PhoneListener: NSObject, ObservableObject {
         // Judge the voice behind THIS line before the window moves on. Done
         // here rather than on the audio thread: embedding takes tens of
         // milliseconds and must never stall capture.
+        // BOTH ENDS, and the start is the one that was being thrown away.
+        // `wordsAppearedAt` is read four lines up for the cut-continuation
+        // mark and was then dropped on the floor; `now` went out as the start,
+        // the end and the alias all at once. Sending `now` twice here would
+        // compile, satisfy every signature, and be the original bug.
         if let speaker, let onSpeaker {
             let tag = speaker.tagForLatestUtterance()
-            onSpeaker(line, tag, now, continuesPrevious)
+            onSpeaker(line, tag, wordsAppearedAt, now, continuesPrevious)
         } else {
-            onLine?(line, now, continuesPrevious)
+            onLine?(line, wordsAppearedAt, now, continuesPrevious)
         }
     }
 
@@ -1149,12 +1167,22 @@ final class PhoneListener: NSObject, ObservableObject {
             // Stamped as the words leave, not when they are pushed: the push
             // behind this one may not happen until the network is back.
             //
+            // THE FOURTH DELIVERY SITE, and the only one that does not go
+            // through `deliver` — so widening that function's callbacks does
+            // not reach it, and it is the last line of every session. It used
+            // to hand over `Date()` alone: teardown time, as the start and the
+            // end at once. Both instants are named here so the same line
+            // cannot answer two different questions with two separate reads of
+            // the clock.
+            //
             // A parting tail that followed a cut immediately really does carry
             // on from it; one spoken after a long silence does not, so it is
             // judged by the same rule as every other line.
-            onLine?(tail, Date(),
+            let partingStartedAt = pendingSince ?? Date()
+            let partingEndedAt = Date()
+            onLine?(tail, partingStartedAt, partingEndedAt,
                     flushPolicy.cutContinues(cutAt: cutAt,
-                                             wordsAppearedAt: pendingSince ?? Date()))
+                                             wordsAppearedAt: partingStartedAt))
         }
         // Outside the branch on purpose: nothing follows this session whether a
         // tail went out or not, and the state a ceiling flush leaves behind is

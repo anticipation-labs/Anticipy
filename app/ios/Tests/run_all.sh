@@ -9,6 +9,11 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 sh "$HERE/run_cursor_tests.sh"
 sh "$HERE/run_heard_tests.sh"
 sh "$HERE/run_flush_policy_tests.sh"
+# WHEN the words started and WHEN the flush produced them — two instants, not
+# one number written into three columns. Placed next to the flush policy
+# because it is the other half of the same moment: that one decides when a line
+# leaves, this one decides what the line says about the time it took.
+sh "$HERE/run_capture_envelope_tests.sh"
 sh "$HERE/run_end_errand_tests.sh"
 sh "$HERE/run_reset_message_tests.sh"
 sh "$HERE/run_line_source_tests.sh"

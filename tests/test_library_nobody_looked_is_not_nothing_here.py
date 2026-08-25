@@ -40,10 +40,13 @@ Spec: docs/superpowers/specs/2026-08-25-library-law-clean.md
 Audit: research/2026-08-24-law1-audit.md item 43 (VIOLATION, severity H).
 """
 import ast
+import json
 from pathlib import Path
 
+import pytest
+
 from brain import memory as memory_module
-from brain.memory import Memory, _extractor_verdict
+from brain.memory import Memory, _DONE_RE, _extractor_verdict
 
 from llm_fakes import FakeExtractor
 
@@ -186,7 +189,57 @@ def test_the_triage_heuristics_reply_is_not_an_extraction():
     assert mem["entities"] == []
 
 
-def test_a_refusal_under_a_live_mode_is_not_an_empty_line():
+# The payload that makes the guard OBSERVABLE. The test above cannot see it:
+# its reply carries none of the extraction keys, so deleting `if by is None:
+# return` changes nothing about the result and the check passes either way —
+# caught by mutation, Law 6. What a non-live transport can actually put on the
+# wire is anything at all, this included, and a body this rich is exactly what
+# a "heuristic" mode must still not be allowed to write.
+FULL_EXTRACTION = json.dumps({
+    "people": ["Kowalski", "Sarah"], "places": ["the Ritz"],
+    "topics": ["reservation"], "commitment": "send the deck",
+    "commitment_to": "Sarah", "completed": None})
+
+# Every mode that is not a live endpoint, not just the one in the field
+# report. "heuristic" is llm.py's keyless engine; "" and None are a transport
+# that never said; the last is a build nobody here has seen. The class is
+# "nobody looked", and closing one instance of it is how the next one ships.
+NO_VERDICT_MODES = ["heuristic", "", "some-future-transport"]
+
+
+@pytest.mark.parametrize("mode", NO_VERDICT_MODES)
+def test_no_endpoint_that_never_looked_may_write_the_graph(mode):
+    m = Memory(":memory:", llm=_Answers(FULL_EXTRACTION, mode=mode))
+    mem = m.ingest(GUEST_LINE, speaker="owner")
+    assert mem["extracted_by"] is None, \
+        f"mode {mode!r} is being reported as a model verdict"
+    assert mem["commitment"] is None
+    assert mem["commitment_id"] is None
+    assert mem["entities"] == []
+    assert list(m.db.execute("SELECT type, name FROM nodes")) == [], \
+        f"mode {mode!r} minted graph nodes nobody read the line for"
+    assert list(m.db.execute("SELECT rel FROM edges")) == []
+    assert m.open_loops() == []
+
+
+def test_a_transport_that_never_said_which_endpoint_answered_writes_nothing():
+    """`mode` missing entirely — a double, an old build, a stubbed client.
+    `getattr(res, "mode", None)` is what reads it, so absence must land in the
+    same no-verdict state as a wrong value."""
+    class _Mute:
+        text = FULL_EXTRACTION
+
+        def chat(self, system, user, temperature=0.1, **kw):
+            return self
+
+    m = Memory(":memory:", llm=_Mute())
+    mem = m.ingest(GUEST_LINE, speaker="owner")
+    assert mem["extracted_by"] is None
+    assert mem["entities"] == []
+    assert list(m.db.execute("SELECT type, name FROM nodes")) == []
+
+
+def test_a_refusal_under_a_live_mode_is_not_an_empty_line(capsys):
     """`_extract_json` SYNTHESISES the literal "{}" when a reply has no braces
     in it, and "{}" parses. So a refusal or an outage page arrived as "nothing
     in this line" — with a live key, and stamped as a real verdict."""
@@ -194,6 +247,20 @@ def test_a_refusal_under_a_live_mode_is_not_an_empty_line():
     mem = Memory(":memory:", llm=llm).ingest(GUEST_LINE)
     assert mem["extracted_by"] is None, \
         "a provider refusal is being reported as a model verdict"
+    # The print was unpinned until 2026-08-25 — deleting it left the suite
+    # green, and with `extracted_by` not yet read by anything it is the ONLY
+    # live evidence that a provider is refusing or serving an outage page.
+    assert "answered with no JSON" in capsys.readouterr().out, \
+        "a week of provider refusals must not look like a week of quiet days"
+
+
+def test_a_reply_that_is_not_readable_json_is_reported(capsys):
+    """Braces present, JSON invalid — a truncated stream, a proxy's error
+    body. It reports, like every other path that writes nothing."""
+    mem = Memory(":memory:", llm=_Answers("{oops}", mode="openrouter")).ingest(
+        GUEST_LINE)
+    assert mem["extracted_by"] is None
+    assert "unreadable" in capsys.readouterr().out
 
 
 # ------------------------------------------------- path (c): a raising model
@@ -214,6 +281,86 @@ def test_the_report_no_longer_claims_a_fallback_that_does_not_exist(capsys):
     the last agent's comment excused a live regression."""
     Memory(":memory:", llm=_Raises()).ingest(GUEST_LINE)
     assert "falling back to rules" not in capsys.readouterr().out
+
+
+# ----------------------- the half that stayed silent is the half that fires
+
+
+# Every transport that produces NO VERDICT, and the words its report must
+# carry. Two of these said nothing at all until 2026-08-25 — `not self.llm`,
+# which is the DEPLOYED DEFAULT on a keyless worker, and a non-live `mode`,
+# which is what an eval built without a key gets — so the two paths that
+# actually run were the two that could not be told from a quiet day. The
+# stamp alone does not close that: `extracted_by` has no consumer in the tree
+# yet, so until the worker half lands the log IS the evidence.
+NO_VERDICT_TRANSPORTS = [
+    ("no model at all", lambda: None, "no extraction model configured"),
+    ("a keyless transport", lambda: _Answers(FULL_EXTRACTION, mode="heuristic"),
+     "not a live extraction model"),
+    ("an endpoint nobody here has seen",
+     lambda: _Answers(FULL_EXTRACTION, mode="some-future-transport"),
+     "not a live extraction model"),
+    ("a model that raises", _Raises, "extraction model unusable"),
+    ("a refusal in prose",
+     lambda: _Answers("I'm sorry, I can't help with that.", mode="openrouter"),
+     "answered with no JSON"),
+    ("an unreadable reply", lambda: _Answers("{oops}", mode="openrouter"),
+     "unreadable"),
+]
+
+
+@pytest.mark.parametrize("shape,build,expected", NO_VERDICT_TRANSPORTS,
+                         ids=[s for s, _, _ in NO_VERDICT_TRANSPORTS])
+def test_no_path_that_writes_nothing_stays_quiet_about_it(shape, build,
+                                                          expected, capsys):
+    mem = Memory(":memory:", llm=build()).ingest(GUEST_LINE, speaker="owner")
+    assert mem["extracted_by"] is None
+    out = capsys.readouterr().out
+    assert expected in out, f"{shape} wrote nothing and said nothing: {out!r}"
+    assert "unread" in out
+
+
+def test_a_configuration_fact_is_said_once_per_librarian(capsys):
+    """`self.llm is None` is fixed at construction — it cannot change while
+    this Memory lives, so reporting it per line would be log spam, and log
+    spam is what gets "cleaned up" the week before it was needed. Once per
+    store, and a new store says it again."""
+    m = Memory(":memory:")
+    m.ingest(GUEST_LINE)
+    assert "no extraction model configured" in capsys.readouterr().out
+    m.ingest(NAMED_LINE)
+    assert capsys.readouterr().out == "", "the same fixed fact, said twice"
+    Memory(":memory:").ingest(GUEST_LINE)
+    assert "no extraction model configured" in capsys.readouterr().out
+
+
+def test_a_transport_failure_is_said_every_time(capsys):
+    """The opposite call, for the opposite kind of fact: a raise, a refusal or
+    an unreadable reply is a per-reply EVENT, and three outages in a day must
+    read as three, not as one."""
+    m = Memory(":memory:", llm=_Raises())
+    m.ingest(GUEST_LINE)
+    assert "extraction model unusable" in capsys.readouterr().out
+    m.ingest(NAMED_LINE)
+    assert "extraction model unusable" in capsys.readouterr().out
+
+
+def test_every_no_verdict_exit_goes_through_the_reporting_door():
+    """The class, not the six instances above: a no-verdict path added
+    tomorrow must not be able to be silent. `return Extraction(), None`
+    written by hand is exactly how the two silent ones got there, so it is
+    the shape that is banned — `_unread()` is the only door out."""
+    src = (Path(__file__).resolve().parent.parent / "brain"
+           / "memory.py").read_text()
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.FunctionDef) and n.name == "_extract")
+    bare = [ast.unparse(n) for n in ast.walk(fn)
+            if isinstance(n, ast.Return) and isinstance(n.value, ast.Tuple)
+            and len(n.value.elts) == 2
+            and isinstance(n.value.elts[1], ast.Constant)
+            and n.value.elts[1].value is None]
+    assert bare == [], \
+        f"a no-verdict exit that reports nothing: {bare}"
 
 
 # --------------------------------------------------- path (b): a real verdict
@@ -274,3 +421,55 @@ def test_ingest_keeps_every_key_it_ever_returned():
     mem = Memory(":memory:").ingest(GUEST_LINE)
     assert set(mem) == {"episode_id", "entities", "commitment",
                         "commitment_id", "closed", "extracted_by"}
+
+
+# ------------------------------- a verdict returned is not a verdict USED
+
+
+PROMISE = "I'll send Sarah the pitch deck tomorrow."
+# Deliberately outside _DONE_RE: no "already/just <verb>", no "<verb> it/that",
+# no "that's done", no "I sent". The verb list cannot close a loop on this
+# sentence, so if the loop closes, the MODEL closed it.
+REPORT = "Sarah has the pitch deck now, so that whole thread is behind us."
+
+
+def test_the_report_line_is_beyond_the_verb_list():
+    """Guards the guard: the moment _DONE_RE could match this sentence, the
+    test below would pass without the model verdict ever being read."""
+    assert not _DONE_RE.search(REPORT)
+
+
+def test_the_models_completed_verdict_is_used_at_the_ingest_layer():
+    """`ingest` passes `ex.completed` into close_from_speech. Dropping that
+    argument left the whole suite green (mutation, 2026-08-25) — and it
+    silently reverts loop-closing to the _DONE_RE verb list alone, which is
+    the regression the code's own comment says was fixed: anything the owner
+    finished in words that list does not contain stays open forever, and the
+    clock nags him about work that is done."""
+    llm = FakeExtractor(per_line={
+        PROMISE: {"people": ["Sarah"], "commitment": "send Sarah the deck"},
+        REPORT: {"completed": "sent Sarah the deck"},
+    })
+    m = Memory(":memory:", llm=llm)
+    m.ingest(PROMISE, speaker="owner")
+    assert [loop["what"] for loop in m.open_loops()] == ["send Sarah the deck"]
+
+    mem = m.ingest(REPORT, speaker="owner")
+    assert mem["closed"] == ["send Sarah the deck"], \
+        "the model said he finished it and the promise stayed open"
+    assert m.open_loops() == []
+
+
+def test_no_verdict_does_not_close_a_promise_by_itself():
+    """The other half: with nobody reading the line, `completed` is None and
+    the sentence above closes nothing. (What _DONE_RE can still do on its own
+    is audit item 41, a separate site with the opposite polarity — closing
+    suppresses an action rather than authorising one.)"""
+    llm = FakeExtractor(per_line={
+        PROMISE: {"people": ["Sarah"], "commitment": "send Sarah the deck"}})
+    m = Memory(":memory:", llm=llm)
+    m.ingest(PROMISE, speaker="owner")
+    m.llm = None  # the key expired mid-day; the promise outlives it
+    mem = m.ingest(REPORT, speaker="owner")
+    assert mem["closed"] == []
+    assert [loop["what"] for loop in m.open_loops()] == ["send Sarah the deck"]

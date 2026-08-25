@@ -38,10 +38,50 @@ def test_keep_listening_stays_the_persons_own_preference():
 
 
 def test_nothing_is_captured_without_an_owner():
-    heard = APP.split("try await backend.pushEvent(kind: \"transcript\"", 1)[0]
-    tail = heard[-600:]
-    assert 'guard !accountID.isEmpty else { return }' in tail, (
+    """The guard must run before anything leaves, and nothing may leave between.
+
+    This asserted the guard sat within the last 600 CHARACTERS before the push.
+    That is a proxy for "close to it", and on 2026-08-25 it went red because
+    legitimate capture-envelope work was added in between — the guard was
+    untouched, still first, still returning early. A distance check reads a
+    reformat as a privacy regression, which is expensive in exactly the wrong
+    direction: it cries wolf on safe edits, and a real leak that happened to fit
+    inside 600 characters would have passed.
+
+    So the intent is asserted directly instead. The guard precedes every exit,
+    and NOTHING between the guard and the push can itself push or queue — which
+    is the property the distance was standing in for, and it holds however the
+    code is laid out.
+    """
+    # Scoped to heard() ONLY. Splitting the whole file on the transcript push
+    # sweeps in every earlier function that legitimately pushes — the profile
+    # upsert, the app_reply write — and reads them as leaks.
+    # COMMENTS STRIPPED FIRST. Searching raw source means a guard commented
+    # OUT still reads as present — a mutation proved exactly that on
+    # 2026-08-25, and the check this replaced had the same hole. The shell
+    # runners in app/ios/Tests already do this (`code()`); this now matches.
+    live = "\n".join(l for l in APP.split("\n")
+                     if not l.lstrip().startswith("//"))
+    heard = live.split("func heard(", 1)[1]
+    heard = heard.split("try await backend.pushEvent(kind: \"transcript\"", 1)[0]
+    guard = 'guard !accountID.isEmpty else { return }'
+    assert guard in heard, (
         "a line spoken with no signed-in account must not be pushed or queued")
+
+    # Nothing may reach the wire, or the on-disk queue, BEFORE the owner check.
+    before = heard[:heard.index(guard)]
+    for leak in ("pushEvent", "queueUnsent", "unsentLines"):
+        assert leak not in before, (
+            f"{leak} runs before the signed-out guard — a line spoken with no "
+            "owner would leave the phone")
+
+    # And nothing between the guard and the push may leave either: the guard is
+    # the LAST word before the wire, not merely somewhere above it.
+    between = heard[heard.index(guard) + len(guard):]
+    for leak in ("pushEvent", "queueUnsent"):
+        assert leak not in between, (
+            f"{leak} sits between the owner check and the push, so a path "
+            "exists that the guard does not cover")
 
 
 def test_a_buffered_line_remembers_whose_words_it_is():

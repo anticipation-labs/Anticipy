@@ -204,6 +204,17 @@ final class AnticipySession: ObservableObject {
         /// brain sorts a person's day by exactly this field.
         /// Optional so a queue written by the previous build still decodes.
         var capturedAt: Date? = nil
+        /// WHEN THE FLUSH PRODUCED THE LINE, which is not when the words
+        /// started. Without it the two ends of a buffered line collapse onto
+        /// one instant at re-send and the brain measures every silence
+        /// flush-to-flush — the same defect the live path had, arriving by the
+        /// one road that survives a relaunch.
+        ///
+        /// Optional so a queue written by the previous build still decodes,
+        /// and it has to be: the getter answers a failed decode with `?? []`,
+        /// so a required field here would silently DELETE everything a person
+        /// said while offline on the first launch after the update.
+        var endedAt: Date? = nil
         /// Whether the 8s ceiling cut this line out of the middle of a
         /// sentence. Kept as the FACT and not as a parent id, because the line
         /// it carries on from may still be sitting in this same queue with no
@@ -259,16 +270,18 @@ final class AnticipySession: ObservableObject {
         // until the next failed push — and the screens that reassure you your
         // words survived read exactly this number.
         pendingCount = unsent.count
-        listener.onLine = { [weak self] line, at, continues in
-            Task { await self?.heard(line, from: .phoneMic, at: at,
+        listener.onLine = { [weak self] line, startedAt, endedAt, continues in
+            Task { await self?.heard(line, from: .phoneMic, at: startedAt,
+                                     endedAt: endedAt,
                                      continuesPrevious: continues) }
         }
         // The on-device voice check rides with each line. It only engages
         // when a model is present AND he has enrolled; otherwise every line
         // travels bare, exactly as before.
         listener.speaker = speakerTagger
-        listener.onSpeaker = { [weak self] line, tag, at, continues in
-            Task { await self?.heard(line, speaker: tag, from: .phoneMic, at: at,
+        listener.onSpeaker = { [weak self] line, tag, startedAt, endedAt, continues in
+            Task { await self?.heard(line, speaker: tag, from: .phoneMic,
+                                     at: startedAt, endedAt: endedAt,
                                      continuesPrevious: continues) }
         }
         // Re-render views observing the session when the listener changes.
@@ -323,13 +336,17 @@ final class AnticipySession: ObservableObject {
     /// unrelated conversations into one.
     private var lastTranscriptEventID = ""
 
-    /// `at` is when the words were spoken, which is not when this runs for
-    /// anything the phone buffered. `continuesPrevious` is true only when the
-    /// ceiling cut a sentence in half.
+    /// `at` is when the words STARTED, which is not when this runs for
+    /// anything the phone buffered. `endedAt` is when the flush produced the
+    /// line — nil for a typed line, which has no speaking duration to measure,
+    /// and the two together are the only thing downstream can subtract to get
+    /// a real silence. `continuesPrevious` is true only when the ceiling cut a
+    /// sentence in half.
     func heard(_ line: String, speaker: String? = nil,
                explicit: Bool = false,
                from source: LineSource = .typed,
                at capturedAt: Date = Date(),
+               endedAt: Date? = nil,
                continuesPrevious: Bool = false) async {
         // A typed line deserves an instant felt ack. Ambient capture does
         // NOT — buzzing on every finalized utterance all day is a phone that
@@ -350,11 +367,16 @@ final class AnticipySession: ObservableObject {
         // Only a cut names a parent, and only a parent that exists: the first
         // line of a session has nothing to carry on from.
         let parent = continuesPrevious ? lastTranscriptEventID : ""
+        // ONE construction rule for the live push and the offline flush alike.
+        // Two paths building envelopes two ways is how a buffered line and a
+        // live line come to mean different things, and the buffered ones are
+        // exactly the rows the boundary work exists for.
+        let capture = CaptureEnvelope.of(startedAt: capturedAt, endedAt: endedAt)
         do {
             let id = try await backend.pushEvent(kind: "transcript", text: line,
                                         speaker: speaker, explicit: explicit,
                                         source: source.wireName,
-                                        capturedAt: capturedAt,
+                                        capture: capture,
                                         parentLine: parent)
             if !id.isEmpty { lastTranscriptEventID = id }
             ListenJournal.shared.record(
@@ -366,11 +388,15 @@ final class AnticipySession: ObservableObject {
             ListenJournal.shared.record(
                 .posted(ok: false,
                         detail: .shelved(again: false, failure: Self.postFailureShape(error))))
+            // Both ends go to disk. Storing only the start would rebuild a
+            // one-instant envelope at flush time and put the buffered path
+            // back where the live path just left.
             unsent = unsent + [BufferedLine(text: line, explicit: explicit,
                                             speaker: speaker,
                                             source: source.wireName,
                                             account: accountID,
                                             capturedAt: capturedAt,
+                                            endedAt: endedAt,
                                             continuesPrevious: continuesPrevious)]
         }
     }
@@ -425,7 +451,9 @@ final class AnticipySession: ObservableObject {
                                             speaker: line.speaker,
                                             explicit: line.explicit,
                                             source: line.source,
-                                            capturedAt: line.capturedAt,
+                                            capture: CaptureEnvelope.of(
+                                                startedAt: line.capturedAt,
+                                                endedAt: line.endedAt),
                                             parentLine: parent)
                 if !id.isEmpty { lastTranscriptEventID = id }
                 // An unreadable id is a broken link, not a guessable one.
@@ -1616,11 +1644,27 @@ final class AnticipySession: ObservableObject {
     /// more rules: telling explanation ("never mind, I'll call them myself")
     /// from instruction is a meaning question, which is the whole point.
     ///
-    // TAPE: (HARNESS-LAWS.md Law 2) audit item #55. Retired by the leg in
-    // `overnight/tape_gate.py`, which stays red while the text below exists.
     // ANCHOR: end-of-errand decision. Everything down to the END marker is
     // compiled and exercised on its own by Tests/run_end_errand_tests.sh, so
     // it must stay pure Foundation and self-contained.
+    //
+    // WHY THE DECLARATION IS THE LAST THING ABOVE `static func`, AND WHY
+    // WHATEVER YOU WANT TO ADD GOES ABOVE THIS PARAGRAPH RATHER THAN BELOW
+    // IT: overnight/tape_gate.py does not look for the marker NEAR the rule.
+    // It looks for it inside a 400-character window ENDING at `static func`
+    // (`_window_span(before=400)`). The marker used to sit above this ANCHOR
+    // block with 40 characters to spare, and ONE ordinary comment line
+    // inserted between the two pushed it out: leg 1 then reported this rule
+    // as tape nobody had declared, exit 2, while the file was unchanged in
+    // every way a reader would notice, and the declaration was still right
+    // there. Measured 2026-08-25 — gap 360 of a 400 budget.
+    // Tests/run_end_errand_tests.sh now imports that window and that regex
+    // FROM the gate and checks the gate's own predicate AND this adjacency,
+    // so the two books can no longer say different things about this rule.
+    //
+    // Retired by the leg in overnight/tape_gate.py, which is RED while the
+    // text below is in the tree and goes green only when it is DELETED.
+    // TAPE: (Law 2, audit item #55) phrase lists on the phone decide MEANING.
     static func answerThatEndsTheErrand(_ answer: String) -> String? {
         let normalized = answer.lowercased()
             .replacingOccurrences(of: "’", with: "'")
