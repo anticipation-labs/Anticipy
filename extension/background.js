@@ -1219,6 +1219,22 @@ export function jpegBytes(dataUrl) {
   return bytes;
 }
 
+/// TAKE the frame off the run's result, so that holding it and forgetting to
+/// drop it cannot be two separate mistakes.
+///
+/// This was `delete out.evidenceShot` inline at the call site, and a mutation
+/// that removed that line turned ZERO checks red — the bytes leaked into the
+/// job row and nothing noticed. A line no test can see is a line that is not
+/// really there, so it became a function with a name and a suite. Unconditional
+/// on purpose: the shot is removed on every path, not only on success, because
+/// a needs_user hand-back is exactly where `out` gets serialized into `params`.
+export function takeEvidenceShot(out) {
+  if (!out || typeof out !== "object" || !("evidenceShot" in out)) return "";
+  const shot = out.evidenceShot;
+  delete out.evidenceShot;
+  return typeof shot === "string" ? shot : "";
+}
+
 /// Deposit one milestone frame and return the receipt entry that points at it,
 /// or "" — and "" is a complete answer. A picture that could not be stored is
 /// not a reason to fail an errand that already happened: the owner's table is
@@ -1521,9 +1537,9 @@ async function runJobInner(job, params) {
       // 100KB data URL in `params` would be a screenshot of a logged-in page
       // sitting in a text column forever, which is the exact thing
       // evidence.pb.js was built to avoid.
+      const shot = takeEvidenceShot(out);
       const shotRef = canonicalState === "succeeded"
-        ? await depositEvidence(job, out.evidenceShot) : "";
-      if (out && "evidenceShot" in out) delete out.evidenceShot;
+        ? await depositEvidence(job, shot) : "";
       const transition = isWorkflowJob(job)
         ? workflowPatch(job, canonicalState, {
             reason: result || (canonicalState === "failed"

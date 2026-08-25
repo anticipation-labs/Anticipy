@@ -30,7 +30,7 @@ const FAKE_JPEG = Buffer.from("x".repeat(9000)).toString("base64");
 globalThis.fetch = async () => ({ ok: false, status: 0, json: async () => ({}), text: async () => "" });
 
 const { runAgentGoal } = await import("../agent_loop.js");
-const { jpegBytes, depositEvidence } = await import("../background.js");
+const { jpegBytes, depositEvidence, takeEvidenceShot } = await import("../background.js");
 
 let failures = 0;
 const check = (name, ok) => {
@@ -107,6 +107,31 @@ const check = (name, ok) => {
   check("with no owner, nothing is deposited at all", unowned === "");
   const noJob = await depositEvidence(null, shot, deps);
   check("with no job, nothing is deposited at all", noJob === "");
+}
+
+// --------------------------------- 2a. the bytes are TAKEN, not merely copied
+//
+// This leg exists because of a mutation that could not be seen. Deleting the
+// line that dropped the frame from the run's result turned ZERO checks red: the
+// data URL rode on into `params` on a hand-back and into the trace writer, and
+// the suite called it a pass. A 100KB screenshot of a logged-in page sitting in
+// a text column forever is the exact thing the evidence host exists to avoid.
+{
+  const out = { status: "done", tabId: 4, evidenceShot: "data:image/jpeg;base64,AAAA" };
+  const shot = takeEvidenceShot(out);
+  check("the frame is handed over", shot === "data:image/jpeg;base64,AAAA");
+  check("...and is GONE from the object that gets serialized into a job row",
+    !("evidenceShot" in out) && !JSON.stringify(out).includes("data:image"));
+  check("...and asking twice yields nothing the second time",
+    takeEvidenceShot(out) === "");
+  // A hand-back is where `out` actually reaches params, so the removal must
+  // not be conditional on the errand having succeeded.
+  const parked = { status: "needs_user", tabId: 4, evidenceShot: "data:image/jpeg;base64,BBBB" };
+  takeEvidenceShot(parked);
+  check("a parked run's frame is dropped too, not just a successful one",
+    !("evidenceShot" in parked));
+  check("a result with no frame is not damaged",
+    takeEvidenceShot({ status: "failed" }) === "" && takeEvidenceShot(null) === "");
 }
 
 // ------------------------------- 2b. the pointer survives the receipt's own cap
