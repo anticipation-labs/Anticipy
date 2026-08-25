@@ -4,14 +4,20 @@ import Foundation
 // state it finds.
 //
 // The failure being closed, seen on 2026-08-24: the rotation leg inside
-// PhoneListener's watchdog fired only when `self.partial.isEmpty`. `partial` is
-// assigned on EVERY recognizer result and cleared in exactly two places,
-// neither of them a flush — so after the very first utterance of a recognition
-// task it is never empty again, and that leg can never fire for the life of the
-// task. A recognizer that goes deaf with NOTHING pending was therefore
-// invisible: the UI says Listening, the ring looks healthy, and the day
-// produces nothing. The "recognizer went silent" leg does not cover it, because
-// that one requires words to be pending, which is the rarer state.
+// PhoneListener's watchdog fired only when `self.partial.isEmpty`. `partial`
+// was assigned on EVERY recognizer result and cleared only at the start of a
+// recognition task and on the stop path — never by a flush — so after the very
+// first utterance of a task it was never empty again, and that leg could never
+// fire for the life of the task. A recognizer that goes deaf with NOTHING
+// pending was therefore invisible: the UI says Listening, the ring looks
+// healthy, and the day produces nothing. The "recognizer went silent" leg does
+// not cover it, because that one requires words to be pending, which is the
+// rarer state.
+//
+// (A flush clears `partial` today — `flushTail` does, so the live caption stops
+// showing words that have already gone out. That is a third clear, added after
+// this policy replaced the leg, and it changes nothing here: the watchdog is
+// forbidden from reading the string at all, by a check in the runner.)
 //
 // Every question the watchdog answers is a question about TIME, so all of them
 // can be answered here — pure Foundation, like TranscriptFlushPolicy,
@@ -59,13 +65,37 @@ struct ListenWatchdogPolicyTests {
         // ever measured. But someone is mid-sentence: a revision arrived 0.4s
         // ago and their words are unsent. `.rotate` does not flush, so rotating
         // here would drop a sentence out of the middle of a conversation.
+        //
+        // `lastResultAt` is deliberately STALE here. It used to be fresh, and
+        // this case then passed because of it rather than because a partial had
+        // arrived — a reviewer compiled the policy with `lastPartialAt` deleted
+        // outright and all eight checks stayed green, which is what "passes for
+        // a different reason than its name states" looks like from the outside.
         let midSentence = ListenWatchdogPolicy.decide(
             engineRunning: true, hasTask: true, interrupted: false,
-            lastBufferAt: ago(0.2), lastResultAt: ago(0.4),
+            lastBufferAt: ago(0.2), lastResultAt: ago(300),
             lastPartialAt: ago(0.4), requestBornAt: ago(600),
-            hasPending: true, now: now)
+            hasPending: false, now: now)
         check("a person mid-sentence (partial 0.4s ago) is never rotated",
               midSentence == .nothing)
+
+        // ------------------------------- and the hole `max()` was hiding
+        // A recognizer throwing an error callback every second has a FRESH
+        // `lastResultAt`, no partials at all, and is stone deaf. `lastResultAt`
+        // "also moves on an error callback, where nothing was heard" — that is
+        // PhoneListener's own reason for keeping a separate partial stamp — so
+        // judging the quiet on `max(lastResultAt, lastPartialAt)` made this
+        // state invisible: the maximum can never be the partial, because
+        // `lastResultAt` is stamped on every callback before `lastPartialAt` is
+        // stamped on some of them. The quiet is measured from when speech was
+        // last RECOGNISED, and from the request's birth when none ever has been.
+        let errorsButNoSpeech = ListenWatchdogPolicy.decide(
+            engineRunning: true, hasTask: true, interrupted: false,
+            lastBufferAt: ago(1), lastResultAt: ago(0.5),
+            lastPartialAt: nil, requestBornAt: ago(200),
+            hasPending: false, now: now)
+        check("a recognizer answering with errors but no speech for 130s is rotated",
+              errorsButNoSpeech == .rotate)
 
         // ------------------------------- and the ordering that makes 1 safe
         // The same 130 seconds of silence, but this time with words unsent.
@@ -115,8 +145,12 @@ struct ListenWatchdogPolicyTests {
         //
         // `.standDown` is not "do nothing". The call site still retries the
         // engine, which is the only path that notices a call ending when iOS
-        // never delivers `.ended` — it sometimes doesn't. It leaves the
-        // recognition task alone.
+        // never delivers `.ended` — it sometimes doesn't. For the length of the
+        // call it leaves the recognition task alone; on the tick the retry
+        // succeeds it swaps the request once, because the microphone may have
+        // come back on a route whose format the live request can no longer
+        // accept. That is the call site's decision, not this policy's, and
+        // `run_watchdog_policy_tests.sh` pins it on the source.
         let onACall = ListenWatchdogPolicy.decide(
             engineRunning: false, hasTask: true, interrupted: true,
             lastBufferAt: ago(300), lastResultAt: ago(300),
@@ -186,6 +220,55 @@ struct ListenWatchdogPolicyTests {
         check("a call that began 3 minutes ago never swapped the recognition task",
               duringTheCall.count == 45 && !mintedATaskDuringTheCall
                   && stoodDown == 45)
+
+        // -------------------------------------- 8. what the call site may assume
+        // PhoneListener's watchdog body used to end with a reconciliation:
+        // "reaching here with `suspended` still set means capture returned on
+        // its own", and it recorded a `.sessionStarted` for that. It was dead
+        // code the day it was written. `.nothing` is the only action that falls
+        // through the switch, `.nothing` requires `interrupted == false`, and
+        // `interrupted` IS `suspended` — so the branch tested a flag it had
+        // already been told was clear, and the line after it assigned false to
+        // false. A must-not-break invariant preserved as prose over an
+        // unreachable branch is worse than no prose: it reads as a live guard.
+        //
+        // The reconciliation happens in `configureAndStartEngine`, which the
+        // `.standDown` arm calls on every tick of a call. What makes deleting
+        // the dead copy safe is the property below, so the property is checked
+        // rather than asserted in a comment. Swept over every combination of
+        // the other seven arguments, because a policy can be right at one
+        // instant and wrong at another.
+        let clocks: [TimeInterval] = [0, 0.4, 5, 7, 9, 121, 300]
+        var sweep = 0
+        var nothingWhileTheMicIsGone = 0
+        var notStandDown = 0
+        for engine in [true, false] {
+            for task in [true, false] {
+                for buffer in clocks {
+                    for result in clocks {
+                        for partial in clocks + [-1] {
+                            for born in clocks {
+                                for pending in [true, false] {
+                                    let answer = ListenWatchdogPolicy.decide(
+                                        engineRunning: engine, hasTask: task,
+                                        interrupted: true,
+                                        lastBufferAt: ago(buffer),
+                                        lastResultAt: ago(result),
+                                        lastPartialAt: partial < 0 ? nil : ago(partial),
+                                        requestBornAt: ago(born),
+                                        hasPending: pending, now: now)
+                                    sweep += 1
+                                    if answer == .nothing { nothingWhileTheMicIsGone += 1 }
+                                    if answer != .standDown { notStandDown += 1 }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        check("nothing falls through the watchdog switch while the microphone is not ours",
+              sweep == 21_952 && nothingWhileTheMicIsGone == 0 && notStandDown == 0)
 
         // ------------------------------------------------------------ result
         print("")

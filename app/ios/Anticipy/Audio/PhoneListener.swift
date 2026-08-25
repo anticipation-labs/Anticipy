@@ -266,11 +266,25 @@ final class PhoneListener: NSObject, ObservableObject {
         // already proves these are readable at runtime. Also note low power
         // mode here: it changes what the OS will let a background app do, and
         // a day that died on a throttled phone otherwise looks like a bug.
-        ListenJournal.shared.record(.noted(
-            "session category: \(session.category.rawValue) "
-            + "mode: \(session.mode.rawValue)"))
-        if ProcessInfo.processInfo.isLowPowerModeEnabled {
-            ListenJournal.shared.record(.noted("low power mode on"))
+        //
+        // GUARDED BY `suspended`, exactly as the 0 Hz stop below is, and for
+        // exactly the reason its comment gives. These two writes sat three lines
+        // ABOVE that guard and obeyed nothing: while a call holds the microphone
+        // the 4s watchdog calls this method on every tick, so they wrote 15
+        // identical lines a minute — 30 in low power. Measured: the 400-line
+        // ring is fully evicted in 27 minutes and the two 256 KB files in about
+        // five hours of outage, so the one `.sessionStopped(cause:
+        // .interruption)` line that explains the whole day rotates away and the
+        // screen folds ~4,500 `.noted` events into `sessions 0 / listening none
+        // / longest silence none / words 0`. A blank, healthy-looking report on
+        // a dead day, produced by the instrument built to make that day visible.
+        if !suspended {
+            ListenJournal.shared.record(.noted(
+                "session category: \(session.category.rawValue) "
+                + "mode: \(session.mode.rawValue)"))
+            if ProcessInfo.processInfo.isLowPowerModeEnabled {
+                ListenJournal.shared.record(.noted("low power mode on"))
+            }
         }
 
         let input = engine.inputNode
@@ -519,10 +533,27 @@ final class PhoneListener: NSObject, ObservableObject {
                 // SFSpeechRecognitionTask every 4 seconds for its whole
                 // length. Standing down entirely would kill that churn and
                 // also remove the only thing that notices a call ENDING when
-                // iOS never delivers `.ended` — it sometimes doesn't. The
-                // retry costs nothing: it returns at the 0 Hz guard.
+                // iOS never delivers `.ended` — it sometimes doesn't. For as
+                // long as the call lasts the retry writes nothing to the
+                // journal and returns at the 0 Hz guard.
                 self.engine.stop()
                 self.configureAndStartEngine()
+                // ...AND ON THE ONE TICK IT SUCCEEDS, THE REQUEST HAS TO GO
+                // TOO. `configureAndStartEngine` reconciles `suspended` itself
+                // and only clears it when the engine actually came up, so
+                // reaching here with it clear means the microphone is ours
+                // again as of this tick. The tap it just installed carries the
+                // CURRENT route's format, and a live request's format was fixed
+                // by its first buffer — `recoverAudio` says exactly this: "the
+                // new route may differ, so start fresh". A call that starts on
+                // Bluetooth and ends on speaker would otherwise feed the new
+                // tap into the old request, the recognizer would produce
+                // nothing, and leg 6 would not rescue it until the quiet passed
+                // 120 seconds. That is up to two more minutes of the deafness
+                // this whole watchdog exists to end, after the call is over.
+                if !self.suspended {
+                    self.swapRecognition(flushPending: true, cause: .routeChange)
+                }
                 return
             case .rebuild:
                 // A dead engine, or audio that stopped flowing with no
@@ -545,16 +576,27 @@ final class PhoneListener: NSObject, ObservableObject {
                 self.swapRecognition(flushPending: false, cause: .silenceRotation)
                 return
             case .nothing:
+                // Nothing to do, and nothing to reconcile either. This used to
+                // fall through to "reaching here with `suspended` still set
+                // means capture returned on its own", which was dead the day it
+                // was written: `.nothing` is the only action that reaches here,
+                // `.nothing` requires `interrupted == false`, and `interrupted`
+                // IS `suspended` — so the branch tested a flag it had just been
+                // told was clear and the line after it assigned false to false.
+                // Swept over all 21,952 combinations of the other arguments,
+                // `decide` never once answers `.nothing` while interrupted, and
+                // `run_watchdog_policy_tests.sh` now fails if that changes.
+                //
+                // The reconciliation is real work and it happens in
+                // `configureAndStartEngine`, which the `.standDown` arm calls on
+                // every tick of a call — that is the path that notices capture
+                // coming back, records the `.sessionStarted` and clears
+                // `suspended`. A must-not-break invariant preserved as prose
+                // over an unreachable branch is worse than no prose: it reads as
+                // a live guard, and the next person to change what feeds
+                // `interrupted:` would trust it.
                 break
             }
-            // A rebuild is not the only way capture comes back. Reaching here
-            // with `suspended` still set means it returned on its own, and a
-            // stop with no matching start reads as a session that never
-            // recovered at all.
-            if self.suspended, self.engine.isRunning {
-                ListenJournal.shared.record(.sessionStarted)
-            }
-            self.suspended = !self.engine.isRunning
         }
         // .common, not .default: a timer in .default never fires while the
         // user is scrolling the feed — the exact moment they're watching.
@@ -811,6 +853,10 @@ final class PhoneListener: NSObject, ObservableObject {
     /// `alreadyReported` is how a recovery that the watchdog retries every 4s
     /// for the length of a phone call stays one line in the journal instead of
     /// hundreds. Only `recoverAudio` passes it.
+    ///
+    /// The same rule now governs every write above the 0 Hz guard in
+    /// `configureAndStartEngine`. It did not, and the two `.noted` lines that
+    /// escaped it evicted the whole ring in 27 minutes of one phone call.
     private func swapRecognition(flushPending: Bool, cause: ListenEvent.SwapCause,
                                  alreadyReported: Bool = false) {
         if !alreadyReported {

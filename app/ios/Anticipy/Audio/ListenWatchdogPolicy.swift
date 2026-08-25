@@ -3,15 +3,20 @@ import Foundation
 /// What the 4-second watchdog should do about the state it finds.
 ///
 /// THE HOLE THIS CLOSES, 2026-08-24. The rotation leg inside the watchdog fired
-/// only when `self.partial.isEmpty`. `partial` is assigned on EVERY recognizer
-/// result and cleared in exactly two places — the start of a recognition task
-/// and the stop path — neither of them a flush. So after the very first
-/// utterance of a task, `partial` is never empty again and that leg could never
-/// fire for the life of the task. A recognizer that goes deaf with NOTHING
-/// pending was therefore invisible: the UI says Listening, the ring looks
-/// healthy, and the day produces nothing. The "recognizer went silent" leg does
-/// not cover it either, because that one requires words to be PENDING, which is
-/// the rarer state.
+/// only when `self.partial.isEmpty`. `partial` was assigned on EVERY recognizer
+/// result and cleared only at the start of a recognition task and on the stop
+/// path — never by a flush. So after the very first utterance of a task,
+/// `partial` was never empty again and that leg could never fire for the life of
+/// the task. A recognizer that goes deaf with NOTHING pending was therefore
+/// invisible: the UI says Listening, the ring looks healthy, and the day
+/// produces nothing. The "recognizer went silent" leg does not cover it either,
+/// because that one requires words to be PENDING, which is the rarer state.
+///
+/// A flush clears `partial` today — `flushTail` does, so the live caption stops
+/// showing words that have already gone out as a line. That third clear landed
+/// after this policy replaced the leg, and it is irrelevant here for a reason
+/// stronger than the count: the watchdog may not read the string at all any
+/// more, and `run_watchdog_policy_tests.sh` fails the build if it does.
 ///
 /// Every question the watchdog asks is a question about TIME — when did a
 /// buffer last arrive, when did the recognizer last revise, how old is this
@@ -75,8 +80,11 @@ struct ListenWatchdogPolicy {
         //
         // Standing down is not standing still: the call site still retries the
         // engine, which is the only path that notices a call ending when iOS
-        // never delivers `.ended`. It costs nothing — the retry returns at the
-        // 0 Hz guard — and it leaves the recognition task alone.
+        // never delivers `.ended`. While the call lasts that retry writes
+        // nothing and returns at the 0 Hz guard, and the recognition task is
+        // left alone. On the ONE tick where the retry succeeds, the call site
+        // swaps the request — see the `.standDown` arm for why a recovered
+        // microphone on a new route needs a new request, not the old one.
         if interrupted { return .standDown }
 
         // A dead engine is a failure, not a route change. This is the one stall
@@ -112,7 +120,23 @@ struct ListenWatchdogPolicy {
         // silence is past 8 long before it is past 120. The ordering is what
         // makes "swap whether or not words are pending" safe, and a guard added
         // here would re-open the hole for the commonest case of all.
-        let quietSince = max(lastResultAt, lastPartialAt ?? Date.distantPast)
+        //
+        // MEASURED FROM WHEN SPEECH WAS LAST RECOGNISED, and `lastResultAt` is
+        // not that. It moves on every recognizer callback INCLUDING an error
+        // one, where nothing was heard at all — which is precisely why
+        // `PhoneListener` keeps a separate partial stamp. So a recognizer
+        // throwing an error a second has a permanently fresh `lastResultAt`, no
+        // partials, and is stone deaf, and `max(lastResultAt, lastPartialAt)`
+        // made that state invisible: `lastResultAt` is stamped before
+        // `lastPartialAt` on every callback that has both, so the maximum could
+        // never be the partial and the whole argument was inert. A reviewer
+        // deleted `lastPartialAt` from this line entirely and every check
+        // stayed green.
+        //
+        // `?? requestBornAt` is what keeps the silent-but-healthy case honest:
+        // a task that has never heard anybody speak is judged from its birth,
+        // so a quiet room still rotates on schedule instead of never.
+        let quietSince = lastPartialAt ?? requestBornAt
         if now.timeIntervalSince(quietSince) > rotationSeconds,
            // ...and the task is old enough to be worth replacing. Without this
            // clause a request born seconds ago that has not heard anything yet

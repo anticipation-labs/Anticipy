@@ -28,11 +28,19 @@ if ! grep -q 'ListenWatchdogPolicy.decide(' "$listener"; then
 fi
 
 # THE WATCHDOG NEVER READS THE TRANSCRIPT STRING. The leg this replaced fired
-# only when `self.partial.isEmpty`, and `partial` is assigned on every
-# recognizer result and cleared nowhere a flush can reach — so after the first
-# utterance of a task it was never empty again and the leg was dead for the life
-# of that task. A recognizer that went deaf with nothing pending was invisible
-# for the rest of the day.
+# only when `self.partial.isEmpty`, and `partial` was assigned on every
+# recognizer result and cleared only at the start of a task and on the stop path
+# — never by a flush — so after the first utterance of a task it was never empty
+# again and the leg was dead for the life of that task. A recognizer that went
+# deaf with nothing pending was invisible for the rest of the day.
+#
+# A flush clears it now: `flushTail` does, so the live caption stops showing
+# words that have already gone out as a line. Which is beside the point, and
+# saying so is why this note is here rather than a stale count of clear sites: a
+# maintainer who greps for "exactly two places", finds three including one in a
+# flush, and cannot tell whether the guard is stale or the code drifted has been
+# failed by the comment. The rule below does not depend on how many places clear
+# the string. It forbids reading it.
 #
 # `partial` specifically, not `isEmpty`: whether words are UNSENT is a fact the
 # policy is entitled to (`hasPending`), and the watchdog reads it off the cursor
@@ -47,6 +55,27 @@ if printf '%s' "$body" | grep -vE '^[[:space:]]*//' \
     echo "leg guarded by it can never fire — which is exactly how a deaf"
     echo "recognizer with nothing pending stayed invisible all day."
     echo "Ask ListenWatchdogPolicy, which judges when things last ARRIVED."
+    exit 2
+fi
+
+# THE `.standDown` ARM MUST STILL SWAP THE REQUEST WHEN THE MICROPHONE COMES
+# BACK. The brief for this arm specified exactly two lines — stop the engine,
+# reconfigure it — and two lines is a 120-second deaf window after every
+# route-changing call. `configureAndStartEngine` reconciles `suspended` itself,
+# so "did it come back" is knowable right there; a live request's format was
+# fixed by its first buffer, so a call that starts on Bluetooth and ends on
+# speaker feeds the new tap into a request that cannot read it. The recognizer
+# then produces nothing and leg 6 does not rescue it until the quiet passes 120s.
+# Asserted on source shape, like the rule above it, because nothing in a pure
+# suite can see a call site.
+arm=$(awk '/case \.standDown:/,/case \.rebuild:/' "$listener")
+if ! printf '%s' "$arm" | grep -vE '^[[:space:]]*//' | grep -q 'swapRecognition'; then
+    echo "The watchdog stands down without ever refreshing the recognition request."
+    echo "A call that ends on a different route hands the new tap's format to a"
+    echo "request whose format was fixed by its first buffer. The recognizer"
+    echo "produces nothing, and the silence rotation does not rescue it for up to"
+    echo "120 more seconds — the same deafness this card exists to close, in"
+    echo "smaller form, after every call."
     exit 2
 fi
 
