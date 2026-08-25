@@ -164,6 +164,226 @@ routerUse((e) => {
       }
     }
   }
+  // ========================================================= SHELF 2 =========
+  //
+  // READ THIS BEFORE YOU TOUCH `NO_APPROVAL_NEEDED` BELOW.  IT IS ONE EDIT
+  // AWAY AND IT READS AS COMPLIANCE.
+  //
+  // Shelf 2 is the middle register: work that runs WITHOUT waiting for a tap
+  // and is reported afterwards with a real undo.  A third `consequence` value
+  // therefore arrives here with no approval, and the block below correctly
+  // fails closed on it — "consequential work needs parseable approval".  The
+  // cheapest way past that rejection is:
+  //
+  //     const NO_APPROVAL_NEEDED = ["read_only", "reversible_local"];  // NO
+  //
+  // That turns off database-level approval for the new lane and puts NOTHING
+  // in its place.  `read_only`'s exemption is EARNED by a backstop this lane
+  // does not have: extension/background.js `runSupervisedReadJob` fails any
+  // job whose consequence !== "read_only" outright, and nothing in that lane
+  // acts on the world.  Shelf 2 would inherit the exemption and none of the
+  // backstop.
+  //
+  // So the exemption is not spelled anywhere.  It is EARNED, here, by passing
+  // every leg below — and it is written this way round on purpose: delete the
+  // leg and `shelf2Earned` is never set, so the lane goes back to demanding
+  // approval instead of quietly running unattended.  A naked allowlist entry
+  // fails the other way.
+  //
+  // WHAT THE LEGS ARE, and why there is no reversibility classifier among
+  // them.  Nobody is asked "is this reversible?" — not a word list, not a
+  // domain list, not a model returning a bit.  That is a question about the
+  // future behaviour of a third party, the answer is one bit, and a wrong bit
+  // in the unsafe direction is unrecoverable and invisible.  A bit cannot be
+  // audited; it can only be believed.  Instead the model writes an ARTIFACT —
+  // "what exactly would undo this?" — and this checks the artifact:
+  //
+  //   the act side (§5.4)   the declared reach and executor, persisted on the
+  //                         row, must equal what the admitted set records for
+  //                         the act type the plan claims.  Checked FIRST and
+  //                         before the undo plan is even read, because the
+  //                         attack arrives WITH a flawless undo plan: declare
+  //                         `local_draft`, mint your own uuid, write a
+  //                         provenance-clean undo, and open Gmail.
+  //   the undo side (§5.2)  every input is a typed, provenance-tagged
+  //                         reference, and this RESOLVES each one against the
+  //                         values the row already holds.  It never reads a
+  //                         field NAME and never parses prose — a checker
+  //                         that read names is a word list wearing a coat,
+  //                         and is beaten by calling a field
+  //                         `owner_supplied_reference` and filling it from
+  //                         the response.  Resolution is the mechanical form
+  //                         of "known-good BEFORE acting": a reference that
+  //                         can only resolve after the act fails here, now.
+  //   the tell (§8.3)       the obligation to announce is on the row, and it
+  //                         is addressed to the owner and nobody else.
+  //   the order (§7.4)      a compensating plan may run only while nothing
+  //                         later in its lineage has already run.
+  //
+  // POLARITY IS A FLOOR, everywhere.  Missing, unparseable, unresolvable,
+  // unrecognised, or unreachable is a REJECTION, never a default.  There is
+  // no fifth outcome that means "proceed".
+  //
+  // The vocabulary below is duplicated in brain/workflow.py on purpose and
+  // tests/test_shelf2_guard_leg.py compares the two files, because the
+  // approval fail-open this file already carries a scar about survived
+  // exactly by the two layers disagreeing with nobody looking.
+  const SHELF2 = "reversible_local";
+  // PARALLEL ARRAYS, NOT AN OBJECT.  Same hazard the comment below spells
+  // out for `consequence`: `{ local_draft: … }[name]` is truthy for
+  // "constructor", "toString" and every other inherited property name, so an
+  // object-as-set would ship an admitted set with undocumented members an
+  // attacker can simply type.  indexOf has no prototype.
+  const SHELF2_ACT_TYPES = ["local_draft"];
+  const SHELF2_REACH = ["local_store"];
+  const SHELF2_EXECUTOR = ["anticipy_store"];
+  // What each act type's undo must actually bind.  `local_draft`'s undo is
+  // "discard our row" and cannot be that without the id we minted first;
+  // without this an undo plan with NO inputs resolves vacuously and every
+  // other leg waves it through.
+  const SHELF2_BINDS = [["minted_by_us"]];
+  const PROVENANCE_TAGS = ["minted_by_us", "owner_supplied", "constant"];
+  const GESTURE_KINDS = ["tap"];
+  // Claimed, and therefore capable of having left something behind.  A queued
+  // successor has changed nothing yet; a failed one is exactly the case
+  // nobody can be sure about, so it counts.
+  const HAS_RUN = ["running", "needs_user", "done", "failed"];
+  const S2 = {
+    act: "shelf2.act_type_not_admitted",
+    reach: "shelf2.reach_disagrees",
+    executor: "shelf2.executor_disagrees",
+    noUndo: "shelf2.no_undo_plan",
+    otherAct: "shelf2.undo_addresses_another_act",
+    provenance: "shelf2.unknown_provenance",
+    unresolved: "shelf2.unresolved_reference",
+    bindsNothing: "shelf2.undo_binds_nothing",
+    noTell: "shelf2.no_announce_obligation",
+    tellLeaves: "shelf2.announce_leaves_the_owner",
+    unordered: "shelf2.unordered_lineage",
+    // Told apart from `unordered` on purpose: a database that would not
+    // answer is not a database that said no, and §10.5(a) requires our own
+    // outage to be distinguishable from a real refusal — "one outage on a
+    // Tuesday kills the shelf permanently" otherwise.  §11 counts by cause.
+    unreadable: "shelf2.lineage_unreadable",
+    superseded: "shelf2.superseded_by_later_act",
+  };
+  const plainObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  const ownValue = (o, k) => (plainObject(o)
+    && Object.prototype.hasOwnProperty.call(o, k)) ? o[k] : undefined;
+
+  const shelf2Refusal = () => {
+    // ---- the act side, first and on its own (§5.4)
+    const act = embedded.act;
+    if (!plainObject(act)) return S2.act;
+    const which = SHELF2_ACT_TYPES.indexOf(String(act.act_type || ""));
+    if (which < 0) return S2.act;
+    if (String(act.reach || "") !== SHELF2_REACH[which]) return S2.reach;
+    if (String(act.executor || "") !== SHELF2_EXECUTOR[which]) return S2.executor;
+
+    // ---- the undo side (§5.2): resolve, never read a name
+    const undo = embedded.undo;
+    if (!plainObject(undo)) return S2.noUndo;
+    if (!Array.isArray(undo.steps) || undo.steps.length === 0) return S2.noUndo;
+    if (String(undo.act_type || "") !== String(act.act_type || "")) {
+      return S2.otherAct;
+    }
+    if (!Array.isArray(undo.inputs)) return S2.noUndo;
+    for (const item of undo.inputs) {
+      if (!plainObject(item)) return S2.noUndo;
+      const tag = String(item.provenance || "");
+      if (PROVENANCE_TAGS.indexOf(tag) < 0) return S2.provenance;
+      const bucket = ownValue(undo.held, tag);
+      if (!plainObject(bucket)) return S2.unresolved;
+      const value = ownValue(bucket, String(item.ref || ""));
+      if (value === undefined || value === null || value === "") {
+        return S2.unresolved;
+      }
+    }
+
+    const bound = [];
+    for (const item of undo.inputs) bound.push(String(item.provenance || ""));
+    for (const tag of (SHELF2_BINDS[which] || [])) {
+      if (bound.indexOf(tag) < 0) return S2.bindsNothing;
+    }
+
+    // ---- the tell is part of the work (§8.3), and it goes to him alone
+    const tell = embedded.announce;
+    if (!plainObject(tell) || !String(tell.channel || "").trim()) {
+      return S2.noTell;
+    }
+    const owner = String(rowValue("owner_ref", "") || "");
+    if (!owner || String(tell.owner_ref || "") !== owner) return S2.tellLeaves;
+
+    // ---- and it must have a position, or §7.4 has nothing to order by
+    if (!(Number(embedded.lineage_seq) >= 1)) return S2.unordered;
+    return "";
+  };
+
+  // §7.4 — LIFO within a lineage.  Keyed on `undo_of` and NOT on the
+  // consequence: a compensating plan carries the owner's own gesture as
+  // authority, so it is ordinary approved work, and a leg keyed on the Shelf
+  // 2 consequence would never fire on the one row it exists for.
+  //
+  // An undo plan is written BEFORE its act runs, against the state as it was
+  // then.  Two individually-undoable acts undone out of order produce an
+  // outcome neither undo promised: undo(A) deletes the draft, undo(B)
+  // RESTORES it, and a draft he was told forty seconds ago was gone is back
+  // with both receipts honest.
+  const orderRefusal = () => {
+    const undoOf = embedded.undo_of;
+    if (!plainObject(undoOf)) return "";
+    const seq = Number(undoOf.act_seq);
+    const target = String(undoOf.plan_id || "");
+    const key = String(rowValue("lineage_key", "") || "");
+    if (!target || !key || !(seq >= 1)) return S2.unordered;
+    let rows = null;
+    try {
+      rows = e.app.findRecordsByFilter(
+        "jobs", "lineage_key = {:k} && consequence = {:c}", "-created", 500, 0,
+        { k: key, c: SHELF2 });
+    } catch (_) { rows = null; }
+    if (!rows || typeof rows.length !== "number") return S2.unreadable;
+    const acts = [];
+    for (const row of rows) {
+      let plan = null;
+      try {
+        const parsed = JSON.parse(String(row.getString("params") || "{}"));
+        plan = parsed && parsed._workflow;
+      } catch (_) { return S2.unreadable; }
+      if (!plainObject(plan)) return S2.unreadable;
+      if (plainObject(plan.undo_of)) continue;   // a compensation is not an act
+      const at = Number(plan.lineage_seq);
+      if (!(at >= 1)) return S2.unreadable;
+      acts.push({ id: String(plan.plan_id || ""), at: at,
+                  status: String(row.getString("status") || "") });
+    }
+    // Locate the act being compensated before ordering anything against it:
+    // an undo that names nothing findable is not the head of its lineage, it
+    // is not anywhere.
+    let located = false;
+    for (const a of acts) {
+      if (a.id !== target) continue;
+      if (a.at !== seq) return S2.unordered;
+      located = true;
+    }
+    if (!located) return S2.unordered;
+    for (const a of acts) {
+      if (a.at > seq && HAS_RUN.indexOf(a.status) >= 0) return S2.superseded;
+    }
+    return "";
+  };
+
+  let shelf2Earned = false;
+  if (nextStatus === "queued") {
+    if (consequence === SHELF2) {
+      const why = shelf2Refusal();
+      if (why) return reject(why);
+      shelf2Earned = true;
+    }
+    const outOfOrder = orderRefusal();
+    if (outOfOrder) return reject(outOfOrder);
+  }
+
   // APPROVAL IS THE DEFAULT AND EXEMPTION IS THE EXCEPTION, not the other way
   // round. This read `consequence === "consequential"`, so owner approval was
   // demanded only when that one string was spelled exactly right. Anything
@@ -185,13 +405,35 @@ routerUse((e) => {
   // for "constructor", "toString" and every other inherited property name, so
   // the obvious lookup hands an attacker an exemption keyword.
   const NO_APPROVAL_NEEDED = ["read_only"];
-  if (nextStatus === "queued" && NO_APPROVAL_NEEDED.indexOf(consequence) < 0) {
+  if (nextStatus === "queued" && !shelf2Earned
+      && NO_APPROVAL_NEEDED.indexOf(consequence) < 0) {
     let approval = {};
     try { approval = JSON.parse(String(body.approval || (old && old.getString("approval")) || "")); }
     catch (_) { return reject("consequential work needs parseable approval"); }
     const scope = String(body.scope_digest || (old && old.getString("scope_digest")) || "");
+    // A TAP IS A GESTURE, NOT WORDING.
+    //
+    // `owner_words` exists because he said them, and refusing an empty one is
+    // right for speech.  It is also the check that makes somebody write
+    // `"owner_words": "tapped undo"` in app/ios/…/AnticipyApp.swift — one
+    // line, in the layer closest to the gesture and furthest from the law —
+    // which would put a sentence he never said into the one field whose whole
+    // purpose is that he did.  So a gesture is admitted AS a gesture, and it
+    // buys exactly what words buy and nothing more: it must name who made it,
+    // be of a kind we recognise, and be bound to THIS plan, THIS version and
+    // THIS scope.  An executor may not mint one — `an executor cannot rewrite
+    // or approve its plan` above already refuses that, and this must not
+    // become a hole in it.
+    const words = String(approval.owner_words || "").trim();
+    const gesture = approval.gesture;
+    const tapped = !!(plainObject(gesture)
+      && GESTURE_KINDS.indexOf(String(gesture.kind || "")) >= 0
+      && String(gesture.actor || "").trim()
+      && String(gesture.plan_id || "") === workflow
+      && Number(gesture.plan_version) === nextVersion
+      && String(gesture.scope_digest || "") === scope);
     if (approval.plan_id !== workflow || Number(approval.plan_version) !== nextVersion
-        || !scope || approval.scope_digest !== scope || !approval.owner_words) {
+        || !scope || approval.scope_digest !== scope || (!words && !tapped)) {
       return reject("approval is not bound to this exact plan version");
     }
   }
