@@ -128,11 +128,26 @@ def test_the_key_never_appears_in_result_or_repr(monkeypatch):
     assert seen["headers"].get("X-Subscription-Token") == "sk-SECRET"
 
 
-def test_query_strips_the_instruction_prefix():
+def test_query_strips_a_labelled_prefix_only():
+    """This test used to assert "look up ferry times" -> "ferry times", and that
+    assertion was pinning a HARNESS-LAWS Law 1 violation in place: the strip was
+    a verb list deciding which words of a sentence were instruction and which
+    were subject. Measured, it lost the request outright — "Compare the two
+    quotes from the movers" searched for "the two quotes from the movers", and
+    the Brief's own moment 29 searched for "me a dentist open Saturdays".
+
+    The rule is now the separator, which is punctuation rather than meaning.
+    THE TRADE IS REAL AND IS NOT HIDDEN: an unlabelled "look up ferry times" now
+    searches whole, which is a marginally worse query than "ferry times". That is
+    the price of not guessing, and a slightly long query returns the ferry
+    timetable while a query missing "compare" answers a different question.
+    See tests/test_research_query_is_not_a_verb_list.py."""
     assert research.query_from_goal(
         "research: opening hours of the Vancouver aquarium") \
         == "opening hours of the Vancouver aquarium"
-    assert research.query_from_goal("look up ferry times") == "ferry times"
+    # No separator, so no strip — the verb may be load-bearing and only a model
+    # could tell. The whole phrase goes to the search engine.
+    assert research.query_from_goal("look up ferry times") == "look up ferry times"
     # A goal that IS the query already passes through whole.
     assert research.query_from_goal("Vancouver aquarium hours") \
         == "Vancouver aquarium hours"

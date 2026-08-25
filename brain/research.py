@@ -42,18 +42,59 @@ claim, e.g. "Open until 5pm daily [2]." If the sources disagree, say which
 says what. If they do not contain the answer, say plainly what you did and
 did not find. No preamble, no headings — just the answer."""
 
-# The search query is the goal minus its instruction verb — Brave does better
-# with "opening hours of the Vancouver aquarium" than with "research: opening
-# hours of the Vancouver aquarium".
-_QUERY_PREFIX = re.compile(
+# A LABEL is stripped from the query. A VERB IS NOT.
+#
+# Brave does better with "opening hours of the Vancouver aquarium" than with
+# "research: opening hours of the Vancouver aquarium", and that is still worth
+# doing. What this used to do as well was decide which words of the owner's
+# sentence were instruction and which were subject, from a list of verbs —
+# research|look up|find|check|search|compare|price|tell me. That is a judgement
+# about MEANING made by a word list, which HARNESS-LAWS Law 1 gives to a model,
+# and it was measurably wrong in both directions:
+#
+#     "Compare the two quotes from the movers" -> "the two quotes from the movers"
+#     "Price check the Sony a7 IV"             -> "check the Sony a7 IV"
+#     "check on my passport application"       -> "on my passport application"
+#     "Find me a dentist open Saturdays"       -> "me a dentist open Saturdays"
+#
+# The first loses the request entirely — comparing IS the task, and a search for
+# the quotes without it answers a different question. The last is the Brief's own
+# moment 29, and the query it handed Brave began with the word "me".
+#
+# THE SEPARATOR IS THE WHOLE RULE NOW. A colon or dash is punctuation a writer
+# put there to mark a label, the same way "TODO:" marks one; reading it is not
+# reading meaning. A verb with no separator is part of the sentence and is left
+# alone, because deciding otherwise requires knowing what the sentence means.
+_QUERY_LABEL = re.compile(
     r"^\s*(research|look\s*up|find(?:\s+out)?|check|search(?:\s+for)?|"
-    r"compare|price|tell\s+me(?:\s+about)?)\s*[:\-—]?\s+",
+    r"compare|price|tell\s+me(?:\s+about)?)\s*[:\-—]\s+",
     re.IGNORECASE)
 
 
 def query_from_goal(goal: str) -> str:
+    """The goal with an explicitly-labelled prefix removed, never a verb.
+
+    Falls back to the whole goal when stripping would leave nothing: an empty
+    query searches for nothing and returns nothing, silently, which reads
+    downstream as "the sources did not contain the answer".
+
+    TWO GUARDS HERE CANNOT CURRENTLY FIRE, and that is written down so the next
+    reader does not mistake them for load-bearing, and the next mutation round
+    does not spend itself proving they are not:
+
+      `or g` — unreachable. `g` is stripped first, and the pattern needs `\s+`
+      AFTER the separator with the match ending there, so whatever it consumes
+      must be followed by more text. It can never eat the whole string, so the
+      result is never empty. Kept because the invariant it states ("an empty
+      query must never leave here") is the one that matters, and a later edit to
+      either the strip or the pattern could make it reachable in a single line.
+
+      `count=1` — redundant. The pattern is `^`-anchored and this module does not
+      use MULTILINE, so `sub` already replaces at most once. Kept for the same
+      reason and because it states the intent: only the FIRST label is a label.
+    """
     g = (goal or "").strip()
-    return _QUERY_PREFIX.sub("", g, count=1).strip() or g
+    return _QUERY_LABEL.sub("", g, count=1).strip() or g
 
 
 class BraveClient:
