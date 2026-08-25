@@ -1804,10 +1804,47 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
       reason: `submitted values are outside the approved scope: ${unsupportedScope.join(", ")}`,
       evidence: [] };
   }
-  if (effectState && terminalReceiptEvidence(state)) {
-    return { verified: true, reason: "", evidence: verificationEvidence(
-      state, facts, "terminal-receipt+approved-pre-effect-fields") };
-  }
+  // A RECEIPT-SHAPED PAGE IS EVIDENCE. IT IS NOT A VERDICT.
+  //
+  // WHAT WAS HERE UNTIL 2026-08-25:
+  //     if (effectState && terminalReceiptEvidence(state)) {
+  //       return { verified: true, ... };
+  //     }
+  // Two regexes over live page prose returned `verified: true` and RETURNED —
+  // the model audit forty lines below never ran. Every other guard in this
+  // function is fail-CLOSED and can only ever answer "no"; this one could
+  // answer "yes", and it was the only thing here that could.
+  //
+  // HARNESS-LAWS.md law 1, and none of its three exemptions cover it. It is
+  // not a sense. It is not the seatbelt — the seatbelt reads what a plan
+  // TOUCHES, and this reads what a page SAYS. It is not a gate or an eval.
+  //
+  // THE MEASURED FAILURE. `terminalReceiptEvidence`'s success alternation
+  // carries `booked|scheduled|registered` and `cancelled|canceled` in one
+  // list, and nothing in this function ever compared the matched verb to the
+  // goal. Goal: "book the appointment." Page: "Successfully cancelled.
+  // Confirmation number: ABC-10023." The shape gap does not read the page; the
+  // contradiction check reads the agent's own sentence, not the page; and the
+  // approved facts — the patient, the date, the time — all appear on a
+  // cancellation receipt for that same appointment, so the guard that could
+  // have caught it had no reason to fire. Verdict: booked.
+  //
+  // WHY NOT JUST DELETE `cancelled` FROM THE LIST. Because that is the
+  // instance and the hole is the class: `renewed` against "cancel my
+  // subscription", `updated` against "delete the listing", `saved` against
+  // anything at all. A lexical match cannot hold the difference, because the
+  // difference is what the page MEANS. Both cases are in
+  // extension/tests/test_done_is_not_a_word_match.mjs.
+  //
+  // SO IT IS DEMOTED RATHER THAN DELETED. The observation is real and worth
+  // something — a page carrying both success prose and a reference number is
+  // genuinely different from one carrying neither — so it rides into the
+  // auditor's prompt as a signal, clearly labelled as a shape and not a
+  // meaning, and the model returns the verdict. This costs one model call on
+  // the errands that used to skip it, on a function that runs a handful of
+  // times per run. A shortcut that can only ever say "yes" buys latency by
+  // skipping the only check that can catch anything.
+  const terminalShape = !!(effectState && terminalReceiptEvidence(state));
   const factsBlock = factsForPrompt(facts);
   const verifierJournal = effectState
     // For a mutable page (cart, form, editor), the CURRENT live state
@@ -1823,7 +1860,13 @@ export async function verifyDone(apiKey, model, goal, result, tabId,
     // it must actually SEE the fields: page text alone (capped at 1500 chars,
     // usually nav and menus) made it reject correct completions, the run
     // ground to maxSteps, and the owner was told a finished task had failed.
-    { role: "user", content: `GOAL: ${goal}\nAPPROVED SCOPE: ${scope || goal}\nAPPROVED FACTS:\n${factsBlock || "(none)"}\nCLAIMED RESULT: ${claimedResult}\n\nBEFORE EXTERNAL EFFECT — FORM VALUES:\n${JSON.stringify(effectState?.fields || []).slice(0, 6000)}\nBEFORE EXTERNAL EFFECT — FORM MAP:\n${(effectState?.elements || "").slice(0, 4000)}\n\nCURRENT URL: ${state.url}\nCURRENT TITLE: ${state.title}\nCURRENT FORM VALUES:\n${JSON.stringify(state.fields || []).slice(0, 6000)}\nCURRENT FORM MAP:\n${(state.elements || "").slice(0, 4000)}\n\nCURRENT PAGE TEXT:\n${(state.text || "").slice(0, 5000)}\n\nEARLIER LIVE PAGE EVIDENCE FROM THIS SAME RUN (research may span pages/scroll states):\n${JSON.stringify(verifierJournal.slice(-10)).slice(0, 42000)}` },
+    { role: "user", content: `GOAL: ${goal}\nAPPROVED SCOPE: ${scope || goal}\nAPPROVED FACTS:\n${factsBlock || "(none)"}\nCLAIMED RESULT: ${claimedResult}\n\nBEFORE EXTERNAL EFFECT — FORM VALUES:\n${JSON.stringify(effectState?.fields || []).slice(0, 6000)}\nBEFORE EXTERNAL EFFECT — FORM MAP:\n${(effectState?.elements || "").slice(0, 4000)}\n\nCURRENT URL: ${state.url}\nCURRENT TITLE: ${state.title}\nCURRENT FORM VALUES:\n${JSON.stringify(state.fields || []).slice(0, 6000)}\nCURRENT FORM MAP:\n${(state.elements || "").slice(0, 4000)}\n\nCURRENT PAGE TEXT:\n${(state.text || "").slice(0, 5000)}${terminalShape
+      // A SHAPE, HANDED OVER AS A SHAPE. Said this way on purpose: the model
+      // is told what was matched and told, in the same breath, what the match
+      // does not establish — because the whole defect being repaired here was
+      // a match like this one being read as an answer.
+      ? "\n\nMECHANICAL OBSERVATION (a shape, not a verdict): the CURRENT page carries both success-sounding prose and a reference/confirmation number, and the pre-effect form values passed the approved-scope and approved-facts checks. This says a receipt-shaped page is present. It does NOT say the receipt is for the action the GOAL asked for — a cancellation, a renewal or an unrelated order confirmation has exactly this shape. Decide that yourself from the text."
+      : ""}\n\nEARLIER LIVE PAGE EVIDENCE FROM THIS SAME RUN (research may span pages/scroll states):\n${JSON.stringify(verifierJournal.slice(-10)).slice(0, 42000)}` },
   ];
   try {
     let auditMessages = messages;
@@ -2771,12 +2814,35 @@ export function unquotedCode(text, fieldAttrs, goal, scope, facts) {
 export function protectedInput(meta = {}) {
   const safe = meta || {};
   const type = String(safe.type || "").trim().toLowerCase();
-  const autocomplete = String(safe.autocomplete || "").trim().toLowerCase();
+  // AUTOCOMPLETE IS A TOKEN LIST, NOT ONE WORD. The HTML spec's own example is
+  // "section-blue shipping cc-number", and real checkouts ship both that and
+  // "current-password webauthn". `startsWith("cc-")` read the whole string, so
+  // a card number declared exactly the way the spec says to declare it walked
+  // straight through. hostile_checkout.html row 3.
+  const tokens = String(safe.autocomplete || "").trim().toLowerCase()
+    .split(/\s+/).filter(Boolean);
   const attrs = String(safe.attrs || "");
   if (type === "password") {
     return "refused: this is a password field — only the owner can fill it";
   }
-  if (autocomplete.startsWith("cc-")) {
+  // A PASSWORD BOX THAT SAYS type="text" IS STILL A PASSWORD BOX.
+  //
+  // Every "show password" toggle in the world flips the type attribute and
+  // leaves the autocomplete declaration alone. page_map.js:9-19 has always
+  // called these sensitive and printed "(sensitive field — never fill)" into
+  // the model's page map — but a line in a prompt is advice, and this function
+  // is the stop. The two disagreed until 2026-08-25: the map said never fill
+  // and the door filled it. hostile_checkout.html row 2.
+  if (tokens.some((t) => t === "current-password" || t === "new-password")) {
+    return "refused: this is a password field — only the owner can fill it";
+  }
+  // `one-time-code` is page_map's third sensitive token and is DELIBERATELY
+  // absent here. unquotedCode (:2754) owns it, and it must stay owned there:
+  // a code the owner actually gave may be typed, and a flat refusal on this
+  // door would re-break the inbox side trip 40b3851d built. The difference is
+  // that a password is never ours to type even when we somehow hold it, and a
+  // code he handed over is.
+  if (tokens.some((t) => t.startsWith("cc-"))) {
     return "refused: this is a payment-card field — only the owner can fill it";
   }
   const cardField = /\b(?:credit|debit|payment)\s*card\b|\bcard\s*(?:number|no\.?|holder|expiry|expiration|security\s*code)\b|\b(?:cvv|cvc|ccv)\b/i;
@@ -2890,17 +2956,75 @@ async function fieldRejects(tabId, index) {
   }
 }
 
+/// WHAT KIND OF CONTROL IS THIS — read off the page the site itself built.
+///
+/// Runs INSIDE the page (chrome.scripting serializes it, so it may close over
+/// nothing and must stay a top-level named function). It is exported so
+/// test_takeover_list.mjs drives THIS function rather than a copy of it: a
+/// copy is how a guard passes its own suite and lets the field through.
+///
+/// It reads DECLARATIONS only — tag, type, autocomplete tokens, and the
+/// accessible name the page wired up. It never judges what a page is FOR.
+/// HARNESS-LAWS.md law 1: "what kind of control did the site declare this to
+/// be" is a fact; "does this page look like a checkout" would be meaning, and
+/// is not asked here or anywhere below it.
+///
+/// WHY IT IS NOT `<input>`-ONLY ANY MORE. Until 2026-08-25 the first line was
+/// `if (!el || el.tagName !== "INPUT") return {}` — and `{}` is exactly what
+/// protectedInput reads as "an ordinary field, go ahead". So:
+///   * a card EXPIRY MONTH, which is a `<select>` on essentially every
+///     checkout there is, was asked about through the select door
+///     (`:5323`), answered with nothing, and written to;
+///   * so was a `<textarea>`, and so was the contenteditable `<div>` that
+///     page_map.js already indexes whenever it carries a tabindex
+///     (page_map.js:253-267) and already resolves writes to (`:370`);
+///   * and `unquotedCode` on that same select door received `undefined`
+///     attrs, so a one-time code offered as a menu option was unguarded too.
+/// Reproduced by extension/tests/hostile_checkout.html, rows 4, 5 and 6.
+export function readDeclaredKind(i) {
+  const map = (typeof window !== "undefined" && window.__anticipyMap) || null;
+  const el = map ? map[i] : null;
+  if (!el) return {};
+  const tag = String(el.tagName || "").toUpperCase();
+  const editable = el.isContentEditable === true;
+  if (!(tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") && !editable) return {};
+  const attr = (n) => {
+    try { return String((el.getAttribute && el.getAttribute(n)) || ""); }
+    catch (_) { return ""; }
+  };
+  // The accessible name the PAGE declared, followed to the elements it names.
+  // A checkout that labels its CVV box with aria-labelledby is not exotic —
+  // it is what a component library emits, and nothing on the input itself
+  // then says what the box is for.
+  let labelled = "";
+  try {
+    const doc = typeof document !== "undefined" ? document : null;
+    labelled = attr("aria-labelledby").split(/\s+/).filter(Boolean)
+      .map((id) => {
+        const node = doc && doc.getElementById ? doc.getElementById(id) : null;
+        return node ? String(node.textContent || "") : "";
+      })
+      .join(" ");
+  } catch (_) { labelled = ""; }
+  let labelText = "";
+  try { labelText = String((el.labels && el.labels[0] && el.labels[0].textContent) || ""); }
+  catch (_) { labelText = ""; }
+  // NO VALUE IS READ HERE, deliberately: page_map.js redacts a sensitive
+  // field's value before anything leaves the page, and a meta reader that
+  // quietly carried one back would undo that on the way to the guard.
+  const attrs = [el.name || attr("name"), el.id || attr("id"),
+    el.autocomplete || attr("autocomplete"), el.placeholder || attr("placeholder"),
+    attr("aria-label"), labelled, labelText]
+    .filter(Boolean).join(" ");
+  const type = tag === "INPUT" ? String(el.type || attr("type") || "text")
+    : (tag === "SELECT" || tag === "TEXTAREA") ? tag.toLowerCase()
+      : "contenteditable";
+  return { type, autocomplete: String(el.autocomplete || attr("autocomplete") || ""), attrs };
+}
+
 async function inputMeta(tabId, index) {
   try {
-    return await inFrame(tabId, index, (i) => {
-      const el = window.__anticipyMap[i];
-      if (!el || el.tagName !== "INPUT") return {};
-      const attrs = [el.name, el.id, el.autocomplete, el.placeholder,
-        el.getAttribute && el.getAttribute("aria-label"),
-        (el.labels && el.labels[0] && el.labels[0].textContent) || ""]
-        .filter(Boolean).join(" ");
-      return { type: el.type || "text", autocomplete: el.autocomplete || "", attrs };
-    });
+    return await inFrame(tabId, index, readDeclaredKind);
   } catch (_) {
     return {};
   }
@@ -3991,6 +4115,44 @@ export async function runAgentGoal(goal, opts) {
   // retried on the next step — that is a loop through somebody's mailbox.
   let inboxTripTaken = false;
   let effectState = null;
+  // THE MILESTONES — the two moments in an errand a person would want a
+  // photograph of: the instant before something irreversible happens, and the
+  // instant a claim of success was believed.
+  //
+  // Until 2026-08-25 `screenshot()` had exactly ONE call site (the vision step
+  // at :5164), fired only when needsEyes() said the page was a calendar or a
+  // seat map, and the picture was handed to the step model and dropped. So the
+  // evidence host built the day before (research/2026-08-24-evidence-host.md,
+  // §5.1) had nothing to store: "done = evidence" promised a photo and the
+  // browser never took one.
+  //
+  // TWO THINGS ARE KEPT, and deliberately not the same thing:
+  //   * `milestoneMarks` — one short line per milestone, no bytes. These ride
+  //     the receipt and survive whatever happens to the image.
+  //   * `milestoneShot` — the NEWEST frame only, in memory, never written to a
+  //     job row or a trace. One picture per errand reaches the host, because
+  //     the host keeps 60 rows in total across every errand this product ever
+  //     runs (backend/pb_hooks/evidence.pb.js) on a 5GB volume that has been
+  //     to 4MB free once already. Two rows per errand halves how far back the
+  //     photos go; it does not double what anybody can see. A second row would
+  //     also be indistinguishable from the first — the collection has no
+  //     column saying WHICH milestone a picture is of. That column is the one
+  //     thing this needs from backend/, and it is named in the report.
+  const milestoneMarks = [];
+  let milestoneShot = null;
+  const captureMilestone = async (name, tabId, url) => {
+    // A capture must never be able to cost an errand. A hidden background tab
+    // may legitimately return nothing, the debugger may be mid-reattach, and
+    // neither is a reason to fail a booking that already happened.
+    let got = null;
+    try { got = await screenshot(tabId); } catch (_) { got = null; }
+    if (got) milestoneShot = got;
+    // The MARK is written whether or not the picture arrived, and says which,
+    // because "there is no photo of this" is itself something to be able to
+    // read off a receipt six weeks later.
+    milestoneMarks.push(`shot:${name}${got ? "" : "(none)"}@${String(url || "").slice(0, 200)}`);
+    return got;
+  };
   // Owner-supplied inputs only. Everything downstream that could reach a
   // local service — the planner's start_url, plan fallbacks, the stuck
   // researcher's go_to, a cited URL in a rejected result — is model output
@@ -5157,8 +5319,13 @@ export async function runAgentGoal(goal, opts) {
           // page — because compiling a route from an unverified success is how a
           // recipe for "the way that looked like it worked" gets minted.
           await recordCleanRun(shape, goal, runTrace);
+          // MILESTONE: the page as it stood when the claim was BELIEVED —
+          // after verifyDone re-read it, not when the model announced it.
+          await captureMilestone("verified-done", tab.id, state.url);
           return { status: "done", result: claimedResult, tabId: tab.id,
-            receipt: { verified: true, evidence: verdict.evidence || [] } };
+            evidenceShot: milestoneShot,
+            receipt: { verified: true,
+              evidence: [...(verdict.evidence || []), ...milestoneMarks] } };
         }
         lastDoneClaim = claimedResult;
         const rawRejectionReason = verdict.reason || "the live evidence did not support it";
@@ -5507,8 +5674,14 @@ export async function runAgentGoal(goal, opts) {
                 { scope, facts, effectState, ownerProfile, evidenceJournal });
               if (verdict.verified) {
                 await recordCleanRun(shape, goal, runTrace);
+                // The SECOND done exit. Both get the milestone, for the same
+                // reason recordCleanRun is a function rather than two copies:
+                // a second exit is where the one that was updated is not.
+                await captureMilestone("verified-done", tab.id, state.url);
                 return { status: "done", result: lastDoneClaim, tabId: tab.id,
-                  receipt: { verified: true, evidence: verdict.evidence || [] } };
+                  evidenceShot: milestoneShot,
+                  receipt: { verified: true,
+                    evidence: [...(verdict.evidence || []), ...milestoneMarks] } };
               }
             }
             history.push(`step ${step}: BLOCKED — you already did ${sig}; do something DIFFERENT`);
@@ -5848,6 +6021,11 @@ export async function runAgentGoal(goal, opts) {
           // what the Enter path would read back off the page next step.
           const submitted = submissionDigest(context, controlState, state.url);
           if (submitted) performedExternalEffects.add(submitted);
+          // MILESTONE: the last frame before something irreversible. Taken
+          // here — after every gate has passed, before the click — so the
+          // picture is of the form that actually goes out, and so a run that
+          // was stopped by a gate never leaves a photo suggesting it wasn't.
+          await captureMilestone("before-commit", tab.id, state.url);
           if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, state);
         }
         if (c.inFrameOnly) await frameClick(tab.id, decision.index);
@@ -6074,6 +6252,10 @@ export async function runAgentGoal(goal, opts) {
               const submitted = submissionDigest(
                 enterContext, enterState, beforeEnter.url);
               if (submitted) performedExternalEffects.add(submitted);
+              // The Enter key is the other way a form is submitted, and it has
+              // needed every guard the click path has (that is why this branch
+              // is a mirror of it). The milestone is no different.
+              await captureMilestone("before-commit", tab.id, beforeEnter.url);
               if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, enterState);
             }
             await new Promise((r) => setTimeout(r, 200));

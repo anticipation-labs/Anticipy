@@ -22,8 +22,30 @@ ok(/unparseable verifier response/.test(src),
   "an unparseable verifier response fails closed");
 ok(/verifier error; completion is unverified/.test(src),
   "a verifier error fails closed");
-ok(/receipt:\s*\{ verified: true, evidence: verdict\.evidence/.test(src),
+// A DONE RESULT CARRIES THE EVIDENCE THAT JUSTIFIED IT.
+//
+// This was `/receipt:\s*\{ verified: true, evidence: verdict\.evidence/` — one
+// literal, matching one line's exact punctuation. It went red on 2026-08-25
+// because the receipt gained a second source of evidence (the milestone marks,
+// card HANDS 3) and the line wrapped. The property never changed; only the
+// spelling did. That is the defect `.superpowers/sdd/second-door-criticals.md`
+// C2 names: a test pinned to today's implementation shape, which has to be
+// rewritten by whoever touches the line and therefore stops being evidence of
+// anything.
+//
+// So it asks the question the file actually cares about, of EVERY done exit
+// there is: does this success name the verdict that justified it? A new exit
+// that forgets to is caught; a reflow is not. The behavioural half — that the
+// verifier's own proof index really does survive into the receipt a job row
+// gets — lives in test_evidence_capture.mjs, which runs the loop.
+{
+  const exits = [...src.matchAll(/return \{ status: "done"[\s\S]{0,400}?\};/g)]
+    .map((m) => m[0]);
+  ok(exits.length >= 2, `every done exit was found (${exits.length})`);
+  ok(exits.length > 0 && exits.every((exit) =>
+    /verified: true/.test(exit) && /verdict\.evidence/.test(exit)),
   "a done result carries the evidence that justified it");
+}
 ok(/onBeforeExternalEffect/.test(src),
   "external-effect uncertainty is persisted before an authorized action");
 

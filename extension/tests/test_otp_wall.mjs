@@ -105,7 +105,7 @@ const ALWAYS_YES = async () => "YES";
   // injected read returns null (what the real API gives for a vanished frame),
   // unquotedCode sees no attrs, and the code wall this suite is about never
   // triggers at all — the test would pass by never reaching the thing it tests.
-  harness.onInject = (src) => (src.includes("tagName !== \"INPUT\"")
+  harness.onInject = (src) => (src.includes("readDeclaredKind")
     ? { type: "text", autocomplete: "one-time-code", attrs: "code verification code" }
     : undefined);
 
@@ -325,7 +325,7 @@ const ALWAYS_YES = async () => "YES";
                fields: [{ index: 0, label: "Verification code", value: "" }] };
     };
     harness.onInject = (src, target) => {
-      if (!src.includes("tagName !== \"INPUT\"")) return undefined;
+      if (!src.includes("readDeclaredKind")) return undefined;
       const url = harness.tabs.get(target.tabId)?.url || "";
       if (url.includes("mail.google.com")) return {};
       return { type: "text", autocomplete: "one-time-code", attrs: "code verification code" };
@@ -398,7 +398,7 @@ const ALWAYS_YES = async () => "YES";
                fields: [{ index: 0, label: "Verification code", value: "" }] };
     };
     harness.onInject = (src, target) => {
-      if (!src.includes("tagName !== \"INPUT\"")) return undefined;
+      if (!src.includes("readDeclaredKind")) return undefined;
       const url = harness.tabs.get(target.tabId)?.url || "";
       if (url.includes("mail.google.com")) return {};
       return { type: "text", autocomplete: "one-time-code", attrs: "code verification code" };
@@ -484,7 +484,7 @@ const ALWAYS_YES = async () => "YES";
   // shape is keyed on the tab's url. A blanket answer would make the inbox look
   // like a code field and the trip would refuse its own destination.
   harness.onInject = (src, target) => {
-    if (!src.includes("tagName !== \"INPUT\"")) return undefined;
+    if (!src.includes("readDeclaredKind")) return undefined;
     const url = harness.tabs.get(target.tabId)?.url || "";
     if (url.includes("mail.google.com")) return {};
     return { type: "text", autocomplete: "one-time-code", attrs: "code verification code" };

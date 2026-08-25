@@ -1193,6 +1193,79 @@ export function ownerFactsFromParams(params) {
       && String(v).length < 200));
 }
 
+// THE RECEIPT PHOTO, ON ITS WAY OUT OF THE BROWSER.
+//
+// The bytes exist for a few seconds inside this extension and nowhere else in
+// the product (research/2026-08-24-evidence-host.md §5.1-5.3). This is the
+// only thing that puts them anywhere durable.
+//
+// A DATA URL IS DECODED HERE RATHER THAN fetch()ed. `fetch("data:...")` works
+// in a service worker, but it makes the deposit depend on the same global that
+// every test in this tree replaces with a scripted model — so the one function
+// that must keep working while `fetch` is a stub would be the one that cannot
+// be tested. atob is not stubbed by anybody.
+export function jpegBytes(dataUrl) {
+  const s = String(dataUrl || "");
+  const comma = s.indexOf(",");
+  if (comma < 0 || !s.startsWith("data:image/jpeg;base64,")) return null;
+  let bin;
+  try { bin = atob(s.slice(comma + 1)); } catch (_) { return null; }
+  // The extension's own capture ceiling and the collection's maxSize are the
+  // same number on purpose (agent_loop.js:129, 1700000045_evidence.js:72). A
+  // frame that got past the first must not die silently at the second.
+  if (!bin.length || bin.length > 400000) return null;
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+/// Deposit one milestone frame and return the receipt entry that points at it,
+/// or "" — and "" is a complete answer. A picture that could not be stored is
+/// not a reason to fail an errand that already happened: the owner's table is
+/// booked either way, and a done-text with no photo is the product's behaviour
+/// as of yesterday. The guard's own refusal shape agrees — `owner_ref` is
+/// compared against the credential's owner and refused when it disagrees
+/// (backend/pb_hooks/guard.pb.js:342-346), so a wrong claim here fails closed
+/// at the door rather than depositing somebody else's page.
+export async function depositEvidence(job, shot, deps = {}) {
+  const base = deps.backendBase || backendBase;
+  const headers = deps.writeHeaders || writeHeaders;
+  const send = deps.fetch || ((...a) => fetch(...a));
+  const store = deps.storage || chrome.storage.local;
+  try {
+    const bytes = jpegBytes(shot);
+    if (!bytes || !job?.id) return "";
+    const { ownerRef } = await store.get(["ownerRef"]);
+    // Unowned evidence is a picture nobody can see and nobody can erase
+    // (1700000045_evidence.js:55-58). Without an owner there is nothing to
+    // deposit, and inventing one is the hole the guard exists to close.
+    if (!ownerRef) return "";
+    const form = new FormData();
+    form.append("owner_ref", ownerRef);
+    form.append("job", String(job.id));
+    // Bound to the exact effect the receipt names, so a photograph of one
+    // action can never end up attached to a different one.
+    if (job.effect_key) form.append("effect_key", String(job.effect_key));
+    form.append("image", new Blob([bytes], { type: "image/jpeg" }), "receipt.jpg");
+    const h = await headers();
+    // MULTIPART SETS ITS OWN CONTENT-TYPE, boundary and all. writeHeaders()
+    // hardcodes application/json for every other call in this file; leaving it
+    // on makes PocketBase parse the body as JSON and reject a valid upload.
+    delete h["Content-Type"];
+    const r = await send(`${await base()}/api/collections/evidence/records`,
+      { method: "POST", headers: h, body: form });
+    if (!r.ok) {
+      console.log(`evidence: could not deposit the receipt photo (${r.status}) — the errand still stands`);
+      return "";
+    }
+    const row = await r.json();
+    return row && row.id ? `evidence:${row.id}` : "";
+  } catch (e) {
+    console.log(`evidence: could not deposit the receipt photo (${String(e).slice(0, 120)})`);
+    return "";
+  }
+}
+
 // WHAT A PARKED JOB REMEMBERS ABOUT THE QUESTION IT IS PARKED ON.
 //
 // `_offer_ref` is the consent offer's ref (side_trip.js `mintOfferRef`), and
@@ -1439,6 +1512,18 @@ async function runJobInner(job, params) {
       }
       const parkedSession = canonicalState === "needs_user" && out.tabId != null
         ? await browserSessionId() : "";
+      // THE PHOTO GOES FIRST, and then the bytes stop existing.
+      //
+      // Deposited before the receipt is written, because the receipt has to be
+      // able to name the row. Deleted immediately afterwards, because `out` is
+      // handed to handBackParamsPatch and read by the trace writer below, and
+      // both of those serialize what they are given into a job row — a
+      // 100KB data URL in `params` would be a screenshot of a logged-in page
+      // sitting in a text column forever, which is the exact thing
+      // evidence.pb.js was built to avoid.
+      const shotRef = canonicalState === "succeeded"
+        ? await depositEvidence(job, out.evidenceShot) : "";
+      if (out && "evidenceShot" in out) delete out.evidenceShot;
       const transition = isWorkflowJob(job)
         ? workflowPatch(job, canonicalState, {
             reason: result || (canonicalState === "failed"
@@ -1458,7 +1543,11 @@ async function runJobInner(job, params) {
             ...(canonicalState === "succeeded" ? {
               summary: result || "completed",
               verified: out.receipt?.verified === true,
-              evidence: out.receipt?.evidence || [],
+              // PREPENDED, not appended. workflow_state.js:116 keeps the first
+              // 12 entries, and the pointer to the photograph is the one entry
+              // that nothing else in the product can reconstruct — the rest of
+              // the array is a proof index the verifier can rebuild.
+              evidence: [...(shotRef ? [shotRef] : []), ...(out.receipt?.evidence || [])],
             } : {}),
           })
         : {
