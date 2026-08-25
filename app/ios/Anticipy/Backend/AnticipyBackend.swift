@@ -29,13 +29,29 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     /// parsing bug.
     let lane: String?
 
+    /// THE EVIDENCE THE SERVER ITSELF CHECKED, as the row holds it.
+    ///
+    /// `backend/pb_hooks/workflow_guard.pb.js` refuses to mark ANY job done
+    /// unless this column parses and carries `verified: true` with a non-empty
+    /// `evidence`. The app never decoded it. So the done card led with
+    /// `result` — free text the extension composed — while the one thing that
+    /// had actually been verified sat unread in the same row, and a stranger
+    /// had no way to tell a receipt from a sentence, which is the entire
+    /// promise of that card.
+    ///
+    /// A `String?` because the column is JSON and the phone is not the place to
+    /// decide what a malformed receipt means; `JobReceipt.parse` turns it into
+    /// something typed, or into nothing.
+    let receipt: String?
+
     init(id: String, goal: String, params: String, status: String,
          result: String?, created: String, workflow_id: String? = nil,
          workflow_version: Int? = nil, workflow_state: String? = nil,
          consequence: String? = nil, approval: String? = nil,
          scope_digest: String? = nil, effect_key: String? = nil,
          effect_uncertain: Bool? = nil,
-         reconciliation: String? = nil, lane: String? = nil) {
+         reconciliation: String? = nil, lane: String? = nil,
+         receipt: String? = nil) {
         self.id = id; self.goal = goal; self.params = params; self.status = status
         self.result = result; self.created = created; self.workflow_id = workflow_id
         self.workflow_version = workflow_version; self.workflow_state = workflow_state
@@ -44,6 +60,7 @@ struct AgentJob: Identifiable, Decodable, Equatable {
         self.effect_uncertain = effect_uncertain
         self.reconciliation = reconciliation
         self.lane = lane
+        self.receipt = receipt
     }
 
     /// The same job with one field replaced.
@@ -62,7 +79,7 @@ struct AgentJob: Identifiable, Decodable, Equatable {
                  consequence: consequence, approval: approval,
                  scope_digest: scope_digest, effect_key: effect_key,
                  effect_uncertain: effect_uncertain,
-                 reconciliation: reconciliation, lane: lane)
+                 reconciliation: reconciliation, lane: lane, receipt: receipt)
     }
 }
 
