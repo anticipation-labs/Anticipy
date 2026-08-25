@@ -161,6 +161,23 @@ struct CallPresencePolicy {
         /// was declined, or an outgoing call nobody picked up, took the
         /// microphone and gave it back — the listener is told about that through
         /// `Action` — but nothing was said, so there is no conversation to bound.
+        ///
+        /// AND THIS ALSO FIRES WHEN A CALL IS DISPLACED RATHER THAN ENDED. Call
+        /// waiting: the owner puts the first call on hold and speaks on the
+        /// second, so the first stretch of conversation is over even though that
+        /// call is still live. It is the same boundary — the owner stopped
+        /// talking to that person at that instant — and pretending the first
+        /// call ran continuously through the second would be the lie.
+        ///
+        /// SO A CONSUMER MUST NOT READ THIS AS "THE PHONE IS FREE NOW", and it
+        /// does not have to: the `Action` in the same `Verdict` says which it
+        /// is. `.retakeMicrophone` beside a close means the last call left and
+        /// the microphone may be back; `.standDownForCall` beside a close means
+        /// the owner simply moved to another call and is still on the phone.
+        /// This is precisely why the three answers ride in one value instead of
+        /// being three functions a caller can ask separately — a post-call
+        /// prompt keyed on the close alone would interrupt somebody in the
+        /// middle of their second call.
         case callClosed(at: Date,
                         outgoing: Bool,
                         heldForAtLeast: TimeInterval,
@@ -190,8 +207,8 @@ struct CallPresencePolicy {
         /// already in progress.
         var sawItConnect: Bool
 
-        /// Every LIVE call this device has seen while it was not yet connected
-        /// — not only the one in front.
+        /// Every call that was live the last time this device looked — not only
+        /// the one in front.
         ///
         /// THE FIELD EXISTS BECAUSE CALL WAITING BREAKS THE ONE-CALL VERSION.
         /// A second call rings while the first is being spoken on, so it is
@@ -204,27 +221,34 @@ struct CallPresencePolicy {
         /// direction, which is still the field being wrong about the one thing
         /// it exists to say.
         ///
-        /// BOUNDED BY THE NUMBER OF LIVE CALLS, because it is intersected with
-        /// them on every observation. A set that only ever grew would be a leak
-        /// with a sense's name on it.
-        var sawUnconnected: Set<UUID>
+        /// EVERY LIVE CALL, NOT ONLY THE RINGING ONES, and the wider set is the
+        /// simpler one as well as the more correct. `sawItConnect` asks whether
+        /// this device had the call in view BEFORE the instant it is now
+        /// reporting — and a call displaced by call waiting and later resumed is
+        /// one this device watched every second of too, which the ringing-only
+        /// version could not say either.
+        ///
+        /// BOUNDED BY CONSTRUCTION: it IS the live call list, so it cannot
+        /// outgrow it. A set that only ever grew would be a leak with a sense's
+        /// name on it.
+        var seenLive: Set<UUID>
 
         static let clear = State(callID: nil,
                                  isOutgoing: false,
                                  connectedSeenAt: nil,
                                  sawItConnect: false,
-                                 sawUnconnected: [])
+                                 seenLive: [])
 
         init(callID: UUID?,
              isOutgoing: Bool,
              connectedSeenAt: Date?,
              sawItConnect: Bool,
-             sawUnconnected: Set<UUID> = []) {
+             seenLive: Set<UUID> = []) {
             self.callID = callID
             self.isOutgoing = isOutgoing
             self.connectedSeenAt = connectedSeenAt
             self.sawItConnect = sawItConnect
-            self.sawUnconnected = sawUnconnected
+            self.seenLive = seenLive
         }
     }
 
@@ -284,15 +308,14 @@ struct CallPresencePolicy {
             return false
         }
 
-        // WHICH LIVE CALLS THIS DEVICE HAS WATCHED ARRIVE. Carried forward only
-        // for calls that are still live, so the set cannot outgrow the call
-        // list; added to for every live call not yet connected, whether or not
-        // it is the one in front. Call waiting is the whole reason it is a set:
-        // the second call rings while the first is being spoken on, and the
-        // fact that it was watched has to survive until it is promoted.
+        // WHICH CALLS THIS DEVICE HAD IN VIEW. Simply the live ones, carried to
+        // the next observation so the question "was this call already in front
+        // of us before now?" has an answer for every call rather than only for
+        // the one that happened to be the presence. Call waiting is the reason
+        // it has to be a set: the second call rings through the first
+        // conversation, and the fact that it was watched has to survive until it
+        // is promoted.
         let liveIDs = Set(live.map { $0.id })
-        let sawUnconnected = was.sawUnconnected.intersection(liveIDs)
-            .union(live.filter { !$0.hasConnected }.map { $0.id })
 
         var boundaries: [Boundary] = []
 
@@ -332,7 +355,7 @@ struct CallPresencePolicy {
                           isOutgoing: call.isOutgoing,
                           connectedSeenAt: nil,
                           sawItConnect: false,
-                          sawUnconnected: sawUnconnected)
+                          seenLive: liveIDs)
 
         if call.id == was.callID {
             // Same call as last time. Carry what was already established: the
@@ -356,11 +379,13 @@ struct CallPresencePolicy {
         // answer it differently from the ordinary one.
         if call.hasConnected, state.connectedSeenAt == nil {
             state.connectedSeenAt = now
-            // Did this device watch this particular call arrive? Read off the
-            // set rather than inferred from which branch we are in — a call that
-            // rang through somebody else's conversation was watched every second
-            // of, and the leading-call-only version could not say so.
-            state.sawItConnect = was.sawUnconnected.contains(call.id)
+            // Did this device have this particular call in view before now? Read
+            // off the set rather than inferred from which branch we are in — a
+            // call that rang through somebody else's conversation, and one
+            // displaced by call waiting and later resumed, were both watched
+            // every second of, and the leading-call-only version could say so
+            // about neither.
+            state.sawItConnect = was.seenLive.contains(call.id)
             boundaries.append(.callOpened(at: now,
                                           outgoing: call.isOutgoing,
                                           sawItConnect: state.sawItConnect))

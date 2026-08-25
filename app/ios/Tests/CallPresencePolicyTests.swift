@@ -223,6 +223,33 @@ struct CallPresencePolicyTests {
         check("an active call outranks a held one",
               promoted.state.callID == a)
 
+        // A DISPLACED CALL CLOSES, AND THE ACTION IS WHAT SAYS THE PHONE IS
+        // STILL BUSY. The owner stopped talking to B at that instant, so the
+        // stretch is over and pretending it ran on through A would be the lie.
+        // But B has not ended, and a post-call prompt keyed on the close alone
+        // would interrupt somebody in the middle of their second call. The
+        // `Action` in the same verdict is what stops that, which is the whole
+        // argument for one value over three functions.
+        check("displacing a call closes its stretch of conversation",
+              promoted.boundaries.contains { if case .callClosed = $0 { return true }
+                                             else { return false } })
+        check("...but the listener is told the phone is still busy, not free",
+              promoted.action == .standDownForCall)
+        check("...and a real hang-up is the one that hands the microphone back",
+              watched[3].action == .retakeMicrophone)
+
+        // Resuming the displaced call opens it again, and this device watched
+        // every second of that too — the ringing-only version of `seenLive`
+        // could say so about neither this nor the call-waiting arrival above.
+        let resumed = Policy.decide(
+            was: promoted.state,
+            sees: [call(b, connected: true),
+                   call(a, connected: true, onHold: true)],
+            now: at(360))
+        check("resuming a displaced call re-opens it as a watched conversation",
+              resumed.boundaries.contains(.callOpened(at: at(360), outgoing: false,
+                                                      sawItConnect: true)))
+
         // -------------------------------------------- 8. an ended call lingers
         // `hasEnded` is delivered as a change before the call leaves the list.
         // A sense that read `calls.isEmpty` would stand down for an extra beat.
@@ -347,6 +374,7 @@ struct CallPresencePolicyTests {
         var negativeHeld = 0
         var strandedInstant = 0
         var unboundedSet = 0
+        var closeMisreadsTheMic = 0
         var notIdempotent = 0
         var notDeterministic = 0
         var openedWithoutConnection = 0
@@ -386,13 +414,14 @@ struct CallPresencePolicyTests {
 
                 // 4. A remembered instant with no call to belong to is a floor
                 //    that will be measured against the wrong conversation. And
-                //    the watched-arriving set is BOUNDED BY THE LIVE CALLS: one
-                //    that only ever grew would be a leak with a sense's name on
-                //    it, kept alive for the whole life of the process.
+                //    the set of calls this device had in view IS the live list,
+                //    which is what bounds it: one that only ever grew would be a
+                //    leak with a sense's name on it, kept alive for the whole
+                //    life of the process.
                 if v.state.callID == nil && v.state.connectedSeenAt != nil {
                     strandedInstant += 1
                 }
-                if !v.state.sawUnconnected.isSubset(of: Set(live.map { $0.id })) {
+                if v.state.seenLive != Set(live.map { $0.id }) {
                     unboundedSet += 1
                 }
 
@@ -420,6 +449,17 @@ struct CallPresencePolicyTests {
                 // 7. And the same question twice gets the same answer.
                 let repeated = Policy.decide(was: was, sees: calls, now: now)
                 if repeated != v { notDeterministic += 1 }
+
+                // 8. A CLOSE NEVER IMPLIES A FREE MICROPHONE ON ITS OWN. The
+                //    action beside it is the only thing that says so, and a
+                //    consumer that reads the close alone would interrupt
+                //    somebody in the middle of the call they just switched to.
+                let closed = v.boundaries.contains {
+                    if case .callClosed = $0 { return true } else { return false }
+                }
+                if closed && ((v.action == .retakeMicrophone) != live.isEmpty) {
+                    closeMisreadsTheMic += 1
+                }
             }
         }
 
@@ -433,7 +473,7 @@ struct CallPresencePolicyTests {
               negativeHeld == 0)
         check("no remembered instant is left without a call to belong to",
               strandedInstant == 0)
-        check("the set of calls watched arriving never outgrows the live call list",
+        check("the remembered set of calls in view is exactly the live ones",
               unboundedSet == 0)
         check("nothing is opened that never connected, and nothing closed that never did",
               openedWithoutConnection == 0 && closedWithoutConnection == 0)
@@ -441,6 +481,8 @@ struct CallPresencePolicyTests {
               notIdempotent == 0)
         check("the same facts always produce the same verdict",
               notDeterministic == 0)
+        check("a close hands the microphone back only when nothing is left on the line",
+              closeMisreadsTheMic == 0)
 
         // AND NOTHING IN HERE KNOWS WHO WAS ON THE CALL, because `CXCall` does
         // not carry it. Asserted as a fact about the type rather than left as a

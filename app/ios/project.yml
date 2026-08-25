@@ -284,7 +284,22 @@ settings:
     # binary and nothing calls it yet: the CXCallObserver adapter that would feed
     # it is the next step, and it is named as owed rather than implied to be
     # done. This number moves because the bytes did, which is the whole rule.
-    CURRENT_PROJECT_VERSION: "86"
+    # 87: the same policy after an adversarial pass at it, which found two
+    # things and is the reason law 6 exists.
+    #
+    # A call DISPLACED by call waiting closes its stretch of conversation while
+    # still being live, and a consumer reading that close alone would fire a
+    # post-call prompt at somebody in the middle of the call they just switched
+    # to. The `Action` in the same verdict already distinguished them; nothing
+    # said so, and now the case says it and a sweep leg holds it.
+    #
+    # And `seenLive` replaces a set that tracked only calls seen RINGING, which
+    # could not vouch for a call displaced and later resumed — the flag lying in
+    # the safe direction is still the one field that exists to say how much to
+    # trust the floor being wrong. The wider set is also the simpler one.
+    #
+    # 86 exists in history and is not these bytes.
+    CURRENT_PROJECT_VERSION: "87"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

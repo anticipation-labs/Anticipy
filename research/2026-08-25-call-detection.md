@@ -205,30 +205,50 @@ The phone can be suspended across the moment a call connects. So:
   timezone crossing, an NTP correction — cannot report a call that lasted a
   negative number of seconds.
 
-**A defect found and fixed while testing, recorded because the fix is the
-interesting part.** The first version remembered only the *leading* call, so
-during call waiting a second call that rang through the first conversation lost
-the fact that it had been watched arriving, and its opening claimed
-`sawItConnect: false` about a call seen from its first ring. The floor stayed
-correct — it was the epistemic flag itself lying, in the safe direction, which is
-still the one field it exists to get right being wrong. `State.sawUnconnected` is
-now a set of the live calls this device watched arrive, intersected with the live
-list on every observation so it cannot outgrow it.
+**Two defects found and fixed, recorded because the fixes are the interesting
+part.** The first was found by the tests, the second by the adversarial pass that
+`HARNESS-LAWS.md` law 6 asks for; neither would have been caught by reading.
+
+1. **The leading-call-only state could not vouch for a call it watched.** The
+   first version remembered only the call in front, so during call waiting a
+   second call that rang through the first conversation lost the fact that it had
+   been watched arriving, and its opening claimed `sawItConnect: false` about a
+   call seen from its first ring. The floor stayed correct — it was the epistemic
+   flag itself lying, in the safe direction, which is still the one field that
+   exists to say how much to trust the floor being wrong. `State.seenLive` is now
+   simply the calls that were live at the previous observation, which is both
+   wider and simpler, and it also covers a call displaced by call waiting and
+   later resumed — a case the first fix still got wrong.
+
+2. **A displaced call closes while still being live, and nothing said so.** Call
+   waiting: the owner puts the first call on hold and speaks on the second, so
+   the first stretch of conversation is over even though that call has not ended.
+   Emitting the close is right — pretending the first call ran continuously
+   through the second would be the lie — but a consumer reading the close alone
+   would fire a post-call prompt at somebody in the middle of the call they just
+   switched to. **The `Action` in the same `Verdict` already distinguished them**
+   — `.retakeMicrophone` beside a close means the phone is free, `.standDownForCall`
+   beside a close means the owner simply moved on — and nothing had ever said so.
+   It is now on the case, pinned by two named checks and by a sweep leg asserting
+   that a close carries `.retakeMicrophone` if and only if nothing is left live.
+   This is the concrete payoff of the three answers riding in one value instead
+   of being three functions a caller can ask separately.
 
 ### 3.3 Tests
 
 `app/ios/Tests/CallPresencePolicyTests.swift` and
 `app/ios/Tests/run_call_presence_tests.sh`, registered in `run_all.sh`.
 
-**39 checks, exit 0.** Twelve stories — a declined ring, a watched call, a call
+**44 checks, exit 0.** Stories — a declined ring, a watched call, a call
 discovered in progress, hold, call waiting, the swap that ends one call and
-connects another in a single callback, an ended call lingering in the list, a
-clock that moved backwards, the retake edge, a floor that only grows — and then
-the part that makes them a contract rather than twelve anecdotes: a **sweep of
-1,638 combinations** (6 prior states × 273 call lists, being every flag
-combination of up to two calls) asserting eight invariants, including that the
-same list observed again records nothing and changes nothing. Without that one, a
-sense polled once a second writes a conversation boundary once a second.
+connects another in a single callback, a call displaced and later resumed, an
+ended call lingering in the list, a clock that moved backwards, the retake edge,
+a floor that only grows — and then the part that makes them a contract rather
+than a pile of anecdotes: a **sweep of 1,638 combinations** (6 prior states × 273
+call lists, being every flag combination of up to two calls) asserting nine
+invariants, including that the same list observed again records nothing and
+changes nothing. Without that one, a sense polled once a second writes a
+conversation boundary once a second.
 
 ### 3.4 The four law legs in the runner
 
@@ -267,11 +287,11 @@ than implied to be finished. `LocalTranscriber.swift` is the cautionary case in
 this same directory: 43 lines, law-abiding, and **zero call sites** for months
 while the violating path it was meant to replace kept running.
 
-**LAW 3.** None of this is verified live and none of it can be. Build 86 is on no
+**LAW 3.** None of this is verified live and none of it can be. Build 87 is on no
 phone, the ears have been dead for 41 hours, and the simulator does not model
-phone calls. What *is* verified: `sh app/ios/Tests/run_all.sh` exits **0** (330
+phone calls. What *is* verified: `sh app/ios/Tests/run_all.sh` exits **0** (335
 checks), and `xcodebuild … -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
-**BUILD SUCCEEDED** with `CFBundleVersion 86` in the built bundle.
+**BUILD SUCCEEDED** with `CFBundleVersion 87` in the built bundle.
 
 ### The next three steps, in order
 
