@@ -177,6 +177,16 @@ final class PhoneListener: NSObject, ObservableObject {
     /// per-session.
     private var lastSessionFacts = ""
 
+    /// The last battery reading actually recorded, so the same one is not
+    /// written again. The thing that reads the battery is the 4-second
+    /// watchdog, and an unguarded write there is fifteen lines a minute — the
+    /// measured rate that evicts the 400-line ring in twenty-seven minutes and
+    /// turns a day that went deaf at nine in the morning into a blank, healthy
+    /// report. Cleared by `begin()` so every session writes its opening
+    /// reading: without that, a session starting at the same percentage the
+    /// last one ended at has nothing to measure its first stretch from.
+    private var lastBatteryReading: BatteryReadingPolicy.Reading?
+
     private var lastBufferAt = Date()
     private var lastResultAt = Date()
     private var requestBornAt = Date()
@@ -301,7 +311,16 @@ final class PhoneListener: NSObject, ObservableObject {
         // DispatchQueue.main.async, so this guard is race-free.
         guard !isListening else { return }
         installObserversOnce()
+        // OFF BY DEFAULT IN EVERY APP, and until it is on `batteryLevel` is
+        // -1.0 forever. `BatteryReadingPolicy` correctly refuses that as
+        // unreadable, so without this one line the journal records no readings,
+        // the tally folds zero, and the Listening screen says "Not recorded" on
+        // a phone that is spending battery all day — a whole instrument green
+        // end to end and measuring nothing. `run_battery_tests.sh` fails if it
+        // goes.
+        UIDevice.current.isBatteryMonitoringEnabled = true
         isListening = true
+        lastBatteryReading = nil
         ListenJournal.shared.record(.sessionStarted)
         lastBufferAt = Date()
         lastResultAt = Date()
@@ -629,6 +648,31 @@ final class PhoneListener: NSObject, ObservableObject {
             if dropped > 0 {
                 ListenJournal.shared.record(
                     .noted("dropped \(dropped) buffers while swapping"))
+            }
+            // WHAT LISTENING COSTS, read on the tick that is already running.
+            // No timer of its own: a second repeating timer to measure the draw
+            // of the first one would be funny once and wrong forever.
+            //
+            // Here rather than in the tap closure, for the reason the drop
+            // counter is drained here — that closure is on the audio thread and
+            // the journal touches a file. And guarded by `shouldRecord`, which
+            // is what keeps a 4-second tick from writing fifteen lines a minute
+            // through a phone call and evicting the interruption that explains
+            // the day. `run_journal_tests.sh` fails if that guard goes.
+            let device = UIDevice.current
+            let power = device.batteryState
+            if let reading = BatteryReadingPolicy.reading(
+                    level: device.batteryLevel,
+                    stateIsKnown: power != .unknown,
+                    // `.full` is a phone at 100% on a cable: not charging, and
+                    // spending nothing. What the fold needs is whether the
+                    // interval starting here can be read as drain at all.
+                    onPower: power == .charging || power == .full),
+               BatteryReadingPolicy.shouldRecord(reading,
+                                                 lastRecorded: self.lastBatteryReading) {
+                self.lastBatteryReading = reading
+                ListenJournal.shared.record(
+                    .batteryRead(percent: reading.percent, onPower: reading.onPower))
             }
             // WHAT to do is decided in ListenWatchdogPolicy, which reads
             // clocks and nothing else, so every ordering below can be shown to
@@ -1032,6 +1076,7 @@ final class PhoneListener: NSObject, ObservableObject {
         // background time charged to an app with nothing left to do.
         suspended = false
         lastSessionFacts = ""
+        lastBatteryReading = nil
         watchdog?.invalidate()
         watchdog = nil
         silenceFlush?.cancel()

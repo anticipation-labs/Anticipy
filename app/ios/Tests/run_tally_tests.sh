@@ -42,6 +42,64 @@ if ! grep -vE '^[[:space:]]*//' "$view" | tr '\n' ' ' \
     exit 2
 fi
 
+# AND THE BATTERY FOLD MUST REACH A PERSON, IN BOTH HALVES. `4%` on its own
+# invites the reader to supply a threshold out of nothing; `4% over 2 hr 10 min`
+# is a measurement they can put against tomorrow's. The window is also the only
+# thing that says the number does NOT cover the whole day — readings bracket the
+# stretches between them and nothing else.
+wording=$(awk '/private var batteryWording/,/^    }$/' "$view" | sed '/^[[:space:]]*\/\//d')
+if [ -z "$wording" ]; then
+    echo "This gate can no longer find the screen's battery wording."
+    echo "An empty block satisfies every rule below by containing nothing, which"
+    echo "is how three separate gate rules were found this week passing by"
+    echo "matching nothing. If it was renamed, rename it here too."
+    exit 2
+fi
+# THE SENTENCE, NOT THE BLOCK. The first version of these two legs grepped the
+# whole function, and `if tally.batteryMeasuredSeconds == 0` — a GUARD, three
+# lines above — satisfied the window rule on its own. Mutation-tested: dropping
+# the window from the returned sentence left the leg green. So both legs read
+# the `return` lines, which are the only thing a person ever sees.
+said=$(printf '%s\n' "$wording" | grep -E '^[[:space:]]*return')
+if ! printf '%s\n' "$said" | grep -q 'batterySpentPoints'; then
+    echo "The Listening screen no longer shows what the battery spent."
+    echo "The fold then measures a cost nobody can read, which is the same as"
+    echo "not measuring it: PhoneListener writes readings all day, the tally"
+    echo "folds them, and the number dies inside a struct."
+    exit 2
+fi
+if ! printf '%s\n' "$said" | grep 'batterySpentPoints' \
+    | grep -q 'batteryMeasuredSeconds'; then
+    echo "The battery number is shown without the window it was spent over."
+    echo "\"4%\" is not a measurement. It also silently claims to cover the whole"
+    echo "day, when what was measured is only the stretches between readings"
+    echo "with the phone off a charger."
+    exit 2
+fi
+# NO VERDICT ABOUT THE BATTERY, asserted on the words a person would read.
+#
+# There is not one recorded drain figure in this repo to draw a comparison
+# from, so a "high"/"normal" here would be a rule written while the sense is
+# unmeasured — tape by Law 5's definition, and the shape this codebase spent
+# three months in a loop over. Report the number and what happened during it.
+#
+# A backstop, not a proof: it can only catch a verdict spelled one of these
+# ways. It is here because that is the shape somebody adds at 2am when a tester
+# asks "so is that bad?", and because the alternative is a comment nobody can
+# check.
+if printf '%s\n' "$wording" \
+    | grep -qiE '"[^"]*(high|heavy|low battery|normal|healthy|fine|bad|good|too much|a lot|excessive)[^"]*"'; then
+    echo "The Listening screen judges the battery instead of reporting it:"
+    printf '%s\n' "$wording" | grep -iE '"[^"]*(high|heavy|low battery|normal|healthy|fine|bad|good|too much|a lot|excessive)[^"]*"'
+    echo ""
+    echo "No drain has ever been measured on this product, so any threshold"
+    echo "behind that word is invented. Say what was spent and over how long;"
+    echo "the counts on the same screen say what the phone was doing while it"
+    echo "spent it, and a person judges."
+    exit 2
+fi
+echo "the battery is reported with its window, and not graded"
+
 swiftc -O \
     "$app/Audio/ListenJournal.swift" \
     "$app/Audio/ListenTally.swift" \

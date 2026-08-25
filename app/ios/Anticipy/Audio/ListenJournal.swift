@@ -38,6 +38,25 @@ enum ListenEvent: Equatable {
     /// the audio session and swallow every failure, so the app can report
     /// "Listening" over a session it never got.
     case noted(String)
+    /// WHAT LISTENING COSTS, in the only unit the phone can give for free.
+    ///
+    /// A percentage and whether the phone was on a charger — never a verdict
+    /// about either. Nothing in this product had ever measured the draw of an
+    /// always-on microphone, a speech recognizer and a 4-second timer, so the
+    /// two costs removed tonight (a call minting a recognizer every four
+    /// seconds, and this journal writing fifteen identical lines a minute) were
+    /// both argued about with no number attached.
+    ///
+    /// A TYPED CASE RATHER THAN A `.noted` SENTENCE, deliberately. `ListenTally`
+    /// keeps notes verbatim because they are prose written for a person, and
+    /// parsing our own sentences twice is how the writing and the reading drift
+    /// apart. This has to be FOLDED — subtracted from the reading before it —
+    /// so it arrives as two values the compiler can keep honest, and the round
+    /// trip through `describe`/`parse` is a check rather than a hope.
+    ///
+    /// Ints and a Bool, so no wording of the owner's can ever reach it: this is
+    /// the one journal payload whose privacy argument is its type.
+    case batteryRead(percent: Int, onPower: Bool)
 
     enum StopCause: String, Equatable {
         case owner, interruption, routeChange, authorizationLost, unrecoveredFailure
@@ -223,6 +242,17 @@ final class ListenJournal {
                   let words = body.split(separator: " ").dropFirst().first
                       .flatMap({ Int($0) }) else { return nil }
             return (when, .flushed(reason: reason, words: words))
+        case "batteryRead":
+            // The FIELDS, never a substring of the line — the lesson `posted`
+            // paid for, where `body.contains("accepted")` read a delivery
+            // failure back as a success. "yes"/"no" and nothing else: an
+            // unreadable power state makes the whole reading unusable, because
+            // it is what decides whether the interval after it counts as drain.
+            guard let percent = body.split(separator: " ").dropFirst().first
+                    .flatMap({ Int($0) }),
+                  let power = after("on power: "),
+                  power == "yes" || power == "no" else { return nil }
+            return (when, .batteryRead(percent: percent, onPower: power == "yes"))
         case "noted":
             let fact = body.dropFirst("noted".count).trimmingCharacters(in: .whitespaces)
             return (when, .noted(fact))
@@ -321,6 +351,8 @@ final class ListenJournal {
             return "flushed  \(words) words sent, reason: \(reason)"
         case .noted(let fact):
             return "noted  \(fact)"
+        case .batteryRead(let percent, let onPower):
+            return "batteryRead  \(percent) percent, on power: \(onPower ? "yes" : "no")"
         case .posted(let ok, let detail):
             let outcome = ok ? "accepted" : "failed"
             return detail.isEmpty

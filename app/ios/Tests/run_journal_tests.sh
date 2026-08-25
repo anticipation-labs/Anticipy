@@ -56,6 +56,51 @@ if ! grep -q 'ListenJournal.shared.record(.posted(' "$session"; then
     echo "like a microphone that heard nothing at all."
     exit 2
 fi
+# The battery, and the guard that keeps it from destroying the record it lives
+# in. The thing that reads it is the 4-SECOND WATCHDOG, so an unguarded write
+# there is fifteen lines a minute — measured on this codebase three commits ago
+# as fully evicting the 400-line ring in twenty-seven minutes and both 256 KB
+# files in about five hours of outage, which deletes the one
+# `sessionStopped cause: interruption` line that explains the whole day.
+#
+# ANCHORED ON THE FUNCTION, AND GUARDED AGAINST ITS RENAME, for the reason the
+# churn leg below it now is: an awk range that matches nothing produces an empty
+# string, finds no journal write in it, and says so cheerfully. Emptiness is the
+# finding.
+if ! grep -q 'ListenJournal.shared.record(' "$listener" \
+    || ! grep -vE '^[[:space:]]*//' "$listener" | tr '\n' ' ' \
+        | grep -q '\.batteryRead(percent:'; then
+    echo "Listening no longer records what it costs."
+    echo "An always-on microphone, a speech recognizer and a 4-second timer are"
+    echo "a real draw, and with no reading in the journal the tally folds zero"
+    echo "and the Listening screen reports \"Not recorded\" forever — the whole"
+    echo "instrument green end to end and measuring nothing."
+    exit 2
+fi
+dog=$(awk '/private func startWatchdog/,/RunLoop.main.add/' "$listener" \
+    | sed '/^[[:space:]]*\/\//d')
+if [ -z "$dog" ]; then
+    echo "This gate can no longer find startWatchdog's body."
+    echo "The rule below then reads an empty string and passes on nothing. If the"
+    echo "method was renamed, rename it here too; what is being protected is the"
+    echo "4s tick that would otherwise write fifteen battery lines a minute."
+    exit 2
+fi
+if printf '%s\n' "$dog" | grep -q 'batteryRead'; then
+    guard=$(printf '%s\n' "$dog" | grep -n 'shouldRecord' | head -1 | cut -d: -f1)
+    write=$(printf '%s\n' "$dog" | grep -n 'batteryRead' | head -1 | cut -d: -f1)
+    if [ -z "$guard" ] || [ "$guard" -gt "$write" ]; then
+        echo "The watchdog records a battery reading without first asking whether"
+        echo "it has already said this."
+        echo "That tick runs every four seconds for as long as listening is on, so"
+        echo "an unguarded write is fifteen identical lines a minute and the whole"
+        echo "ring gone in twenty-seven — including the line that says a call took"
+        echo "the microphone. Go through BatteryReadingPolicy.shouldRecord."
+        exit 2
+    fi
+fi
+echo "the battery is recorded when it changes, not once per watchdog tick"
+
 # ---------------------------------------------------------------- privacy
 # THE JOURNAL IS EXPORTABLE FROM SETTINGS, so anything written into it leaves
 # the phone on a person's tap, and `ListeningDiagnosticsView` ships in RELEASE

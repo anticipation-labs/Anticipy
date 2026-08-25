@@ -354,7 +354,7 @@ struct ListenJournalTests {
 extension ListenEvent {
     enum Kind: CaseIterable {
         case sessionStarted, sessionStopped, recognizerSwapped
-        case flushed, posted, noted
+        case flushed, posted, noted, batteryRead
     }
 
     var kind: Kind {
@@ -365,6 +365,7 @@ extension ListenEvent {
         case .flushed: return .flushed
         case .posted: return .posted
         case .noted: return .noted
+        case .batteryRead: return .batteryRead
         }
     }
 
@@ -394,6 +395,15 @@ extension ListenEvent {
             return [.noted("session category: AVAudioSessionCategoryRecord mode: AVAudioSessionModeMeasurement"),
                     .noted("low power mode on"),
                     .noted("dropped 600 buffers while swapping")]
+        // Both power states, and both ends of the range. The false/true pair is
+        // where a describe/parse pair drifts — an outcome field read as a
+        // substring is exactly how `posted` once turned a delivery failure into
+        // a success — and 0 is the reading that must never be confused with the
+        // -1 the OS returns when it cannot say.
+        case .batteryRead:
+            return [.batteryRead(percent: 47, onPower: false),
+                    .batteryRead(percent: 100, onPower: true),
+                    .batteryRead(percent: 0, onPower: false)]
         }
     }
 

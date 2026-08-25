@@ -49,6 +49,27 @@ struct ListeningDiagnosticsView: View {
                 // enormous stretch and almost nowhere else.
                 row("Longest stretch hearing nothing", duration(tally.longestSilenceSeconds))
                 row("Words sent", "\(tally.wordsFlushed)")
+                // WHAT IT COST, next to what it was doing. Nothing in this
+                // product had ever measured the draw of an always-on
+                // microphone, a recognizer and a 4-second timer, so the two
+                // costs removed this week — a call minting a recognizer every
+                // four seconds, and the journal writing fifteen identical lines
+                // a minute — were both argued about with no number attached.
+                //
+                // NO VERDICT, and that is deliberate rather than timid. There
+                // is not one recorded drain figure in this repo to draw a line
+                // from, so any "high"/"normal" here would be a rule written
+                // while the sense is unmeasured. The counts below this section
+                // say what the phone was doing while it spent this; a person
+                // reads the two together and judges.
+                row("Battery used while listening", batteryWording)
+                if tally.batteryOnPowerSeconds > 0 {
+                    // Said out loud rather than silently excluded. A day spent
+                    // plugged in otherwise reports a triumphantly small drain
+                    // and the reason is invisible.
+                    row("On the charger",
+                        "\(duration(tally.batteryOnPowerSeconds)), not counted above")
+                }
                 if tally.flushes > 0 {
                     row("Sentences cut off by the clock",
                         "\(tally.flushesByReason["ceiling"] ?? 0) of \(tally.flushes)")
@@ -123,6 +144,26 @@ struct ListeningDiagnosticsView: View {
         // reassuring wrong number is worse than no number, because it is
         // believed. `run_tally_tests.sh` fails the build if this argument goes.
         tally = ListenTally.of(ListenJournal.shared.persistedEvents, now: Date())
+    }
+
+    /// What the battery spent, in the two halves it takes to mean anything.
+    ///
+    /// "4%" alone invites the reader to supply a threshold of their own out of
+    /// nothing; "4% over 2 hr 10 min" is a measurement they can put against
+    /// tomorrow's. The window is the measured one, not the whole day: readings
+    /// only bracket the stretches between them, and time on a charger is not in
+    /// it at all.
+    ///
+    /// Three answers, because the two kinds of nothing are different questions.
+    /// "Not recorded" is a phone that never told us — the simulator, which has
+    /// no battery at all, a journal written before this shipped, or monitoring
+    /// switched off. "Nothing to compare yet" is readings with no pair of them
+    /// bracketing an unplugged stretch. Neither is "it spent nothing", which is
+    /// a much more reassuring claim and would be a lie in both cases.
+    private var batteryWording: String {
+        if tally.batteryReadings == 0 { return "Not recorded" }
+        if tally.batteryMeasuredSeconds == 0 { return "Nothing to compare yet" }
+        return "\(tally.batterySpentPoints)% over \(duration(tally.batteryMeasuredSeconds))"
     }
 
     private func row(_ name: String, _ value: String) -> some View {

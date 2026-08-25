@@ -310,6 +310,131 @@ struct ListenTallyTests {
         check("a note is not mistaken for something heard",
               n.wordsFlushed == 0 && n.flushes == 0)
 
+        // --------------------------------------------------- 10. what it cost
+        // An always-on microphone, a speech recognizer and a 4-second timer are
+        // a real draw, and until now nothing in this product had ever measured
+        // one. The honest question is not "is the battery low" — the phone
+        // already says that better than we can — but "what did LISTENING spend,
+        // and over how long", so the number can be put next to the counts above
+        // it and read as explainable or not.
+        //
+        // No threshold anywhere below. A comparison would be a rule written
+        // while the sense is unmeasured, which is what Law 5 forbids, and there
+        // is no measured drain in this repo to draw a line from.
+
+        // Nothing recorded is its own answer, and it is the SIMULATOR's answer
+        // and every pre-existing journal's answer. It must not read as "spent
+        // nothing", which is a different and much more reassuring claim.
+        let noBattery = ListenTally.of([
+            (at(0), .sessionStarted),
+            (at(600), .flushed(reason: "gap", words: 12)),
+        ])
+        check("a day with no battery readings says so rather than reporting zero spent",
+              noBattery.batteryReadings == 0
+                  && noBattery.batterySpentPoints == 0
+                  && noBattery.batteryMeasuredSeconds == 0)
+
+        // The ordinary case: an hour of listening off the charger, four points
+        // gone. Both halves are reported, because "4%" with no window is not a
+        // measurement and "%/hr" is a rate this screen has no business inventing
+        // on the reader's behalf.
+        let anHour: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .batteryRead(percent: 90, onPower: false)),
+            (at(3_600), .batteryRead(percent: 86, onPower: false)),
+            (at(3_601), .sessionStopped(cause: .owner)),
+        ]
+        let spent = ListenTally.of(anHour)
+        check("points spent while listening are counted, with the time they were spent over",
+              spent.batterySpentPoints == 4 && spent.batteryMeasuredSeconds == 3_600)
+        check("and the readings themselves are counted, so absent and zero stay different",
+              spent.batteryReadings == 2)
+
+        // THE CHARGER. A day spent plugged in would otherwise report a tiny
+        // drain, or a negative one, and read as a triumph of efficiency. That
+        // time is excluded from the measurement and reported separately, so the
+        // exclusion is visible rather than silent.
+        let plugged: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .batteryRead(percent: 50, onPower: true)),
+            (at(3_600), .batteryRead(percent: 80, onPower: false)),
+            (at(7_200), .batteryRead(percent: 77, onPower: false)),
+        ]
+        let charged = ListenTally.of(plugged)
+        check("time on the charger is not counted as drain",
+              charged.batterySpentPoints == 3 && charged.batteryMeasuredSeconds == 3_600)
+        check("and it is reported rather than quietly dropped",
+              charged.batteryOnPowerSeconds == 3_600)
+
+        // A level that goes UP while unplugged is a recalibration, not a gift.
+        // Signed deltas are summed so a bounce nets itself out, and the total is
+        // floored at zero so a report can never claim the phone gained battery
+        // by listening.
+        let bounced: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .batteryRead(percent: 60, onPower: false)),
+            (at(600), .batteryRead(percent: 61, onPower: false)),
+            (at(1_200), .batteryRead(percent: 60, onPower: false)),
+        ]
+        let bounce = ListenTally.of(bounced)
+        check("a battery that ticks up while unplugged does not net out as negative drain",
+              bounce.batterySpentPoints == 0 && bounce.batteryMeasuredSeconds == 1_200)
+
+        // NOT LISTENING IS NOT MEASURED. This is the whole reason the fold reads
+        // the session lines at all: an overnight drain with the app suspended
+        // and the microphone off is not a cost of listening, and attributing it
+        // would make every number here a lie in the direction that matters most.
+        let overnight: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .batteryRead(percent: 80, onPower: false)),
+            (at(60), .sessionStopped(cause: .owner)),
+            (at(28_800), .batteryRead(percent: 55, onPower: false)),
+        ]
+        let night = ListenTally.of(overnight)
+        check("a drain while listening was off is not charged to listening",
+              night.batterySpentPoints == 0 && night.batteryMeasuredSeconds == 0)
+
+        // And a stop-and-restart between two readings breaks the span for the
+        // same reason: the hole in the middle is time nobody was listening, and
+        // the two readings on either side of it cannot bracket it.
+        let broken: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .batteryRead(percent: 80, onPower: false)),
+            (at(60), .sessionStopped(cause: .owner)),
+            (at(7_200), .sessionStarted),
+            (at(10_800), .batteryRead(percent: 70, onPower: false)),
+            (at(14_400), .batteryRead(percent: 68, onPower: false)),
+        ]
+        let gap = ListenTally.of(broken)
+        check("a session that stopped and restarted between two readings breaks the span",
+              gap.batterySpentPoints == 2 && gap.batteryMeasuredSeconds == 3_600)
+
+        // A reading stamped at the same instant as the stop belongs to the
+        // session that is ending, not to the silence that follows it. Ties are
+        // ordered rather than left to `sorted(by:)`, which is documented as not
+        // stable and carries no defined order for equal keys at all.
+        let tie: [(Date, ListenEvent)] = [
+            (at(1_800), .sessionStopped(cause: .owner)),
+            (at(1_800), .batteryRead(percent: 70, onPower: false)),
+            (at(0), .batteryRead(percent: 75, onPower: false)),
+            (at(0), .sessionStarted),
+        ]
+        let tied = ListenTally.of(tie)
+        check("a reading stamped with the stop still belongs to the session it ended",
+              tied.batterySpentPoints == 5 && tied.batteryMeasuredSeconds == 1_800)
+
+        // A reading is not something heard. The silence clock must not be reset
+        // by the phone reporting its own battery, or an interruption that killed
+        // the day would be broken into four-second pieces and disappear.
+        let quiet: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(1_800), .batteryRead(percent: 70, onPower: false)),
+            (at(3_600), .batteryRead(percent: 69, onPower: false)),
+        ]
+        let q = ListenTally.of(quiet, now: at(3_600))
+        check("a battery reading is not evidence that anybody spoke",
+              q.longestSilenceSeconds == 3_600 && q.wordsFlushed == 0)
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {

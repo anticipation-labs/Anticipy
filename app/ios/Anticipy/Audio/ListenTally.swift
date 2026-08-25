@@ -92,6 +92,35 @@ struct ListenTally: Equatable {
     /// the reading drift apart.
     var notes: [String] = []
 
+    /// WHAT LISTENING COST, and the window that cost was spent over. Both
+    /// halves, always: "4%" with no window is not a measurement, and a rate is
+    /// a division this screen has no business doing on the reader's behalf.
+    ///
+    /// Points the battery FELL while a session was open and the phone was off
+    /// power. Signed deltas are summed, so a level that ticks up mid-stretch
+    /// (recalibration; it happens) nets itself out instead of being clamped
+    /// away in one direction and counted in the other. The TOTAL is floored at
+    /// zero, because a report claiming the phone gained battery by listening is
+    /// a report nobody will believe about anything else either.
+    var batterySpentPoints = 0
+    /// Seconds those points were spent over — the sum of the intervals between
+    /// readings that were both inside one unbroken listening session, off
+    /// power. Not the same as `listeningSeconds`, and deliberately smaller: a
+    /// session with one reading in it brackets nothing and contributes none.
+    var batteryMeasuredSeconds = 0
+    /// Time inside a listening session with the phone on a charger. EXCLUDED
+    /// from the two numbers above and reported anyway, so the exclusion is
+    /// visible: a day spent plugged in otherwise reports a triumphantly small
+    /// drain, and a day that charged in the middle of it reports a negative
+    /// one.
+    var batteryOnPowerSeconds = 0
+    /// How many readings reached the record at all. THE DIFFERENCE BETWEEN
+    /// "nothing was spent" AND "nothing was seen", which are the two things a
+    /// zero here would otherwise mean at once. Zero is the simulator, a journal
+    /// written by a build before this existed, and a phone where battery
+    /// monitoring was never switched on.
+    var batteryReadings = 0
+
     var postsAccepted = 0
     /// A day that heard everything and delivered nothing looks exactly like a
     /// microphone that heard nothing at all, from outside.
@@ -148,6 +177,15 @@ struct ListenTally: Equatable {
         // has rotated away is still a journal of a listening day, and guessing
         // "off" there would hide exactly the silence this type reports.
         var ownerHasItOff = false
+        // The last reading recorded, and whether one unbroken listening session
+        // has covered every instant since it. Both are needed: the interval
+        // between two readings is only drain if nobody stopped listening in the
+        // middle of it, and an overnight fall with the microphone off is not a
+        // cost of listening. Attributing it would make this number a lie in the
+        // one direction that matters, because it is the direction that makes
+        // the product look expensive when it is not.
+        var lastReading: (at: Date, percent: Int, onPower: Bool)? = nil
+        var sessionUnbrokenSinceReading = false
 
         for (time, event) in ordered {
             switch event {
@@ -167,6 +205,10 @@ struct ListenTally: Equatable {
                 lastHeardAt = time
                 ownerHasItOff = false
                 tally.ending = .listening
+                // A start breaks the span for the same reason a stop does: the
+                // hole before it is time nobody was listening, and the readings
+                // on either side of it cannot bracket it.
+                sessionUnbrokenSinceReading = false
 
             case .sessionStopped(let cause):
                 tally.stopsByCause[cause.rawValue, default: 0] += 1
@@ -174,6 +216,7 @@ struct ListenTally: Equatable {
                     tally.listeningSeconds += Int(time.timeIntervalSince(opened))
                     openedAt = nil
                 }
+                sessionUnbrokenSinceReading = false
                 if cause == .owner {
                     // The owner was still listening right up to here, so the
                     // quiet before this stop counts — and the quiet after it
@@ -212,6 +255,31 @@ struct ListenTally: Equatable {
                 tally.swaps += 1
                 tally.swapsByCause[cause.rawValue, default: 0] += 1
 
+            case .batteryRead(let percent, let onPower):
+                tally.batteryReadings += 1
+                // THE INTERVAL IS DESCRIBED BY THE READING THAT OPENED IT, not
+                // by this one. A reading is written when the level or the power
+                // state CHANGES, so the reading that says "on power" is the one
+                // taken the moment the cable went in — and the interval it
+                // opens is the charged one.
+                if let previous = lastReading,
+                   sessionUnbrokenSinceReading, openedAt != nil {
+                    let seconds = max(0, Int(time.timeIntervalSince(previous.at)))
+                    if previous.onPower {
+                        tally.batteryOnPowerSeconds += seconds
+                    } else {
+                        tally.batteryMeasuredSeconds += seconds
+                        tally.batterySpentPoints += previous.percent - percent
+                    }
+                }
+                lastReading = (at: time, percent: percent, onPower: onPower)
+                sessionUnbrokenSinceReading = openedAt != nil
+                // AND NOTHING ELSE MOVES. A reading is not evidence that anybody
+                // spoke, so `lastHeardAt` stays where it is: the phone reporting
+                // its own battery every few minutes through a call that took the
+                // microphone would otherwise cut the day's one enormous silence
+                // into pieces and delete the finding.
+
             case .noted(let fact):
                 tally.notes.append(fact)
 
@@ -249,6 +317,11 @@ struct ListenTally: Equatable {
         // backwards under us.
         tally.listeningSeconds = max(0, tally.listeningSeconds)
         tally.longestSilenceSeconds = max(0, tally.longestSilenceSeconds)
+        // Floored here rather than per interval. Clamping each delta would
+        // count every fall in full and every rise as nothing, which biases a
+        // day of ordinary battery jitter upward by a point or two an hour — an
+        // invented drain, in the direction that makes listening look costly.
+        tally.batterySpentPoints = max(0, tally.batterySpentPoints)
         return tally
     }
 
@@ -265,6 +338,13 @@ struct ListenTally: Equatable {
     private static func orderWithinAnInstant(_ event: ListenEvent) -> String {
         switch event {
         case .sessionStarted: return "0"
+        // Between a start and everything else: a reading stamped with the start
+        // describes the session that is beginning, and a reading stamped with a
+        // STOP is the last one that session gets — it must be folded before the
+        // stop closes the span, or the final interval of every session is lost.
+        // "." sorts below "1" and above "0", which is exactly that slot, and it
+        // cannot collide with `sessionStarted`, whose key is the bare "0".
+        case .batteryRead(let percent, let onPower): return "0.\(percent) \(onPower)"
         case .recognizerSwapped(let cause): return "1\(cause.rawValue)"
         case .flushed(let reason, let words): return "2\(words) \(reason)"
         case .noted(let fact): return "3\(fact)"

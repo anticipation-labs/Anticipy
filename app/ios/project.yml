@@ -117,7 +117,31 @@ settings:
     # (AnticipyVocabulary.swift): the shipped model heard "anticipy growth
     # ... dot com" as "anticipate growth there's something.com" and she
     # offered to buy the misspelling of her own product.
-    CURRENT_PROJECT_VERSION: "76"
+    #
+    # 77: the phone finally says what listening costs, and the number stops
+    # lying about which bytes it describes.
+    #
+    # This setting sat at 76 across NINETEEN iOS commits. Seven different source
+    # trees all called themselves build 76, so "is that bug still in the build
+    # on your phone?" had no answer, and two research passes hit exactly that as
+    # an obstacle in one night. App Store Connect refuses a re-used build
+    # number, which is the only reason it was ever noticed at all — days after
+    # the tree it should have described. `Tests/run_build_number_tests.sh` now
+    # fails when the iOS source has moved since this line last did, so the
+    # reminder arrives while the change is still being written rather than at
+    # upload.
+    #
+    # And the battery. An always-on microphone, a speech recognizer and a
+    # 4-second watchdog are a real draw, and nothing in this product had ever
+    # measured one — so the two costs removed this week (a call minting an
+    # SFSpeechRecognitionTask every four seconds for its whole length, and the
+    # journal writing fifteen identical lines a minute through an outage) were
+    # both argued about with no number attached to either. The Listening screen
+    # now reports what was spent and over how long, with time on a charger
+    # excluded and said out loud. No threshold, no verdict: there is no measured
+    # drain in this repo to draw a line from, and a rule written while the sense
+    # is unmeasured is tape by Law 5's definition.
+    CURRENT_PROJECT_VERSION: "77"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
