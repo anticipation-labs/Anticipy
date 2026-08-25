@@ -43,11 +43,58 @@ Then:
 ### The technical finding that outranks the ranking either way
 
 **A must be ADDITIVE, never a replacement.** `SpeechAnalyzer` has no
-`contextualStrings` equivalent. `AnticipyVocabulary` is what teaches the
+`contextualStrings` equivalent that the module we want will honour — see the
+correction below, which makes this finding stronger, not weaker.
+`AnticipyVocabulary` is what teaches the
 recognizer her own name, the owner's name, and the roster — and `tejas_gate`
 leg 7 ("THE RECOGNIZER KNOWS ITS NAME") pins that organ. A wholesale swap would
 turn leg 7 red, or worse, pass while silently regressing the guard that stopped
 her proposing to buy a misspelling of her own product's name.
+
+### CORRECTION, same day — the API exists, and that is worse
+
+The sentence above originally read "`SpeechAnalyzer` has no `contextualStrings`
+equivalent" flat. That is **half wrong**, and the accurate version is a sharper
+warning rather than a reprieve. Found by an independent session against primary
+Apple sources; relayed here rather than left in a chat, per LAW 4.
+
+`AnalysisContext.contextualStrings` is real and documented (iOS 26+):
+
+    final var contextualStrings: [AnalysisContext.ContextualStringsTag : [String]] { get set }
+
+attached with `SpeechAnalyzer.setContext(_:)`, capped at 100 phrases of one or
+two words — the same cap the legacy API carries.
+
+**But `SpeechTranscriber` ignores it.** An Apple engineer, in the accepted
+answer on Developer Forums thread 811083: *"currently, contextual strings only
+help transcriptions from the DictationTranscriber module. The SpeechTranscriber
+module does not currently take contextual strings into account."* Apple's own
+prose scopes the property the same way, and structurally `DictationTranscriber`
+carries an "Improve accuracy" section while `SpeechTranscriber` has no
+`ContentHint` type and no `contentHints` in its initializer. The custom-LM
+bridge (`SFSpeechLanguageModel`) lands on `DictationTranscriber` too.
+
+**Why this is worse than the original claim.** A missing API is a compile
+error: loud, immediate, impossible to ship. An API that exists and is inert on
+the module you actually want is a **silent** failure — the code compiles,
+`setContext` succeeds, nothing throws, and the vocabulary biasing simply does
+not happen. `AnticipyVocabulary` exists because she once proposed buying a
+misspelling of her own product's name, and it owns `tejas_gate` leg 7. This is
+exactly the shape the ruling warned about: "pass while silently regressing the
+guard".
+
+**So option A is a three-way fork, not two:**
+
+- **`SpeechTranscriber`** — the high-quality long-form model, and no phrase
+  biasing at all.
+- **`DictationTranscriber`** — keeps biasing and unlocks custom language
+  models, but Apple describes it as the same models and locales as on-device
+  `SFSpeechRecognizer`. Ask hard what the migration buys over the incumbent
+  before paying for it.
+- **Stay on `SFSpeechRecognizer`.**
+
+Unchanged by this correction: the iOS 26 floor, the requirement that A be
+additive, and the §8 gate, whose inputs are still failing or unmeasured.
 
 So: keep the SFSpeech arm for the 16.0 floor **and** for vocabulary, and add the
 analyzer arm behind a routing policy. That is the same seam
