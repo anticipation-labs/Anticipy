@@ -38,6 +38,13 @@ import traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
+# The credentials were always next to the gate; nothing loaded them, so
+# legs that COULD be measured reported "cannot be tested" and the
+# scoreboard named the wrong leg to work. Explicit environment still wins.
+sys.path.insert(0, HERE if 'HERE' in dir() else os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402  sibling module; gates are run as scripts
+_ENV_LOADED = _env.load_and_announce(ROOT)
+
 
 VERBOSE = "--verbose" in sys.argv or "-v" in sys.argv
 

@@ -15,6 +15,13 @@ anybody's report. Run it. It prints what is true.
 import json, os, re, subprocess, sys, tempfile, urllib.request, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# The credentials were always next to the gate; nothing loaded them, so
+# BASE below silently fell back to the hardcoded default even when
+# .env.local named a different backend. Explicit environment still wins.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402  sibling module; gates are run as scripts
+_ENV_LOADED = _env.load_and_announce(ROOT)
 BASE = os.environ.get("ANTICIPY_BACKEND_URL",
                       "https://backend-production-61e0a.up.railway.app")
 

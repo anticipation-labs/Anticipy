@@ -82,6 +82,13 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+# The credentials were always next to the gate; nothing loaded them, so
+# legs that COULD be measured reported "cannot be tested" and the
+# scoreboard named the wrong leg to work. Explicit environment still wins.
+sys.path.insert(0, HERE if 'HERE' in dir() else os.path.dirname(os.path.abspath(__file__)))
+import _env  # noqa: E402  sibling module; gates are run as scripts
+_ENV_LOADED = _env.load_and_announce(ROOT)
+
 
 # One SQLite file per owner, mode 0o700 — brain/supervisor.py:31 and :92.
 # The env var is read the same way the supervisor reads it so this gate and

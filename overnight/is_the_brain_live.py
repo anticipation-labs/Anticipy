@@ -48,6 +48,12 @@ import os
 import sys
 from collections import Counter, defaultdict
 
+# The credentials were always next to the gate and nothing loaded them.
+import os as _os, sys as _sys  # noqa: E402
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import _env  # noqa: E402  sibling module; gates are run as scripts
+_ENV_LOADED = _env.load_and_announce(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests  # noqa: E402
