@@ -132,6 +132,7 @@ fi
 
 swiftc -O \
     "$app/Audio/ListenJournal.swift" \
+    "$app/Audio/ListenSessionFacts.swift" \
     "$app/Audio/ListenWatchdogPolicy.swift" \
     "$here/ListenWatchdogPolicyTests.swift" \
     -o "$out/watchdogtests"

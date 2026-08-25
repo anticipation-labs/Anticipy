@@ -72,10 +72,35 @@ if [ "$(code | grep -c 'continuesPrevious: continues)')" -lt 2 ]; then
     echo "it defaults to false, so losing it is silent."
     exit 2
 fi
-if ! code | grep -q 'heard(line, from: .pendant)'; then
-    echo "The pendant transcript callback does not name itself as the pendant."
-    echo "This is the one that buzzed all day: the phone mic is off, so the old"
-    echo "test read 'not listening' and treated ambient speech as typed."
+# THE PENDANT LANE IS MUTE, and this check now proves that instead of proving
+# the callback exists. Until 2026-08-25 it asserted `heard(line, from: .pendant)`
+# was present — which pinned a design/LOCAL-FIRST.md rule 1 violation in place:
+# the only thing feeding that callback was a websocket streaming the pendant's
+# raw Opus frames to a vendor, and rule 1 is "RAW AUDIO NEVER LEAVES A DEVICE.
+# Not to Deepgram, not to anyone." Closed in 49b04481 (server) and ca317582
+# (iOS). The lane cost nothing to close: events with source="pendant" in
+# production were ZERO, ever, against 229 from the phone microphone.
+#
+# The concern the old check protected is still real and is kept below: a
+# capture path that does not NAME its source gets read as typed, and the day
+# this one returns it must declare itself. So `.pendant` must survive as a
+# LineSource case — deleting the case is how the next implementer silently
+# reintroduces an unlabelled path — while no code may feed it today.
+if ! code | grep -q 'case pendant'; then
+    echo "LineSource lost its .pendant case."
+    echo "The lane is mute, but the SOURCE must outlive it: a capture path that"
+    echo "cannot name itself is read as typed, which is the bug that buzzed all"
+    echo "day. Whoever rebuilds the pendant on an on-device transcriber needs"
+    echo "this case waiting for them, not a label they have to reinvent."
     exit 2
 fi
-echo "line ack: decided by source, and all three capture paths declare theirs"
+if code | grep -q 'from: .pendant'; then
+    echo "Something feeds the pendant lane again."
+    echo "It is deliberately mute: LocalTranscriber.swift is 43 lines with zero"
+    echo "call sites, wants AVAudioPCMBuffer while the pendant emits Opus Data,"
+    echo "and there is no Opus decoder in the target. If that gap is now closed,"
+    echo "this check is the place to say so — and overnight/no_vendor_ears.py"
+    echo "must still be green, meaning the audio never left the phone."
+    exit 2
+fi
+echo "line ack: decided by source; the pendant lane is mute and its label survives"

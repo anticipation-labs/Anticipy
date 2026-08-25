@@ -26,6 +26,25 @@ WHAT IT CANNOT SEE, said plainly rather than left for someone to discover: a
 vendor reached through a hostname it does not know, audio forwarded by a service
 this repo does not contain, or a key passed in at runtime under another name.
 The registry below is the honest limit of it.
+
+AND ONE BLIND SPOT WORTH MORE THAN THE REST, found by the agent that closed the
+iOS half on 2026-08-25 and recorded here rather than left as a surprise. This
+gate greps for the VENDOR'S NAME. The sentences that actually rendered to the
+owner never used it:
+
+    "Pendant · starting transcription"
+    "I'm opening its secure transcription stream"
+
+Both describe audio leaving the phone. Neither contains a hostname or a
+credential, so this gate was green on the exact copy a person would have read.
+The two strings that DID name the vendor sat in branches the UI rarely reached.
+
+That is not fixable by adding those phrases to a list — the next wording would
+evade it, and a list of sentences deciding what a promise MEANS is the Law 1
+violation this file exists downstream of. The honest containment is a human
+reading the user-facing copy whenever this lane changes, and knowing that a
+green result here means "no code path calls a vendor", never "the product does
+not tell the owner it does".
 """
 from __future__ import annotations
 
@@ -108,6 +127,11 @@ def main() -> int:
         print("  What this cannot see: a vendor whose hostname is not in the")
         print("  registry, audio forwarded by a service outside this repo, or a")
         print("  key supplied at runtime under another name.")
+        print("  AND: copy that promises the owner their audio travels WITHOUT")
+        print("  naming the vendor — \"starting transcription\", \"opening its")
+        print("  secure transcription stream\". Those rendered while this gate")
+        print("  was green. Green here means no code path calls a vendor. It")
+        print("  never means the product stopped telling the owner it does.")
         return 0
 
     print("  [1] FAIL  SHIPPED CODE REACHES AN AUDIO VENDOR")
