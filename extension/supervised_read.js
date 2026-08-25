@@ -124,12 +124,19 @@ export function actionRefusedReason(source, action) {
 // The lease: the only thing that authorises this
 // ---------------------------------------------------------------------------
 
-// AUTHORISATION MAY NOT COME FROM A PARAMS FLAG. `side_trip.js:190-260` states
+// AUTHORISATION MAY NOT COME FROM A PARAMS FLAG. `side_trip.js:189-303` states
 // the rule this obeys: a flag is something another process set, and "another
 // process decided I may read your inbox" is exactly the sentence this product
-// cannot afford to be true. There a boolean was derived from the owner's
-// verbatim reply; here it is derived from a lease that only the phone can
-// write, and only while the person is looking at the read.
+// cannot afford to be true.
+//
+// The two modules answer it differently on purpose, and the difference is
+// worth knowing before copying either. A side trip has no supervisor, so its
+// consent is the owner answering the module's own offer, with a model reading
+// whether the answer means yes — a word list there read a man's mail off an
+// apology about his mail server (side_trip.js, 2026-08-24). This module's
+// consent is a lease only the phone can write, and only while the person is
+// looking at the read, so no sentence has to be understood at all. A lease is
+// the stronger of the two; prefer it wherever a human is present.
 //
 // FAIL CLOSED, and the missing case is the one that matters: no lease, an
 // unparseable lease and an expired lease are all "nobody is watching". An
@@ -600,7 +607,7 @@ export async function runSupervisedRead({
              stopped: "failed", steps, lines, facts, refused };
   } finally {
     // OUR TAB ALWAYS CLOSES, on every exit path — done, lease, refusal, throw
-    // — exactly as `side_trip.js:305-309` does it. A mailbox tab left open is
+    // — exactly as `side_trip.js:378-382` does it. A mailbox tab left open is
     // both a mess and a privacy problem.
     //
     // And a tab we did NOT open is never closed and never navigated: for

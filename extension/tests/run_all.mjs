@@ -45,6 +45,7 @@ const suites = [
   "test_config_base.mjs",
   "test_learn_before_doing.mjs",
   "test_otp_wall.mjs",
+  "test_inbox_consent.mjs",
   "test_vision_cost.mjs",
   "test_walled_source.mjs",
   "test_carried_values.mjs",

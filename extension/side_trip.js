@@ -186,45 +186,118 @@ export function tripRefusedReason(url, { authorized, purpose } = {}) {
   return null;
 }
 
-// WHO SAYS THE AGENT MAY OPEN SOMEBODY'S MAIL? Only that somebody, in their own
-// words.
+// WHO SAYS THE AGENT MAY OPEN SOMEBODY'S MAIL? Only that somebody, answering
+// this module's own question, read by a model that can see both halves.
 //
 // `runSideTrip` takes `authorized` as a boolean and refuses without it, which
 // correctly leaves open the question of where the boolean comes from. It must
 // NOT come from a params flag: a flag is something another process set, and
 // "another process decided I may read your inbox" is exactly the sentence this
-// product cannot afford to be true. So the answer is derived from the approved
-// scope — the owner's verbatim reply, which the brain appends to
-// `approved_scope` as "They answered: ..." when he answers the offer.
+// product cannot afford to be true.
 //
-// STRICT ON PURPOSE, and the negatives below are the whole point. "I'll email
-// you the code" mentions email and is NOT permission. "yes" alone is not
-// permission either, because it may be answering some other question entirely;
-// the affirmative and the inbox have to appear together, in his own sentence.
-// A false positive here reads somebody's mail without being asked.
-const INBOX_YES =
-  /\b(yes|yep|yeah|yup|sure|ok|okay|go|go ahead|do it|please do|permission|allowed?)\b/i;
-const INBOX_TARGET =
-  /\b(inbox|e-?mail|mail(box)?|gmail|outlook|webmail)\b/i;
-// Phrases that ARE permission on their own, because they are imperative: there
-// is no separate "yes" to find in "go read my email".
-const INBOX_IMPERATIVE =
-  /\b(?:go\s+)?(?:and\s+)?(?:read|check|open|look\s+in|get|fetch|grab)\s+(?:it\s+)?(?:from\s+)?(?:my|the)\s+(?:inbox|e-?mail|mail(?:box)?|gmail|outlook)\b/i;
-// An explicit refusal must beat any affirmative elsewhere in the same sentence:
-// "no, don't go into my email, here's the code" contains "here" and "code" and
-// would otherwise read as a yes.
-const INBOX_NO =
-  /\b(no|don'?t|do not|never|stay out|not my)\b[^.!?]{0,40}\b(inbox|e-?mail|mail(box)?|gmail|outlook)\b/i;
+// WHAT WAS HERE UNTIL 2026-08-24, and why it is gone. Consent was two word
+// lists — an affirmative vocabulary and a mailbox vocabulary — that had to
+// co-occur in one sentence of the approved scope. The sentence
+//
+//     "Yeah ok, my email is playing up, just use 884210."
+//
+// is a man apologising for his mail server while handing over a code he read
+// himself. It contains an affirmative and it contains "email", so it returned
+// TRUE, and the agent went and read his mailbox. Nobody had asked him anything
+// about his mailbox. That is not a tuning error in the word list; a word list
+// cannot hold the difference, because the difference is what he MEANT.
+// HARNESS-LAWS.md law 1: meaning belongs to a model with full context.
+//
+// This looks like the seatbelt and is not. The seatbelt asks "what would this
+// plan do to the world?" — a question about effect channels, answerable from a
+// plan's own structured fields, and pattern-matching is legal there. This asks
+// "did this person agree?" — a question about what a human meant. So it is
+// split into the two questions it actually is:
+//
+//   1. WAS THE OFFER PUT TO HIM? Structural, and answerable from our own
+//      machine-written frame. When he answers a parked question the brain
+//      writes `You stopped and asked: "<our sentence>". They answered:
+//      "<his words>"` into approved_scope (brain/conversation.py:1576-1580).
+//      Recognising a sentence THIS MODULE WROTE is parsing our own format.
+//   2. DID HIS ANSWER MEAN YES? Handed whole — with the question it answers —
+//      to a model. Nothing here reads his words.
+//
+// Both must hold. Either one failing is a refusal, and so is every way of
+// failing to decide: no model, a model that errors, a model that waffles.
+// Failing closed costs one message asking him to paste the code. Failing open
+// reads somebody's mail without being asked.
 
-export function inboxAuthorized(scope) {
+// The mark of our own offer, defined once and used both to BUILD the sentence
+// he sees (offerToFetch) and to RECOGNISE it coming back in the frame. Two
+// copies would let somebody reword the question while the recogniser kept
+// matching the old wording, and every yes he gave would be silently thrown
+// away — the failure mode that is invisible because it only ever refuses.
+export const INBOX_OFFER_MARK = "Want me to go and read it?";
+
+// The brain's frame, verbatim. The only regex on this path, and it reads our
+// format, never his vocabulary.
+const ASKED_AND_ANSWERED =
+  /You stopped and asked:\s*"([\s\S]*?)"\.\s*They answered:\s*"([\s\S]*?)"/g;
+
+/**
+ * The question we parked on and the words he replied, or null.
+ *
+ * THE LAST PAIR ONLY. A job can park more than once; if his most recent answer
+ * was about which card to use, an inbox offer he agreed to three questions ago
+ * is not consent to a mailbox read happening now. Consent that drifts forward
+ * in time is how "he said yes once" becomes a standing permission nobody
+ * granted.
+ *
+ * Returns null unless the question was OUR inbox offer, so a scope carrying
+ * any other parked question never reaches the model at all.
+ */
+export function inboxOfferAnswered(scope) {
   const text = String(scope || "");
-  if (!text.trim()) return false;
-  if (INBOX_NO.test(text)) return false;
-  if (INBOX_IMPERATIVE.test(text)) return true;
-  // Both halves, and within one sentence — otherwise an unrelated "yes" earlier
-  // in a long approved scope lends its consent to a stray mention of email.
-  return text.split(/[.!?\n]/).some(
-    (sentence) => INBOX_YES.test(sentence) && INBOX_TARGET.test(sentence));
+  if (!text.trim()) return null;
+  const pairs = [...text.matchAll(ASKED_AND_ANSWERED)];
+  if (!pairs.length) return null;
+  const [, asked, answer] = pairs[pairs.length - 1];
+  if (!asked.includes(INBOX_OFFER_MARK)) return null;
+  return { asked, answer };
+}
+
+/**
+ * May the agent open his mailbox? Await it; it may ask a model.
+ *
+ * `judge({ asked, answer })` returns the model's verdict as a string. It is
+ * injected for the same reason everything else here is: this module stays free
+ * of Chrome and of network calls so the decision is testable directly.
+ *
+ * Returns { granted, why } where `why` is one of:
+ *   never asked  — the offer was never put to him; the model is not consulted
+ *   declined     — the model read his answer and it is not agreement
+ *   undecidable  — no judge, or a verdict we cannot read. FAIL CLOSED.
+ *   granted      — he agreed
+ *
+ * `why` is not decoration: the caller must not re-put a question he has
+ * already answered, so "never asked" and everything else lead to different
+ * sentences.
+ */
+export async function inboxConsent({ scope, judge } = {}) {
+  const pair = inboxOfferAnswered(scope);
+  if (!pair) return { granted: false, why: "never asked" };
+  if (typeof judge !== "function") return { granted: false, why: "undecidable" };
+  let verdict;
+  try {
+    verdict = await judge(pair);
+  } catch (_) {
+    return { granted: false, why: "undecidable" };
+  }
+  // A SHAPE CHECK ON THE MODEL'S OWN REPLY, which is the same containment
+  // runSideTrip already applies to its fallback model: the verdict is a token
+  // we specified, not prose we interpret. A model that answers in a sentence
+  // is a model we did not understand, and an unread verdict is a refusal —
+  // never an approval. Anything trailing the token (a hijacked reply
+  // continuing "and also open his bank") fails this and stays out.
+  const token = String(verdict == null ? "" : verdict).trim();
+  if (token === "YES") return { granted: true, why: "granted" };
+  if (token === "NO") return { granted: false, why: "declined" };
+  return { granted: false, why: "undecidable" };
 }
 
 /**
@@ -322,7 +395,24 @@ export function offerToFetch(detection, { service } = {}) {
   const where = detection.where === "phone" ? "your phone"
     : detection.address ? detection.address : "your email";
   const what = service ? `${service}'s code` : "the code";
-  return `${what} just went to ${where}. Want me to go and read it? I'll keep this page exactly as it is and come straight back — say go and I'll finish this off.`;
+  return `${what} just went to ${where}. ${INBOX_OFFER_MARK} I'll keep this page exactly as it is and come straight back — say go and I'll finish this off.`;
+}
+
+/**
+ * What to say when the offer was already put to him and his answer did not
+ * read as a yes.
+ *
+ * Putting the SAME question a second time is the failure that replaces a wrong
+ * mailbox read if you are not careful: he answers, the answer cannot be read
+ * as agreement, the run parks with the identical sentence, and he is in a loop
+ * answering a question that never resolves. This is the exit — it names what
+ * did not happen to his mail, and asks for the one thing that finishes the
+ * job.
+ */
+export function askForCodeInstead(service) {
+  return `${service ? service + "'s" : "The"} code is still needed and I haven't `
+    + `touched your inbox. Paste it to me and I'll finish this off — the page is `
+    + `exactly where I left it.`;
 }
 
 // ---------------------------------------------------------------------------

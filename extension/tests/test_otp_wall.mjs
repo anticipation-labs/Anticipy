@@ -11,7 +11,7 @@
 // Run: node extension/tests/test_otp_wall.mjs
 import assert from "node:assert/strict";
 import { installChrome } from "./chrome_mock.mjs";
-import { inboxAuthorized, tripOnOffer } from "../side_trip.js";
+import { inboxConsent, offerToFetch, tripOnOffer } from "../side_trip.js";
 
 let failures = 0;
 const check = (name, ok) => {
@@ -20,47 +20,34 @@ const check = (name, ok) => {
 };
 
 // ------------------------------------- 1. who may open somebody else's mail
-// Only that somebody, in their own words. The permission is derived from the
-// approved scope and never from a params flag, because "another process decided
-// I may read your inbox" is a sentence this product cannot afford to be true.
+// Only that somebody, answering the question we actually put to him, read by a
+// model. Never a params flag ("another process decided I may read your inbox"
+// is a sentence this product cannot afford to be true), and — since
+// 2026-08-24 — never a word list either. `inboxAuthorized` used to match an
+// affirmative vocabulary against a mailbox vocabulary, and on
+// "Yeah ok, my email is playing up, just use 884210." it returned true and the
+// agent read the man's mail. Consent from keyword proximity is not consent.
+//
+// test_inbox_consent.mjs owns that boundary in full; a second copy of it here
+// is a second copy to drift. What this file checks is the property the two
+// behavioural sections below stand on.
+const OFFER = offerToFetch({ where: "email", address: "o***r@gmail.com" },
+                           { service: "shop" });
+const ANSWERED = (answer) =>
+  `You stopped and asked: "${OFFER}". They answered: "${answer}" — that answer is final; act on it.`;
+const ALWAYS_YES = async () => "YES";
 {
-  // Imperatives are permission on their own — there is no separate yes to find.
-  for (const yes of [
-    "go read my email",
-    "go and read my email",
-    "yes, go read my inbox",
-    "check my inbox",
-    "open my gmail and get it",
-    "grab it from my email",
-    "look in my inbox",
-    "fetch it from my email",
-  ]) check(`permission: ${JSON.stringify(yes)}`, inboxAuthorized(yes));
-
-  // An affirmative and the inbox, together, in one sentence.
-  check("an answered yes about the inbox is permission",
-    inboxAuthorized("They answered: yes go ahead and read the email"));
-
-  // THE NEGATIVES ARE THE POINT. A false positive here reads somebody's mail
-  // without being asked.
-  for (const no of [
-    "",
-    "book a table for two at seven",
-    "I'll email you the code",                    // mentions email, not permission
-    "the code went to my email",                  // a statement of fact
-    "yes",                                        // yes to WHAT?
-    "yes, book it",                               // a yes about something else
-    "no, don't go into my email, the code is 1234",
-    "do not read my inbox",
-    "never touch my email",
-    "stay out of my mail",
-  ]) check(`refused: ${JSON.stringify(no)}`, !inboxAuthorized(no));
-
-  // The two halves must be in the SAME sentence, or a stray yes early in a long
-  // approved scope lends its consent to an unrelated mention of email later.
-  check("a yes in one sentence does not authorise an inbox mentioned in another",
-    !inboxAuthorized("Yes, book the table. The confirmation goes to my email."));
-
-  check("nothing is not permission", !inboxAuthorized(null) && !inboxAuthorized(undefined));
+  check("a scope with no parked question never authorises a mailbox read",
+    !(await inboxConsent({ scope: "sign me up for the shop account", judge: ALWAYS_YES })).granted);
+  check("...not even one worded the way the old word list wanted",
+    !(await inboxConsent({
+      scope: 'They said: "yeah ok, my email is playing up, just use 884210"',
+      judge: ALWAYS_YES,
+    })).granted);
+  check("an answer to OUR offer, read as agreement, does authorise it",
+    (await inboxConsent({ scope: ANSWERED("yes, go on"), judge: ALWAYS_YES })).granted);
+  check("and with no model to read that same answer, it fails closed",
+    !(await inboxConsent({ scope: ANSWERED("yes, go on") })).granted);
 }
 
 // --------------------------------------------- 2. what the offer actually says
@@ -155,6 +142,59 @@ const check = (name, ok) => {
     typeof asked.tabId === "number");
   check("the hand-back is not the old 'got nowhere' stall",
     !/without getting anywhere|got nowhere/i.test(String(asked.result)));
+
+  // ------------------ 3b. THE DEFECT, END TO END, THROUGH THE WHOLE LOOP
+  //
+  // The audit's sentence, carried in the approved scope exactly as it would
+  // arrive: a man approving a checkout, apologising for his mail server and
+  // handing over a code he read himself.
+  //
+  //     "Yeah ok, my email is playing up, just use 884210."
+  //
+  // Until 2026-08-24 this opened his mailbox. It satisfied the affirmative
+  // vocabulary ("yeah", "ok"), it satisfied the mailbox vocabulary ("email"),
+  // no negative sat within 40 characters, so `inboxAuthorized` returned true
+  // and the run navigated a fresh tab to mail.google.com and read it.
+  //
+  // Checked here at the level that matters — TABS, not return values. A unit
+  // test on the consent function proves the function; this proves that no
+  // other path in the loop reaches his mail.
+  {
+    const opened = [];
+    const realCreate = chrome.tabs.create.bind(chrome.tabs);
+    chrome.tabs.create = async (props) => { opened.push(String(props?.url || "")); return realCreate(props); };
+    let judged = 0;
+    // A code the owner never gave — otherwise `unquotedCode` allows the typing
+    // (he quoted 884210 himself) and the run never reaches the mailbox branch
+    // this case exists to test.
+    scripted([{ action: "type", index: 0, text: "123456" }]);
+    const inner = globalThis.fetch;
+    globalThis.fetch = async (url, opts = {}) => {
+      if (String(url).includes("openrouter")
+          && /did this person agree to let/.test(String(opts.body || ""))) {
+        judged++;
+        // Even a model that would have said yes changes nothing: it is never
+        // reached, because he was never asked the question.
+        return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "YES" } }] }), text: async () => "" };
+      }
+      return inner(url, opts);
+    };
+    const out = await runAgentGoal("finish checking out", {
+      apiKey: "test-key",
+      scope: 'checkout for the shop order. They said: "Yeah ok, my email is playing up, just use 884210."',
+      ownerProfile: { email: "omar@gmail.com", first_name: "Omar" },
+      authorized: true,
+      planning: true,
+      stillLive: async () => true,
+    });
+    check("THE DEFECT: the audit's sentence never opens his mailbox",
+      !opened.some((u) => u.includes("mail.google.com")), JSON.stringify(opened));
+    check("...and no model was asked to rule on a question he was never put",
+      judged === 0);
+    check("...and he is asked, rather than read", out.status === "needs_user"
+      && /Want me to go and read it/.test(String(out.result)), String(out.result));
+    chrome.tabs.create = realCreate;
+  }
 }
 
 // ------------------- 4. BEHAVIOURAL: authorised -> it GOES, READS, CONTINUES
@@ -202,6 +242,7 @@ const check = (name, ok) => {
     { action: "done", result: "Account verified" },
   ];
   const seen = [];
+  const consentAsked = [];
   globalThis.fetch = async (url, opts = {}) => {
     if (!String(url).includes("openrouter")) {
       return { ok: false, status: 0, json: async () => ({}), text: async () => "" };
@@ -218,6 +259,12 @@ const check = (name, ok) => {
       content = JSON.stringify({ verified: true });
     } else if (/find ONE verification code/.test(joined)) {
       content = "483920";
+    } else if (/did this person agree to let/.test(joined)) {
+      // The consent judge. It is asked the question we parked on and his reply,
+      // and answers in one token. This is the ONLY thing in the run that may
+      // conclude his mailbox may be opened.
+      consentAsked.push(joined);
+      content = "YES";
     } else {
       seen.push(all[all.length - 1]);
       content = JSON.stringify(a.shift() || { action: "wait" });
@@ -227,8 +274,11 @@ const check = (name, ok) => {
 
   const out = await runAgentGoal("finish signing up for the shop account", {
     apiKey: "test-key",
-    // HIS OWN WORDS are the authorization.
-    scope: 'sign me up for the shop account. They answered: "yes, go read my email"',
+    // HIS OWN WORDS, ANSWERING OUR OWN QUESTION, are the authorization — in the
+    // frame the brain actually writes (brain/conversation.py:1576-1580) when he
+    // replies to a parked run. A loose "yes, go read my email" floating in the
+    // scope is NOT this: nothing in it says he was ever asked.
+    scope: `sign me up for the shop account. ${ANSWERED("yeah go on")}`,
     ownerProfile: { email: "omar@gmail.com", first_name: "Omar" },
     authorized: true,
     planning: true,
@@ -236,6 +286,8 @@ const check = (name, ok) => {
   });
 
   check("an authorised run finishes instead of parking", out.status === "done");
+  check("a model — not a word list — was what said his mailbox could be opened",
+    consentAsked.length === 1 && consentAsked[0].includes("yeah go on"));
   check("the agent actually went to HIS inbox",
     opened.some((u) => u.includes("mail.google.com")));
   check("the working tab was never navigated away — a separate tab made the trip",
@@ -251,7 +303,11 @@ const check = (name, ok) => {
   // a log is a code that outlived its minute.
   const { readFileSync } = await import("node:fs");
   const loop = readFileSync(new URL("../agent_loop.js", import.meta.url), "utf8");
-  const wall = loop.slice(loop.indexOf("THE OTP WALL"), loop.indexOf("THE OTP WALL") + 3000);
+  // The window has to reach the end of the wall's own branch. It was 3000
+  // characters and the consent rewrite pushed the hand-back past it, which made
+  // this leg red for the wrong reason — a source check that measures a byte
+  // offset instead of the property it names.
+  const wall = loop.slice(loop.indexOf("THE OTP WALL"), loop.indexOf("THE OTP WALL") + 5000);
   check("the history line records the code's LENGTH, never its value",
     /got\.value\.length/.test(wall) && !/history\.push\([^)]*\$\{got\.value\}/.test(wall));
   check("the trip is taken at most once per run", /inboxTripTaken/.test(wall));
