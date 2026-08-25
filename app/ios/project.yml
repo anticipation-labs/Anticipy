@@ -173,10 +173,17 @@ settings:
     #
     # 81: sherpa-onnx unlinked again. Builds 76-80 delivered ZERO rows to
     # production; 75 delivered 313 and stopped at the minute it was replaced.
-    # 81 is the first build since 75 without the speaker frameworks, so it is
-    # also the experiment: a row from 81 says the linkage was the cause, and
-    # silence from 81 says look at the session instead.
-    CURRENT_PROJECT_VERSION: "81"
+    # 81 was the first build since 75 without the speaker frameworks.
+    #
+    # 82: and 82 is the one to install, because three more source files landed
+    # after 81 was set (the receipt column AgentJob now decodes, and the two
+    # sign-up screens that put a dialling code in the field). 81 and 82 are not
+    # the same app, and "which build are you holding" has to keep having an
+    # answer — that is the whole reason this number is gated. The experiment is
+    # unchanged and now rides on 82: it is still the first build since 75
+    # without the speaker frameworks, so a row from it says the linkage was the
+    # cause, and silence from it says look at the session instead.
+    CURRENT_PROJECT_VERSION: "82"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
