@@ -422,3 +422,55 @@ on-device transcriber for it.
 | **LAW 5** | This is the senses rung, which is where the fix order says to start. No behavioural rule was written. §4.4 exists *because* the sense was measured rather than assumed. |
 | **LAW 6** | §3 names its own proxies' weaknesses, §5 refuses to call the far channel proven, §7 is the attack surface, and §8 says the spec's install story is unverified. |
 | **LOCAL-FIRST 1** | No audio was written to disk and none left this machine. The runner greps the whole `app/macos` tree for cloud speech vendors and fails on a hit; mutation-tested. |
+
+---
+
+## 10. What was built alongside this, and what it counts
+
+The experiment came first because it decides the architecture. Only after it
+answered did any product code get written, and it is deliberately the smallest
+honest slice: **two pure types and no app.** No UI, no Xcode target, no Chrome
+extension work, no pendant — the pendant is mute (§8) and the rest is weeks
+(spec §11).
+
+| File | What it decides |
+|---|---|
+| `app/macos/Anticipy/Capture/MeetingOfferPolicy.swift` | whether to OFFER to record. Its return type is an offer or nothing; it has no vocabulary for starting one. §6.2's signal, built from §4.3's measured rows. |
+| `app/macos/Anticipy/Capture/CaptureStreamHealth.swift` | whether a running stream is carrying audio or is §4.4's silence. Exists only because of §4.4. |
+| `app/macos/Tests/CaptureCoreTests.swift` | **30 checks.** |
+| `app/macos/Tests/run_capture_core_tests.sh` | four deterministic source-tree legs, run before the checks compile |
+
+```
+$ sh app/macos/Tests/run_capture_core_tests.sh
+  the detector offers and cannot record, and no app name is a predicate
+  silence is identity with zero, as measured
+  … 30 × PASS …
+  all capture-core checks passed
+$ echo $?
+  0
+```
+
+**Correction to the record.** The commit that introduced these files
+(`e7a8e731`) says "31 checks" in its message. The true count is **30**,
+`grep -c '^PASS'` against a clean run. History is not rewritten in this repo, so
+the number is corrected here, where a reader can act on it. Nothing else in that
+message is affected — the mutation results below are as stated.
+
+The four source-tree legs were each mutation-tested by introducing exactly the
+thing they forbid, and each returned exit 2:
+
+| Mutation | Leg that caught it |
+|---|---|
+| `extension MeetingOfferPolicy { func startRecording() {} }` | the detector may not learn to record |
+| `var isZoom: Bool { (bundleID ?? "").contains("zoom") }` | no meeting-app name may become a predicate |
+| `peakAmplitude == 0` → `peakAmplitude < 0.005` | silence is identity with zero, not a tolerance |
+| a cloud speech vendor named in a comment | LOCAL-FIRST rule 1 / spec gate leg 4 |
+
+Clean, the runner returns 0. This matters because this repo has found gate rules
+that passed by matching nothing; a leg that has never been made to fail is not
+known to work.
+
+**These are unit checks over pure functions. They are not LAW 3 evidence for
+anything.** No signed app exists, no permission has been granted, nothing has
+been posted to production, and `overnight/mac_ear_gate.py` — the spec's five
+legs — has not been written. The card is at its first rung.
