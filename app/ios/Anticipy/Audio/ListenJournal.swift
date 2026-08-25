@@ -44,6 +44,15 @@ enum ListenEvent: Equatable {
     }
     enum SwapCause: String, Equatable {
         case error, taskLimit, routeChange, silenceRotation
+        /// The owner opened the app and the microphone was taken back.
+        ///
+        /// Its own case rather than `.routeChange` because the route did not
+        /// change — a call held the input, iOS suspended the app, and nothing
+        /// brought listening back until somebody looked at their phone. That
+        /// distinction is the finding: this count answers "how often did she
+        /// only come back because he opened the app?", which is the honest
+        /// measure of how much of the interruption hole is still open.
+        case appReturned
     }
 }
 

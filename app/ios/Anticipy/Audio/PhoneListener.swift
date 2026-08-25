@@ -1,6 +1,12 @@
 import AVFoundation
 import Foundation
 import Speech
+// For the background task assertion held across an interruption. This file is
+// not a pure policy file — it owns AVAudioEngine and SFSpeechRecognizer and
+// could never be compiled by swiftc alone — so the rule that keeps UIKit out
+// of the policies does not bind it. The decisions it makes live in
+// ListenWatchdogPolicy and ListenResumePolicy, which stay pure.
+import UIKit
 
 /// Pendant-less listening: the phone's own microphone feeds Apple's speech
 /// recognizer (on-device when supported), emitting one line per utterance.
@@ -63,6 +69,29 @@ final class PhoneListener: NSObject, ObservableObject {
     private var silenceFlush: DispatchWorkItem?
     private var watchdog: Timer?
     private var observersInstalled = false
+
+    /// Held only across an interruption, and worth ROUGHLY THIRTY SECONDS —
+    /// not a phone call.
+    ///
+    /// `UIBackgroundModes: audio` buys background execution only while audio is
+    /// actually flowing. During an interruption none is: the engine is stopped
+    /// and `configureAndStartEngine` returns at the 0 Hz guard without
+    /// installing a tap. There is no `processing` or `fetch` mode in this app
+    /// and `bluetooth-central` only fires for a pendant nobody has flashed, so
+    /// without this assertion iOS can suspend the process the moment capture
+    /// stops — and `.ended` arrives to an app that is not running, or never
+    /// arrives at all.
+    ///
+    /// What thirty seconds actually covers: Siri, a notification tapped and
+    /// dismissed, a fifteen-second call declined. Most interruptions by count,
+    /// and none of the long ones. A ten-minute call still suspends the app;
+    /// `ListenResumePolicy` is what makes THAT case recoverable, when the owner
+    /// next opens the app.
+    ///
+    /// iOS TERMINATES an app that lets an assertion expire without ending it,
+    /// which is why `endBackgroundAssertion` is also the expiration handler
+    /// rather than politeness.
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     /// Which words of the current task's text have already been sent as lines.
     ///
@@ -316,12 +345,22 @@ final class PhoneListener: NSObject, ObservableObject {
             guard let self, self.isListening else { return }
             let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             if raw.flatMap(AVAudioSession.InterruptionType.init) == .began {
+                // BEFORE `suspended`, because the moment capture stops is the
+                // moment iOS is entitled to freeze this process — and a frozen
+                // process cannot take an assertion, hear `.ended`, or run a
+                // watchdog tick. Short interruptions are the ones this saves.
+                self.beginBackgroundAssertion()
                 ListenJournal.shared.record(.sessionStopped(cause: .interruption))
                 self.suspended = true   // honest: the mic is gone right now
             } else {
                 // Ended (or unknown): take it back. The session was handed
                 // away and handed back, and the input we get back may not be
                 // the one we had.
+                //
+                // The assertion is released here whatever happens next: it has
+                // done its job the instant `.ended` was delivered, and holding
+                // one that iOS then expires is how an app gets terminated.
+                self.endBackgroundAssertion()
                 self.recoverAudio(cause: .routeChange)
             }
         }
@@ -346,12 +385,75 @@ final class PhoneListener: NSObject, ObservableObject {
         }
     }
 
+    /// Ask iOS for a little more running time while the microphone is gone.
+    ///
+    /// Ends any assertion already held first. A second `.began` with no
+    /// `.ended` between them (Siri during a call, a second call waiting) would
+    /// otherwise overwrite the identifier, and an identifier nothing can end
+    /// any more is one iOS eventually terminates the app over.
+    private func beginBackgroundAssertion() {
+        endBackgroundAssertion()
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "listen-interruption") { [weak self] in
+            // Called when iOS is out of patience. Ending it here is what keeps
+            // the app alive; letting an assertion expire unended is a
+            // termination, not a warning.
+            self?.endBackgroundAssertion()
+        }
+    }
+
+    /// Idempotent on purpose, because two paths race to end the same
+    /// assertion in either order: the expiration handler, and `.ended`
+    /// arriving. Apple's contract is that an identifier is ended once, by the
+    /// holder; ending one iOS has already reclaimed is outside it. The guard
+    /// is what makes "just call it, from anywhere" safe.
+    private func endBackgroundAssertion() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+    }
+
+    /// The owner came back and the microphone may be ours again.
+    ///
+    /// Distinct from `start()`, which is for listening that is OFF. Here
+    /// listening never stopped wanting to happen — iOS took the input away and
+    /// the app was suspended before it could take it back. `start()` would run
+    /// the two permission callbacks and then return at `begin()`'s re-entrancy
+    /// guard, doing nothing at all.
+    ///
+    /// No watchdog restart here, deliberately. A repeating `Timer` on the main
+    /// runloop is FROZEN by app suspension, not invalidated, and resumes firing
+    /// when the runloop does; and if iOS terminated the app instead, the fresh
+    /// process has `isListening == false` and `ListenResumePolicy` sends it
+    /// down the `.start` branch, which builds a new watchdog anyway. Restarting
+    /// it here would be a line with no failure behind it.
+    func retakeMicrophone() {
+        guard isListening else { return }
+        // Recorded HERE rather than left to `recoverAudio`, which suppresses
+        // its own swap line whenever `suspended` is already set — a dedupe that
+        // exists for the 4-second watchdog retry, which would otherwise write
+        // one identical line per tick for the length of a call. This path runs
+        // once, when a person opens the app, and its count is the whole point
+        // of `.appReturned` existing: it says how often listening only came
+        // back because somebody looked at their phone. Suppressed, the cause
+        // could never appear in the journal or the tally at all.
+        //
+        // The condition mirrors `recoverAudio`'s `alreadyDown` exactly, so this
+        // records when that one would not, and stays silent when it will —
+        // one line either way, never two.
+        if suspended {
+            ListenJournal.shared.record(.recognizerSwapped(cause: .appReturned))
+        }
+        recoverAudio(cause: .appReturned)
+    }
+
     /// Bring the whole capture chain back after whatever iOS did to it.
     ///
-    /// `cause` is required rather than defaulted. Three of the four callers
-    /// are failures, not route changes, and a default here would let the next
-    /// caller inherit "the route changed" for a dead AVAudioEngine — which is
-    /// the mislabelling this parameter exists to end.
+    /// `cause` is required rather than defaulted. Its five callers are three
+    /// different kinds of event — two route changes, two failures, and the
+    /// owner walking back into the app — and a default here would let the next
+    /// caller inherit "the route changed" for a dead AVAudioEngine, or for a
+    /// call that suspended the whole process. That mislabelling is what this
+    /// parameter exists to end.
     private func recoverAudio(cause: ListenEvent.SwapCause) {
         guard isListening else { return }
         // Read BEFORE the rebuild, because the rebuild is what clears it.
@@ -763,6 +865,11 @@ final class PhoneListener: NSObject, ObservableObject {
         }
         isListening = false
         suspended = false
+        // Toggling Listen off during a call is the path that reaches here with
+        // an assertion still held. Without this line it would sit until iOS
+        // expired it — not a termination, the expiration handler ends it, but
+        // background time charged to an app with nothing left to do.
+        endBackgroundAssertion()
         watchdog?.invalidate()
         watchdog = nil
         silenceFlush?.cancel()

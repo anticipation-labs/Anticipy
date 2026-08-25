@@ -31,6 +31,7 @@
 		78EE68DCD42670CAD7886BDC /* GlassControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */; };
 		7E48A45EE188911B2EFB7A66 /* TranscriberClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3C23460620BAF04806F594 /* TranscriberClient.swift */; };
 		84AE67C98C92B710BDD9A786 /* ContextGrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0ADEE2467BA67E3131CEC1 /* ContextGrant.swift */; };
+		859C9A2572940C9366F344A8 /* ListenResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */; };
 		8E57577FB951B85FBF9F584F /* CaptureSourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */; };
 		8EBF95ED1C7E5C562D44A86A /* AnswerRoutePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */; };
 		946396466F25E501C639DFF1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8095C94E5CB8E9048543E8B5 /* PrivacyInfo.xcprivacy */; };
@@ -96,6 +97,7 @@
 		D918825F71DB13464C228B73 /* ContextAskSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextAskSheet.swift; sourceTree = "<group>"; };
 		DF0ADEE2467BA67E3131CEC1 /* ContextGrant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextGrant.swift; sourceTree = "<group>"; };
 		DF9F21774275ABF326AAC99C /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenResumePolicy.swift; sourceTree = "<group>"; };
 		E0B72B7E633EA125C09A7923 /* ConversationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationCard.swift; sourceTree = "<group>"; };
 		E2204C09ACF068DDA67C8698 /* LifeContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeContext.swift; sourceTree = "<group>"; };
 		E94C340A3EF64050C750BCD7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -185,6 +187,7 @@
 				C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */,
 				BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */,
 				A66BCAC2FE553220A46D105D /* ListenJournal.swift */,
+				DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */,
 				1AEAC7CF712A4733733AB7C1 /* ListenTally.swift */,
 				B7A992D0567130EEE3198554 /* ListenWatchdogPolicy.swift */,
 				2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */,
@@ -325,6 +328,7 @@
 				65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */,
 				CC601CF895488D6287CAE43B /* LifeContext.swift in Sources */,
 				0A4F7E4B9727318D39265E30 /* ListenJournal.swift in Sources */,
+				859C9A2572940C9366F344A8 /* ListenResumePolicy.swift in Sources */,
 				F575AF0873EA378927B6B04B /* ListenTally.swift in Sources */,
 				4C31B09D72A9D889801DACB7 /* ListenWatchdogPolicy.swift in Sources */,
 				68D70E24AEE5564D0E6516E3 /* ListeningDiagnosticsView.swift in Sources */,

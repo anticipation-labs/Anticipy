@@ -1064,6 +1064,11 @@ struct HomeView: View {
 
     private var listenButtonLabel: String {
         if micNeedsHelp { return "Microphone is off" }
+        // Above the `isListening` line, because `suspended` is only ever set
+        // while `isListening` is true — the switch is on and the input is
+        // somewhere else. "Listening with phone" over a microphone a call
+        // holds is the biggest type on the screen saying the wrong thing.
+        if session.listener.suspended { return "Waiting for the microphone" }
         return session.listener.isListening ? "Listening with phone" : "Listen with phone"
     }
 
@@ -1144,8 +1149,16 @@ struct HomeView: View {
     private var briefingText: String {
         var parts: [String] = []
         // Only the phone mic actually hears anything today.
+        //
+        // `isListening` is the owner's standing wish, not a fact about the
+        // microphone: a call, Siri or another app takes the input and sets
+        // `suspended` while `isListening` stays true. Saying "I'm listening."
+        // there is the same lie the status strip's own comment exists to stop,
+        // in the FIRST line she speaks, over an input she does not have.
         if session.listener.isListening {
-            parts.append("I'm listening.")
+            parts.append(session.listener.suspended
+                         ? "Something else has the microphone right now."
+                         : "I'm listening.")
         }
         if !needsOK.isEmpty {
             parts.append("I've got \(needsOK.count) thing\(needsOK.count == 1 ? "" : "s") ready. Just say the word.")

@@ -132,6 +132,9 @@ struct ListeningDiagnosticsView: View {
         case "taskLimit": return "Restarted at Apple's time limit"
         case "routeChange": return "Restarted after an audio change"
         case "silenceRotation": return "Restarted after a long silence"
+        // The one worth reading twice. A high count here means listening kept
+        // needing a human to walk back into the app before it resumed.
+        case "appReturned": return "Restarted when you came back"
         default: return "Restarted: \(cause)"
         }
     }

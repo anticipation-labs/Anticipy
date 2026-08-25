@@ -1171,8 +1171,20 @@ final class AnticipySession: ObservableObject {
 
     /// Called on launch and on returning to foreground: if listening was on
     /// when we left, pick it right back up.
+    ///
+    /// This used to read `if keepListening, !listener.isListening` and do
+    /// NOTHING after a phone call, because no interruption anywhere in the app
+    /// clears `isListening` — the guard was false exactly when it mattered. The
+    /// decision now lives in `ListenResumePolicy`, where it can be shown to
+    /// fail with swiftc alone; this body only carries the answer out.
     func resumeListeningIfWanted() {
-        if keepListening, !listener.isListening { listener.start() }
+        switch ListenResumePolicy.decide(wantsListening: keepListening,
+                                         isListening: listener.isListening,
+                                         suspended: listener.suspended) {
+        case .start: listener.start()
+        case .retakeMicrophone: listener.retakeMicrophone()
+        case .nothing: break
+        }
     }
 
     /// Why a pairing attempt didn't work — so the UI never blames someone for

@@ -146,6 +146,47 @@ struct ListenWatchdogPolicyTests {
         check("a young request is not rotated however quiet it has been",
               young == .nothing)
 
+        // ------------------------------------------- 7. the drill, 45 ticks
+        // Check 5 asks the call question once, at one instant. The churn was
+        // never one wrong answer: it was the SAME wrong answer every four
+        // seconds for the length of the call, and a policy can be right on one
+        // tick and wrong for all of a three-minute call. So this steps the
+        // clock through the whole outage — 180 seconds, 4 seconds at a time,
+        // 45 ticks, which is the exact number of SFSpeechRecognitionTasks the
+        // old body minted while the microphone belonged to somebody else.
+        //
+        // Everything below `interrupted` is screaming for the whole stretch,
+        // deliberately: the engine never comes up (`configureAndStartEngine`
+        // returns at the 0 Hz guard, because a silenced input reports 0 Hz),
+        // no buffer and no result has arrived since the call took the
+        // microphone, words are left pending, and the request is five minutes
+        // old — past the rotation window on every single tick. Every leg has a
+        // reason to fire and none of them may.
+        let callBegan = now
+        var duringTheCall: [ListenWatchdogPolicy.Action] = []
+        for tick in 1...45 {
+            duringTheCall.append(ListenWatchdogPolicy.decide(
+                engineRunning: false, hasTask: true, interrupted: true,
+                lastBufferAt: callBegan, lastResultAt: callBegan,
+                lastPartialAt: nil,
+                requestBornAt: callBegan.addingTimeInterval(-300),
+                hasPending: true,
+                now: callBegan.addingTimeInterval(Double(tick) * 4)))
+        }
+        let mintedATaskDuringTheCall = duringTheCall.contains { action in
+            if case .swap = action { return true }
+            return action == .rotate
+        }
+        // THE COUNT, not only the absence. `.nothing` 45 times would satisfy an
+        // absence-only check while having quietly stopped retrying the engine —
+        // a different bug wearing the same symptom, because that retry is the
+        // only thing that notices a call ENDING when iOS never delivers
+        // `.ended`. Standing down has to mean standing down 45 times.
+        let stoodDown = duringTheCall.filter { $0 == .standDown }.count
+        check("a call that began 3 minutes ago never swapped the recognition task",
+              duringTheCall.count == 45 && !mintedATaskDuringTheCall
+                  && stoodDown == 45)
+
         // ------------------------------------------------------------ result
         print("")
         if failures.isEmpty {

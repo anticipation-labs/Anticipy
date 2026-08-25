@@ -23,5 +23,6 @@ sh "$HERE/run_theme_contract_tests.sh"
 sh "$HERE/run_journal_tests.sh"
 sh "$HERE/run_tally_tests.sh"
 sh "$HERE/run_watchdog_policy_tests.sh"
+sh "$HERE/run_resume_policy_tests.sh"
 
 echo "iOS logic gate: all suites passed"
