@@ -27,7 +27,8 @@ from . import research
 
 from .anticipy_core import Anticipy, goal_tokens
 from .memory import Memory
-from .segmenter import SegmentStore, place_turn
+from . import sorter
+from .segmenter import SegmentStore, parse_ts, place_turn
 from .conversation import Conversation, MockTransport, TwilioTransport
 from .llm import LLM, TZ as TZ_FALLBACK
 from .voice_arm import VoiceArm, has_credentials, rest_credential
@@ -2123,6 +2124,144 @@ ASK_QUIET_S = 120.0
 ASK_RETRY_S = 60.0
 
 
+def conversation_context(segments, ev) -> tuple:
+    """What was already said in the conversation he is IN — and nothing from
+    one he has left.
+
+    `place_turn` is what evaluates closure, and it runs AFTER hear(). So the
+    open row read here can belong to a conversation that is already over, and
+    until 2026-08-25 the FIRST LINE OF A NEW CONVERSATION was judged with the
+    previous conversation's last eight lines sitting in its prompt. That is
+    over-context, and it is the exact failure `inherited_errand` — the largest
+    word-list machine in the repo — exists to veto after the fact.
+
+    Asked at the same clock `place_turn` will ask at (capture time, falling
+    back to arrival), so the two cannot disagree about which conversation this
+    turn is in.
+
+    Returns (segment_or_None, lines). A conversation still DELIVERING is not
+    over, however quiet his clock says he has been, and keeps its context.
+    """
+    if segments is None:
+        return None, []
+    try:
+        at = parse_ts(capture_key(ev)) or datetime.now(timezone.utc)
+        seg = sorter.context_segment(segments.open_segment(), at)
+        return (seg, segments.recent_turns(seg["id"])) if seg else (None, [])
+    except Exception:
+        return None, []
+
+
+# --- SORTER: the one wall-clock evaluation of closure ---------------------
+# `should_close` is called from exactly ONE place, `place_turn`, which runs
+# only when the NEXT turn arrives. A conversation that ends and is followed by
+# silence therefore NEVER closes — its row stays status="open" forever, and
+# worker.py said so in its own words for weeks: "NOTHING reads it yet."
+#
+# The precedent for a quiet-triggered sweep is already here and already fires:
+# maybe_ask_parked (ASK_QUIET_S) and deliver_pending_digest. This is the same
+# shape, server-side, and it is the whole of what SORTER needed that did not
+# already exist.
+SHADOW_DIR = "research/evals/segment-shadow"
+
+
+def _shadow_sink(record: dict) -> None:
+    """Law 4: a conclusion that lives only in a log will be re-derived, wrong,
+    by the next session. Shadow diffs go into repo files the day they exist."""
+    try:
+        os.makedirs(SHADOW_DIR, exist_ok=True)
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with open(f"{SHADOW_DIR}/{day}.jsonl", "a") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+    except Exception as exc:
+        print(f"sorter: could not record the shadow diff — {exc!r}")
+
+
+def sweep_closed_segments(anticipy, now=None, sink=None):
+    """Close whatever conversation has gone quiet, and judge it whole.
+
+    Returns the record it produced, or None when it did nothing.
+
+    OFF IS GENUINELY OFF. With the flag unset this function reads one
+    environment variable and returns, touching no store and no model, so the
+    live per-line path is bit-for-bit what it is today.
+    """
+    want = sorter.mode()
+    if want == sorter.MODE_OFF:
+        return None
+    store = getattr(anticipy, "segments", None)
+    if store is None:
+        return None
+    now = now or datetime.now(timezone.utc)
+    try:
+        seg = store.open_segment()
+    except Exception as exc:
+        print(f"sorter: could not read the open conversation — {exc!r}")
+        return None
+    if not seg:
+        return None
+    over, why = sorter.closable(seg, now)
+    if not over:
+        return None
+
+    # Closing is a CLOCK fact. It happens whether or not a model is reachable,
+    # and it is final: a closed segment is never reopened, because reopening
+    # means retracting work that may already be running in his browser.
+    try:
+        store.close(seg, now)
+    except Exception as exc:
+        print(f"sorter: could not close {seg.get('id')} — {exc!r}")
+        return None
+    print(f"sorter: conversation {seg.get('id')} closed ({why})")
+
+    turns = store.segment_turns(seg["id"])
+    payload = sorter.render_payload(
+        turns, triaged_through_seq=int(seg.get("triaged_through_seq") or 0))
+    brain = getattr(anticipy, "brain", None)
+    llm = getattr(brain, "strong", None) or getattr(anticipy, "llm", None)
+    out = sorter.judge_segment(llm, payload)
+
+    # The provenance backstop, evidence-scoped. An item that spends vocabulary
+    # its OWN cited turns never held is dropped here rather than downstream,
+    # so the record says which item and why.
+    kept, dropped = [], list(out["dropped"])
+    for item in out["items"]:
+        if sorter.invents_beyond_evidence(item, payload):
+            novel = sorter.unevidenced_tokens(
+                item.get("goal") or "", sorter.evidence_texts(item, payload))
+            dropped.append((str(item.get("goal") or ""),
+                            f"invents {sorted(novel)} against its own evidence"))
+        else:
+            kept.append(item)
+    out = dict(out, items=kept, dropped=dropped)
+
+    effective = want
+    if want == sorter.MODE_ON:
+        # `on` still needs hear()'s funnel — the owner-is-a-party question,
+        # the consequential hold, quiet research, the held card and its one
+        # go-ahead text, the meeting hold, the ask valve — EXTRACTED, not
+        # reimplemented. A second copy of that logic is how the organs get
+        # lost. Until that extraction lands, `on` is DEMOTED to shadow, out
+        # loud, in the printout and in the record. A lane that half-acts
+        # while its flag says it is live is the worst of the three states.
+        print("sorter: ANTICIPY_SEGMENT_TRIAGE=on, but hear()'s funnel is not "
+              "extracted yet — running as shadow, acting on nothing")
+        effective = sorter.MODE_SHADOW
+
+    record = dict(out, segment=seg["id"], why_closed=why, mode=effective,
+                  requested_mode=want, turns=len(payload["turns"]),
+                  words=payload["words"], at=now.isoformat())
+    (sink or _shadow_sink)(record)
+
+    # In shadow the judge writes NOTHING — in particular not `summary` back
+    # onto the segment row. The live per-line path reads it as decide_link's
+    # prefilter, so a shadow that edits it is not a shadow.
+    if sorter.writes_back(effective) and out["advance_cursor"]:
+        store.write_verdict(seg, out["summary"], out["entities"],
+                            max(payload["ordinals"] or [0]))
+    return record
+
+
 def maybe_ask_parked(anticipy, now: float = 0.0) -> None:
     """Send the parked question, fully governed: real quiet, daylight only,
     counted against the daily uninvited cap, deduped against what she has
@@ -3275,15 +3414,7 @@ def main() -> None:
                     continue
                 # What was already said in this conversation, so a question
                 # never arrives stripped of what it was about.
-                convo_context = []
-                open_seg = None
-                if segments is not None:
-                    try:
-                        open_seg = segments.open_segment()
-                        if open_seg:
-                            convo_context = segments.recent_turns(open_seg["id"])
-                    except Exception:
-                        convo_context = []
+                open_seg, convo_context = conversation_context(segments, ev)
                 # Which earlier line does this one carry on from? Asked as
                 # part of the triage call that already runs, so it costs no
                 # extra request. `cands` is the index space the model answers
@@ -3396,6 +3527,15 @@ def main() -> None:
             # A digest that could not send earlier (quiet hours, blip)
             # goes out as soon as it is allowed to.
             deliver_pending_digest(anticipy)
+
+            # A conversation that ended and was followed by SILENCE has to be
+            # noticed by a clock, because no further turn is coming to notice
+            # it. Off by default: with the flag unset this reads one
+            # environment variable and returns.
+            try:
+                sweep_closed_segments(anticipy)
+            except Exception as e:
+                print(f"sorter: sweep skipped ({e!r})")
 
             # A parked question gets asked once the room is REALLY quiet —
             # never into a live meeting, never at night, never past the

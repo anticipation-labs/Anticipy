@@ -298,7 +298,22 @@ class SegmentStore:
 
     def recent_turns(self, segment_id: str, limit: int = 8) -> list[str]:
         """What was already said in this conversation — the context a question
-        needs. 'What time is the demo day Monday' means nothing alone."""
+        needs. 'What time is the demo day Monday' means nothing alone.
+
+        ORDERED BY CAPTURE TIME, not by arrival. This function is the one that
+        feeds the model, and until 2026-08-25 it sorted `-created` — the
+        moment the row landed — which is precisely the rule this module's own
+        docstring calls THE ONE THAT MUST NEVER BE BROKEN, and precisely the
+        bug Omi ships as #6551. Our pendant is store-and-forward: it buffers
+        and flushes, so a backlog reaches the prompt out of order and the
+        model reads a plan that was never said in that order.
+
+        The fetch still asks PocketBase for `-created`, because
+        `capture_started_at` is EMPTY on every historical row and sorting
+        server-side by it would bury them. A wider window is pulled and the
+        order is settled here, where `capture_span`'s fallback to `created`
+        keeps old builds behaving exactly as they do today.
+        """
         try:
             filt = f'segment="{segment_id}" && kind="transcript"'
             owner_filter = self._owner_filter()
@@ -306,11 +321,63 @@ class SegmentStore:
                 filt += f" && {owner_filter}"
             r = pb.get(f"{self.base}/api/collections/events/records",
                        params={"filter": filt,
-                               "sort": "-created", "perPage": limit})
+                               "sort": "-created",
+                               "perPage": max(limit * 4, limit)})
             items = r.json().get("items", []) if r.ok else []
-            return [i.get("text", "") for i in reversed(items) if i.get("text")]
+            spoken = []
+            for i in items:
+                if not i.get("text"):
+                    continue
+                start, end = capture_span(i)
+                if start is None:
+                    continue
+                spoken.append((start, end or start, str(i.get("id") or ""),
+                               i["text"]))
+            spoken.sort(key=lambda s: (s[0], s[1], s[2]))
+            return [text for *_, text in spoken[-limit:]]
         except Exception:
             return []
+
+    def segment_turns(self, segment_id: str, limit: int = 200) -> list[dict]:
+        """The WHOLE conversation as rows, in capture order — what the segment
+        judge is asked about. `recent_turns` returns the last few as bare
+        strings, which is all a per-line prompt could carry; this returns the
+        rows themselves, so ordinals, capture clocks, voice verdicts and
+        capture source survive into the payload."""
+        try:
+            filt = f'segment="{segment_id}" && kind="transcript"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt += f" && {owner_filter}"
+            r = pb.get(f"{self.base}/api/collections/events/records",
+                       params={"filter": filt, "sort": "-created",
+                               "perPage": limit})
+            items = r.json().get("items", []) if r.ok else []
+            placed = []
+            for i in items:
+                start, end = capture_span(i)
+                if start is None:
+                    continue
+                placed.append((start, end or start, str(i.get("id") or ""), i))
+            placed.sort(key=lambda p: (p[0], p[1], p[2]))
+            return [row for *_, row in placed]
+        except Exception:
+            return []
+
+    def write_verdict(self, segment: dict, summary: str, entities: list,
+                      through: int) -> None:
+        """What the judge produced, back onto the row. `decide_link` reads
+        `summary` and `entities` as its prefilter and the next segment reads
+        the summary as thread context, so this call is never wasted — which is
+        exactly why a SHADOW run must never make it."""
+        try:
+            pb.patch(f"{self.base}/api/collections/segments/records/{segment['id']}",
+                     json={"summary": summary,
+                           "entities": json.dumps([str(e) for e in entities][:40]),
+                           "triaged_through_seq": int(through or 0),
+                           "dirty": False})
+        except Exception:
+            pass
 
     def create(self, started: datetime, parent: Optional[str] = None) -> Optional[dict]:
         try:
