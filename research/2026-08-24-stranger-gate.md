@@ -315,15 +315,23 @@ unreachable, and there is a test for each proving it.
 - Legs 3, 4, 5 are about the **iOS app**, which has no served artifact — there
   is no URL to compare a build against. `is_the_brain_live.py` exists because
   the worker has the same problem. The only live proof for these is a device.
-- Leg 6 is about the **worker**, same reason. Its guard could in principle be
-  probed by watching a real welcome arrive at 2am, which is a week, not a gate.
+- Legs 6 and 8 are about the **worker**, same reason: no served artifact, so
+  no URL to compare against. Leg 6's guard could in principle be probed by
+  watching a real welcome arrive at 2am, which is a week, not a gate; leg 8's
+  `MediaUrl` could be probed by sending a real MMS, which is a phone bill and
+  a person.
 - Leg 7's server half **is** effectively live-adjacent (`workflow_guard.pb.js`
   was probed as deployed by the walkthrough); its app half is not.
 - Leg 2 is by definition about the tree — it is the pre-deploy check that makes
   leg 1 fixable.
 
-Per Law 3: **five of nine legs going green proves the repo, not the product.**
-Only legs 1 and 9 survive a bad deploy.
+Per Law 3: **seven of nine legs going green proves the repo, not the product**
+— legs 2, 3, 4, 5, 6, 7 and 8. Only legs 1 and 9 survive a bad deploy.
+
+*Corrected 2026-08-25. This section said "five of nine" and its enumeration
+named 2–7, leaving leg 8 out altogether. The count is now computed from `LEGS`
+and printed by the gate's own READY message rather than remembered here, since
+a number written by hand is exactly what rotted.*
 
 ---
 
