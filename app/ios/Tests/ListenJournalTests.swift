@@ -157,6 +157,80 @@ struct ListenJournalTests {
               roomy.kept == 200 && roomy.reads == 200 && !roomy.torn
                   && tight.kept == 64 && tight.reads == 200 && !tight.torn)
 
+        // ------------------------------------------------------------ 8. it survives the process
+        // The ring holds ~400 lines and dies with the app. A day of listening
+        // is longer than that and the failure worth reading is usually the one
+        // that killed the process, so the ring alone cannot answer "what
+        // happened this morning". A file sink can.
+        //
+        // Bounded and rotated for the reason the class header already gives:
+        // backend/start.sh exists in this repo because a disposable log filled
+        // a volume and took production down. Two files, newest wins.
+        func tempDir() -> URL {
+            let d = FileManager.default.temporaryDirectory
+                .appendingPathComponent("journal-\(UUID().uuidString)")
+            try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+            return d
+        }
+
+        let dirA = tempDir()
+        let fileA = dirA.appendingPathComponent("listen-journal.log")
+        let persisted = ListenJournal(limit: 10, fileURL: fileA)
+        persisted.record(.sessionStarted, at: t0)
+        persisted.record(.flushed(reason: "gap", words: 7), at: t0.addingTimeInterval(1))
+        check("what was recorded can be read back after the object is gone",
+              persisted.persistedLines.count == 2
+                  && persisted.persistedLines[0].contains("sessionStarted")
+                  && persisted.persistedLines[1].contains("7 words"))
+
+        // Oldest first across the rotation boundary too, for the same reason
+        // entries is: a session that failed is read from its start.
+        let dirB = tempDir()
+        let fileB = dirB.appendingPathComponent("listen-journal.log")
+        let rolling = ListenJournal(limit: 10_000, fileURL: fileB, rotateAtBytes: 2_048)
+        for i in 0..<400 {
+            rolling.record(.posted(ok: true, detail: "line\(i)"), at: t0)
+        }
+        let all = rolling.persistedLines
+        check("a file past the cap rotates rather than growing without end",
+              FileManager.default.fileExists(atPath: fileB.appendingPathExtension("1").path))
+        check("the newest line is in the newest file, and survives the rotation",
+              all.last?.contains("line399") == true)
+        check("rotation keeps two files, never more",
+              !FileManager.default.fileExists(atPath: fileB.appendingPathExtension("2").path))
+        check("no single file is allowed past the cap by much",
+              (try? FileManager.default.attributesOfItem(atPath: fileB.path)[.size] as? Int)
+                  .flatMap { $0 } ?? 0 < 8_192)
+
+        // The journal is exportable from Settings, so anything written here
+        // leaves the phone on a person's tap. design/LOCAL-FIRST.md governs it:
+        // a flush is a word COUNT, never the words.
+        let dirC = tempDir()
+        let fileC = dirC.appendingPathComponent("listen-journal.log")
+        let priv = ListenJournal(limit: 10, fileURL: fileC)
+        priv.record(.flushed(reason: "ceiling", words: 12), at: t0)
+        priv.record(.posted(ok: false, detail: "requeued, offline"), at: t0)
+        // record() is async — it must be, because it is called from the audio
+        // thread and now touches a file. So a check that reads the file
+        // DIRECTLY has to drain the queue first; any read through the journal
+        // does that by entering the same serial queue. Without this line the
+        // file is simply empty here and the check fails for a reason that has
+        // nothing to do with what it is testing.
+        _ = priv.persistedLines
+        let onDisk = (try? String(contentsOf: fileC, encoding: .utf8)) ?? ""
+        check("nothing written to disk carries transcript text",
+              !onDisk.isEmpty && onDisk.contains("12 words")
+                  && !onDisk.lowercased().contains("the quick brown"))
+
+        // A journal with no file is still a journal. The ring must work when
+        // the sink cannot be opened at all, because a diagnostic that needs
+        // disk to function is useless on the device that ran out of it.
+        let noFile = ListenJournal(limit: 3,
+                                   fileURL: URL(fileURLWithPath: "/nope/nowhere/x.log"))
+        noFile.record(.sessionStarted, at: t0)
+        check("an unopenable sink never costs us the in-memory journal",
+              noFile.entries.count == 1 && noFile.persistedLines.isEmpty)
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {
