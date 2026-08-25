@@ -102,6 +102,7 @@ echo "the battery is reported with its window, and not graded"
 
 swiftc -O \
     "$app/Audio/ListenJournal.swift" \
+    "$app/Audio/ListenSessionFacts.swift" \
     "$app/Audio/ListenTally.swift" \
     "$here/ListenTallyTests.swift" \
     -o "$out/tallytests"
