@@ -321,6 +321,29 @@ routerUse((e) => {
           }
         }
       }
+      // A PICTURE OF THE PAGE IS THE ONE THING ONLY THE BROWSER HOLDS.
+      //
+      // `evidence` (1700000045_evidence.js) is where a receipt photo lives so
+      // that a done-text can carry it. The bytes exist for a few seconds
+      // inside the extension and nowhere else, so without this branch the host
+      // is a room with no door. Depositing through the collection API rather
+      // than a bespoke upload route is deliberate: PocketBase already does the
+      // multipart handling, the size ceiling and the mime allowlist, and the
+      // only thing left to decide here is authorisation.
+      //
+      // CREATE ONLY, and only for the owner this credential actually resolves
+      // to. `owner_ref` in the body is a client-authored CLAIM — the same
+      // shape as the `legacy_uuid` hole account_delete.pb.js:22-30 records —
+      // so it is compared against `ownerRef` rather than trusted. Update and
+      // delete never reach here at all: the collection's own updateRule and
+      // deleteRule are null, so a browser can deposit evidence and can never
+      // come back to re-point the share window that makes it publicly
+      // fetchable, or destroy the proof of what it did.
+      const evidenceBase = "/api/collections/evidence/records";
+      if (ownerRef && method === "POST" && path === evidenceBase
+          && String(body().owner_ref || "") === ownerRef) {
+        return e.next();
+      }
       return e.json(403, { error: "agent is not allowed to access that record" });
     }
     // A THROWN lookup and an EMPTY one are not the same event, and the code
@@ -384,7 +407,13 @@ routerUse((e) => {
       const ownersBase = "/api/collections/owners/records";
       if (path === ownersBase + "/" + authId) return e.next();
 
-      const match = path.match(/^\/api\/collections\/(jobs|events|owner_profile|segments|agents|pendants)\/records(?:\/([^/]+))?$/);
+      // `evidence` joins the list so the phone can FIND the receipt photo for
+      // a job before it renders it. Nothing else changes: the owner-scoping
+      // below already covers it (a filtered list must name this account, a
+      // single record must belong to it), and the collection's null
+      // update/delete rules mean the widening cannot become a way to edit or
+      // erase a receipt even though this branch would permit the request.
+      const match = path.match(/^\/api\/collections\/(jobs|events|owner_profile|segments|agents|pendants|evidence)\/records(?:\/([^/]+))?$/);
       if (!match) return e.json(403, { error: "account is not allowed to access that collection" });
       const collection = match[1];
       const recordId = match[2] || "";

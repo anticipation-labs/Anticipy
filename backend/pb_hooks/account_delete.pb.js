@@ -67,6 +67,14 @@ routerAdd("POST", "/me/delete", (e) => {
     // at 300 rows globally, which is a disk-space defence, not a privacy control.
     { name: "agent_llm_audit", legacy: null },
     { name: "agent_audit_sessions", legacy: null },
+    // A photograph of a page they were logged into is the densest single
+    // thing this product will ever hold about somebody. Its owner_ref is a
+    // TEXT column with no cascade, exactly like the audit rows above, so
+    // nothing else would ever remove it — and deleting the record is also
+    // what removes the stored FILE from the volume. The retention sweep in
+    // evidence.pb.js is a disk-space defence, not a privacy control: it caps
+    // the table, it does not honour anybody's erasure.
+    { name: "evidence", legacy: null },
     // Last and largest, so a timeout lands on the cheapest table to retry.
     { name: "events", legacy: null },
   ];
