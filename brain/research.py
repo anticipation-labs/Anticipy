@@ -72,7 +72,7 @@ _QUERY_LABEL = re.compile(
 
 
 def query_from_goal(goal: str) -> str:
-    """The goal with an explicitly-labelled prefix removed, never a verb.
+    r"""The goal with an explicitly-labelled prefix removed, never a verb.
 
     Falls back to the whole goal when stripping would leave nothing: an empty
     query searches for nothing and returns nothing, silently, which reads
@@ -287,6 +287,24 @@ def run_research(goal: str, params: Optional[dict] = None, llm=None,
     citations. Returns {"ok": bool, "result": str} and never raises — a
     crashed pass would leave the job stuck at `running` forever."""
     query = query_from_goal(goal)
+    # THE SEARCH STRING AND THE QUESTION ARE NOT THE SAME OBJECT.
+    #
+    # `query_from_goal` runs a verb list over the goal. Gated behind a mandatory
+    # separator that is safe for SEARCH TERMS — deciding what string a search
+    # engine is handed is plumbing, which is the carve-out HARNESS-LAWS law 1
+    # makes for senses — and it is NOT safe for the question the answering model
+    # is asked, because that is meaning. Both used to be the stripped string:
+    #
+    #   "compare: the two quotes from the movers"
+    #     -> Brave gets "the two quotes from the movers"          (right)
+    #     -> the model was ASKED "the two quotes from the movers"  (wrong)
+    #
+    # which is the original defect the separator was supposed to close, reached
+    # by adding a colon: comparing IS the task, and the answer came back
+    # describing two quotes instead of comparing them. So the model is asked
+    # what the owner asked, and the word list is left doing the one thing it can
+    # legitimately do.
+    asked = (goal or "").strip() or query
     client = brave or (BraveClient(api_key) if api_key else None)
     if client is None:
         return {"ok": False, "result": "No search backend is configured."}
@@ -314,7 +332,7 @@ def run_research(goal: str, params: Optional[dict] = None, llm=None,
         sources.append({"n": i, "title": res["title"], "url": res["url"],
                         "description": res["description"],
                         "content": content or res["description"]})
-    summary = _summarize(query, sources, llm=llm)
+    summary = _summarize(asked, sources, llm=llm)
     listed = "\n".join(f"[{s['n']}] {s['title']} — {s['url']}" for s in sources)
     return {"ok": True, "result": f"{summary}\n\nSources:\n{listed}"}
 

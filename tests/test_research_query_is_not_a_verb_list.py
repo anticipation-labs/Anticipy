@@ -70,6 +70,54 @@ def test_an_empty_or_bare_goal_never_becomes_empty():
     assert query_from_goal("   ") == ""
 
 
+def test_the_stripped_label_never_changes_the_QUESTION_THAT_GETS_ANSWERED():
+    """The residual half of the same defect, found reviewing the repair.
+
+    The separator makes the verb list safe to run over SEARCH TERMS — deciding
+    what string a search engine is handed is plumbing, and Law 1's carve-out
+    for senses covers it. It does not make the list safe to run over the
+    QUESTION, and `run_research` was handing the stripped string to both:
+
+        "compare: the two quotes from the movers"
+            -> Brave gets "the two quotes from the movers"     (fine)
+            -> the answering model is ASKED "the two quotes from the movers"
+
+    which is the original failure exactly — comparing IS the task, and the
+    answer comes back describing two quotes instead of comparing them. It just
+    needed a colon to reach it. So the model is asked what the owner asked, and
+    the word list is left doing only the one thing it can legitimately do.
+    """
+    import types
+    import brain.research as r
+
+    class Brave:
+        def __init__(self):
+            self.queries = []
+
+        def search(self, query, count=5):
+            self.queries.append(query)
+            return [{"title": "Movers", "url": "https://example.com/movers",
+                     "description": "Two quotes."}]
+
+    class LLM:
+        live = True
+
+        def __init__(self):
+            self.asked = []
+
+        def chat(self, system, user, **kw):
+            self.asked.append(user)
+            return types.SimpleNamespace(text="Quote A is cheaper [1].")
+
+    brave, llm = Brave(), LLM()
+    r.run_research("compare: the two quotes from the movers", {}, llm=llm,
+                   brave=brave, fetcher=lambda url: "Quote A $900, quote B $1200.")
+    assert brave.queries == ["the two quotes from the movers"], \
+        "the search string is plumbing and the label still comes off it"
+    assert "compare" in llm.asked[0].lower(), \
+        "the answering model was asked a question the word list had rewritten"
+
+
 def test_only_the_first_label_is_stripped():
     """count=1. Two labels means the second is part of what he asked for —
     "research: look up: the ferry" is asking about a thing called "look up:"
