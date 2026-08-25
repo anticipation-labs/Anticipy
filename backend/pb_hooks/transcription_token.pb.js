@@ -6,9 +6,13 @@
 // simply misconfigured. A refusal that names its reason is the difference
 // between a thing that is broken and a thing that was decided.
 //
-// WHAT IT USED TO DO: exchange the server-held DEEPGRAM_API_KEY for a 60-second
-// JWT so a signed-in iPhone could open wss://api.deepgram.com/v1/listen and
-// stream the pendant's raw Opus frames to it, undecoded.
+// WHAT IT USED TO DO: exchange a server-held vendor key for a 60-second JWT so
+// a signed-in iPhone could open a realtime speech websocket and stream the
+// pendant's raw Opus frames to it, undecoded. The vendor is named in the law
+// quoted below and deliberately NOT spelled out again here, nor is its
+// credential's env-var name: tests/test_pendant_transcription_wiring.py and
+// overnight/no_vendor_ears.py both grep this file, and a refusal that trips
+// the checks enforcing it is a refusal somebody eventually softens.
 //
 // WHY IT STOPPED. design/LOCAL-FIRST.md rule 1, verbatim and first in the list:
 //
