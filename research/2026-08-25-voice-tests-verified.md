@@ -187,26 +187,49 @@ while the server holds nothing. Then two sub-cases, and the diagnostics screen
 separates them:
 
 - `Lines that did not reach the server` **present and rising** → posts are being attempted and refused. `ListenTally.swift:295` counts `.posted(ok: false)`. The line is on the disk queue and the home screen says *"N things you said are waiting for a signal."*
-- `Lines that did not reach the server` **absent** (`postsFailed == 0`) and `Words sent` large → **the phone is signed out.** This is the previous report's mechanism 4 and it is **still live in HEAD**:
+- `Lines that did not reach the server` **absent** (`postsFailed == 0`) while `Words sent` is large → posts are not being *attempted* at all. See the correction immediately below before concluding anything from this.
+
+### Correction to the previous report's mechanism 4 — it is far narrower than claimed
+
+The previous report described a signed-out phone that "keeps transcribing
+beautifully" while every line is rendered twice and dropped, with no queue, no
+banner and no journal trace. The early return is real —
+`AnticipyApp.swift`, in `heard(...)`:
 
 ```swift
-// AnticipyApp.swift, heard(...)
 sessionLines.append(SessionLine(text: line))
 transcript.append(TranscriptLine(id: "local-\(UUID().uuidString)", …))
-guard !accountID.isEmpty else { return }        // ← before the push AND before the journal
+guard !accountID.isEmpty else { return }   // before the push AND before the journal
 ```
 
-The early return happens **before both** the `backend.pushEvent` call and the
-`ListenJournal.shared.record(.posted(...))` on either branch. So a signed-out
-phone transcribes beautifully, renders every line twice on screen, records
-`.flushed` in the journal, records **no `.posted` event of any kind**, never
-queues, and leaves `pendingCount` at 0 so the "waiting for a signal" banner
-never appears. The row keeps its `circle.dotted` (`ContentView.swift:1703`)
-forever, which reads as "still sending".
+It returns before both the `backend.pushEvent` call and the
+`ListenJournal.shared.record(.posted(...))` on either branch, so a line lost
+here genuinely leaves no trace of any kind. **But the state it guards against
+cannot persist**, and the previous report did not check that:
 
-That combination — words flushed, zero posts attempted, no failure row, no
-pending banner — is produced by nothing else, and it is legible in about four
-seconds from a screen that already ships.
+- `signOut()` calls **`listener.stop()`** — and its own comment records that this was the fix for exactly the scenario the previous report describes: *"the AVAudioEngine tap stayed installed and the room kept being transcribed behind the sign-in door."*
+- `git show 6e277694:app/ios/Anticipy/AnticipyApp.swift` — **build 76 already has it.** So the fix predates the build the previous report was written about.
+- `isSignedIn` is `!accountID.isEmpty && !authToken.isEmpty` (`:1098`), and `AnticipyApp.swift:27` swaps the entire window to `AuthView` the instant it goes false. A signed-out tester is looking at the sign-in screen, not at a healthy home screen.
+
+So `guard !accountID.isEmpty` is **belt-and-braces for a race** — a line already
+in flight when the credentials clear — not a sustained failure mode. It can eat
+one or two lines at the moment of a forced sign-out. It cannot eat a day.
+
+**This is the fifth claim in that report that did not survive checking, and it
+matters because it is the one a tester would most easily mistake for the
+answer.** `postsFailed == 0` with `Words sent` high therefore points at
+something else — most likely that the app was restarted and the tally is
+reading a fresh journal — and the tester should be sent to `Times listening
+started` and `Longest stretch hearing nothing` rather than to the sign-in
+screen.
+
+**What still separates the two delivery failures**, which is the useful half:
+`Lines that did not reach the server` **present and rising** means posts are
+being refused and the line is safe on the disk queue, with the home screen
+saying *"N things you said are waiting for a signal."* Its absence means no
+post was ever refused. Neither number can be read without `Words sent` beside
+it, and that pair is legible in about four seconds from a screen that already
+ships.
 
 ---
 
@@ -275,6 +298,14 @@ central prohibition, at severity H, on the intake router every voice line
 crosses.
 
 ---
+
+## Reconciled against three findings that landed the same night
+
+Checked after this file's first draft, and recorded so nobody re-checks them.
+
+1. **`AnticipyVocabulary` works** (`research/2026-08-25-claim-audit.md`, `501c1184`). The "SpeechTranscriber silently ignores `contextualStrings`" claim is a true fact about Apple's *newer* API and a wrong description of this codebase — nothing here touches `SpeechTranscriber`, `SpeechAnalyzer` or `AnalysisContext`, and both shipping sites use `SFSpeechAudioBufferRecognitionRequest`, where contextual strings do work. **Neither document here made a vocabulary claim in either direction**, so nothing needed correcting; noted so the next reader does not go looking.
+2. **The word-error-rate rig exists and has never been run** (`research/2026-08-25-transcription-quality.md`, `c1cf82b2`). `proof/engine_or_audio.py` is 1,400 lines with a 370-word ground-truth script, a recording protocol, pre-registered thresholds and 57 tests; `proof/runs/` does not exist, because the ~40-line scratch recorder that writes the mic tap to a WAV was never written. Confirmed by inspection. The test script now points a tester at that gap in Part 2 instead of inviting them to judge accuracy by ear, and asks for the one thing that *is* useful without the rig: the exact sentence said next to the exact row returned.
+3. **The extension version number is not evidence.** Production serves 0.8.4 against source 0.11.0 — the finding in the section above — and separately the *committed* zip has been found declaring 0.11.0 while the `agent_loop.js` inside it was older. So the Law 3 conclusion above stands on the served version being one that was **never committed at all**, which no manifest edit can explain, rather than on any single version string. The test script's Appendix C now says a version number does not settle it.
 
 ## Corrections owed to other files
 

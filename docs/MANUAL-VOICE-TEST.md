@@ -106,13 +106,14 @@ repeat a test that has already failed to produce an answer twice.
 
 ### 0.3 — Are you signed in?
 
-**Look:** Settings → your account details are filled in, not blank.
+**Look:** the screen you are on. **If you can see the home screen with the
+waveform, you are signed in.** If you are looking at a sign-in screen, that is
+your answer — sign in first.
 
-**Why this one matters more than it looks:** a signed-out phone still hears you,
-still writes every sentence on screen, and **silently throws all of it away** —
-no error, no warning, no "waiting to send" message. It is the single most
-convincing way for the product to look healthy while doing nothing. Part 3
-below catches it, but check now and save yourself the trip.
+**Why this takes one second and not more:** signing out also switches the
+microphone off and swaps the whole app to the sign-in door, so "signed out and
+quietly still listening" is not a state this app can be in. If anyone tells you
+to suspect it, they are working from an older description of the code.
 
 ### 0.4 — Is your phone number saved?
 
@@ -271,6 +272,25 @@ is fine. **You are checking that disfluent speech is not silently discarded.**
 is not. That is worth reporting on its own, because every test anyone has run so
 far has been in clean sentences.
 
+### What Part 2 can and cannot tell you
+
+This part checks that speech **survives** — that it becomes a row rather than
+vanishing. It does **not** measure how *accurate* the transcription is, and you
+should not try to judge that by eye.
+
+There is a proper instrument for accuracy, and its status is worth knowing
+before you spend the night counting misheard words: `proof/engine_or_audio.py`
+is a finished 1,400-line word-error-rate harness with a 370-word script,
+pre-registered thresholds and 57 tests — and **it has never been run once**,
+because the ~40-line piece that saves the microphone to a sound file was never
+written and `proof/runs/` does not exist. (See
+`research/2026-08-25-transcription-quality.md`.)
+
+So if the words come back wrong, **write down the exact sentence you said and
+the exact row you got**, and stop there. That pair is genuinely useful data. An
+impression that "it's inconsistent" is not, and it is what every previous
+attempt has produced.
+
 ---
 
 # PART 3 — Does it reach the server?
@@ -307,7 +327,7 @@ server"**.
 | Waiting-for-a-signal banner | "Lines that did not reach the server" | What it means |
 |---|---|---|
 | Yes, N above 0 | Present, rising | **A network or server problem.** She captured everything, could not deliver it, and is holding it on disk to retry. Nothing is lost. Get a better signal and watch N fall to zero. |
-| **No banner at all** | **Absent**, while **Words sent** is large | **The phone is signed out.** This is the nastiest failure in the product: every sentence is transcribed, drawn on screen twice, and thrown away without being queued, without an error, and without a single trace in the log. Sign in, and **redo Parts 1–3** — everything you said while signed out is gone for good. |
+| **No banner at all** | **Absent**, while **Words sent** is large | No post was ever *attempted*. The most likely reason is dull: the app restarted and this screen is reading a fresh record. Check **Times listening started** — if it says 1 and you know you started listening earlier, the app was killed and restarted. Report the numbers and the time. |
 | No banner | Present | Posts are being refused. Report the number and the time. |
 
 **If rows are checkmarked but the server has no record**, that is not something
@@ -643,4 +663,4 @@ If you hit one of these, it is already on record. Do not spend the night on it.
 - **A card with the heading "Quick question for you" and no question underneath.** She formed a question, could not find a quiet moment to ask it, and the header shipped anyway.
 - **Nothing about *why* a sentence was ignored, anywhere.** The reason is computed and then discarded — it is never written down. Six different silences are indistinguishable from outside. This is the top item on the fix list.
 - **Speaker is always empty** on every line ever recorded, unless you did Step 0.6.
-- **The browser extension being served from the website is an old version.** If you set up a computer from that download, you get eight-day-old code. Someone should redeploy.
+- **The browser extension served from the website is an old version.** Production serves 0.8.4 against a source of 0.11.0, so a computer set up from that download gets roughly eight-day-old code. Someone is rebuilding it. **A version number alone does not settle this** — the committed package has also been found claiming 0.11.0 while the code inside it was older, so if this matters to your test, ask rather than reading the number off a screen.
