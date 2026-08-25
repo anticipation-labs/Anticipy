@@ -1098,3 +1098,240 @@ def test_a_retrofitted_database_has_the_same_shape_as_a_fresh_one(tmp_path):
     migrated = Memory(path=_old_database(tmp_path))
     for table in ("episodes", "profile_facts"):
         assert _columns(fresh.db, table) == _columns(migrated.db, table), table
+
+
+# ====================================== the DESTRUCTIVE decisions hear it too
+# `episodes.speaker` was stored, was carried onto every commitment and into
+# briefing_facts, and was dropped at exactly the two places where a line can
+# KILL a fact or put a value into a form. LAW 5 order: the sense exists and is
+# captured, and the destructive decision was the one place it was not passed
+# along.
+#
+# Reproduced against the shipped code, ONE scenario, TWO doors:
+#
+#   episodes: (1,'owner','Dana and I are heading to Lisbon.')
+#             (2,'other',"Oh, didn't you hear? Omar and Dana broke up.")
+#   listing the model saw: "[2] Oh, didn't you hear? Omar and Dana broke up."
+#   live profile: ['broke up with Dana']
+#   retired:      ('partner is Dana', ..., source='consolidation')
+#
+#   recall(...) -> src_type='episode' source=<absent> — trusted half of
+#   memory_notes, unfenced, and eligible to settle a gap in an approved plan.
+#
+# One tag closes both: memory.OVERHEARD is in _UNTRUSTED_SOURCES, so the fence
+# every consumer already keys on does the rest.
+
+import time  # noqa: E402
+
+from brain.anticipy_core import _UNTRUSTED_SOURCES, memory_notes  # noqa: E402
+from brain.memory import OVERHEARD, RETIRED_EXCLUDED  # noqa: E402
+from llm_fakes import FakeLLM  # noqa: E402
+
+DAY = 86400.0
+
+
+def _breakup_overheard(now, speaker):
+    """The owner says one thing forty days ago; somebody in earshot
+    contradicts it yesterday. `speaker` is the phone's verdict on THAT second
+    line and is the only thing that varies."""
+    llm = FakeLLM(
+        consolidations=[
+            {"facts": [{"fact": "partner is Dana", "importance": 5,
+                        "episode_ids": [1], "kind": "stable"}]},
+            {"facts": [{"fact": "broke up with Dana", "importance": 3,
+                        "episode_ids": [2]}]},
+        ],
+        relations=["replaces"])
+    m = Memory(":memory:", llm=llm)
+    m.ingest("Dana and I are heading to Lisbon.", ts=now - 40 * DAY,
+             speaker="owner")
+    m.consolidate(now=now - 40 * DAY)
+    m.ingest("Oh, didn't you hear? Omar and Dana broke up.", ts=now - DAY,
+             speaker=speaker)
+    m.consolidate(now=now - DAY)
+    return m, llm
+
+
+def test_the_consolidation_listing_says_who_spoke():
+    """The listing was f"[{r[0]}] {r[2]}" — id and text. The judgement stays
+    with the model that can see the whole day; what changed is that it is no
+    longer being asked blind."""
+    now = time.time()
+    _m, llm = _breakup_overheard(now, "other")
+    shown = llm.consolidation_calls()[-1]
+    assert "NOT them" in shown, shown
+    _m2, llm2 = _breakup_overheard(now, "owner")
+    assert "(them)" in llm2.consolidation_calls()[-1]
+
+
+def test_an_unattributed_line_is_listed_exactly_as_it_always_was():
+    """The honesty wall, at the prompt. Live roster coverage is 0%, so almost
+    every line carries no verdict; a tag on every line would teach the model
+    that an untagged line is unusual, and it is the ordinary case."""
+    now = time.time()
+    _m, llm = _breakup_overheard(now, None)
+    shown = llm.consolidation_calls()[-1]
+    assert shown == "[2] Oh, didn't you hear? Omar and Dana broke up.", shown
+
+
+def test_a_line_the_phone_says_was_not_the_owner_cannot_retire_what_he_said():
+    """The harm, end to end. A colleague, a guest or a television says "they
+    broke up" in earshot and the fact the OWNER stated dies. The fact still
+    lands — it just does not get to kill anything, exactly as a mailed one
+    does not."""
+    now = time.time()
+    m, _llm = _breakup_overheard(now, "other")
+    live = sorted(f["fact"] for f in m.profile_facts())
+    assert live == ["broke up with Dana", "partner is Dana"], live
+    assert m.db.execute(
+        "SELECT COUNT(*) FROM profile_facts WHERE retired_ts IS NOT NULL"
+    ).fetchone()[0] == 0
+
+
+def test_the_owners_own_line_still_retires_what_he_said_before():
+    """The direction that must NOT be fenced, or the feature is off. Same
+    scenario, same model verdict; only the voice tag differs."""
+    now = time.time()
+    m, _llm = _breakup_overheard(now, "owner")
+    assert [f["fact"] for f in m.profile_facts()] == ["broke up with Dana"]
+
+
+def test_an_unattributed_line_still_retires():
+    """And absence is not a verdict. With 0% roster coverage, reading "we do
+    not know who said this" as "not him" would turn supersession off for every
+    owner the product has."""
+    now = time.time()
+    m, _llm = _breakup_overheard(now, None)
+    assert [f["fact"] for f in m.profile_facts()] == ["broke up with Dana"]
+
+
+def test_a_fact_distilled_only_from_other_peoples_lines_is_labelled():
+    """The tag is on the ROW, so every consumer of _UNTRUSTED_SOURCES sees it
+    without being told about voices — the provenance window, the briefing, the
+    prompt fence, the gap filler."""
+    now = time.time()
+    m, _llm = _breakup_overheard(now, "other")
+    got = dict(m.db.execute("SELECT fact, source FROM profile_facts"))
+    assert got["broke up with Dana"] == OVERHEARD, got
+    assert got["partner is Dana"] == "consolidation", got
+    assert OVERHEARD in _UNTRUSTED_SOURCES
+
+
+def test_one_line_of_his_in_the_evidence_is_enough_to_make_it_ordinary():
+    """EVERY contributing line has to be a positive "not the owner". A fact
+    the owner's own words are part of is not a stranger's report, and neither
+    is one built partly from lines nobody could place."""
+    now = time.time()
+    llm = FakeLLM(consolidations=[{"facts": [
+        {"fact": "the Devon deal closes Friday", "importance": 3,
+         "episode_ids": [1, 2]}]}])
+    m = Memory(":memory:", llm=llm)
+    m.ingest("Devon said Friday.", ts=now - DAY, speaker="other")
+    m.ingest("Yes, Friday works for me.", ts=now, speaker="owner")
+    m.consolidate(now=now)
+    assert [f["source"] for f in m.profile_facts()] == ["consolidation"]
+
+
+# ------------------------------------------- and the same tag, at the prompt
+
+
+def _overheard_store(now, speaker):
+    m = Memory(":memory:", llm=None)
+    m.ingest("The reservation should be under the name Kowalski, obviously.",
+             ts=now - 2 * DAY, speaker=speaker)
+    return m
+
+
+def test_an_overheard_line_is_fenced_when_it_reaches_a_prompt():
+    """I6, confirmed open in the §7 run: an episode row carried no `source`
+    key at all, so `str(f.get("source") or "")` read "" — not in
+    _UNTRUSTED_SOURCES — and a stranger's sentence landed in the TRUSTED half
+    of memory_notes with no fence around it."""
+    now = time.time()
+    m = _overheard_store(now, "other")
+    got = m.recall("reservation name", retired=RETIRED_EXCLUDED)
+    assert got, "recall came back empty; the fixture is not exercising it"
+    assert all(f.get("source") == OVERHEARD for f in got), got
+    notes = memory_notes(got, budget=900)
+    assert "UNTRUSTED" in notes, notes
+    assert "Kowalski" in notes, notes
+
+
+def test_the_edge_derived_from_an_overheard_line_is_fenced_too():
+    """THE THIRD DOOR, found while checking the second. An edge is derived
+    from ONE episode and carries its authority: fencing the episode row alone
+    moved the same content one row down — "Kowalski —about→ reservation" —
+    and let it through unfenced, and the gap filler still answered off it."""
+    now = time.time()
+    m = _overheard_store(now, "other")
+    got = m.recall("reservation name", retired=RETIRED_EXCLUDED)
+    edges = [f for f in got if f["src_type"] not in ("episode", "profile")]
+    assert edges, [f["src_type"] for f in got]
+    assert all(f.get("source") == OVERHEARD for f in edges), edges
+
+
+def test_an_overheard_line_cannot_settle_a_gap_in_an_approved_plan():
+    """fill_gaps_from_memory excludes untrusted text rather than fencing it,
+    because the answer becomes a value the browser agent types into a real
+    form. extension/agent_loop.js states the invariant: "a sentence she
+    overheard could put a value into a form that spends his money." Asserted
+    on the model never being ASKED — the safe branch is that she asks HIM."""
+    import types
+
+    from brain.orchestrator import fill_gaps_from_memory
+
+    now = time.time()
+    m = _overheard_store(now, "other")
+    seen = {}
+
+    class _LLM:
+        live = True
+
+        def chat(self, system, user, **kw):
+            seen["known"] = user
+            return types.SimpleNamespace(text=json.dumps({"answer": "Kowalski"}))
+
+    filled, remaining = fill_gaps_from_memory(
+        _LLM(), m, "book the table", ["reservation name"])
+    assert filled == {}, filled
+    assert remaining == ["reservation name"], remaining
+    assert "known" not in seen, seen
+
+
+def test_the_owners_own_line_still_settles_a_gap():
+    """The direction that must not be fenced. His own words, and lines nobody
+    could place, reach the gap filler exactly as they always have — otherwise
+    this fence turns the feature off for every owner alive, since live roster
+    coverage is 0% and almost every line carries no verdict.
+
+    ASSERTED ROW BY ROW, not only on the outcome. Written as "the gap still
+    got filled" this went GREEN against a mutation that fenced absence: recall
+    returns the episode AND the edge derived from it, the mutation reached one
+    of them, and the survivor answered the question. An outcome assertion over
+    a set of rows cannot tell "nothing was fenced" from "not everything
+    was"."""
+    import types
+
+    from brain.orchestrator import fill_gaps_from_memory
+
+    now = time.time()
+    for speaker in ("owner", None):
+        m = _overheard_store(now, speaker)
+        got = m.recall("reservation name", retired=RETIRED_EXCLUDED)
+        assert len(got) >= 2, (speaker, got)   # episode AND derived edge
+        assert [f.get("source") for f in got] == [""] * len(got), (speaker, got)
+        assert "UNTRUSTED" not in memory_notes(got, budget=900), speaker
+        seen = {}
+
+        class _LLM:
+            live = True
+
+            def chat(self, system, user, **kw):
+                seen["known"] = user
+                return types.SimpleNamespace(
+                    text=json.dumps({"answer": "Kowalski"}))
+
+        filled, _rest = fill_gaps_from_memory(
+            _LLM(), m, "book the table", ["reservation name"])
+        assert filled == {"reservation name": "Kowalski"}, (speaker, filled)
+        assert "Kowalski" in seen["known"], (speaker, seen)

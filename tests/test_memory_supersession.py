@@ -22,21 +22,47 @@ only sent 0.40-0.80 to be judged. A cheap sift that silently excludes the case
 the feature exists for is not a sift in front of the decision; it IS the
 decision, which is what HARNESS-LAW 1 forbids.
 
+AND THE FIX SHIPPED WITH TWO MORE OF ITS OWN SENTENCE, both upstream of the
+same model call, both reproduced and both closed in the same file (see THE
+SIFT, at the bottom):
+
+    a word-LENGTH filter   "partner is Jo" -> {partner}, "broke up with Jo"
+                           -> {broke}: overlap 0, no model ever asked, and the
+                           same score merged "partner is Al" into "partner is
+                           Jo" and let a veto for one delete the other.
+    a [:3] truncation      the band by another mechanism. Four facts naming
+                           Dana, and the pair the feature exists for scored
+                           lowest of the four, because a supersession pair is
+                           low-overlap BY NATURE — one sentence asserts and
+                           the other negates.
+
+So the answer to "what may a cheap sift do here" is: decide the ORDER the
+model is asked in, and nothing else. Every live row is put to the model, in
+one call carrying the whole list. See research/2026-08-24-supersession-fixes.md.
+
 WHAT IS BEING TESTED, and where each rule lives:
 
   * the model decides the relation (same / replaces / different). Nothing here
     reads the words. `test_the_pair_reaches_the_model_at_all` is the leg that
-    goes red if the sift ever narrows back.
+    goes red if the sift ever narrows back, and the SIFT section below is the
+    leg for every mechanism that has tried to narrow it so far.
   * retirement gates ACTION absolutely and SPEECH conditionally
     (docs/DECISIONS-2026-08-24.md RULING 2). The action lane is the default of
     profile_facts()/recall(); the speech lane is asked for by name and comes
-    back with the retirement written into the fact's own sentence.
+    back with the retirement written into the fact's own sentence. That holds
+    for raw hearing too: recall() filtered only the profile half, so a dead
+    fact reached both action sinks through the episode layer.
   * two deterministic guards, both structure: the older side loses whichever
     way it arrived, and untrusted text may not retire something the owner said.
   * with no model, nothing is retired and nothing raises.
+
+Who SPOKE the line a retirement is built on is the other half of this, and it
+lives with the rest of the speaker doctrine in
+tests/test_memory_knows_who_spoke.py.
 """
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import sys
@@ -45,7 +71,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from brain.memory import RETIRED_QUOTED, Memory  # noqa: E402
+from brain.memory import (OVERHEARD, RETIRED_EXCLUDED,  # noqa: E402
+                          RETIRED_QUOTED, Memory)
 from llm_fakes import FakeLLM  # noqa: E402
 
 DAY = 86400.0
@@ -87,13 +114,14 @@ def test_the_pair_reaches_the_model_at_all():
     _m, llm = _breakup_store(now)
     asked = llm.relation_calls()
     assert len(asked) == 1, f"expected one judgement, got {asked}"
-    assert "partner is Dana" in asked[0]
-    assert "broke up with Dana" in asked[0]
+    payload = json.loads(asked[0])
+    assert payload["new_note"] == "broke up with Dana"
+    assert [n["note"] for n in payload["stored_notes"]] == ["partner is Dana"]
     # And the ages ride along: which fact has taken the other's place is a
     # question about WHEN, and asking it without the dates is asking the model
     # to guess.
-    assert "a_last_heard_days_ago" in asked[0]
-    assert "b_last_heard_days_ago" in asked[0]
+    assert payload["new_note_last_heard_days_ago"] == 1
+    assert payload["stored_notes"][0]["last_heard_days_ago"] == 40
 
 
 def test_a_verdict_of_different_leaves_both_facts_standing():
@@ -406,24 +434,26 @@ def test_a_restatement_newer_than_the_retirement_is_judged_afresh():
 
 
 def test_a_retired_row_is_never_put_to_the_model():
-    """The prompt asks which of two facts is true NOW. That question has no
+    """The prompt asks which stored fact is true NOW. That question has no
     answer about a fact that already stopped being true, and a "replaces"
     verdict against a corpse would retire something twice.
 
-    THE INCOMING TEXT IS CHOSEN SO ONLY THE DEAD ROW CAN BE A CANDIDATE.
-    Written the obvious way — an incoming fact sharing a word with both rows —
-    this check passed while the guard was removed: the live row sorted first,
-    answered "replaces", and _relate_fact returned before the dead row was ever
-    reached. It was green for the ordering, not for the rule. "partner is away
-    this week" overlaps the retired "partner is Dana" and shares nothing with
-    "broke up with Dana", so if the dead row is a candidate at all the model
-    gets asked and this goes red."""
+    ASSERTED ON THE LIST THE MODEL WAS HANDED, not on whether it was asked at
+    all. Every live row is now a candidate — that is the whole point of the
+    sift no longer excluding anything — so "no call was made" would be green
+    for an empty store and for a store that offered the corpse alongside the
+    live row. What must hold is that the dead row's wording is not in the
+    payload."""
     now = time.time()
     m, llm = _breakup_store(now)
     llm.calls.clear()
     llm.relations = ["different", "different"]
     m._relate_fact("partner is away this week", ts=now - 20 * DAY)
-    assert llm.relation_calls() == [], llm.relation_calls()
+    asked = llm.relation_calls()
+    assert asked, "the live row should still have been judged"
+    offered = [n["note"] for a in asked for n in json.loads(a)["stored_notes"]]
+    assert offered == ["broke up with Dana"], offered
+    assert not any("partner is Dana" in n for n in offered), offered
 
 
 # ------------------------------------------------- guard 2: the provenance
@@ -642,3 +672,366 @@ def test_triage_context_is_asked_for_in_the_speech_lane():
     a = Anticipy(memory=m, llm=_LLM())
     a._decide("who is my partner these days", {"commitment": None})
     assert asked and asked[0] == RETIRED_QUOTED, asked
+
+
+# ================================================================= THE SIFT
+# The commit that shipped supersession also shipped this sentence, having
+# found and fixed ONE instance of it:
+#
+#   "A threshold that excludes the case is not a sift in front of the
+#    decision — it IS the decision."
+#
+# It shipped with two more, both upstream of the same model call. These legs
+# are the ones that go red if either comes back. They assert on WHAT WAS
+# ASKED, never on the outcome: with a scripted fake, an outcome assertion goes
+# green for a sift that excluded the pair and a verdict that happened to land
+# on something else.
+
+
+def _four_facts_naming_dana(now, relations=("different",) * 8):
+    """The reproduced C3 shape: four stored facts naming one person, of which
+    the supersession candidate scores LOWEST. Word overlap is anti-correlated
+    with the thing being looked for, because one sentence asserts and the
+    other negates."""
+    llm = FakeLLM(relations=list(relations))
+    m = Memory(":memory:", llm=llm)
+    for fact in ("partner is Dana",            # overlap 0.333 — the one
+                 "Dana broke her wrist skiing",    # 0.500
+                 "Dana broke the blender",         # 0.667
+                 "Dana broke up with her boss"):   # 0.667
+        m.remember_fact(fact, importance=3, ts=now - 30 * DAY)
+    llm.calls.clear()
+    return m, llm
+
+
+def test_a_two_letter_name_is_not_thrown_away_before_the_question():
+    """C2, reproduced on the shipped code. `_compare_words` dropped every
+    non-digit token of two characters or fewer, so
+
+        "partner is Jo"    -> {partner}
+        "broke up with Jo" -> {broke}
+
+    overlap 0, `if overlap > 0` never fired, NO MODEL WAS EVER ASKED, and the
+    dead fact led recall at salience 4.7 forever:
+
+        partner name 'Dana': SAME_FACT calls = 1; live = ['broke up with Dana']
+        partner name 'Jo'  : SAME_FACT calls = 0; live = ['partner is Jo',
+                                                          'broke up with Jo']
+
+    Jo, Al, Ed, Bo, Mo, Ty, Li — one class of name, silently unlearnable. The
+    residual list in the review does not cover it, because these sentences DO
+    share a word: the code threw it away before counting.
+
+    Driven through the real consolidation pass and asserted on the CALL, so
+    restoring `len(w) > 2` in _compare_words goes red here even though the
+    fake would have answered "replaces" if it had been asked."""
+    now = time.time()
+    for name in ("Jo", "Al", "Ed", "Bo", "Ty", "Li"):
+        llm = FakeLLM(
+            consolidations=[
+                {"facts": [{"fact": f"partner is {name}", "importance": 5,
+                            "episode_ids": [1], "kind": "stable"}]},
+                {"facts": [{"fact": f"broke up with {name}", "importance": 3,
+                            "episode_ids": [2]}]},
+            ],
+            relations=["replaces"])
+        m = Memory(":memory:", llm=llm)
+        m.ingest(f"{name} and I are heading to Lisbon.", ts=now - 40 * DAY)
+        m.consolidate(now=now - 40 * DAY)
+        m.ingest(f"{name} and I broke up last night.", ts=now - 1 * DAY)
+        m.consolidate(now=now - 1 * DAY)
+        asked = llm.relation_calls()
+        assert len(asked) == 1, f"{name}: no model was asked at all"
+        offered = [n["note"] for n in json.loads(asked[0])["stored_notes"]]
+        assert f"partner is {name}" in offered, (name, offered)
+        assert [f["fact"] for f in m.profile_facts()] == \
+            [f"broke up with {name}"], (name, m.profile_facts())
+
+
+def test_a_short_name_is_not_swallowed_by_the_wording_shortcut():
+    """The same letter-count one tier DOWN, where it is worse than a missed
+    question. "partner is Jo" and "partner is Al" both reduced to {partner},
+    scored 1.00, and the >= 0.8 shortcut returned "same" WITH NO MODEL IN THE
+    LOOP — so _merge_fact kept the original wording and "Al" was thrown away:
+
+        _same_as('partner is Jo', 'partner is Al') -> True
+        profile after storing BOTH: ['partner is Jo']
+
+    llm=None on purpose: this tier answers with no model available, which is
+    exactly why nothing could have caught it."""
+    now = time.time()
+    m = Memory(":memory:", llm=None)
+    assert not m._same_as("partner is Jo", "partner is Al")
+    m.remember_fact("partner is Jo", importance=5, ts=now - 10 * DAY)
+    m.remember_fact("partner is Al", importance=5, ts=now)
+    assert sorted(f["fact"] for f in m.profile_facts()) == \
+        ["partner is Al", "partner is Jo"]
+
+
+def test_a_veto_for_one_short_name_does_not_delete_another():
+    """And one tier down again, where the same score DELETES. forget_fact is
+    the owner's tap; `_same_as` is how it recognises a reworded re-derivation.
+    Reproduced: a tap on "dinner with Jo" removed "dinner with Al" and then
+    blocked "dinner with Ed" from ever being written."""
+    now = time.time()
+    m = Memory(":memory:", llm=None)
+    m.remember_fact("dinner with Al", importance=4, source="interview", ts=now)
+    assert m.forget_fact("dinner with Jo") == 0
+    assert [f["fact"] for f in m.profile_facts()] == ["dinner with Al"]
+    assert not m._is_vetoed("dinner with Ed")
+
+
+def test_the_filler_words_the_letter_count_stood_in_for_are_still_dropped():
+    """The fix is not "count nothing". A filler word shared by two sentences
+    INFLATES their similarity, and two tiers read that score with no model in
+    the loop. Both directions were measured while writing this:
+
+        with "is" counted: "Their name is Omar." absorbed "Their name is Omar
+                           Ebrahim." at exactly 0.80 and the surname was lost
+        with "in" counted: the veto "the renewal closes in 4 weeks" reached
+                           0.80 against "the Devon renewal closes in 3 weeks"
+                           and DELETED it
+
+    So the closed class is written down instead of counted. This leg goes red
+    if a filler word starts counting, and its sibling above goes red if a name
+    stops — a fix that only satisfies one of them is not the fix."""
+    m = Memory(":memory:", llm=None)
+    assert m._compare_words("partner is Jo") == {"partner", "jo"}
+    assert m._compare_words("broke up with Jo") == {"broke", "jo"}
+    assert not m._same_as("Their name is Omar.", "Their name is Omar Ebrahim.")
+    assert not m._same_as("the Devon renewal closes in 3 weeks",
+                          "the renewal closes in 4 weeks")
+
+
+def test_every_live_fact_reaches_the_model_however_low_it_ranks():
+    """C3, reproduced on the shipped code. The 0.40 band was removed and the
+    RANKING was not: only the three highest-overlap candidates reached the
+    model, and a supersession pair is low-overlap BY NATURE because one
+    sentence asserts and the other negates.
+
+        stored:   'partner is Dana' (0.333), 'Dana broke her wrist' (0.500),
+                  'Dana broke the blender' (0.667), 'Dana broke up with her
+                  boss' (0.667)
+        incoming: 'broke up with Dana'
+        put to the model: the boss, the blender, the wrist
+        'partner is Dana' reached the model: False
+
+    Any owner with four facts naming one person lost the pair the feature
+    exists for. Restoring `[:3]` — or any cut on the ordered list — goes red
+    here."""
+    now = time.time()
+    m, llm = _four_facts_naming_dana(now)
+    m._relate_fact("broke up with Dana", ts=now)
+    offered = [n["note"] for a in llm.relation_calls()
+               for n in json.loads(a)["stored_notes"]]
+    assert "partner is Dana" in offered, offered
+    assert len(offered) == 4, offered
+    # AND THE TIE GOES TO THE OLDER ROW. The blender and the boss both score
+    # 0.667; `sorted(near, reverse=True)` put the higher rowid — the NEWER
+    # noise — in front of the older row, which is by definition the one a
+    # supersession is about. It decides only ordering now, but ordering is
+    # what survives when a batch boundary falls between them.
+    assert offered[:2] == ["Dana broke the blender",
+                           "Dana broke up with her boss"], offered
+
+
+def test_the_ranking_only_decides_what_is_asked_first():
+    """What a cheap sift may legitimately do here, and the only thing. Overlap
+    orders the list so the likely answer is in the first batch — that is honest
+    cost control, because the worst case is unchanged and the expected case is
+    one call. Excluding is not.
+
+    Sized past _JUDGE_BATCH so the batching itself is exercised: a store with
+    more live facts than one prompt holds must still put EVERY one of them to
+    the model, in as many calls as it takes. The zero-overlap fact is written
+    last so it lands in the final batch."""
+    from brain.memory import _JUDGE_BATCH
+
+    now = time.time()
+    llm = FakeLLM(relations=["different"] * 200)
+    m = Memory(":memory:", llm=llm)
+    for i in range(_JUDGE_BATCH + 3):
+        # Distinct SUBJECTS, not one subject with a changing number: the
+        # latter is a detail update and _relate_fact rightly merges them, so
+        # the store would end up holding two rows and never batch.
+        m.remember_fact(f"Dana enjoys thing{i}", importance=3,
+                        ts=now - 30 * DAY)
+    m.remember_fact("home is 4 Maple St", importance=4, ts=now - 30 * DAY)
+    llm.calls.clear()
+    m._relate_fact("we moved to Rowan Ave", ts=now)
+    calls = llm.relation_calls()
+    assert len(calls) > 1, "the batching never ran; resize the store"
+    offered = [n["note"] for a in calls for n in json.loads(a)["stored_notes"]]
+    # Shares NO word with the incoming fact — the shape residual #4 named, and
+    # the shape a move actually arrives in.
+    assert "home is 4 Maple St" in offered, offered
+    assert len(offered) == _JUDGE_BATCH + 4, len(offered)
+
+
+def test_a_low_ranked_fact_is_still_obeyed_when_the_model_names_it():
+    """The other half of the same rule: reaching the model is worth nothing if
+    the verdict about it cannot be acted on. The model names the LAST note in
+    the list — the lowest-overlap one — and the store retires that row and no
+    other."""
+    now = time.time()
+    m, llm = _four_facts_naming_dana(now)
+    llm.relations = ["replaces"]
+    llm.answer_n = 4          # 'partner is Dana', ranked last on overlap
+    m.remember_fact("broke up with Dana", importance=3, ts=now)
+    dead = m.db.execute(
+        "SELECT fact FROM profile_facts WHERE retired_ts IS NOT NULL"
+    ).fetchall()
+    assert [d[0] for d in dead] == ["partner is Dana"], dead
+
+
+def test_a_verdict_naming_a_note_the_store_never_offered_is_no_verdict():
+    """The list-shaped question has one more way to be unreadable than the
+    pairwise one did: an "n" that names nothing. A model that answers 9 to a
+    list of two has not identified a fact, and acting on it would retire an
+    arbitrary row. Same contract as an unknown relation — no verdict leaves
+    the profile exactly as it was."""
+    import types
+
+    now = time.time()
+
+    class _LLM:
+        live = True
+
+        def chat(self, system, user, **kw):
+            if "SAME underlying fact" not in system:
+                return types.SimpleNamespace(text="{}")
+            return types.SimpleNamespace(
+                text=json.dumps({"n": 9, "relation": "replaces"}))
+
+    m = Memory(":memory:", llm=_LLM())
+    m.remember_fact("partner is Dana", importance=5, ts=now - 30 * DAY)
+    m.remember_fact("broke up with Dana", importance=3, ts=now)
+    assert all(f["retired_ts"] is None
+               for f in m.profile_facts(retired=RETIRED_QUOTED))
+
+
+# ============================================== THE EPISODE LAYER (RULING 2)
+# recall() returned (profile + graph)[:limit] and only `profile` was filtered.
+# The docstring ruled episodes out of scope — true of the RECORD, irrelevant
+# to the RULING, which governs what may be an input to ACTION.
+
+
+def _moved_house(now):
+    """RULING 2 §7's own example, driven through the real consolidation pass.
+    The old address arrives phrased as an IMPERATIVE, which is a stronger
+    action signal than the live fact beside it."""
+    llm = FakeLLM(
+        consolidations=[
+            {"facts": [{"fact": "home is 4 Maple St", "importance": 5,
+                        "episode_ids": [1], "kind": "stable"}]},
+            {"facts": [{"fact": "home is 18 Rowan Ave", "importance": 5,
+                        "episode_ids": [2], "kind": "stable"}]},
+        ],
+        relations=["replaces"])
+    m = Memory(":memory:", llm=llm)
+    m.ingest("Our home address is 4 Maple St, put that on the delivery.",
+             ts=now - 200 * DAY)
+    m.consolidate(now=now - 200 * DAY)
+    m.ingest("We moved — home is 18 Rowan Ave now.", ts=now - 1 * DAY)
+    m.consolidate(now=now - 1 * DAY)
+    return m
+
+
+def test_a_retired_fact_does_not_reach_the_action_lane_as_raw_hearing():
+    """Reproduced on the shipped code:
+
+        recall("what is my home address for the delivery",
+               retired=RETIRED_EXCLUDED):
+           src_type='profile'  known: home is 18 Rowan Ave
+           src_type='episode'  heard: "Our home address is 4 Maple St, put
+                                       that on the delivery."
+
+    The only mitigation was that profile sorts first and the model MIGHT
+    prefer it — model-dependent, which is precisely what RULING 2 refuses for
+    this lane: fill_gaps_from_memory is "NEVER — hard filter. No exception, no
+    flag."."""
+    now = time.time()
+    m = _moved_house(now)
+    got = m.recall("what is my home address for the delivery",
+                   retired=RETIRED_EXCLUDED)
+    assert got, "recall came back empty; the fixture is not exercising it"
+    assert not any("4 Maple St" in f["fact"] for f in got), got
+    assert any("18 Rowan Ave" in f["fact"] for f in got), got
+
+
+def test_the_dead_address_cannot_settle_a_gap_through_the_episode_layer():
+    """The sink where money rides, driven through the REAL function — the
+    value being correct and simply never arriving is this repo's recorded
+    failure shape (8849df15). filled[gap] -> params[key] -> the browser
+    agent's approved values -> a form it submits."""
+    import types
+
+    from brain.orchestrator import fill_gaps_from_memory
+
+    now = time.time()
+    m = _moved_house(now)
+    seen = {}
+
+    class _LLM:
+        live = True
+
+        def chat(self, system, user, **kw):
+            seen["known"] = user
+            return types.SimpleNamespace(text=json.dumps({"answer": "x"}))
+
+    fill_gaps_from_memory(_LLM(), m, "order the groceries for delivery",
+                          ["delivery address"])
+    assert seen.get("known"), "the gap filler was never reached"
+    assert "4 Maple St" not in seen["known"], seen["known"]
+    assert "18 Rowan Ave" in seen["known"], seen["known"]
+
+
+def test_the_speech_lane_still_hears_the_line_that_was_actually_said():
+    """The half that must NOT regress. "He said the address was 4 Maple St" is
+    a true record of a thing that was said, whenever it is read, and §7's
+    broadband answer needs it — she has to name the old address because the
+    company's records still show it. Only the ACTION lane drops it."""
+    now = time.time()
+    m = _moved_house(now)
+    got = m.recall("what is my home address for the delivery",
+                   retired=RETIRED_QUOTED)
+    assert any("4 Maple St" in f["fact"] and f["src_type"] == "episode"
+               for f in got), got
+
+
+def test_a_live_fact_s_own_episode_is_not_collateral():
+    """The filter is provenance, so it must take the episodes behind RETIRED
+    facts and nothing else. A rule that dropped every episode mentioning a
+    retired fact's words, or every episode older than a retirement, would take
+    the live fact's own hearing with it."""
+    now = time.time()
+    m = _moved_house(now)
+    got = m.recall("home Rowan moved", retired=RETIRED_EXCLUDED)
+    assert any("We moved" in f["fact"] for f in got), got
+
+
+def test_the_retired_counter_does_not_count_a_retirement_the_fence_refused():
+    """M7. _supersede returns a truthy row id on the provenance-fence path too,
+    having retired nothing — latent while only mail and calendar were fenced
+    and consolidation could not produce them, and REACHABLE the moment an
+    overheard line could. `retired` is the one number the nightly print shows,
+    and the one place anybody would notice supersession quietly stopping: a
+    mislabel there reads as "she corrected herself" on a night she refused
+    to."""
+    now = time.time()
+    m = Memory(":memory:", llm=FakeLLM(relations=["replaces"]))
+    m.remember_fact("never books anything through Kayak", importance=5,
+                    source="interview", ts=now - 10 * DAY)
+    llm = FakeLLM(
+        consolidations=[{"facts": [
+            {"fact": "books flights through Kayak", "importance": 4,
+             "episode_ids": [1]}]}],
+        relations=["replaces"])
+    m.llm = llm
+    m.ingest("They always book through Kayak, you know.", ts=now,
+             speaker="other")
+    res = m.consolidate(now=now)
+    assert res["new"] == 1, res          # the fact still LANDS
+    assert res["retired"] == 0, res      # and it killed nothing
+    assert "never books anything through Kayak" in \
+        [f["fact"] for f in m.profile_facts()]

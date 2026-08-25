@@ -25,13 +25,22 @@ class FakeLLM:
     point of the wider question, so a supersession test scripts `relations`.
     Both default to empty, and an empty queue answers "different": a fake that
     ran out of script must not start retiring facts.
+
+    THE QUESTION IS ASKED ABOUT A LIST NOW, not a pair: the sift may no longer
+    decide which stored notes reach the model, so every live note goes in one
+    call and the reply names one of them by "n". A scripted verdict therefore
+    answers about `stored_notes[0]` — the note the sift ORDERED first — which
+    is the same note the old pairwise loop would have asked about first.
+    `answer_n` overrides that when a test needs the verdict pinned to a
+    different note in the list.
     """
 
     def __init__(self, consolidations=None, same_verdicts=None,
-                 relations=None):
+                 relations=None, answer_n=None):
         self.consolidations = list(consolidations or [])
         self.same_verdicts = list(same_verdicts or [])
         self.relations = list(relations or [])
+        self.answer_n = answer_n
         self.calls: list[tuple[str, str]] = []
 
     # **kw, not a pinned signature: brain.llm.LLM.chat grew an `aux` flag
@@ -53,7 +62,19 @@ class FakeLLM:
                 relation = "same" if self.same_verdicts.pop(0) else "different"
             else:
                 relation = "different"
-            return _Reply(json.dumps({"relation": relation}))
+            if relation == "different":
+                return _Reply(json.dumps({"n": None, "relation": relation}))
+            # Which stored note the verdict is about. Read off the payload
+            # rather than assumed, so a scripted verdict cannot silently
+            # answer about a note the store never offered.
+            try:
+                notes = json.loads(user).get("stored_notes") or []
+            except Exception:
+                notes = []
+            n = self.answer_n if self.answer_n is not None else 1
+            if not notes or not 1 <= n <= len(notes):
+                return _Reply(json.dumps({"n": None, "relation": "different"}))
+            return _Reply(json.dumps({"n": n, "relation": relation}))
         return _Reply("{}")
 
     def relation_calls(self) -> list[str]:

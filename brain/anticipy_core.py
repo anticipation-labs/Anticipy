@@ -30,7 +30,7 @@ from . import pb
 from .asking import ask_line, question_line
 from .compute import compute_answer
 from .llm import LLM, now_line, owner_tz
-from .memory import RETIRED_EXCLUDED, RETIRED_QUOTED, Memory
+from .memory import OVERHEARD, RETIRED_EXCLUDED, RETIRED_QUOTED, Memory
 from .workflow import (Consequence, approve as approve_plan,
                        cancel as cancel_plan, from_params as workflow_from_params,
                        merge as merge_plan, new_plan, put_in_params)
@@ -408,11 +408,24 @@ def _fact_words(text: str) -> set:
 # so a missing string here silently disables a source rather than leaking it —
 # but a string added later, after somebody relaxes that refusal, leaks it.
 #
+# memory.OVERHEARD is the phone saying, out of its own voice roster and not out
+# of the words, that the line this came from was NOT the owner speaking. A
+# colleague, a guest or a television in earshot is a third party with a mouth
+# instead of a keyboard, and it is the SAME question this set already answers
+# for a keyboard. It is imported rather than spelled again because the store
+# writes the tag and this set reads it, and two spellings of one string is how
+# a fence silently stops fencing.
+#
+# It is also the widest member by volume: ambient audio is most of what this
+# product hears. Only an explicit "not the owner" verdict ever carries it —
+# see the comment at memory.OVERHEARD for why absence must stay a third state.
+#
 # MEMBERSHIP, NOT THE LITERAL STRING. Every consumer keys on this set, so a
 # fourth untrusted source is one line here rather than a hunt through six
 # prompt sinks — the hunt being what left `fill_gaps_from_memory` and the
 # briefing comparing against "import" by hand.
-_UNTRUSTED_SOURCES = {"import", "supervised_mail", "supervised_professional"}
+_UNTRUSTED_SOURCES = {"import", "supervised_mail", "supervised_professional",
+                      OVERHEARD}
 
 
 def _someone_elses(loop: dict) -> bool:

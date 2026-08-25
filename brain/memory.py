@@ -184,7 +184,19 @@ reports of finishing something ("sent Priya the deck", "already paid it",
 "that's done") — the thing that got done, not the whole sentence."""
 
 CONSOLIDATE_SYSTEM = """You distill what someone's assistant should KNOW about them from
-lines overheard during their day. Each input line is "[id] text".
+lines overheard during their day. Each input line is "[id] text", and a line
+whose speaker the phone recognised carries that verdict too:
+
+  [7] (them) I'm allergic to shellfish.
+  [8] (NOT them — someone else in earshot) Oh, didn't you hear? They broke up.
+  [9] Sourdough again this week.        <- nobody could tell; that is ordinary
+
+WHO SPOKE IS EVIDENCE, NOT A RULE, and the third line is the common case: the
+phone usually cannot tell, and a line with no tag is exactly as usable as it
+has always been. A tagged "(NOT them)" line is somebody else talking near
+them — a colleague, a guest, a television — and a fact distilled from one of
+those alone is a fact about THEM being reported by a stranger. It can still be
+worth keeping, and it is not the same thing as hearing it from them.
 Reply ONLY with compact JSON:
 {"facts":[{"fact":"...","importance":N,"episode_ids":[id,...]}]}
 Those three keys are REQUIRED and are the whole of the shape. There is one
@@ -211,8 +223,9 @@ a small error: it means the fact never fades at all, so "the Devon deal
 closes Friday" outranks fresher facts forever after the deal has closed.
 Leaving it out is the safe answer and costs nothing."""
 
-SAME_FACT_SYSTEM = """Two short notes about the same person, each with how long ago it was
-last heard. Decide the RELATION between them. Exactly one of three:
+SAME_FACT_SYSTEM = """A new short note about someone, and every note already stored about
+them, each with how long ago it was last heard. ONE question: does the new
+note stand in one of these relations to any ONE stored note?
 
 "same" — they state the SAME underlying fact; one restates or updates a
   detail of the other. "partner is Sarah" / "his partner's name is Sarah".
@@ -220,15 +233,30 @@ last heard. Decide the RELATION between them. Exactly one of three:
   the older one's place: a new person in the same role, a move, a breakup, a
   job change, a place that closed, an explicit renunciation ("never again").
   "partner is Dana" / "broke up with Dana".
-"different" — genuinely different facts that can both be true at once.
-  "prefers 7pm dinners" / "prefers Italian food".
 
-Say "replaces" only when going on believing the OLDER note would make the
-assistant wrong about this person today. Two facts that merely sit oddly
-together are "different" — a wrongly retired fact is a thing she stops
-knowing about him.
-Reply ONLY with compact JSON, one of:
-{"relation":"same"} {"relation":"replaces"} {"relation":"different"}"""
+MOST NEW NOTES STAND IN NEITHER. Genuinely different facts can both be true
+at once — "prefers 7pm dinners" and "prefers Italian food" — and that is the
+ordinary answer. Say "replaces" only when going on believing the stored note
+would make the assistant wrong about this person today. Two facts that merely
+sit oddly together are different — a wrongly retired fact is a thing she
+stops knowing about him.
+
+NOTHING WAS FILTERED OUT BEFORE YOU. The stored notes are not pre-selected
+for similar wording, so the one that matters may share no word at all with
+the new note ("partner is Jo" / "broke up with Jo" share only a name;
+"home is 4 Maple St" / "we moved to Rowan Ave" share nothing). Read them all.
+
+Answer with the "n" of the ONE stored note, or null when none of them stand
+in either relation. Reply ONLY with compact JSON, one of:
+{"n":N,"relation":"same"} {"n":N,"relation":"replaces"} {"n":null,"relation":"different"}"""
+
+# HOW MANY STORED NOTES GO INTO ONE JUDGEMENT.
+#
+# This is a bound on PROMPT SIZE, not on which pairs get judged: every live
+# note is asked about, in as many calls as it takes. See _relate_fact for why
+# nothing may be excluded, and _ask_the_model_which_note for why the ordering
+# in front of this only ever changes what is asked FIRST.
+_JUDGE_BATCH = 25
 
 # THE TWO LANES A RETIRED FACT MAY TRAVEL, and they are not symmetric.
 #
@@ -254,6 +282,34 @@ Reply ONLY with compact JSON, one of:
 # cannot drop what is inside the sentence it is rendering.
 RETIRED_EXCLUDED = "excluded"
 RETIRED_QUOTED = "quoted"
+
+# THE SOURCE TAG FOR "THE PHONE SAID THIS WAS NOT THE OWNER SPEAKING".
+#
+# `episodes.speaker` is the phone's LOCAL voice verdict, it has been stored
+# since ingest() grew the column, and it is carried into `briefing_facts` and
+# on to every commitment. It was dropped at the two places where it decides
+# something DESTRUCTIVE, and both were reproduced:
+#
+#   * consolidate() listed episodes as "[id] text", so a line the phone judged
+#     was NOT the owner ("Oh, didn't you hear? Omar and Dana broke up.")
+#     distilled a fact that RETIRED one the owner had stated. A colleague, a
+#     guest or a television in earshot could kill a fact.
+#   * recall() built episode rows with no `source` key at all, so the same
+#     ambient line landed in the TRUSTED half of memory_notes, unfenced, and
+#     was eligible to settle a gap in an approved plan.
+#
+# ONE TAG CLOSES BOTH, because `_UNTRUSTED_SOURCES` is already the fence every
+# consumer keys on: labelled with this, a fact cannot retire something the
+# owner said (_supersede guard 1), cannot take more than a third of a bounded
+# window (_provenance_window), is fenced in memory_notes, and is not eligible
+# to settle a gap at all (fill_gaps_from_memory). anticipy_core imports this
+# name into that set, so there is one string and one definition.
+#
+# ONLY AN EXPLICIT "other" LABELS. No voice verdict is a distinct third state
+# that changes nothing — live roster coverage is 0%, so reading absence as
+# "not his" would fence every line the product has ever heard. Same wall
+# `_someone_elses`, `_speaker_verdict` and `_fact_kind` already stand behind.
+OVERHEARD = "overheard"
 
 # Rule fallback so completion still works with no model available.
 _DONE_RE = re.compile(
@@ -594,6 +650,29 @@ class Memory:
         "see", "get", "got", "how", "why", "can", "will", "would", "they",
         "them", "his", "her", "she", "him", "out", "not", "but", "about",
         "again", "still", "just", "there", "here", "into", "onto", "from",
+        # THE SHORT FUNCTION WORDS, WRITTEN DOWN INSTEAD OF COUNTED.
+        #
+        # `_compare_words` used to drop every non-digit token of two
+        # characters or fewer. That was this list, approximated by counting
+        # letters, and counting letters cannot tell a preposition from a
+        # person: it took "Jo", "Al", "Ed", "Bo", "Mo", "Ty" and "Li" with it.
+        #
+        # Removing the count without adding the list is not the fix either,
+        # and both directions were measured. A filler word shared by two
+        # sentences INFLATES their similarity, and two tiers here read the
+        # score with no model in the loop: with "is" counting as a word,
+        # "Their name is Omar." absorbed "Their name is Omar Ebrahim." at 0.80
+        # and the surname was thrown away; with "in" counting, the veto
+        # "the renewal closes in 4 weeks" reached 0.80 against "the Devon
+        # renewal closes in 3 weeks" and DELETED it.
+        #
+        # Closed class only — articles, prepositions, particles, pronouns,
+        # auxiliaries, conjunctions. Nothing here is a name, and nothing here
+        # carries a claim: "no" is deliberately absent, because negation is
+        # exactly the difference between two facts.
+        "a", "an", "as", "at", "by", "in", "of", "on", "to", "up",
+        "am", "be", "is", "do", "he", "i", "it", "me", "my", "we", "us",
+        "or", "so", "if",
     }
 
     def recall(self, query: str, limit: int = 8,
@@ -608,9 +687,29 @@ class Memory:
         for RETIRED_QUOTED by name, and what comes back says out loud that it
         is no longer true.
 
-        Only the PROFILE layer has retirement. Episodes are raw hearing and
-        are never retired — "he said they broke up" is a true record of a
-        thing that was said, whenever it is read."""
+        Only the PROFILE layer has retirement — the episode ROW is raw hearing
+        and is never retired, because "he said they broke up" is a true record
+        of a thing that was said, whenever it is read.
+
+        THAT IS TRUE OF THE RECORD AND SAYS NOTHING ABOUT THE RULING, which
+        governs what may be an INPUT TO ACTION. It used to be read as though it
+        did: `(profile + graph)[:limit]` filtered only `profile`, so in the
+        ACTION lane the §7 example came back as
+
+            src_type='profile'  known: home is 18 Rowan Ave
+            src_type='episode'  heard: "Our home address is 4 Maple St, put
+                                        that on the delivery."
+
+        — the retired address, unmarked, phrased as an imperative, on its way
+        to filled[gap] -> params[key] -> a form the browser agent submits. The
+        only thing standing in front of it was that profile sorts first and the
+        model MIGHT prefer it, which is exactly the model-dependence RULING 2
+        refuses for this lane ("NEVER — hard filter. No exception, no flag.").
+
+        So in the action lane an episode that a retired fact was DISTILLED FROM
+        is dropped: it is that fact in undistilled form. Structure, not words —
+        `provenance` is a list of episode ids and nothing here reads a
+        sentence. The speech lane keeps every episode, unchanged."""
         words = {w.strip(".,!?").lower() for w in query.split()
                  if len(w) > 2 and w.strip(".,!?").lower() not in self._STOP}
         # What she KNOWS about him answers before what she happened to
@@ -641,13 +740,33 @@ class Memory:
         # episodes, so a fact stated this morning became unrecallable by
         # afternoon ("the gate code is 4417" was provably lost after 240
         # later lines). A day of ambient listening blows past 200 in an hour.
+        dead_episodes = (set() if retired == RETIRED_QUOTED
+                         else self._episodes_behind_retired_facts())
         facts = []
-        for eid, ts, text in self._search_episodes(words):
+        for eid, ts, text, speaker in self._search_episodes(words):
+            if eid in dead_episodes:
+                continue
             hits = sum(1 for w in words if w in text.lower())
             if hits >= 2 or (hits == 1 and len(words) == 1):
                 facts.append({"fact": f'heard: "{text}"',
                               "src_type": "episode", "dst_type": "episode",
-                              "ts": ts, "quote": text})
+                              "ts": ts, "quote": text,
+                              # WHOSE MOUTH IT CAME OUT OF, carried the same
+                              # way a profile fact carries where it was
+                              # imported from. An episode row had no `source`
+                              # key at all, so `str(f.get("source") or "")`
+                              # read "" everywhere and a line the phone judged
+                              # was NOT the owner landed in the TRUSTED half of
+                              # memory_notes, unfenced, and was eligible to
+                              # settle a gap in an approved plan. Only an
+                              # explicit "other" labels: no voice verdict is a
+                              # third state that changes nothing, because live
+                              # roster coverage is 0% and reading absence as
+                              # "not his" would fence every line she has ever
+                              # heard.
+                              "source": (OVERHEARD
+                                         if _speaker_verdict(speaker) == "other"
+                                         else "")})
         if not seeds and not facts:
             return profile
 
@@ -681,17 +800,48 @@ class Memory:
         graph = sorted(uniq.values(), key=lambda f: (-relevance(f), -f["ts"]))
         return (profile + graph)[:limit]
 
+    def _episodes_behind_retired_facts(self) -> set:
+        """Episode ids that a RETIRED profile fact was distilled from.
+
+        The dead fact's own raw hearing. Ids only — this reads `provenance`,
+        which is the list of episode ids `consolidate` recorded, and never
+        looks at a sentence.
+
+        RESIDUAL, WRITTEN DOWN RATHER THAN HIDDEN: an episode that states the
+        same dead thing but was never distilled INTO that fact is not in any
+        provenance list and still reaches the action lane. Closing that
+        completely means excluding raw episodes from the action lane entirely,
+        which costs the ability to act on anything said since the last nightly
+        consolidation — an owner ruling, not a thing to decide here. See
+        research/2026-08-24-supersession-fixes.md."""
+        out: set = set()
+        for (prov,) in self.db.execute(
+                "SELECT provenance FROM profile_facts "
+                "WHERE retired_ts IS NOT NULL"):
+            try:
+                ids = json.loads(prov or "[]")
+            except Exception:
+                continue
+            for e in ids if isinstance(ids, list) else []:
+                if isinstance(e, int) and not isinstance(e, bool):
+                    out.add(e)
+        return out
+
     def _search_episodes(self, words: set[str], limit: int = 300):
         """Every episode ever heard is searchable — no recency cliff. Uses
         the FTS index when it exists, and a LIKE query otherwise, so an old
-        database keeps working without a rebuild."""
+        database keeps working without a rebuild.
+
+        Rows are (id, ts, text, speaker). `speaker` rides along because the
+        caller has to label the row with it: it was already stored and simply
+        never read back out on this path."""
         if not words:
             return []
         terms = sorted(words)[:8]
         try:
             q = " OR ".join(f'"{t}"' for t in terms)
             rows = self.db.execute(
-                "SELECT e.id, e.ts, e.text FROM episodes_fts f "
+                "SELECT e.id, e.ts, e.text, e.speaker FROM episodes_fts f "
                 "JOIN episodes e ON e.id = f.rowid "
                 "WHERE episodes_fts MATCH ? ORDER BY e.ts DESC LIMIT ?",
                 (q, limit),
@@ -703,7 +853,7 @@ class Memory:
         clause = " OR ".join("LOWER(text) LIKE ?" for _ in terms)
         args = [f"%{t}%" for t in terms] + [limit]
         return self.db.execute(
-            f"SELECT id, ts, text FROM episodes WHERE {clause} "
+            f"SELECT id, ts, text, speaker FROM episodes WHERE {clause} "
             f"ORDER BY ts DESC LIMIT ?", args,
         ).fetchall()
 
@@ -1168,7 +1318,8 @@ class Memory:
         now = now or time.time()
         last = int(self._state_get("last_episode_id", "0") or 0)
         rows = self.db.execute(
-            "SELECT id, ts, text FROM episodes WHERE id>? ORDER BY id LIMIT ?",
+            "SELECT id, ts, text, speaker FROM episodes WHERE id>? "
+            "ORDER BY id LIMIT ?",
             (last, batch)).fetchall()
         if not rows:
             self._state_set("last_run_ts", str(now))
@@ -1176,7 +1327,18 @@ class Memory:
             return {"ran": True, "episodes": 0, "new": 0, "merged": 0,
                     "retired": 0, "remaining": 0}
         try:
-            listing = "\n".join(f"[{r[0]}] {r[2]}" for r in rows)
+            # WHO SPOKE RIDES WITH THE LINE. The listing was "[id] text" and
+            # the speaker verdict — stored on the row, carried into
+            # briefing_facts, carried onto every commitment — was dropped
+            # exactly here, at the one place a line can KILL a fact. Reproduced
+            # on the shipped code: episode 2, tagged 'other', distilled "broke
+            # up with Dana" and retired the owner's own "partner is Dana".
+            #
+            # LAW 5 ORDER. The sense exists and is captured; passing it along
+            # is what comes before any rule, and the judgement stays with the
+            # model that can see the whole day. Nothing here reads a word.
+            listing = "\n".join(
+                f"[{r[0]}]{_speaker_tag(r[3])} {r[2]}" for r in rows)
             res = self.llm.chat(CONSOLIDATE_SYSTEM, listing)
             cands = json.loads(_extract_json(res.text)).get("facts")
             if not isinstance(cands, list):
@@ -1216,6 +1378,7 @@ class Memory:
                     "episodes": 0, "new": 0, "merged": 0, "retired": 0,
                     "remaining": self._episodes_after(last)}
         valid = {r[0]: r[1] for r in rows}  # id -> ts
+        spoke = {r[0]: _speaker_verdict(r[3]) for r in rows}  # id -> verdict
         new = merged = retired = 0
         try:
             for c in cands:
@@ -1250,29 +1413,46 @@ class Memory:
                 if not eps:
                     continue
                 fact_ts = max(valid[e] for e in eps)
+                # A FACT NOBODY BUT A STRANGER SAID IS LABELLED AS ONE. Every
+                # contributing line has to be a positive "not the owner" for
+                # this to fire: one line of his, or one line nobody could
+                # place, and it is ordinary consolidation again. Absence is
+                # not a verdict, and the owner's own words must never be
+                # fenced by a roster that recognises nobody.
+                src = (OVERHEARD
+                       if eps and all(spoke.get(e) == "other" for e in eps)
+                       else "consolidation")
                 match, relation = self._relate_fact(text, fact_ts)
                 changed = self._last_match_changed_detail
                 if match is not None and relation == "same":
                     self._merge_fact(match, imp, fact_ts, eps,
                                      new_text=text if changed else None,
-                                     source="consolidation", kind=kind)
+                                     source=src, kind=kind)
                     merged += 1
                 elif match is not None and relation == "replaces":
-                    # Counted separately, and counted only when a row landed:
-                    # `retired` is the number that says the profile is
-                    # CORRECTING itself rather than only growing, and the
-                    # nightly print is the one place anybody would notice
-                    # supersession quietly stopping.
-                    if self._supersede(match, text, imp, 0.6, "consolidation",
-                                       fact_ts, eps, kind=kind):
+                    # Counted separately, and counted only when a row landed
+                    # AND SOMETHING ACTUALLY DIED: `retired` is the number that
+                    # says the profile is CORRECTING itself rather than only
+                    # growing, and the nightly print is the one place anybody
+                    # would notice supersession quietly stopping. _supersede
+                    # returns a truthy row id on the provenance-fence path too,
+                    # having retired nothing — latent while only mail and
+                    # calendar were fenced and consolidation could not produce
+                    # them, and REACHABLE the moment an overheard line could.
+                    # A mislabel here reads as "she corrected herself" on a
+                    # night she refused to.
+                    landed = self._supersede(match, text, imp, 0.6, src,
+                                             fact_ts, eps, kind=kind)
+                    if landed:
                         new += 1
-                        retired += 1
+                        if self._is_retired(match) or self._is_retired(landed):
+                            retired += 1
                 else:
                     # Counted only if a row actually landed. _insert_fact
                     # returns 0 for a vetoed fact, and a pass that reports
                     # writing facts it refused would make the veto invisible
                     # in the one number anybody watches.
-                    if self._insert_fact(text, imp, 0.6, "consolidation",
+                    if self._insert_fact(text, imp, 0.6, src,
                                          fact_ts, eps, kind=kind):
                         new += 1
             self._state_set("last_episode_id", str(rows[-1][0]))
@@ -1393,12 +1573,32 @@ class Memory:
     def _compare_words(self, text: str) -> set:
         """Words that decide whether two facts are the same one.
 
-        Short tokens are dropped as noise EXCEPT numbers: "6" and "8" carry
-        the whole meaning of a time, and dropping them made two different
-        dinners look like one.
+        NO WORD IS THROWN AWAY FOR BEING SHORT. It used to drop every token of
+        two characters or fewer unless it was a digit, and HARNESS-LAW 1 names
+        a word count as a pattern that may not decide meaning. Measured on the
+        shipped code, in both of the places this set is read:
+
+          _compare_words("partner is Jo")    -> {partner}
+          _compare_words("broke up with Jo") -> {broke}
+
+        so the pair the whole supersession feature exists for had overlap 0,
+        no model was ever asked, and the dead fact led recall forever. Jo, Al,
+        Ed, Bo, Mo, Ty, Li — one class of name, silently unlearnable.
+
+        The tier below is worse than a missed question. "partner is Jo" and
+        "partner is Al" BOTH reduced to {partner}, scoring 1.00, so _same_as
+        returned True with no model in the loop at all: "partner is Al" was
+        merged into "partner is Jo" and the name thrown away, and
+        forget_fact("dinner with Jo") DELETED "dinner with Al" and then
+        blocked "dinner with Ed" from ever being written.
+
+        The length test was standing in for a stopword list and doing it by
+        counting letters, which cannot tell a preposition from a person.
+        `_STOP` is the list, it is written down, and it holds no names.
+        Numbers were already exempt for the reason that still applies: "6" and
+        "8" carry the whole meaning of a time.
         """
-        return {w for w in _fact_tokens(text)
-                if (len(w) > 2 or w.isdigit()) and w not in self._STOP}
+        return {w for w in _fact_tokens(text) if w not in self._STOP}
 
     def _relate_fact(self, text: str,
                      ts: Optional[float] = None) -> tuple:
@@ -1413,15 +1613,36 @@ class Memory:
         deterministic same-wording tiers that already shipped, and nothing
         else. No verb list, no threshold, decides that a fact is dead.
 
-        THE SIFT HAD TO WIDEN, and this is the measured reason. It used to
-        offer the model only pairs scoring 0.40-0.80 on word overlap.
-        "partner is Dana" and "broke up with Dana" reduce to {partner, dana}
-        and {broke, dana} — overlap 0.33 — so the one pair the whole feature
-        exists for scored BELOW the band and was never asked about. A cheap
-        sift that silently excludes the case is not a sift, it is the
-        decision. Now any shared compare-word makes a pair a candidate and the
-        model is asked about the three closest; the call budget is unchanged
-        (it was already capped at three), the band is not.
+        WHAT A CHEAP SIFT MAY DO HERE, AND IT IS ONLY ONE THING: decide the
+        ORDER the model is asked in. It may never decide WHICH pairs it is
+        asked about. Three mechanisms in a row got that backwards, each one
+        removed after it was measured excluding the deciding pair:
+
+          the 0.40-0.80 band   "partner is Dana" / "broke up with Dana" score
+                               0.33 and fell below it;
+          `if overlap > 0`     "partner is Jo" / "broke up with Jo" reduced to
+                               {partner} and {broke} (see _compare_words) —
+                               overlap 0, no model ever asked;
+          `[:3]`               the band by another mechanism. With four stored
+                               facts naming Dana, "broke up with Dana" put the
+                               blender (0.667), the boss (0.667) and the wrist
+                               (0.500) to the model, and "partner is Dana"
+                               (0.333) reached it never.
+
+        The third one is the general form and it is why no threshold on words
+        can be safe here: A SUPERSESSION PAIR IS LOW-OVERLAP BY NATURE, because
+        one sentence asserts and the other negates. Word overlap is
+        anti-correlated with the thing being looked for, so ranking by it and
+        cutting is worse than random. "home is 4 Maple St" and "we moved to
+        Rowan Ave" share no word at all.
+
+        So the sift excludes nothing. EVERY live row is put to the model — in
+        one call carrying the whole list, batched at _JUDGE_BATCH per call, and
+        stopping at the first batch that comes back with a verdict. Overlap
+        orders the list so the likely answer is in the first batch: it changes
+        what is asked FIRST, never what is asked. The expected cost is ONE call
+        (it was up to three), and the worst case is bounded by the size of the
+        profile rather than by a number that could hide the answer.
 
         `ts` is the evidence date of the incoming fact and is used for exactly
         one thing: see the retired-row guard below.
@@ -1430,9 +1651,10 @@ class Memory:
         norm = " ".join(_fact_tokens(text))
         cand_words = self._compare_words(text)
         cand_nums = _fact_numbers(text)
-        near = []
-        for rid, fact, retired_ts in self.db.execute(
-                "SELECT id, fact, retired_ts FROM profile_facts").fetchall():
+        candidates = []
+        for rid, fact, retired_ts, last_seen in self.db.execute(
+                "SELECT id, fact, retired_ts, last_seen_ts "
+                "FROM profile_facts").fetchall():
             # A DEAD ROW STOPS BEING A TARGET ONCE SOMETHING NEWER THAN ITS
             # RETIREMENT SAYS THE SAME THING AGAIN.
             #
@@ -1456,9 +1678,13 @@ class Memory:
             if fnorm == norm:
                 return rid, "same"
             fwords = self._compare_words(fact)
-            if not cand_words or not fwords:
-                continue
-            overlap = len(cand_words & fwords) / len(cand_words | fwords)
+            # NOT `continue` when either side is empty. A fact made entirely of
+            # stopwords used to fall out of candidacy here, which is the same
+            # exclusion this method exists to stop making; it now goes to the
+            # model like everything else, and only the two deterministic
+            # shortcuts below need a non-empty set to mean anything.
+            overlap = (len(cand_words & fwords) / len(cand_words | fwords)
+                       if (cand_words or fwords) else 0.0)
             # SAME WORDS, DIFFERENT NUMBER, IS NOT THE SAME FACT.
             #
             # The word filter dropped anything of two characters or fewer, so
@@ -1493,7 +1719,7 @@ class Memory:
                 # below merging them and throwing the new number away, which is
                 # why that branch is now an elif.
                 pass
-            elif overlap >= 0.8:
+            elif cand_words and fwords and overlap >= 0.8:
                 return rid, "same"  # near-identical wording; no model needed
             # A RETIRED ROW IS NEVER PUT TO THE MODEL. The question the prompt
             # asks — which of these is true now — has no answer about a fact
@@ -1501,40 +1727,89 @@ class Memory:
             # a corpse would retire something twice. The deterministic tiers
             # above still see it, which is what keeps a replayed re-derivation
             # accruing on the dead row instead of coming back to life.
-            if overlap > 0 and retired_ts is None:
-                near.append((overlap, rid, fact))
-        if self.llm and near:
-            now = time.time()
-            for _overlap, rid, fact in sorted(near, reverse=True)[:3]:
-                try:
-                    # AGES GO WITH THE FACTS. "partner is Dana" and "broke up
-                    # with Dana" are the same two sentences whichever way round
-                    # they were said; which one has taken the other's place is
-                    # a question about WHEN, and asking it without the dates is
-                    # asking the model to guess. `a` is what is stored, `b` is
-                    # what just arrived.
-                    seen = self.db.execute(
-                        "SELECT last_seen_ts FROM profile_facts WHERE id=?",
-                        (rid,)).fetchone()
-                    res = self.llm.chat(SAME_FACT_SYSTEM, json.dumps({
-                        "a": fact,
-                        "a_last_heard_days_ago": _days_ago(
-                            seen[0] if seen else now, now),
-                        "b": text,
-                        "b_last_heard_days_ago": _days_ago(ts or now, now),
-                    }), aux=True)
-                    relation = json.loads(
-                        _extract_json(res.text)).get("relation")
-                except Exception:
-                    continue
-                # An answer this store does not know — a value the model
-                # invented, a reply in the old {"same":bool} shape from a
-                # prompt revision nobody here has seen — is NO VERDICT, the
-                # same contract _fact_kind and _speaker_verdict hold. No
-                # verdict leaves the profile exactly as it was.
-                if relation in ("same", "replaces"):
-                    return rid, relation
+            #
+            # THIS IS THE ONLY EXCLUSION LEFT, and it is a fact about the ROW
+            # (is it still true?), never about the words.
+            if retired_ts is None:
+                candidates.append((overlap, rid, fact, last_seen))
+        return self._ask_the_model_which_note(text, ts, candidates)
+
+    def _ask_the_model_which_note(self, text: str, ts: Optional[float],
+                                  candidates: list) -> tuple:
+        """Put the incoming fact and EVERY live stored fact to the model, and
+        return (row_id, relation) for the one it names — or (None, "different").
+
+        `candidates` is (overlap, row_id, fact, last_seen_ts) per live row.
+
+        THE ORDER IS THE ONLY THING OVERLAP DECIDES. Batches are asked in turn
+        until one answers, so a well-ordered list costs one call and a
+        badly-ordered one costs more calls and reaches the same rows. Ties go
+        to the LOWER row id — the older fact — because the older row is by
+        definition the one a supersession is about, and sorting ties to the
+        newest put fresh noise in front of it.
+
+        WHAT STOPS THE LOOP IS A VERDICT, NOT A BUDGET, and that distinction
+        is the whole point. A batch that names a note ends the search because
+        the model answered the question; a batch that answers nothing readable
+        does NOT, because an unreadable reply says nothing about the rows it
+        never covered. The residual is honest and worth writing down: if the
+        model names a note in an early batch while the real match sits in a
+        later one, the later one is not seen. That is a model getting an
+        answer wrong with the evidence in front of it, which is a different
+        thing from code deciding it may not be asked.
+
+        AGES GO WITH THE FACTS. Which of two facts has taken the other's place
+        is a question about WHEN, and asking it without the dates is asking the
+        model to guess.
+        """
+        if not self.llm or not candidates:
+            return None, "different"
+        now = time.time()
+        ordered = sorted(candidates, key=lambda c: (-c[0], c[1]))
+        for start in range(0, len(ordered), _JUDGE_BATCH):
+            batch = ordered[start:start + _JUDGE_BATCH]
+            try:
+                res = self.llm.chat(SAME_FACT_SYSTEM, json.dumps({
+                    "new_note": text,
+                    "new_note_last_heard_days_ago": _days_ago(ts or now, now),
+                    "stored_notes": [
+                        {"n": i + 1, "note": c[2],
+                         "last_heard_days_ago": _days_ago(c[3] or now, now)}
+                        for i, c in enumerate(batch)],
+                }), aux=True)
+                raw = json.loads(_extract_json(res.text))
+            except Exception:
+                continue
+            if not isinstance(raw, dict):
+                continue
+            # AN ANSWER THIS STORE DOES NOT KNOW IS NO VERDICT — a relation the
+            # model invented, a reply in the old {"same":bool} or bare
+            # {"relation":...} shape from a prompt revision nobody here has
+            # seen, an `n` that names no note it was shown. The same contract
+            # _fact_kind and _speaker_verdict hold: no verdict leaves the
+            # profile exactly as it was, and the remaining batches are still
+            # asked, because one unreadable reply is not an answer about the
+            # rows it never covered.
+            relation = raw.get("relation")
+            n = raw.get("n")
+            if relation not in ("same", "replaces"):
+                continue
+            if isinstance(n, bool) or not isinstance(n, int):
+                continue
+            if not 1 <= n <= len(batch):
+                continue
+            return batch[n - 1][1], relation
         return None, "different"
+
+    def _is_retired(self, rid: int) -> bool:
+        """Did this row actually end up retired? Asked instead of inferring it
+        from _supersede's return value, which is a truthy row id on the
+        provenance-fence path as well — the path where the new fact lands and
+        deliberately kills nothing."""
+        row = self.db.execute(
+            "SELECT retired_ts FROM profile_facts WHERE id=?", (rid,)
+        ).fetchone()
+        return bool(row) and row[0] is not None
 
     def _supersede(self, old_id: int, text: str, importance: int,
                    confidence: float, source: str, ts: float,
@@ -1740,14 +2015,26 @@ class Memory:
             "SELECT type, name FROM nodes WHERE id=?", (i,)).fetchone()
         s, d = name(src), name(dst)
         quote = None
+        speaker = None
         if episode_id:
             row = self.db.execute(
-                "SELECT text FROM episodes WHERE id=?", (episode_id,)).fetchone()
+                "SELECT text, speaker FROM episodes WHERE id=?",
+                (episode_id,)).fetchone()
             quote = row[0] if row else None
+            speaker = row[1] if row else None
         return {
             "fact": f"{s[1]} —{rel}→ {d[1]}",
             "src_type": s[0], "dst_type": d[0],
             "ts": ts, "quote": quote,
+            # THE THIRD DOOR. An edge is derived from ONE episode and carries
+            # its authority: "Kowalski —about→ reservation" is exactly as much
+            # a stranger's word as the sentence it was pulled out of. Without
+            # this, fencing the episode row moved the same content one row
+            # down and let it through unfenced — measured: the episode was
+            # fenced, the edge was not, and fill_gaps_from_memory still filled
+            # the reservation name off an overheard line.
+            "source": (OVERHEARD if _speaker_verdict(speaker) == "other"
+                       else ""),
         }
 
     def _upsert_node(self, type_: str, name: str, ts: float,
@@ -1838,6 +2125,19 @@ def _bumped(confidence) -> float:
     if c >= _CONFIDENCE_SETTLED:
         return c
     return c + (_CONFIDENCE_CEILING - c) * _CONFIDENCE_STEP
+
+
+def _speaker_tag(speaker) -> str:
+    """How one episode's voice verdict is written into the consolidation
+    listing. Empty string when there is no verdict, which is the ordinary case
+    and must read as ordinary — a tag on every line would teach the model that
+    an untagged line is unusual, and today almost every line is untagged."""
+    verdict = _speaker_verdict(speaker)
+    if verdict == "owner":
+        return " (them)"
+    if verdict == "other":
+        return " (NOT them — someone else in earshot)"
+    return ""
 
 
 def _speaker_verdict(speaker) -> Optional[str]:

@@ -1363,14 +1363,37 @@ def ends_in_the_world(llm, line: str, goal: str) -> bool:
     went silent — a coin flip on whether he ever got the one text (seen live,
     2026-08-09). Asked as its own question, the model judges the substance.
     Only an explicit true escalates; absent, malformed or dead-model replies
-    leave the quiet behaviour exactly as it was."""
+    leave the quiet behaviour exactly as it was.
+
+    THE COLLAPSE DIRECTION IS THE QUIET ONE, AND IT IS THE RECORDED FAILURE.
+    A timeout here returns False, the plan stays quiet research, and the owner
+    never gets the one text — which is the 2026-08-09 shape this function was
+    written to stop, arriving by a different route. It is deliberate for now
+    (escalating on every transient fault would interrupt him about prep work,
+    the failure the quiet lane exists to prevent), and it is the one place
+    this function differs from its three siblings, which carry four states
+    precisely because "no" and "nobody answered" are different things.
+    Whether an UNANSWERED here should escalate is an owner ruling, written up
+    in research/2026-08-24-supersession-fixes.md; the collapse is pinned by
+    tests/test_ends_in_the_world.py either way, so a change to it is a
+    decision somebody makes rather than a default nobody can see.
+
+    What it must not be is SILENT. party_verdict prints when its question goes
+    unanswered; this one swallowed the exception, so a model that timed out
+    every night looked exactly like a model that answered "no" every night."""
     if not goal or not llm or not getattr(llm, "live", False):
         return False
     try:
         res = llm.chat(WORLD_SYSTEM,
                        f"HEARD: {line}\n\nTASK: {goal}", temperature=0.0)
         raw = json.loads(_extract_json(res.text))
-    except Exception:
+    except Exception as exc:
+        print(f"world: the consequence question went unanswered — {exc!r}; "
+              f"staying quiet about {goal!r}")
+        return False
+    if not isinstance(raw, dict) or "ends_in_the_world" not in raw:
+        print(f"world: unreadable reply to the consequence question -> "
+              f"{raw!r}; staying quiet about {goal!r}")
         return False
     return raw.get("ends_in_the_world") is True
 
