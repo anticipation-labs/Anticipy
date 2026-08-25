@@ -189,13 +189,17 @@ class MockTransport:
     def __init__(self):
         self.sent: list[dict] = []
 
-    def send(self, to: str, body: str) -> dict:
+    def send(self, to: str, body: str, media=None) -> dict:
         # `delivered` is False for the same reason it exists on a live send: a
         # record that nobody delivered must not be readable as one that was.
         # `mock` is what distinguishes "captured" from "Twilio has it, delivery
         # pending"; both are honest, and neither is "sent".
+        #
+        # `media` is captured rather than ignored: this is the rig every test
+        # of the picture runs through, and a mock that silently drops it would
+        # make a broken chain look wired.
         rec = {"to": to, "body": body, "ts": time.time(), "mock": True,
-               "delivered": False}
+               "delivered": False, "media": list(media or [])}
         self.sent.append(rec)
         return rec
 
@@ -229,7 +233,16 @@ class TwilioTransport:
                              "when Twilio is not configured")
         self.voice = voice_arm
 
-    def send(self, to: str, body: str) -> dict:
+    def send(self, to: str, body: str, media=None) -> dict:
+        # ONLY PASSED WHEN THERE IS ONE. Transports and arms that predate the
+        # picture are still in the tree and still in production — the SMS
+        # webhook's suppressing transport, proof/smoke_worker.py's `T`, every
+        # `def text(self, to, body)` fake in tests/ — and handing them a
+        # keyword they have never seen is a TypeError on the ONE path that
+        # must never fail. A text with no picture is exactly the call it was
+        # yesterday.
+        if media:
+            return self.voice.text(to, body, media=media)
         return self.voice.text(to, body)
 
 
@@ -308,7 +321,16 @@ class Conversation:
 
     # ------------------------------------------------------------ outbound
 
-    def say(self, phone: str, body: str) -> dict:
+    def say(self, phone: str, body: str, media=None) -> dict:
+        # THE DEDUPE STILL READS THE BODY ALONE, AND THAT IS A DECISION.
+        # A second attempt that differs only by having a picture on it is
+        # deduped away by the loop below (spec §13 question 9, settled here by
+        # whoever holds brain/). It is the right way round: the owner reading
+        # the same sentence twice in his thread is a worse day than the owner
+        # reading it once without a photo, and the photo is reachable in the
+        # app either way — the evidence host serves the owner's own rows to
+        # his signed-in session with no public window at all.
+        #
         # The same sentence never goes out twice in a row within minutes — on
         # 2026-08-02 one "which one should I call off" question was sent three
         # times inside 30 seconds. Saying it once is the human behavior.
@@ -326,10 +348,19 @@ class Conversation:
             # dedupe above still sees it. Only the SMS leg is skipped: the
             # caller is delivering this reply on the channel the answer came
             # in on. See reply_in_app().
+            #
+            # NO PICTURE ON THIS LANE, and none is needed: the app reads the
+            # owner's own evidence rows through his signed-in session
+            # (backend/pb_hooks/evidence.pb.js), so an in-app reply does not
+            # need a public URL to exist for a picture to be seen.
             return {"to": phone, "body": body, "via": "in-app"}
+        # Conditional for the reason TwilioTransport.send gives: transports
+        # that predate the picture are still in the tree and still shipping.
+        if media:
+            return self.transport.send(phone, body, media=media)
         return self.transport.send(phone, body)
 
-    def reach_out(self, phone: str, about: str) -> dict:
+    def reach_out(self, phone: str, about: str, media=None) -> dict:
         """Anticipy texts first (Tomo-style), conversationally, about a
         pending item or something she overheard."""
         if self.llm and self.llm.live:
@@ -345,7 +376,10 @@ class Conversation:
             body = self._parse(res.text).get("reply") or about
         else:
             body = about
-        return self.say(phone, body)
+        # The composer may rewrite the words; it never touches the picture.
+        # WHICH picture was settled by the browser model at the moment it
+        # declared the errand done, and nothing on the way out re-opens it.
+        return self.say(phone, body, media=media)
 
     # ------------------------------------------------------------- inbound
 

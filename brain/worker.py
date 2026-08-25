@@ -254,6 +254,49 @@ def fetch_owner_first_name(owner_ref: str = "") -> str | None:
         return None
 
 
+# The column the owner's answer is stored in. Named for what it does, because
+# the person answering it is being asked one question and deserves to be able
+# to read it: "send a photo of the confirmation with the done text".
+PHOTO_SETTING = "photo_with_done_text"
+
+
+def owner_wants_evidence_photos(owner_ref: str = "") -> bool:
+    """Has this owner said a picture of their confirmation may be TEXTED?
+
+    A FLOOR, AND A FLOOR THAT LIFTS ITSELF IS NOT A FLOOR. The question is
+    "does anything authorise attaching this picture", and NOBODY HAS ANSWERED
+    IS NO — an absent column, an unreachable backend, a profile row that does
+    not exist yet, all of it is off. That is deliberate and it is not a bug to
+    be tidied away by defaulting to true when the read fails.
+
+    Why the question is real rather than paranoia: for a photo to reach a
+    handset at all there has to be an https URL that answers an ANONYMOUS GET
+    with a picture of a page the owner was logged into — their booking, their
+    address, whatever the confirmation page showed. Twilio fetches MediaUrl
+    from its own infrastructure with no credential of ours. The window is
+    fifteen minutes and five fetches (backend/pb_hooks/evidence.pb.js), and
+    Twilio's own copy and the handset's copy last forever. design/LOCAL-FIRST
+    rule 3 does not obviously permit that, and this code deliberately does not
+    settle the question on the owner's behalf.
+
+    Reading a stored boolean is not a rule reading anybody's words: PocketBase
+    serialises a bool field as JSON true/false, and the two string forms below
+    are the same value arriving over a form post. Nothing here interprets a
+    sentence.
+    """
+    try:
+        profile = _latest_profile(owner_ref)
+        answer = profile.get(PHOTO_SETTING) if profile else None
+        if answer is None and owner_ref:
+            r = pb.get(f"{PB}/api/collections/owners/records/{owner_ref}",
+                       timeout=10)
+            if getattr(r, "ok", False):
+                answer = (r.json() or {}).get(PHOTO_SETTING)
+        return answer is True or str(answer).strip().lower() in ("true", "1")
+    except Exception:
+        return False
+
+
 def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> bool:
     """Day zero's first proactive touch: the moment a BRAND-NEW owner saves
     their number, she says hello — once, ever, per number.
@@ -1675,7 +1718,31 @@ def report_finished_jobs(anticipy) -> None:
                       f"phone on this account — so it went to the feed "
                       f"instead of to a text: {said[:80]}")
                 continue
-            if not anticipy.notify_owner(said):
+            # DONE = EVIDENCE. This is the one text in the product that may
+            # carry a picture, and it is resolved HERE — in the moment of
+            # sending, never earlier — because opening a share window puts a
+            # photograph of a page the owner was logged into on an anonymous
+            # https URL for fifteen minutes. A window opened before anybody
+            # needs it is exposure bought for nothing.
+            #
+            # NOTHING BELOW CHOOSES A PICTURE and nothing below can fail the
+            # text: picture_for_done_text returns [] for a receipt naming no
+            # evidence, for a receipt naming more than one (a floor, not a
+            # tie-break — see brain/evidence.py), for an owner who has not
+            # said yes, and for every failure of the share door. It never
+            # raises. The words go out either way.
+            #
+            # PASSED ONLY WHEN THERE IS ONE, for the reason every other hop in
+            # this chain gives: notify_owner has a dozen callers and a dozen
+            # doubles in tests/ and proof/ that predate the picture, and a
+            # keyword they have never seen is a TypeError swallowed by
+            # notify_owner's own except — which reads as "he was not told" and
+            # silences the confirmation entirely. That regression was real: it
+            # took out every SMS-lane answer for one run of this file.
+            photo = picture_for_done_text(job, owner_wants_evidence_photos)
+            told = (anticipy.notify_owner(said, media=photo) if photo
+                    else anticipy.notify_owner(said))
+            if not told:
                 print(f"result for {job['id']}: send failed, not recording it as said")
                 continue
             # Same order for the same reason: the text has landed, so nothing

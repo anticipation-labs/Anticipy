@@ -45,6 +45,8 @@ from xml.sax.saxutils import escape
 
 import requests
 
+from .evidence import one_url
+
 # What no Twilio account can work without, whatever it authenticates WITH.
 ACCOUNT_ENV = ("TWILIO_ACCOUNT_SID", "TWILIO_PHONE_NUMBER")
 # The preferred outbound credential. See `rest_credential`.
@@ -408,16 +410,86 @@ class VoiceArm:
 
     # ------------------------------------------------------------------ text
 
-    def text(self, to: str, body: str) -> dict:
+    def text(self, to: str, body: str, media=None) -> dict:
+        """The words, and the picture if this channel can carry one.
+
+        THE WORDS ARE THE FLOOR. `media` may be dropped for any reason — a
+        destination MMS does not reach, more than one candidate, a URL Twilio
+        would refuse — and every one of those still sends the sentence. A
+        confirmation that vanishes because a screenshot failed is strictly
+        worse than the confirmation with no screenshot that shipped yesterday.
+        """
         self._guard("text", to)
-        return self._result(
-            requests.post(
+        payload = {"From": self.from_number, "To": to, "Body": body}
+        picture = self._picture_this_channel_can_carry(to, media)
+        if picture:
+            payload["MediaUrl"] = picture
+        # ONE POST SITE, AND THE RETRY IS THE SAME ONE. A second authenticated
+        # post for the retry would make three credential-bearing send sites in
+        # this file where the reviewed design has two — Messages.json and
+        # Calls.json — and
+        # tests/test_twilio_auth_and_delivery.py pins that count on purpose:
+        # every send must authenticate through one path somebody has read.
+        # A loop keeps the credential in one place AND keeps the payload
+        # visible at the post, which is what stranger-gate leg 8 reads.
+        #
+        # ONE RETRY, ON THE RESPONSE, NEVER ON THE EXCEPTION. Twilio has
+        # media-specific error codes and enumerating them is the wrong repair:
+        # a code list rots the day Twilio adds one, and the failure mode when
+        # it rots is a LOST CONFIRMATION. Not-ok means Twilio queued NOTHING,
+        # so dropping the picture and sending the same words again cannot
+        # double-text. A 201 carrying an error_code is a message Twilio
+        # ACCEPTED — it is `ok`, so it never reaches the retry, and `_result`
+        # raises for it below. This product has a recorded incident of the
+        # same sentence going out repeatedly; that ordering is what prevents
+        # its return.
+        for _attempt in (1, 2):
+            response = requests.post(
                 f"{self.base}/Messages.json",
                 auth=self.auth,
-                data={"From": self.from_number, "To": to, "Body": body},
+                data=payload,
                 timeout=15,
-            ),
-            "text", to)
+            )
+            if response.ok or "MediaUrl" not in payload:
+                break
+            self._log(f"Twilio refused the text to {str(to)[:6]}… with a "
+                      f"picture attached (HTTP {response.status_code}); "
+                      "sending the same words again without it.")
+            payload.pop("MediaUrl")
+        return self._result(response, "text", to)
+
+    def _picture_this_channel_can_carry(self, to: str, media) -> str:
+        """The one URL that may ride on a text to `to`, or "".
+
+        TWO REFUSALS, AND NEITHER DECIDES WHAT ANYTHING MEANS.
+
+        `one_url` is the floor from brain/evidence.py: zero candidates is no
+        picture and more than one is ALSO no picture, because nothing
+        downstream of the browser model may choose between them.
+
+        The `+1` test reads a NUMBER'S COUNTRY CODE, which is transport
+        addressing — the same kind of check `e164` itself is — and it is here
+        because Twilio documents MMS as US/Canada on standard long codes and
+        NOBODY IN THIS REPO HAS MEASURED what a MediaUrl to +44 does. The
+        possibilities include rejecting the whole message. Stranger-gate leg 3
+        passes, so a London stranger really does reach production with a +44
+        number; they get exactly today's behaviour rather than an experiment
+        run on their live week. Relax it when somebody measures it, not before.
+        """
+        picture = one_url(media)
+        if not picture:
+            given = len(list(media or []))
+            if given > 1:
+                self._log(f"NO PICTURE on this text: {given} were offered and "
+                          "exactly one is the proof of this errand. Nothing "
+                          "here may pick between them.")
+            return ""
+        if not str(to).startswith("+1"):
+            self._log(f"no picture on this text: {str(to)[:6]}… is outside "
+                      "the numbers Twilio delivers MMS to, and the words "
+                      "matter more than the picture.")
+            return ""
+        return picture
 
     # ------------------------------------------------------------------ call
 

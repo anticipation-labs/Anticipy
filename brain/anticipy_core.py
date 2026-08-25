@@ -2839,7 +2839,18 @@ class Anticipy:
 
     # ----------------------------------------------------------- voice arm
 
-    def notify_owner(self, message: str, channel: str = "sms") -> Optional[dict]:
+    def notify_owner(self, message: str, channel: str = "sms",
+                     media=None) -> Optional[dict]:
+        # `media` IS OPTIONAL AND ALMOST EVERY CALLER OMITS IT. Only the
+        # done-text carries a picture (WIRE IT ALL step 1: act -> evidence ->
+        # done-text with photo); questions, stall notices and FYIs are words.
+        #
+        # BOTH BRANCHES BELOW CARRY IT, and the conversational one is the one
+        # that matters: brain/worker.py builds a Conversation unconditionally,
+        # so the direct `self.voice.text` below is a fallback the worker does
+        # not take. Wiring only that fallback would turn stranger-gate leg 8
+        # green and ship a product where no photo is ever attached.
+        #
         # A failed text must never abort the hearing loop — the job is already
         # queued and the app still surfaces it under "Needs your OK".
         try:
@@ -2860,7 +2871,8 @@ class Anticipy:
             # Conversational channel first: she opens a real thread, not a
             # "reply YES" wall; replies come back via Conversation.on_reply.
             if self.conversation and self.owner_phone and channel == "sms":
-                return self.conversation.reach_out(self.owner_phone, message)
+                return self.conversation.reach_out(self.owner_phone, message,
+                                                   media=media)
             if not (self.voice and self.owner_phone):
                 # No transport is not a FAILED send — dev and test rigs run
                 # without Twilio, and her feed voice must survive there. Only
@@ -2869,7 +2881,16 @@ class Anticipy:
                 # claims he was told.
                 return {"skipped": "no transport"}
             if channel == "call":
+                # A phone call carries no picture, and a caller that asked for
+                # one on this channel has asked for something that does not
+                # exist. The words still go.
                 return self.voice.call(self.owner_phone, message)
+            # Conditional for the reason TwilioTransport.send gives: arms and
+            # doubles that predate the picture are still in the tree, and a
+            # keyword they have never seen is a TypeError swallowed by the
+            # except below — which reads as "he was not told".
+            if media:
+                return self.voice.text(self.owner_phone, message, media=media)
             return self.voice.text(self.owner_phone, message)
         except Exception as e:
             print(f"notify_owner failed ({channel}): {e}")
