@@ -15,9 +15,11 @@ law; it is a comment.
 
   RED here is not a bug. RED here is the law working.
 
-This gate goes green on exactly one condition: there is no tape left. Every
-other state — tape present, tape unmarked, tape marked but pointing at a leg
-that tracks something else — is red, and the message says which.
+This gate goes green on exactly one condition: there is no LIVE tape left.
+Every other state — tape present, tape unmarked, tape marked but pointing at a
+leg that tracks something else, tape recorded as closed that came back — is
+red, and the message says which. Tape that was genuinely removed is CLOSED,
+not forgotten: it keeps a running predicate here forever (leg 6).
 
 --------------------------------------------------------------------------
 HOW TO READ THE VERDICT — because this gate is red on purpose
@@ -32,8 +34,11 @@ tripwire was firing into the noise the gate makes on purpose.
 So every leg declares whether its red is EXPECTED, and the verdict is three
 states, not two:
 
-  exit 0  CLEAN            — no tape left anywhere. Celebrate, then delete
-                             this gate's registry (leg 1 will ask you to).
+  exit 0  CLEAN            — no live tape left anywhere. Celebrate; do NOT
+                             delete this file. Every piece that was closed
+                             keeps a running predicate here (leg 6), and
+                             deleting it is how a revert brings the tape back
+                             in silence.
   exit 1  TAPE OUTSTANDING — leg 2 is red and NOTHING ELSE IS. This is the
                              steady state. Law 2 is working.
   exit 2  THE BOOKS DISAGREE — a leg that is not red by design went red. The
@@ -111,6 +116,64 @@ how the two scopes came to disagree; an entry that needs a different expiry
 needs a different `find`, or a new state here with a test behind it.
 
 --------------------------------------------------------------------------
+THE FOURTH STATE: CLOSED — the green path this gate did not have
+--------------------------------------------------------------------------
+Until 2026-08-25 this gate could record tape, and tape that never existed. It
+could not record tape that was CLOSED, and that is the one outcome Law 2 is
+written to encourage. The 2026-08-25 sorter spec found it while planning to
+retire `shard_too_thin`, one of the audited five, and every road was red:
+
+  drop the entry, leave the count  -> leg 4: "the registry covers (19,21,22,50),
+                                      but the audit recorded (19,20,21,22,50)"
+  drop the entry AND lower the count -> leg 4: "the audit doc now reports 5;
+                                      this gate is pinned to 4"
+  edit the audit document to 4     -> forbidden. It is a dated measurement, and
+                                      leg 4's own message says so.
+
+A gate that cannot express the outcome it wants is a gate people route around.
+So there is a fourth state, and it is NOT a promise:
+
+  CLOSED  the entry moved from KNOWN_TAPE to CLOSED_TAPE, carrying its Tape()
+          VERBATIM. The same `find` that used to prove it LIVE now has to prove
+          it GONE, on every run, forever. leg 2 green for it. leg 6 watches it.
+
+What makes "closed" mean something, rather than being the registry-satisfied-by-
+declaration attack this gate already defeats for live tape:
+
+  * The TEXT is gone, computed. leg 6 re-runs the entry's own predicate against
+    the shipped organs every run. Moving an entry into CLOSED_TAPE while its
+    text is still in the tree is leg 6 RED (RESURRECTION), and leg 3 RED.
+  * The MARKER is gone, computed. A closed entry claims NO marker line, so a
+    `TAPE:` comment left behind at the old site is an ORPHAN in leg 1 — the
+    same red as tape that shipped with no expiry at all.
+  * It cannot come back quietly. A revert, a rebase, or a merge that takes the
+    older file puts the text back; leg 6 goes RED naming every site. That red
+    is NOT by design, so it lands as exit 2 and changes the fingerprint. It is
+    deliberately not leg 2's business: leg 2 is red by design, and a
+    resurrection hiding under a by-design red is the I4 failure again.
+  * The census is CONSERVED, not shortened. Legs 3 and 4 count
+    KNOWN_TAPE + CLOSED_TAPE. The audited five stay five forever.
+
+--------------------------------------------------------------------------
+THE DATED NUMBER, AFTER SOMETHING IS CLOSED
+--------------------------------------------------------------------------
+research/2026-08-24-law1-audit.md says 5 undeclared, 0 properly declared. That
+is a measurement of 2026-08-24 and it never changes, because nothing about
+2026-08-24 changes. AUDIT_UNDECLARED and AUDIT_UNDECLARED_COUNT are copies of
+it and they never change either.
+
+What changes is the PARTITION. The dated five is a fixed set; the present state
+splits it into OPEN (KNOWN_TAPE) and CLOSED (CLOSED_TAPE), and leg 4 checks
+that the split is exact — union equals the dated tuple, no item in both, none
+lost. Closure moves an item across the line. The total is pinned to a document
+nobody is allowed to edit, so the census still cannot shrink quietly; it simply
+now has somewhere to shrink TO that is still counted.
+
+AUDIT_DECLARED_COUNT stays 0 for the same reason: on 2026-08-24, zero pieces
+were properly declared. Declaring the four open ones tomorrow does not make
+that sentence less true.
+
+--------------------------------------------------------------------------
 WHAT THIS GATE CANNOT SEE — stated out loud, so green is never read as safe
 --------------------------------------------------------------------------
 Tape that was never marked, is not one of the audited five, and nobody
@@ -130,6 +193,26 @@ the header must never print a scan scope the leg does not have.
 Tape in `overnight/` and `tests/`. Deliberately excluded: Law 1 exempts gates
 and evals, and both directories discuss tape by nature — this file alone would
 produce a dozen false markers. The exclusion is printed in the gate's output.
+
+The same DECISION coming back under a different name. leg 6 watches one string.
+If the word count that `shard_too_thin` ran is reintroduced as `too_short()`,
+every book here agrees and every book is wrong. That is a reading of what code
+MEANS and it belongs to an audit, not to a needle.
+
+A closure whose `find` was weakened in the same diff that deleted the marker.
+Change the needle to something the tree never held and delete the `TAPE:`
+comment, and leg 6 sees GONE and leg 1 sees no orphan. Note what that costs:
+deleting a Law-2 marker from shipped code, in a diff, with a name on it — and
+what remains is then ordinary UNMARKED tape, which is the blind spot stated
+above, not a new one this state opened. Leaving the marker behind is red.
+
+`closed_by`. It is a commit id, checked for SHAPE and not for existence. This
+repo has two worktrees on divergent lineages, so an id that resolves in one
+tree does not resolve in the other; a gate that went red on that would be
+wrong-firing in half the repository. It is provenance for a human. The things
+leg 6 actually verifies are the text being gone and the replacement leg being
+a file that exists and defines the symbol named — which proves the leg EXISTS,
+never that it tests the right thing. That reading is a review's job.
 
 Run:  python3 overnight/tape_gate.py
 """
@@ -340,6 +423,28 @@ def _all_offsets(hay: str, needle: str):
         start = i + 1
 
 
+def sites_anywhere(root: str, needle: str, dirs=SHIPPED_DIRS) -> list[str]:
+    """Every `rel:line` in the shipped organs where `needle` still appears.
+
+    Deliberately NOT written in terms of a home file: a CLOSED entry's file may
+    itself be gone, and "is this text still shipping" must not depend on a path
+    surviving. `Tape.state()` keeps its own home-first walk because that is
+    what tells LIVE from MOVED, and merging the two is how the 2026-08-24
+    scope bug happened. Two callers, one question each.
+    """
+    out: list[str] = []
+    for rel in iter_shipped_files(root, dirs):
+        try:
+            with open(os.path.join(root, rel), encoding="utf-8",
+                      errors="replace") as f:
+                text = f.read()
+        except OSError:
+            continue
+        for i in _all_offsets(text, needle):
+            out.append(f"{rel}:{_line_of(text, i)}")
+    return out
+
+
 # --------------------------------------------------------------------------
 # THE REGISTRY. One entry per known piece of tape.
 #
@@ -444,6 +549,84 @@ class Tape:
         return f"{self.marker_home or self.home or self.find}"
 
 
+class ClosedTape:
+    """A piece of tape that was ACTUALLY REMOVED — and is still watched.
+
+    This is the state the gate did not have. It wraps the `Tape(...)` entry
+    VERBATIM: same `find`, same `rel`, same `home`, same `audit_item`, same
+    `ledger_needle`. The predicate that used to prove the tape LIVE is the one
+    that now has to prove it GONE, on every run, for as long as this repo
+    exists. Nothing here is satisfied by having been written down:
+
+      * move an entry in here while its text is still in the tree  -> leg 6 RED
+        (RESURRECTION) and leg 3 RED;
+      * leave its `TAPE:` comment behind                           -> leg 1 RED,
+        because a closed entry claims NO marker line and the comment is then an
+        orphan, exactly like tape that shipped with no expiry;
+      * revert the fix later                                       -> leg 6 RED,
+        naming every site the text came back at.
+
+    Fields beyond the wrapped entry:
+      closed_by    the commit that removed it. SHAPE-checked only — see the
+                   header: two worktrees on divergent lineages mean an id that
+                   resolves here may not resolve there, and a gate that went
+                   red on that would be wrong-firing in half the repository.
+                   It is provenance for a human, and it is what the ledger's
+                   "Retired tape" bullet has to name (leg 5).
+      replaced_by  repo-relative path of the leg or test that pins the
+                   behaviour the tape used to provide. Checked to EXIST.
+      proves       a symbol that must appear in that file. Checked. This proves
+                   the leg exists and is named what the entry says; it does not
+                   prove it tests the right thing, and leg 6 says so out loud.
+      note         one line for whoever reads this in a year.
+    """
+
+    def __init__(self, tape: Tape, closed_by: str, replaced_by: str,
+                 proves: str, note: str):
+        self.tape = tape
+        self.closed_by = closed_by
+        self.replaced_by = replaced_by
+        self.proves = proves
+        self.note = note
+
+    # The wrapped entry IS the identity. Delegating rather than copying is the
+    # point: a closure cannot quietly carry a different `find` than the entry
+    # it replaced, because there is only one `find`.
+    id = property(lambda self: self.tape.id)
+    rel = property(lambda self: self.tape.rel)
+    find = property(lambda self: self.tape.find)
+    home = property(lambda self: self.tape.home)
+    marker_home = property(lambda self: self.tape.marker_home)
+    audit_item = property(lambda self: self.tape.audit_item)
+    ledger_needle = property(lambda self: self.tape.ledger_needle)
+    what = property(lambda self: self.tape.what)
+    real_fix = property(lambda self: self.tape.real_fix)
+
+    def sites(self, root: str, dirs=SHIPPED_DIRS) -> list[str]:
+        return sites_anywhere(root, self.find, dirs)
+
+    def state(self, root: str, dirs=SHIPPED_DIRS) -> tuple[str, list[str]]:
+        """GONE, or LIVE with every site it came back at.
+
+        Never MOVED: for closed tape there is no longer a place the registry
+        says it lives, so "somewhere else" is not a distinction — it is back.
+        """
+        found = self.sites(root, dirs)
+        return (LIVE, found) if found else (GONE, [])
+
+    def marker_text(self, root: str) -> str:
+        """Only reached when the entry is NOT gone, i.e. a resurrection that
+        leg 3 is about to ask for a `TAPE:` comment. Tolerates the old home
+        file having disappeared, because a resurrection may land elsewhere."""
+        try:
+            return self.tape.marker_text(root)
+        except LegFailed:
+            return ""
+
+    def where(self) -> str:
+        return self.tape.where()
+
+
 CORE = "brain/anticipy_core.py"
 ASKING = "brain/asking.py"
 
@@ -526,10 +709,53 @@ KNOWN_TAPE = [
     ),
 ]
 
+# --------------------------------------------------------------------------
+# THE CLOSED REGISTER. Tape that is actually GONE, and stays watched.
+#
+# EMPTY on 2026-08-25, and that is the honest state: nothing has been closed
+# yet. The mechanism ships before the first closure on purpose — the spec that
+# found this hole (docs/superpowers/specs/2026-08-25-sorter-conversation-
+# granularity.md) cannot land its retirement diff until there is a green path
+# to land it into, and a green path invented in the same diff as the first
+# thing that needs it is a green path nobody reviewed.
+#
+# To close a piece of tape:
+#   1. Delete the tape and its `TAPE:` comment. Land the real fix.
+#   2. MOVE the `Tape(...)` literal out of KNOWN_TAPE and into a ClosedTape
+#      wrapper here. Do not retype it — move it. The `find` is the predicate,
+#      and it now has to keep coming back GONE forever.
+#   3. Move its `[tape:…]` bullet in HARNESS-LAWS.md from `## Known standing
+#      tape` to `## Retired tape`, and name `closed_by` in the bullet.
+#   4. Do NOT touch AUDIT_UNDECLARED, AUDIT_UNDECLARED_COUNT, or the audit
+#      document. The census is conserved: legs 3 and 4 count both lists.
+#
+# Shape:
+#   ClosedTape(
+#       Tape(tid=..., rel=..., find=..., ...),      # moved verbatim
+#       closed_by="0a9e8d13",
+#       replaced_by="overnight/tejas_gate.py",
+#       proves="leg_2_shard_guard",
+#       note="one line: what does the job now",
+#   ),
+CLOSED_TAPE: list[ClosedTape] = []
+
+# A commit id, checked for SHAPE only. See the header: verifying it resolves
+# would be red in one worktree and green in the other.
+CLOSED_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+_PLACEHOLDER = frozenset({"", "todo", "tbd", "pending", "none", "n/a",
+                          "0" * 7, "0" * 8, "0" * 40})
+
 # The 2026-08-24 audit's census, declared SEPARATELY from the list above so
 # that shortening the list to quiet this gate trips leg 4 instead of passing.
 # Deleting a census item is then a deliberate edit to a number, in a diff, with
 # a name on it — not silence.
+#
+# NEITHER OF THESE EVER CHANGES while AUDIT_DOC is the dated record. They are a
+# copy of a measurement of 2026-08-24, and closing a piece of tape does not
+# alter what was true that day. What closure changes is the PARTITION of this
+# fixed set into KNOWN_TAPE (open) and CLOSED_TAPE (closed); leg 4 checks the
+# split is exact. That is how a fixed historical number reconciles with a
+# changing present one: the total is conserved, the sides move.
 AUDIT_UNDECLARED = (19, 20, 21, 22, 50)
 AUDIT_UNDECLARED_COUNT = 5
 AUDIT_DECLARED_COUNT = 0          # what the audit found properly declared
@@ -562,8 +788,9 @@ CENSUS_ROWS = (
 # testing something else.
 # --------------------------------------------------------------------------
 def leg_1_markers_are_registered(root: str = ROOT, registry=None,
-                                 dirs=SHIPPED_DIRS) -> str:
+                                 dirs=SHIPPED_DIRS, closed=None) -> str:
     registry = KNOWN_TAPE if registry is None else registry
+    closed = CLOSED_TAPE if closed is None else closed
 
     # (a) Can this leg read what it claims to scan? Everything below is a
     # statement about files it opened, so this question comes first.
@@ -610,6 +837,12 @@ def leg_1_markers_are_registered(root: str = ROOT, registry=None,
     # anticipy_core.py already holds two declared markers, so ANY new
     # undeclared marker anywhere in that 4000-line file would have been waved
     # through as "a file we know about". One entry claims exactly one line.
+    # CLOSED_TAPE deliberately claims NOTHING. A closed entry's tape is gone,
+    # so its `TAPE:` comment must be gone too; if the comment was left behind
+    # it lands here as an ORPHAN — the same red as tape that shipped with no
+    # expiry at all. Letting a closed entry keep its claim would give the
+    # abandoned marker a permanent hiding place, which is the registry-
+    # satisfied-by-declaration failure one state further on.
     claimed = set()
     for t in registry:
         line_no = t.marker_line(root)
@@ -646,9 +879,11 @@ def leg_1_markers_are_registered(root: str = ROOT, registry=None,
             + "\n        ".join(lines)
             + "\n        Re-point the entry's `find`/`home` at where the code "
               "is now — or, if the real fix landed and those other sites are "
-              "unrelated code that merely reads the same, retire the entry: "
-              f"drop it from KNOWN_TAPE, drop its bullet from {LAWS}, and lower "
-              "AUDIT_UNDECLARED_COUNT in the same diff.\n        This is red "
+              "unrelated code that merely reads the same, CLOSE the entry: "
+              "move the Tape(...) literal verbatim into CLOSED_TAPE, move its "
+              f"bullet in {LAWS} from `## Known standing tape` to `## Retired "
+              "tape`, and leave AUDIT_UNDECLARED alone — the census is "
+              "conserved, not shortened.\n        This is red "
               "because an ordinary extract-method refactor does it without "
               "anyone touching a predicate. On 2026-08-24 that retired live "
               "tape from BOTH leg 2 and leg 3 at once: all three books agreed, "
@@ -660,15 +895,30 @@ def leg_1_markers_are_registered(root: str = ROOT, registry=None,
             "the registry names tape that is no longer in the tree: "
             + ", ".join(stale)
             + ".\n        Law 2: \"Tape whose gate leg went green gets DELETED, "
-              "not kept 'just in case.'\" The tape is gone — now retire it. "
-              f"Drop the entry from KNOWN_TAPE, drop its bullet from {LAWS}, "
-              "and lower AUDIT_UNDECLARED_COUNT if it was one of the audited "
-              "five. A registry that outlives its tape is the next false "
-              "'tracked by leg 4'.")
+              "not kept 'just in case.'\" The tape is gone — now CLOSE it, in "
+              "three moves, in one diff:\n"
+              "        1. move the `Tape(...)` literal out of KNOWN_TAPE and "
+              "into a ClosedTape(...) wrapper in CLOSED_TAPE. MOVE it, do not "
+              "retype it: the `find` is the predicate, and leg 6 re-runs it "
+              "every run from now on so a revert cannot bring the tape back "
+              "quietly.\n"
+              f"        2. move its `[tape:…]` bullet in {LAWS} from `## Known "
+              "standing tape` to `## Retired tape`, naming the closing "
+              "commit.\n"
+              "        3. leave AUDIT_UNDECLARED, AUDIT_UNDECLARED_COUNT and "
+              f"{AUDIT_DOC} ALONE. The audit is a dated measurement; legs 3 "
+              "and 4 count both registers, so the census is conserved rather "
+              "than shortened.\n"
+              "        Until 2026-08-25 this message said \"lower "
+              "AUDIT_UNDECLARED_COUNT\", and that instruction could not be "
+              "followed — leg 4 pinned the count to the audit document and "
+              "every road out was red. A gate that cannot express the outcome "
+              "it wants is a gate people route around.")
     return (f"read {reach['read']} of {reach['total']} files in "
             + ", ".join(f"{d}/" for d in dirs)
             + f"; {len(markers)} marker(s), {len(registry)} registered, "
-              "none orphaned, none moved, none stale")
+            + f"{len(closed)} closed, "
+            + "none orphaned, none moved, none stale")
 
 
 # --------------------------------------------------------------------------
@@ -680,6 +930,13 @@ def leg_1_markers_are_registered(root: str = ROOT, registry=None,
 # Here the condition is the other way round: while a registered piece of tape
 # is still in the tree and its real fix has not landed, this is RED. It goes
 # green the day the tape is deleted, and not one day sooner.
+#
+# CLOSED_TAPE IS NOT READ HERE, ON PURPOSE. A closed entry is green here the
+# moment it moves, which is the point — but that also means this leg must not
+# be the one that notices a resurrection. This leg is red by design; a real
+# failure arriving inside a permanent red is the I4 hole, where a census shrink
+# printed as one lowercase line nobody counted. Resurrection lives in leg 6,
+# which is NOT red by design, so it lands as exit 2 and changes the fingerprint.
 #
 # THIS LEG IS RED BY DESIGN. See BY_DESIGN_RED and the verdict in main().
 # --------------------------------------------------------------------------
@@ -706,7 +963,9 @@ def leg_2_tape_expires(root: str = ROOT, registry=None,
               "The predicate is `the taped text is nowhere in the shipped "
               "organs`; the way to green is to land the real fix and delete "
               "the tape, then retire the entry (leg 1 will ask you to).")
-    return "no tape is left in the tree — every expiry predicate has come true"
+    return ("no live tape is left in the tree — every expiry predicate has "
+            "come true. CLOSED_TAPE keeps watching the ones that came true "
+            "(leg 6); do not delete it, that is how a revert gets in quietly")
 
 
 # --------------------------------------------------------------------------
@@ -720,12 +979,20 @@ def leg_2_tape_expires(root: str = ROOT, registry=None,
 #   * declared: a `TAPE:` comment in its marker home, and that comment must
 #     name THIS gate — because a comment naming a leg that tracks something
 #     else is audit item #21, and it read as compliant for months.
+#
+# It reads KNOWN_TAPE + CLOSED_TAPE, so closing a piece does not remove it from
+# the census: item 20 is known by name here forever, whichever register it sits
+# in. A closed entry is GONE and therefore accounted for — and if it ever comes
+# back, it is not GONE any more and this leg demands a `TAPE:` comment again,
+# which is a second, independent catch on a resurrection.
 # --------------------------------------------------------------------------
 def leg_3_audited_five(root: str = ROOT, registry=None, census_ids=None,
-                       dirs=SHIPPED_DIRS) -> str:
+                       dirs=SHIPPED_DIRS, closed=None) -> str:
     registry = KNOWN_TAPE if registry is None else registry
+    closed = CLOSED_TAPE if closed is None else closed
     census_ids = AUDIT_UNDECLARED if census_ids is None else census_ids
-    census = [t for t in registry if t.audit_item in census_ids]
+    census = [t for t in list(registry) + list(closed)
+              if t.audit_item in census_ids]
     open_items, gone = [], []
     for t in sorted(census, key=lambda x: x.audit_item):
         if t.state(root, dirs)[0] == GONE:
@@ -772,18 +1039,37 @@ def leg_3_audited_five(root: str = ROOT, registry=None, census_ids=None,
 # A message that asserts something untrue is worse than no message: this leg
 # now fails when it cannot read the row, and says which row it could not read.
 # --------------------------------------------------------------------------
-def leg_4_census_intact(root: str = ROOT, registry=None) -> str:
+def leg_4_census_intact(root: str = ROOT, registry=None, closed=None) -> str:
     registry = KNOWN_TAPE if registry is None else registry
-    have = tuple(sorted(t.audit_item for t in registry
-                        if t.audit_item is not None))
+    closed = CLOSED_TAPE if closed is None else closed
+    open_items = [t.audit_item for t in registry if t.audit_item is not None]
+    shut_items = [c.audit_item for c in closed if c.audit_item is not None]
+
+    # An item cannot be open and closed at once. Checked before the arithmetic,
+    # because a duplicate would ALSO trip the tuple below and print the wrong
+    # diagnosis ("dropped or renumbered") for the opposite mistake.
+    both = sorted(set(open_items) & set(shut_items))
+    if both:
+        raise LegFailed(
+            f"audit item(s) {tuple(both)} are in BOTH KNOWN_TAPE and "
+            "CLOSED_TAPE. Closing is a MOVE, not a copy: an entry left in both "
+            "registers is red in one and green in the other, and the census "
+            "then counts it twice. Delete the KNOWN_TAPE copy if the tape is "
+            "gone (leg 6 will keep watching it), or delete the CLOSED_TAPE "
+            "copy if it is not.")
+
+    have = tuple(sorted(open_items + shut_items))
     if have != tuple(sorted(AUDIT_UNDECLARED)):
         raise LegFailed(
-            f"the registry covers audit items {have or '()'}, but the "
-            f"2026-08-24 audit recorded {tuple(sorted(AUDIT_UNDECLARED))} as "
-            "undeclared tape. An entry was dropped or renumbered. If a piece "
-            "genuinely no longer exists, leg 1 retires it and AUDIT_UNDECLARED "
-            "changes in the same diff — deleting the entry alone hides the "
-            "item instead of closing it.")
+            f"the two registers together cover audit items {have or '()'}, but "
+            f"the 2026-08-24 audit recorded {tuple(sorted(AUDIT_UNDECLARED))} "
+            "as undeclared tape. An entry was dropped or renumbered.\n"
+            "        The audited five are a FIXED set — a measurement of one "
+            "day, which nothing since can change. Closing a piece does not "
+            "remove it from that set; it moves it from KNOWN_TAPE to "
+            "CLOSED_TAPE, where legs 3, 4 and 6 all still count it. Deleting "
+            "the entry from both registers hides the item instead of closing "
+            "it, and that is what this is.")
     if len(AUDIT_UNDECLARED) != AUDIT_UNDECLARED_COUNT:
         raise LegFailed(
             f"AUDIT_UNDECLARED lists {len(AUDIT_UNDECLARED)} items but "
@@ -826,9 +1112,10 @@ def leg_4_census_intact(root: str = ROOT, registry=None) -> str:
                 "the new items here; if it shrank, say which piece was closed "
                 "and how.")
         agreed.append(f"{pinned} {label}")
-    return (f"census intact ({AUDIT_UNDECLARED_COUNT} audited items, "
-            f"{len(registry)} registered); {AUDIT_DOC} agrees: "
-            + ", ".join(agreed))
+    return (f"census intact ({AUDIT_UNDECLARED_COUNT} audited items: "
+            f"{len(open_items)} open, {len(shut_items)} closed; "
+            f"{len(registry)} + {len(closed)} entries registered); "
+            f"{AUDIT_DOC} agrees: " + ", ".join(agreed))
 
 
 # --------------------------------------------------------------------------
@@ -847,19 +1134,35 @@ def leg_4_census_intact(root: str = ROOT, registry=None) -> str:
 # --------------------------------------------------------------------------
 LEDGER_NEEDLE_RE = re.compile(r"\[tape:[A-Za-z0-9_.-]+\]")
 
+STANDING_HEADING = "Known standing tape"
+RETIRED_HEADING = "Retired tape"
 
-def leg_5_ledger_agrees(root: str = ROOT, registry=None) -> str:
-    registry = KNOWN_TAPE if registry is None else registry
-    laws = read(root, LAWS)
-    m = re.search(r"^##\s*Known standing tape.*?(?=^## |\Z)", laws,
+
+def ledger_section(laws: str, heading: str):
+    """One `## <heading>` section of the law file, up to the next `## `.
+
+    `##` and not `###` deliberately: a "Retired tape" written as a SUBSECTION
+    of "Known standing tape" would leave every retired bullet still inside the
+    standing section, and the closed-entry check below would read as red for a
+    correct closure — or, worse, a future loosening of this regex would let a
+    live bullet count as retired. One level, one section, no nesting.
+    """
+    m = re.search(rf"^##\s*{re.escape(heading)}.*?(?=^## |\Z)", laws,
                   re.S | re.M)
-    if not m:
+    return m.group(0) if m else None
+
+
+def leg_5_ledger_agrees(root: str = ROOT, registry=None, closed=None) -> str:
+    registry = KNOWN_TAPE if registry is None else registry
+    closed = CLOSED_TAPE if closed is None else closed
+    laws = read(root, LAWS)
+    section = ledger_section(laws, STANDING_HEADING)
+    if section is None:
         raise LegFailed(
             f"{LAWS} has no \"Known standing tape\" section any more. That "
             "section is the human-readable half of Law 2's registry; without "
             "it the only ledger is this file, and a ledger with one copy is a "
             "ledger nobody cross-checks.")
-    section = m.group(0)
     missing = [t.id for t in registry if t.ledger_needle not in section]
     if missing:
         raise LegFailed(
@@ -867,6 +1170,19 @@ def leg_5_ledger_agrees(root: str = ROOT, registry=None) -> str:
             f"{LAWS} never mentions: " + ", ".join(missing)
             + ".\n        Both books have to name it, or the next agent reads "
               "the law file, sees four bullets, and believes that is all of it.")
+    # A CLOSED entry must have LEFT the standing section. Otherwise the human
+    # book still reads "standing tape" for something the machine book says is
+    # gone, and the next agent believes the human book.
+    still_standing = [c.id for c in closed if c.ledger_needle in section]
+    if still_standing:
+        raise LegFailed(
+            "tape this gate records as CLOSED is still listed as standing in "
+            f"{LAWS}: " + ", ".join(still_standing)
+            + f".\n        Closing is a MOVE in every book. Move the bullet "
+              f"from `## {STANDING_HEADING}` to `## {RETIRED_HEADING}` and "
+              "name the closing commit in it, in the same diff that moved the "
+              "entry into CLOSED_TAPE.")
+
     registered = {t.ledger_needle for t in registry}
     unbacked = sorted(set(LEDGER_NEEDLE_RE.findall(section)) - registered)
     if unbacked:
@@ -884,8 +1200,201 @@ def leg_5_ledger_agrees(root: str = ROOT, registry=None) -> str:
             f"the standing-tape ledger in {LAWS} does not name `{THIS_GATE}` as "
             "the leg that tracks these. A ledger entry with no leg is the "
             "state Law 2 was written to end.")
-    return (f"{len(registry)} entries, and {LAWS}'s ledger names every one — "
-            f"and names nothing this registry does not")
+
+    # --- the retired half. Both directions, like the standing half. --------
+    retired = ledger_section(laws, RETIRED_HEADING)
+    if closed and retired is None:
+        raise LegFailed(
+            f"{len(closed)} piece(s) of tape are recorded as closed here, and "
+            f"{LAWS} has no `## {RETIRED_HEADING}` section to record them in: "
+            + ", ".join(c.id for c in closed)
+            + ".\n        A closure the human book never mentions reads, to "
+              "the next agent, as tape that never existed — and the point of "
+              "closing rather than deleting is that the record survives. Add "
+              f"the section, and give each closed piece a bullet carrying its "
+              "`[tape:…]` tag and its closing commit.")
+    if retired is not None:
+        gaps = []
+        for c in closed:
+            if c.ledger_needle not in retired:
+                gaps.append(f"{c.id}: no `{c.ledger_needle}` bullet under "
+                            f"`## {RETIRED_HEADING}`")
+            elif c.closed_by not in retired:
+                gaps.append(f"{c.id}: its bullet does not name the closing "
+                            f"commit `{c.closed_by}`")
+        if gaps:
+            raise LegFailed(
+                f"the retired-tape ledger in {LAWS} does not match CLOSED_TAPE:"
+                "\n        - " + "\n        - ".join(gaps)
+                + "\n        The retired section is what a human reads to find "
+                  "out that a piece of tape was closed, and by which commit. A "
+                  "closure with no commit named is the same promise-shaped "
+                  "record Law 2 exists to end.")
+        shut = {c.ledger_needle for c in closed}
+        ghosts = sorted(set(LEDGER_NEEDLE_RE.findall(retired)) - shut)
+        if ghosts:
+            raise LegFailed(
+                f"the `## {RETIRED_HEADING}` section of {LAWS} claims tape was "
+                "retired that CLOSED_TAPE has never heard of: "
+                + ", ".join(ghosts)
+                + ".\n        This is how a piece of tape gets retired in the "
+                  "book a human reads while nothing checks it is actually "
+                  "gone — the exact shape of the standing-ledger bug one "
+                  "section up. Add the ClosedTape(...) entry, or delete the "
+                  "bullet.")
+    return (f"{len(registry)} standing and {len(closed)} retired, and "
+            f"{LAWS}'s ledger names every one — and names nothing these "
+            "registers do not")
+
+
+# --------------------------------------------------------------------------
+# LEG 6 — CLOSED TAPE STAYS CLOSED.
+#
+# The other half of the fourth state, and the reason "closed" is not just a
+# list somebody wrote a name on. For every entry in CLOSED_TAPE this leg
+# re-runs the entry's OWN predicate — the same `find` that used to prove it
+# LIVE — against the shipped organs, on every run, forever.
+#
+# Three ways a closure can be a lie, and one of them is not an attack at all:
+#
+#   RESURRECTION. The fix is reverted, a rebase drops it, or a merge takes the
+#   older file. The text is back and every book still says closed. This repo
+#   has TWO WORKTREES ON DIVERGENT LINEAGES, so that is not hypothetical —
+#   it is a Tuesday. Same class as the MOVED bug this gate already had, where a
+#   refactor retired live tape from two legs at once.
+#
+#   A CLOSURE THAT NEVER HAPPENED. Somebody moves an entry into CLOSED_TAPE to
+#   quiet leg 2 or leg 3 without deleting anything. Then `find` is still in the
+#   tree, and this is the leg that says so.
+#
+#   VOUCHING FOR A TREE IT DID NOT READ. "The text is nowhere in the shipped
+#   organs" means nothing if the scan could not read the organs — that is I3,
+#   where CODE_EXTS held `.h` and not `.c` and 142 firmware files were
+#   invisible. Leg 1 checks reach, but leg 1 is a DIFFERENT leg: if it is red
+#   for reach reasons this one would still cheerfully report "still closed",
+#   which is I2's disease (a message asserting what it did not check). So this
+#   leg re-checks reach itself before it will vouch — but only when there is
+#   something to vouch FOR, so an empty register does not double every reach
+#   complaint into two red legs.
+#
+# NOT red by design. A resurrection is exit 2 and shows up in the fingerprint
+# as `RED LEGS: 2 (by design), 6`, which is the whole point of not putting it
+# in leg 2.
+# --------------------------------------------------------------------------
+def leg_6_closed_tape_stays_closed(root: str = ROOT, registry=None,
+                                   closed=None, dirs=SHIPPED_DIRS) -> str:
+    registry = KNOWN_TAPE if registry is None else registry
+    closed = CLOSED_TAPE if closed is None else closed
+    if not closed:
+        # Say exactly this and nothing warmer. A leg that reports "all closed
+        # tape is still closed" having looked at an empty list is the sentence
+        # leg 4 used to print about an audit row it had not read.
+        return ("CLOSED_TAPE is empty — no tape has been closed yet, so this "
+                "leg has checked nothing and is vouching for nothing. It "
+                "starts working the day a piece of tape is actually removed.")
+
+    if not dirs:
+        # `sites_anywhere` over no organs returns nothing, and nothing reads as
+        # GONE for every entry — a green produced by opening zero files, which
+        # is the shape of every fail-open in this repo tonight. scan_reach()
+        # below would not catch it either: an empty scope has no missing organ,
+        # no hollow one and no unclassified file.
+        raise LegFailed(
+            "this leg was asked to check closed tape against an EMPTY set of "
+            "shipped organs. Every entry would read GONE because no file was "
+            "opened. A caller passing `dirs=()` gets a red, not a green.")
+
+    live_ids = {t.id for t in registry}
+    both = sorted(c.id for c in closed if c.id in live_ids)
+    if both:
+        raise LegFailed(
+            "entries that are in KNOWN_TAPE and CLOSED_TAPE at the same time: "
+            + ", ".join(both)
+            + ".\n        A piece of tape is open or closed, never both: leg 2 "
+              "would hold it red while this leg holds it green, and the census "
+              "in leg 4 would count it twice. Closing is a MOVE — delete the "
+              "KNOWN_TAPE copy.")
+
+    reach = scan_reach(root, dirs)
+    broken = []
+    if reach["missing"]:
+        broken.append("shipped organ(s) missing: "
+                      + ", ".join(reach["missing"]))
+    if reach["hollow"]:
+        broken.append("shipped organ(s) this leg can read nothing out of: "
+                      + ", ".join(reach["hollow"]))
+    if reach["unknown"]:
+        broken.append(f"{len(reach['unknown'])} file(s) neither read nor "
+                      "declared as non-code")
+    if broken:
+        raise LegFailed(
+            "this leg cannot say that closed tape stayed closed, because the "
+            "scan it would say it with is not intact:\n        - "
+            + "\n        - ".join(broken)
+            + "\n        \"The text is nowhere in the shipped organs\" is a "
+              "statement about files that were OPENED. Fix leg 1's reach "
+              "first — its message names the file types. This leg refuses to "
+              "vouch rather than report a green it did not earn.")
+
+    back = []
+    for c in closed:
+        found = c.sites(root, dirs)
+        if found:
+            shown = ", ".join(found[:4])
+            more = f" (+{len(found) - 4} more)" if len(found) > 4 else ""
+            back.append(f"{c.id}: `{c.find}` was recorded closed by "
+                        f"{c.closed_by}, and it is BACK at {shown}{more}")
+    if back:
+        raise LegFailed(
+            f"{len(back)} piece(s) of tape this gate records as CLOSED are in "
+            "the tree again:\n        - " + "\n        - ".join(back)
+            + "\n        RESURRECTION. Either the fix was reverted, a rebase "
+              "dropped it, or a merge took the older file — this repo runs two "
+              "worktrees on divergent lineages, so that is the ordinary case, "
+              "not the exotic one. Decide which happened, in a diff, with a "
+              "name on it: re-land the fix, or move the entry back into "
+              "KNOWN_TAPE (where leg 2 will hold it red again) and restore its "
+              f"`TAPE:` comment and its `## {STANDING_HEADING}` bullet.\n"
+              "        Do NOT resolve this by editing `find`. `find` is the "
+              "predicate; a predicate edited to stop matching is the thing "
+              "this whole file exists to make expensive.")
+
+    faults = []
+    for c in closed:
+        sha = (c.closed_by or "").strip().lower()
+        if sha in _PLACEHOLDER or not CLOSED_SHA_RE.match(sha):
+            faults.append(
+                f"{c.id}: closed_by={c.closed_by!r} is not a commit id. A "
+                "closure with no commit behind it is a claim, and the whole "
+                "point of this state is that the record outlives the diff.")
+            continue
+        path = os.path.join(root, c.replaced_by)
+        if not os.path.exists(path):
+            faults.append(
+                f"{c.id}: replaced_by={c.replaced_by!r} is not in this tree. "
+                "The leg that pins the behaviour the tape used to provide has "
+                "to exist, or the tape was not replaced — it was deleted.")
+            continue
+        with open(path, encoding="utf-8", errors="replace") as f:
+            body = f.read()
+        if not c.proves or c.proves not in body:
+            faults.append(
+                f"{c.id}: {c.replaced_by} does not contain `{c.proves}`. The "
+                "entry names that symbol as the thing that proves the "
+                "replacement; if it is not there, nothing named is running.")
+    if faults:
+        raise LegFailed(
+            "closed tape whose provenance does not hold up:\n        - "
+            + "\n        - ".join(faults)
+            + "\n        This leg checks that the replacement leg EXISTS and "
+              "is named what the entry says. It does not and cannot check "
+              "that the leg tests the right thing — that is a reading of what "
+              "code means, and it belongs to a review (Law 1, Law 5).")
+
+    return (f"{len(closed)} closed piece(s), still gone from "
+            + ", ".join(f"{d}/" for d in dirs) + ": "
+            + ", ".join(f"{c.id} (closed by {c.closed_by}, replacement pinned "
+                        f"in {c.replaced_by})" for c in closed))
 
 
 # Each leg carries whether its red is EXPECTED. Leg 2 is the only one: it is
@@ -898,6 +1407,7 @@ LEGS = [
     (3, "THE AUDITED FIVE ARE DECLARED OR GONE", leg_3_audited_five, False),
     (4, "THE CENSUS CANNOT SHRINK QUIETLY", leg_4_census_intact, False),
     (5, "THE LAW'S LEDGER AGREES", leg_5_ledger_agrees, False),
+    (6, "CLOSED TAPE STAYS CLOSED", leg_6_closed_tape_stays_closed, False),
 ]
 BY_DESIGN_RED = tuple(n for n, _, _, d in LEGS if d)
 
@@ -996,9 +1506,16 @@ def main(root: str = ROOT) -> int:
 
     print("  Red here is the law working. Green means the tape is GONE, not")
     print("  that it was written down. Do not soften a predicate to get there.")
+    print(f"  Closed tape is recorded, not forgotten: {len(CLOSED_TAPE)} entry(ies) "
+          "in CLOSED_TAPE,")
+    print("  each still checked against the tree every run by leg 6. Retiring a")
+    print("  piece is a MOVE between registers — the audited census is conserved,")
+    print(f"  and {AUDIT_DOC} is never edited.")
     print("  What this gate cannot see: tape nobody marked, nobody registered,")
-    print("  and that is not one of the audited five. Only an audit finds that")
-    print(f"  — the last one is {AUDIT_DOC}.")
+    print("  and that is not one of the audited five; the same DECISION coming")
+    print("  back under a different name; and whether a closure's replacement leg")
+    print("  tests the right thing. Only an audit finds those — the last one is")
+    print(f"  {AUDIT_DOC}.")
     print()
     return code
 
