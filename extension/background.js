@@ -1180,7 +1180,15 @@ export function ownerFactsFromParams(params) {
   const p = params && typeof params === "object" ? params : {};
   const NEVER = ["source", "say", "now", "lane", "missing", "authorized",
                  "approved_scope", "needed", "start_url", "task", "assumption",
-                 "note", "memory", "resume_tab", "resume_session"];
+                 "note", "memory", "resume_tab", "resume_session",
+                 // `procedure`: what the server read off the OPEN WEB about how
+                 // this kind of task is done. Background, never a given fact —
+                 // the same reason `memory` is on this list, and a stronger one,
+                 // because its provenance is a web page rather than something he
+                 // said. It is an object, so the type filter below would drop it
+                 // today; named anyway, because "it happens not to be a string"
+                 // is not a rule anybody can rely on.
+                 "procedure"];
   const ownerAnswer = (k) => /^owner_answer/i.test(String(k));
   const bookkeeping = (k) => String(k).startsWith("_");
   if (p._workflow?.facts && typeof p._workflow.facts === "object") {
@@ -1430,6 +1438,26 @@ async function runJobInner(job, params) {
         // not part of the approved scope, and anything inside _workflow is
         // covered by the digest his approval is bound to.
         memory: typeof params.memory === "string" ? params.memory.slice(0, 1200) : "",
+        // WHAT THE SERVER LOOKED UP BEFORE LETTING GO OF THIS ROW.
+        //
+        // The research gate parks a world-touching errand on the research lane
+        // until the worker has read how the task is done, then hands the row
+        // back carrying what it read (brain/worker.py run_preflight_research).
+        // Without this the browser waits for that read and then pays to do it
+        // again itself.
+        //
+        // Passed through raw and NOT trusted here: runAgentGoal puts it through
+        // learn.js's cleanProcedure — the same door a locally-learned procedure
+        // goes through — and reads it back out of the cache before using it.
+        // Deciding here what is safe to keep would be the second copy of a rule
+        // that already exists, in a second file, and that is how two copies
+        // drift. Same doctrine as `memory` directly above.
+        //
+        // Read from params, NOT from params._workflow: a procedure is
+        // background, not part of the approved scope, and anything inside
+        // _workflow is covered by the digest his approval is bound to.
+        procedure: params.procedure && typeof params.procedure === "object"
+          && !Array.isArray(params.procedure) ? params.procedure : null,
         // A Manifest V3 worker may be reclaimed during a long research run.
         // Keep its bounded live-page notebook on the canonical job so a
         // lease retry resumes with evidence already earned instead of

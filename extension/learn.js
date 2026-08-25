@@ -302,34 +302,62 @@ export async function learnProcedure(question, { deps, maxPages = MAX_PAGES } = 
   const parsed = parseJsonObject(raw);
   if (!parsed) return null;
 
-  const steps = Array.isArray(parsed.steps)
-    ? parsed.steps.slice(0, MAX_PROCEDURE_STEPS).map((s) => String(s).slice(0, 240))
-    : [];
+  const procedure = cleanProcedure({
+    startUrl: parsed.start_url,
+    needs: parsed.needs,
+    steps: parsed.steps,
+    caveats: parsed.caveats,
+    sources: readings.map((r) => r.url),
+    question: q,
+  });
   // An empty steps list is the honest blank the system prompt asks for. Treat it
   // as "learned nothing" rather than caching a hollow procedure that would stop
   // the agent ever researching this shape again.
-  if (!steps.length) {
-    if (note) note(`learning: the pages did not say how, so I am not guessing`);
-    return null;
+  if (!procedure && note) {
+    note(`learning: the pages did not say how, so I am not guessing`);
   }
+  return procedure;
+}
 
-  let startUrl = null;
-  const proposed = String(parsed.start_url || "");
-  // MODEL OUTPUT DERIVED FROM WEB CONTENT. It gets the same treatment as the
-  // planner's URL: validated here, and re-checked against the loopback rule by
-  // the caller, because nothing a page says may widen where the agent may go.
-  if (isResearchable(proposed)) startUrl = proposed;
-
+/**
+ * THE ONE PLACE A PROCEDURE RECORD IS BUILT, whichever door it came in by.
+ *
+ * Two doors need it and they must not drift: a procedure distilled here from
+ * pages this run read, and one DOWNLINKED from the server on a job row, which
+ * the worker's research pass produced before the browser was allowed to claim
+ * the errand (HANDS 1 §4.5, §5.4). Both are ultimately model output derived
+ * from page text, so both get identical treatment — every field copied BY NAME
+ * with no spread, every list bounded, every string cut. Anything the writer did
+ * not declare (an injected `approved`, an owner value, a second start URL) does
+ * not survive.
+ *
+ * The twin of `_clean_procedure` in brain/research.py, field for field; the
+ * shape-parity leg in tests/test_research_shape_parity.py is what notices when
+ * the two ports drift.
+ *
+ * Returns null for the honest blank: no steps is not a procedure.
+ */
+export function cleanProcedure(record, now = Date.now()) {
+  if (!record || typeof record !== "object") return null;
+  const trim = (values, count, chars) => (Array.isArray(values)
+    ? values.slice(0, count).map((v) => String(v).slice(0, chars)) : []);
+  const steps = trim(record.steps, MAX_PROCEDURE_STEPS, 240);
+  if (!steps.length) return null;
+  const stamp = Number(record.learnedAt);
   return {
-    startUrl,
-    needs: Array.isArray(parsed.needs)
-      ? parsed.needs.slice(0, 5).map((n) => String(n).slice(0, 160)) : [],
+    // MODEL OUTPUT DERIVED FROM WEB CONTENT. It gets the same treatment as the
+    // planner's URL: validated here, and re-checked against the loopback rule by
+    // the caller, because nothing a page says may widen where the agent may go.
+    // A bad address costs the field and nothing else — steps that may be
+    // perfectly good are not thrown away over where somebody said to start.
+    startUrl: isResearchable(record.startUrl)
+      ? String(record.startUrl).slice(0, 500) : null,
+    needs: trim(record.needs, 5, 160),
     steps,
-    caveats: Array.isArray(parsed.caveats)
-      ? parsed.caveats.slice(0, 3).map((c) => String(c).slice(0, 160)) : [],
-    sources: readings.map((r) => r.url),
-    learnedAt: Date.now(),
-    question: q.slice(0, 200),
+    caveats: trim(record.caveats, 3, 160),
+    sources: trim(record.sources, 5, 500),
+    learnedAt: Number.isFinite(stamp) && stamp > 0 ? stamp : now,
+    question: String(record.question || "").slice(0, 200),
   };
 }
 

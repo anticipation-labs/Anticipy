@@ -6,8 +6,8 @@
 // jobs; the confirmation gate lives in the backend queue, outside the model.
 
 import {
-  learnProcedure, procedureBlock, rankSources, recallProcedure, rememberProcedure,
-  taskShape,
+  cleanProcedure, learnProcedure, procedureBlock, rankSources, recallProcedure,
+  rememberProcedure, taskShape,
 } from "./learn.js";
 import {
   askForCodeInstead, inboxConsent, mintOfferRef, runSideTrip, stampOffer,
@@ -4244,6 +4244,30 @@ export async function runAgentGoal(goal, opts) {
   // answer for this shape — rather than an opinion about familiarity.
   // (HANDS 1 spec §5.2, §8.3.)
   let procedure = await recallProcedure(shape, chrome.storage.local);
+  // AND THE SERVER MAY ALREADY HAVE LOOKED IT UP.
+  //
+  // The research gate holds a world-touching errand off this lane until the
+  // worker has read how the task is done (brain/research.py research_gate,
+  // brain/worker.py run_preflight_research), and hands what it read down on the
+  // job row. Without this the pass is pure cost: the browser would pay to read
+  // the same pages again, on his machine, having been made to wait for the
+  // server to read them first.
+  //
+  // NOT TRUSTED, and stored rather than used directly. It goes through the SAME
+  // door a locally-learned procedure goes through — cleanProcedure builds it key
+  // by key and re-checks the one dangerous field — and then it is READ BACK out
+  // of the cache, so `recallProcedure`'s liveness rules decide whether it counts
+  // exactly as they do for anything else. Caching it is not a side effect: the
+  // shape has been paid for, and the next errand of that shape must be free even
+  // if the server never sends it again.
+  if (!procedure && opts.procedure) {
+    const downlinked = cleanProcedure(opts.procedure);
+    if (downlinked) {
+      await rememberProcedure(shape, downlinked, chrome.storage.local);
+      procedure = await recallProcedure(shape, chrome.storage.local);
+      if (procedure) console.log("agent: the server looked this up before handing it over");
+    }
+  }
   if (procedure) {
     console.log(`agent: already know how -> ${procedure.steps.length} steps (learned once)`);
   } else if (plan && plan.unfamiliar) {

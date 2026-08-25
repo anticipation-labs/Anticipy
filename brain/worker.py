@@ -1317,6 +1317,129 @@ def release_stranded_research(anticipy,
     return freed
 
 
+def held_for_research(job) -> bool:
+    """Is this research-lane row a BROWSER errand waiting on its research pass?
+
+    Two different things ride `lane="research"` and they must never be confused:
+    a read-only lookup, which this worker ANSWERS, and a world-touching errand
+    the research gate parked here so no browser could claim it before she had
+    looked up how the task is done (HANDS 1 §5.4-5.5). Answering the second one
+    would mark a booking "done" with a summary of the open web — an errand that
+    never happened, reported as finished.
+
+    What tells them apart is `params._research_gate.handback`, written by
+    `Anticipy._queue_job` at mint time. It is a worker-authored value on a lane
+    no claimant can reach, which is the only reason a flag is admissible here:
+    `research_lane.pb.js` refuses every browser claim on this lane, so nothing
+    that could benefit from setting it can get at the row.
+    """
+    try:
+        params = json.loads(job.get("params") or "{}") or {}
+    except Exception:
+        return False
+    gate = params.get("_research_gate")
+    return isinstance(gate, dict) and bool(gate.get("handback"))
+
+
+def run_preflight_research(anticipy, learner=None) -> None:
+    """LOOK IT UP, THEN LET THE BROWSER HAVE IT.
+
+    The held half of the research gate. A world-touching errand is parked on
+    `lane="research"` at mint; this reads how the task is done, writes it into
+    the owner's own procedure cache, hands it to the row, and puts the row back
+    on the browser lane.
+
+    A GATE THAT HOLDS MUST ALWAYS LET GO, and that is the invariant this
+    function exists to keep rather than a nicety. Researched, unresearched,
+    keyless, model-less or crashed mid-read, the row leaves this lane on the
+    pass that saw it — §5.5: "A gate that cannot run must open, not hold, and
+    say so in the trace." A parked errand is worse than an unresearched one,
+    and it is worse silently.
+
+    NOTHING IS CLAIMED. There is no lease, no `claimed_by` and no workflow
+    transition, because this is not an execution of the plan — it is an
+    annotation of a queued row, and `queued -> queued` is a legal write with
+    the goal, the scope digest and the embedded workflow all untouched. That
+    also means a worker dying mid-read costs nothing: the row is still queued
+    and still marked, and the next pass reads it again. Nothing has to sweep
+    up after this the way `release_stranded_research` sweeps up after a claim.
+    """
+    try:
+        base = anticipy.backend_url
+        filt = 'status="queued" && lane="research"'
+        scope = owner_filter(anticipy)
+        if scope:
+            filt = f"({filt}) && {scope}"
+        r = pb.get(f"{base}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 5, "sort": "created"},
+                   timeout=10)
+        if not getattr(r, "ok", False):
+            return
+        api_key = os.environ.get("BRAVE_API_KEY")
+        for job in r.json().get("items", []):
+            if not held_for_research(job):
+                continue
+            try:
+                params = json.loads(job.get("params") or "{}") or {}
+            except Exception:
+                params = {}
+            # ONLY THE QUESTION TRAVELS, and it is the goal — never the row's
+            # `source`, which is the authorizing utterance and is a transcript.
+            # design/LOCAL-FIRST.md blesses the research arm in the cloud on
+            # exactly that condition, and `learn_procedure` caps it at 200
+            # characters on the way out.
+            goal = str(job.get("goal") or "").strip()
+            learned = None
+            if api_key and goal:
+                try:
+                    learned = (learner or research.learn_procedure)(
+                        goal, llm=anticipy.llm, api_key=api_key)
+                except Exception as e:
+                    # The read failing is a blank answer, not a stuck errand.
+                    print(f"preflight: the read failed for {job['id']} "
+                          f"({type(e).__name__}) — opening the browser anyway")
+            if not isinstance(learned, dict):
+                learned = None
+            gate = dict(params.get("_research_gate") or {})
+            # THE MARKER IS CLEARED HERE, or the next pass researches the same
+            # row forever and the errand never runs.
+            gate.pop("handback", None)
+            gate["researched"] = bool(learned)
+            if learned:
+                store = None
+                try:
+                    store = anticipy.memory.procedures()
+                except Exception:
+                    store = None
+                # Paid for ONCE per task shape: the next errand of this shape is
+                # satisfied at the gate with no pass at all.
+                research.remember_procedure(research.task_shape(goal), learned,
+                                            store)
+                params["procedure"] = learned
+                gate["why"] = (f"looked it up before the browser opened — "
+                               f"{len(learned.get('steps') or [])} steps from "
+                               f"{len(learned.get('sources') or [])} page(s)")
+            else:
+                gate["why"] = ("looked and found nothing usable — opening the "
+                               "browser unresearched rather than parking the "
+                               "errand")
+            params["_research_gate"] = gate
+            back = pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
+                            json={"lane": "", "params": json.dumps(params)},
+                            timeout=10)
+            if getattr(back, "ok", False):
+                print(f"preflight: {job['id']} -> browser lane "
+                      f"({'researched' if learned else 'unresearched'})")
+            else:
+                # Still queued, still marked: the next pass tries again. Said
+                # out loud because a hold nobody released is the one failure
+                # this function cannot self-heal from.
+                print(f"preflight: {job['id']} could not be handed back "
+                      f"({getattr(back, 'status_code', '?')}) — still held")
+    except Exception as e:
+        print(f"preflight pass failed: {e}")
+
+
 def run_research_jobs(anticipy, runner=None) -> None:
     """Run the research lane HERE, in the worker — never in his Chrome.
 
@@ -1348,6 +1471,17 @@ def run_research_jobs(anticipy, runner=None) -> None:
         # or removed on a redeploy takes effect without a code path changing.
         api_key = os.environ.get("BRAVE_API_KEY")
         for job in jobs:
+            # A HELD BROWSER ERRAND IS NOT A QUESTION TO ANSWER.
+            #
+            # The research gate parks world-touching work on this lane so no
+            # browser can claim it before she has looked up how the task is
+            # done. Answering it here would write a summary of the open web
+            # into `result`, mark the row done, and report a booking that never
+            # happened as finished. run_preflight_research owns these rows and
+            # hands every one of them back to the browser lane; this is the
+            # second layer, so one of the two failing does not reopen the hole.
+            if held_for_research(job):
+                continue
             if not api_key:
                 # Graceful fallback: no key means no research arm, and a job
                 # queued for an executor that does not exist would sit
@@ -3693,6 +3827,14 @@ def main() -> None:
             # never into a live meeting, never at night, never past the
             # daily cap, never twice, never past ten minutes.
             maybe_ask_parked(anticipy)
+
+            # LOOK IT UP BEFORE THE BROWSER OPENS. A world-touching errand is
+            # parked on the research lane at mint time and comes back here to
+            # be read up on, then handed to the browser. Ahead of
+            # run_research_jobs on purpose: both passes read the same lane, and
+            # a held errand answered as a research question is a booking
+            # reported done that never happened.
+            run_preflight_research(anticipy)
 
             # The research lane runs HERE, in this process. Read-only goals
             # never wait for — or touch — his browser (roadmap §6).

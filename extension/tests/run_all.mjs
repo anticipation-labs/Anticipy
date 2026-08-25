@@ -47,6 +47,7 @@ const suites = [
   "test_memory_in_the_prompt.mjs",
   "test_config_base.mjs",
   "test_learn_before_doing.mjs",
+  "test_server_procedure_reaches_the_hands.mjs",
   "test_recall_is_not_gated.mjs",
   "test_otp_wall.mjs",
   "test_inbox_consent.mjs",

@@ -26,6 +26,7 @@ from typing import Optional
 import requests
 
 from . import pb
+from . import research
 
 from .asking import ask_line, question_line
 from .compute import compute_answer
@@ -765,6 +766,23 @@ LINEAGE_AMEND_WINDOW = OPEN_PLAN_WINDOW
 # compares against this constant to tell "already waiting on him" apart from
 # "that errand exists in no system at all".
 QUEUE_WRITE_FAILED = ""
+
+# THE ONE LANE A BROWSER MAY NOT CLAIM, spelled once.
+#
+# It is the same string `job_lane` returns for read-only work, and that is the
+# point rather than an accident: the research gate needs a value that is
+# already excluded at BOTH enforcement points HANDS 1 §5.5 names —
+# backend/pb_hooks/research_lane.pb.js's poll rewrite, and every shipped
+# extension's own `lane!="research"` filter — and a NEW lane string would be
+# excluded by neither. Client code cannot be recalled; a third value would be
+# claimable by every extension in the wild until they all updated, which is
+# exactly the hole research_lane.pb.js's header exists to describe.
+#
+# What tells the two apart on this lane is the row itself:
+# `params._research_gate.handback` is written by the brain at mint time and
+# read by worker.run_preflight_research, which hands the row BACK to the
+# browser lane instead of answering it as a research question.
+RESEARCH_LANE = "research"
 
 # A finalized recognizer line can cut a sentence at exactly the wrong place:
 # "... caused a 20" / "yeah, agreed — cm crack ...". The second line's
@@ -3218,6 +3236,45 @@ class Anticipy:
             params["commitment_id"] = cid
         return params
 
+    def _research_gate(self, goal: str, touches: str | None, lane: str):
+        """May a browser claim this errand yet, or does she look it up first?
+
+        Returns (verdict, procedure). The procedure is the recalled record when
+        one was confirmed to apply and None otherwise, so a caller cannot use a
+        candidate the floor refused — there is nothing there to use.
+
+        THE GATE IS NEVER HANDED THE GOAL (§5.3). It gets an effect channel the
+        triage model declared with full context, and the SHAPE of a cache hit.
+        The goal is used HERE, to build the shape key and to ask the one
+        question about whether a remembered procedure applies — both of which
+        are a lookup's job or a model's, never a decision made by reading the
+        prose.
+        """
+        # A row already bound for the server's own research arm has no browser
+        # to hold off it. Gating the research lane in front of the research
+        # lane is not a gate, it is a loop.
+        if lane:
+            return research.GateVerdict(
+                research.GATE_NOT_REQUIRED,
+                f"lane={lane} — the server's own arm, no browser to hold"), None
+        # A GATE THAT CANNOT RUN MUST OPEN. `learn_procedure` needs a Brave key
+        # AND a live model — without either it returns None and no web traffic
+        # happens at all — so holding a row for a pass that could not produce
+        # anything is a parked errand and nothing else. The existing keyless
+        # fallback in run_research_jobs is the precedent.
+        can_run = bool(os.environ.get("BRAVE_API_KEY")) and bool(
+            self.llm is not None and getattr(self.llm, "live", False))
+        try:
+            store = self.memory.procedures()
+        except Exception:
+            # A cache that cannot be opened is a miss, never an exception:
+            # breaking an errand over a storage failure is worse than paying
+            # for the research again.
+            store = None
+        recall = research.recall_confirmed_procedure(goal, store, llm=self.llm)
+        return research.research_gate(touches, recall.procedure,
+                                      gate_can_run=can_run), recall.procedure
+
     def _queue_job(self, goal: str, params: dict, hold: bool = False,
                    explicit: bool = False,
                    touches: str | None = None) -> Optional[str]:
@@ -3425,6 +3482,26 @@ class Anticipy:
         # keeps the browser lane rather than queueing for an executor that
         # does not exist — graceful fallback, never a dead queue.
         lane = job_lane(goal, params) if os.environ.get("BRAVE_API_KEY") else ""
+        # THE RESEARCH GATE (HANDS 1 spec §5.4), asked here and only here.
+        #
+        # This is the one place in the brain that mints a job row, so it is the
+        # only place where `touches` and the lane are both in hand — and until
+        # now the line above routed the lane WITHOUT the effect channel the
+        # triage model had already declared, leaving `_READ_ONLY_RE` (registered
+        # standing tape) to decide it from the wording instead.
+        #
+        # The gate does not re-decide that routing. It asks a second question of
+        # the same row: MAY A BROWSER CLAIM THIS YET. Held rows go to
+        # lane="research", which is the one lane value both enforcement points
+        # §5.5 names already exclude — research_lane.pb.js rewrites any queued
+        # poll that does not name a lane, and every shipped extension's own
+        # filter carries `lane!="research"` — so the hold is enforced against
+        # extensions in the wild, which a NEW lane string would not be.
+        # worker.run_preflight_research hands every held row back on its next
+        # pass, researched or not.
+        gate, procedure = self._research_gate(goal, touches, lane)
+        if research.gate_holds_the_browser(gate.verdict):
+            lane = RESEARCH_LANE
         consequential = bool(hold or goal in IRREVERSIBLE
                              or is_consequential(goal, params, explicit=explicit))
         owner_for_workflow = self.owner_ref or self.owner_id or "local-unowned"
@@ -3528,6 +3605,31 @@ class Anticipy:
             recalled = ""
         if recalled:
             params = dict(params, memory=recalled)
+        # WHAT THE GATE DECIDED, ON THE ROW, IN WORDS.
+        #
+        # §5.5 asks for the reason specifically: a gate that opened because it
+        # was BROKEN must be visible afterwards, or a lane that is quietly down
+        # reads as a lane that quietly decided nothing needed looking up. It is
+        # also what worker.run_preflight_research reads to tell a held browser
+        # errand from a genuine read-only research job on the same lane.
+        #
+        # A bookkeeping key, so it is excluded from FACTS ALREADY GIVEN on the
+        # browser side by the `_` rule that already covers every one of these
+        # (extension/background.js ownerFactsFromParams) rather than by a new
+        # entry somebody has to remember to add.
+        gate_note = {"verdict": gate.verdict, "why": gate.why}
+        if research.gate_holds_the_browser(gate.verdict):
+            gate_note["handback"] = True
+        params = dict(params, _research_gate=gate_note)
+        # AND WHAT SHE ALREADY KNEW, HANDED TO THE HANDS.
+        #
+        # Deliberately outside `_workflow` for the same reason `memory` is:
+        # scope_digest hashes goal + facts + consequence + authority_text, and
+        # a recollection put in there would change the digest of an already
+        # approved plan and 409 his own "yes". He approved a GOAL, never a
+        # procedure somebody read off the open web.
+        if procedure:
+            params = dict(params, procedure=procedure)
         params = put_in_params(params, workflow)
         workflow_fields = workflow.job_fields()
         try:

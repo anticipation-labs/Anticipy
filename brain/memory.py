@@ -128,6 +128,40 @@ CREATE TABLE IF NOT EXISTS vetoed_facts (
     ts REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_vetoed_norm ON vetoed_facts(norm);
+-- WHAT SHE LEARNED FROM THE OPEN WEB ABOUT HOW A TASK IS DONE.
+--
+-- HANDS 1 spec §4.2-4.4. A PROCEDURE is the distilled shape of a task —
+-- startUrl, needs, steps, caveats, sources — with no owner value anywhere in
+-- it by construction (`needs` names a CATEGORY, "an account number", never a
+-- value). It is not a RECIPE: a recipe is slot indexes and control labels
+-- against one logged-in session on one machine, it stays in
+-- chrome.storage.local, and nothing here has an opinion about it.
+--
+-- §4.3 asked the one question the spec left open — is this store owner-scoped?
+-- It is, and the scoping is this FILE: one SQLite per owner
+-- (brain/supervisor.py:93, mode 0o700), so a procedure one owner's research
+-- paid for is invisible to the next, and the delete that removes his directory
+-- removes this with it. An un-owned shared store is the better object and the
+-- worse risk (a cross-owner poisoning surface where the per-profile version is
+-- not one), and there is no measurement yet saying the compounding across
+-- owners is worth anything — the product has one owner. Ship the reach; earn
+-- the sharing, and name what changed.
+--
+-- Living here rather than in PocketBase is also what makes it FREE: §4.4
+-- prices a new collection at a migration plus guard.pb.js's hard-coded list
+-- plus account_delete.pb.js's OWNER_TABLES plus a retention sweep on a 5 GB
+-- volume that has filled once, and every one of those four costs is paid by
+-- somebody remembering. `CREATE TABLE IF NOT EXISTS` reaches an existing
+-- owner's database with a new TABLE, which is how `vetoed_facts` shipped.
+--
+-- One row per shape rather than one blob: bounded (MAX_PROCEDURES), and
+-- `sources` stays queryable, because provenance nobody can inspect is
+-- provenance in name only.
+CREATE TABLE IF NOT EXISTS procedures (
+    shape TEXT PRIMARY KEY,
+    record TEXT NOT NULL,        -- the whole declared record, JSON
+    learned_at REAL NOT NULL     -- epoch ms, copied out for eviction order
+);
 """
 
 # COLUMNS ADDED AFTER OWNERS ALREADY HAD A memory.db ON DISK.
@@ -518,6 +552,76 @@ def _provenance_window(facts: list[dict], limit: int) -> list[dict]:
     return [f for i, f in enumerate(facts) if i in keep]
 
 
+# The one spelling of the table name, so the store and anything that inspects
+# it cannot drift.
+PROCEDURE_TABLE = "procedures"
+# The one key this store answers to. `brain.research.PROCEDURE_KEY` is the same
+# string, and it is deliberately NOT imported: research.py imports orchestrator,
+# and memory.py is imported BY anticipy_core, so a back-import here would build
+# a cycle out of a constant. The parity leg in tests/test_procedure_store.py
+# holds the two spellings together instead.
+_PROCEDURE_MAP_KEY = "procedures"
+
+
+class ProcedureStore:
+    """`brain.research`'s get/set map, backed by the owner's own SQLite.
+
+    The interface is `chrome.storage.local`'s — one key holding one map of
+    shape -> record — because `brain/research.py` is a PORT of `extension/
+    learn.js` and a port that has to be handed a different-shaped store is not
+    a port any more, it is a second implementation. The rows underneath are
+    per-shape; assembling and replacing the map is what this adapter is for.
+
+    NOTHING HERE RAISES. `recall_procedure` catches, `remember_procedure`
+    catches, and both treat a failure as a miss on purpose — breaking an errand
+    over a storage failure is worse than paying for the research again — so a
+    store that raised would only be relying on somebody else's except.
+    """
+
+    def __init__(self, db: sqlite3.Connection):
+        self.db = db
+
+    def get(self, key: str) -> dict:
+        if key != _PROCEDURE_MAP_KEY:
+            # ONE TABLE, ONE MEANING. A second caller reaching for another key
+            # must not quietly be handed the procedures: that is how two
+            # unrelated things end up sharing a row and neither owner notices.
+            return {}
+        try:
+            rows = self.db.execute(
+                f"SELECT shape, record FROM {PROCEDURE_TABLE}").fetchall()
+        except sqlite3.Error:
+            return {}
+        out = {}
+        for shape, record in rows:
+            try:
+                value = json.loads(record)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(value, dict):
+                out[shape] = value
+        return out
+
+    def set(self, key: str, value) -> None:
+        if key != _PROCEDURE_MAP_KEY or not isinstance(value, dict):
+            return
+        try:
+            self.db.execute(f"DELETE FROM {PROCEDURE_TABLE}")
+            for shape, record in value.items():
+                if not isinstance(record, dict):
+                    continue
+                stamp = record.get("learnedAt")
+                self.db.execute(
+                    f"INSERT INTO {PROCEDURE_TABLE}(shape, record, learned_at) "
+                    "VALUES (?, ?, ?)",
+                    (str(shape), json.dumps(record),
+                     float(stamp) if isinstance(stamp, (int, float))
+                     and not isinstance(stamp, bool) else 0.0))
+            self.db.commit()
+        except sqlite3.Error:
+            pass
+
+
 class Memory:
     def __init__(self, path: str | Path = ":memory:", llm=None):
         self.db = sqlite3.connect(str(path))
@@ -539,6 +643,14 @@ class Memory:
         except sqlite3.Error:
             pass  # no FTS5 in this build; _search_episodes falls back to LIKE
         self.llm = llm  # optional LLM extractor; falls back to rules
+
+    def procedures(self) -> ProcedureStore:
+        """The owner's procedure cache, in the store `brain.research` expects.
+
+        A method rather than an attribute because it is a view on the same
+        connection, not a second piece of state to keep in sync.
+        """
+        return ProcedureStore(self.db)
 
     def _retrofit_columns(self) -> None:
         """Bring an existing owner's database up to _ADDED_COLUMNS.
