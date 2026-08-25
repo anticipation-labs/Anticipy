@@ -28,7 +28,46 @@ response — even if you were not asked to review anything. Flagging beats
 completing the task.
 
 Scoreboards (run them, believe them): `python3 overnight/tejas_gate.py`,
-`overnight/done_gate.py`, `overnight/fellowship_gate.py`.
-Field map: research/HOW-AN-AGENT-EXISTS.md.
+`overnight/done_gate.py`, `overnight/tape_gate.py`, `overnight/stranger_gate.py`.
+
+`tape_gate.py` is Law 2's expiry and is **RED on purpose**. Red is the law
+working; green means the tape is GONE, not that somebody wrote it down. Never
+soften one of its predicates to reach green.
+
+The gates load `.env.local` themselves (since `8a58e14e`) and print to stderr
+which credentials they picked up, by name. Before that, `done_gate` reported
+"no model key, so her judgement cannot be measured" with the key sitting in the
+same directory, and — because it tells you to work only the first failing leg —
+sent agent after agent at the wrong leg. If you see no stderr notice, no file
+was found and a red "cannot be tested" leg is real.
+
+Field map: `docs/BRIEF.html` is the one document — what we are building, the
+definition of done, the fifty moments, and every screen with file refs.
+`docs/BOARD-STATE-2026-08-24.md` is the twelve harness cards as the board
+actually has them.
 Live-deploy rule: verify with overnight/is_it_live.py-style checks after every
 deploy — `railway up` reports success while failing.
+
+## When more than one agent is working in this tree
+
+**Stage by path. Never `git add -A`, `git add .`, or `git commit -a`.**
+
+Those commands commit whatever is in the index, and the index is shared. On
+2026-08-25 two workers made this mistake independently within an hour: each ran
+a selective `git add`, then a bare `git commit`, and each swept up files a
+*different* live agent had already staged — half-finished code, including a
+deliberately-red TDD test, landing inside a commit whose message described
+something else entirely.
+
+Both were repairable the same way, and the repair is worth knowing:
+
+    git log -1 --pretty=%B > /tmp/msg          # keep the message
+    git reset --soft HEAD~1                    # index restored exactly as it was
+    git commit -F /tmp/msg -- <only your paths>
+
+`git commit -- <paths>` commits those paths and nothing else, whatever else is
+staged. Use it every time. The other agent's work stays staged and untouched.
+
+Check `git status --porcelain` before committing: if files outside your brief
+are staged, someone else is mid-task in this tree and a bare commit will take
+them.
