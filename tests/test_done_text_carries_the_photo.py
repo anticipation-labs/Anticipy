@@ -423,19 +423,23 @@ def test_one_evidence_id_in_the_receipt_is_the_picture(monkeypatch):
 
 
 def test_a_receipt_naming_no_picture_is_not_an_error(monkeypatch):
-    monkeypatch.setattr(ev.pb, "post", _never_called)
+    door, calls = _open_door()
+    monkeypatch.setattr(ev.pb, "post", door)
     job = {"id": "j1", "receipt": _receipt("url:https://earls.test/confirm")}
     assert ev.picture_for_done_text(job, _yes, base="http://pb") == []
+    assert calls == [], "a share window was opened for a text with no picture"
 
 
 def test_more_than_one_candidate_means_no_picture_and_a_loud_line(monkeypatch):
     """Two ids is a defect in the depositor, not a menu for the sender."""
-    monkeypatch.setattr(ev.pb, "post", _never_called)
+    door, calls = _open_door()
+    monkeypatch.setattr(ev.pb, "post", door)
     said: list[str] = []
     job = {"id": "j1", "receipt": _receipt("evidence:rec1111111111aaa",
                                            "evidence:rec2222222222bbb")}
     assert ev.picture_for_done_text(job, _yes, base="http://pb",
                                     log=said.append) == []
+    assert calls == [], "a picture was shared after refusing to choose one"
     assert any("j1" in line for line in said), (
         f"a second picture was dropped without naming the job: {said}")
 
@@ -444,19 +448,25 @@ def test_an_owner_who_never_said_yes_gets_no_picture(monkeypatch):
     """The switch is a FLOOR — does anything authorise attaching this picture
     — and a floor that lifts itself is not a floor. Nobody has answered means
     no."""
-    monkeypatch.setattr(ev.pb, "post", _never_called)
+    door, calls = _open_door()
+    monkeypatch.setattr(ev.pb, "post", door)
     job = {"id": "j1", "receipt": _receipt("evidence:rec1234567890abc")}
     assert ev.picture_for_done_text(job, lambda _ref: False,
                                     base="http://pb") == []
+    assert calls == [], (
+        "the owner never said yes and a photograph of their screen was put "
+        "on an anonymous URL anyway")
 
 
 def test_no_window_is_opened_before_the_moment_of_sending(monkeypatch):
     """A window that is open before anybody needs it is exposure bought for
     nothing. Both refusals above must cost zero share calls, which is what
     `_never_called` proves — this test names the property."""
-    monkeypatch.setattr(ev.pb, "post", _never_called)
+    door, calls = _open_door()
+    monkeypatch.setattr(ev.pb, "post", door)
     assert ev.picture_for_done_text({"receipt": "{}"}, _yes) == []
     assert ev.picture_for_done_text({}, _yes) == []
+    assert calls == []
 
 
 @pytest.mark.parametrize("door", [
@@ -476,6 +486,10 @@ def test_a_share_door_that_never_answers_is_no_picture(monkeypatch):
         raise OSError("timed out")
 
     monkeypatch.setattr(ev.pb, "post", timeout)
+    # Directly, so that `picture_for_done_text`'s own outer net cannot answer
+    # for this: the share call is what must degrade to "no picture".
+    assert ev.open_share_window("rec1234567890abc", base="http://pb",
+                                log=lambda _l: None) == ""
     job = {"id": "j1", "receipt": _receipt("evidence:rec1234567890abc")}
     assert ev.picture_for_done_text(job, _yes, base="http://pb") == []
 
@@ -489,6 +503,8 @@ def test_an_unparseable_answer_is_no_picture(monkeypatch):
             raise ValueError("not json")
 
     monkeypatch.setattr(ev.pb, "post", lambda url, **kw: Garbage())
+    assert ev.open_share_window("rec1234567890abc", base="http://pb",
+                                log=lambda _l: None) == ""
     job = {"id": "j1", "receipt": _receipt("evidence:rec1234567890abc")}
     assert ev.picture_for_done_text(job, _yes, base="http://pb") == []
 
@@ -509,5 +525,19 @@ def test_the_id_is_read_out_of_our_own_record_format():
         == ["rec1234567890abc"]
 
 
-def _never_called(url, **kw):
-    raise AssertionError(f"a share window was opened for nothing: {url}")
+def _open_door():
+    """A share door that WOULD hand back a URL, and a record of every call.
+
+    Deliberately not a fake that raises: `open_share_window` swallows every
+    exception on purpose, so a raising double is swallowed too and the test
+    passes no matter what the code does. Both mutations of "never open a
+    window for nothing" survived a raising double and were caught only by this
+    one — which is the rule about a leg that cannot fail, applied to a test.
+    """
+    calls = []
+
+    def door(url, **kw):
+        calls.append((url, dict(kw.get("json") or {})))
+        return _Response({"ok": True, "url": URL, "expires": "later"}, 200)
+
+    return door, calls
