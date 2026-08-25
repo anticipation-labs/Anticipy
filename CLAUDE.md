@@ -28,7 +28,17 @@ response — even if you were not asked to review anything. Flagging beats
 completing the task.
 
 Scoreboards (run them, believe them): `python3 overnight/tejas_gate.py`,
-`overnight/done_gate.py`, `overnight/fellowship_gate.py`.
-Field map: research/HOW-AN-AGENT-EXISTS.md.
+`overnight/done_gate.py`, `overnight/tape_gate.py`.
+
+`tape_gate.py` is law 2's expiry, and it is **RED right now on purpose**. Red is
+the law working. Green means the tape is GONE, not that somebody wrote it down —
+so never soften one of its predicates to reach green. It also prints what it
+cannot see: tape nobody marked and nobody registered. Only an audit finds that;
+the last one is `research/2026-08-24-law1-audit.md`.
+
+Field map: `docs/BRIEF.html` is the one document — what we are building, the
+definition of done, the fifty moments, and every screen with file refs.
+`docs/BOARD-STATE-2026-08-24.md` is the twelve harness cards as the board
+actually has them, with what each asks for and where it stands.
 Live-deploy rule: verify with overnight/is_it_live.py-style checks after every
 deploy — `railway up` reports success while failing.
