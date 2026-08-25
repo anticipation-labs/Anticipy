@@ -110,6 +110,60 @@ URLS = [
     "https://www.youtube.com/watch?v=1",
     "https://en.wikipedia.org/wiki/Warranty",
     "https://canada.gc.ca/forms",
+
+    # A DOTTED QUAD IS ONE SPELLING OF AN ADDRESS, NOT THE ADDRESS.
+    #
+    # Everything above this line writes loopback and link-local the long way,
+    # and a port that only understood the long way passed the whole corpus
+    # while `http://2130706433:8090/admin` — the same machine, the same admin
+    # port — walked through `_clean_procedure` and became a startUrl. The
+    # browser's URL constructor normalises all of these before the host rule
+    # ever sees them; `urlsplit` hands them back verbatim, so the port has to
+    # do the normalising itself or the refusal is decorative.
+    #
+    # The family, not the three cases that were found: decimal (2130706433),
+    # hex (0x7f000001), octal (0177.), short forms (127.1), and the mixed
+    # spellings in between. 2852039166 is 169.254.169.254 — the cloud metadata
+    # endpoint, which the server can reach and the laptop cannot.
+    "http://2130706433/",
+    "http://0x7f000001/",
+    "http://2852039166/latest/meta-data/",
+    "http://0177.0.0.1/",
+    "http://127.1/",
+    "http://0x7f.1/",
+    "http://0/",
+    "http://[::ffff:127.0.0.1]/",
+    # 010.0.0.1 is octal 8.0.0.1 — a PUBLIC address. Here so the fix cannot be
+    # "refuse anything with a leading zero": that would refuse a real page and
+    # look like security.
+    "http://010.0.0.1/",
+    # 2130706433 as a LABEL, not a host. Public, and must stay researchable.
+    "http://2130706433.example.com/",
+    # Hosts that end in a number the IPv4 parser cannot finish. The browser
+    # throws on all three rather than treating them as domain names.
+    "http://999.999.999.999/",
+    "http://example.com.5/",
+    "http://1.1.1.1.1/",
+    "http://1.2.3.4.example/",
+    # The browser accepts these; a character allow-list written from memory
+    # refuses them, and a refused help page looks exactly like security.
+    "https://my_docs.example.com/a",
+    "https://foo~bar.example/x",
+
+    # PERCENT-ENCODING IS ANOTHER SPELLING, and the browser decodes the host
+    # before it does anything else. `%31%32%37.0.0.1` IS 127.0.0.1.
+    "http://%31%32%37.0.0.1/",
+    "http://%41.example.com/",
+    "http://exa%6dple.com/",
+    # Decoding once is the rule, not decoding until it stops changing: `%2570`
+    # decodes to `%70`, which still holds a forbidden host character, and the
+    # browser throws rather than decoding again.
+    "http://%2570.example.com/",
+    # A URL whose PORT is unparseable is an invalid URL, not a URL with a good
+    # host. `urlsplit` is lazy about the port and hands the host back anyway.
+    "http://a:b:c/",
+    "http://example.com:99999/",
+    "http://support.example.com:8090/x",
 ]
 
 

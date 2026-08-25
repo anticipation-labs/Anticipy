@@ -337,3 +337,106 @@ def test_the_sources_are_kept_so_provenance_stays_inspectable():
     store = Store()
     research.remember_procedure("shape", procedure(), store)
     assert research.recall_procedure("shape", store)["sources"]
+
+
+# ===========================================================================
+# THE LEG THAT SAYS THIS GATE IS NOT YET IN THE PRODUCT
+#
+# RED ON PURPOSE. Do not delete it, do not soften it, do not mark it xfail.
+# It goes green the day something that actually runs calls `research_gate`,
+# and not before.
+#
+# Everything above this line passes, and until this leg goes green that is a
+# statement about a library, not about the product. `research_gate` has no
+# caller anywhere: `gate_holds_the_browser` returns True only for
+# GATE_RESEARCH, and since nothing asks, no job is ever held. The card's
+# requirement — "any plan that will touch the world gets a research pass
+# first, server-side, before the browser opens" — is enforced in zero places
+# while 90-odd tests describe how well it would be enforced if it were.
+#
+# That is the failure HARNESS-LAWS law 3 is about (repo-green is a claim) and
+# the shape law 2 calls a leg that cannot fail. The honest expiry for it is a
+# leg that CAN fail and currently does.
+#
+# What wiring it means, concretely, so this is a task and not a complaint:
+#   brain/anticipy_core.py:3427 already computes `lane = job_lane(goal, params)`
+#   with `touches` sitting unused in the same scope. The gate belongs there,
+#   keyed on that `touches`, before the job may take the browser lane — and
+#   `job_lane` itself still routes on `_IRREVERSIBLE_RE` / `_BROWSER_TARGET_RE`
+#   / `_READ_ONLY_RE`, the registered standing tape this gate was supposed to
+#   start replacing. anticipy_core.py is not this card's file to edit.
+# ===========================================================================
+
+CALLABLE_NAMES = ("research_gate", "gate_holds_the_browser",
+                  "recall_confirmed_procedure", "remember_procedure")
+
+
+def _production_callers(repo=None):
+    """Every call to one of the gate's entry points from code that RUNS.
+
+    Not brain/research.py (where they are defined) and not tests/ (where a
+    library is described rather than used). `repo` is injectable ONLY so the
+    scanner itself can be shown to work — see the test below it."""
+    import re as _re
+    from pathlib import Path
+
+    repo = Path(repo) if repo else Path(__file__).resolve().parents[1]
+    pattern = _re.compile(r"\b(" + "|".join(CALLABLE_NAMES) + r")\s*\(")
+    hits = []
+    for folder in ("brain", "backend", "overnight", "app"):
+        root = repo / folder
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.py"):
+            if path.name == "research.py" and path.parent.name == "brain":
+                continue
+            for i, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith("#") or stripped.startswith("TAPE:"):
+                    continue
+                if pattern.search(line):
+                    hits.append(f"{path.relative_to(repo)}:{i}: {stripped[:90]}")
+    return hits
+
+
+def test_UNWIRED_the_research_gate_is_not_called_by_anything_that_runs():
+    """RED UNTIL THE GATE IS WIRED. See the block above before touching this."""
+    callers = _production_callers()
+    assert callers, (
+        "brain/research.py:research_gate has NO production caller.\n"
+        "Every other test in this file passes against a library nothing "
+        "imports, so 'the research gate is built' is not a true sentence "
+        "about this product — no world-touching job is held by anything.\n"
+        "Wire it at brain/anticipy_core.py:3427, where `touches` is already "
+        "in scope and unused, then this leg goes green on its own.\n"
+        "If you are reading this because the suite is red: that is the leg "
+        "working (HARNESS-LAWS law 2 polarity). Deleting it or relaxing it "
+        "is the failure it exists to prevent.")
+
+
+def test_the_unwired_leg_would_notice_if_the_gate_WERE_wired(tmp_path):
+    """A red leg is only worth anything if it can go green for the RIGHT
+    reason. A leg that fails no matter what is a decoration that happens to be
+    the colour of an expiry, so the scanner is run against a tree that does
+    have a caller and must find it."""
+    (tmp_path / "brain").mkdir()
+    (tmp_path / "brain" / "anticipy_core.py").write_text(
+        "def claim(touches, procedure):\n"
+        "    v = research_gate(touches, procedure)\n"
+        "    return gate_holds_the_browser(v.verdict)\n")
+    found = _production_callers(tmp_path)
+    assert len(found) == 2, found
+    assert "brain/anticipy_core.py:2" in found[0]
+
+
+def test_the_unwired_leg_is_not_fooled_by_the_gate_being_MENTIONED(tmp_path):
+    """extension/agent_loop.js:4253 already contains the words "research_gate,
+    wired at anticipy_core.py:3427" in a comment saying it is NOT wired. A
+    scanner that counted that would report the gate as done because somebody
+    wrote its name down."""
+    (tmp_path / "brain").mkdir()
+    (tmp_path / "brain" / "anticipy_core.py").write_text(
+        "# TODO: research_gate(touches) belongs here\n"
+        "#   see brain/research.py research_gate(...)\n"
+        "lane = job_lane(goal, params)\n")
+    assert _production_callers(tmp_path) == []

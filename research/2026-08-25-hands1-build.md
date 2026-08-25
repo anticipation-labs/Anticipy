@@ -308,20 +308,61 @@ doing understanding's job on the owner's own words, and it decides what the
 research arm actually goes and looks for.
 
 **I did not fix it.** It is outside this card, the fix is a model call (which
-has a cost argument attached), and law 1 says flagging beats completing. It is
-recorded here so the next agent does not rediscover it. It is **not** currently
-in `HARNESS-LAWS.md`'s ledger or `tape_gate.py`'s registry — by the tape gate's
-own account it is exactly the category it says it cannot see: "tape nobody
-marked, nobody registered, and that is not one of the audited five."
+has a cost argument attached), and law 1 says flagging beats completing.
 
-The new code adds no pattern over meaning. `task_shape` operates on the owner's
-words but is a cache **key**, not a decision — the honest risk is a shape
-collision handing a run background text for a different errand, which the step
-prompt already fences as untrusted and tells the agent the live page beats. It
-is `learn.js`'s existing key, unchanged, and the alternative (an embedding) is
-the spec's own rejected option. `is_researchable`, `NEVER_RESEARCH` and the
-ranking lists are about *where the agent may go*, which is the seatbelt clause,
-not meaning.
+**CORRECTION (2026-08-25, repair round).** The paragraph that stood here said
+this finding was "**not** currently in `HARNESS-LAWS.md`'s ledger or
+`tape_gate.py`'s registry ... exactly the category it says it cannot see: tape
+nobody marked, nobody registered". **That was false, and it was false about the
+one file HARNESS-LAWS names as where the laws are enforced.** It is registered,
+it was registered eleven hours before this report was written, and it is the
+same construct, the same site and the same objection:
+
+> `research/2026-08-24-law1-audit.md:190` — item **#51**
+> `_QUERY_PREFIX` / `query_from_goal` | research.py:44-52, site run_research:132
+> | strips a prefix from the goal before searching — **the `price` and
+> `compare` legs eat a load-bearing word** | VIOLATION | L
+
+The flag was right and the "nobody has seen this" framing was wrong, which is
+worse than useless: it invites the owner to re-open a question that was closed
+and ranked L the day before. That is law 4 failing inside the review layer — a
+finding that lives in a file, re-derived as new by the next session — and the
+cost is his triage time, which is the one thing this product exists to protect.
+
+The lesson, written down so it is cheaper than the mistake: **grep the audit
+before calling anything unregistered.** `grep -n '<construct>'
+research/2026-08-24-law1-audit.md` costs one command.
+
+~~The new code adds no pattern over meaning.~~ **WRONG, and the same mistake
+twice in one section: it says so without checking the census.** The paragraph
+that stood here argued `task_shape` "is a cache **key**, not a decision". The
+audit had already ruled the opposite on the very construct being ported:
+
+> `research/2026-08-24-law1-audit.md:229` — item **#76**
+> `taskShape` `INSTANCE_WORDS`/`STOP` sets | extension/learn.js:96-135 |
+> decides: **which cached procedure is replayed for a new task** | VIOLATION | M
+
+So this diff copied a ranked, known Law-1 violation into a second language and
+then wrote a comment in `brain/research.py` asserting it was not one — which is
+precisely how a closed question gets re-opened in the wrong direction, and how
+the three-month loop restarts. The blast radius grew in the same diff, too:
+recall became unconditional (`extension/agent_loop.js:4246`), so a shape
+collision can no longer be filtered out by `plan.unfamiliar` happening to be
+false. The key drops words under three characters, drops the stop list, and
+SORTS — so "transfer money from savings to checking" and "transfer money from
+checking to savings" are both `checking-money-savings-transfer`.
+
+**Closed on the server side in the repair round** (see §7): the key is demoted
+to a SIFT and `procedure_applies` / `recall_confirmed_procedure` own the
+decision — one question, four states, FLOOR polarity, nothing replayed without
+a live model confirming it applies. `extension/learn.js` is **still item #76,
+open and unchanged**; it is not this card's file.
+
+`is_researchable`, `NEVER_RESEARCH` and the ranking lists are about *where the
+agent may go*, which is the seatbelt clause, not meaning (and the audit agrees:
+item #81 rules `NEVER_RESEARCH` and the SSRF guards LEGAL). The repair round
+found that the seatbelt clause only protects you if the seatbelt is buckled —
+see §7.
 
 ---
 
@@ -365,3 +406,217 @@ not meaning.
 3. **The gate is not live and cannot be** until §3.1 and §3.2 are wired; until
    then `research_gate` is a tested library with no caller, and I have not
    claimed otherwise anywhere in the code.
+
+---
+
+## 7. Repair round (2026-08-25) — what the adversarial reviewer killed
+
+A reviewer refused to approve §1-§6 and filed five findings. This section is
+what came of them. Nothing below is verified against production: the ears are
+dead, zero transcript rows have reached prod in ~31 hours, and builds 76-80
+delivered none — so every claim here is "proven by tests", never "proven live".
+
+### 7.1 `is_researchable` was not a faithful port, and the parity leg could not see it — CLOSED
+
+The finding, verified before touching anything, by running the real `learn.js`
+under node against `research.py`:
+
+| URL | learn.js | research.py (before) |
+|---|---|---|
+| `http://2130706433/` | refused | **allowed** |
+| `http://0x7f000001/` | refused | **allowed** |
+| `http://2852039166/latest/meta-data/` | refused | **allowed** |
+| `http://0177.0.0.1/` | refused | **allowed** |
+| `http://0x7f.1/` | refused | **allowed** |
+| `http://0/` | refused | **allowed** |
+| `http://999.999.999.999/` | refused | **allowed** |
+| `http://example.com.5/` | refused | **allowed** |
+| `http://1.1.1.1.1/` | refused | **allowed** |
+
+`2130706433` is `127.0.0.1`; `2852039166` is `169.254.169.254`, the cloud
+metadata endpoint the worker can reach and the laptop cannot. `_clean_procedure`
+accepted `http://2130706433:8090/admin` — the PocketBase admin port
+`agent_loop.js:1994-2007` names by hand as the threat — while correctly refusing
+the dotted-quad spelling of the same machine. The module comment claimed the
+port was "only honest because tests/test_research_shape_parity.py compares
+character by character"; the corpus contained only dotted quads, so the one
+class the predicate exists for was the one class it never tested.
+
+**The class, not the three URLs.** WHATWG's URL parser normalises every IPv4
+spelling before a host rule sees it, which is why learn.js's identical regexes
+are correct and the port's were not. Adding `^0x7f` would have closed three
+URLs and left the family open. So `parse_host` now implements the browser's own
+host parser — percent-decode, IDNA, "ends in a number", the IPv4 parser — and
+returns a **typed** `ParsedHost` carrying an `ipaddress` object. Every refusal
+is a containment test on that object. After canonicalisation there is no such
+thing as "the encoded form", including a spelling nobody has thought of yet.
+
+The refused ranges are learn.js's, one for one, so parity stays exact.
+`ipaddress.is_private` is broader and deliberately unused: widening the
+server's refusals is a real improvement and belongs in a diff that widens the
+extension's in the same breath.
+
+Corpus: `tests/test_research_shape_parity.py` grew 22 rows covering decimal,
+hex, octal, short-form, percent-encoded, trailing-dot, unparseable-port and
+`ends-in-a-number-but-cannot-finish` hosts, plus the negatives that stop the fix
+being "refuse anything unusual" (`010.0.0.1` is octal 8.0.0.1 — public;
+`2130706433.example.com` is a label, not an address).
+
+Class test, node-independent: `tests/test_research_host.py` (54).
+
+### 7.2 Two more divergences, found by this round's own sweep
+
+Neither was in the findings; both were in the SAME class and were found by
+sweeping 16 hand-built edge cases through both languages.
+
+* **`http://a:b:c/`, `http://example.com:99999/`** — the browser throws on an
+  unparseable port. `urlsplit` is lazy about the port and handed back a
+  perfectly good host, so the port was **more permissive than the browser**
+  again. Closed: `parts.port` is now evaluated, and a failure to parse it fails
+  the URL.
+* **`http://%41.example.com/`, `http://%31%32%37.0.0.1/`** — the browser
+  percent-decodes the host first. The port refused all percent-encoded hosts
+  (stricter, so it refused real pages), and `%31%32%37.0.0.1` **is** `127.0.0.1`
+  and was being refused for the wrong reason. Closed: decoded once, exactly as
+  WHATWG does — `%2570` decodes to `%70`, still holds a forbidden character,
+  and fails, rather than being decoded twice.
+
+### 7.3 Where the fetch LANDS — a class no URL check can close
+
+Closing 7.1 exposed the ceiling of the whole approach. `is_researchable` reads
+a string, and this half of the product is a cloud worker, not a browser:
+
+1. **`requests` follows redirects by default.** Every refusal was applied to a
+   URL that was never read, and none to the one that was. A real help page can
+   answer `302 Location: http://169.254.169.254/latest/meta-data/`.
+2. **A hostname is not an address.** Any domain an attacker controls resolves to
+   127.0.0.1 whenever its owner wants it to.
+3. **`run_research` never called `is_researchable` at all** — it read every URL
+   the search backend returned, in order. Only `learn_procedure` filtered
+   (through `rank_sources`). Proven by test before the fix: it fetched
+   `http://169.254.169.254/latest/meta-data/` first.
+
+So the guard moved to the address, at every hop, immediately before connecting:
+`fetch_is_permitted` resolves and requires every returned address to be on the
+open web; `fetch_page` sets `allow_redirects=False` and walks the chain itself,
+re-checking each hop; `run_research` filters its candidates like the other lane.
+This also closes `http://[::ffff:127.0.0.1]/` server-side (see 7.6) without
+breaking parity, because it is not a string rule.
+
+**Honest limit, in the code and here:** the addresses a name resolves to are
+checked, then the NAME is handed to `requests`, which resolves it again. A DNS
+rebind between the two answers is not closed and cannot be without pinning the
+connection to the checked address. Every fixed-address and redirect route is
+closed; the rebind window is not.
+
+Tests: `tests/test_research_fetch.py` (13).
+
+### 7.4 `task_shape` is audit item #76, and the comment denied it — CLOSED server-side
+
+Finding upheld in full. §4 of this report and the comment at
+`brain/research.py:434` both asserted "NOT A LAW-1 PROBLEM ... a cache key, not
+a decision" without citing `research/2026-08-24-law1-audit.md:229`, which had
+already ranked this exact construct **VIOLATION / M** with the "Decides" column
+reading "which cached procedure is replayed for a new task". Both texts are
+corrected above and in the module.
+
+The reviewer's concrete case is real and is now asserted as a test: the key
+drops words under three characters, drops the stop list, and **sorts**, so
+`transfer money from savings to checking` and `transfer money from checking to
+savings` are both `checking-money-savings-transfer`. With recall unconditional
+(`agent_loop.js:4246`) nothing filters that collision out any more.
+
+**Fix, in the shape law 1 spells out:** the key is demoted to the one role
+HARNESS-LAWS leaves open for a word list — "the cheap sift in front of the
+model, never as the decision". `procedure_applies` asks ONE question on its own
+("would following this remembered procedure accomplish the NEW task?"), returns
+a **four-state** answer (`RECALL_YES` / `RECALL_NO` / `RECALL_UNASKED` /
+`RECALL_UNANSWERED`), and `recall_confirmed_procedure` compares the verdict.
+Polarity is a **FLOOR** — no verdict means no replay — because a miss costs one
+research pass and a wrong replay costs a browser agent following someone else's
+steps on his accounts. Both floor-lifting mutations were tried and both were
+caught.
+
+The remembered procedure is fenced as untrusted in the prompt: every word of it
+came off the open web, and a procedure that argues for its own applicability is
+told to be treated as a reason to say no.
+
+**NOT fixed:** item #76 names `extension/learn.js:96-135`. The browser copy is
+still the decision on its own side and that file is not this card's. #76 stays
+open, now with a fixed sibling to copy.
+
+Tests: `tests/test_research_recall.py` (12).
+
+### 7.5 `research_gate` has no caller — NOT FIXED, and now RED
+
+Upheld, and re-verified: grepping the tree for `research_gate`,
+`gate_holds_the_browser`, `recall_procedure`, `remember_procedure` and
+`learn_procedure` outside `tests/` and `brain/research.py` returns exactly one
+hit — a comment on `extension/agent_loop.js:4253` saying it is not wired.
+
+This is the leg-that-cannot-fail in its purest form: `gate_holds_the_browser`
+returns True only for `GATE_RESEARCH`, nothing asks, so no job is ever held, and
+the card's requirement is enforced in zero places while ~90 tests describe how
+well it would be enforced if it were.
+
+**I did not wire it.** The site is `brain/anticipy_core.py:3427`, which is
+another card's file and has live agents in it. What I did instead is make the
+gap impossible to mistake for done, in two places that do not rot:
+
+* `brain/research.py` carries a block above `gate_holds_the_browser` stating
+  plainly that nothing calls any of it, that §5.3 is "satisfied in a library
+  nobody calls and violated in the shipped loop" (`plan.unfamiliar`,
+  `agent_loop.js:4251`), and naming the exact wiring site.
+* **`tests/test_research_gate.py::test_UNWIRED_the_research_gate_is_not_called_by_anything_that_runs` is RED and stays red until the gate is wired.**
+  Law 2 polarity: it fails BECAUSE the thing is missing, and goes green on its
+  own the day something that runs calls it. A companion test proves the scanner
+  can go green for the right reason (it finds a real call in a synthetic tree)
+  and is not fooled by the gate merely being MENTIONED in a comment — which
+  `agent_loop.js:4253` already does.
+
+**The suite is therefore 1 red on purpose.** Do not delete that leg, do not
+mark it xfail, do not soften its predicate.
+
+### 7.6 Findings NOT closed, and new ones raised
+
+| # | What | Where | Why not closed here |
+|---|---|---|---|
+| 1 | **Navigation precedence**: a cached `startUrl` now overrides a *confident* planner's fresh `start_url`, because `procedure` is no longer null when `unfamiliar` is false | `extension/agent_loop.js:4264` — `if (procedure && procedure.startUrl && plan) plan.startUrl = procedure.startUrl;` | Not this card's file; other agents are live in it. The server-side analogue IS fixed (7.4): only a model-confirmed procedure is released, so a stale record cannot silently outrank fresh reasoning. The browser needs the same treatment or, at minimum, the cached URL must lose to a planner that answered `unfamiliar:false`. |
+| 2 | `taskShape` `STOP`/`INSTANCE_WORDS` deciding replay | `extension/learn.js:96-135` — audit **#76**, VIOLATION/M | Not this card's file. Server half closed; browser half open. |
+| 3 | `_QUERY_PREFIX` eating a load-bearing word (`price`, `compare`) | `brain/research.py:48` — audit **#51**, VIOLATION/L | Still open, still flagged, and — corrected from §4 — **already registered** in the audit. Fix is a model call with a cost argument. |
+| 4 | **NEW: `http://[::ffff:127.0.0.1]/` is allowed by BOTH copies.** Verified under node: `isResearchable` returns true, and `new URL(...).hostname` is `[::ffff:7f00:1]`, which `/^\[?::1\]?$/` does not match. An IPv4-mapped IPv6 address is loopback. | `extension/learn.js:137-165` and the port | Fixing it in the port alone would break the parity contract, so it is closed at the FETCH boundary server-side (7.3) and left visible in the parity corpus. **The extension is still open to it.** |
+| 5 | **NEW: `loopbackTarget` has the same gap.** Its comment correctly explains that WHATWG normalises `127.1` / `0177.0.0.1` / `2130706433`, and it strips brackets — but `::ffff:127.0.0.1` matches none of its arms. | `extension/agent_loop.js:1993-2005` | Not this card's file. Same one-line class as #4. |
+| 6 | **NEW: IDNA divergence.** `http://١٢٣.com/` throws in the browser (UTS-46 Bidi rule) and punycodes to `xn--9hbcd.com` here, so the port is the permissive side — on a registrable domain, never an address, and the fetch guard still checks what it resolves to. | `brain/research.py` `parse_host` | Closing it needs the `idna` package (UTS-46). A dependency decision, not this card's. Written down in the code and here rather than left to be rediscovered. |
+
+### 7.7 Process finding the reviewer was right about
+
+Both false Law-1 claims in §4 — "`_QUERY_PREFIX` is not registered" and
+"`task_shape` is not a Law-1 problem" — were written **without grepping
+`research/2026-08-24-law1-audit.md`**, the file HARNESS-LAWS names as where the
+laws are enforced. One invented a new finding out of a closed one; the other
+argued the opposite of a ranked verdict. Both cost the owner triage time, which
+is law 4 failing inside the review layer.
+
+The rule, written down because it is cheaper than the mistake:
+`grep -n '<construct>' research/2026-08-24-law1-audit.md` before calling
+anything unregistered, unranked, or not-a-violation. One command.
+
+### 7.8 Numbers, measured back to back
+
+Measured by restoring the pre-round files, running, restoring the new ones, and
+running again — not by arithmetic:
+
+* **before:** `2048 passed`, exit 0
+* **after:** `2122 passed, 1 failed`, exit 1 — the one failure is
+  `test_UNWIRED_the_research_gate_is_not_called_by_anything_that_runs`, red on
+  purpose (7.5)
+* `tests/test_day_zero_oracle.py` is excluded from both runs: it fails to
+  COLLECT on `ModuleNotFoundError: No module named 'playwright'` via
+  `proof/day_zero_20.py:37`. Pre-existing, untouched by this round.
+
+Every behaviour added was shown able to fail by mutating the fix in place and
+restoring: the IPv4 canonicalisation (47 tests red), the refused-range
+containment (8 red), the port check (4 red), the percent-decode (4 red), and
+both directions of the recall FLOOR (1 and 2 red).
+
+**No tape was added, and no gate predicate or test was weakened to reach green.**
