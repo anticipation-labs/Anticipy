@@ -47,6 +47,7 @@
 		DADE2F027C1013968D052B37 /* sherpa-onnx in Frameworks */ = {isa = PBXBuildFile; productRef = 18E77196B32C3DF5E3B7DFE6 /* sherpa-onnx */; };
 		DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F02D4F43DF4322168E31300 /* Notifier.swift */; };
 		E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A935B05F51033496D5EF92C9 /* HapticEngine.swift */; };
+		F575AF0873EA378927B6B04B /* ListenTally.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AEAC7CF712A4733733AB7C1 /* ListenTally.swift */; };
 		F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */; };
 		FE3F2EC49604E6841F2D92F4 /* PendantRadioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */; };
 		FF9C51D6755044E050520ADE /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9F21774275ABF326AAC99C /* AuthView.swift */; };
@@ -57,6 +58,7 @@
 		0B0C300D8A79FC68733630D6 /* PendantBatteryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantBatteryPolicy.swift; sourceTree = "<group>"; };
 		10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakerTagger.swift; sourceTree = "<group>"; };
 		11B56391BC84404B937B150F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1AEAC7CF712A4733733AB7C1 /* ListenTally.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenTally.swift; sourceTree = "<group>"; };
 		207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRoster.swift; sourceTree = "<group>"; };
 		2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceEnrollView.swift; sourceTree = "<group>"; };
 		25E2EB04173AB9206E285D54 /* OpusFrameAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusFrameAssembler.swift; sourceTree = "<group>"; };
@@ -179,6 +181,7 @@
 				C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */,
 				BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */,
 				A66BCAC2FE553220A46D105D /* ListenJournal.swift */,
+				1AEAC7CF712A4733733AB7C1 /* ListenTally.swift */,
 				2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */,
 				8E88365017E289B62475F24B /* PhoneListener.swift */,
 				10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */,
@@ -316,6 +319,7 @@
 				65B4D71BC118D11316A825FB /* JobReceiptPolicy.swift in Sources */,
 				CC601CF895488D6287CAE43B /* LifeContext.swift in Sources */,
 				0A4F7E4B9727318D39265E30 /* ListenJournal.swift in Sources */,
+				F575AF0873EA378927B6B04B /* ListenTally.swift in Sources */,
 				732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */,
 				DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */,
 				A0C6AC3D27BE2A2D7D82A6D4 /* OnboardingFinale.swift in Sources */,
