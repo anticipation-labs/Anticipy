@@ -38,10 +38,21 @@ designed outcome, not a failure.
 """
 from __future__ import annotations
 
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+
 import argparse
+import hashlib
 import os
 import subprocess
 import sys
+
+# The scorer strips this line before scoring and checks what it says against
+# the cell it was filed under. Imported rather than restated so the two files
+# cannot drift into two different contracts.
+from proof.engine_or_audio import PROVENANCE_PREFIX  # noqa: E402
 
 #: The models §11 named. Anything else still runs — the control arm decides
 #: whether it was good enough — but the report says plainly that it is not the
@@ -154,6 +165,43 @@ def whisper_command(interpreter, wav, out_dir, model="base") -> list[str]:
     ]
 
 
+def wav_digest(wav: str) -> str:
+    """sha256 of the WAV, so two cells cannot silently name one recording.
+
+    A filename is exactly the thing a tired human gets wrong at eleven at
+    night, and arm A's transcript filed under arm B reverses the answer about
+    the audio session line. The hash is what proof/engine_or_audio.py checks.
+    """
+    h = hashlib.sha256()
+    with open(wav, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def provenance_line(wav: str, arm: str, decoder: str = "reference") -> str:
+    """The line proof/engine_or_audio.py's output contract asks for.
+
+    The scratch recorder that has to write this for the on-device cells does
+    not exist yet. This side of the contract does, so it honours it today —
+    and a run where the reference cells carry provenance and the phone's cells
+    do not is a run where the harness can still tell arm A's WAV from arm C's.
+    """
+    return (f"{PROVENANCE_PREFIX} arm={arm} decoder={decoder} "
+            f"wav={os.path.basename(wav)} sha256={wav_digest(wav)}\n")
+
+
+def arm_of(out_path: str) -> str:
+    """Which arm this transcript is being written for, from the path the
+    protocol tells the operator to write to (`<run>/arm_a/reference.txt`).
+    Guessing is not good enough here: a wrong guess would stamp a provenance
+    line that itself lies, so an unrecognised path gets no line at all."""
+    parent = os.path.basename(os.path.dirname(os.path.abspath(out_path)))
+    if parent.startswith("arm_") and len(parent) == 5:
+        return parent[4].upper()
+    return ""
+
+
 def decode(wav: str, out_path: str, model="base", allow_download=False) -> str:
     plan = availability(find_interpreter(), cached_models(), model, allow_download)
     if not plan["available"]:
@@ -167,7 +215,12 @@ def decode(wav: str, out_path: str, model="base", allow_download=False) -> str:
     if produced != os.path.abspath(out_path):
         os.replace(produced, out_path)
     with open(out_path, encoding="utf-8") as fh:
-        return fh.read()
+        text = fh.read()
+    arm = arm_of(out_path)
+    if arm:
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write(provenance_line(wav, arm) + text)
+    return text
 
 
 def main(argv=None) -> int:
