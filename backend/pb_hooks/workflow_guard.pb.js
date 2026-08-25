@@ -164,7 +164,28 @@ routerUse((e) => {
       }
     }
   }
-  if (nextStatus === "queued" && consequence === "consequential") {
+  // APPROVAL IS THE DEFAULT AND EXEMPTION IS THE EXCEPTION, not the other way
+  // round. This read `consequence === "consequential"`, so owner approval was
+  // demanded only when that one string was spelled exactly right. Anything
+  // else skipped the whole block and reached `queued` UNAPPROVED, free to act
+  // on the world: a typo, a truncated write, a row the brain never stamped, an
+  // older client, or any third enum value added later. Driven, not reasoned
+  // about — `tests/test_workflow_guard_fails_closed.py` sends "consequentia",
+  // "" and "reversible" and every one of them was let through before this.
+  //
+  // The polarity here was ALSO the only one in the system pointing the wrong
+  // way, which is the part that matters: this file's own first line calls
+  // itself the final authority, and the final authority was the layer that
+  // failed open.
+  //   brain/workflow.py:64-68     unreadable -> CONSEQUENTIAL ("it gets every gate")
+  //   extension/background.js:1062, 1300-1301   `!== "read_only"` -> allowlist
+  //   app/ios/…/AnticipyApp.swift:1352          missing key -> "consequential"
+  //
+  // An ARRAY, not an object-as-set: `{ read_only: 1 }[consequence]` is truthy
+  // for "constructor", "toString" and every other inherited property name, so
+  // the obvious lookup hands an attacker an exemption keyword.
+  const NO_APPROVAL_NEEDED = ["read_only"];
+  if (nextStatus === "queued" && NO_APPROVAL_NEEDED.indexOf(consequence) < 0) {
     let approval = {};
     try { approval = JSON.parse(String(body.approval || (old && old.getString("approval")) || "")); }
     catch (_) { return reject("consequential work needs parseable approval"); }
