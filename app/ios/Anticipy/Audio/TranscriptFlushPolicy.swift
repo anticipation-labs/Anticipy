@@ -40,27 +40,73 @@ struct TranscriptFlushPolicy {
         return now.timeIntervalSince(pendingSince) >= maxHold
     }
 
-    /// How long after a line is sent a near-copy of it is still the same
-    /// sentence rather than a new one.
-    let echoWindow: TimeInterval = 12
+    /// How long after a line is sent a near-copy of it is still the same AUDIO
+    /// arriving twice, rather than a person saying the thing again.
+    ///
+    /// It is the utterance gap, not a number of its own, and the reason is
+    /// arithmetic rather than taste. Two separately-flushed lines are two
+    /// lines because a pause of at least `utteranceGap` ended the first one —
+    /// and the second line then costs however many seconds it takes to say.
+    /// So a person who repeats themselves cannot land the second delivery any
+    /// sooner than the gap plus the length of what they said, whatever they
+    /// do. A recognizer handing back audio it already decoded pays neither
+    /// cost: the words exist already.
+    ///
+    /// Both ends of that are measured, not assumed. `run_flush_policy_tests.sh`
+    /// drives the real cursor and the real flush clock over every speaking
+    /// rate and every pause that can produce two lines of one phrase, and the
+    /// closest a genuine repeat ever lands is 3.4 seconds — four words at five
+    /// words a second with the shortest pause that still makes two lines. The
+    /// recorded machine duplicate of 2026-08-17 landed at 2.0 seconds. The gap
+    /// sits between them and a check goes red if it stops doing so.
+    ///
+    /// It was twelve seconds, which is above that floor, and the cost was
+    /// root-caused on 2026-08-24 in
+    /// research/2026-08-24-why-voice-tests-dont-complete.md: a tester saying a
+    /// phrase, watching for the row, and saying it again got ONE row for two
+    /// utterances, with no trace of the second anywhere. Three attempts, two
+    /// rows, and the one that vanished was the middle one. Saying it again to
+    /// see whether it worked is the single most common thing a person does
+    /// when checking a microphone, and it was the one thing this guard was
+    /// guaranteed to eat.
+    ///
+    /// Reaching past the gap is also this policy contradicting itself. A pause
+    /// that long ends an utterance everywhere else in this file — it is what
+    /// `flushReason` calls `.gap` and what `cutContinues` refuses to reach
+    /// across. A window wider than that calls the same line a new utterance
+    /// and a repeat of the last one in the same breath.
+    var echoWindow: TimeInterval { utteranceGap }
 
-    /// Is this line the previous one said again?
+    /// Is this line the same audio arriving a second time?
     ///
     /// Not losing words cost something: the recognizer revises, and a flush
     /// on the ceiling followed by a banked window can deliver the SAME
     /// sentence twice in slightly different words. Live 2026-08-17, two
     /// seconds apart: "Yeah I know where it is" then "Yeah I know it is".
-    /// Nothing was lost — it was said twice, and a transcript that repeats
+    /// Nothing was lost — it was said once, and a transcript that repeats
     /// itself reads as broken to the person watching it.
+    ///
+    /// The words cannot be what decides this, and that is the whole design.
+    /// A recognizer re-rendering an utterance and a person deliberately
+    /// repeating one produce the same words on purpose; comparing them can
+    /// only ever guess, and the guess it made was the wrong one for every
+    /// manual test anybody ran. `window` is what decides, on the one thing the
+    /// two events genuinely differ in — whether there was time to say it
+    /// again. The word comparison below only runs INSIDE that window, where no
+    /// person could have re-spoken four words, and its job there is narrowed
+    /// to recognising one utterance in two renderings.
     ///
     /// Judged on shared words rather than characters, because the difference
     /// between two hypotheses of one sentence is usually a word appearing or
     /// vanishing. Deliberately conservative: real repetition ("yeah yeah
     /// yeah", "no no no") is short and identical, and dropping a genuinely
     /// new sentence is far worse than letting one echo through.
+    ///
+    /// `window` carries no default. It was twelve, nothing passed it, and the
+    /// number outlived every reason anyone had for it.
     static func isEchoOfPrevious(_ line: String, previous: String,
                                  apart: TimeInterval,
-                                 window: TimeInterval = 12) -> Bool {
+                                 window: TimeInterval) -> Bool {
         if apart > window { return false }
         let words = { (s: String) -> [String] in
             s.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
