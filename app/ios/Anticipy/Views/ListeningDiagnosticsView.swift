@@ -58,6 +58,22 @@ struct ListeningDiagnosticsView: View {
                 }
             }
 
+            if !tally.notes.isEmpty {
+                Section("What the phone reported") {
+                    // The audio session as it ACTUALLY came back, not as it was
+                    // asked for; low power mode; audio dropped while swapping.
+                    // Deduped because a session fact repeats on every start and
+                    // the same sentence twelve times is noise, not a finding.
+                    ForEach(Array(NSOrderedSet(array: tally.notes)) as? [String] ?? [],
+                            id: \.self) { note in
+                        Text(note)
+                            .font(Theme.aside)
+                            .foregroundStyle(Theme.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
             Section("The log") {
                 if lines.isEmpty {
                     Text("Nothing recorded yet. This fills in while I'm listening.")

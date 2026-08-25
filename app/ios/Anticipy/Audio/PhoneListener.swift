@@ -82,6 +82,10 @@ final class PhoneListener: NSObject, ObservableObject {
     private var lastResultAt = Date()
     private var requestBornAt = Date()
     private var bufferTick = 0
+    /// Buffers thrown away because the orphan hold was full — audio the
+    /// recognizer will never see. Incremented on the audio thread under
+    /// `orphanLock`, drained and reported by the watchdog on the main queue.
+    private var orphanDropped = 0
 
     /// When the currently-unsent words first appeared, and the ceiling on how
     /// long they may wait.
@@ -225,6 +229,20 @@ final class PhoneListener: NSObject, ObservableObject {
         // Nothing surfaces the suppression: no error, no log.
         try? session.setAllowHapticsAndSystemSoundsDuringRecording(true)
         try? session.setActive(true, options: .notifyOthersOnDeactivation)
+        // READ IT BACK. The three try? calls above are the entire audio
+        // configuration and each one swallows its error, so the app can report
+        // "Listening" over a session it never actually got — silently, on some
+        // device or iOS version we do not own. Asking the session what it
+        // became is the cheapest possible way to see that, and HapticEngine
+        // already proves these are readable at runtime. Also note low power
+        // mode here: it changes what the OS will let a background app do, and
+        // a day that died on a throttled phone otherwise looks like a bug.
+        ListenJournal.shared.record(.noted(
+            "session category: \(session.category.rawValue) "
+            + "mode: \(session.mode.rawValue)"))
+        if ProcessInfo.processInfo.isLowPowerModeEnabled {
+            ListenJournal.shared.record(.noted("low power mode on"))
+        }
 
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -255,7 +273,16 @@ final class PhoneListener: NSObject, ObservableObject {
             } else if self.isListening {
                 // No request is taking audio right now (swap in flight).
                 // Hold it — do NOT drop it — and replay into the next one.
-                if self.orphanBuffers.count < 600 { self.orphanBuffers.append(buffer) }
+                // A COUNTER, NOT A JOURNAL CALL. This closure runs on the
+                // audio thread; the journal now touches a file, and parking
+                // audio behind a disk write to report dropped audio would be
+                // the joke writing itself. The watchdog reports this from the
+                // main queue instead.
+                if self.orphanBuffers.count < 600 {
+                    self.orphanBuffers.append(buffer)
+                } else {
+                    self.orphanDropped &+= 1
+                }
             }
             self.orphanLock.unlock()
             // Cheap liveness beacon (~3x/sec), off the audio thread.
@@ -351,6 +378,18 @@ final class PhoneListener: NSObject, ObservableObject {
         watchdog?.invalidate()
         let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in
             guard let self, self.isListening else { return }
+            // Drain the audio thread's drop counter here, on the main queue,
+            // coalesced into ONE line however many buffers were lost. A
+            // journal that spends its lines saying the same thing has evicted
+            // the session it was meant to explain.
+            self.orphanLock.lock()
+            let dropped = self.orphanDropped
+            self.orphanDropped = 0
+            self.orphanLock.unlock()
+            if dropped > 0 {
+                ListenJournal.shared.record(
+                    .noted("dropped \(dropped) buffers while swapping"))
+            }
             // A dead engine is a failure, not a route change. This is the one
             // stall the watchdog was built to catch.
             if !self.engine.isRunning { self.recoverAudio(cause: .error); return }

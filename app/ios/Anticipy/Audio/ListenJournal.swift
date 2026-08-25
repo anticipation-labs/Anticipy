@@ -31,6 +31,13 @@ enum ListenEvent: Equatable {
     /// the phone on a person's tap. A status code, a queue state or an error
     /// name is what belongs; the words the owner said never do.
     case posted(ok: Bool, detail: String)
+    /// A fact about the SENSES — what the audio session actually became, what
+    /// the power mode is, how much audio was dropped. Never speech, and never
+    /// anything derived from speech: the same rule `posted`'s detail carries,
+    /// for the same reason. This exists because three `try?` calls configure
+    /// the audio session and swallow every failure, so the app can report
+    /// "Listening" over a session it never got.
+    case noted(String)
 
     enum StopCause: String, Equatable {
         case owner, interruption, routeChange, authorizationLost, unrecoveredFailure
@@ -172,6 +179,9 @@ final class ListenJournal {
                   let words = body.split(separator: " ").dropFirst().first
                       .flatMap({ Int($0) }) else { return nil }
             return (when, .flushed(reason: reason, words: words))
+        case "noted":
+            let fact = body.dropFirst("noted".count).trimmingCharacters(in: .whitespaces)
+            return (when, .noted(fact))
         case "posted":
             let ok = body.contains("accepted")
             let detail = after(ok ? "accepted" : "failed")?
@@ -256,6 +266,8 @@ final class ListenJournal {
             return "recognizerSwapped  a fresh recognizer took over, cause: \(cause.rawValue)"
         case .flushed(let reason, let words):
             return "flushed  \(words) words sent, reason: \(reason)"
+        case .noted(let fact):
+            return "noted  \(fact)"
         case .posted(let ok, let detail):
             let outcome = ok ? "accepted" : "failed"
             return detail.isEmpty

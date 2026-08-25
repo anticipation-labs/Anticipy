@@ -174,6 +174,25 @@ struct ListenTallyTests {
                   && straight.longestSilenceSeconds == 870
                   && straight.wordsFlushed == 49)
 
+        // ------------------------------------------------------- 9. senses facts
+        // The three things that were invisible: what the audio session ACTUALLY
+        // became (three try? calls decide it and swallow every failure), low
+        // power mode, and audio dropped while a swap was in flight. Kept in
+        // order and verbatim — they are prose written for a person already.
+        let noted: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .noted("session category: AVAudioSessionCategoryRecord mode: AVAudioSessionModeMeasurement")),
+            (at(1), .noted("low power mode on")),
+            (at(40), .noted("dropped 600 buffers while swapping")),
+        ]
+        let n = ListenTally.of(noted)
+        check("senses facts are kept, in order, verbatim",
+              n.notes.count == 3
+                  && n.notes[0].contains("AVAudioSessionCategoryRecord")
+                  && n.notes[2] == "dropped 600 buffers while swapping")
+        check("a note is not mistaken for something heard",
+              n.wordsFlushed == 0 && n.flushes == 0)
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {

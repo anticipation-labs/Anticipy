@@ -55,6 +55,13 @@ struct ListenTally: Equatable {
     /// identically in a total, and only one of them is a defect.
     var stopsByCause: [String: Int] = [:]
 
+    /// Facts about the senses, in the order they were noted — what the audio
+    /// session actually became, low power mode, audio dropped while swapping.
+    /// Kept verbatim rather than re-parsed: they are already prose written for
+    /// a person, and parsing our own sentences twice is how the writing and
+    /// the reading drift apart.
+    var notes: [String] = []
+
     var postsAccepted = 0
     /// A day that heard everything and delivered nothing looks exactly like a
     /// microphone that heard nothing at all, from outside.
@@ -110,6 +117,9 @@ struct ListenTally: Equatable {
             case .recognizerSwapped(let cause):
                 tally.swaps += 1
                 tally.swapsByCause[cause.rawValue, default: 0] += 1
+
+            case .noted(let fact):
+                tally.notes.append(fact)
 
             case .posted(let ok, _):
                 if ok { tally.postsAccepted += 1 } else { tally.postsFailed += 1 }

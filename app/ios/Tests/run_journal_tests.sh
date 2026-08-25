@@ -79,7 +79,21 @@ if ! grep -q 'postFailureShape(error)' "$session"; then
     echo "instead of the server's sentence about the owner's own words."
     exit 2
 fi
+# THE TAP CLOSURE STAYS JOURNAL-FREE. It runs on the audio thread, and the
+# journal now writes to a FILE. A record() call in there would park audio
+# behind a disk write — the instrument built to explain dropped speech becoming
+# a way to drop it. Dropped-buffer counting is a plain integer there, reported
+# by the watchdog from the main queue instead. Asserted on source shape,
+# the way run_flush_policy_tests.sh asserts its own.
+tap=$(awk '/installTap\(onBus: 0/,/^        }$/' "$listener")
+if printf '%s' "$tap" | grep -q 'ListenJournal'; then
+    echo "The audio tap closure now writes to the journal."
+    echo "That closure runs on the audio thread and the journal touches a file."
+    echo "Count into an integer there and let the watchdog report it."
+    exit 2
+fi
 echo "the journal is written on start, stop, swap, flush and post"
+echo "the audio tap stays journal-free"
 
 swiftc -O \
     "$app/Audio/ListenJournal.swift" \

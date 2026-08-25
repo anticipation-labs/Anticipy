@@ -247,6 +247,9 @@ struct ListenJournalTests {
             .posted(ok: true, detail: "queued line sent"),
             .posted(ok: false, detail: "requeued, offline"),
             .posted(ok: true, detail: ""),
+            .noted("session category: AVAudioSessionCategoryRecord mode: AVAudioSessionModeMeasurement"),
+            .noted("low power mode on"),
+            .noted("dropped 600 buffers while swapping"),
         ]
         let dirD = tempDir()
         let trip = ListenJournal(limit: 100,
