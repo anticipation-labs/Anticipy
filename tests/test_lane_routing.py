@@ -5,6 +5,35 @@ import json
 
 import brain.anticipy_core as core
 from brain.anticipy_core import Anticipy, job_lane
+from brain.memory import Memory
+
+from llm_fakes import FakeExtractor
+
+PITCH_LINE = "I'll send you the pitch deck after this call."
+
+
+def _offline_anticipy(**kw):
+    """An Anticipy with no brain, whose MEMORY still gets an extraction
+    verdict.
+
+    These two tests ride `_decide`'s offline arm — "a fresh commitment means
+    act". That commitment used to be minted by `_rule_extract`, the
+    capitalisation regex brain/memory.py carried until 2026-08-25, which is
+    exactly the Law-1 violation that got deleted. With no model there is now
+    no commitment and no act, so the double supplies the verdict the arm was
+    always really standing on.
+
+    NOTE, for whoever owns brain/anticipy_core.py: that arm is dead code in
+    production either way. A live LLM gives Anticipy a `brain` and the arm is
+    never reached; a non-live one leaves memory with `llm=None` and the
+    commitment is always None. The spec says delete it
+    (docs/superpowers/specs/2026-08-25-library-law-clean.md 4.2a); this file
+    only keeps the tests honest until someone does.
+    """
+    kw.setdefault("memory", Memory(":memory:", llm=FakeExtractor(
+        topics=["pitch deck"],
+        commitment="send you the pitch deck after this call")))
+    return Anticipy(**kw)
 
 
 def test_read_only_goals_get_the_research_lane():
@@ -110,11 +139,10 @@ def test_an_sms_ask_is_marked_on_the_job(monkeypatch):
     monkeypatch.setattr(core.pb, "post",
                         lambda url, **kw: (posted.update(kw.get("json") or {}),
                                            R())[1])
-    a = Anticipy(owner_id="own1")
+    a = _offline_anticipy(owner_id="own1")
     monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
     # No LLM: the deterministic path acts on a fresh commitment.
-    out = a.hear("I'll send you the pitch deck after this call.",
-                 channel="sms")
+    out = a.hear(PITCH_LINE, channel="sms")
     assert out["decision"].decision == "act"
     assert json.loads(posted["params"])["channel"] == "sms"
 
@@ -133,7 +161,7 @@ def test_a_pendant_line_carries_no_channel(monkeypatch):
     monkeypatch.setattr(core.pb, "post",
                         lambda url, **kw: (posted.update(kw.get("json") or {}),
                                            R())[1])
-    a = Anticipy(owner_id="own1")
+    a = _offline_anticipy(owner_id="own1")
     monkeypatch.setattr(a, "_same_pending", lambda goal, **_k: None)
-    a.hear("I'll send you the pitch deck after this call.")
+    a.hear(PITCH_LINE)
     assert "channel" not in json.loads(posted["params"])

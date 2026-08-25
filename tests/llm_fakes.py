@@ -114,3 +114,80 @@ def licence_reply(system: str, licensed: bool = True):
     if LICENCE_KEY not in (system or ""):
         return None
     return json.dumps({LICENCE_KEY: bool(licensed)})
+
+
+# --------------------------------------------------------------------------
+# THE DOOR — a deterministic extractor for tests, and ONLY for tests
+# --------------------------------------------------------------------------
+# brain/memory.py used to answer the extraction question with `_rule_extract`
+# whenever no model did: a capitalisation regex decided who was a PERSON, an
+# "I'll ..." clause decided what the PROMISE was, and `people[0]` decided who
+# it had been promised TO. That is HARNESS-LAW 1's forbidden question answered
+# by a pattern, on a path that ran in production, and it is deleted
+# (docs/superpowers/specs/2026-08-25-library-law-clean.md, section 3).
+#
+# Thirty-nine tests were leaning on it as an implicit test double and none of
+# them tested it — `grep -rn "_rule_extract" tests/` returned nothing. This is
+# the double they should always have had.
+#
+# IT LIVES HERE AND brain/ MUST NEVER IMPORT IT. A "shared" deterministic
+# extractor pulled back into the shipped tree is the same decision under a
+# different name, which is the blind spot overnight/tape_gate.py:197-200 names
+# as one no gate can catch. tests/test_library_nobody_looked_is_not_nothing_
+# here.py pins that.
+EXTRACT_KEY = "extract memory from one line"
+
+
+@dataclass
+class _ExtractReply:
+    """An LLMResult-shaped reply.
+
+    `mode` is present and `_Reply`'s is not, deliberately. memory._extract
+    reads the transport's own report of WHICH ENDPOINT ANSWERED to decide
+    whether anybody looked at the line at all, so a double that omits it is
+    saying "no verdict" — which is the honest answer for FakeLLM above, whose
+    canned "{}" is not an extraction verdict, and the wrong answer for this
+    one, which is deliberately standing in for a model that did look.
+    """
+    text: str
+    # NO DEFAULT, deliberately. Every construction below states the mode, so a
+    # default here would be unreachable — and an unreachable default is a value
+    # no test can ever catch being wrong. Found by mutation: flipping it to
+    # "heuristic" changed nothing anywhere in the suite.
+    mode: str
+    used_model: str = "fake-extractor"
+
+
+class FakeExtractor:
+    """Answers the extraction prompt with the `Extraction` a test wants.
+
+    The default payload is returned for every line. `per_line` overrides it
+    for an EXACT line — exact keys, never a substring or a pattern, so this
+    double cannot quietly grow into the thing it replaced.
+
+    Any other system prompt gets `None`-shaped silence in the same style as
+    `licence_reply`: this double answers ONE question and says so.
+    """
+
+    def __init__(self, people=(), places=(), topics=(), commitment=None,
+                 commitment_to=None, completed=None, per_line=None,
+                 mode="openrouter"):
+        self.default = {"people": list(people), "places": list(places),
+                        "topics": list(topics), "commitment": commitment,
+                        "commitment_to": commitment_to, "completed": completed}
+        self.per_line = dict(per_line or {})
+        self.mode = mode
+        self.lines: list[str] = []
+
+    def payload_for(self, line: str) -> dict:
+        if line in self.per_line:
+            merged = dict(self.default)
+            merged.update(self.per_line[line])
+            return merged
+        return dict(self.default)
+
+    def chat(self, system: str, user: str, temperature: float = 0.1, **kw):
+        if EXTRACT_KEY not in (system or ""):
+            return _ExtractReply("{}", mode=self.mode)
+        self.lines.append(user)
+        return _ExtractReply(json.dumps(self.payload_for(user)), mode=self.mode)

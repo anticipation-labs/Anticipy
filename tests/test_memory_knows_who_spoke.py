@@ -32,15 +32,45 @@ from brain.anticipy_core import Anticipy
 from brain.memory import Memory
 from brain.orchestrator import (Decision, PARTY_YES, PARTY_NO, PARTY_UNASKED,
                                 PARTY_UNANSWERED)
-from llm_fakes import licence_reply
+from llm_fakes import FakeExtractor, licence_reply
 
 GUEST_LINE = "I'll send you the pitch deck tomorrow morning."
+KOWALSKI_LINE = "The reservation should be under the name Kowalski, obviously."
+
+
+# ------------------------------------------ where these tests' facts come from
+#
+# THESE TESTS ARE ABOUT WHO SPOKE, not about extraction — and until 2026-08-25
+# thirty-five of them got their commitment for free from `_rule_extract`, the
+# capitalisation regex in brain/memory.py that decided who a person was, what a
+# promise was, and WHO IT HAD BEEN PROMISED TO whenever no model answered. That
+# is HARNESS-LAW 1's forbidden question answered by a pattern; it is deleted
+# (audit item 43), and `_extract` returns NO VERDICT instead, which writes
+# nothing at all into the graph.
+#
+# Not one of these tests ever tested that regex — `grep -rn "_rule_extract"
+# tests/` returned nothing. They leaned on it as an implicit test double. So
+# they get a real one, and it is explicit about what it claims: `FakeExtractor`
+# lives in tests/llm_fakes.py and brain/ never imports it, which
+# tests/test_library_nobody_looked_is_not_nothing_here.py pins.
+_EXTRACTIONS = {
+    GUEST_LINE: {"topics": ["pitch deck"],
+                 "commitment": "send you the pitch deck tomorrow morning"},
+    KOWALSKI_LINE: {"people": ["Kowalski"], "topics": ["reservation"]},
+}
+
+
+def _store(*args, **kw):
+    """A Memory whose extractor ANSWERS, so that a test about attribution
+    cannot quietly turn into a test of whether anything was extracted."""
+    kw.setdefault("llm", FakeExtractor(per_line=_EXTRACTIONS))
+    return Memory(*args, **kw)
 
 
 # ------------------------------------------------- the store records who spoke
 
 def test_a_guests_promise_is_recorded_as_someone_elses():
-    m = Memory(":memory:")
+    m = _store(":memory:")
     m.ingest(GUEST_LINE, speaker="other")
     loop = m.open_loops()[0]
     assert loop["speaker"] == "other", \
@@ -48,7 +78,7 @@ def test_a_guests_promise_is_recorded_as_someone_elses():
 
 
 def test_the_owners_own_promise_is_recorded_as_his():
-    m = Memory(":memory:")
+    m = _store(":memory:")
     m.ingest(GUEST_LINE, speaker="owner")
     assert m.open_loops()[0]["speaker"] == "owner"
 
@@ -56,10 +86,10 @@ def test_the_owners_own_promise_is_recorded_as_his():
 def test_no_verdict_is_stored_as_no_verdict():
     """Not "owner". The 97% of lines that carry no voice verdict must be
     distinguishable from the ones the roster actually placed."""
-    m = Memory(":memory:")
+    m = _store(":memory:")
     m.ingest(GUEST_LINE)
     assert m.open_loops()[0]["speaker"] is None
-    m2 = Memory(":memory:")
+    m2 = _store(":memory:")
     m2.ingest(GUEST_LINE, speaker="unknown")
     assert m2.open_loops()[0]["speaker"] is None, \
         "a build that says 'unknown' out loud means the same as saying nothing"
@@ -68,7 +98,7 @@ def test_no_verdict_is_stored_as_no_verdict():
 def test_the_line_itself_keeps_the_verdict():
     """On the episode, not only on the commitment: the episode is the record
     of what was said, and a promise is one thing that can be derived from it."""
-    m = Memory(":memory:")
+    m = _store(":memory:")
     mem = m.ingest(GUEST_LINE, speaker="other")
     row = m.db.execute("SELECT speaker FROM episodes WHERE id=?",
                        (mem["episode_id"],)).fetchone()
@@ -80,7 +110,7 @@ def test_the_line_itself_keeps_the_verdict():
 def test_triage_saying_someone_else_owes_it_is_kept_on_the_promise():
     """The sensor that actually fires today. Voice coverage is 0%; `owes` is
     produced on every triaged line by a model with the whole conversation."""
-    m = Memory(":memory:")
+    m = _store(":memory:")
     mem = m.ingest(GUEST_LINE)
     m.attribute_commitment(mem["commitment_id"], owes="other")
     assert m.open_loops()[0]["owes"] == "other"
@@ -93,7 +123,7 @@ def test_a_no_verdict_call_never_erases_a_verdict_already_stored():
     sentence, triaged with no verdict at all, erased the mark the first hearing
     got right. The erase path is gone: absence is not an answer, exactly as it
     is not for a voice tag or a fact's kind."""
-    m = Memory(":memory:")
+    m = _store(":memory:")
     mem = m.ingest(GUEST_LINE)
     m.attribute_commitment(mem["commitment_id"], owes="other")
     m.attribute_commitment(mem["commitment_id"], owes=None)
@@ -107,7 +137,7 @@ def test_a_no_verdict_call_on_an_unmarked_promise_still_writes_nothing():
     """The other half of the same contract: writing nothing is not writing
     "owner". A promise nobody judged must stay unjudged, or the clock starts
     reading the absence of an answer as an answer."""
-    m = Memory(":memory:")
+    m = _store(":memory:")
     mem = m.ingest(GUEST_LINE)
     m.attribute_commitment(mem["commitment_id"], owes=None)
     assert m.open_loops()[0]["owes"] is None
@@ -116,7 +146,7 @@ def test_a_no_verdict_call_on_an_unmarked_promise_still_writes_nothing():
 # --------------------------------------------------- hear() stops dropping it
 
 def _brain(monkeypatch, **kw):
-    m = Memory(":memory:")
+    m = _store(":memory:")
     a = Anticipy(memory=m, llm=None, owner_id="t", owner_phone=None, **kw)
     monkeypatch.setattr(a, "_queue_job", lambda *a_, **k_: "job")
     return a, m
@@ -158,7 +188,7 @@ def _triaging_brain(monkeypatch, owes, party=PARTY_NO, decision="act",
     file could express the case that broke the fence."""
     import brain.anticipy_core as core
     from brain.orchestrator import Decision
-    m = Memory(":memory:")
+    m = _store(":memory:")
     a = Anticipy(memory=m, llm=None, owner_id="t", owner_phone=None)
     monkeypatch.setattr(a, "_queue_job", lambda *a_, **k_: "job")
     monkeypatch.setattr(a, "_decide", lambda *a_, **k_: Decision(
@@ -410,7 +440,7 @@ def test_a_withdrawal_survives_the_same_sentence_being_heard_again():
     load-bearing for two features now, so it is pinned here. If it ever
     changes, a re-heard sentence silently resurrects a verdict that was
     deliberately taken back."""
-    m = Memory(":memory:")
+    m = _store(":memory:")
     mem = m.ingest(GUEST_LINE)
     m.attribute_commitment(mem["commitment_id"], owes="other")
     assert m.withdraw_attribution(mem["commitment_id"], "the reversal says he "
@@ -439,7 +469,7 @@ def test_withdrawing_an_attribution_needs_a_reason(monkeypatch):
     replaces is not the SQL. It is that a caller must know they are erasing:
     a correction with no reason is reachable from every path that happens to
     hold an empty variable, which is exactly how the last one fired."""
-    m = Memory(":memory:")
+    m = _store(":memory:")
     mem = m.ingest(GUEST_LINE)
     m.attribute_commitment(mem["commitment_id"], owes="other")
     assert m.withdraw_attribution(mem["commitment_id"], "") is False
@@ -453,7 +483,7 @@ def test_withdrawing_reports_whether_it_actually_removed_anything():
     """A caller must not be able to read "there was nothing to withdraw" as
     "the withdrawal worked" — that is how a fix goes green while doing
     nothing."""
-    m = Memory(":memory:")
+    m = _store(":memory:")
     mem = m.ingest(GUEST_LINE)
     assert m.withdraw_attribution(mem["commitment_id"], "no mark yet") is False
     m.attribute_commitment(mem["commitment_id"], owes="other")
@@ -580,7 +610,7 @@ def test_an_explicit_line_does_not_even_pay_for_the_reversal(monkeypatch):
     other way."""
     import brain.anticipy_core as core
     calls = []
-    m = Memory(":memory:")
+    m = _store(":memory:")
     a = Anticipy(memory=m, llm=None, owner_id="t", owner_phone=None)
     monkeypatch.setattr(a, "_queue_job", lambda *a_, **k_: "job")
     monkeypatch.setattr(a, "_decide", lambda *a_, **k_: Decision(
@@ -683,7 +713,7 @@ def test_the_briefing_is_handed_the_attribution_and_told_what_it_means():
     key in the payload that the prompt never explains is evidence the model
     has to guess at."""
     from brain.anticipy_core import BRIEFING_SYSTEM
-    m = Memory(":memory:")
+    m = _store(":memory:")
     m.ingest(GUEST_LINE, speaker="other")
     loop = m.briefing_facts(since_ts=0)["open_loops"][0]
     assert loop["speaker"] == "other"
@@ -1034,7 +1064,7 @@ def test_an_existing_owners_database_gains_the_column(tmp_path):
     """`CREATE TABLE IF NOT EXISTS` reaches an old database with a new TABLE
     and never with a new COLUMN. Every current owner has a file already."""
     db = _old_database(tmp_path)
-    m = Memory(path=db)
+    m = _store(path=db)
     assert m.db.execute("SELECT COUNT(*) FROM episodes").fetchone()[0] == 1
     assert len(m.profile_facts()) == 1
     m.ingest(GUEST_LINE, speaker="other")
@@ -1045,8 +1075,8 @@ def test_opening_the_same_database_twice_is_not_an_error(tmp_path):
     """The retrofit runs on every open. The second one finds the column
     already there, and that is the normal case, not a failure."""
     db = _old_database(tmp_path)
-    Memory(path=db).ingest(GUEST_LINE, speaker="other")
-    m = Memory(path=db)
+    _store(path=db).ingest(GUEST_LINE, speaker="other")
+    m = _store(path=db)
     assert m.open_loops()[0]["speaker"] == "other"
 
 
@@ -1236,8 +1266,8 @@ def test_one_line_of_his_in_the_evidence_is_enough_to_make_it_ordinary():
 
 
 def _overheard_store(now, speaker):
-    m = Memory(":memory:", llm=None)
-    m.ingest("The reservation should be under the name Kowalski, obviously.",
+    m = _store(":memory:")
+    m.ingest(KOWALSKI_LINE,
              ts=now - 2 * DAY, speaker=speaker)
     return m
 

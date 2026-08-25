@@ -693,7 +693,12 @@ class Memory:
             "INSERT INTO episodes(ts, text, speaker) VALUES (?, ?, ?)",
             (ts, text, speaker))
         episode_id = cur.lastrowid
-        ex = self._extract(text)
+        # The words are already durable — the INSERT above runs first and the
+        # FTS trigger fires on it — so recall over what was actually said
+        # survives a total extraction outage. What a no-verdict costs is the
+        # DERIVED graph below, and that cost is the point: a node or an edge
+        # is a claim, and a claim with nobody behind it is what Law 1 forbids.
+        ex, extracted_by = self._extract(text)
 
         node_ids = {}
         for name in ex.people:
@@ -743,6 +748,13 @@ class Memory:
             "commitment": ex.commitment,
             "commitment_id": commitment_id,
             "closed": closed,
+            # WHO READ THIS LINE: "model", or None for no verdict. None does
+            # NOT mean the line was empty — it means nobody looked at it, and
+            # from outside the deploy host those two were the same row until
+            # this key existed. It is what the stamp on `events.extractor`
+            # carries (spec section 5), so a degraded librarian and a quiet
+            # day stop being indistinguishable.
+            "extracted_by": extracted_by,
         }
 
     def close_matching(self, about: str, status: str = "done") -> list[str]:
@@ -758,6 +770,18 @@ class Memory:
         """The owner said they finished something — find which open promise
         that was and mark it done. Matches on word overlap, and only when the
         overlap is real, so 'I sent it' never closes an unrelated promise."""
+        # THE ASYMMETRY THIS LEAVES, and it must not be described as clean.
+        # `completed` is a model verdict, and since 2026-08-25 it is None
+        # whenever no model answered — but `_DONE_RE` still gets its vote
+        # underneath. So on a degraded brain a promise can be CLOSED by a verb
+        # list and never OPENED by one. That is strictly the safer direction
+        # (closing suppresses an action; opening authorises one) and it is
+        # still a pattern deciding what a sentence means. It is audit item 41,
+        # a separate site with the opposite polarity, deliberately left out of
+        # the extractor diff so that blast radius stayed measurable — see
+        # docs/superpowers/specs/2026-08-25-library-law-clean.md 4.2b and 11.
+        # After that fix, this is the last pattern that can move the
+        # commitment graph.
         if not completed and not _DONE_RE.search(text or ""):
             return []
         claim = completed or text
@@ -2396,51 +2420,106 @@ class Memory:
 
     # --------------------------------------------------------- extraction
 
-    def _extract(self, text: str) -> Extraction:
-        if self.llm:
-            try:
-                res = self.llm.chat(EXTRACT_SYSTEM, text, aux=True)
-                raw = json.loads(_extract_json(res.text))
+    def _extract(self, text: str) -> tuple[Extraction, Optional[str]]:
+        """The Extraction, and WHO filled it — "model", or None for no verdict.
 
-                def names(key: str) -> list[str]:
-                    # A bare string where a list was promised iterates per
-                    # CHARACTER: "Sarah" became nodes S, a, r, a, h in the
-                    # permanent graph, which then matched everything.
-                    val = raw.get(key)
-                    if isinstance(val, str):
-                        val = [val]
-                    if not isinstance(val, list):
-                        return []
-                    return [v.strip() for v in val
-                            if isinstance(v, str) and len(v.strip()) > 1]
+        NO VERDICT IS NOT AN EMPTY LINE. A model that read the sentence and
+        found no promise in it returns an empty Extraction and the verdict
+        "model". A transport that answered with the triage heuristic's JSON, a
+        refusal, an outage page, or an exception ALSO returns an empty
+        Extraction — and no verdict. Those are different facts about the same
+        row and the store has to keep both, because one of them means "nothing
+        here" and the other means "nobody looked".
 
-                def one(key: str):
-                    val = raw.get(key)
-                    return val.strip() if isinstance(val, str) and val.strip() else None
+        Until 2026-08-25 they were the same fact, and the second one was
+        worse than that: the caller fell through to a regex that made a
+        capitalised word a PERSON, an "I'll ..." clause the PROMISE, and
+        `people[0]` — the first capitalised word in the sentence — WHO IT HAD
+        BEEN PROMISED TO. That is the meaning question HARNESS-LAW 1 gives to
+        a model, answered by a pattern, on a path that ran in production
+        whenever the key was missing (brain/worker.py hands memory
+        `llm if llm.live else None`, read once at boot).
 
-                return Extraction(
-                    people=names("people"),
-                    places=names("places"),
-                    topics=names("topics"),
-                    commitment=one("commitment"),
-                    commitment_to=one("commitment_to"),
-                    # ASKED FOR, DECLARED, CONSUMED — AND NEVER PASSED.
-                    # EXTRACT_SYSTEM requests `completed`, the dataclass
-                    # declares it and ingest() acts on it, but this branch
-                    # built the object without it, so with a live model it
-                    # was ALWAYS None. Closing a loop fell back entirely to
-                    # the _DONE_RE verb list, and anything he finished in
-                    # words that list does not contain stayed open forever.
-                    completed=one("completed"),
-                )
-            except Exception as e:
-                # A model returning garbage silently demoted memory to a
-                # regex that finds capitalised words and "I'll ..." clauses.
-                # Nothing anywhere reported the downgrade, so a degraded
-                # brain looked exactly like a quiet day.
-                print(f"memory: extraction model unusable, falling back to "
-                      f"rules ({type(e).__name__}: {str(e)[:120]})")
-        return _rule_extract(text)
+        Minting a commitment is what authorises the clock to raise an errand
+        at the owner, so this is a FLOOR, and Law 1 says a floor must refuse
+        without a verdict or it lifts itself. Hence: no verdict writes nothing.
+        The episode itself is inserted before this runs and is never at risk.
+        """
+        # `not self.llm`, not `is None`: this was `if self.llm:` before, and
+        # narrowing it to an identity check would start calling a falsy
+        # stand-in that used to be skipped.
+        if not self.llm:
+            return Extraction(), None
+        try:
+            res = self.llm.chat(EXTRACT_SYSTEM, text, aux=True)
+        except Exception as e:
+            print(f"memory: extraction model unusable, this line goes "
+                  f"unread ({type(e).__name__}: {str(e)[:120]})")
+            return Extraction(), None
+
+        # WHICH ENDPOINT ANSWERED, before a single byte of the reply is
+        # parsed. A keyless LLM does not raise — it returns the TRIAGE
+        # heuristic's JSON (brain/llm.py), which is valid JSON from a
+        # different prompt, so every key below comes back missing and an
+        # empty Extraction used to be handed over as though a model had read
+        # the line. Return before json.loads: a reply to another question is
+        # not a weak answer to this one, it is no answer.
+        by = _extractor_verdict(getattr(res, "mode", None))
+        if by is None:
+            return Extraction(), None
+
+        # A live endpoint that answered in prose. _extract_json SYNTHESISES
+        # the literal "{}" for a reply with no braces in it, and "{}" parses —
+        # so a refusal ("I'm sorry, I can't help with that.") or an outage
+        # page arrived as "the model read this line and found nothing in it",
+        # stamped with a real verdict. That is the one reading that must never
+        # be guessed, because it is the exact shape of a quiet day.
+        if not _looks_like_json(getattr(res, "text", "")):
+            print("memory: extraction model answered with no JSON, this line "
+                  "goes unread")
+            return Extraction(), None
+
+        try:
+            raw = json.loads(_extract_json(res.text))
+        except Exception as e:
+            print(f"memory: extraction reply unreadable, this line goes "
+                  f"unread ({type(e).__name__}: {str(e)[:120]})")
+            return Extraction(), None
+
+        def names(key: str) -> list[str]:
+            # A bare string where a list was promised iterates per
+            # CHARACTER: "Sarah" became nodes S, a, r, a, h in the
+            # permanent graph, which then matched everything.
+            val = raw.get(key)
+            if isinstance(val, str):
+                val = [val]
+            if not isinstance(val, list):
+                return []
+            return [v.strip() for v in val
+                    if isinstance(v, str) and len(v.strip()) > 1]
+
+        def one(key: str):
+            val = raw.get(key)
+            return val.strip() if isinstance(val, str) and val.strip() else None
+
+        # A live model that read the line and found nothing in it lands HERE,
+        # with `by` set. That is a verdict, and it is the one thing an empty
+        # Extraction from any path above is not.
+        return Extraction(
+            people=names("people"),
+            places=names("places"),
+            topics=names("topics"),
+            commitment=one("commitment"),
+            commitment_to=one("commitment_to"),
+            # ASKED FOR, DECLARED, CONSUMED — AND NEVER PASSED.
+            # EXTRACT_SYSTEM requests `completed`, the dataclass
+            # declares it and ingest() acts on it, but this branch
+            # built the object without it, so with a live model it
+            # was ALWAYS None. Closing a loop fell back entirely to
+            # the _DONE_RE verb list, and anything he finished in
+            # words that list does not contain stayed open forever.
+            completed=one("completed"),
+        ), by
 
 
 def _bumped(confidence) -> float:
@@ -2499,6 +2578,50 @@ def _extract_json(text: str) -> str:
     return text[start:end + 1] if start >= 0 <= end else "{}"
 
 
+def _looks_like_json(text) -> bool:
+    """Whether a reply contains a JSON object AT ALL.
+
+    _extract_json synthesises the literal "{}" for a reply with no braces in
+    it, and "{}" parses — so a refusal, an outage page, or plain prose came
+    back through the extractor indistinguishable from a model that read the
+    line and found nothing in it. Asking this first is what keeps those two
+    apart. It reads the transport's reply for machine-readability, never the
+    owner's words for meaning, which is the same thing json.loads does one
+    line later.
+    """
+    body = text or ""
+    start, end = body.find("{"), body.rfind("}")
+    return start >= 0 and end > start
+
+
+# The endpoints whose answer counts as somebody having READ the line. This is
+# the transport's own report of which branch of LLM.chat returned (brain/llm.py
+# LLMResult.mode), set by which credential was present. "heuristic" is llm.py's
+# keyless engine answering the TRIAGE prompt, and it is on this list nowhere.
+_LIVE_EXTRACTOR_MODES = ("gemini", "openrouter")
+
+
+def _extractor_verdict(mode) -> Optional[str]:
+    """WHO filled this Extraction — "model", or None for no verdict.
+
+    NO VERDICT IS NOT AN EMPTY LINE, and the whole point of this function is
+    that the two arrive looking identical. A model that read the sentence and
+    found no promise in it returns an empty Extraction and "model"; a
+    transport that answered with another prompt's JSON, a refusal, or an
+    exception returns an empty Extraction and NO VERDICT. One of those means
+    "nothing here" and the other means "nobody looked", and outside the deploy
+    host a degraded librarian and a quiet day were the same row.
+
+    Same honesty wall as _horizon, _fact_kind and _speaker_verdict: three
+    states, not two, and the third is stored rather than rounded off. A build
+    nobody here has seen, or a double that never said, is no verdict — never
+    health.
+
+    `mode` is never read off the owner's words.
+    """
+    return "model" if mode in _LIVE_EXTRACTOR_MODES else None
+
+
 def _fact_tokens(text: str) -> list[str]:
     """Lowercase word tokens with possessives folded — "partner's" and
     "partner" must count as the same word or restatements never match."""
@@ -2513,30 +2636,23 @@ def _fact_numbers(text: str) -> set:
     return set(re.findall(r"\d+(?:[.:]\d+)?", (text or "").lower()))
 
 
-_COMMIT_RE = re.compile(
-    r"\bI(?:'ll| will| can| should)\s+(.+?)(?:\.|$)", re.IGNORECASE)
-_NAME_RE = re.compile(r"\b(?<![.!?]\s)([A-Z][a-z]{2,})\b")
-_NOT_NAMES = {"The", "This", "That", "Monday", "Tuesday", "Wednesday", "Thursday",
-              "Friday", "Saturday", "Sunday", "Tomorrow", "Today", "Italian"}
-
-
-def _rule_extract(text: str) -> Extraction:
-    """Deterministic fallback used offline and in tests."""
-    people = [n for n in _NAME_RE.findall(text) if n not in _NOT_NAMES]
-    m = _COMMIT_RE.search(text)
-    commitment = m.group(1).strip() if m else None
-    commitment_to = None
-    if commitment:
-        for p in people:
-            if re.search(rf"\b{p}\b", commitment):
-                commitment_to = p
-                break
-        if commitment_to is None and people:
-            commitment_to = people[0]
-    topics = []
-    for kw in ("deck", "pitch deck", "invoice", "report", "dinner", "reservation",
-               "meeting", "flight", "email", "document"):
-        if kw in text.lower():
-            topics.append(kw)
-    return Extraction(people=people, places=[], topics=topics,
-                      commitment=commitment, commitment_to=commitment_to)
+# WHAT USED TO BE HERE, so nobody re-derives it: `_rule_extract`, and the
+# three patterns it ran on every line the extraction model did not answer for.
+# A capitalised word (`_NAME_RE`) was a PERSON. An "I'll ..." clause
+# (`_COMMIT_RE`) was the PROMISE. Ten hardcoded words — deck, pitch deck,
+# invoice, report, dinner, reservation, meeting, flight, email, document —
+# were the only TOPICS a life could be about. And `people[0]`, the first
+# capitalised word in the sentence, was WHO THE PROMISE HAD BEEN MADE TO.
+#
+# It was not a stopgap. It did not degrade the graph, it FABRICATED in it,
+# and the recorded failure this codebase's laws exist for is "one invented
+# human being". Deleted 2026-08-25 per
+# docs/superpowers/specs/2026-08-25-library-law-clean.md section 3 — audit
+# item 43 in research/2026-08-24-law1-audit.md, severity H. `_extract`
+# returns no verdict instead, and no verdict writes nothing.
+#
+# The 39 tests that were leaning on it as an implicit test double — none of
+# them tested it — take `FakeExtractor` from tests/llm_fakes.py, which lives
+# in tests/ and which brain/ must never import. A "shared" deterministic
+# extractor pulled back into the shipped tree is the same decision under a
+# different name.

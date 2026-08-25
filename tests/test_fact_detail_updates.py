@@ -121,22 +121,35 @@ def test_completed_is_carried_from_the_model(mem):
     class _LLM:
         def chat(self, *a, **k):
             class R:
+                # `mode` is what says an endpoint actually ANSWERED. A double
+                # that omits it is standing in for a transport that never
+                # looked, and _extract now reads it before parsing a byte.
+                mode = "openrouter"
                 text = ('{"people":["Priya"],"places":[],"topics":["launch"],'
                         '"commitment":null,"commitment_to":null,'
                         '"completed":"sent Priya the launch plan"}')
             return R()
     mem.llm = _LLM()
-    ex = mem._extract("just sent Priya the launch plan")
+    ex, by = mem._extract("just sent Priya the launch plan")
+    assert by == "model"
     assert ex.completed == "sent Priya the launch plan", \
         f"the model's completed verdict was dropped: {ex!r}"
 
 
 def test_a_broken_extraction_model_is_reported_not_silent(mem, capsys):
+    """It used to say "falling back to rules", and it did fall back to one:
+    a capitalisation regex that decided who a person was and who a promise
+    was made to. The rules are deleted, so the report can no longer name
+    them — but it must still be a report. Silence here is the whole disease:
+    a degraded brain looked exactly like a quiet day."""
     class _Boom:
         def chat(self, *a, **k):
             raise RuntimeError("upstream 502")
     mem.llm = _Boom()
-    mem._extract("dinner with Sarah at 8")
+    ex, by = mem._extract("dinner with Sarah at 8")
     out = capsys.readouterr().out
-    assert "falling back to rules" in out, \
+    assert "extraction model unusable" in out, \
         "a degraded brain must not look identical to a quiet day"
+    assert by is None, "a model that raised has said nothing about this line"
+    assert (ex.people, ex.commitment, ex.commitment_to) == ([], None, None), \
+        "no verdict must write no people and no promise"

@@ -9,7 +9,7 @@ import sqlite3
 import time
 
 from brain.memory import Memory
-from llm_fakes import FakeLLM
+from llm_fakes import FakeExtractor, FakeLLM
 
 
 # ------------------------------------------------- extraction + provenance
@@ -162,7 +162,13 @@ def test_importance_outranks_recency_within_profile():
 
 
 def test_recall_without_profile_is_unchanged():
-    m = Memory()
+    # The extraction verdict is explicit now. It used to come from
+    # `_rule_extract`, the capitalisation regex brain/memory.py carried until
+    # 2026-08-25 — which is also how "Sarah" became the person this promise
+    # was made TO, off nothing but being the first capitalised word.
+    m = Memory(llm=FakeExtractor(
+        people=["Sarah"], topics=["pitch deck"],
+        commitment="send Sarah the pitch deck tomorrow", commitment_to="Sarah"))
     t0 = time.time() - 3600
     m.ingest("I'll send Sarah the pitch deck tomorrow.", ts=t0)
     out = m.recall("what did I promise Sarah?")
@@ -229,7 +235,8 @@ def test_remember_fact_clamps_importance():
 # ------------------------------------------------------------- briefing
 
 def test_briefing_facts_prefer_profile():
-    m = Memory()
+    m = Memory(llm=FakeExtractor(
+        topics=["Italian place"], commitment="book the Italian place for Saturday"))
     start = time.time() - 10
     m.ingest("I'll book the Italian place for Saturday.")
     m.remember_fact("partner is Sarah", importance=5)
