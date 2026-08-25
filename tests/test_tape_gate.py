@@ -906,11 +906,27 @@ def test_gap_the_dated_document_is_never_edited_to_close_a_piece():
     assert tg.AUDIT_UNDECLARED == (19, 20, 21, 22, 50)
     assert tg.AUDIT_UNDECLARED_COUNT == 5
     assert tg.AUDIT_DECLARED_COUNT == 0
-    covered = sorted([t.audit_item for t in tg.KNOWN_TAPE]
-                     + [c.audit_item for c in tg.CLOSED_TAPE])
+
+    # `audit_item is not None` — the same filter leg_4_census_intact applies,
+    # and it has to be here for the same reason. The census is the five pieces
+    # the 2026-08-24 audit found UNDECLARED; it is a dated measurement and it
+    # cannot grow. Tape registered AFTER that day therefore carries no census
+    # number, and legs 1, 2 and 5 track it instead.
+    #
+    # Without the filter this test raised TypeError (None < int) the moment
+    # the first such entry was registered — which made the ONE mechanism Law 2
+    # depends on, declaring a new piece of tape, impossible to land without a
+    # red suite. A test that forbids registration is a test that produces
+    # undeclared tape, which is the exact state this gate exists to end.
+    covered = sorted([t.audit_item for t in tg.KNOWN_TAPE
+                      if t.audit_item is not None]
+                     + [c.audit_item for c in tg.CLOSED_TAPE
+                        if c.audit_item is not None])
     assert tuple(covered) == tg.AUDIT_UNDECLARED, (
         "the two registers together are the census; if this fails an item was "
         "dropped from both instead of moved between them")
+    # And the gate's own predicate agrees, so this test cannot drift from it.
+    tg.leg_4_census_intact(ROOT)
 
 
 # --- leg 6, both directions ----------------------------------------------

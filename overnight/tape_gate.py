@@ -629,6 +629,8 @@ class ClosedTape:
 
 CORE = "brain/anticipy_core.py"
 ASKING = "brain/asking.py"
+IOS_APP = "app/ios/Anticipy/AnticipyApp.swift"
+SEGMENTER = "brain/segmenter.py"
 
 KNOWN_TAPE = [
     Tape(
@@ -706,6 +708,84 @@ KNOWN_TAPE = [
         marker_home="question_line",
         audit_item=50,
         ledger_needle="[tape:third_person_drop]",
+    ),
+    # THE FIRST ENTRY THAT IS NOT ONE OF THE AUDITED FIVE, and the first that
+    # is not in brain/. Both are worth saying out loud.
+    #
+    # `audit_item=None` is deliberate and is NOT a way of ducking legs 3 and 4.
+    # The 2026-08-24 audit produced two different censuses: 61 Law-1
+    # violations, and — separately — five pieces of UNDECLARED TAPE. Legs 3
+    # and 4 pin the second one, by number, against a row in the audit
+    # document. This rule is #55 of the first census, and it was not one of
+    # the five, so putting 55 in `audit_item` would make the two registers
+    # cover (19, 20, 21, 22, 50, 55) against an audit that says five — leg 4
+    # would go red for "an entry was dropped or renumbered", which is the
+    # opposite of what happened. The audit is a dated measurement and this
+    # gate never edits it. So: no census claim, and the `TAPE:` comment names
+    # #55 in the text where a human reads it.
+    #
+    # `home` and `marker_home` stay None because slice_def_span() matches
+    # Python `def`, not Swift `static func`; the whole-file scope is right
+    # here anyway — this text appears exactly once in the tree, and the fix is
+    # its deletion, not its relocation.
+    Tape(
+        tid="answerThatEndsTheErrand",
+        rel=IOS_APP,
+        find="static func answerThatEndsTheErrand(",
+        what="three phrase lists ON THE PHONE decide that the owner's typed "
+             "answer MEANS \"call this errand off\" — the job is written "
+             "cancelled, the owner's own sentence is filed as the evidence "
+             "they cancelled it, and the brain never sees the line",
+        real_fix="delete the function, drop `endsTheErrand` from "
+                 "AnswerRoutePolicy.route and `.endTheErrand` from its Route, "
+                 "so every typed answer becomes one `app_reply` event and "
+                 "on_reply decides. BLOCKED ON brain/: _classify's offline "
+                 "fallback reads _pending() (awaiting_confirm) only, so with "
+                 "the model down a \"forget it\" typed at a needs_user card "
+                 "returns intent=chat and the errand keeps running. Fix that "
+                 "fallback to see _open_work(), then delete this.",
+        ledger_needle="[tape:answer_ends_errand]",
+    ),
+    # Also not one of the audited five, for the same reason and with the same
+    # `audit_item=None`: the 2026-08-24 census is a dated measurement of the
+    # five UNDECLARED pieces and it cannot grow. Leg 3 will therefore never
+    # know this one by name — legs 1, 2 and 5 do, and that is what makes
+    # registering it visible at all: the marker is claimed (leg 1), the expiry
+    # actually runs (leg 2), and the human ledger has to agree (leg 5).
+    #
+    # Found on 2026-08-25 by the EARS turn-envelope spec (docs/superpowers/
+    # specs/2026-08-25-ears-turn-envelope.md §9 item 1, §12 item 4), which
+    # named it, explicitly declined to defend it, and left it unmarked: "It is
+    # not registered as tape. Either it gets a `TAPE:` comment with a red gate
+    # leg (LAW 2), or the meaning call moves to a model. It cannot stay
+    # unmarked." This entry is the first of those two.
+    #
+    # `home` and `marker_home` stay None: the regex is module-level, the text
+    # appears exactly once in the tree, and the fix is its deletion.
+    Tape(
+        tid="_ANAPHORIC",
+        rel=SEGMENTER,
+        find="_ANAPHORIC = re.compile(",
+        what="an opener word list — so|anyway|okay|right|back to|where were "
+             "we|and|but|it|that|they|he|she … — together with a >=2 "
+             "content-word overlap count and a <8-word length test, decides "
+             "whether two turns are ABOUT THE SAME THING. That is the "
+             "conversation-boundary question settled by wording",
+        real_fix="the band-3 question ('did this pick the previous subject "
+                 "back up?') is asked of a model, ON ITS OWN and in four "
+                 "states, with `escalate` kept as the honest no-verdict — the "
+                 "shape party_verdict and ends_in_the_world already use. Then "
+                 "the regex, the >=2 overlap count and the <8-word test are "
+                 "ALL DELETED. Not done in the registering diff because the "
+                 "live verdict reaches only `parent_segment`, a column nothing "
+                 "in the tree reads (measured: "
+                 "tests/test_segmenter_link_tape.py), so a model call on every "
+                 "ingested turn buys nothing live today — and Law 3 forbids "
+                 "claiming otherwise while the ears are dead. That test goes "
+                 "RED the day the verdict reaches hear(), which is the day "
+                 "this trade stops holding and the model call is owed.",
+        audit_item=None,
+        ledger_needle="[tape:anaphoric_link]",
     ),
 ]
 

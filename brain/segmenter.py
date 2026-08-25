@@ -41,6 +41,28 @@ _STOP = {
 
 # A short line that leans on what came before ("anyway, where were we") is a
 # continuation signal, not a new subject.
+#
+# WHY THIS IS REGISTERED RATHER THAN REWRITTEN, measured on 2026-08-25 and not
+# taken on anyone's word — two claims about this code were in circulation and
+# both were half wrong. worker.py said of `place_turn` "NOTHING reads it yet";
+# the spec worried it feeds triage, because `recent_turns` really does become
+# `convo_context` at worker.py:3703 and really is passed to `hear()`. The truth
+# is neither: `recent_turns` reads `events.segment`, and which segment a live
+# turn is stamped into is decided by `should_close` — a pure CLOCK rule, which
+# is a sense and lawful. The verdict below reaches exactly one field,
+# `parent_segment`, and nothing in this repository reads it. So the wrong
+# verdict cannot change what the judge sees TODAY, and a model call on every
+# ingested turn would buy nothing live; Law 3 adds that nothing could be
+# verified live anyway while the ears are dead. In `segment_all` — the pure
+# entry point done_gate leg 2 measures — the same verdict IS the boundary.
+# Both halves are pinned in tests/test_segmenter_link_tape.py, and the first
+# of them goes RED the day the verdict reaches `hear()`, which is the day this
+# trade stops holding.
+#
+# TAPE (HARNESS-LAWS.md Law 2): this list, with decide_link()'s ">=2 overlap"
+# count and "<8 words" test, settles whether two turns mean the SAME THING.
+# REAL FIX: one model question, four-state, `escalate` kept as the no-verdict;
+# then delete all three. Expiry: overnight/tape_gate.py leg 2, RED until gone.
 _ANAPHORIC = re.compile(
     r"^\s*(so|anyway|anyways|okay|ok|right|back to|where were we|and|but|also|"
     r"it|that|they|he|she|those|these|which)\b", re.IGNORECASE)
@@ -149,6 +171,9 @@ def decide_link(gap_s: float, text: str, prev_segment: Optional[dict]) -> tuple[
     short = len((text or "").split()) < 8
     if _ANAPHORIC.match(text or "") or short:
         # "anyway…", "so…", or just a brief remark: leans on prior context.
+        # Registered tape — the declaration sits above `_ANAPHORIC`, and this
+        # branch, the overlap count above and the length test die with it.
+        # Do NOT extend it: the fix is one model question, not more openers.
         return ("link", "anaphoric/short, still inside the near band") if gap_s < GATE_BAND_S \
             else ("escalate", "anaphoric/short but a long way back")
     if gap_s >= GATE_BAND_S:
