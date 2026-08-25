@@ -77,6 +77,17 @@ CREATE TABLE IF NOT EXISTS profile_facts (
     -- the words at recall time is the pattern-match on meaning HARNESS-LAW 1
     -- forbids. See _HALF_LIFE_DAYS for what the ranker does with it.
     kind TEXT,
+    -- WHEN THIS STOPS BEING TRUE ON ITS OWN, epoch seconds, NULL for never.
+    -- A different question from `kind`, which is how fast a fact FADES:
+    -- decay sinks the salience of a fact that is still true, this says the
+    -- fact ends. "Dana is in Montreal Friday to Sunday" is not less
+    -- interesting on Monday, it is false on Monday. Named by the model at
+    -- distillation like `kind` is; deciding it from the words at recall time
+    -- would be the pattern-match on meaning HARNESS-LAW 1 forbids, and
+    -- guessing one is worse than having none because it makes a TRUE fact
+    -- vanish on a date nobody stated. Survives expiry on purpose: the permit
+    -- expiring IS the errand (Brief moment 8), so a sweep must not erase it.
+    valid_until REAL,
     -- WHEN THIS STOPPED BEING TRUE, and which row took its place. NULL means
     -- it is still true. The row is NEVER deleted: "the old facts aren't
     -- deleted — they're retired" (Brief moment 35), and a chain that can be
@@ -141,6 +152,7 @@ CREATE INDEX IF NOT EXISTS idx_vetoed_norm ON vetoed_facts(norm);
 _ADDED_COLUMNS = (
     ("episodes", "speaker", "TEXT"),
     ("profile_facts", "kind", "TEXT"),
+    ("profile_facts", "valid_until", "REAL"),
     ("profile_facts", "retired_ts", "REAL"),
     ("profile_facts", "retired_by", "INTEGER"),
 )
@@ -415,6 +427,23 @@ def _confidence_band(confidence) -> float:
     except (TypeError, ValueError):
         c = 0.0
     return _CONFIDENCE_FLOOR + (1.0 - _CONFIDENCE_FLOOR) * c
+
+
+def _horizon(valid_until) -> Optional[float]:
+    """A usable horizon, or None. NO VERDICT IS NOT AN EXPIRY.
+
+    A model that returns "soon", an empty string, nothing, or a NaN has not
+    said when a fact ends, and the only safe reading of that is that it does
+    not. Expiring on a guessed date deletes a true fact; leaving it permanent
+    costs a stale row the ranker already sinks. Same honesty wall as
+    _fact_kind and _speaker_verdict."""
+    try:
+        v = float(valid_until)
+    except (TypeError, ValueError):
+        return None
+    if v != v or v in (float("inf"), float("-inf")) or v <= 0:
+        return None
+    return v
 
 
 def _fact_kind(kind) -> Optional[str]:
@@ -1043,7 +1072,8 @@ class Memory:
     def remember_fact(self, text: str, importance: int = 4,
                       source: str = "interview", confidence: float = 0.9,
                       ts: Optional[float] = None,
-                      kind: Optional[str] = None) -> int:
+                      kind: Optional[str] = None,
+                      valid_until: Optional[float] = None) -> int:
         """Seed the profile directly — the day-zero interview (roadmap §8)
         writes what he tells her here, so she is not amnesiac on install.
         Merges into an existing row when it already states the same fact
@@ -1088,7 +1118,7 @@ class Memory:
         # model's authority. It is a parameter at all so the consolidation
         # path and the tests can state a verdict that was actually made.
         fid = self._insert_fact(text, importance, confidence, source, ts, [],
-                                kind=kind)
+                                kind=kind, valid_until=valid_until)
         self.db.commit()
         return fid
 
@@ -1821,6 +1851,54 @@ class Memory:
             return batch[n - 1][1], relation
         return None, "different"
 
+    def expire_stale(self, now: Optional[float] = None) -> int:
+        """Retire every fact whose own horizon has passed. Returns how many.
+
+        This is the OTHER half of ageing, and the half that did not exist. The
+        ranker already sinks an old fact's salience through _decay, but a
+        decayed fact is still TRUE — still recallable, still eligible to fill a
+        gap in a plan, merely lower down. A fact with a horizon is different in
+        kind: on Monday, "Dana is in Montreal Friday to Sunday" is not a faded
+        fact, it is a wrong one.
+
+        RETIRED, NEVER DELETED, reusing exactly the machinery Brief moment 35
+        already proved: the row stays for audit, leaves the profile, and cannot
+        settle a gap. What separates the two reasons is `retired_by`, which a
+        horizon leaves NULL because no newer row took this one's place —
+        "that date passed" and "you told me something that contradicts this"
+        are different answers to "why did she stop believing it", and a human
+        asking deserves the right one.
+
+        THREE THINGS IT WILL NOT DO, each of which would be worse than the gap
+        it fills:
+          * expire a fact with no horizon. No verdict is not an expiry
+            (_horizon); a guessed date deletes something true.
+          * expire a `stable` fact. That kind means "this does not stop being
+            true", so a horizon on one is a model contradicting itself, and a
+            birthday that expires is no verdict rather than an instruction.
+          * erase the horizon on its way past. The permit expiring IS the
+            errand (Brief moment 8) — a sweep that tidied `valid_until` away
+            would delete the most actionable fact in the store on the one day
+            it mattered, and leave nothing to explain the retirement either.
+
+        Idempotent: already-retired rows are skipped, so running twice cannot
+        move `retired_ts` and make "retired N days ago" lie.
+        """
+        now = now if now is not None else time.time()
+        rows = self.db.execute(
+            "SELECT id FROM profile_facts "
+            "WHERE valid_until IS NOT NULL AND valid_until <= ? "
+            "  AND retired_ts IS NULL "
+            "  AND (kind IS NULL OR kind != 'stable')",
+            (now,)).fetchall()
+        for (rid,) in rows:
+            # retired_by stays NULL: a horizon has no successor row.
+            self.db.execute(
+                "UPDATE profile_facts SET retired_ts=? WHERE id=?", (now, rid))
+        if rows:
+            self.db.commit()
+        return len(rows)
+
     def _is_retired(self, rid: int) -> bool:
         """Did this row actually end up retired? Asked instead of inferring it
         from _supersede's return value, which is a truthy row id on the
@@ -1897,7 +1975,8 @@ class Memory:
 
     def _insert_fact(self, text: str, importance: int, confidence: float,
                      source: str, ts: float, episode_ids: list[int],
-                     kind: Optional[str] = None) -> int:
+                     kind: Optional[str] = None,
+                     valid_until: Optional[float] = None) -> int:
         """Returns the new row id, or 0 when the fact is under veto and no row
         was written. The check sits HERE, at the lowest writer, because
         consolidate() inserts without going through remember_fact — a gate at
@@ -1907,10 +1986,11 @@ class Memory:
             return 0
         cur = self.db.execute(
             "INSERT INTO profile_facts(fact, importance, confidence, source, "
-            "provenance, kind, first_seen_ts, last_seen_ts) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "provenance, kind, valid_until, first_seen_ts, last_seen_ts) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
             (text, importance, confidence, source,
-             json.dumps(episode_ids or []), _fact_kind(kind), ts, ts))
+             json.dumps(episode_ids or []), _fact_kind(kind),
+             _horizon(valid_until), ts, ts))
         return cur.lastrowid
 
     def _merge_fact(self, fact_id: int, importance: int, ts: float,
