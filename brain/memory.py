@@ -1256,6 +1256,22 @@ class Memory:
                 "id": r[0],
                 "fact": (r[1] if retired_ts is None
                          else _retired_note(r[1], retired_ts, now)),
+                # THE FACT AS HE SAID IT, beside the fact as she would say it.
+                # `fact` is a RENDERING — for a retired row it carries the
+                # whole "no longer true — retired N days ago:" sentence — and
+                # anything that MATCHES against it is matching seven words
+                # this module wrote itself ("longer", "true", "retired",
+                # "days", "ago", "today", "yesterday"). `_profile_recall`
+                # scored query relevance off `fact`, so every dead row in the
+                # store answered to those words: measured, "is that still
+                # true" came back with the dead address at salience 4.70 as
+                # the only relevant thing in a store that holds no "true".
+                #
+                # So the two are separate keys and the sinks divide by use:
+                # anything SHOWN to a model reads `fact`, so the retirement
+                # can never be dropped by accident; anything that SEARCHES
+                # reads `text`. See tests/test_library_recall_matches_the_fact.
+                "text": r[1],
                 "importance": r[2],
                 "confidence": r[3], "source": r[4], "provenance": prov,
                 "first_seen_ts": r[6], "last_seen_ts": r[7], "kind": kind,
@@ -1515,7 +1531,11 @@ class Memory:
 
         out = []
         for f in self.profile_facts(retired=retired):
-            blob = f["fact"].lower()
+            # `text`, not `fact`: relevance is a claim that the QUESTION is
+            # about this fact, and it must be counted over what he said, not
+            # over the retirement sentence this module wraps a dead row in.
+            # See the `text` key in profile_facts for the measurement.
+            blob = f["text"].lower()
             rel = sum(1 for w in words if w in blob)
             if not rel:
                 continue
