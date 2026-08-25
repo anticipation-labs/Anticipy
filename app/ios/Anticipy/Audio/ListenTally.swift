@@ -34,10 +34,40 @@ struct ListenTally: Equatable {
     /// the record counts up to its last event rather than being dropped: the
     /// day a session never closed is exactly the day worth reading.
     var listeningSeconds = 0
-    /// The longest stretch in which nothing at all was heard. THE number this
-    /// card turns on — an interruption that killed the day shows up here and
-    /// almost nowhere else.
+    /// The longest stretch in which nothing at all was heard WHILE LISTENING WAS
+    /// SUPPOSED TO BE HAPPENING. THE number this card turns on — an interruption
+    /// that killed the day shows up here and almost nowhere else.
+    ///
+    /// That second clause is the whole of it, in both directions. Hours of quiet
+    /// after the owner turns listening off are correct behaviour and must never
+    /// appear here; hours of quiet after a call took the microphone are the
+    /// failure this card exists to end, and used to be invisible. The stop's
+    /// cause is what separates them, and the journal already records it.
     var longestSilenceSeconds = 0
+
+    /// How the record ENDS, at the moment it is read. No count can carry this,
+    /// and it is the first thing a person needs: "you have it turned off" and
+    /// "a call took the microphone at nine and it never came back" produce the
+    /// same silence and want opposite reactions.
+    enum Ending: Equatable {
+        /// Not one session line in the record — both ends rotated away, or this
+        /// phone has never listened. Reported rather than guessed at.
+        case unknown
+        /// A session was open when the record was read.
+        case listening
+        /// The owner turned it off. Quiet afterwards is the ordinary state of a
+        /// phone nobody is talking to, not a finding.
+        case stoppedByOwner
+        /// Something took listening away and nothing brought it back. The
+        /// silence since is the report.
+        case stoppedByOther(cause: String)
+    }
+    var ending: Ending = .unknown
+
+    /// Nothing has been heard for this long as of the moment the record was
+    /// READ — not as of its last line, which on the day worth reading is the
+    /// stop itself. Zero once the owner has listening turned off.
+    var unheardForSeconds = 0
 
     var flushes = 0
     var wordsFlushed = 0
@@ -67,14 +97,43 @@ struct ListenTally: Equatable {
     /// microphone that heard nothing at all, from outside.
     var postsFailed = 0
 
-    static func of(_ events: [(Date, ListenEvent)]) -> ListenTally {
+    /// `now` is the moment the record is being READ, and it is the difference
+    /// between an instrument and a decoration.
+    ///
+    /// On the day this type exists for, the journal's last line IS the failure:
+    /// 09:00, a call took the microphone, iOS never delivered `.ended`, nothing
+    /// restarted listening. There are no later events. A fold that measures to
+    /// its own last line therefore answers "58 min" for a phone that has heard
+    /// nothing since breakfast, and a reassuring wrong number is worse than no
+    /// number, because it is believed.
+    ///
+    /// Passed in rather than read from `Date()` inside, so the fold stays a pure
+    /// function of its inputs and every case below is checkable with `swiftc`
+    /// alone. Defaulted to nil — the record then ends at its own last line, the
+    /// behaviour every existing check means by "the end of the day".
+    /// `Tests/run_tally_tests.sh` fails the build if the screen stops passing one.
+    static func of(_ events: [(Date, ListenEvent)], now: Date? = nil) -> ListenTally {
         var tally = ListenTally()
         // Sorted here rather than assumed: the journal is written from two
         // threads and read back as a file that may have been rotated, so
         // arrival order is not a guarantee we own. An unsorted fold could
         // produce a negative duration, and a report that prints nonsense on the
         // one day it is needed is worse than no report.
-        let ordered = events.sorted { $0.0 < $1.0 }
+        //
+        // TIES ARE BROKEN, and the tiebreak is not decoration. This fold runs
+        // through single-slot state (`openedAt`, `lastHeardAt`), so events
+        // sharing a stamp are order-sensitive, and `sorted(by:)` is documented
+        // as NOT stable — equal keys carry no defined order at all. Measured
+        // before the stamps carried sub-seconds: the same three events folded to
+        // `listening 0s` one way and `listening 43200s` the other. Sub-second
+        // stamps make a real tie nearly impossible; `orderWithinAnInstant` makes
+        // the answer defined anyway, because "nearly" is what the invariant is
+        // about.
+        let ordered = events.sorted {
+            $0.0 == $1.0
+                ? orderWithinAnInstant($0.1) < orderWithinAnInstant($1.1)
+                : $0.0 < $1.0
+        }
         guard let first = ordered.first else { return tally }
 
         var openedAt: Date? = nil
@@ -83,16 +142,31 @@ struct ListenTally: Equatable {
         // not that a person spoke — and the failure being hunted is precisely a
         // machine that keeps ticking while hearing nothing.
         var lastHeardAt: Date = first.0
+        // Whether the owner has listening switched OFF. The one condition under
+        // which quiet is not a finding: nobody was listening, so nothing could
+        // have been missed. It starts false because a journal whose start line
+        // has rotated away is still a journal of a listening day, and guessing
+        // "off" there would hide exactly the silence this type reports.
+        var ownerHasItOff = false
 
         for (time, event) in ordered {
             switch event {
             case .sessionStarted:
                 tally.sessions += 1
+                // A new session is not evidence of speech, so the stretch that
+                // ended here still counts. This is the interruption at 09:00
+                // that nobody noticed until the app was opened at 18:00: nine
+                // deaf hours with a start line on either side of them, which
+                // the fold used to erase by simply resetting the clock.
+                if !ownerHasItOff {
+                    tally.longestSilenceSeconds = max(
+                        tally.longestSilenceSeconds,
+                        Int(time.timeIntervalSince(lastHeardAt)))
+                }
                 openedAt = time
-                // A new session is not evidence of speech, but it does end the
-                // silence being measured: nobody was listening, so nothing
-                // could have been missed.
                 lastHeardAt = time
+                ownerHasItOff = false
+                tally.ending = .listening
 
             case .sessionStopped(let cause):
                 tally.stopsByCause[cause.rawValue, default: 0] += 1
@@ -100,19 +174,39 @@ struct ListenTally: Equatable {
                     tally.listeningSeconds += Int(time.timeIntervalSince(opened))
                     openedAt = nil
                 }
-                tally.longestSilenceSeconds = max(
-                    tally.longestSilenceSeconds,
-                    Int(time.timeIntervalSince(lastHeardAt)))
-                lastHeardAt = time
+                if cause == .owner {
+                    // The owner was still listening right up to here, so the
+                    // quiet before this stop counts — and the quiet after it
+                    // does not.
+                    tally.longestSilenceSeconds = max(
+                        tally.longestSilenceSeconds,
+                        Int(time.timeIntervalSince(lastHeardAt)))
+                    lastHeardAt = time
+                    ownerHasItOff = true
+                    tally.ending = .stoppedByOwner
+                } else {
+                    // AND THE CLOCK KEEPS RUNNING. An interruption, a route
+                    // change, a lost permission or a failure did not end the
+                    // expectation that this phone is listening — it IS the
+                    // failure, and the hours after it are the report. Moving
+                    // `lastHeardAt` here is what answered "58 min" for a day
+                    // that heard nothing after nine in the morning.
+                    tally.ending = .stoppedByOther(cause: cause.rawValue)
+                }
 
             case .flushed(let reason, let words):
                 tally.flushes += 1
                 tally.wordsFlushed += words
                 tally.flushesByReason[reason, default: 0] += 1
-                tally.longestSilenceSeconds = max(
-                    tally.longestSilenceSeconds,
-                    Int(time.timeIntervalSince(lastHeardAt)))
+                if !ownerHasItOff {
+                    tally.longestSilenceSeconds = max(
+                        tally.longestSilenceSeconds,
+                        Int(time.timeIntervalSince(lastHeardAt)))
+                }
                 lastHeardAt = time
+                // Words arrived, so listening is plainly on whatever the
+                // session lines did or did not survive rotation.
+                ownerHasItOff = false
 
             case .recognizerSwapped(let cause):
                 tally.swaps += 1
@@ -126,14 +220,28 @@ struct ListenTally: Equatable {
             }
         }
 
-        // A session still open when the record ends counts up to the last thing
-        // that happened. Dropping it would erase the longest sessions, which
-        // are the ones a full day is made of.
-        if let opened = openedAt, let last = ordered.last?.0 {
-            tally.listeningSeconds += Int(last.timeIntervalSince(opened))
+        // The record ends at the later of its own last line and the moment it is
+        // being read. `max` rather than a bare `now`: a clock that has moved
+        // backwards under us must not shorten the day, and a caller that passes
+        // nothing gets the last line, which is what it always got.
+        let lastLine = ordered.last?.0 ?? first.0
+        let end = max(lastLine, now ?? lastLine)
+
+        // A session still open when the record ends counts up to there. Dropping
+        // it would erase the longest sessions, which are the ones a full day is
+        // made of.
+        if let opened = openedAt {
+            tally.listeningSeconds += Int(end.timeIntervalSince(opened))
+        }
+        // NOT nested inside that, and the nesting was the bug. An interruption
+        // is exactly what sets `openedAt` back to nil, so the trailing silence
+        // of the one day this card is for was the one trailing silence never
+        // measured. The RECOVERABLE failure (a session left open) reported
+        // 10hr 58min correctly while the FATAL one reported 58 minutes.
+        if !ownerHasItOff {
+            tally.unheardForSeconds = max(0, Int(end.timeIntervalSince(lastHeardAt)))
             tally.longestSilenceSeconds = max(
-                tally.longestSilenceSeconds,
-                Int(last.timeIntervalSince(lastHeardAt)))
+                tally.longestSilenceSeconds, tally.unheardForSeconds)
         }
 
         // Clamp rather than trust. `max(0,)` costs nothing and makes a
@@ -142,5 +250,26 @@ struct ListenTally: Equatable {
         tally.listeningSeconds = max(0, tally.listeningSeconds)
         tally.longestSilenceSeconds = max(0, tally.longestSilenceSeconds)
         return tally
+    }
+
+    /// Where an event sorts against another stamped at the same instant.
+    ///
+    /// The narrative order of one moment: a session starts, the machinery moves,
+    /// words go out, and only then can it stop. Any total order would make the
+    /// fold deterministic; this one also makes it right, because the alternative
+    /// reading of `[started@T, stopped@T]` is a stop that precedes its own start
+    /// and books twelve hours of listening that never happened.
+    ///
+    /// Exhaustive on purpose. A new `ListenEvent` case cannot land without a
+    /// decision about where it sorts inside a shared instant.
+    private static func orderWithinAnInstant(_ event: ListenEvent) -> String {
+        switch event {
+        case .sessionStarted: return "0"
+        case .recognizerSwapped(let cause): return "1\(cause.rawValue)"
+        case .flushed(let reason, let words): return "2\(words) \(reason)"
+        case .noted(let fact): return "3\(fact)"
+        case .posted(let ok, let detail): return "4\(ok) \(detail)"
+        case .sessionStopped(let cause): return "5\(cause.rawValue)"
+        }
     }
 }

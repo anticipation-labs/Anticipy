@@ -122,14 +122,22 @@ struct ListenJournalTests {
         // append, so the wrap path is inside what this case proves instead of
         // beside it. A third queue reads entries throughout, because on a phone
         // Settings can be showing the journal while a session is still running.
-        func hammer(limit: Int) -> (kept: Int, reads: Int, torn: Bool) {
+        //
+        // THE READER THREAD IS A CRASH TEST, AND SAYING SO IS THE POINT. It used
+        // to carry two assertions that could not fail: `snapshot.count > limit`
+        // over a ring bounded at construction, and `!contains("posted")` when
+        // every line written here is a `.posted`. Both read like safety and
+        // proved nothing. What the reader really pins is that 200 concurrent
+        // reads of a journal two queues are writing complete at all — an
+        // unsynchronised array here is a crash or a garbage read, and the count
+        // coming back is the evidence that neither happened.
+        func hammer(limit: Int) -> (kept: Int, reads: Int) {
             let journal = ListenJournal(limit: limit)
             let group = DispatchGroup()
             let audioThread = DispatchQueue(label: "test.audio")
             let mainThread = DispatchQueue(label: "test.main")
             let readerThread = DispatchQueue(label: "test.reader")
             var reads = 0
-            var torn = false
             for (tag, queue) in [("audio", audioThread), ("main", mainThread)] {
                 queue.async(group: group) {
                     for i in 0..<100 {
@@ -137,25 +145,25 @@ struct ListenJournalTests {
                     }
                 }
             }
-            // A snapshot taken mid-write may be short, but it may never exceed
-            // the bound, hold a blank line, or hold anything that is not one of
-            // the lines just written.
             readerThread.async(group: group) {
                 for _ in 0..<200 {
-                    let snapshot = journal.entries
+                    // The read itself is the check, and its RESULT deliberately
+                    // is not. Every property one could assert about a snapshot
+                    // of a bounded ring of `.posted` lines is true by
+                    // construction, and a condition that cannot fail is not a
+                    // check — it is a sentence that reads like one.
+                    _ = journal.entries
                     reads += 1
-                    if snapshot.count > limit { torn = true }
-                    if snapshot.contains(where: { !$0.contains("posted") }) { torn = true }
                 }
             }
             group.wait()
-            return (journal.entries.count, reads, torn)
+            return (journal.entries.count, reads)
         }
         let roomy = hammer(limit: 400)
         let tight = hammer(limit: 64)
-        check("two queues writing while a third reads: nothing lost, nothing torn, bound held",
-              roomy.kept == 200 && roomy.reads == 200 && !roomy.torn
-                  && tight.kept == 64 && tight.reads == 200 && !tight.torn)
+        check("two queues writing while a third reads 200 times: nothing lost, the bound held, no crash",
+              roomy.kept == 200 && roomy.reads == 200
+                  && tight.kept == 64 && tight.reads == 200)
 
         // ------------------------------------------------------------ 8. it survives the process
         // The ring holds ~400 lines and dies with the app. A day of listening
@@ -196,8 +204,16 @@ struct ListenJournalTests {
               FileManager.default.fileExists(atPath: fileB.appendingPathExtension("1").path))
         check("the newest line is in the newest file, and survives the rotation",
               all.last?.contains("line399") == true)
+        // COUNTED, not asserted against a name no implementation could produce.
+        // This used to check that `listen-journal.log.2` did not exist, and
+        // `rotateIfNeeded` only ever writes `.1` — so no change to the rotation
+        // could have failed it. Counting the directory can: a rotation that
+        // started keeping three generations, or one that stopped deleting the
+        // one it rolled over, shows up here as a third file.
+        let kept = (try? FileManager.default.contentsOfDirectory(
+            atPath: dirB.path))?.count ?? 0
         check("rotation keeps two files, never more",
-              !FileManager.default.fileExists(atPath: fileB.appendingPathExtension("2").path))
+              kept == 2)
         check("no single file is allowed past the cap by much",
               (try? FileManager.default.attributesOfItem(atPath: fileB.path)[.size] as? Int)
                   .flatMap { $0 } ?? 0 < 8_192)
@@ -235,22 +251,17 @@ struct ListenJournalTests {
         // The tally folds over events read BACK from the file, so writing and
         // reading must agree. They are two functions that can drift, and the
         // drift would be silent: a reworded line still looks fine to a person
-        // and simply stops counting. Every case goes out and comes back.
-        let everyCase: [ListenEvent] = [
-            .sessionStarted,
-            .sessionStopped(cause: .interruption),
-            .sessionStopped(cause: .owner),
-            .recognizerSwapped(cause: .taskLimit),
-            .recognizerSwapped(cause: .silenceRotation),
-            .flushed(reason: "ceiling", words: 40),
-            .flushed(reason: "gap", words: 1),
-            .posted(ok: true, detail: "queued line sent"),
-            .posted(ok: false, detail: "requeued, offline"),
-            .posted(ok: true, detail: ""),
-            .noted("session category: AVAudioSessionCategoryRecord mode: AVAudioSessionModeMeasurement"),
-            .noted("low power mode on"),
-            .noted("dropped 600 buffers while swapping"),
-        ]
+        // and simply stops counting.
+        //
+        // EVERY CASE, AND NOW THAT IS TRUE. This used to be a hand-written array
+        // literal, and Swift has no exhaustiveness check over an array of enum
+        // values — so a reworded line failed the check while a NEW CASE sailed
+        // through it. `parse` ends in `default: return nil`, so the new case's
+        // every line would be dropped from `persistedEvents`, the tally would
+        // under-report a whole event class, and the gate would stay green
+        // vouching for it. `ListenEvent.everyCase` below closes that with a
+        // compiler error instead of a comment.
+        let everyCase = ListenEvent.everyCase
         let dirD = tempDir()
         let trip = ListenJournal(limit: 100,
                                  fileURL: dirD.appendingPathComponent("j.log"))
@@ -262,6 +273,50 @@ struct ListenJournalTests {
               trip.persistedEvents.allSatisfy {
                   Int($0.0.timeIntervalSince1970) == Int(t0.timeIntervalSince1970) })
 
+        // A DELIVERY FAILURE THAT READS BACK AS A SUCCESS. `parse` decided the
+        // outcome with `body.contains("accepted")` — a substring search over the
+        // whole line, detail included. Measured:
+        //
+        //   posted(ok: false, detail: "not accepted by proxy")
+        //     -> posted(ok: true,  detail: "by proxy")
+        //
+        // A day that heard everything and delivered nothing is one of the two
+        // failures this screen is for, and this turned it into a clean day.
+        // Latent rather than live — today's details are wire names and `http
+        // NNN` shapes — but "no live value happens to contain the word" is not a
+        // property anything enforces.
+        let trap = ListenEvent.posted(ok: false, detail: "not accepted by proxy")
+        let dirE = tempDir()
+        let trapped = ListenJournal(limit: 10,
+                                    fileURL: dirE.appendingPathComponent("j.log"))
+        trapped.record(trap, at: t0)
+        check("a failed post whose detail contains the word 'accepted' does not read back as accepted",
+              trapped.persistedEvents.map { $0.1 } == [trap])
+
+        // ------------------------------------------------ 10. sub-second stamps
+        // `[.withInternetDateTime]` has no fractional part, so two lines written
+        // 0.8s apart parsed back to the SAME instant. The tally folds through
+        // single-slot state, `sorted(by:)` is documented as not stable, and the
+        // measured cost of one such tie was twelve hours of listening appearing
+        // out of nowhere. The stamps carry milliseconds now.
+        let dirF = tempDir()
+        let fine = ListenJournal(limit: 10,
+                                 fileURL: dirF.appendingPathComponent("j.log"))
+        fine.record(.sessionStarted, at: t0)
+        fine.record(.sessionStopped(cause: .owner), at: t0.addingTimeInterval(0.8))
+        let instants = fine.persistedEvents.map { $0.0 }
+        check("two lines written 0.8s apart do not collapse onto the same instant",
+              instants.count == 2 && instants[0] != instants[1])
+
+        // AND EVERY LINE ALREADY ON DISK STILL READS. A phone that has been
+        // running the old build has a journal full of stamps with no fractional
+        // part, and the day worth reading is usually the one before the update.
+        // A reader that only understands the new shape would silently drop all
+        // of it and report a blank, healthy day.
+        check("a line stamped before the milliseconds existed still parses",
+              ListenJournal.parse("2026-08-24T09:00:00Z  sessionStopped  listening ended, cause: interruption")?.1
+                  == .sessionStopped(cause: .interruption))
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {
@@ -271,5 +326,78 @@ struct ListenJournalTests {
             for f in failures { print("  - \(f)") }
             exit(1)
         }
+    }
+}
+
+/// Every case of `ListenEvent`, and the compiler is what keeps it every.
+///
+/// THE HOLE THIS CLOSES. `ListenJournal` promised that "ListenJournalTests
+/// round-trips EVERY case through describe and back; a new case or a reworded
+/// line cannot land without failing that check." Half of that was true. A
+/// reworded line does fail it. A NEW CASE did not: the list was a hand-written
+/// array literal, and Swift has no exhaustiveness check over an array of enum
+/// values. `describe` and `ListenTally.of` both switch exhaustively, so the
+/// compiler forces those — but `parse` ends in `default: return nil`, so the new
+/// case's every line is silently dropped from `persistedEvents`, the tally
+/// under-reports a whole class of event, and the gate stays green vouching for
+/// the drift the comment said it prevented.
+///
+/// The chain below cannot be left half-done. Add a case to `ListenEvent` and
+/// `kind` stops compiling; add the `Kind` and `samples(of:)` stops compiling;
+/// supply a sample and the round-trip check starts covering it. Three compiler
+/// errors, in the order a person would want them, instead of a sentence.
+///
+/// It lives in the test file rather than in `ListenJournal.swift` because
+/// nothing in the app would ever call it, and this repo already fails the build
+/// over a suite that vouches for a function with no call sites. The gate leg is
+/// the same either way: `run_journal_tests.sh` compiles this file.
+extension ListenEvent {
+    enum Kind: CaseIterable {
+        case sessionStarted, sessionStopped, recognizerSwapped
+        case flushed, posted, noted
+    }
+
+    var kind: Kind {
+        switch self {
+        case .sessionStarted: return .sessionStarted
+        case .sessionStopped: return .sessionStopped
+        case .recognizerSwapped: return .recognizerSwapped
+        case .flushed: return .flushed
+        case .posted: return .posted
+        case .noted: return .noted
+        }
+    }
+
+    /// More than one per kind where the SHAPE of the line differs: a cause that
+    /// is a different word, a detail that is empty, a prose fact with a colon in
+    /// it. Those are where a describe/parse pair drifts.
+    static func samples(of kind: Kind) -> [ListenEvent] {
+        switch kind {
+        case .sessionStarted:
+            return [.sessionStarted]
+        case .sessionStopped:
+            return [.sessionStopped(cause: .interruption),
+                    .sessionStopped(cause: .owner),
+                    .sessionStopped(cause: .authorizationLost)]
+        case .recognizerSwapped:
+            return [.recognizerSwapped(cause: .taskLimit),
+                    .recognizerSwapped(cause: .silenceRotation),
+                    .recognizerSwapped(cause: .appReturned)]
+        case .flushed:
+            return [.flushed(reason: "ceiling", words: 40),
+                    .flushed(reason: "gap", words: 1)]
+        case .posted:
+            return [.posted(ok: true, detail: "queued line sent"),
+                    .posted(ok: false, detail: "requeued, offline"),
+                    .posted(ok: true, detail: "")]
+        case .noted:
+            return [.noted("session category: AVAudioSessionCategoryRecord mode: AVAudioSessionModeMeasurement"),
+                    .noted("low power mode on"),
+                    .noted("dropped 600 buffers while swapping")]
+        }
+    }
+
+    static var everyCase: [ListenEvent] {
+        Kind.allCases.flatMap(samples(of:))
     }
 }

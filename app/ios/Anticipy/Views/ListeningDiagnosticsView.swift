@@ -29,6 +29,19 @@ struct ListeningDiagnosticsView: View {
     var body: some View {
         List {
             Section("Today") {
+                // FIRST, ABOVE EVERY COUNT, because it is the only row that
+                // answers "is this phone working right now" and no total can.
+                // "You turned it off" and "a call took the microphone at nine
+                // and nothing brought it back" produce identical silence and
+                // want opposite reactions from the person reading this.
+                row("Listening right now", nowWording(tally.ending))
+                // Shown whenever there is anything to say, with no threshold
+                // deciding what counts as too long: a phone that has heard
+                // nothing for eleven hours and a phone that has heard nothing
+                // for four minutes both say so, and the reader judges.
+                if tally.unheardForSeconds > 0 {
+                    row("Nothing heard for", duration(tally.unheardForSeconds))
+                }
                 row("Times listening started", "\(tally.sessions)")
                 row("Time spent listening", duration(tally.listeningSeconds))
                 // The number this screen exists for. A call that ended
@@ -101,7 +114,15 @@ struct ListeningDiagnosticsView: View {
         // The file, not the ring: the ring dies with the process and the
         // session worth reading is often the one that ended when it did.
         lines = ListenJournal.shared.persistedLines
-        tally = ListenTally.of(ListenJournal.shared.persistedEvents)
+        // AND THE MOMENT IT IS BEING READ, which is this screen's to give and
+        // nobody else's. On the day this whole card is for, the journal's last
+        // line IS the failure — 09:00, a call took the microphone, nothing
+        // restarted listening, no later events at all — so a fold that can only
+        // measure to its own last line answered "Longest stretch hearing
+        // nothing: 58 min" for a phone that had been deaf since breakfast. A
+        // reassuring wrong number is worse than no number, because it is
+        // believed. `run_tally_tests.sh` fails the build if this argument goes.
+        tally = ListenTally.of(ListenJournal.shared.persistedEvents, now: Date())
     }
 
     private func row(_ name: String, _ value: String) -> some View {
@@ -109,6 +130,23 @@ struct ListeningDiagnosticsView: View {
             Text(name).font(.callout).foregroundStyle(Theme.text)
             Spacer(minLength: 12)
             Text(value).font(.callout).foregroundStyle(Theme.text2)
+        }
+    }
+
+    /// Whether this phone is listening at all, and if not, why not.
+    ///
+    /// The `.stoppedByOther` wording deliberately reuses `stopWording`, so a new
+    /// stop cause gets its sentence in one place and cannot say one thing here
+    /// and another in the section below.
+    private func nowWording(_ ending: ListenTally.Ending) -> String {
+        switch ending {
+        // Said rather than guessed at. A journal whose session lines have both
+        // rotated away cannot answer this, and inventing "yes" there is how a
+        // dead day looks healthy.
+        case .unknown: return "Not recorded"
+        case .listening: return "Yes"
+        case .stoppedByOwner: return "No. \(stopWording("owner"))"
+        case .stoppedByOther(let cause): return "No. \(stopWording(cause))"
         }
     }
 

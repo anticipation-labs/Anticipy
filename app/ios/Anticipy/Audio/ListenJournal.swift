@@ -90,7 +90,35 @@ final class ListenJournal {
     let fileURL: URL?
     private let rotateAtBytes: Int
 
-    private let stamp: ISO8601DateFormatter = {
+    /// MILLISECONDS, and they are load-bearing rather than tidy.
+    /// `[.withInternetDateTime]` alone has no fractional part, so two lines
+    /// written 0.8s apart parsed back to the SAME instant. `ListenTally.of`
+    /// folds through single-slot state and `sorted(by:)` is documented as not
+    /// stable, so a tie carried no defined order at all — and the measured cost
+    /// of one tie between a start and a stop was twelve hours of listening
+    /// appearing out of nowhere.
+    private static let stamp: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    /// Two readers, because a phone updating to this build has a journal full of
+    /// stamps written by the old one, and the day worth reading is usually the
+    /// day before the update. A reader that only understood the new shape would
+    /// drop every one of those lines and report a blank, healthy day — which is
+    /// the exact failure this whole file exists to make impossible.
+    ///
+    /// Static, unlike the per-line formatters this replaced. `persistedEvents`
+    /// runs over every line on disk — thousands of them on a bad day — and
+    /// building two `ISO8601DateFormatter`s per line was paid by the one screen
+    /// somebody opens when their phone has stopped working.
+    private static let readerWithMillis: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let readerWithoutMillis: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f
@@ -116,7 +144,7 @@ final class ListenJournal {
         // serial, and every reader below enters it the same way, so a read
         // always drains the writes issued before it.
         queue.async { [self] in
-            let line = "\(stamp.string(from: time))  \(described)"
+            let line = "\(Self.stamp.string(from: time))  \(described)"
             if ring.count < limit {
                 ring.append(line)
             } else {
@@ -149,9 +177,17 @@ final class ListenJournal {
     ///
     /// This parses our own format, which is plumbing rather than meaning: the
     /// case name is the second field precisely because `describe` was written
-    /// to be greppable. The risk is drift between writing and reading, so
-    /// `ListenJournalTests` round-trips EVERY case through describe and back;
-    /// a new case or a reworded line cannot land without failing that check.
+    /// to be greppable. The risk is drift between writing and reading, and the
+    /// drift is silent — a reworded line still looks fine to a person and simply
+    /// stops counting.
+    ///
+    /// `ListenJournalTests` round-trips every case through describe and back,
+    /// over `ListenEvent.everyCase` — which the COMPILER keeps every. Adding a
+    /// case to `ListenEvent` stops that file compiling until the case has been
+    /// given a sample, and the sample then has to survive the trip. The array
+    /// literal it replaced could not do that: `parse` ends in
+    /// `default: return nil`, so a new case's every line was dropped here in
+    /// silence while the gate stayed green.
     var persistedEvents: [(Date, ListenEvent)] {
         persistedLines.compactMap(Self.parse)
     }
@@ -159,9 +195,8 @@ final class ListenJournal {
     static func parse(_ line: String) -> (Date, ListenEvent)? {
         let parts = line.components(separatedBy: "  ")
         guard parts.count >= 2 else { return nil }
-        let reader = ISO8601DateFormatter()
-        reader.formatOptions = [.withInternetDateTime]
-        guard let when = reader.date(from: parts[0]) else { return nil }
+        guard let when = readerWithMillis.date(from: parts[0])
+                ?? readerWithoutMillis.date(from: parts[0]) else { return nil }
         let body = parts.dropFirst().joined(separator: "  ")
         guard let name = body.split(separator: " ").first.map(String.init)
         else { return nil }
@@ -192,10 +227,19 @@ final class ListenJournal {
             let fact = body.dropFirst("noted".count).trimmingCharacters(in: .whitespaces)
             return (when, .noted(fact))
         case "posted":
-            let ok = body.contains("accepted")
-            let detail = after(ok ? "accepted" : "failed")?
-                .trimmingCharacters(in: CharacterSet(charactersIn: ", ")) ?? ""
-            return (when, .posted(ok: ok, detail: detail))
+            // THE OUTCOME FIELD, never a substring of the line. This was
+            // `body.contains("accepted")`, and a detail is free-form prose, so
+            // `posted(ok: false, detail: "not accepted by proxy")` read back as
+            // `posted(ok: true, detail: "by proxy")` — a delivery failure
+            // reporting itself as a success on the screen whose whole job is to
+            // tell a day that heard nothing from a day that delivered nothing.
+            let rest = parts.dropFirst().joined(separator: "  ")
+                .dropFirst(name.count).trimmingCharacters(in: .whitespaces)
+            let outcome = String(rest.prefix(while: { $0 != "," }))
+            guard outcome == "accepted" || outcome == "failed" else { return nil }
+            let detail = String(rest.dropFirst(outcome.count))
+                .trimmingCharacters(in: CharacterSet(charactersIn: ", "))
+            return (when, .posted(ok: outcome == "accepted", detail: detail))
         default:
             return nil
         }

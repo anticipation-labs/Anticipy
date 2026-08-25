@@ -174,6 +174,123 @@ struct ListenTallyTests {
                   && straight.longestSilenceSeconds == 870
                   && straight.wordsFlushed == 49)
 
+        // ...AND THE CASE THE INVARIANT IS ACTUALLY ABOUT. The four events above
+        // sit at four DISTINCT timestamps, so they only ever prove the sort is
+        // called. Two lines written 0.8s apart used to parse back to the same
+        // Date, `sorted(by:)` is documented as not stable, and this fold runs
+        // through single-slot state — so equal stamps were order-sensitive and
+        // the answers were 12 hours apart:
+        //
+        //   [started@T, stopped@T, posted@T+12h] -> listening 0s     silence 0s
+        //   [stopped@T, started@T, posted@T+12h] -> listening 43200s silence 43200s
+        //
+        // Sub-second stamps make a real tie almost impossible; this makes the
+        // answer defined even so, because "almost" is what the invariant is for.
+        let tieOne: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(0), .sessionStopped(cause: .interruption)),
+            (at(43_200), .posted(ok: true, detail: "queued line sent")),
+        ]
+        let tieOther: [(Date, ListenEvent)] = [
+            (at(0), .sessionStopped(cause: .interruption)),
+            (at(0), .sessionStarted),
+            (at(43_200), .posted(ok: true, detail: "queued line sent")),
+        ]
+        check("two events stamped at the same instant fold the same way in either order",
+              ListenTally.of(tieOne, now: at(43_200))
+                  == ListenTally.of(tieOther, now: at(43_200)))
+        // Same for two events of the SAME case at one instant: `notes` is an
+        // ordered array, so two facts sharing a stamp would otherwise make the
+        // whole tally depend on which thread's write landed first.
+        let tieNotes: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(5), .noted("low power mode on")),
+            (at(5), .noted("dropped 600 buffers while swapping")),
+        ]
+        let tieNotesOther: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(5), .noted("dropped 600 buffers while swapping")),
+            (at(5), .noted("low power mode on")),
+        ]
+        check("two facts stamped at the same instant come back in the same order either way",
+              ListenTally.of(tieNotes) == ListenTally.of(tieNotesOther))
+
+        // ------------------------------------- 10. the day a call ended and nobody noticed
+        // THE CASE THIS WHOLE TYPE EXISTS FOR, and the one it used to get wrong.
+        //
+        // 09:00 a call takes the microphone. iOS never delivers `.ended`,
+        // nothing restarts listening, and the phone is deaf until bedtime. The
+        // journal's last line is the 09:00 stop — there are no later events at
+        // all — so a fold that measures to its own last line answers zero, and
+        // a fold that only measures a trailing silence for a session left OPEN
+        // never reaches this one, because an interruption is exactly what sets
+        // `openedAt` back to nil.
+        //
+        // Measured on the code before this check existed, with the screen read
+        // at 19:00: `longestSilence = 3480` — "58 min", a reassuring number on
+        // a phone that had heard nothing for eleven hours. The asymmetry was
+        // backwards: the recoverable failure (session left open) reported
+        // 10hr 58min correctly, the FATAL one reported 58 minutes.
+        let callAt0900: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),                             // 08:00
+            (at(120), .flushed(reason: "gap", words: 30)),        // 08:02
+            (at(3_600), .sessionStopped(cause: .interruption)),   // 09:00
+        ]
+        let readAt1900 = at(39_600)                               // 19:00
+        let deaf = ListenTally.of(callAt0900, now: readAt1900)
+        check("a call that ended listening at 09:00 reads as eleven deaf hours at 19:00",
+              deaf.longestSilenceSeconds == 39_480
+                  && deaf.unheardForSeconds == 39_480)
+        check("and the screen can say why nothing is being heard, not only how long",
+              deaf.ending == .stoppedByOther(cause: "interruption"))
+
+        // THE OTHER DIRECTION, and it is a lie of the same size. If the owner
+        // turned listening off at 09:00, ten quiet hours are correct behaviour
+        // — nobody was listening, so nothing was missed. Reporting them as
+        // "longest stretch hearing nothing" would invent a failure. The cause
+        // on the stop is what tells the two apart, and it is already recorded.
+        let ownerStoppedAt0900: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(120), .flushed(reason: "gap", words: 30)),
+            (at(3_600), .sessionStopped(cause: .owner)),
+        ]
+        let off = ListenTally.of(ownerStoppedAt0900, now: readAt1900)
+        check("hours of quiet after the owner turned listening off are not a finding",
+              off.longestSilenceSeconds == 3_480 && off.unheardForSeconds == 0
+                  && off.ending == .stoppedByOwner)
+
+        // The same hole in the MIDDLE of a day. A call at 09:00, the owner
+        // finally opens the app at 18:00 and listening resumes — that is nine
+        // deaf hours with a start line on both sides of them, and the fold used
+        // to answer zero for it because a `sessionStarted` simply reset the
+        // silence clock. `.appReturned` counts how often that happened; this is
+        // how long it cost.
+        let nineDeafHours: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(120), .flushed(reason: "gap", words: 30)),
+            (at(3_600), .sessionStopped(cause: .interruption)),
+            (at(36_000), .recognizerSwapped(cause: .appReturned)),
+            (at(36_000), .sessionStarted),
+            (at(36_060), .flushed(reason: "gap", words: 5)),
+        ]
+        let recovered = ListenTally.of(nineDeafHours, now: at(39_600))
+        check("an interruption nothing recovered from until 18:00 is nine hours of silence, not none",
+              recovered.longestSilenceSeconds == 35_880)
+        check("and once words arrive again the phone is not still reported as deaf",
+              recovered.unheardForSeconds == 3_540
+                  && recovered.ending == .listening)
+
+        // WHY THE CLOCK IS A PARAMETER AND NOT AN OPTIONAL EXTRA. With no
+        // reading moment the record can only end at its own last line, and on
+        // this day the last line IS the 09:00 stop — so the answer is the
+        // 58 minutes before the call, and the eleven hours after it are
+        // unmeasurable by construction. `of` stays pure; the SCREEN owns the
+        // clock, because the screen is the thing that knows when it is being
+        // read. Every check above this section relies on this fallback, which
+        // is why it is defaulted rather than required.
+        check("with no reading moment the deaf hours are unmeasurable, which is why the screen passes one",
+              ListenTally.of(callAt0900).longestSilenceSeconds == 3_480)
+
         // ------------------------------------------------------- 9. senses facts
         // The three things that were invisible: what the audio session ACTUALLY
         // became (three try? calls decide it and swallow every failure), low
