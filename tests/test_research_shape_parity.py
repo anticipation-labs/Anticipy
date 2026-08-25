@@ -225,3 +225,27 @@ def test_the_authority_and_content_farm_lists_have_not_drifted():
         assert theirs == ours, (
             f"{name} has drifted: only in learn.js {sorted(theirs - ours)}, "
             f"only in research.py {sorted(ours - theirs)}")
+
+
+def test_the_two_stores_agree_on_when_a_procedure_is_still_good():
+    """The browser and the server now both hold procedures for the same shapes.
+    If their TTLs drifted, one side would recall a record the other had already
+    given up on — and "is there a live cached answer" is the FACT the research
+    gate is keyed on, so the two halves of the product would answer the gate
+    differently and nothing would say so.
+
+    Read out of learn.js's own source, so a number changed on one side fails
+    here rather than in production a fortnight later."""
+    src = LEARN_JS.read_text()
+
+    def js_const(name):
+        line = src.split(f"export const {name} = ", 1)[1].split(";", 1)[0]
+        return eval(line.split("//")[0].strip(), {"__builtins__": {}}, {})
+
+    assert js_const("PROCEDURE_TTL_MS") == research.PROCEDURE_TTL_MS
+    assert js_const("MAX_PROCEDURE_STEPS") == research.MAX_PROCEDURE_STEPS
+    assert js_const("MAX_PAGES") == research.MAX_PROCEDURE_PAGES
+    # The cache bound is a default argument on rememberProcedure, not a const.
+    limit = src.split("export async function rememberProcedure(", 1)[1] \
+               .split(")", 1)[0].split("limit = ", 1)[1]
+    assert int(limit) == research.MAX_PROCEDURES
