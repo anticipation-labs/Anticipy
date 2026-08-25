@@ -39,6 +39,7 @@ from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            NOT_HIS, check_sufficiency, fill_gaps_from_memory,
                            party_verdict, PARTY_YES, PARTY_UNASKED,
                            PARTY_UNANSWERED, ends_in_the_world,
+                           work_is_licensed, LICENCE_YES,
                            unsupported_names,
                            unsupported_counts, read_into_a_machine,
                            not_speech_evidence,
@@ -930,16 +931,19 @@ Reply ONLY with compact JSON:
 {{"initiate":true|false,"say":"<the text, or null>","goal":"<job goal to prepare, or null>","loop_ids":[<ids you are acting on>],"reason":"<8 words>"}}"""
 
 # A clock can remind someone about a fact, but it cannot manufacture a task
-# from that fact.  The model once turned "Remember that my dentist appointment
-# is Friday at 3" into a browser job to "confirm appointment details".  Only
-# the owner's own words expressing an obligation or request authorize the
-# clock to prepare work; everything else remains a reminder with goal=null.
-_CLOCK_ACTION_SOURCE_RE = re.compile(
-    r"\b(?:i\s+(?:need|have|got|ought|plan|intend|promised|said|agreed)\s+to|"
-    r"i(?:'ll|\s+will|\s+should|\s+must|\s+gotta)|"
-    r"remind\s+me\s+to|can\s+you|could\s+you|would\s+you|please\b)",
-    re.IGNORECASE,
-)
+# from that fact. The model once turned "Remember that my dentist appointment
+# is Friday at 3" into a browser job to "confirm appointment details". Only an
+# obligation of the owner's authorizes the clock to prepare work; everything
+# else remains a reminder with goal=null.
+#
+# That question — does this remembered sentence put him on the hook? — used to
+# be answered by `_CLOCK_ACTION_SOURCE_RE`, a nine-verb list. It was a regex
+# deciding what words MEAN on the path that mints goals from stored facts:
+# HARNESS-LAWS Law 1's canonical shape, audit item 11, severity H. It is gone.
+# The question is now put to a model that can read the quote —
+# orchestrator.work_is_licensed() — and clock_tick() compares its verdict.
+# Both directions of the verb list's error are reproduced in that function's
+# docstring and pinned in tests/test_clock_authority.py.
 
 
 BRIEFING_SYSTEM = f"""You are {NAME}, the person's personal assistant who lives
@@ -3630,15 +3634,54 @@ class Anticipy:
                   f"({raw_ids!r}) — dropping model goal {goal!r}")
             goal = None
         selected = [l for l in shown if not loop_ids or l["id"] in loop_ids]
-        if goal and not any(_CLOCK_ACTION_SOURCE_RE.search(
-                str(loop.get("source") or "")) for loop in selected):
-            print(f"clock: reminder has no owner-authored task — dropping model goal {goal!r}")
+        # TWO DUTIES LIVED IN ONE LINE HERE, AND ONLY ONE OF THEM WAS ABOUT
+        # WORDS. `not any(regex.search(...) for loop in selected)` is True on
+        # an EMPTY `selected` whatever the regex says — so the check that
+        # dropped a goal built on a loop id we do not hold was carried
+        # accidentally, by the arity of any(), inside a check about meaning.
+        # It is load-bearing: the guest fence below cannot catch that case
+        # (`named` is empty, so it falls to the unnamed branch, whose
+        # `bool(selected)` is False and never fires), and the nearby
+        # unreadable-loop_ids drop only covers ids that are not digit strings.
+        # A model naming loop 99 of a three-loop store passed everything else.
+        # Reproduced before splitting them, on a one-loop store with
+        # loop_ids [99]: with the verb list neutralised the goal was still
+        # dropped, and it was this arity doing it.
+        #
+        # So it is now its own check, stated in its own words. It is
+        # MECHANISM, not meaning: it asks whether the ids we were handed name
+        # rows we hold, and reads no English at all. Being explicit is the
+        # point — the extract-method refactor that retires a check nobody
+        # wrote down is the exact failure tape_gate.py was rebuilt around.
+        if goal and not selected:
+            print("clock: the loops it named are not loops I hold "
+                  f"({loop_ids}) — dropping model goal {goal!r}")
             goal = None
-        # AND WHOSE PROMISE WAS IT? The check above asks whether a sentence is
-        # SHAPED like an obligation; it cannot ask whose. A guest saying "I'll
-        # send you the pitch deck tomorrow" passes it word for word, so an
+        # AND THE MEANING QUESTION, PUT TO A MODEL. Does anything the owner
+        # actually said put him on the hook for this work? One call for the
+        # whole set, because one quote licensing it is enough — the `any()`
+        # the verb list stood in for, asked of something that can read.
+        #
+        # THIS IS A FLOOR, so anything that is not a positive licence refuses:
+        # no verdict is no authority. The cost of refusing is one prepared job
+        # and her `say` still goes out; the cost of a wrong yes is a browser
+        # job and a card buzzing his phone about work he never asked for.
+        if goal:
+            licence = work_is_licensed(
+                self.llm, [loop.get("source") for loop in selected], goal)
+            if licence != LICENCE_YES:
+                print("clock: nothing he said licenses preparing this "
+                      f"({licence}) — dropping model goal {goal!r}")
+                goal = None
+        # AND WHOSE PROMISE WAS IT? The check above asks whether anything here
+        # is an obligation; it cannot ask whose, and a model asked "is this
+        # work he is carrying?" about a quote with no attribution beside it
+        # can be honestly wrong. A guest saying "I'll send you the pitch deck
+        # tomorrow" reads as a real errand — it IS one, just not his — so an
         # overheard promise became an open loop and the clock prepared browser
-        # work for it — the owner chased about something somebody else said.
+        # work for it, and the owner was chased about something somebody else
+        # said. That is why this second question exists and why it reads
+        # STORED LABELS rather than asking anybody anything.
         #
         # Seatbelt-shaped, and the same shape as the _UNTRUSTED_SOURCES fence:
         # it compares stored labels (the phone's voice verdict, triage's own
@@ -3679,10 +3722,12 @@ class Anticipy:
         #             failure above: a fence that never lifts is a product
         #             that stops working the first time a guest speaks.
         #
-        # That is also why the authority check one block up reads `not any()`
-        # over the same set and this one does not. They ask opposite-shaped
-        # questions: that one asks whether ANY loop licenses preparing work at
-        # all (a floor — one owner-authored quote is enough), this one asks
+        # That is also why the authority check one block up is an `any()` over
+        # the same set — one call, one quote is enough — and this one is not.
+        # They ask opposite-shaped questions: that one asks whether ANY loop
+        # licenses preparing work at all (a floor — one owner-authored quote is
+        # enough, which is why its whole set goes to the model in one go and a
+        # single yes carries it), this one asks
         # whether the work is positively NOT his (a ceiling — one not-his
         # verdict among the loops it rests on is enough to refuse). Both err
         # toward not acting; the direction that means "don't act" is opposite

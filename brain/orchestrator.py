@@ -1375,6 +1375,118 @@ def ends_in_the_world(llm, line: str, goal: str) -> bool:
     return raw.get("ends_in_the_world") is True
 
 
+LICENCE_SYSTEM = """An assistant listened to somebody's day and wrote down an
+open loop, keeping the exact words it came out of. Nobody has spoken since — a
+timer woke the assistant, and it now wants to go and PREPARE work off that
+loop.
+
+ONE QUESTION: do these quoted words put the OWNER on the hook for the work
+described, so that preparing it serves something he is actually carrying?
+
+TRUE when the words are a promise he made, a request he made of you, or a
+request someone made of him that he took on — and, the case ambient listening
+exists for, when they merely REVEAL a duty he already had. "The VAT return is
+due on the seventh", "we're completely out of the good coffee", "that filling
+has been aching for a week": nobody promised anything, nobody asked, and there
+is still something of his that needs doing. THE TEST: if nobody had spoken at
+all, would this still need doing, and is it his?
+
+FALSE when the words are a fact he wanted remembered and nothing more
+("remember my dentist appointment is Friday at three" — the appointment is his
+to attend, but there is no work here to prepare), an observation, a joke, an
+opinion, chatter, or plainly somebody else's business. FALSE ALSO when the
+words do carry a real obligation but the described work does not serve it —
+that work was invented rather than heard, which is the failure this question
+exists to catch.
+
+WORDING IS NOT THE TEST, and a verb list gets this backwards in both
+directions: "I need to say, that was funny" is chatter, and a flat statement
+of fact is very often a real errand.
+
+Reply ONLY with compact JSON: {"licenses_work": true|false}"""
+
+
+# FOUR ANSWERS, for the reason party_verdict() gives at length: a bool cannot
+# tell "no" apart from "nobody answered", and this caller's decision differs.
+#
+#   LICENCE_YES        — a live model read the quotes and said the work is his.
+#                        The ONLY value that lets the clock prepare anything.
+#   LICENCE_NO         — a live model read them and said no.
+#   LICENCE_UNASKED    — there was nothing to ask, or no live model to ask.
+#                        This is a FLOOR, not a ceiling, so it refuses: an
+#                        authority check with no verdict has no authority. It
+#                        is unreachable in a real deployment — a keyless LLM
+#                        answers CLOCK_SYSTEM with heuristic triage JSON whose
+#                        `initiate` is falsy, so clock_tick returns before it
+#                        ever gets here — and refusing costs the model's `say`
+#                        nothing.
+#   LICENCE_UNANSWERED — a live model was asked and no readable answer came
+#                        back. Also refuses, for the same reason: nothing was
+#                        learned, and the cheap side of this method's
+#                        asymmetry is to drop the work and keep the words.
+LICENCE_YES = "yes"
+LICENCE_NO = "no"
+LICENCE_UNASKED = "unasked"
+LICENCE_UNANSWERED = "unanswered"
+
+
+def work_is_licensed(llm, quotes, goal: str) -> str:
+    """May a CLOCK TICK prepare this work off these remembered quotes?
+
+    Replaces `_CLOCK_ACTION_SOURCE_RE`, a nine-verb list that decided whether a
+    remembered sentence MEANT an obligation — HARNESS-LAWS Law 1's canonical
+    shape, audited 2026-08-24 as item 11, severity H. Measured on this tree,
+    the verb list was wrong in both directions at once:
+
+      * It dropped the goal on all four sentences orchestrator's own `owes`
+        prompt names as the reason ambient listening exists — "the VAT return
+        is due on the seventh", "we're completely out of the good coffee",
+        "that filling has been aching for a week", "I forgot to cook for my
+        kids this afternoon" — and on every bare imperative ("Book Earls for
+        Friday at 7"). That is the same mistake measured on 2026-08-20, when
+        treating a speech act as the only route to an obligation sent HALF of
+        all real errands to "nobody".
+      * It passed on "Can you believe Tejas said that?", "Please, that is
+        ridiculous", "I'll be honest…", "I have to say…" — chatter that then
+        licensed a consequential held card.
+
+    Asked as its OWN question, with the quotes and the proposed work in front
+    of it, the model judges the substance. Same shape and same reasoning as
+    party_verdict() and ends_in_the_world(): the clock model that INVENTED the
+    goal is the last thing that should certify it, and bundling the question
+    into CLOCK_SYSTEM's eight-key JSON is the failure check_sufficiency()
+    measured — one field among many loses, every time.
+
+    ONE call for the whole set, mirroring the `any()` the verb list stood in
+    for: one quote licensing the work is enough."""
+    # `if str(q).strip()` alone is not this filter: str(None) is "None", four
+    # truthy characters, and a loop with no source would have been quoted to
+    # the model as the word None. clock_tick already drops unevidenced loops
+    # upstream, but a helper that leans on its caller's filter is one refactor
+    # from asking a frontier model whether "None" is an errand.
+    texts = [str(q).strip() for q in (quotes or []) if q and str(q).strip()]
+    if not goal or not texts or not llm or not getattr(llm, "live", False):
+        return LICENCE_UNASKED
+    heard = "\n".join(f"- {t}" for t in texts)
+    try:
+        res = llm.chat(LICENCE_SYSTEM,
+                       f"HEARD:\n{heard}\n\nWORK IT WANTS TO PREPARE: {goal}",
+                       temperature=0.0)
+        raw = json.loads(_extract_json(res.text))
+    except Exception as exc:
+        print(f"licence: the question went unanswered — {exc!r}")
+        return LICENCE_UNANSWERED
+    answer = raw.get("licenses_work") if isinstance(raw, dict) else None
+    if answer is True:
+        return LICENCE_YES
+    if answer is False:
+        return LICENCE_NO
+    # A live model that replied without the key, or with something that is not
+    # a boolean, did not say "no" — it said nothing this code can read.
+    print(f"licence: unreadable reply -> {raw!r}")
+    return LICENCE_UNANSWERED
+
+
 def check_sufficiency(llm, goal: str) -> list:
     """What would someone have to be TOLD before this could be started?
 

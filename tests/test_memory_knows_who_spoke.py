@@ -8,9 +8,9 @@ the floor one call before memory saw the words.
 
 The live consequence, reproduced against the shipped code: a guest at the
 owner's table says "I'll send you the pitch deck tomorrow morning." It becomes
-an open commitment in the owner's memory, its source passes
-`_CLOCK_ACTION_SOURCE_RE`, and `clock_tick` may mint a browser job from it. The
-owner is then chased about a promise somebody else made.
+an open commitment in the owner's memory, the clock's authority check reads it
+as a real errand of somebody's, and `clock_tick` may mint a browser job from
+it. The owner is then chased about a promise somebody else made.
 
     open_loops after a GUEST's sentence:
       [{'id': 3, 'what': 'send you the pitch deck tomorrow morning',
@@ -32,6 +32,7 @@ from brain.anticipy_core import Anticipy
 from brain.memory import Memory
 from brain.orchestrator import (Decision, PARTY_YES, PARTY_NO, PARTY_UNASKED,
                                 PARTY_UNANSWERED)
+from llm_fakes import licence_reply
 
 GUEST_LINE = "I'll send you the pitch deck tomorrow morning."
 
@@ -470,15 +471,24 @@ def _clock_against(memory, loop_id):
     to test the fence has to reach the fence."""
     class _NamesIt:
         owner_zone = "America/Vancouver"
+        # LIVE, and routing on the prompt. clock_tick asks a SECOND question
+        # before it prepares anything — work_is_licensed() — and a double that
+        # answers every system prompt with its one canned clock reply answers
+        # that one with something unreadable, which refuses. These legs are
+        # about the GUEST fence, so the licence is granted and the guest fence
+        # is left as the only thing that can stop the job.
+        live = True
 
-        def chat(self, *_a, **_k):
+        def chat(self, system="", *_a, **_k):
+            reply = licence_reply(system) or json.dumps({
+                "initiate": True,
+                "say": "Want me to get that pitch deck ready?",
+                "goal": "draft the pitch deck email",
+                "loop_ids": [loop_id],
+            })
+
             class R:
-                text = json.dumps({
-                    "initiate": True,
-                    "say": "Want me to get that pitch deck ready?",
-                    "goal": "draft the pitch deck email",
-                    "loop_ids": [loop_id],
-                })
+                text = reply
             return R()
 
     queued = []
@@ -699,15 +709,20 @@ class _Loops:
 
 class _LLM:
     owner_zone = "America/Vancouver"
+    # See _NamesIt above: live, and the licence question answered as its own
+    # question so these legs measure the guest fence and nothing else.
+    live = True
 
-    def chat(self, *_a, **_k):
+    def chat(self, system="", *_a, **_k):
+        reply = licence_reply(system) or json.dumps({
+            "initiate": True,
+            "say": "Want me to get that pitch deck ready?",
+            "goal": "draft the pitch deck email",
+            "loop_ids": [7],
+        })
+
         class R:
-            text = json.dumps({
-                "initiate": True,
-                "say": "Want me to get that pitch deck ready?",
-                "goal": "draft the pitch deck email",
-                "loop_ids": [7],
-            })
+            text = reply
         return R()
 
 
@@ -781,19 +796,34 @@ GUESTS = _loop(7, "send the pitch deck",
                "I'll send you the pitch deck tomorrow morning.", owes="other")
 
 
-def _clock_over(loops, goal, loop_ids=None):
+def _clock_over(loops, goal, loop_ids=None, licence_needs=None):
     """clock_tick against a multi-loop store, with the model's reply — and in
-    particular whether it named any loop_ids — under the test's control."""
+    particular whether it named any loop_ids — under the test's control.
+
+    `licence_needs` scripts the SECOND question clock_tick asks before it
+    prepares anything (orchestrator.work_is_licensed): the stand-in grants the
+    licence only if that string is among the quotes it was actually handed.
+    That is how a scope test stays a scope test now that no regex reads the
+    quotes — a loop beyond the payload cap cannot license work precisely
+    because its words never reach the model. Left None, the licence is granted
+    and the guest fence below is the only thing that can stop the job."""
     reply = {"initiate": True, "say": "Want me to sort that?", "goal": goal}
     if loop_ids is not None:
         reply["loop_ids"] = loop_ids
 
     class _Reply:
         owner_zone = "America/Vancouver"
+        live = True
 
-        def chat(self, *_a, **_k):
+        def chat(self, system="", user="", **_k):
+            if licence_reply(system) is not None:
+                body = licence_reply(
+                    system, licence_needs is None or licence_needs in user)
+            else:
+                body = json.dumps(reply)
+
             class R:
-                text = json.dumps(reply)
+                text = body
             return R()
 
     a = Anticipy(memory=_ManyLoops(*loops), llm=_Reply(), owner_phone=None)
@@ -895,10 +925,19 @@ def test_a_loop_the_model_never_saw_cannot_authorise_preparing_work():
     bland = [_loop(i, f"loop {i}", f"the weather was fine on day {i}.")
              for i in range(1, 11)]
     authored = _loop(99, "book the table", "I need to book the Earls table")
-    out, queued = _clock_over(bland + [authored], "draft the pitch deck email")
+    out, queued = _clock_over(bland + [authored], "draft the pitch deck email",
+                              licence_needs="book the Earls table")
     assert out["goal"] is None, \
         "a quote the model never saw authorised the work it prepared"
     assert queued == []
+    # THE CONTROL. Without it this leg passes for whatever reason the licence
+    # happens to be refused. Same store, same goal, the authoring quote now
+    # inside the cap: the work is prepared, so the leg above is measuring the
+    # cap and not something else.
+    out, queued = _clock_over([authored] + bland[:9], "draft the pitch deck email",
+                              licence_needs="book the Earls table")
+    assert out["goal"] == "draft the pitch deck email"
+    assert queued == ["draft the pitch deck email"]
 
 
 def test_loop_ids_that_cannot_be_read_drop_the_goal_instead_of_guessing():

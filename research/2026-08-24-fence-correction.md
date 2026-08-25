@@ -306,13 +306,17 @@ model's answer; `withdraw_attribution` compares a stored label; the `isdigit()`
 filter parses an **id field**, not words; the clock prompt change asks the model
 for more, not less.
 
-**`_CLOCK_ACTION_SOURCE_RE` (`brain/anticipy_core.py:937`) remains a known,
-unregistered Law-1 violation — this is the fourth wave to flag it.** It decides,
-by regex over the owner's own words, whether a quote authorizes preparing work.
-The `named`/`selected` fence leans on it directly: on a hallucinated loop id the
-authority check is what drops the goal. I did not depend on it for anything new
-and did not fix it here, per instruction — but the dependency is now recorded in
-the code at the fence, not only in a report.
+~~**`_CLOCK_ACTION_SOURCE_RE` (`brain/anticipy_core.py:937`) remains a known,
+unregistered Law-1 violation — this is the fourth wave to flag it.**~~
+**CLOSED 2026-08-24, the wave after this one** (research/2026-08-24-clock-verb-list.md).
+The regex is deleted; the meaning question now goes to
+`orchestrator.work_is_licensed()`, a four-state model verdict `clock_tick()`
+compares. The dependency this section recorded was real and turned out to be
+LOAD-BEARING FOR A REASON NOBODY HAD NAMED: on a hallucinated loop id it was not
+the regex doing the work at all, it was `any()` over an empty `selected`. That
+half was mechanism wearing a meaning check's clothes, and it is now its own
+explicit guard with its own message — mutation-proven, because deleting it while
+the licence backstop stood left every test in the tree green.
 
 ---
 

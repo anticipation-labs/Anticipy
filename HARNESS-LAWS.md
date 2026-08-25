@@ -31,6 +31,23 @@ Pattern-matching is legitimate in exactly three places:
 - **Gates and evals** — deterministic tests of outcomes (overnight/*.py).
   Measuring is not programming.
 
+**What the fix looks like, so the next agent reaches for it instead of tape.**
+There are now four worked examples in the tree of a meaning question taken off
+a pattern and given to a model: `party_verdict` (whose promise is this?),
+`ends_in_the_world` (does this plan end in an action?), `check_sufficiency`
+(what would you have to be told first?) and `work_is_licensed` (does anything
+he said license preparing this?) — all in brain/orchestrator.py. The shape is
+the same every time: **ONE question, asked on its own**, never a ninth key in
+an existing JSON reply, because a field among many loses (measured: seven
+cases, zero moved); a **four-state** answer, because "no" and "nobody
+answered" are different things and a bool can only carry two of them; and the
+caller comparing the verdict. Whether the missing state refuses or waves
+through is decided by which way the check points — a FLOOR (does anything
+authorize this?) must refuse without a verdict or it lifts itself; a CEILING
+(is this positively forbidden?) must not fence without one or it never lifts.
+Getting that backwards is how a fence becomes a wall, and how a wall becomes
+a decoration.
+
 ## LAW 2 — Tape ships only with an expiry.
 
 If a string-level patch must ship in an emergency, it ships carrying:

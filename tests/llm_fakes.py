@@ -66,3 +66,30 @@ class FakeLLM:
 
     def consolidation_calls(self) -> list[str]:
         return [user for system, user in self.calls if "distill" in system]
+
+
+# --------------------------------------------------------------------------
+# THE CLOCK'S SECOND QUESTION
+# --------------------------------------------------------------------------
+# clock_tick() no longer decides whether a remembered sentence expressed an
+# obligation by reading its verbs — `_CLOCK_ACTION_SOURCE_RE` was Law-1 audit
+# item 11 and is gone. It puts the question to a model instead
+# (orchestrator.work_is_licensed) and compares the verdict.
+#
+# That means a clock double whose `chat` answers EVERY system prompt with its
+# one canned reply now says nothing this code can read when asked the licence
+# question — LICENCE_UNANSWERED, which refuses, because an authority floor
+# with no verdict has no authority. Route on the prompt, the way FakeLLM
+# already does, and the double stays honest about which question it answered.
+LICENCE_KEY = "licenses_work"
+
+
+def licence_reply(system: str, licensed: bool = True):
+    """The JSON a stand-in should answer the licence question with, or None
+    when `system` is some other prompt and the caller should carry on.
+
+    `licensed=False` is how a test says "the model read his words and found
+    no errand of his in them" without going anywhere near a verb list."""
+    if LICENCE_KEY not in (system or ""):
+        return None
+    return json.dumps({LICENCE_KEY: bool(licensed)})

@@ -31,6 +31,7 @@ import types
 
 from brain import anticipy_core as core
 from brain.anticipy_core import Anticipy
+from llm_fakes import licence_reply
 
 
 class ScriptedLLM:
@@ -189,7 +190,11 @@ def test_the_clock_stays_quiet_when_its_prepared_work_never_landed(monkeypatch):
         live = True
 
         def chat(self, system, user, **kw):
-            return types.SimpleNamespace(text=json.dumps({
+            # clock_tick asks a SECOND question before preparing anything —
+            # work_is_licensed(). Answering it with the canned clock reply is
+            # an unreadable answer, which refuses, and this leg would then go
+            # green for the wrong reason entirely.
+            return types.SimpleNamespace(text=licence_reply(system) or json.dumps({
                 "initiate": True,
                 "say": "Want me to sort dinner for the kids?",
                 "goal": "Arrange dinner for the kids for 6 PM",
