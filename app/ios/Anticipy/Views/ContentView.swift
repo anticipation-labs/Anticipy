@@ -80,6 +80,111 @@ extension AgentJob {
     }
 }
 
+// ANCHOR: home feed placement
+
+/// Where a job belongs on Home, and what a called-off card leads with.
+///
+/// THE SECTION A JOB LANDS IN USED TO BE THREE SEPARATE `filter` CLOSURES, and
+/// between them they named five of the six statuses a row can hold.
+/// `cancelled` — the status BOTH `session.decline` and `session.stopRunning`
+/// write (`AnticipyApp.swift`) — matched none of them. So a job the owner
+/// stopped left the screen entirely the moment the write landed, which reads
+/// exactly like the tap having worked. What it actually did was delete the only
+/// account of what happened from the only place a person reads.
+///
+/// That mattered most in the one case this product exists to get right. A stop
+/// on a run that may already have committed something writes "It may already
+/// have gone through before I stopped. Worth a check." into `result` — and the
+/// same PATCH writes `effect_uncertain: false` (`cancellationFields`), so
+/// `JobReceiptPolicy.safetyLine` answers the reassuring "Nothing you told me
+/// was lost." `result` is the ONLY surviving carrier of that warning, and it
+/// was being carried to a card that rendered nowhere at all. docs ex 36 / ex
+/// 50: the duplicate booking nobody checks for is the cardinal sin here.
+///
+/// Pure Foundation, and anchored so `Tests/run_home_feed_tests.sh` compiles the
+/// REAL source rather than a copy of it. A copy is honest only until somebody
+/// edits one side.
+enum HomeFeedPolicy {
+    /// The four places a row can be on Home. `hidden` is an answer, not a
+    /// default: a supervised read is a job the person is sitting there
+    /// watching, and it must never also appear under "Waiting for your browser"
+    /// as though it were stalled.
+    enum Placement {
+        case needsYou
+        case handling
+        case done
+        case hidden
+    }
+
+    /// ATTENTION IS DECIDED BEFORE THE LANE IS, and that ordering is the
+    /// shipping behaviour rather than a preference. `needsOK` never consulted
+    /// `isErrand`, so a supervised read that stopped and asked for something
+    /// has always been given a card here. Testing the lane first would take
+    /// that card away from the two statuses that cannot afford to lose it.
+    static func placement(status: String, lane: String?) -> Placement {
+        switch status {
+        case "awaiting_confirm", "needs_user": return .needsYou
+        default: break
+        }
+        if lane == "supervised_read" { return .hidden }
+        switch status {
+        case "queued", "running": return .handling
+        // `cancelled` files with `done` and `failed` because it is TERMINAL,
+        // not because it succeeded. That section has meant "finished with, one
+        // way or another" since failures started rendering under it, and the
+        // card says which of the three this one was.
+        case "done", "failed", "cancelled": return .done
+        // A status nobody here has heard of. Silence beats filing it under a
+        // heading that would then be claiming something about it.
+        default: return .hidden
+        }
+    }
+
+    /// What a called-off card leads with.
+    ///
+    /// THE ENGINE'S OWN WORDS FIRST, never a sentence composed here about them.
+    /// ex 126 forbids paraphrasing what came back, and on this card the words
+    /// that came back are the warning: "You stopped this. It may already have
+    /// gone through before I stopped. Worth a check."
+    ///
+    /// The fallback is reachable only when the server wrote nothing — the
+    /// "Don't do it" path, where `decline` sets the cancellation fields and no
+    /// result at all. It is a claim about this app's own action and nothing
+    /// else, which is the one kind of claim the phone can make with no receipt
+    /// behind it.
+    static func calledOffLead(result: String?) -> String {
+        let said = (result ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return said.isEmpty ? "You called this off. I didn't do it." : said
+    }
+
+    /// Whether Home says out loud that there is no way to reach this person.
+    ///
+    /// The sentence itself is old; where it was said is the defect. It lived
+    /// inside `if !handling.isEmpty`, so it reached only people who ALREADY had
+    /// errands stuck — while the comment sitting above it argued the opposite
+    /// case in capitals: an unreachable customer never finds out they are
+    /// unreachable. An account with no number gets asked nothing, ever, so it
+    /// never accumulates the stuck work that was the condition for being told.
+    ///
+    /// `reachedTheServer` is the guard that keeps this from becoming a
+    /// confidently false claim, and it is not decoration. `ownerPhone` is a
+    /// device-local mirror: it is empty for the whole of a launch that has not
+    /// yet re-read the account, and it is EMPTY IN EXACTLY THE SAME WAY whether
+    /// the account has no number or the phone simply has not asked yet. Home is
+    /// the highest-traffic surface in the app and it does not get to say "I
+    /// can't reach you" from a session that has never once reached its own
+    /// server — the same rule the briefing above it already keeps.
+    ///
+    /// Whitespace counts as no number. A blank field cannot be texted, and
+    /// which of the two blanks it is is not a question worth asking.
+    static func sayUnreachable(ownerPhone: String, reachedTheServer: Bool) -> Bool {
+        guard reachedTheServer else { return false }
+        return ownerPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+// END ANCHOR: home feed placement
+
 /// Home = the proactive feed: what Anticipy heard, what it's handling,
 /// what needs your OK, and what's done — plus live connection health.
 struct HomeView: View {
@@ -391,7 +496,9 @@ struct HomeView: View {
     // needs_user (login wall, CAPTCHA, refused site) used to render in NO
     // section at all — the job silently disappeared while the card said
     // "Nothing needs you right now". It belongs in the attention section.
-    private var needsOK: [AgentJob] { session.jobs.filter { $0.status == "awaiting_confirm" || $0.status == "needs_user" } }
+    private var needsOK: [AgentJob] {
+        session.jobs.filter { HomeFeedPolicy.placement(status: $0.status, lane: $0.lane) == .needsYou }
+    }
     /// Finished quiet work — anticipy_says events the brain marked done.
     /// Newest first, capped so the desk never becomes a landfill.
     private var foundForYou: [BrainEvent] {
@@ -445,8 +552,21 @@ struct HomeView: View {
     /// (`AgentJob.lane`), which is why this reads the field rather than
     /// sniffing goals or params.
     private func isErrand(_ job: AgentJob) -> Bool { job.lane != "supervised_read" }
-    private var handling: [AgentJob] { session.jobs.filter { isErrand($0) && ($0.status == "queued" || $0.status == "running") } }
-    private var finished: [AgentJob] { session.jobs.filter { isErrand($0) && ($0.status == "done" || $0.status == "failed") } }
+    private var handling: [AgentJob] {
+        session.jobs.filter { HomeFeedPolicy.placement(status: $0.status, lane: $0.lane) == .handling }
+    }
+    /// Terminal work: done, failed, AND called off.
+    ///
+    /// This read `done || failed` and nothing else, so every cancellation fell
+    /// through all three sections and rendered nowhere — including the one
+    /// carrying "it may already have gone through, worth a check". No backend
+    /// work was needed to fix it: `fetchJobs` applies no status filter, so those
+    /// rows have been sitting in `session.jobs` the whole time, matching
+    /// nothing. One question, one answer, in `HomeFeedPolicy` — three closures
+    /// naming statuses by hand is how a status came to match none of them.
+    private var finished: [AgentJob] {
+        session.jobs.filter { HomeFeedPolicy.placement(status: $0.status, lane: $0.lane) == .done }
+    }
 
     /// What she heard, as conversations rather than as a wall of lines.
     ///
@@ -530,6 +650,18 @@ struct HomeView: View {
                             }
                         }
                         listenCard.padding(.top, feedIsEmpty ? Theme.Space.tight : Theme.Space.roomy)
+                        // AN UNREACHABLE CUSTOMER NEVER FINDS OUT THEY ARE
+                        // UNREACHABLE. That sentence is a comment further down
+                        // this file, above a line that was nested inside
+                        // `if !handling.isEmpty` — so it could only reach
+                        // someone who already had work stuck, and an account
+                        // with no number gets asked nothing and never
+                        // accumulates any. Said here, under the control, on the
+                        // screen everybody opens.
+                        if HomeFeedPolicy.sayUnreachable(ownerPhone: session.ownerPhone,
+                                                         reachedTheServer: verified) {
+                            unreachableNotice.padding(.top, Theme.Space.tight)
+                        }
                         if feedIsEmpty {
                             switch session.connection {
                             case .loading:          loadingState
@@ -1079,6 +1211,27 @@ struct HomeView: View {
         }
     }
 
+    /// No number on file, said on Home instead of only under a stuck queue.
+    ///
+    /// QUIET ON PURPOSE, and the choice is argued rather than defaulted. This
+    /// is a STANDING state: for an account with no number it is true on every
+    /// launch, for as long as that stays true. A permanent sentence in the
+    /// app's one accent colour, sitting under the control that turns the whole
+    /// product on, is a nag — and an app that asks for a microphone all day
+    /// cannot afford to nag. So it takes `Theme.text2` at the same 15pt the
+    /// Chrome sentence further down already uses for a standing fact, and the
+    /// accent stays on the parked-queue line, where the consequence is concrete
+    /// and is happening today. Placement was the defect; loudness never was.
+    private var unreachableNotice: some View {
+        Text("I don't have a number for you. A text is the only way I can reach you "
+             + "when something needs your word, so anything I prepare will just sit "
+             + "here until you open the app. Add it in Settings.")
+            .font(.system(size: 15))
+            .foregroundStyle(Theme.text2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     /// What the control says, what tapping it does, and what sits beside the
     /// words — one answer, from `ListenControlPolicy`.
     ///
@@ -1609,7 +1762,19 @@ struct ConfirmJobCard: View {
                 Button {
                     Task { await session.decline(job) }
                 } label: {
-                    Text("Not now")
+                    // NOT AN ESCAPE HATCH, A CANCELLATION — and the label now
+                    // says which. `session.decline` writes `status=cancelled`
+                    // and nulls approval, lease and receipt, and the backend
+                    // comment on `setJobFields` calls it "cancel it". "Not now"
+                    // promises a later that does not exist: the plan is gone,
+                    // and getting it back means saying the whole thing again.
+                    //
+                    // This is deliberately NOT the same edit as the two real
+                    // "Not now"s on this screen. Those defer an OFFER — the
+                    // mail read, the interview — and every escape hatch in this
+                    // app is full-width, real size and unguilty. They keep
+                    // their words. This one is not an offer being deferred.
+                    Text("Don't do it")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.ghost)
@@ -1800,7 +1965,7 @@ struct HandlingCard: View {
             // THE ONLY STOP IN THIS PRODUCT WAS ON HIS LAPTOP.
             // HandlingCard carried no controls at all, so away from the desk,
             // watching a run head somewhere wrong, he could do nothing about
-            // it. Same cancellation path as "Not now", so a stop from here
+            // it. Same cancellation path as "Don't do it", so a stop from here
             // and a stop from Chrome mean one thing to the rest of the
             // system; the browser loop re-reads liveness immediately before
             // every irreversible action, so this lands before a submit.
@@ -1821,8 +1986,6 @@ struct HandlingCard: View {
     }
 }
 
-/// A completed job with its result — or a failed one, which gets a plain
-/// sentence and a way forward instead of a shrug and a stack trace.
 /// Something she quietly looked into, delivered. Her sentence leads —
 /// the card IS her speaking, not a log row. Tap to read the whole thing
 /// (sources and all); collapsed it stays a glanceable three lines.
@@ -1871,6 +2034,17 @@ struct FoundCard: View {
     }
 }
 
+/// Terminal work, in the three ways it can end.
+///
+/// A completed job leads with its receipt. A failed one gets a plain sentence
+/// and a way forward instead of a shrug and a stack trace. A CALLED-OFF one
+/// gets a card at all, which it did not have: `cancelled` matched none of
+/// Home's three filters, so a job the owner stopped left the screen the instant
+/// the write landed — taking with it the only sentence saying it might have
+/// gone through anyway. See `HomeFeedPolicy`.
+///
+/// The first two paragraphs of this comment spent some time attached to
+/// `FoundCard` instead, which is where they were found.
 struct DoneCard: View {
     let job: AgentJob
     @EnvironmentObject var session: AnticipySession
@@ -1878,12 +2052,22 @@ struct DoneCard: View {
     @State private var showRaw = false
 
     private var succeeded: Bool { job.status == "done" }
+    /// The owner stopped it — from "Don't do it" on the card above, or from
+    /// Stop on a running one. Both write `cancelled`, and until this branch
+    /// existed both vanished off the screen without leaving a card behind.
+    private var calledOff: Bool { job.status == "cancelled" }
     private var retrying: Bool { session.inFlight.contains(job.id) }
     private var retryFailed: Bool { session.failedWrites.contains(job.id) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: succeeded ? "checkmark.circle.fill" : "exclamationmark.circle")
+            // Three outcomes, two colours. A cancellation is neither a
+            // success nor a failure, so it takes the same muted grey a failure
+            // does and is told apart by the glyph and the sentence — not by a
+            // third colour grading it. Nobody is being scored for stopping
+            // something.
+            Image(systemName: succeeded ? "checkmark.circle.fill"
+                  : (calledOff ? "slash.circle" : "exclamationmark.circle"))
                 .foregroundStyle(succeeded ? Theme.accent : Theme.muted)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
@@ -1911,6 +2095,12 @@ struct DoneCard: View {
                         Text(context)
                             .font(.footnote)
                             .foregroundStyle(Theme.muted)
+                            // Every other multi-line Text on this card carries
+                            // this and the goal did not, so a goal longer than
+                            // the row clipped to one line with an ellipsis —
+                            // the restated question, cut in half, under its own
+                            // answer. It wraps now.
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     // THE PROOF, not the claim. The server refuses to mark any
                     // job done without a verified receipt naming non-empty
@@ -1929,6 +2119,49 @@ struct DoneCard: View {
                             .foregroundStyle(Theme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                } else if calledOff {
+                    // THE RESULT LEADS, and this is the load-bearing half of
+                    // the whole card. When a stop lands on a run that may
+                    // already have committed something, `stopRunning` writes
+                    // "You stopped this. It may already have gone through
+                    // before I stopped. Worth a check." into `result` — and the
+                    // SAME patch writes `effect_uncertain: false`, because
+                    // `cancellationFields` clears the workflow. So `result` is
+                    // the only surviving carrier of that warning, and until
+                    // this branch existed it was carried to a card that
+                    // rendered nowhere: the person watched the run head
+                    // somewhere wrong, tapped Stop, and the row left the
+                    // screen. ex 36 / ex 50 — the duplicate booking nobody
+                    // checks for.
+                    //
+                    // AND `job.safetyLine` IS DELIBERATELY NOT HERE. It reads
+                    // `effect_uncertain`, which the cancellation just set
+                    // false, so on this card it returns "Nothing you told me
+                    // was lost." — the reassuring sentence, printed directly
+                    // under the warning that contradicts it, and the
+                    // reassuring one is the one people act on. It stays on the
+                    // failed branch below, where the field still means what it
+                    // says.
+                    Text(HomeFeedPolicy.calledOffLead(result: job.result))
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // The goal underneath, in the same lead-then-context order
+                    // the succeeded branch uses a few lines up: what happened
+                    // first, what it was about second.
+                    Text(job.humanGoal)
+                        .font(.footnote)
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // NO RETRY BUTTON, and that is the point rather than an
+                    // omission. The failed branch offers one because nothing
+                    // happened and the person wants it to. Here they just said
+                    // stop — and in the exact case this branch exists for, they
+                    // stopped because it may already have gone through. A
+                    // one-tap "Start a fresh attempt" sitting beside "worth a
+                    // check" is the duplicate booking with a button on it.
+                    // Asking again out loud queues it again, through the brain,
+                    // which is where deciding what was meant belongs.
                 } else {
                     Text(job.humanGoal)
                         .font(.callout.weight(.medium))

@@ -35,6 +35,13 @@ sh "$HERE/run_first_run_tests.sh"
 sh "$HERE/run_owner_mirror_tests.sh"
 sh "$HERE/run_enrollment_offer_tests.sh"
 sh "$HERE/run_job_receipt_tests.sh"
+# The same card from the other end. That one asks what the server proved
+# before it says "done"; this asks which section a job reaches at all — and
+# whether a job the owner STOPPED reaches one. `cancelled` matched none of
+# Home's three filters, so a stop deleted the row from the screen along with
+# the only sentence saying it might have gone through anyway. Early, for the
+# reachability reason above.
+sh "$HERE/run_home_feed_tests.sh"
 # The phone as a HAND, for one verb. Placed beside the receipt because it is the
 # same argument from the other end: that one asks what the server proved before
 # the card says "done", this one asks what has to be true before the phone
