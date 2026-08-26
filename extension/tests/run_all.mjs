@@ -64,6 +64,7 @@ const suites = [
   "test_agent_integration.mjs",
   "test_theme_contract.mjs",
   "test_watch_lease.mjs",
+  "test_device_lane.mjs",
   "test_owner_profile_needs_owner.mjs",
   "test_account_delete_flow.mjs",
   "test_hook_scope_trap.mjs",
