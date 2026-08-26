@@ -124,9 +124,22 @@ struct AuthView: View {
         }
     }
 
+    /// TWO NUMBERS, BECAUSE ONE OF THEM WAS BEING READ AS BOTH.
+    ///
+    /// This said "It takes about ten seconds", and ten seconds is the only
+    /// number a stranger is given anywhere in first run — so it became the
+    /// ruler for the door AND for the four beats and two iOS alerts behind it.
+    /// It understated its own screen by half before it understated the rest by
+    /// six times. Somebody who budgeted ten seconds and is still going at forty
+    /// has been misled by the app's own estimate, which for a product asking
+    /// for a microphone all day is a bad first thing to be wrong about.
+    ///
+    /// Both figures are the shipped budget, not invention:
+    /// `CONSUMER-FEEL-DIRECTION-2026-08-03.md` §5 opens the door at 0:00 and
+    /// leaves it at 0:20, and lands on Home at 1:00.
     private var subtitle: String {
         switch mode {
-        case .signUp: return "Make an account and I'll start keeping your day for you. It takes about ten seconds."
+        case .signUp: return "Make an account and I'll start keeping your day for you. Twenty seconds here, about a minute in all."
         case .signIn: return "Your email and password, and everything's where you left it."
         case .forgot: return "Tell me the email you signed up with and I'll text you a code."
         case .code:   return "I've sent a 6-digit code to your phone. Enter it and pick a new password."

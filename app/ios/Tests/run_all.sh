@@ -33,6 +33,15 @@ sh "$HERE/run_first_run_tests.sh"
 # five device-local answers to "who are you" go with the account that left.
 # Placed beside it, and early, for the reachability reason above.
 sh "$HERE/run_owner_mirror_tests.sh"
+# The third question about the same phone, one screen further in: not whose
+# tour this is, nor whose answers are still on the handset, but whether what
+# first run SAYS about them is true when it says it. The track counted the
+# account they had just made as zero; the last beat re-interrogated somebody
+# for an email and a number it already held; and the finale promised "Give me
+# a day. You'll see." to a person who had declined the microphone thirty
+# seconds earlier. Beside the other two, and early, for the reachability
+# reason above.
+sh "$HERE/run_first_run_copy_tests.sh"
 sh "$HERE/run_enrollment_offer_tests.sh"
 sh "$HERE/run_job_receipt_tests.sh"
 # The same card from the other end. That one asks what the server proved
