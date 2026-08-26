@@ -32,7 +32,7 @@ from .asking import ask_line, question_line
 from .compute import compute_answer
 from .llm import LLM, now_line, owner_tz
 from .memory import OVERHEARD, RETIRED_EXCLUDED, RETIRED_QUOTED, Memory
-from .workflow import (Consequence, approve as approve_plan,
+from .workflow import (ActDeclaration, Consequence, approve as approve_plan,
                        cancel as cancel_plan, from_params as workflow_from_params,
                        merge as merge_plan, new_plan, put_in_params)
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
@@ -806,6 +806,89 @@ QUEUE_WRITE_FAILED = ""
 # read by worker.run_preflight_research, which hands the row BACK to the
 # browser lane instead of answering it as a research question.
 RESEARCH_LANE = "research"
+
+# THE LANE THE PHONE CLAIMS — rung 0, and the one place a NEW lane string is
+# worth what it costs.
+#
+# The comment above this one is the scar: a new lane value is excluded by
+# NEITHER enforcement point HANDS 1 §5.5 names, so minting one is minting a
+# hole. The research gate could avoid that by reusing "research", because it
+# only ever wanted to HOLD a row. This lane cannot reuse it: the WORKER claims
+# the research lane and would answer a dinner reservation as a search query,
+# and `run_preflight_research` hands every held row back with a hardcoded
+# `{"lane": ""}` — into his Chrome.
+#
+# So the value is new, and what the scar demands of a new value is that BOTH
+# enforcement points name it. THIS FILE CANNOT DO THAT — both of them live in
+# `backend/pb_hooks/research_lane.pb.js`, and queuing a row onto a lane the
+# server does not know about is exactly the hole. Verified in the tree at the
+# time of writing, and it is a standing dependency of this constant, not a
+# courtesy:
+#   1. The poll rewrite appends `lane != "device_calendar"` to every queued
+#      poll that does not name a lane — the 0.2.3 extensions in the wild
+#      never see the row.
+#   2. The claim PATCH is refused for anything that is not an owner session —
+#      and that layer is the load-bearing one, because the SHIPPED 0.2.4
+#      extension polls with `lane!="research"`, which NAMES the lane and is
+#      therefore never rewritten. Without leg 2 it sees these rows today.
+# `test_the_brain_and_the_backend_hook_spell_the_lane_the_same` pins that the
+# two files agree on the STRING. It cannot pin that the hook still enforces
+# it; `extension/tests/test_device_lane.mjs` is what holds that half, and
+# under Law 3 neither is done until it is green against LIVE — the hooks are
+# uploaded by `railway up`, which has reported success while failing twice.
+# Client code cannot be recalled; the server can refuse.
+DEVICE_CALENDAR_LANE = "device_calendar"
+
+# WHO EXECUTES, as the model declared it on the plan.
+#
+# `ActDeclaration.executor` (brain/workflow.py) exists because "a declared
+# reach on a general browser session is a label attached to a process that can
+# do anything the session can do" — SHELF 2 §8.7. The lane is the delivery
+# side of that same sentence: an act declared for the phone's EventKit is
+# delivered to the phone, and an act declared for anything else is not.
+#
+# DELIVERY IS NOT PERMISSION, and the two tables are separate on purpose.
+# `ADMITTED_ACT_TYPES` decides what may run WITHOUT a tap; this decides where
+# an approved job is picked up. A calendar write is held by the confirmation
+# gate before this is ever consulted — `is_consequential` returns True on
+# `touches == "world"` ABOVE the explicit escape — so the lane selects the
+# executor, never the requirement for approval. Anything in a diff that looks
+# like a second approval check written for the phone is the bug the research
+# warned about ("a device execution lane that does not route through the same
+# gate is not a new hand, it is a hole in the gate").
+#
+# The executor string and the lane string are deliberately DIFFERENT words. If
+# they were the same, a `device_lane` that simply echoed its argument would
+# pass every test of this file while being no registry at all.
+PHONE_CALENDAR_EXECUTOR = "phone_eventkit"
+
+# TYPED AND CLOSED, the same way `Provenance` is closed and for the same
+# reason: a new executor is a schema change visible in a diff, never a string
+# a model can invent at runtime. An unrecognised executor is not a new lane —
+# it is the lane everything already goes to.
+DEVICE_EXECUTOR_LANES: dict[str, str] = {
+    PHONE_CALENDAR_EXECUTOR: DEVICE_CALENDAR_LANE,
+}
+
+
+def device_lane(act) -> str:
+    """Which device lane an act declaration is delivered on, or "".
+
+    Reads exactly one field of one typed object and looks it up in a closed
+    dict. It never sees the goal, never sees the transcript, and never sees a
+    date — so no wording, in any language, can move a job onto a device lane,
+    and no wording can keep a declared one off it. That is the whole of the
+    Law 1 argument: this decides DELIVERY from a stored declaration, it does
+    not decide what any sentence MEANT.
+
+    Not `isinstance`-free by accident. A dict that happens to carry an
+    `executor` key is what a corrupt row or a hand-written params blob looks
+    like, and honouring it would let the row choose its own executor.
+    """
+    if not isinstance(act, ActDeclaration):
+        return ""
+    return DEVICE_EXECUTOR_LANES.get(act.executor, "")
+
 
 # A finalized recognizer line can cut a sentence at exactly the wrong place:
 # "... caused a 20" / "yeah, agreed — cm crack ...". The second line's
@@ -3300,7 +3383,8 @@ class Anticipy:
 
     def _queue_job(self, goal: str, params: dict, hold: bool = False,
                    explicit: bool = False,
-                   touches: str | None = None) -> Optional[str]:
+                   touches: str | None = None,
+                   act: Optional[ActDeclaration] = None) -> Optional[str]:
         # A held card supersedes the parked question: the plan the fragment
         # was asking about has since completed itself, and the card's own
         # one-text asks whatever is still missing. Two question texts for
@@ -3505,6 +3589,23 @@ class Anticipy:
         # keeps the browser lane rather than queueing for an executor that
         # does not exist — graceful fallback, never a dead queue.
         lane = job_lane(goal, params) if os.environ.get("BRAVE_API_KEY") else ""
+        # AND THEN THE DEVICE LANE, WHICH OUTRANKS BOTH OF THE ABOVE.
+        #
+        # Deliberately OUTSIDE the Brave-key conditional. Brave is what the
+        # server's research arm needs; the phone needs nothing but the phone.
+        # A calendar hand that reverted to Chrome because a SEARCH key was
+        # unset would work in the rig and not in production, which is the
+        # shape of every live failure this file carries a date about.
+        #
+        # And deliberately BEFORE `_research_gate`, which already returns
+        # GATE_NOT_REQUIRED for any row that has a lane ("no browser to hold
+        # off it" — true of this lane for a different reason than it is true
+        # of the research one, and true either way). That ordering is what
+        # keeps `handback` off the row: `run_preflight_research` hands every
+        # marked row back with a hardcoded `{"lane": ""}`, so a device job
+        # that ever picked the marker up would be moved into his Chrome by a
+        # pass that does not know the phone exists.
+        lane = device_lane(act) or lane
         # THE RESEARCH GATE (HANDS 1 spec §5.4), asked here and only here.
         #
         # This is the one place in the brain that mints a job row, so it is the

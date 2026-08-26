@@ -25,7 +25,7 @@ import requests
 from . import pb
 from . import research
 
-from .anticipy_core import Anticipy, goal_tokens
+from .anticipy_core import DEVICE_CALENDAR_LANE, Anticipy, goal_tokens
 from .evidence import picture_for_done_text
 from .memory import Memory
 from . import sorter
@@ -1191,8 +1191,15 @@ def report_stalled_work(anticipy) -> None:
         # The research lane is excluded: it never needs his Chrome — this
         # same process runs it — so "I just need your browser open" would be
         # a false alarm about work she is about to do herself.
+        # The device lane is excluded for the SAME reason and a worse one:
+        # every sentence this function composes says his browser is what is
+        # missing, and a calendar write does not need his browser at all.
+        # Telling him to open Chrome to unblock work Chrome cannot do is the
+        # same class of untruth as promising to solve a CAPTCHA — he acts on
+        # it, and nothing changes. `report_unclaimed_device_work` below owns
+        # that lane, and says the true thing instead.
         filt = (f'(status="queued" || status="running") && updated<="{since}"'
-                f' && lane!="research"')
+                f' && lane!="research" && lane!="{DEVICE_CALENDAR_LANE}"')
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
@@ -1239,6 +1246,118 @@ def report_stalled_work(anticipy) -> None:
             print(f"stalled (no browser): {job['id']} — told him")
     except Exception as e:
         print(f"stalled-work report failed: {e}")
+
+
+# A DEVICE ERRAND NOBODY EVER PICKED UP.
+#
+# The browser lane has `report_stalled_work` for exactly this shape, and it is
+# built on `browser_reachable()` — the extension writes a heartbeat into
+# `agents.last_seen`, so the server can see whether Chrome is there. THE PHONE
+# WRITES NO SUCH ROW. Verified 2026-08-25: `AnticipyApp.swift` polls
+# `fetchJobs` every three seconds and posts nothing on that pass;
+# `watching_until` is written only while `SupervisedReadView` is on screen.
+# So there is no "is the phone alive" signal to ask, and inventing one — a
+# body flag, a claimant name — is the thing `side_trip.js:194-198` refuses.
+#
+# What there IS, is our own row. The app polls every three seconds; a device
+# errand still sitting at `queued` fifteen minutes later has been passed over
+# roughly three hundred times. That is a FIRST-PARTY OBSERVATION of a record
+# we wrote, not a guess about a device we cannot see — which is why this needs
+# no equivalent of `browser_reachable`'s "unknown is not absent" caution.
+#
+# Fifteen and not two: a lift, a tunnel, a phone face-down through a meeting
+# are all ordinary, and a text about each one is how she becomes exhausting.
+# Same order as RESEARCH_STRANDED_MINUTES for the same reason.
+DEVICE_UNCLAIMED_MINUTES = 15
+
+
+def report_unclaimed_device_work(anticipy) -> None:
+    """Say so when work queued for his phone has been sitting there.
+
+    A calendar write that waits forever because the phone is off is a promise
+    silently broken, and silence is the failure this whole file is built
+    against. It says the TRUE thing — the app, not the browser — and it never
+    says the work happened.
+
+    Deliberately a NOTICE and not a recovery: nothing here requeues, retries,
+    or moves the row to another lane. `run_preflight_research` hands rows back
+    to the browser with a hardcoded `{"lane": ""}`, and a calendar write in a
+    browser tab is an errand burning its attempts against a page that has no
+    EventKit. There is one hand for this verb; when it is not there the
+    honest move is to say so and keep waiting.
+    """
+    try:
+        # Nothing here is urgent enough to wake him — same quiet hours the
+        # clock and the browser stall notice respect.
+        hour = datetime.now(CLOCK_TZ).hour
+        if CLOCK_QUIET_START <= hour or hour < CLOCK_QUIET_END:
+            return
+        since = (datetime.now(timezone.utc)
+                 - timedelta(minutes=DEVICE_UNCLAIMED_MINUTES)
+                 ).strftime("%Y-%m-%d %H:%M:%S")
+        # `running` counts too, and for a sharper reason than it does on the
+        # browser lane: nothing sweeps this lane. The extension requeues its
+        # own stale jobs and the worker hands back its own stranded research;
+        # a phone that claimed a row and then died leaves it at `running`
+        # with no process anywhere looking at it, reading as "she is on it".
+        filt = (f'(status="queued" || status="running")'
+                f' && lane="{DEVICE_CALENDAR_LANE}" && updated<="{since}"')
+        scope = owner_filter(anticipy)
+        if scope:
+            filt = f"({filt}) && {scope}"
+        r = pb.get(f"{anticipy.backend_url}/api/collections/jobs/records",
+                   params={"filter": filt, "perPage": 5, "sort": "updated"},
+                   timeout=10)
+        if not getattr(r, "ok", False):
+            return
+        for job in r.json().get("items", []):
+            goal = (job.get("goal") or "").strip()
+            # Quiet work stays quiet, exactly as on the browser lane: an
+            # ambient errand that cannot run was never something he asked for.
+            if ambient_job(job):
+                continue
+            if already_raised(goal, decision="stalled"):
+                continue
+            # ...and the same again when the durable record could not be
+            # written. `already_raised` reads the event `post_event` writes
+            # AFTER the text has gone out, so a write outage made every pass
+            # believe nothing had been said and re-sent the notice every two
+            # seconds.
+            local_key = f'device-stalled:{job["id"]}:{job.get("status")}'
+            if sent_moments_ago(local_key):
+                continue
+            midway = job.get("status") == "running"
+            said = anticipy._voice({
+                "situation": ("this stopped partway on their phone — say so "
+                              "plainly, no alarm, and that you will finish it "
+                              "when the Anticipy app is open again" if midway
+                              else "this is queued for their PHONE, not their "
+                              "computer, and the Anticipy app has not picked "
+                              "it up — tell them plainly, no alarm, that it "
+                              "goes the moment the app is open. Never say it "
+                              "is done"),
+                "task": goal,
+            # The goal is a free-form phrase, so the template wraps it rather
+            # than reading it as a noun: "I'm ready to put {goal} in your
+            # calendar" turns "put dinner Thursday 7pm in my calendar" into
+            # a sentence with two calendars in it. Same shape the browser
+            # fallback next door already uses.
+            }) or (f"{goal} stopped partway on your phone. I'll finish it when "
+                   f"the app is open again." if midway else
+                   f"{goal} — I'm ready, it just needs the Anticipy app open "
+                   f"on your phone. Nothing has changed yet.")
+            # A send that did not happen is not a send. `notify_owner` has
+            # returned truthy with no transport before and she stamped his
+            # questions delivered for ten hours.
+            if not anticipy.notify_owner(said):
+                print(f"device stall notice for {job['id']}: send failed, "
+                      f"not recording it")
+                continue
+            mark_sent(local_key)
+            post_event("anticipy_says", said, decision="stalled", goal=goal)
+            print(f"unclaimed on the device lane: {job['id']} — told him")
+    except Exception as e:
+        print(f"device-lane report failed: {e}")
 
 
 RESEARCH_CLAIMANT = "worker-research"
@@ -3855,6 +3974,13 @@ def main() -> None:
             # And when nothing can run at all, say that too rather than
             # leaving a task queued behind a browser that is not open.
             report_stalled_work(anticipy)
+
+            # The same sentence for the other hand. `report_stalled_work`
+            # above returns at its first line whenever Chrome IS reachable,
+            # so an errand waiting on a phone that is off would never be
+            # looked at by anything: the browser being fine says nothing
+            # about the phone. Two hands, two silences to break.
+            report_unclaimed_device_work(anticipy)
 
             # And when she cannot understand the words at all, say THAT — the
             # lines are being kept, not lost, and he is owed the difference
