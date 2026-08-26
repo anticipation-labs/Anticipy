@@ -51,15 +51,6 @@ sh "$HERE/run_home_feed_tests.sh"
 # for the rest of the day), and this suite compiles the real wording out of
 # ContentView.swift and asks it.
 sh "$HERE/run_home_copy_tests.sh"
-# What Home SAYS once it has placed a job — the same screen one step later. Four
-# of its sentences carry a number the phone counted: how many things are waiting
-# on a browser, how many interview answers she already holds, how long the
-# microphone has been gone, and what the day-zero examples read as out loud.
-# Three of the four were saying the wrong thing (a queue nobody named, "Six
-# questions" typed into the prose, and a recovery claimed in the present tense
-# for the rest of the day), and this suite compiles the real wording out of
-# ContentView.swift and asks it.
-sh "$HERE/run_home_copy_tests.sh"
 # The phone as a HAND, for one verb. Placed beside the receipt because it is the
 # same argument from the other end: that one asks what the server proved before
 # the card says "done", this one asks what has to be true before the phone
