@@ -847,7 +847,10 @@ struct OnboardingView: View {
                               monospaced: Bool = false,
                               changeLabel: String,
                               change: @escaping () -> Void) -> some View {
-        let open = { Haptics.tap(); withAnimation(Theme.spring) { change() } }
+        // Annotated rather than inferred: this is a multi-statement closure
+        // handed to two different call sites, and it is the one thing in this
+        // file no parse check can prove for me.
+        let open: () -> Void = { Haptics.tap(); withAnimation(Theme.spring) { change() } }
         return VStack(alignment: .leading, spacing: Theme.Space.hair) {
             Text(label)
                 .font(.caption)
