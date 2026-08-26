@@ -33,7 +33,8 @@ from brain.anticipy_core import (DEVICE_CALENDAR_LANE, DEVICE_EXECUTOR_LANES,
                                  PHONE_CALENDAR_EXECUTOR, RESEARCH_LANE,
                                  Anticipy, device_lane, job_lane)
 from brain.workflow import (ADMITTED_ACT_TYPES, ActDeclaration, Consequence,
-                            Refusal, UndoInput, UndoPlan, admissible, new_plan)
+                            Refusal, UndoInput, UndoPlan, admissible,
+                            merge as merge_plan, new_plan)
 
 
 def calendar_act(executor=PHONE_CALENDAR_EXECUTOR):
@@ -232,6 +233,36 @@ def test_the_research_gate_never_parks_a_device_job(monkeypatch):
 def test_the_same_goal_without_a_declaration_stays_in_the_browser(monkeypatch):
     posted = _queue(monkeypatch, "dinner Thursday 7pm", touches="world")
     assert posted["lane"] == ""
+
+
+def test_refining_a_card_cannot_move_it_to_another_hand():
+    """The row's `lane` column is written ONCE, at mint.
+
+    `Anticipy._merge_into` — the path a plan assembled over several turns
+    takes, "book dinner tomorrow" becoming "book dinner for 2 at Cactus Club
+    at 7 PM" — returns before the lane is ever computed and its PATCH does
+    not carry a `lane` field. That is only safe while the ACT is stable
+    across a merge, because the lane was derived from the act: if an
+    amendment could replace the act, the row would keep a lane its own
+    embedded plan no longer agrees with, and a calendar errand would be
+    delivered to Chrome (or a restaurant booking to a phone that cannot
+    make one) with nothing anywhere disagreeing.
+
+    `merge()` preserves it today only because `replace()` does not name it.
+    That is an accident of one line, so it is pinned here rather than
+    trusted.
+    """
+    plan = new_plan(
+        owner_ref="own1", lineage_key="lin1", goal="dinner Thursday",
+        consequence=Consequence.CONSEQUENTIAL, source_event_id="e1",
+        act=calendar_act(),
+    )
+    amended = merge_plan(plan, expected_version=plan.version,
+                         goal="dinner Thursday 7pm for two",
+                         authority_text="make it 7, for two")
+    assert amended.goal != plan.goal          # the amendment really landed
+    assert device_lane(amended.act) == device_lane(plan.act)
+    assert device_lane(amended.act) == DEVICE_CALENDAR_LANE
 
 
 # --------------------------------------------- nobody claimed it, so say so
