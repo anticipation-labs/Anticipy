@@ -67,10 +67,22 @@ enum FirstRunOwnership {
     /// how-it-works, sets the flag, and the real owner who signs up next is
     /// never introduced to the product at all.
     ///
-    /// So it is cleared on the SAME `Decision` that clears `flagKey`, on the
-    /// same lines, at all three sites. The two cannot drift apart because
-    /// neither is ever written without the other, and
-    /// `run_first_run_route_tests.sh` reads those sites rather than trusting
+    /// So it is cleared beside `flagKey`, on the same `.replay` decision, at
+    /// all three sites — but NOT unconditionally, and that difference is the
+    /// design rather than a slip. `arriving` answers `.replay` for a brand-new
+    /// sign-up too (an empty owner id is not the id just minted), so an
+    /// unconditional clear walks every new customer through the welcome
+    /// typewriter and the how-it-works cards a second time, forty seconds after
+    /// the first. `FirstRunRoute.introSurvivesReplay` draws the line, and where
+    /// it answers true the two flags DO part company: the installer above keeps
+    /// the introduction they spent, and the owner who signs up next does not
+    /// get it. That gap is real and it is chosen; `FirstRunRoute` argues the
+    /// trade in full beside the predicate, and `FirstRunRouteTests.swift` walks
+    /// the case rather than leaving it as prose. What the tour flag still
+    /// guarantees is the part that matters most: it is cleared either way, so
+    /// the microphone primer is asked for, and "she hears nothing all week"
+    /// cannot come back through here. `run_first_run_route_tests.sh` reads all
+    /// three sites for the clear AND for the predicate rather than trusting
     /// the pairing.
     ///
     /// Declared here for the reason above: a second copy of the string is how

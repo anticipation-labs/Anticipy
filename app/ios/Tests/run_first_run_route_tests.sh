@@ -95,13 +95,93 @@ if ! printf '%s\n' "$intro_arm" | grep -q 'segment: .intro'; then
     exit 2
 fi
 
-# And the view can only render the pages its segment carries. This is the one
-# structural guarantee behind the sentence above — a TabView listing all four
-# pages unconditionally renders the primer whatever the segment says.
+# And the view can only render the pages its segment carries. `segment.pages`
+# is the list of indices the TabView walks — a TabView listing all four
+# unconditionally renders the primer whatever the segment says.
 if ! code "$onboard" | grep -q 'ForEach(segment.pages'; then
     echo "OnboardingView no longer builds its pages from segment.pages."
     echo "A TabView that lists all four beats renders the microphone primer in"
     echo "front of the door whatever the routing decided."
+    exit 2
+fi
+
+# ------------------------------------------ AND THE TWO HALVES OF THAT CLAIM
+#
+# `segment.pages` IS A LIST OF INTS. The check above proves the pre-auth
+# segment walks two indices; it proves nothing about what those indices DRAW,
+# and nothing about what a tap on them starts. Both were one token away from a
+# live microphone in front of the sign-in door with this whole suite green:
+#
+#   `case Step.howItWorks: micPrimer`  — the primer becomes the second pre-auth
+#      beat, and its own affirmative button is `session.startListening()`.
+#   `if !micAsked, ...`                — the mic branch of advance() loses its
+#      beat guard, so the FIRST Continue tap, on the pre-auth welcome beat,
+#      starts listening.
+#
+# Both were run against this file and both came back exit 0. So the mapping and
+# the guard are read here rather than assumed, which is what the header of
+# FirstRunRoute.swift already promises this suite does.
+code "$onboard" > "$out/onboard.code.swift"
+pagefn=$(span "$out/onboard.code.swift" 'func page[(]')
+[ -n "$pagefn" ] || { echo "OnboardingView has no func page(_:) for this suite to read."; exit 2; }
+for pair in 'welcome:welcome' 'howItWorks:howItWorks' 'mic:micPrimer' 'phone:yourNumber'; do
+    beat=${pair%%:*}
+    view=${pair#*:}
+    if ! printf '%s\n' "$pagefn" | grep -qE "case Step\.$beat:[[:space:]]+$view\$"; then
+        echo "page(_:) no longer draws $view on the $beat beat."
+        echo "The beat indices are what segment.pages carries; this switch is"
+        echo "what turns one into a screen, and nothing else reads it. A"
+        echo "pre-auth index pointed at micPrimer is a microphone in front of"
+        echo "the door, and heard() pushes live before it queues."
+        exit 2
+    fi
+done
+primers=$(printf '%s\n' "$pagefn" | grep -c 'micPrimer' || true)
+if [ "$primers" != "1" ]; then
+    echo "page(_:) mentions micPrimer $primers times; it may appear on exactly"
+    echo "one arm, the microphone beat. Any other arm is reachable from a"
+    echo "segment the routing believes carries no microphone."
+    exit 2
+fi
+
+# THE TAP, NOT ONLY THE SCREEN. advance() is shared by every beat, so its
+# microphone branch has to name the beat it belongs to; without that the
+# primary button starts listening on whichever page is showing.
+advancefn=$(span "$out/onboard.code.swift" 'func advance[(]')
+[ -n "$advancefn" ] || { echo "OnboardingView has no func advance() for this suite to read."; exit 2; }
+if ! printf '%s\n' "$advancefn" | grep -q 'if step == Step\.mic, !micAsked'; then
+    echo "advance()'s microphone branch is no longer gated on the microphone beat."
+    echo "advance() runs on every beat's primary button. Ungated, the first"
+    echo "Continue tap — on the pre-auth welcome beat — calls startListening()"
+    echo "before an account exists, and heard() pushes live before it queues."
+    exit 2
+fi
+micbranch=$(printf '%s\n' "$advancefn" | awk '/if step == Step\.mic, !micAsked/ { grab = 1 } grab { print; if (/^[[:space:]]*}$/) exit }')
+if ! printf '%s\n' "$micbranch" | grep -q 'session.startListening()'; then
+    echo "The gated branch in advance() no longer starts listening, so whatever"
+    echo "does is somewhere this check cannot see it was gated."
+    exit 2
+fi
+listens=$(code "$onboard" | grep -c 'session.startListening()' || true)
+if [ "$listens" != "1" ]; then
+    echo "OnboardingView calls session.startListening() $listens times."
+    echo "There is one call site and it lives inside the beat-gated branch of"
+    echo "advance(). A second one cannot be read as gated by anything here, and"
+    echo "this view is instantiated in front of the sign-in door."
+    exit 2
+fi
+
+# AND THE FLAG THE TERMINAL BRANCH WRITES. In `.rest` and `.whole` the CALLER
+# writes both flags on consecutive lines; writing this one here first put the
+# app in `decide(true, true, false)` = `.tour(.rest)` while the person was
+# still standing on the number beat of `.whole`, changing `segment` under a
+# live view. It survived on SwiftUI keeping @State across two cases of one
+# `case .tour(let segment):` arm, which is view identity rather than a promise.
+if ! printf '%s\n' "$advancefn" | grep -q '!segment.endsTheTour { hasSeenIntro = true }'; then
+    echo "advance()'s terminal branch writes the introduction flag in a segment"
+    echo "that ends the tour. The caller writes both flags there; writing this"
+    echo "one first re-routes .whole to .rest mid-finish, and the enrolment"
+    echo "invite is raised from inside that window."
     exit 2
 fi
 

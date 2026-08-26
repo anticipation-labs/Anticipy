@@ -408,7 +408,18 @@ settings:
     # states and `hasSeenIntro` is what makes the first of them survive a
     # relaunch — so 93 and these bytes disagree about which screen a launch
     # opens on, which is the largest thing a build number can disagree about.
-    CURRENT_PROJECT_VERSION: "94"
+    #
+    # 95 is the repair of 94, and it is a routing change rather than a wording
+    # one, so it needs its own number: on 94 an owner who signed out was sent
+    # into the NEW-USER introduction, because `hasSeenIntro` is a key that did
+    # not exist when their tour was walked and nothing stamps it retroactively.
+    # 95 reads a completed tour on the handset as proof the introduction was
+    # given on it, so 94 and these bytes disagree about which screen a signed-out
+    # launch opens on — again the largest thing a build number can disagree
+    # about. The microphone still may not move, and on 95 the suite reads the
+    # page map and the beat guard that keep it where it is rather than assuming
+    # them.
+    CURRENT_PROJECT_VERSION: "95"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

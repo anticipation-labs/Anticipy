@@ -46,6 +46,19 @@ for seen in [true, false] {
         }
     }
 }
+// AND TOTALITY OVER THAT HALF OF THE TABLE, because the loop above can only
+// speak about routes that carry a segment: once `.door` is the answer for more
+// of the signed-out combinations, it falls silent on exactly the rows that
+// changed. Signed out, the only two screens that ask nothing of an account are
+// the introduction and the door, and every row must land on one of them.
+check("every signed-out route is the introduction or the door",
+      [true, false].allSatisfy { seen in
+          [true, false].allSatisfy { onboarded in
+              let route = FirstRunRoute.decide(hasSeenIntro: seen, isSignedIn: false,
+                                               hasOnboarded: onboarded)
+              return route == .intro || route == .door
+          }
+      })
 
 // ===================================================== A PHONE
 //
@@ -100,6 +113,32 @@ struct Phone {
             onboardedAccount = id
         }
         account = id
+    }
+
+    /// AnticipyApp.resumeSignedInAccount's flag reconciliation — the switch at
+    /// the top of it, which runs synchronously before the first `await`.
+    ///
+    /// MODELLED BECAUSE THE UPGRADE IS ONLY REACHABLE THROUGH IT. Nothing a
+    /// person can tap produces a handset carrying `hasOnboarded` and no
+    /// `hasSeenIntro`; an app update produces it on every phone already using
+    /// the product, and this is the only code that then runs.
+    mutating func resumes() {
+        guard !account.isEmpty else { return }
+        switch FirstRunOwnership.resuming(account: account,
+                                          onboardedAccount: onboardedAccount,
+                                          hasOnboarded: hasOnboarded) {
+        case .keep:
+            break
+        case .adopt:
+            onboardedAccount = account
+        case .replay:
+            if !FirstRunRoute.introSurvivesReplay(onboardedAccount: onboardedAccount,
+                                                  hasOnboarded: hasOnboarded) {
+                hasSeenIntro = false
+            }
+            hasOnboarded = false
+            onboardedAccount = account
+        }
     }
 
     /// signOut clears the credentials and the five owner mirrors and touches
@@ -207,6 +246,73 @@ check("6. then the door", six.route == .door)
 six.signsIn(personA)
 check("6. and the tour resumes at the microphone, the introduction already spent",
       six.route == .tour(.rest))
+
+// 7. THE UPGRADE — the one state nobody can be walked INTO, because every
+//    existing owner is already standing in it. `hasSeenIntro` is a new key, so
+//    it is false on a handset that earned `hasOnboarded` on the build before
+//    this one, and nothing writes it retroactively: the only two lines that
+//    write it are walked by somebody doing THIS build's first run. The tour on
+//    that build CONTAINED the introduction — all four beats sat behind the
+//    door — so a false flag there is a hole in the record, not a fact about
+//    the person.
+var seven = Phone()
+seven.hasOnboarded = true       // earned on an earlier build
+seven.onboardedAccount = ""     // whose, was not recorded: the key did not exist
+seven.account = personA
+check("7. the update itself changes nothing — the owner opens on Home",
+      seven.route == .home)
+seven.resumes()
+check("7. and the resuming launch adopts the tour flag without inventing an introduction",
+      seven.onboardedAccount == personA && !seven.hasSeenIntro)
+// THE REGRESSION THIS PINS. Read on `hasSeenIntro` alone, the signed-out
+// branch sent this phone into the new-user introduction the moment its owner
+// signed out: the logo animation, the "I'm Anticipy…" typewriter and the three
+// how-it-works cards, with `skipLabel` returning nil on both pre-auth beats, in
+// front of somebody who has used the product for weeks. It also contradicted
+// the rule written three lines above it — signed out, the app cannot know who
+// is holding the phone, so it shows the door.
+seven.signsOut()
+check("7. signing out shows an existing owner the door, not a first-run introduction",
+      seven.route == .door)
+seven.signsIn(personA)
+check("7. and signing back in lands straight on Home", seven.route == .home)
+check("7. with the introduction still never claimed on their behalf",
+      !seven.hasSeenIntro)
+
+// 7b. AND IT DOES NOT RE-OPEN THE HOLE FirstRunOwnership CLOSED. The same
+//     upgraded handset, handed to somebody else: the arriving account is not
+//     the recorded owner, so both flags clear together and person B is
+//     introduced to a product they have never seen.
+var sevenB = Phone()
+sevenB.hasOnboarded = true
+sevenB.account = personA
+sevenB.resumes()
+sevenB.signsOut()
+sevenB.signsIn(personB)
+check("7b. a second person on an upgraded phone still gets the whole tour",
+      sevenB.route == .tour(.whole))
+check("7b. the introduction included, because they have never had it",
+      sevenB.route.segment?.pages.contains(FirstRunBeat.welcome) == true)
+
+// THE SIGNED-OUT BRANCH, DIRECTLY, over the pair of flags that names it.
+// A completed tour on this handset is proof the introduction was given on it:
+// until the door moved, all four beats sat behind it and `hasOnboarded` could
+// not be earned without walking them. That is the same adoption argument
+// FirstRunOwnership makes about the pre-upgrade flag, not a second guess about
+// who is holding the phone — and it is the only shape that can carry a tour
+// without an introduction, because both `onFinished` sites write the two
+// together and every clear clears them together.
+check("a handset carrying a completed tour opens on the door once signed out",
+      FirstRunRoute.decide(hasSeenIntro: false, isSignedIn: false,
+                           hasOnboarded: true) == .door)
+check("a handset carrying neither still opens on the introduction",
+      FirstRunRoute.decide(hasSeenIntro: false, isSignedIn: false,
+                           hasOnboarded: false) == .intro)
+check("and no signed-out phone that already carries somebody's first run is introduced again",
+      [true, false].allSatisfy { seen in
+          FirstRunRoute.decide(hasSeenIntro: seen, isSignedIn: false,
+                               hasOnboarded: true) == .door
+      })
 
 // THE GAP, WRITTEN DOWN RATHER THAN LEFT TO BE DISCOVERED. An installer who
 // taps through the two pre-auth beats and never signs in is indistinguishable,

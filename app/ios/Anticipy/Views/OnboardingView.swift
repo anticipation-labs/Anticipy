@@ -467,9 +467,21 @@ struct OnboardingView: View {
             // down. Clearing the last page of `.intro` is what "they have been
             // introduced" MEANS, and it is written synchronously here rather
             // than left to a closure that a torn-down view may never call.
-            // Idempotent in `.rest`, and in `.whole` it records the same fact
-            // the caller records a moment later.
-            hasSeenIntro = true
+            //
+            // AND ONLY THERE, which is the guard rather than a tidy-up. In the
+            // two segments that END the tour the caller writes both flags on
+            // consecutive lines, and writing this one first opened a window
+            // between them: `decide(hasSeenIntro: true, isSignedIn: true,
+            // hasOnboarded: false)` is `.tour(.rest)`, so in `.whole` this line
+            // changed `segment` under a live view while the person was still
+            // standing on the number beat. Nothing broke, but only because
+            // `.tour(.whole)` and `.tour(.rest)` land in the same
+            // `case .tour(let segment):` arm and SwiftUI therefore kept the
+            // @State `step` — view identity, not a guarantee, and the enrolment
+            // invite below is raised from inside that window. Idempotent in
+            // `.rest` by definition: nothing routes there without the flag
+            // already set.
+            if !segment.endsTheTour { hasSeenIntro = true }
             // The last step is cleared. Say so and let the caller write it
             // down; nothing about the celebration can strand anyone now.
             finish()

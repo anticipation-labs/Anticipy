@@ -11,8 +11,11 @@ struct AnticipyApp: App {
     /// and two copies of the string would be a clear that clears nothing.
     @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
     /// WHETHER THIS PERSON HAS BEEN INTRODUCED TO THE PRODUCT YET. Also
-    /// declared in FirstRunOwnership, and cleared on the same lines as the
-    /// tour flag — see the note beside `introKey`.
+    /// declared in FirstRunOwnership, and cleared beside the tour flag on the
+    /// same `.replay` decision — but only where `introSurvivesReplay` says the
+    /// introduction on this phone cannot have been this person's own, which is
+    /// what stops a brand-new sign-up watching it twice. So the two flags do
+    /// part company in one known case; see the note beside `introKey`.
     @AppStorage(FirstRunOwnership.introKey) private var hasSeenIntro = false
     /// LIGHT UNLESS YOU CHOSE DARK. This line used to read
     /// `.preferredColorScheme(.dark)` a few lines down, which is why the app
@@ -1311,9 +1314,12 @@ final class AnticipySession: ObservableObject {
     @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
     @AppStorage(FirstRunOwnership.ownerKey) private var onboardedAccount = ""
     /// AND WHETHER THE PERSON HOLDING IT HAS BEEN INTRODUCED. Cleared on the
-    /// same `.replay` decision as the tour flag, on the line below it, at both
-    /// sites — a different person is about to use this phone, and the two
-    /// pre-auth beats are part of what they have not been shown.
+    /// same `.replay` decision as the tour flag, at both sites — a different
+    /// person is about to use this phone, and the two pre-auth beats are part
+    /// of what they have not been shown. BEHIND `introSurvivesReplay`, though,
+    /// not on the bare line below it: `.replay` is also the arm a brand-new
+    /// sign-up takes, and an unconditional clear there replays the
+    /// introduction to the person who has just this second walked it.
     @AppStorage(FirstRunOwnership.introKey) private var hasSeenIntro = false
 
     /// Make an account. The device's existing `ownerID` rides up as

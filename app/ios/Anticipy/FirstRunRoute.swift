@@ -159,11 +159,20 @@ enum FirstRunRoute: Equatable {
     /// -- WHAT THIS DELIBERATELY DOES NOT CATCH ------------------------------
     ///
     /// An installer who taps through the two pre-auth beats and never signs
-    /// in leaves `hasSeenIntro` true with no owner recorded, which is
-    /// indistinguishable — with every durable fact this device has — from the
-    /// stranger who walked those beats themselves a moment ago. There is no
-    /// third fact to separate them, so one of the two has to be got wrong, and
-    /// this gets the rare one wrong rather than the common one.
+    /// in leaves `hasSeenIntro` true with no owner recorded, which is exactly
+    /// what the stranger who walked those beats themselves a moment ago leaves.
+    ///
+    /// "There is no third fact to separate them" would be too strong, and it
+    /// is worth being exact about which pair is really trapped. A NON-durable
+    /// fact does separate the stranger cleanly — whether the introduction was
+    /// walked in THIS process — and it could be read here. What survives no
+    /// fact at all is the installer versus the person who walked the
+    /// introduction, force-quit before the door, and came back: on the launch
+    /// after a force-quit no in-process marker exists either, so those two are
+    /// the pair one of which has to be got wrong. This gets the rarer one
+    /// wrong. Taking the other side is a real option, and its price is that
+    /// the force-quitter is walked through both beats a second time; it is
+    /// written down here rather than done, because it is a trade and not a fix.
     ///
     /// What that costs is bounded, and it is worth writing down: the owner of
     /// such a phone misses the two EXPLANATORY beats. They do not miss the
@@ -194,7 +203,26 @@ enum FirstRunRoute: Equatable {
             // Before somebody authenticates the app cannot know who is holding
             // the phone, so it must not guess by showing or hiding an
             // introduction — it shows the door and lets the sign-in answer it.
-            return hasSeenIntro ? .door : .intro
+            //
+            // TWO FLAGS, BECAUSE ONE OF THEM DID NOT EXIST YET. `hasSeenIntro`
+            // is new with this change, so it is false on every handset that
+            // earned `hasOnboarded` on an earlier build, and nothing writes it
+            // retroactively: the only lines that write it are walked by
+            // somebody doing THIS build's first run. Read on its own, this
+            // branch therefore sent every existing owner who signed out into
+            // the new-user introduction — the logo animation, the typewriter
+            // and the three how-it-works cards, neither beat carrying a skip —
+            // and contradicted the paragraph above it while doing so.
+            //
+            // A completed tour on this handset is proof the introduction was
+            // given on it, because until the door moved all four beats sat
+            // BEHIND it and `hasOnboarded` could not be earned without walking
+            // them. That is the adoption argument `FirstRunOwnership` already
+            // makes about the pre-upgrade flag, not a second guess about who is
+            // holding the phone — and the pair (tour, no introduction) can only
+            // be the pre-upgrade handset, because both `onFinished` sites write
+            // the two flags together and every clear clears them together.
+            return (hasSeenIntro || hasOnboarded) ? .door : .intro
         }
         guard !hasOnboarded else { return .home }
         return .tour(hasSeenIntro ? .rest : .whole)
