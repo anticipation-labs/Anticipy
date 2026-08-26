@@ -26,6 +26,13 @@ struct SettingsView: View {
     /// that trait, so nothing has to be told about the change.
     @AppStorage(AppTheme.key) private var themeChoice = AppTheme.light.rawValue
 
+    /// How long this phone has heard nothing, folded from the journal on disk.
+    /// Zero until the `.task` below has read it, and zero forever on a phone
+    /// whose owner has listening turned off — `ListenTally` hard-zeroes it
+    /// under `.stoppedByOwner`, so the row cannot appear over somebody's own
+    /// deliberate silence.
+    @State private var unheard = 0
+
     @State private var pairCode = ""
     @State private var pairOutcome: AnticipySession.PairOutcome?
     @State private var pairing = false
@@ -86,6 +93,40 @@ struct SettingsView: View {
                 }
                 .arrowRow()
 
+                // THE ONE NUMBER THAT CAN CONTRADICT THE HEADLINE ABOVE IT, and
+                // it has to be on this row rather than one tap deeper.
+                // `listeningState` is built from `capturing`, which is
+                // `isListening && !suspended` — the app's own INTENT flags, not
+                // a fact about the microphone. So the sentence at the top of
+                // this section reads "I'm listening on this phone." for exactly
+                // the case CLAUDE.md records: the ears went deaf for thirty
+                // hours and nothing noticed. Intent said yes the whole time.
+                // This line is the half the phone actually measured.
+                //
+                // NO THRESHOLD, NO COLOUR, NO VERDICT, and that is the design
+                // rather than timidity. The same sentence reads "Nothing heard
+                // for 4 min" on a healthy phone and "Nothing heard for 6 hr
+                // 20 min" on a deaf one; nothing here decides which of those is
+                // bad, because nothing here can — there is no recorded normal
+                // for this to be measured against, and a rule invented while the
+                // sense is unmeasured is what law 1 exists to stop. That is
+                // `ListeningDiagnosticsView.swift:38-43` standing on a second
+                // screen, and it holds only while both screens word the same
+                // seconds the same way, which is why this asks `PlainDuration`
+                // instead of dividing by sixty.
+                //
+                // ABOVE ZERO ONLY, which is already the owner's own off switch:
+                // `ListenTally` hard-zeroes this under `.stoppedByOwner`
+                // (`ListenTally.swift:317`) because quiet after you turned it
+                // off is the ordinary state of a phone nobody is talking to and
+                // not a finding. So it can never nag somebody who chose the
+                // silence, and no second condition is needed to stop it.
+                if unheard > 0 {
+                    Text("Nothing heard for \(PlainDuration.words(unheard))")
+                        .font(.callout)
+                        .foregroundStyle(Theme.text2)
+                }
+
                 if session.micBlocked {
                     Text("iPhone has microphone access switched off for me. It won't ask again. Only you can turn it back on.")
                         .font(.caption)
@@ -140,6 +181,13 @@ struct SettingsView: View {
             }
             .listRowBackground(Theme.card)
             .onAppear(perform: syncPause)
+            // DELIBERATELY NOT IN THE `onAppear` ABOVE. `syncPause` is three
+            // field reads and a timer; this reads up to 512KB off disk through
+            // a synchronous `queue.sync` and then parses every line of it.
+            // Putting the two together would hitch the first frame of the one
+            // screen people open when they want listening to STOP, which is the
+            // last screen in the app that may be slow to draw.
+            .task { unheard = await Self.unheardSeconds() }
 
             Section("Pendant") {
                 HStack {
@@ -669,9 +717,15 @@ struct SettingsView: View {
                     if InterviewProgress().isComplete { InterviewProgress().reopenAll() }
                     showInterview = true
                 } label: {
-                    Label(InterviewProgress().isComplete
-                          ? "Go over my questions again"
-                          : "Let me ask you six questions",
+                    // THREE-WAY ON WHAT IS LEFT, because two-way on `isComplete`
+                    // put "Let me ask you six questions" directly above a
+                    // caption reading "You've answered 4 of 6". Two halves of
+                    // one section, reading one `InterviewProgress`, disagreeing
+                    // about it — only the caption ever counted, so somebody who
+                    // had answered four was offered six.
+                    Label(InterviewInvitation.buttonLabel(
+                            remaining: InterviewProgress().remaining.count,
+                            total: InterviewQuestion.script.count),
                           systemImage: "quote.bubble")
                 }
                 .ghostRow()
@@ -750,6 +804,25 @@ struct SettingsView: View {
 
     private func clock(_ d: Date) -> String {
         d.formatted(date: .omitted, time: .shortened)
+    }
+
+    /// How long this phone has heard nothing, as of right now.
+    ///
+    /// Detached, because the fold is file I/O plus a parse of every line the
+    /// journal holds and the caller is a view body.
+    ///
+    /// `now:` IS THE WHOLE POINT OF THE CALL and is not a default worth taking.
+    /// A fold that can only measure to the journal's own last line answers
+    /// "58 min" for a phone that has been deaf since breakfast, because on that
+    /// day the last line IS the failure — a call took the microphone at nine
+    /// and nothing wrote another line after it. `ListeningDiagnosticsView`
+    /// passes it for the same reason and says so at `:138-145`; a reassuring
+    /// wrong number is worse than no number, because it is believed.
+    private static func unheardSeconds() async -> Int {
+        await Task.detached(priority: .utility) {
+            ListenTally.of(ListenJournal.shared.persistedEvents,
+                           now: Date()).unheardForSeconds
+        }.value
     }
 
     private func startNow() {
@@ -1011,7 +1084,23 @@ struct SettingsView: View {
         let progress = InterviewProgress()
         let answered = progress.answeredCount
         if answered == 0 {
-            return "You haven't told me anything about your life yet. Six questions, all skippable."
+            // "You haven't told me anything about your life yet" was false on
+            // this screen. It sits under a heading reading "What I know about
+            // you", four sections below a field holding her first name, one
+            // section below her number, and directly above the list of sources
+            // she has let in — and it said she had told us nothing. The
+            // interview being untouched is not the same claim as knowing
+            // nothing, and only the second one was ever on screen.
+            //
+            // Read from `session` rather than the `@State` copies above: those
+            // are seeded on appear and can hold typing nobody has saved yet, and
+            // this sentence is about what she HOLDS, not what is in a text field.
+            let grants = ContextGrants()
+            return InterviewInvitation.nothingAnswered(
+                name: !session.ownerFirstName.isEmpty,
+                number: !session.ownerPhone.isEmpty,
+                calendar: grants.granted(.calendar),
+                contacts: grants.granted(.contacts))
         }
         if progress.isComplete {
             return "You've answered all six. I can go over them again any time."
@@ -1097,5 +1186,100 @@ struct SettingsView: View {
         session.agentOnline = false
         session.agentLastSeenSeconds = nil
         forgotten = true
+    }
+}
+
+/// What the interview OFFERS, and what she already holds — as words, from one
+/// place, so the two halves of one section cannot contradict each other.
+///
+/// THEY DID CONTRADICT EACH OTHER, both ways round. The button said "Let me ask
+/// you six questions" directly above a caption reading "You've answered 4 of 6",
+/// because the button was two-way on `isComplete` and only the caption ever
+/// counted. And the caption's own opening said "You haven't told me anything
+/// about your life yet" on a screen that reads back her first name, her number
+/// and every source she has let in. One section, two sentences, neither of them
+/// true of the same person.
+///
+/// PURE FOUNDATION, and `run_interview_invite_tests.sh` lifts this enum out of
+/// this file and compiles it against Foundation alone to keep it that way.
+/// Nothing here may reach for a Color, a Font or a View: these are decisions
+/// about what is true of somebody's account, and a decision that needs a screen
+/// to make is a decision that cannot be tested without one.
+///
+/// NO FRACTION, NO BAR, NO METER, which is `interviewState`'s standing order
+/// and the reason it has always been a sentence. A skip records NOTHING
+/// (`Interview.swift:113-118`), so an unanswered question is simply still open
+/// — and a meter reading two of six would be grading somebody for declining to
+/// answer what they were promised was skippable. Counting is not the same act
+/// as scoring, and only the first one happens here.
+enum InterviewInvitation {
+
+    /// The button, three-way on what is actually left.
+    ///
+    /// NOT the audit's proposed "2 questions left" / "1 question left", and the
+    /// argument against that copy is written four sections up in this same
+    /// file: the Appearance row "names what the tap DOES rather than what the
+    /// app currently is", because "a control that reads 'Light' while the
+    /// screen is light is a status line people tap expecting nothing to
+    /// happen". "2 questions left" is precisely that status line, and the
+    /// caption directly beneath this button is already where the count is
+    /// reported — so the label would have become the third thing on one screen
+    /// saying how many are left, and the only one of the three that had stopped
+    /// naming an action. The count goes ON the offer instead, in the grammar
+    /// the untouched string already uses.
+    static func buttonLabel(remaining: Int, total: Int) -> String {
+        // Every question answered. The tap reopens them all rather than opening
+        // a screen with nothing to ask, so the label must not promise new ones.
+        if remaining <= 0 { return "Go over my questions again" }
+        // Nothing answered yet: today's words, character for character. "six"
+        // is spelled out here and in `nothingAnswered` below and nowhere else,
+        // and `run_interview_invite_tests.sh` goes red the day
+        // `InterviewQuestion.script` stops holding exactly six — a prose numeral
+        // is only true while the array agrees with it, and this one has no way
+        // to find out on its own. `>=` rather than `==` so a count that has
+        // somehow overrun the script still lands on the offer instead of
+        // falling through to "Let me ask you 7 more questions".
+        if remaining >= total { return "Let me ask you six questions" }
+        return remaining == 1
+            ? "Let me ask you 1 more question"
+            : "Let me ask you \(remaining) more questions"
+    }
+
+    /// The line under the button when the interview itself is untouched.
+    ///
+    /// NAMED FROM THE HOLDINGS THEMSELVES, never from a count, and never in the
+    /// negative. There is no "but not your contacts" branch and there must not
+    /// be one: an absence listed beside three presences is a gap with a shape,
+    /// and a gap with a shape on a consent screen is an ask wearing a status
+    /// line. She names what she has and stops. Every source she does not hold
+    /// is already answered honestly one section up, on its own row, where
+    /// "What I can see" says so and offers the way back in.
+    ///
+    /// The clause is a SEPARATE statement of what she holds and is not counted
+    /// toward the six. Knowing somebody's phone number is not two-sixths of an
+    /// interview, and folding it into the fraction would build the meter the
+    /// type comment above refuses.
+    ///
+    /// When the list really is empty the old sentence is kept verbatim, because
+    /// there it was always true.
+    static func nothingAnswered(name: Bool, number: Bool,
+                                calendar: Bool, contacts: Bool) -> String {
+        var held: [String] = []
+        if name { held.append("your name") }
+        if number { held.append("your number") }
+        if calendar { held.append("what's on your calendar") }
+        if contacts { held.append("who's in your contacts") }
+        guard !held.isEmpty else {
+            return "You haven't told me anything about your life yet. Six questions, all skippable."
+        }
+        return "I know \(sentenceList(held)). Six questions would tell me the rest, all skippable."
+    }
+
+    /// "a", "a and b", "a, b and c" — no serial comma, matching the lists this
+    /// app already says out loud.
+    static func sentenceList(_ parts: [String]) -> String {
+        guard let last = parts.last else { return "" }
+        guard parts.count > 1 else { return last }
+        return parts.dropLast().joined(separator: ", ") + " and " + last
     }
 }

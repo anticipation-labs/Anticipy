@@ -42,6 +42,15 @@ sh "$HERE/run_job_receipt_tests.sh"
 # the only sentence saying it might have gone through anyway. Early, for the
 # reachability reason above.
 sh "$HERE/run_home_feed_tests.sh"
+# What Home SAYS once it has placed a job — the same screen one step later. Four
+# of its sentences carry a number the phone counted: how many things are waiting
+# on a browser, how many interview answers she already holds, how long the
+# microphone has been gone, and what the day-zero examples read as out loud.
+# Three of the four were saying the wrong thing (a queue nobody named, "Six
+# questions" typed into the prose, and a recovery claimed in the present tense
+# for the rest of the day), and this suite compiles the real wording out of
+# ContentView.swift and asks it.
+sh "$HERE/run_home_copy_tests.sh"
 # The phone as a HAND, for one verb. Placed beside the receipt because it is the
 # same argument from the other end: that one asks what the server proved before
 # the card says "done", this one asks what has to be true before the phone
@@ -64,7 +73,23 @@ sh "$HERE/run_reachable_number_tests.sh"
 sh "$HERE/run_field_caption_tests.sh"
 sh "$HERE/run_notifier_tests.sh"
 sh "$HERE/run_context_grant_tests.sh"
+# The same consent screen one moment later: what she says back once the grant
+# lands, and what the button said before it. Beside the gate suite because it
+# is the other half of the same sentence — that one holds "no grant, no read",
+# this one holds "and here is exactly what the read produced", including the
+# lines that did not fit on the sheet.
+sh "$HERE/run_context_receipt_tests.sh"
 sh "$HERE/run_interview_tests.sh"
+# What that interview OFFERS, one screen later. Beside it because it reads the
+# same `InterviewProgress`: that suite asks whether an answer is recorded and a
+# skip is not, this one asks what Settings then SAYS about it. One section was
+# telling a person two things about themselves and both could be false at once —
+# a button offering six questions above a caption reading "You've answered 4 of
+# 6", and that caption opening "You haven't told me anything about your life
+# yet" on a screen holding their name, their number and their calendar grant.
+# It also carries the listening row's measured silence, whose legs are law legs:
+# no threshold decides when quiet becomes a finding, and no colour judges it.
+sh "$HERE/run_interview_invite_tests.sh"
 sh "$HERE/run_supervised_read_tests.sh"
 sh "$HERE/run_theme_contract_tests.sh"
 sh "$HERE/run_journal_tests.sh"
