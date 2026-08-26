@@ -140,7 +140,116 @@ enum HomeFeedPolicy {
         }
     }
 
-    /// What a called-off card leads with.
+    /// It was stopped before it finished. NOT "the owner stopped it" — see
+    /// `calledOffKicker`: the brain writes this status too, on cards he was
+    /// never shown. One answer, here, because three places now ask it: the card
+    /// that draws it, the cap that must not cut it, and the runner that checks
+    /// both.
+    static func wasCalledOff(status: String) -> Bool { status == "cancelled" }
+
+    /// Whether Done's cap is allowed to cut this card.
+    ///
+    /// "Done" is drawn newest-CREATED first and capped, and both of those are
+    /// about when a job STARTED. Nothing on the row says when it ENDED —
+    /// `AgentJob` decodes `created` and no other timestamp — so an errand begun
+    /// this morning and stopped this evening sorts below every job that began
+    /// and finished in between, and the cap cuts it. While cancellations
+    /// rendered nowhere at all that cost nothing. Now the cap is the last thing
+    /// standing between "it may already have gone through" and the person who
+    /// needs to read it: the same silence the section fix was written to end,
+    /// arriving one step later through the display instead of the filter.
+    ///
+    /// So the cap counts SETTLED cards, and a card still asking the reader to
+    /// go and check something out in the world is drawn however old it is.
+    /// There are two shapes of that, both read off the row's own fields and
+    /// never off its words:
+    ///
+    ///   * a cancellation — because this card can never tell a decline of a
+    ///     plan that never ran from a decline of a run that stopped partway.
+    ///     `decline` clears `effect_uncertain` on its way out and writes no
+    ///     `result`, so the two arrive here indistinguishable and the card is
+    ///     not entitled to assume the harmless one; and
+    ///   * a failure the row ITSELF still marks uncertain, where
+    ///     `JobReceiptPolicy.safetyLine` answers "It may already have gone
+    ///     through … so you don't end up with two." That one was droppable
+    ///     before any of this and is the same defect wearing a different
+    ///     status, which is why it is named here rather than left for the next
+    ///     reviewer to find.
+    ///
+    /// This is a cap rule and nothing else. It can only ever ADD a card that
+    /// would have been dropped, it draws it in the same newest-first position
+    /// it would have held anyway, and it grades, counts and colours nothing.
+    static func settled(status: String, effectUncertain: Bool?) -> Bool {
+        if wasCalledOff(status: status) { return false }
+        return effectUncertain != true
+    }
+
+    /// WHICH OF DONE'S ROWS ARE ACTUALLY DRAWN, by index, in the order given.
+    ///
+    /// The walk lives here and not in the view, and that is not tidiness.
+    /// `settled` is a predicate about ONE row; the defect it guards is about a
+    /// walk over many, and the one-word version of that walk going wrong —
+    /// leaving the scan at the shelf's edge instead of stepping past it —
+    /// drops the exact card the rule exists to keep while every predicate in
+    /// the file still answers correctly. That mutation survived this suite
+    /// until the walk became a function with cases behind it. A rule nothing
+    /// can prove wrong is not a rule.
+    ///
+    /// `rows` arrives newest-CREATED first and the answer keeps that order:
+    /// everything past the shelf is older than everything on it, so a survivor
+    /// lands exactly where newest-first would have put it, at the bottom.
+    /// The shelf counts SETTLED rows only. Nothing is promoted, reordered,
+    /// marked or counted out loud.
+    static func shelved(_ rows: [(status: String, effectUncertain: Bool?)],
+                        shelf: Int) -> [Int] {
+        var drawn: [Int] = []
+        var used = 0
+        for (i, row) in rows.enumerated() {
+            if settled(status: row.status, effectUncertain: row.effectUncertain) {
+                // SKIP, NEVER STOP. What is being looked for past the shelf's
+                // edge is precisely the old cancellation nothing else on this
+                // screen will mention, and it is down there because it is old,
+                // which is the same reason a stop would never reach it.
+                if used >= shelf { continue }
+                used += 1
+            }
+            drawn.append(i)
+        }
+        return drawn
+    }
+
+    /// THE CARD'S OWN IDENTITY, said by the card and not by the server.
+    ///
+    /// The card used to be identified only by what `result` happened to hold,
+    /// and on the "Don't do it" path `result` holds whatever the ENGINE wrote
+    /// before the tap — `decline` (`AnticipyApp.swift`) writes the cancellation
+    /// fields and never touches `result`. So a stuck job carrying "I may have
+    /// already sent that … check the site before I try again" was cancelled and
+    /// then rendered under "Done" still leading with an offer to try again,
+    /// with no sentence anywhere saying the owner had stopped it. Now the card
+    /// says what it is first, in the same caption treatment `ConfirmJobCard`
+    /// uses for "Your exact words", and the server's words follow it verbatim.
+    ///
+    /// IT NAMES NO ACTOR, and that is the whole of the wording. The obvious
+    /// line here is "You called this off", and it is false on rows the owner
+    /// never touched. `cancelled` is not the owner's word: `_cancel_job`
+    /// (`brain/anticipy_core.py`) writes it to take a card off the desk that he
+    /// was NEVER TOLD ABOUT — "I picked this up from the room rather than from
+    /// you, so I've dropped it", "she was not allowed to raise this" — and the
+    /// extension writes it when a run spends its last attempt. Telling somebody
+    /// they cancelled a thing they were never shown is the same false claim as
+    /// telling them nothing happened when it might have, printed the other way
+    /// round.
+    ///
+    /// "Stopped" is true of every one of them: the phone's "Don't do it", Stop
+    /// on a running job, the two endings `AnswerRoutePolicy` routes here, the
+    /// stop from the Chrome popup, the brain's own drop, and a run out of
+    /// attempts. It says the card's state and leaves WHO to the sentence
+    /// underneath, which is the one place that actually knows. It never
+    /// overrides what came back; it sits above it.
+    static let calledOffKicker = "Stopped"
+
+    /// What a called-off card leads with, under that kicker.
     ///
     /// THE ENGINE'S OWN WORDS FIRST, never a sentence composed here about them.
     /// ex 126 forbids paraphrasing what came back, and on this card the words
@@ -148,13 +257,35 @@ enum HomeFeedPolicy {
     /// gone through before I stopped. Worth a check."
     ///
     /// The fallback is reachable only when the server wrote nothing — the
-    /// "Don't do it" path, where `decline` sets the cancellation fields and no
-    /// result at all. It is a claim about this app's own action and nothing
-    /// else, which is the one kind of claim the phone can make with no receipt
-    /// behind it.
+    /// "Don't do it" path again, where `decline` writes no result at all.
+    ///
+    /// IT USED TO READ "You called this off. I didn't do it." AND THAT IS A
+    /// SENTENCE THIS CARD CANNOT SAY. "Don't do it" is offered on two statuses,
+    /// and they are not the same event. `awaiting_confirm` is a plan waiting
+    /// for a yes, where nothing has run. `needs_user` is a run that STOPPED
+    /// PARTWAY and asked for something, and it can carry `effect_uncertain`:
+    /// `extension/background.js` promotes exactly that combination, and
+    /// `ConfirmJobCard` prints "Only continue if the action did not happen."
+    /// over it. Tapping "Don't do it" there PATCHes `effect_uncertain: false`
+    /// with no result and no reconciliation record, so by the time this card
+    /// renders the row has lost the one field that said the effect was in
+    /// doubt — and the two statuses are indistinguishable, both now `cancelled`.
+    /// A flat "I didn't do it" over that is the duplicate booking of ex 36 with
+    /// a denial printed on it.
+    ///
+    /// So the fallback claims only what this app can still see: after your tap,
+    /// it did nothing more. That is the house's own sentence for this act —
+    /// `AnticipyApp.swift` already ends an errand with "I did nothing further."
+    /// — and it neither denies nor invents a warning the phone never measured,
+    /// which is the standing rule for naming a loss on this screen.
+    ///
+    /// The real repair is one line up the stack and is NOT in this file:
+    /// `decline` should write a `result` the way `stopRunning` already does,
+    /// branching on `job.effect_uncertain` BEFORE it clears it. Until it does,
+    /// this is the most the card is entitled to say.
     static func calledOffLead(result: String?) -> String {
         let said = (result ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return said.isEmpty ? "You called this off. I didn't do it." : said
+        return said.isEmpty ? "I did nothing further." : said
     }
 
     /// Whether Home says out loud that there is no way to reach this person.
@@ -166,19 +297,36 @@ enum HomeFeedPolicy {
     /// unreachable. An account with no number gets asked nothing, ever, so it
     /// never accumulates the stuck work that was the condition for being told.
     ///
-    /// `reachedTheServer` is the guard that keeps this from becoming a
-    /// confidently false claim, and it is not decoration. `ownerPhone` is a
-    /// device-local mirror: it is empty for the whole of a launch that has not
-    /// yet re-read the account, and it is EMPTY IN EXACTLY THE SAME WAY whether
-    /// the account has no number or the phone simply has not asked yet. Home is
-    /// the highest-traffic surface in the app and it does not get to say "I
-    /// can't reach you" from a session that has never once reached its own
-    /// server — the same rule the briefing above it already keeps.
+    /// THE ACCOUNT ANSWERS THIS, NOT THE MIRROR — and the first version of this
+    /// guard let the mirror answer, which is the whole defect back again.
+    ///
+    /// `ownerPhone` is a device-local `@AppStorage` mirror. It is EMPTY IN
+    /// EXACTLY THE SAME WAY whether the account has no number or this launch
+    /// simply has not asked yet, and "has not asked yet" is not a rare state:
+    /// `resumeSignedInAccount` re-reads the owner AFTER `await refresh()`, so
+    /// `connection == .ready` — the thing this used to be gated on — is already
+    /// true while the number is still unread; and both owner reads in that file
+    /// are `try?`, so a read that fails leaves the mirror empty for the whole
+    /// session. Gating on "the feed loaded" therefore proves nothing about the
+    /// question actually being asked, and Home is the highest-traffic surface
+    /// in the app: it does not get to tell somebody with a number on file to go
+    /// and add one.
+    ///
+    /// So `accountSaysNoNumber` is the ACCOUNT RECORD's own answer, and it is
+    /// an optional because there are three states and not two. `nil` is "nobody
+    /// has managed to ask", and Home says nothing at all in that state.
+    /// `backend.fetchOwner` was built to hand back exactly this distinction —
+    /// its own comment: "'' means the account has no number … a thrown error
+    /// means nothing has been learned and nothing should change."
+    ///
+    /// BOTH must agree. The mirror is checked as well, so a phone holding a
+    /// number the account has since dropped stays quiet rather than calling
+    /// itself unreachable while showing the number in Settings.
     ///
     /// Whitespace counts as no number. A blank field cannot be texted, and
     /// which of the two blanks it is is not a question worth asking.
-    static func sayUnreachable(ownerPhone: String, reachedTheServer: Bool) -> Bool {
-        guard reachedTheServer else { return false }
+    static func sayUnreachable(ownerPhone: String, accountSaysNoNumber: Bool?) -> Bool {
+        guard accountSaysNoNumber == true else { return false }
         return ownerPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
@@ -192,6 +340,17 @@ struct HomeView: View {
     @EnvironmentObject var session: AnticipySession
     @Environment(\.scenePhase) private var scenePhase
     @State private var typedLine = ""
+    /// Does the ACCOUNT have a number on file? `nil` until the server has
+    /// answered — see `HomeFeedPolicy.sayUnreachable` for why that third state
+    /// is the whole point and `session.ownerPhone` cannot supply it.
+    ///
+    /// Home asks for itself because nothing it can read says whether the owner
+    /// record was ever successfully read this session: `ownerPhone` is written
+    /// by two best-effort `try?` reads in `AnticipyApp.swift`, one of which
+    /// runs AFTER the refresh that flips `connection` to `.ready`, and neither
+    /// leaves a mark behind on failure. The sentence is made here, so the
+    /// evidence for it is gathered here.
+    @State private var accountSaysNoNumber: Bool?
     /// The sentence the typewriter is committed to, captured ONCE. See
     /// `briefingView` — the poll runs every 3 seconds and used to wipe and
     /// re-type her whole briefing, with a haptic, every time a job count moved.
@@ -567,6 +726,34 @@ struct HomeView: View {
     private var finished: [AgentJob] {
         session.jobs.filter { HomeFeedPolicy.placement(status: $0.status, lane: $0.lane) == .done }
     }
+    /// How much of Done is a shelf. Eight is what this section has always
+    /// drawn; naming it is the only change to the number.
+    private static let doneShelf = 8
+    /// Done as it is actually drawn — the shelf, plus every card the shelf is
+    /// not allowed to swallow.
+    ///
+    /// `finished` is newest-CREATED first, because that is the only timestamp
+    /// the row carries, and a plain `prefix` therefore cuts by when work BEGAN
+    /// on a shelf that is about how it ENDED. An errand started this morning
+    /// and stopped tonight is the oldest row of the nine and gets cut, which
+    /// puts "it may already have gone through" back out of sight — see
+    /// `HomeFeedPolicy.settled` for the whole argument.
+    ///
+    /// The order is untouched: everything past the shelf is older than
+    /// everything on it, so what survives lands exactly where newest-first
+    /// would have put it, at the bottom. Nothing is promoted, nothing is
+    /// marked, and a person with no unsettled work sees the same eight cards
+    /// they saw before.
+    /// Bound once, because `finished` recomputes off `session.jobs` on every
+    /// read and the answer below is a list of INDEXES into the list it was
+    /// asked about.
+    private var finishedShown: [AgentJob] {
+        let rows = finished
+        let keep = HomeFeedPolicy.shelved(
+            rows.map { (status: $0.status, effectUncertain: $0.effect_uncertain) },
+            shelf: Self.doneShelf)
+        return keep.map { rows[$0] }
+    }
 
     /// What she heard, as conversations rather than as a wall of lines.
     ///
@@ -651,15 +838,19 @@ struct HomeView: View {
                         }
                         listenCard.padding(.top, feedIsEmpty ? Theme.Space.tight : Theme.Space.roomy)
                         // AN UNREACHABLE CUSTOMER NEVER FINDS OUT THEY ARE
-                        // UNREACHABLE. That sentence is a comment further down
-                        // this file, above a line that was nested inside
+                        // UNREACHABLE. Those were this file's own capitals,
+                        // written above a sentence nested inside
                         // `if !handling.isEmpty` — so it could only reach
                         // someone who already had work stuck, and an account
                         // with no number gets asked nothing and never
-                        // accumulates any. Said here, under the control, on the
-                        // screen everybody opens.
+                        // accumulates any. Said here instead, once, under the
+                        // control, on the screen everybody opens. The nested
+                        // copy is gone rather than kept: this one already
+                        // carries the parked-queue consequence in its own
+                        // words, and that one asked the device-local mirror
+                        // with no guard on it at all.
                         if HomeFeedPolicy.sayUnreachable(ownerPhone: session.ownerPhone,
-                                                         reachedTheServer: verified) {
+                                                         accountSaysNoNumber: accountSaysNoNumber) {
                             unreachableNotice.padding(.top, Theme.Space.tight)
                         }
                         if feedIsEmpty {
@@ -730,23 +921,24 @@ struct HomeView: View {
                                 // believed the fixes were live. Chrome already
                                 // reports its version on every heartbeat, so
                                 // the answer was always here to be shown.
-                                // AN UNREACHABLE CUSTOMER NEVER FINDS OUT
-                                // THEY ARE UNREACHABLE. Sign-up never
-                                // required a number, this app has no
-                                // notifications at all, and a text is the
-                                // only channel there is — so an account with
-                                // no number on file gets asked nothing, ever,
-                                // and its work parks forever in silence.
-                                // Anyone who signed up before the sign-up
-                                // gate is in exactly that state right now.
-                                if session.ownerPhone.isEmpty {
-                                    Text("I have no number for you, so I can't tell you when "
-                                         + "something needs your word. These will just wait. "
-                                         + "Add it in Settings and I'll start reaching you.")
-                                        .font(.system(size: 15))
-                                        .foregroundStyle(Theme.accent)
-                                        .padding(.bottom, Theme.Space.tight)
-                                }
+                                // THE SECOND COPY OF THE UNREACHABLE SENTENCE
+                                // IS GONE FROM HERE, and both halves of that
+                                // are deliberate. It was the same fact as
+                                // `unreachableNotice` above — which already
+                                // carries the parked-queue consequence in its
+                                // own words ("anything I prepare will just sit
+                                // here until you open the app") — so with the
+                                // hoist landed the two said one thing twice on
+                                // one scroll, in two different voices. And this
+                                // one asked `session.ownerPhone.isEmpty` with NO
+                                // guard at all: the device-local mirror is empty
+                                // in exactly the same way whether the account
+                                // has no number or this launch has not read it
+                                // yet, so on a reinstall-and-sign-in whose owner
+                                // read failed it printed "I have no number for
+                                // you" in the app's one accent colour at
+                                // somebody whose number was sitting on the
+                                // server. See `HomeFeedPolicy.sayUnreachable`.
                                 if let stale = session.staleExtensionVersion {
                                     // These three fragments shipped fused: the version
                                     // interpolation ran straight into the next sentence, so the
@@ -782,7 +974,7 @@ struct HomeView: View {
                                     .padding(.top, Theme.Space.section)
                                     .padding(.bottom, Theme.Space.tight)
                                 VStack(spacing: 0) {
-                                    ForEach(Array(finished.prefix(8).enumerated()), id: \.element.id) { i, job in
+                                    ForEach(Array(finishedShown.enumerated()), id: \.element.id) { i, job in
                                         if i > 0 { Rectangle().fill(Theme.edge).frame(height: 0.5) }
                                         DoneCard(job: job)
                                             .transition(.asymmetric(
@@ -864,6 +1056,13 @@ struct HomeView: View {
                 Haptics.warmUp()
                 session.resumeListeningIfWanted()
             }
+            // ASK THE ACCOUNT WHETHER THERE IS A NUMBER ON IT, once, and only
+            // ever on a phone whose mirror is already empty — so an account
+            // that has one pays nothing here at all. Keyed on `verified`
+            // because there is no point asking before a read of this server has
+            // worked, and because that flip is what re-arms it after a launch
+            // that started offline.
+            .task(id: verified) { await askWhetherWeCanReachThem() }
             .onChange(of: scenePhase) { phase in
                 if phase == .active {
                     Haptics.warmUp()
@@ -1219,9 +1418,10 @@ struct HomeView: View {
     /// app's one accent colour, sitting under the control that turns the whole
     /// product on, is a nag — and an app that asks for a microphone all day
     /// cannot afford to nag. So it takes `Theme.text2` at the same 15pt the
-    /// Chrome sentence further down already uses for a standing fact, and the
-    /// accent stays on the parked-queue line, where the consequence is concrete
-    /// and is happening today. Placement was the defect; loudness never was.
+    /// Chrome sentence further down already uses for a standing fact.
+    /// Placement was the defect; loudness never was — which is also why the
+    /// accent-coloured second copy that used to sit inside the stuck-queue
+    /// block is not still there saying the same thing louder.
     private var unreachableNotice: some View {
         Text("I don't have a number for you. A text is the only way I can reach you "
              + "when something needs your word, so anything I prepare will just sit "
@@ -1230,6 +1430,32 @@ struct HomeView: View {
             .foregroundStyle(Theme.text2)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The one read behind that sentence.
+    ///
+    /// `fetchOwner` THROWS when it could not ask and returns `""` only as a
+    /// fact — its own comment says the caller's decision turns on exactly that
+    /// difference, and this is the caller whose decision turns on it. So a
+    /// failure leaves `accountSaysNoNumber` at `nil` and Home stays quiet,
+    /// which is the honest outcome of not knowing.
+    ///
+    /// COST, since this is a second read of a record `resumeSignedInAccount`
+    /// also reads: it is behind `session.ownerPhone.isEmpty`, the same
+    /// condition that file already calls "one read per launch" for an account
+    /// with genuinely no number. A phone holding a number never gets here.
+    /// Once answered it is not asked again for the life of this view: adding a
+    /// number in Settings fills the mirror, and the mirror is the other half of
+    /// the guard.
+    private func askWhetherWeCanReachThem() async {
+        guard verified,
+              accountSaysNoNumber == nil,
+              !session.accountID.isEmpty,
+              session.ownerPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let owner = try? await session.backend.fetchOwner(id: session.accountID)
+        else { return }
+        accountSaysNoNumber = owner.phone
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// What the control says, what tapping it does, and what sits beside the
@@ -2052,10 +2278,16 @@ struct DoneCard: View {
     @State private var showRaw = false
 
     private var succeeded: Bool { job.status == "done" }
-    /// The owner stopped it — from "Don't do it" on the card above, or from
-    /// Stop on a running one. Both write `cancelled`, and until this branch
-    /// existed both vanished off the screen without leaving a card behind.
-    private var calledOff: Bool { job.status == "cancelled" }
+    /// Stopped before it finished — from "Don't do it" on the card above, from
+    /// Stop on a running one, from an answer that ended the errand, from the
+    /// Chrome popup, or from the brain dropping a card he was never shown. All
+    /// of them write `cancelled`, and until this branch existed all of them
+    /// vanished off the screen without leaving a card behind.
+    ///
+    /// Asked of the policy rather than of the string, because Home's Done cap
+    /// asks the same question a few hundred lines up and two spellings of one
+    /// question is how `cancelled` came to match nothing in the first place.
+    private var calledOff: Bool { HomeFeedPolicy.wasCalledOff(status: job.status) }
     private var retrying: Bool { session.inFlight.contains(job.id) }
     private var retryFailed: Bool { session.failedWrites.contains(job.id) }
 
@@ -2142,10 +2374,45 @@ struct DoneCard: View {
                     // reassuring one is the one people act on. It stays on the
                     // failed branch below, where the field still means what it
                     // says.
-                    Text(HomeFeedPolicy.calledOffLead(result: job.result))
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(Theme.text)
-                        .fixedSize(horizontal: false, vertical: true)
+                    //
+                    // THE CARD SAYS WHAT IT IS BEFORE THE SERVER DOES, and
+                    // that line is the repair. `decline` never writes `result`,
+                    // so on the "Don't do it" path the sentence below is
+                    // whatever the ENGINE last said — for a stuck job, "I may
+                    // have already sent that … check the site before I try
+                    // again, so you don't end up with two." Led with, under a
+                    // heading reading "Done", that is a terminal card promising
+                    // a retry that will never come, with nothing anywhere on it
+                    // saying the owner stopped it. The kicker is the same
+                    // caption treatment `ConfirmJobCard` gives "Your exact
+                    // words", it costs one line, and it makes the card's
+                    // identity independent of what the server happened to
+                    // write. It names WHAT, never WHO — the brain cancels cards
+                    // he was never shown, so an actor in the kicker would be a
+                    // fresh false claim; see `HomeFeedPolicy.calledOffKicker`.
+                    // Succeeded and failed do not need one: their leads are
+                    // composed here and say what they are.
+                    //
+                    // BOUND TO THE SENTENCE IT LABELS, at the same spacing 4
+                    // `ConfirmJobCard` binds "Your exact words" to the words —
+                    // loose in this card's outer stack the kicker sat exactly
+                    // as far from its own sentence as the goal sits from it,
+                    // and a label the same distance from everything is not
+                    // reading as a label of anything. Combined for VoiceOver
+                    // for the same reason: the glyph beside this card is
+                    // `accessibilityHidden`, so the kicker is the only thing
+                    // that says what the card is, and two stray elements read
+                    // out one after another do not make one statement.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(HomeFeedPolicy.calledOffKicker)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.muted)
+                        Text(HomeFeedPolicy.calledOffLead(result: job.result))
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
                     // The goal underneath, in the same lead-then-context order
                     // the succeeded branch uses a few lines up: what happened
                     // first, what it was about second.
