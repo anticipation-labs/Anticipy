@@ -340,7 +340,17 @@ settings:
     # not in project.yml, which is the file `xcodegen generate` writes FROM — so
     # adding any source file resurrects the vendor sentence. Fixed at the source
     # this time. See the note on the key itself.
-    CURRENT_PROJECT_VERSION: "90"
+    #
+    # 91: the trust-tier UX pass, five source files in one tree and none of them
+    # compiled together until now. Sign-out stopped leaving the last owner's
+    # name and email on the screen for whoever signs in next; a stop you tapped
+    # stopped taking its own warning away with it; a half-typed number under
+    # Save stopped saying nothing at all; a stopped card now says it stopped.
+    # Every one of those is a sentence a person reads and believes, so build 90
+    # and these bytes disagree about what the app told somebody about their own
+    # account. That is the reason the number moves even though no feature was
+    # added.
+    CURRENT_PROJECT_VERSION: "91"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
