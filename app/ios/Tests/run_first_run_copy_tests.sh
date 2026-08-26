@@ -28,7 +28,11 @@ finale="$app/Views/OnboardingFinale.swift"
 auth="$app/Views/AuthView.swift"
 diag="$app/Views/ListeningDiagnosticsView.swift"
 settings="$app/Views/SettingsView.swift"
-for f in "$onboard" "$finale" "$auth" "$diag" "$settings"; do
+# The call site, and Home. Neither was read by this suite when it was written,
+# and that is exactly why a dead feature passed it: see "THE FINALE IS WIRED".
+root="$app/AnticipyApp.swift"
+home="$app/Views/ContentView.swift"
+for f in "$onboard" "$finale" "$auth" "$diag" "$settings" "$root" "$home"; do
     [ -f "$f" ] || { echo "missing $f — these checks would compile nothing"; exit 2; }
 done
 
@@ -59,6 +63,31 @@ if code "$onboard" | grep -qE 'beatNames\[step\]'; then
     echo "The track indexes beatNames[step] again."
     echo "Against a five-element array that misnames every beat by one: the"
     echo "count says 3 of 5 and the name above it says the beat before."
+    exit 2
+fi
+
+# 1b. AND IT DOES NOT COUNT OVER THE INTRODUCTION. The welcome beat is the
+#     product introducing itself; a counter on it turns that into "step 1 of 5"
+#     of a wizard. `design/day-zero.md` refuses wizard dots and so does the
+#     audit's own rejected-recommendations list, and the comment above the
+#     modifier argues it in writing — but an argument in a comment is the one
+#     thing the next agent can delete without anything going red. It is a
+#     SwiftUI modifier rather than a pure decision, so it is checked as source.
+#
+#     Both halves have to hold: invisible AND not announced. An element drawn
+#     at zero opacity that still reads "Step 1 of 5" to VoiceOver is a wizard
+#     for screen-reader users only, which is worse than the bug.
+if ! code "$onboard" | grep -q 'step == Step.welcome ? 0 : 1'; then
+    echo "The progress track no longer hides itself on the welcome beat."
+    echo "That renders \"Hello   2 of 5\" over the product's own introduction:"
+    echo "wizard dots in prose. day-zero.md and the mobile-UX audit both refuse"
+    echo "it, and the comment above that line argues it out."
+    exit 2
+fi
+if ! code "$onboard" | grep -q 'accessibilityHidden(step == Step.welcome)'; then
+    echo "The track is hidden by opacity but still announced on welcome."
+    echo "A counter nobody can see that VoiceOver still reads aloud is a wizard"
+    echo "for screen-reader users only."
     exit 2
 fi
 
@@ -96,6 +125,25 @@ fi
 #     is checked here is that the seed also records that an account's own number
 #     is ALREADY SAVED, because `advance()` otherwise re-sends it and reports
 #     "I couldn't save that just now" over a number already on the record.
+#     The NAME AND EMAIL need the same guard, and did not get it: they were
+#     seeded from the account by the same `.task` and re-sent by the same
+#     `advance()` one branch below the number's guard. Same false failure, same
+#     screen, same connection — "I couldn't save that just now" over an email
+#     the account already holds.
+#     Checked at the USE, not the declaration. The first draft of this leg
+#     grepped for `detailsChanged` alone and a mutation that deleted it from
+#     the `if` — leaving the `let` above it — walked straight through green.
+#     A computed guard nothing branches on is the same bug wearing a variable
+#     name, which is what check 1 says about `beatNames[step]`.
+if ! code "$onboard" | grep -q 'detailsSaved, detailsChanged'; then
+    echo "The last beat re-sends the name and email unchanged."
+    echo "Both are seeded from the account, so somebody who signs in and leaves"
+    echo "the first-name box alone re-sends facts already on their record. On a"
+    echo "bad connection that holds them at the last page of first run under a"
+    echo "save failure over their own saved email. The number got this guard;"
+    echo "these two live one branch below it."
+    exit 2
+fi
 if ! code "$onboard" | grep -q 'phoneSaved = hasStoredPhone'; then
     echo "The number beat no longer knows its seeded number is already saved."
     echo "advance() then re-sends it on every first run, and on a bad"
@@ -115,6 +163,43 @@ if ! code "$finale" | grep -q 'ending.sentence'; then
 fi
 if code "$finale" | grep -q 'text: "Give me a day'; then
     echo "The finale has a hardcoded ending again."
+    exit 2
+fi
+
+# 3b. THE FINALE IS WIRED, which is the check whose absence made every other
+#     check in this section worthless. `FirstRunEnding` was correct, compiled
+#     and green while the call site read `OnboardingFinale { celebrating =
+#     false }` — a trailing closure binds to the LAST parameter, so the two
+#     facts fell back to their defaults, every ending collapsed to `.listening`
+#     and "Give me a day. You'll see." still played over somebody who had
+#     declined the microphone. The whole feature was dead and this suite said
+#     "all first-run copy checks passed".
+#
+#     A decision nothing consults is not shipped. Read the call site.
+if ! code "$root" | grep -q 'OnboardingFinale(listening:'; then
+    echo "AnticipyApp no longer passes the two facts to OnboardingFinale."
+    echo "Whatever it passes instead, the ending is decided by defaults again:"
+    echo "one sentence over everybody, including the person who just tapped"
+    echo "\"Not right now\" on the microphone. FirstRunEnding being right does"
+    echo "not matter if nothing asks it."
+    exit 2
+fi
+if ! code "$root" | grep -q 'micBlocked:'; then
+    echo "AnticipyApp passes no micBlocked: to OnboardingFinale."
+    echo "The \"iOS has my microphone switched off\" ending is unreachable."
+    exit 2
+fi
+# And the defaults must stay gone. Restoring one makes the old broken call
+# compile again, which is how this shipped dead the first time: with a default
+# in place, deleting the argument is a silent copy change rather than a build
+# error. It also puts the answer in two places, and the second one is invisible
+# — flipping `= true` to `= false` there rewrote the last sentence of first run
+# for every person alive and turned nothing red.
+if code "$finale" | grep -qE '^[[:space:]]*(var|let) (listening|micBlocked)[[:space:]]*='; then
+    echo "OnboardingFinale defaults listening/micBlocked again."
+    echo "Un-defaulted, a dropped argument is a build error. Defaulted, it is a"
+    echo "wrong sentence on the last screen of first run with a green suite"
+    echo "over it — which is what happened."
     exit 2
 fi
 
@@ -184,7 +269,7 @@ fi
 primer=$(code "$onboard" | grep -A2 'You can see exactly what I cost')
 if printf '%s\n' "$primer" | grep -q '%'; then
     echo "The cost promise carries a percentage."
-    echo "ListeningDiagnosticsView:59-64 states there is not one recorded drain"
+    echo "ListeningDiagnosticsView's \"NO VERDICT\" note states there is no recorded drain"
     echo "figure in this repo to draw a line from. An invented number on the"
     echo "consent screen is what law 1 exists to stop."
     exit 2
@@ -197,7 +282,60 @@ if printf '%s\n' "$primer" | grep -q 'today'; then
     echo "window."
     exit 2
 fi
-echo "the track, the last beat, the door, the opt-out and the cost line are all wired"
+# 7. THE CITATIONS RESOLVE.
+#
+# "READ THE COMMENT ABOVE THE LINE BEFORE CHANGING THE LINE" is the mechanism
+# this repo leans on hardest — the mobile-UX audit records it killing a third
+# of its own findings. That makes a comment pointing at the wrong code worse
+# than a comment saying nothing: the next reader follows it, lands on a toolbar
+# modifier or a pause menu, concludes the note is nonsense, and reverts a
+# correct fix. Five citations written into these files during this group's
+# first pass were wrong on the DAY THEY WERE WRITTEN, not merely drifted.
+#
+# So the comments here now cite QUOTED COPY AND SYMBOL NAMES, never line
+# numbers, and the quotations are checked. A line number rots in silence the
+# next time somebody inserts a paragraph above it; a quotation that stops
+# resolving fails this suite. Comments are the target, so these scan the RAW
+# files rather than `code`.
+missing_citation() {
+    echo "A comment in first run cites \"$2\" in $(basename "$1"), which is not there."
+    echo "Either the quoted copy moved and the citation must follow it, or the"
+    echo "citation was never right. Both are load-bearing: this repo's rule is"
+    echo "to read the comment above the line, and a citation that sends the"
+    echo "reader to unrelated code trains them out of doing that."
+    exit 2
+}
+# OnboardingFinale's header rests its whole case on Home contradicting the
+# promise one screen later, and on ContentView's own warning about isListening.
+for quote in "I'm not listening yet, tap Listen with phone" \
+             "the owner's standing wish, not a fact about the"; do
+    grep -qF "$quote" "$home" || missing_citation "$home" "$quote"
+done
+# The number beat's opt-out says "I'll do this in Settings." and names the two
+# sections that have to hold those three fields for that to be true.
+for quote in 'Section("You")' 'Section("Your number")' \
+             "Find out what listening actually did"; do
+    grep -qF "$quote" "$settings" || missing_citation "$settings" "$quote"
+done
+# The cost promise leans on this file shipping in release and refusing a verdict.
+for quote in "SHIPS IN RELEASE" "NO VERDICT"; do
+    grep -qF "$quote" "$diag" || missing_citation "$diag" "$quote"
+done
+# And no first-run comment may go back to citing a line number, which is the
+# habit rather than the instance. `swift:123` in a comment is the shape.
+for f in "$onboard" "$finale" "$auth"; do
+    if grep -nE '`[A-Za-z]+\.swift:[0-9]+' "$f"; then
+        echo "^ $(basename "$f") cites a line number again."
+        echo "Every one of those written in this group's first pass pointed at"
+        echo "unrelated code within days, several on the day of writing. Cite"
+        echo "the quoted copy or the symbol; those move with the thing they name"
+        echo "and this suite can check them."
+        exit 2
+    fi
+done
+
+echo "the track, the last beat, the finale's wiring, the door, the opt-out, the"
+echo "cost line and every citation in first run all resolve"
 
 # ------------------------------------------------------------- the real types
 #

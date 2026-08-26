@@ -162,11 +162,21 @@ check("the first name still says why it cannot be worked out",
 
 check("someone listening gets the ending this scene was written for",
       FirstRunEnding.of(listening: true, micBlocked: false) == .listening)
-// `micBlocked` is `listener.permissionDenied`, which LATCHES on a refusal and
-// is not re-derived from iOS on every read. A phone that is audibly listening
-// must never be told its microphone is switched off, whatever an older flag
-// still says.
-check("listening outranks a stale refusal flag",
+// THIS CHECK USED TO CARRY A FALSE REASON, and the reason mattered more than
+// the check: it said `micBlocked` "LATCHES on a refusal and is not re-derived
+// from iOS on every read". It does not latch. `AnticipyApp.micBlocked` is
+// `listener.permissionDenied`, a COMPUTED property that performs three live
+// iOS authorization reads on every access and stores nothing. Anybody
+// reasoning from the old sentence would have gone looking for a cache to
+// invalidate that was never there.
+//
+// The true reason for the order is narrower. `isListening` is set true in
+// exactly one place, inside `PhoneListener.begin()`, which is reachable only
+// after both authorizations come back granted — so `listening && micBlocked`
+// should never occur at all. This pins the branch that handles it anyway,
+// because a phone that is audibly listening must never be told its microphone
+// is switched off.
+check("listening outranks a refusal flag it should never see",
       FirstRunEnding.of(listening: true, micBlocked: true) == .listening)
 check("iOS having refused is its own ending",
       FirstRunEnding.of(listening: false, micBlocked: true) == .blocked)

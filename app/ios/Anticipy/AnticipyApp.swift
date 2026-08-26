@@ -50,7 +50,21 @@ struct AnticipyApp: App {
             }
             .overlay {
                 if celebrating {
-                    OnboardingFinale { celebrating = false }
+                    // THE TWO FACTS ARE THE POINT OF THIS CALL. `OnboardingFinale`
+                    // picks one of three closing sentences, and passing neither
+                    // fact collapsed all three into "Give me a day. You'll see."
+                    // — said to the person who had tapped "Not right now" on the
+                    // microphone a minute earlier, and to the person iOS had
+                    // refused on their behalf. Home contradicts that promise on
+                    // the very next screen.
+                    //
+                    // Read off `isListening`, the owner's standing wish, rather
+                    // than `capturing`: a phone call holding the microphone for
+                    // four seconds at this exact moment would otherwise make the
+                    // app call somebody a decliner in the one breath it has to
+                    // thank them.
+                    OnboardingFinale(listening: session.listener.isListening,
+                                     micBlocked: session.micBlocked) { celebrating = false }
                 }
             }
             // The three biggest state changes in the product used to hard-cut.

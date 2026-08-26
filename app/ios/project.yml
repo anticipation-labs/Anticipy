@@ -370,7 +370,28 @@ settings:
     # Same reason the number moved at 91: every one of these is a sentence a
     # person reads and believes, so build 91 and these bytes disagree about
     # what the app told somebody about their own account.
-    CURRENT_PROJECT_VERSION: "92"
+    #
+    # 93: build 92's note above says first run "ends three ways". It did not.
+    # `FirstRunEnding` was written, compiled and tested at 92, and nothing
+    # called it: the call site passed neither fact, a trailing closure bound to
+    # the last parameter, both facts fell back to their defaults and every
+    # ending collapsed to the one sentence the type existed to stop. So build
+    # 92 still says "Give me a day. You'll see." to somebody who declined the
+    # microphone, and Home contradicts it on the very next screen. 93 is the
+    # first build where that sentence is chosen rather than assumed.
+    #
+    # Also at 93: the last beat stopped re-sending a name and email the account
+    # already held, which on a bad connection held a person at the final page
+    # of first run under a save failure over their own saved email.
+    #
+    # The bytes that moved are otherwise comments — but they are the comments
+    # this repo navigates by, and six of them cited line numbers that pointed
+    # at unrelated code, five of those wrong on the day they were written. One
+    # stated as fact that `permissionDenied` latches when it is a computed
+    # property doing three live reads. A comment that misdirects the next
+    # reader is a defect in a codebase whose first rule is to read the comment
+    # above the line, so 92 and these bytes disagree about that too.
+    CURRENT_PROJECT_VERSION: "93"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

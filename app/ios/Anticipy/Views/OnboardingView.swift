@@ -231,9 +231,18 @@ struct OnboardingView: View {
         // NAMES THE PAGE, BECAUSE IT DOES NOT SKIP. This read "Skip for now",
         // and "for now" promises a second pass that does not exist: the branch
         // below sets `phoneSkipped`, saves, and calls `finish()` — it ends
-        // first run. All three fields on this beat live in Settings (first
-        // name and email at `SettingsView.swift:201-203`, the number at
-        // `:288-295`), so the honest label is the page, not the delay.
+        // first run. All three fields on this beat really do live in Settings:
+        // first name and email in its `Section("You")`, the number in its
+        // `Section("Your number")`. So the honest label is the page, not the
+        // delay.
+        //
+        // CITED BY SECTION NAME RATHER THAN LINE NUMBER, deliberately. This
+        // comment used to give two line ranges in SettingsView, and both were
+        // wrong on the day they were written — one landed on a status pill,
+        // the other on a caption. The next agent checking whether this label
+        // tells the truth would have found no fields there and reverted a
+        // correct fix. Section titles are user-visible copy, they move with
+        // their fields, and `run_first_run_copy_tests.sh` greps for them.
         case Step.phone: return "I'll do this in Settings."
         default: return nil
         }
@@ -315,7 +324,24 @@ struct OnboardingView: View {
             }
             let first = firstName.trimmingCharacters(in: .whitespaces)
             let mail = email.trimmingCharacters(in: .whitespaces)
-            if !detailsSaved, !first.isEmpty || !mail.isEmpty {
+            // AND UNCHANGED IS ALREADY SAVED — the same bug the number got a
+            // guard for one branch up, left open here in the same function.
+            // Both boxes are SEEDED from the account (`firstName` from
+            // `session.ownerFirstName`, `email` from `session.ownerEmail`,
+            // which `signIn` always writes), so somebody who signs in, leaves
+            // the first-name box alone and taps "Start living your day" was
+            // re-sending facts already on their record. On a good connection
+            // that is a wasted round trip; on a bad one the `guard ok` below
+            // holds them on the last page of first run under "I couldn't save
+            // that just now" — over an email their account already has. A
+            // false failure, and the last thing first run does.
+            //
+            // Compared at the point of sending rather than latched at seed
+            // time like `phoneSaved`, because `.onChange(of: firstName)` fires
+            // after this view's `.task` and would clear a flag set there.
+            let detailsChanged = first != session.ownerFirstName
+                || mail != session.ownerEmail
+            if !detailsSaved, detailsChanged, !first.isEmpty || !mail.isEmpty {
                 let ok = await session.saveOwnerDetails(first: first, last: "", email: mail)
                 guard ok else {
                     savingPhone = false
@@ -545,15 +571,20 @@ struct OnboardingView: View {
             // has been measuring the real one all along and this screen never
             // said so.
             //
-            // Every clause is a row that exists: "Battery used while
-            // listening" (`ListeningDiagnosticsView.swift:65`), "Time spent
-            // listening" (`:46`), "The log" (`:111`), reached from
-            // `SettingsView.swift:83`, and that file ships in RELEASE
-            // deliberately (`:5-9`) — a receipt only a debug build can show is
-            // not a receipt.
+            // Every clause is a row that exists in `ListeningDiagnosticsView`:
+            // "Battery used while listening", "Time spent listening" and "The
+            // log" — reached from Settings' "Find out what listening actually
+            // did", and that file ships in RELEASE deliberately ("SHIPS IN
+            // RELEASE", in its own header) — a receipt only a debug build can
+            // show is not a receipt. Each of those rows is grepped by
+            // `run_first_run_copy_tests.sh`; the route is too.
+            //
+            // Named, not numbered. The line numbers this comment used to carry
+            // for the Settings route were wrong on the day of writing.
             //
             // NO PERCENTAGE, AND NO "TODAY". Not a percentage because
-            // `ListeningDiagnosticsView:59-64` states there is not one recorded
+            // `ListeningDiagnosticsView`'s "NO VERDICT" note states there is
+            // not one recorded
             // drain figure in this repo to draw a line from, and an invented
             // number on the consent screen is what law 1 exists to stop. Not
             // "today" because it would not be true: `ListenTally.of` folds
@@ -661,10 +692,13 @@ struct OnboardingView: View {
     /// so there is no path where this page claims an email or a number it does
     /// not have. It says "already on your account" rather than the more natural
     /// "came in at the door" for the same reason: on the sign-in path the
-    /// number never came in at any door — `signIn` reads it back off the
-    /// account record (`AnticipyApp.swift:1330-1332`) — and a confirmation
+    /// number never came in at any door — `AnticipySession.signIn` reads it
+    /// back off the account record into `ownerPhone` — and a confirmation
     /// screen that is wrong about where it got your number is worse than one
     /// that never mentioned it.
+    ///
+    /// (That parenthesis carried a line number until this pass, and the line
+    /// number had already drifted onto the middle of an unrelated comment.)
     ///
     /// LEADING, like `howItWorks` and `micPrimer`. Centred prose was survivable
     /// over three identical boxes; over rows carrying a label, a value and a
@@ -753,8 +787,23 @@ struct OnboardingView: View {
                         .foregroundStyle(Theme.muted)
                 }
             } else {
-                // "I'll reach you at" and the number in monospace, which is the
-                // spec's own wording and the spec's own treatment.
+                // "I'll reach you at" is the spec's own wording, word for word.
+                //
+                // THE TREATMENT IS NOT THE SPEC'S, and saying so cost this
+                // comment its previous sentence. The spec asks for "the number
+                // in monospace"; what ships is `.title3.monospacedDigit()`,
+                // which is not a monospaced face at all — it is the same system
+                // font this whole flow already uses, with fixed-width DIGITS.
+                // The standing constraint on this pass is no new font, so a
+                // real monospaced face was not available to spend. Digits of
+                // equal width are the part of the spec's intent that a phone
+                // number actually needs: the number stops shuffling sideways
+                // as it is typed or re-read. `.monospacedDigit()` is already
+                // the idiom here — `AuthView` sets it on the pairing code and
+                // `SettingsView` on its one measured number.
+                //
+                // So: the spec's wording, and as much of the spec's treatment
+                // as the constraint left on the table. Not the same claim.
                 confirmedRow(label: "I'll reach you at",
                              value: session.ownerPhone,
                              monospaced: true,
