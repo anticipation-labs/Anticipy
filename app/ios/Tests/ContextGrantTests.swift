@@ -219,8 +219,17 @@ do {
     let contacts = ContextSource.contacts.promises.joined(separator: " ")
     check(!contacts.contains("only when it matters"),
           "the contacts promise no longer claims names travel only when needed")
-    check(contacts.lowercased().contains("list of names"),
-          "the contacts promise says a list is sent, not a single name")
+    // This asserted the literal phrase "list of names", which was the old
+    // wording. The promise now names the CAP the reader has enforced all
+    // along — "at most forty names, once" — so the check moved from the
+    // phrasing to the thing the phrasing is about: more than one name goes,
+    // and the historical false promise ("only the name travels", :108) has
+    // not crept back. The spelled-out cap itself is pinned against
+    // LifeContext.maxNames in run_context_receipt_tests.sh.
+    check(contacts.lowercased().contains("names"),
+          "the contacts promise says names travel, plural, not a single name")
+    check(!contacts.lowercased().contains("only the name"),
+          "the contacts promise does not claim just one of them goes")
 }
 
 print(failures == 0 ? "context grant tests: all passed" : "context grant tests: \(failures) FAILED")
