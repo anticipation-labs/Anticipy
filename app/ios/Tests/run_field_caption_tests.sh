@@ -71,16 +71,49 @@ fi
 #    same predicate the button is gated on, and by the outcome the save came
 #    back with. A caption reading anything else is a caption that can disagree
 #    with the button beside it, which is the whole defect.
-if ! code "$settings" | grep -q 'complete: session\.e164(phoneField) != nil'; then
-    echo "Settings' number caption no longer reads e164."
+#
+#    AND THE CHECK IS SCOPED TO ONE CALL, not to the file. Three whole-file
+#    greps are three separate questions, each of which any caption on the screen
+#    can answer — which is how the first draft passed, and how the argument no
+#    grep named (`text:`) could be replaced with "" while this suite stayed
+#    green: `FieldCaption.state` returns .neutral on empty text before it can
+#    return .notYetValid, so the refusal sentence became unreachable on the one
+#    screen this fix is about, silently. So the call is lifted as one block and
+#    every argument that carries a state is asserted INSIDE it.
+code "$settings" > "$out/settings.code.swift"
+awk '
+    /FieldCaptionLine\(/ { grab = 1; buf = ""; depth = 0 }
+    grab {
+        buf = buf $0 " "
+        n = gsub(/\(/, "("); m = gsub(/\)/, ")")
+        depth += n - m
+        if (depth <= 0) { print buf; grab = 0 }
+    }
+' "$out/settings.code.swift" > "$out/captions.txt"
+
+number=$(grep 'complete: session\.e164(phoneField) != nil' "$out/captions.txt" | head -1)
+if [ -z "$number" ]; then
+    echo "No FieldCaptionLine on Settings reads e164."
     echo "The caption and the Save button have to answer to one predicate, or"
     echo "the screen can refuse a number in one place and accept it in the other."
+    echo "(If the caption IS still there, this block lift has broken — it"
+    echo "brackets on parentheses. Either way these checks are reading nothing.)"
     exit 2
 fi
-if ! code "$settings" | grep -q 'attempt: phoneAttempt'; then
+if ! printf '%s\n' "$number" | grep -q 'attempt: phoneAttempt'; then
     echo "Settings' number caption no longer reads what the save came back with."
     echo "That is the state the old `phoneSaved` bool had no room for: a save"
     echo "that never reached the server, reported as nothing at all."
+    exit 2
+fi
+if ! printf '%s\n' "$number" | grep -q 'text: phoneField'; then
+    echo "Settings' number caption no longer reads the field's own text."
+    echo "FieldCaption.state answers 'empty' before it answers 'not yet whole',"
+    echo "so a caption handed anything but the live text can never reach the"
+    echo "refusal sentence: the field prefills to a dialling code, Save is"
+    echo "disabled because e164 refuses it, and the line under it says only what"
+    echo "the field is for. A disabled button and no sentence saying why is the"
+    echo "dead end this fix exists to close."
     exit 2
 fi
 if ! code "$settings" | grep -q 'FieldCaptionLine('; then
@@ -92,6 +125,60 @@ if code "$settings" | grep -q 'phoneSaved ?'; then
     echo "The two-state caption ternary is back on the number field."
     exit 2
 fi
+
+# 3b. AND SOMETHING MUST STILL WRITE THE FAILURE. Every check above is about the
+#     caption's INPUTS; none of them is about the one line that ever puts a
+#     failure into `attempt`. With the inputs pinned and the verdict unpinned,
+#     `phoneAttempt = ok ? .saved : .untried` passed this whole suite — and that
+#     assignment IS the shipped bug: `upsertOwnerPhone` comes back false in
+#     airplane mode, the state goes back to untried, the caption falls through
+#     to its neutral sentence, and the person is told their number is saved or
+#     not by silence. The four states are worth nothing if only three are ever
+#     reachable.
+#
+#     Matched loosely — `<field> = <something that is not another => ... .failed`
+#     — so that rewriting the ternary as an if/else is still a pass, and losing
+#     the failure branch is not.
+for field in detailsAttempt phoneAttempt; do
+    if ! code "$settings" | grep -qE "$field = [^=].*\.failed"; then
+        echo "Nothing in Settings ever sets $field to .failed."
+        echo "A save that did not reach the server would be reported as nothing"
+        echo "at all — which is the exact silence the old bool kept, arriving"
+        echo "back through the state machine that replaced it."
+        exit 2
+    fi
+done
+
+# 3c. AND THE FORGET PATH MUST PUT THEM BACK. `forgetMeOnThisPhone` cleared the
+#     two bools these states replaced; the rename left those two lines naming
+#     identifiers that no longer existed, so this file did not compile at all
+#     for one commit. Deleting them was the obvious repair and it is wrong: the
+#     `.onChange` handlers fire on a CHANGE, and somebody who saved nothing and
+#     then tapped forget leaves every field already empty — no change, no reset,
+#     and a "Saved." left sitting over a value that was just deleted.
+forget=$(awk '
+    /private func forgetMeOnThisPhone\(\)/ { grab = 1; depth = 0; seen = 0 }
+    grab {
+        buf = buf $0 " "
+        n = gsub(/\{/, "{"); m = gsub(/\}/, "}")
+        depth += n - m
+        if (n > 0) seen = 1
+        if (seen && depth <= 0) { print buf; exit }
+    }
+' "$out/settings.code.swift")
+if [ -z "$forget" ]; then
+    echo "Found no \`forgetMeOnThisPhone\` body in SettingsView."
+    echo "Either the method moved or this extraction broke; either way this"
+    echo "check is reading nothing."
+    exit 2
+fi
+for field in detailsAttempt phoneAttempt; do
+    printf '%s\n' "$forget" | grep -q "$field = .untried" || {
+        echo "forgetMeOnThisPhone no longer resets $field."
+        echo "A forget that leaves a verdict standing is the app reporting a save"
+        echo "of something it has just erased."
+        exit 2; }
+done
 
 # 4. TWO SENTENCES, ONE WORDING. The constants must still be what the first-run
 #    beat ships, or the port has drifted and the component bought nothing.

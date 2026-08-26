@@ -1068,8 +1068,14 @@ struct SettingsView: View {
         session.ownerBirthday = ""
         session.ownerPhone = ""
         firstName = ""; lastName = ""; email = ""; birthday = ""; phoneField = ""
-        detailsSaved = false
-        phoneSaved = false
+        // The successors of the `detailsSaved` / `phoneSaved` bools this method
+        // used to clear. Set here rather than left to the `.onChange` handlers
+        // above: those fire on a CHANGE, and a person who saved nothing and
+        // then tapped forget leaves every field already empty — no change, no
+        // reset, and a "Saved." sitting over a field whose value was just
+        // deleted. The one state a forget must never end in.
+        detailsAttempt = .untried
+        phoneAttempt = .untried
         if pendant.hasPairedPendant { pendant.forgetPendant() }
         // Let go of the browser BEFORE the identity rotates, or the pairing is
         // orphaned: agents.owner is written once, at pairing, with whatever
