@@ -25,7 +25,8 @@ import requests
 from . import pb
 from . import research
 
-from .anticipy_core import DEVICE_CALENDAR_LANE, Anticipy, goal_tokens
+from .anticipy_core import (DEVICE_CALENDAR_LANE, RESEARCH_LANE, Anticipy,
+                            goal_tokens, is_device_lane, needs_no_browser)
 from .evidence import picture_for_done_text
 from .memory import Memory
 from . import sorter
@@ -1210,6 +1211,16 @@ def report_stalled_work(anticipy) -> None:
             return
         for job in r.json().get("items", []):
             goal = (job.get("goal") or "").strip()
+            # THE FILTER ABOVE IS AN OPTIMISATION; THIS IS THE DECISION.
+            # `lane!="device_calendar"` is SQLite's `=`, which is
+            # case-sensitive, while the hook and the phone both normalise
+            # before they judge (anticipy_core.normalized_lane says why). A
+            # row stored as "Device_Calendar" is a device row to them and
+            # arrives HERE, where every sentence composed below tells him his
+            # BROWSER is what is missing. It is not, and no wording of that
+            # sentence could make it true.
+            if needs_no_browser(job.get("lane")):
+                continue
             # Quiet work stays quiet: an ambient job that cannot run is not
             # worth his attention — it was never something he asked her for.
             if ambient_job(job):
@@ -1279,6 +1290,13 @@ def report_unclaimed_device_work(anticipy) -> None:
     against. It says the TRUE thing — the app, not the browser — and it never
     says the work happened.
 
+    IT ALSO NEVER SAYS IT IS ABOUT TO. "It goes the moment the app is open"
+    was in the first draft of both the brief and the fallback, and it is a
+    promise made out of a fact this process cannot have: the phone writes no
+    heartbeat, and `CalendarHandPolicy.decide` refuses on two dozen causes,
+    all but three of them invisible from here. The app open and refusing is
+    the ordinary case this notice is FOR, not an edge of it.
+
     Deliberately a NOTICE and not a recovery: nothing here requeues, retries,
     or moves the row to another lane. `run_preflight_research` hands rows back
     to the browser with a hardcoded `{"lane": ""}`, and a calendar write in a
@@ -1300,18 +1318,40 @@ def report_unclaimed_device_work(anticipy) -> None:
         # own stale jobs and the worker hands back its own stranded research;
         # a phone that claimed a row and then died leaves it at `running`
         # with no process anywhere looking at it, reading as "she is on it".
+        # ASK FOR A SUPERSET AND DECIDE IN PYTHON. `lane="device_calendar"`
+        # is SQLite's `=` and case-sensitive; the hook and the phone both
+        # normalise before they judge, so a row stored "Device_Calendar" is a
+        # device row to both of them and matched NOBODY's filter here. It sat
+        # queued with no hand and no notice — the orphan
+        # `CalendarHandPolicy.swift:96-105` names by name.
+        # The negative clauses are exhaustive rather than clever: "" is the
+        # browser and "research" is this process, and those are the only other
+        # lanes a job row carries, so this is the device rows plus anything
+        # oddly cased. `is_device_lane` — the same normalisation the other two
+        # layers use — is what actually selects.
+        # DELIBERATELY NOT `lane~"device_calendar"`: no filter in this repo
+        # uses that operator against the live PocketBase, and a filter the
+        # server rejects comes back `ok=False`, which the line below reads as
+        # "nothing to report" — trading a narrow silence for a total one.
         filt = (f'(status="queued" || status="running")'
-                f' && lane="{DEVICE_CALENDAR_LANE}" && updated<="{since}"')
+                f' && lane!="" && lane!="{RESEARCH_LANE}"'
+                f' && updated<="{since}"')
         scope = owner_filter(anticipy)
         if scope:
             filt = f"({filt}) && {scope}"
+        # Ten, not five: the page is now a superset, and a page filled by rows
+        # this function will discard is silence again by another route.
         r = pb.get(f"{anticipy.backend_url}/api/collections/jobs/records",
-                   params={"filter": filt, "perPage": 5, "sort": "updated"},
+                   params={"filter": filt, "perPage": 10, "sort": "updated"},
                    timeout=10)
         if not getattr(r, "ok", False):
             return
         for job in r.json().get("items", []):
             goal = (job.get("goal") or "").strip()
+            # The filter above is the superset; this is the lane decision,
+            # read the way the hook and the phone read it.
+            if not is_device_lane(job.get("lane")):
+                continue
             # Quiet work stays quiet, exactly as on the browser lane: an
             # ambient errand that cannot run was never something he asked for.
             if ambient_job(job):
@@ -1327,25 +1367,55 @@ def report_unclaimed_device_work(anticipy) -> None:
             if sent_moments_ago(local_key):
                 continue
             midway = job.get("status") == "running"
+            # WHAT THIS FUNCTION IS ALLOWED TO CLAIM, and it is less than the
+            # first draft claimed. "It goes the moment the app is open" is a
+            # statement about the PHONE'S FUTURE BEHAVIOUR, and the brain
+            # cannot see the phone at all — the comment above this function
+            # spends a paragraph on exactly that: there is no heartbeat row,
+            # which is why "sitting at queued" is the only observation there
+            # is. `CalendarHandPolicy.decide` refuses on twenty-four
+            # enumerated causes (CalendarHandPolicy.swift:303-347). The mint
+            # point compares the three the routing key can see — act_type,
+            # reach and executor — so a row delivered here agrees with the
+            # phone about the ACT. The other twenty are invisible from this
+            # process: `.noWritableCalendar`, `.startAlreadyPast`,
+            # `.factsIncomplete`, `.approvalNotOnTheRow`, and so on. Every one
+            # of them produces the same picture — the app IS open, it IS
+            # refusing, and she is texting him that it is about to run.
+            # So the sentence says what was OBSERVED (it is still queued,
+            # nothing has happened) and promises nothing. An owner who is told
+            # the truth opens the app and sees a refusal; an owner promised it
+            # would run waits, and the promise is what makes the wait a lie.
             said = anticipy._voice({
                 "situation": ("this stopped partway on their phone — say so "
-                              "plainly, no alarm, and that you will finish it "
-                              "when the Anticipy app is open again" if midway
+                              "plainly, no alarm, and that you are still "
+                              "holding it. You cannot see their phone, so you "
+                              "do not know why it stopped: make no promise "
+                              "about when it finishes, do not tell them that "
+                              "opening the app is enough, and never say it is "
+                              "done"
+                              if midway
                               else "this is queued for their PHONE, not their "
                               "computer, and the Anticipy app has not picked "
-                              "it up — tell them plainly, no alarm, that it "
-                              "goes the moment the app is open. Never say it "
-                              "is done"),
+                              "it up — tell them plainly, no alarm, that "
+                              "nothing has happened yet and you are still "
+                              "holding it. You cannot see their phone: it "
+                              "may be closed, or open and refusing this "
+                              "errand for a reason only it can see. So make "
+                              "no promise about whether or when it runs, do "
+                              "not tell them that opening the app is enough, "
+                              "do not give a time, and never say it is "
+                              "done"),
                 "task": goal,
             # The goal is a free-form phrase, so the template wraps it rather
             # than reading it as a noun: "I'm ready to put {goal} in your
             # calendar" turns "put dinner Thursday 7pm in my calendar" into
             # a sentence with two calendars in it. Same shape the browser
             # fallback next door already uses.
-            }) or (f"{goal} stopped partway on your phone. I'll finish it when "
-                   f"the app is open again." if midway else
-                   f"{goal} — I'm ready, it just needs the Anticipy app open "
-                   f"on your phone. Nothing has changed yet.")
+            }) or (f"{goal} stopped partway on your phone. It hasn't "
+                   f"finished, and I'm still holding it." if midway else
+                   f"{goal} — still waiting on your phone. The Anticipy app "
+                   f"hasn't picked it up, and nothing has changed yet.")
             # A send that did not happen is not a send. `notify_owner` has
             # returned truthy with no transport before and she stamped his
             # questions delivered for ten hours.

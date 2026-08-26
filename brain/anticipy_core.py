@@ -932,6 +932,54 @@ DEVICE_ACT_LANES: dict[tuple[str, str, str], str] = {
 }
 
 
+# HOW A STORED LANE STRING IS READ — once, here, the way both other layers
+# already read it.
+#
+# `research_lane.pb.js` normalises with `.trim().toLowerCase()` before it
+# decides anything, and `CalendarHandPolicy.normalizedLane`
+# (app/ios/Anticipy/Backend/CalendarHandPolicy.swift:110) does the same on the
+# phone, saying why in its own comment: "an orphan is worse than a refusal,
+# because a refusal is countable and an orphan is silence". THE BRAIN WAS THE
+# LAYER THAT DID NOT. Its two readers compared raw strings inside a PocketBase
+# filter, and SQLite's `=` is case-sensitive, so a row stored as
+# `"Device_Calendar"` — which the hook's immutability leg accepts as no change
+# at all, because it normalises both sides before comparing — was a device row
+# to the hook and to the phone, and to `report_stalled_work` was a BROWSER
+# errand. That function then texts the owner "I just need your Chrome open"
+# about a calendar write his Chrome cannot do: verbatim the untruth this lane
+# was built to end, reachable with no code change anywhere.
+#
+# Law 1 is not in play. These decide which HAND a stored lane string names.
+# No goal, no transcript and no date can reach them — the argument is a value
+# this system wrote onto its own row, never anybody's words.
+
+# Read off the registry rather than typed a second time: a new device lane has
+# to be defended where `DEVICE_ACT_LANES` is pinned, and must not ALSO have to
+# be remembered here.
+DEVICE_LANES: frozenset = frozenset(DEVICE_ACT_LANES.values())
+
+
+def normalized_lane(raw) -> str:
+    """A stored lane string, read the way the hook and the phone read it."""
+    return str(raw or "").strip().lower()
+
+
+def is_device_lane(raw) -> bool:
+    """True when a stored lane names a device lane, however it is cased."""
+    return normalized_lane(raw) in DEVICE_LANES
+
+
+def needs_no_browser(raw) -> bool:
+    """True when opening Chrome would not move this row one inch.
+
+    The research lane runs in the worker process and the device lane runs on
+    the phone; neither has ever needed his browser. Both belong to the same
+    sentence — "I just need your Chrome open" — and the browser stall notice
+    is the only place that sentence is composed.
+    """
+    return normalized_lane(raw) in (DEVICE_LANES | {RESEARCH_LANE})
+
+
 def device_lane(act) -> str:
     """Which device lane an act declaration is delivered on, or "".
 

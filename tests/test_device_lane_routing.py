@@ -474,11 +474,17 @@ def _anticipy(said):
         notify_owner=lambda msg, channel="sms": (said.append(msg), {"ok": 1})[1])
 
 
-def _device_row(minutes_old=30):
+def _device_row(minutes_old=30, lane=DEVICE_CALENDAR_LANE, status="queued"):
+    """One row on the device lane.
+
+    `lane` is a parameter because the STORED string is the thing under test
+    below: the hook accepts a rewrite to "Device_Calendar" as no change at
+    all, and PocketBase keeps what it was given.
+    """
     stamp = (datetime.now(timezone.utc) - timedelta(minutes=minutes_old)
              ).strftime("%Y-%m-%d %H:%M:%S")
     return {"id": "d1", "goal": "dinner Thursday 7pm",
-            "status": "queued", "lane": DEVICE_CALENDAR_LANE,
+            "status": status, "lane": lane,
             "params": "{}", "owner": "own1", "updated": stamp,
             "created": stamp}
 
@@ -894,3 +900,200 @@ def test_the_brain_routes_on_every_field_the_phone_refuses_on():
             assert device_lane(act) == "", (
                 f"the phone refuses a declaration whose {field} is {wrong!r}; "
                 f"the brain must not deliver one to it")
+
+
+# =================================================================== REPAIR 2
+# The second adversarial pass. Two findings landed on this half of rung 0 and
+# they are the same two shapes as the first pass's: a sentence the brain has
+# no standing to say, and a lane string the brain read differently from every
+# other layer.
+
+
+# --------------------------------------------------------------------------
+# ONE LANE STRING, THREE READERS, TWO OF THEM NORMALISING.
+#
+# `research_lane.pb.js` normalises with `.trim().toLowerCase()` BEFORE it
+# judges anything, so a PATCH rewriting a row's lane to "Device_Calendar" is
+# no change at all to its immutability leg and is accepted with a `next()`.
+# PocketBase then stores the raw string. `CalendarHandPolicy.normalizedLane`
+# normalises too, so the phone still calls that row its own — and says why in
+# its own comment: "an orphan is worse than a refusal, because a refusal is
+# countable and an orphan is silence."
+#
+# The brain was the layer that compared raw strings, inside a SQLite filter
+# where `=` is case-sensitive. The same row was therefore:
+#   (b) NOT excluded by `report_stalled_work`'s `lane!="device_calendar"`, so
+#       a calendar errand was announced to him as a stalled BROWSER errand —
+#       "I just need your Chrome open" about work Chrome cannot do, which is
+#       verbatim the untruth this whole lane was built to end; and
+#   (c) NOT matched by `report_unclaimed_device_work`'s `lane="..."`, so the
+#       one function that would have told him the truth never saw it either.
+#
+# Both are closed the same way and in one place: `anticipy_core.
+# normalized_lane` is the hook's rule and the phone's rule spelled once, the
+# SQL clause is demoted to an optimisation, and the decision is made in
+# Python on every row that comes back.
+
+
+def test_a_case_variant_device_row_is_never_called_a_browser_errand(
+        monkeypatch):
+    """(b), the untruth — and the one that has to hold even if (c) never did.
+
+    The double applies the filter clauses exactly as the server does, which is
+    what makes this test able to fail: "Device_Calendar" is not the string in
+    `lane!="device_calendar"`, so the row comes back and reaches the loop.
+    """
+    said = []
+    _stall_backend(monkeypatch, [_device_row(lane="Device_Calendar")])
+    monkeypatch.setattr(W, "browser_reachable", lambda *a, **k: False)
+    W.report_stalled_work(_anticipy(said))
+    assert said == [], said
+
+
+def test_a_browser_errand_is_still_reported_as_one(monkeypatch):
+    """The control. A guard wide enough to silence the browser lane would
+    make the test above green while breaking the function it guards."""
+    said = []
+    _stall_backend(monkeypatch, [_device_row(lane="")])
+    monkeypatch.setattr(W, "browser_reachable", lambda *a, **k: False)
+    W.report_stalled_work(_anticipy(said))
+    assert len(said) == 1, said
+
+
+def test_every_casing_of_the_device_lane_is_still_reported(monkeypatch):
+    """(c), the orphan: a row no hand claims and no notice mentions.
+
+    Stated over casings rather than on one string, because the property is
+    not "Device_Calendar works" — it is that the brain reads a stored lane
+    the way the two layers that judge it do.
+    """
+    for lane in ("Device_Calendar", " device_calendar ", "DEVICE_CALENDAR",
+                 "device_calendar\n"):
+        said = []
+        W.REPORTED.clear()
+        W._SENT_RECENTLY.clear()
+        _stall_backend(monkeypatch, [_device_row(lane=lane)])
+        W.report_unclaimed_device_work(_anticipy(said))
+        assert len(said) == 1, (lane, said)
+
+
+def test_the_device_notice_speaks_for_no_other_lane(monkeypatch):
+    """The control for the widened query.
+
+    The filter now asks for a superset — everything that is not the browser
+    and not research — so the narrowing moved into Python, where a bug is a
+    notice claiming a research errand is "waiting on your phone".
+    """
+    said = []
+    _stall_backend(monkeypatch, [_device_row(lane="Research"),
+                                 _device_row(lane="supervised_read")])
+    W.report_unclaimed_device_work(_anticipy(said))
+    assert said == [], said
+
+
+# --------------------------------------------------------------------------
+# WHAT THE BRAIN MAY CLAIM ABOUT A PHONE IT CANNOT SEE.
+#
+# The first draft told him a queued device errand "goes the moment the app is
+# open". That is a statement about the phone's FUTURE BEHAVIOUR, and the
+# comment above `report_unclaimed_device_work` spends a paragraph establishing
+# that this process cannot see the phone at all: there is no heartbeat row,
+# which is exactly why "it is still sitting at queued" is the only observation
+# available.
+#
+# `CalendarHandPolicy.decide` refuses on two dozen enumerated causes
+# (CalendarHandPolicy.swift:303-347). The mint point already agrees with the
+# phone on the three the routing key can see — act_type, reach, executor — so
+# a row that arrives there agrees about the ACT. The rest are invisible from
+# here: `.noWritableCalendar`, `.startAlreadyPast`, `.factsIncomplete`,
+# `.approvalNotOnTheRow`, `.unresolvedReference`… Every one of them paints the
+# same picture: the app is open, it is refusing, and she is texting him that
+# it is about to run. The app open and refusing is the ORDINARY case this
+# notice exists for, not an edge of it.
+
+# Instances, and named as instances: the wordings the first draft actually
+# used, plus the ones a rewrite reaches for first. A phrase list cannot
+# enumerate a promise nobody has thought of yet — the exact pin below is what
+# covers that half, because any change to these sentences is red and has to be
+# argued in a diff rather than merged.
+A_PROMISE_THE_BRAIN_CANNOT_KEEP = (
+    "the moment the app",
+    "just needs",
+    "all it needs",
+    "as soon as",
+    "i'm ready",
+    "will go",
+    "will run",
+    "when the app is open",
+    "once the app is open",
+)
+
+
+def _device_notice(monkeypatch, status="queued"):
+    """Both halves of what can actually reach him.
+
+    The BRIEF is what steers the sentence he normally gets, and it is the
+    only deterministic handle on that sentence — the voice is a model. The
+    FALLBACK is what is sent verbatim when the voice is not there.
+    """
+    said, briefs = [], []
+    _stall_backend(monkeypatch, [_device_row(status=status)])
+    a = _anticipy(said)
+    a._voice = lambda ctx: briefs.append(ctx) or None
+    W.report_unclaimed_device_work(a)
+    assert len(said) == 1 and len(briefs) == 1, (said, briefs)
+    return briefs[0]["situation"], said[0]
+
+
+@pytest.mark.parametrize("status", ("queued", "running"))
+def test_the_device_notice_promises_nothing_about_a_phone_it_cannot_see(
+        monkeypatch, status):
+    """Neither half may claim the errand is about to run.
+
+    The brief is held to the same list as the sentence, which constrains how
+    the prohibition itself may be worded: an instruction that QUOTES the
+    promise in order to forbid it is a brief one careless edit away from
+    carrying it.
+    """
+    brief, sentence = _device_notice(monkeypatch, status)
+    for phrase in A_PROMISE_THE_BRAIN_CANNOT_KEEP:
+        assert phrase not in sentence.lower(), (status, phrase, sentence)
+        assert phrase not in brief.lower(), (status, phrase, brief)
+
+
+@pytest.mark.parametrize("status", ("queued", "running"))
+def test_the_device_brief_says_the_phone_cannot_be_seen(monkeypatch, status):
+    """The positive half. Absence of a promise is not the same as telling the
+    voice it has no standing to make one — and the voice writes the sentence
+    that actually goes out."""
+    brief, _ = _device_notice(monkeypatch, status)
+    low = brief.lower()
+    assert "cannot see their phone" in low, brief
+    assert "make no promise" in low, brief
+    assert "never say it is done" in low, brief
+
+
+def test_the_queued_brief_names_the_case_that_makes_a_promise_a_lie(
+        monkeypatch):
+    """A brief that says "do not promise" without saying WHY reads as
+    fussiness and gets edited out. The reason is the phone's refusal set."""
+    brief, _ = _device_notice(monkeypatch, "queued")
+    assert "open and refusing" in brief.lower(), brief
+
+
+def test_the_device_fallback_sentences_are_pinned(monkeypatch):
+    """The half a phrase list cannot cover.
+
+    These two strings are what he receives when the voice is down, and any
+    edit to either is red here. That is the point: a promise nobody thought
+    to enumerate cannot be re-introduced quietly, only in a diff that also
+    edits this test, which is the thing a reviewer reads.
+    """
+    _, queued = _device_notice(monkeypatch, "queued")
+    _, midway = _device_notice(monkeypatch, "running")
+    assert queued == (
+        "dinner Thursday 7pm — still waiting on your phone. The Anticipy app "
+        "hasn't picked it up, and nothing has changed yet."), queued
+    assert midway == (
+        "dinner Thursday 7pm stopped partway on your phone. It hasn't "
+        "finished, and I'm still holding it."), midway
