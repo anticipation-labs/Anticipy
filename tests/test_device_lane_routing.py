@@ -29,16 +29,26 @@ import pytest
 
 import brain.anticipy_core as core
 import brain.worker as W
-from brain.anticipy_core import (DEVICE_CALENDAR_LANE, DEVICE_EXECUTOR_LANES,
-                                 PHONE_CALENDAR_EXECUTOR, RESEARCH_LANE,
+from brain.anticipy_core import (DEVICE_ACT_LANES, DEVICE_CALENDAR_LANE,
+                                 PHONE_CALENDAR_ACT_TYPE,
+                                 PHONE_CALENDAR_EXECUTOR,
+                                 PHONE_CALENDAR_REACH, RESEARCH_LANE,
                                  Anticipy, device_lane, job_lane)
 from brain.workflow import (ADMITTED_ACT_TYPES, ActDeclaration, Consequence,
                             Refusal, UndoInput, UndoPlan, admissible,
                             merge as merge_plan, new_plan)
 
 
-def calendar_act(executor=PHONE_CALENDAR_EXECUTOR):
+def calendar_act(executor=PHONE_CALENDAR_EXECUTOR,
+                 act_type=PHONE_CALENDAR_ACT_TYPE,
+                 reach=PHONE_CALENDAR_REACH):
     """What the model declares when the errand's effect is a calendar write.
+
+    Spelled from the module's constants and never from literals, so this
+    helper cannot be quietly "fixed" into agreeing with a brain that has
+    drifted away from the phone. The strings themselves are pinned against
+    `CalendarHandPolicy.swift` by
+    `test_the_brain_and_the_phone_spell_the_act_the_same`.
 
     The minted id is the point: `EKEvent.eventIdentifier` is assigned BY
     EVENTKIT ON SAVE, so an undo that looks up "the identifier EventKit gave
@@ -46,8 +56,8 @@ def calendar_act(executor=PHONE_CALENDAR_EXECUTOR):
     before the act, so the undo resolves from `minted_by_us` alone.
     """
     return ActDeclaration(
-        act_type="calendar_event",
-        reach="owner_calendar",
+        act_type=act_type,
+        reach=reach,
         executor=executor,
         target=UndoInput(name="event tag", provenance="minted_by_us",
                          ref="calendar_event_tag"),
@@ -67,7 +77,10 @@ def test_the_registry_is_a_lookup_and_not_an_identity_function():
     would pass every test above while being no registry at all.
     """
     assert PHONE_CALENDAR_EXECUTOR != DEVICE_CALENDAR_LANE
-    assert DEVICE_EXECUTOR_LANES[PHONE_CALENDAR_EXECUTOR] == DEVICE_CALENDAR_LANE
+    assert DEVICE_ACT_LANES[
+        (PHONE_CALENDAR_ACT_TYPE, PHONE_CALENDAR_REACH,
+         PHONE_CALENDAR_EXECUTOR)
+    ] == DEVICE_CALENDAR_LANE
 
 
 def test_the_wording_decides_nothing():
@@ -98,7 +111,8 @@ def test_an_unknown_executor_never_reaches_the_device_lane():
     lane everything already goes to."""
     assert device_lane(calendar_act(executor="anticipy_store")) == ""
     assert device_lane(calendar_act(executor="")) == ""
-    assert device_lane(calendar_act(executor="phone_eventkit_v2")) == ""
+    assert device_lane(
+        calendar_act(executor=PHONE_CALENDAR_EXECUTOR + "_v2")) == ""
     assert device_lane(None) == ""
     assert device_lane({"executor": PHONE_CALENDAR_EXECUTOR}) == ""
 
@@ -118,7 +132,7 @@ def test_routing_admits_nothing_to_shelf_two():
     decided. If this ever goes green the wrong way, a device lane has become
     a hole in the gate — the exact failure the research named.
     """
-    assert "calendar_event" not in ADMITTED_ACT_TYPES
+    assert PHONE_CALENDAR_ACT_TYPE not in ADMITTED_ACT_TYPES
     assert PHONE_CALENDAR_EXECUTOR not in {
         a.executor for a in ADMITTED_ACT_TYPES.values()}
 
@@ -135,7 +149,7 @@ def test_a_calendar_write_is_refused_act_and_tell_even_with_a_perfect_undo():
     value is held before the act, addressing the same reference the act
     declares as its target. Nothing in it needs anything EventKit returned —
     `EKEvent.eventIdentifier` never appears. It is still refused, at the
-    first branch, because `calendar_event` is not in the admitted set and
+    first branch, because `calendar_write` is not in the admitted set and
     §10.3 says that set can only ever refuse.
 
     So rung 0 ships HELD. The minted id is worth building for moment 11's
@@ -150,7 +164,7 @@ def test_a_calendar_write_is_refused_act_and_tell_even_with_a_perfect_undo():
         consequence=Consequence.CONSEQUENTIAL, source_event_id="e1",
         act=calendar_act(),
         undo=UndoPlan(
-            act_type="calendar_event",
+            act_type=PHONE_CALENDAR_ACT_TYPE,
             steps=("find the event carrying our tag and remove it",),
             inputs=(tag,),
             held={"minted_by_us": {"calendar_event_tag": "a3f1-…"}}),
@@ -286,6 +300,26 @@ def test_the_brain_and_the_backend_hook_spell_the_lane_the_same():
     assert m.group(1) == DEVICE_CALENDAR_LANE
 
 
+def _calls(fn, name):
+    """Does `fn`'s body contain a CALL to `name` — not a mention of it.
+
+    `"name(" in inspect.getsource(fn)` was the first draft, and a
+    commented-out line contains that substring. Mutation, in `worker.main`:
+    `report_unclaimed_device_work(anticipy)` -> `pass  #
+    report_unclaimed_device_work(anticipy)`. 23 passed, 2251 passed, exit 0.
+    A comment parses to nothing at all, so the AST cannot be fooled the same
+    way — and neither can a docstring, a log line naming the function, or a
+    string in a list of names somebody meant to call later.
+    """
+    import ast
+    import inspect
+    import textwrap
+    tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+    return any(isinstance(node, ast.Call)
+               and getattr(node.func, "id", None) == name
+               for node in ast.walk(tree))
+
+
 def test_the_worker_loop_actually_calls_it():
     """A pass nothing calls is a comment.
 
@@ -294,10 +328,51 @@ def test_the_worker_loop_actually_calls_it():
     still waits forever and he is still not told. `report_stalled_work` is
     the control — both hands are announced from the same loop or neither is.
     """
-    import inspect
-    body = inspect.getsource(W.main)
-    assert "report_stalled_work(anticipy)" in body
-    assert "report_unclaimed_device_work(anticipy)" in body
+    assert _calls(W.main, "report_stalled_work")
+    assert _calls(W.main, "report_unclaimed_device_work")
+
+
+# The two shapes `_calls` has to tell apart, written as REAL functions in a
+# REAL file — which is the whole difficulty. The first draft of the control
+# below built them with `exec` of a string, and `exec`ed code has
+# `co_filename == "<string>"` with nothing behind it, so `inspect.getsource`
+# raised `OSError: could not get source code` and the control could not run at
+# all. A source-inspecting check has to be tested against a subject that HAS
+# source, on the same code path `W.main` takes.
+#
+# `_wiring_sample_commented_out` is the exact mutation that beat the
+# substring check: `report_unclaimed_device_work(anticipy)` demoted to a
+# trailing comment. Neither sample is ever called; the name inside the second
+# is deliberately unbound, and binding it would be the mistake — `_calls`
+# reads source, and a helper that also had to RUN would pin nothing about
+# `W.main`.
+
+
+def _wiring_sample_commented_out():
+    pass  # report_unclaimed_device_work(anticipy)
+
+
+def _wiring_sample_really_calls():
+    report_unclaimed_device_work(anticipy)  # noqa: F821  # never executed
+
+
+def test_the_wiring_check_can_tell_a_call_from_a_comment():
+    """The control for the control.
+
+    `_calls` is the only thing standing between "the worker announces
+    unclaimed device work" and a green suite that proves nothing, so it is
+    tested against the exact mutation that beat its predecessor rather than
+    trusted because it says `ast`.
+
+    Both directions, always. Only the negative half would stay green for
+    `_calls = lambda *a: False`, which would take `test_the_worker_loop
+    _actually_calls_it` down with it — but silently, as a helper nobody
+    doubted.
+    """
+    assert not _calls(_wiring_sample_commented_out,
+                      "report_unclaimed_device_work")
+    assert _calls(_wiring_sample_really_calls,
+                  "report_unclaimed_device_work")
 
 
 def test_a_device_job_is_not_reported_as_a_missing_browser(monkeypatch):
@@ -447,3 +522,375 @@ def _stall_backend(monkeypatch, jobs, writes_fail=False):
     monkeypatch.setattr(W.pb, "get", _get)
     monkeypatch.setattr(W.pb, "post", lambda *a, **k: _Resp(ok=not writes_fail))
     monkeypatch.setattr(W.pb, "patch", lambda *a, **k: _Resp())
+
+
+# ==================================================================== REPAIR
+# Everything below was added because the first draft of this file left four
+# doors open. Each block names the door and the mutation that walked through
+# it while the whole suite stayed green.
+
+
+# --------------------------------------------------------------------------
+# LAW 1, AT THE MINT POINT — not at `device_lane`.
+#
+# `test_the_wording_decides_nothing` above cannot see this. It asserts
+# `device_lane(None) == ""` inside a loop over goals, which is loop-invariant,
+# and `job_lane(goal) == ""`, which is about the RESEARCH lane. `device_lane`
+# takes an `ActDeclaration`, so no word list can ever be written INTO it — a
+# word list has to go where the GOAL is, and that is `_queue_job`. This is the
+# mutation that survived the first draft, at anticipy_core.py's lane line:
+#
+#   lane = device_lane(act) or (DEVICE_CALENDAR_LANE
+#                               if "calendar" in (goal or "").lower() else lane)
+#
+# 23 passed, 2251 passed, exit 0.
+#
+# So the property is not "no word list is in `device_lane`". It is: THE DEVICE
+# LANE DOES NOT VARY WITH THE GOAL. Hold the declaration fixed, vary the words
+# over every shape a word list would reach for, and the answer must not move.
+# That kills a predicate on any vocabulary, in any language, including one
+# nobody thought to put in a corpus.
+
+CALENDAR_IN_PLAIN_ENGLISH = (
+    "put dinner with Sara Thursday 7pm on my calendar",
+    "add the dentist to my calendar for Friday at 3",
+    "schedule the standup for 9am tomorrow",
+    "block out Thursday evening",
+    "create a calendar event for the flight home",
+    "book Thursday 7pm",
+)
+
+# The same errands with every word a list could key on removed. A word list
+# strong enough to pass the block above would have to recognise these too, and
+# cannot.
+NOTHING_A_WORD_LIST_COULD_SEE = (
+    "dinner with Sara",
+    "the thing Omar asked about",
+    "sara + me, the italian place",
+    "tell Marcus I am in",
+)
+
+EVERY_GOAL = CALENDAR_IN_PLAIN_ENGLISH + NOTHING_A_WORD_LIST_COULD_SEE
+
+
+def test_the_mint_point_routes_on_the_declaration_and_never_on_the_goal(
+        monkeypatch):
+    """The invariance, stated as an invariance.
+
+    With a declaration, every goal lands on the device lane. Without one, no
+    goal does. Both halves are needed: the first kills
+    `device_lane(act) and <word list>`, the second kills
+    `device_lane(act) or <word list>`.
+    """
+    with_declaration = {
+        goal: _queue(monkeypatch, goal, act=calendar_act(),
+                     touches="world")["lane"]
+        for goal in EVERY_GOAL}
+    without_declaration = {
+        goal: _queue(monkeypatch, goal, touches="world")["lane"]
+        for goal in EVERY_GOAL}
+
+    assert set(with_declaration.values()) == {DEVICE_CALENDAR_LANE}, \
+        with_declaration
+    assert DEVICE_CALENDAR_LANE not in set(without_declaration.values()), \
+        without_declaration
+
+
+def test_no_wording_mints_a_device_lane_row_on_its_own(monkeypatch):
+    """The half that goes red the day somebody adds the demo fallback.
+
+    Named separately from the invariance above so the failure reads as what it
+    is rather than as a set comparison.
+    """
+    for goal in CALENDAR_IN_PLAIN_ENGLISH:
+        posted = _queue(monkeypatch, goal, touches="world")
+        assert posted["lane"] != DEVICE_CALENDAR_LANE, goal
+
+
+# --------------------------------------------------------------------------
+# THE GATE, WITH EVERY ARGUMENT THE MINT POINT IS HOLDING.
+#
+# `_queue_job` had `touches` in its hands — it passes it to `_refines_pending`
+# and to `_research_gate` — and dropped it on the floor at the consequence
+# line. `is_consequential(goal, params, explicit=True)` is False for a
+# calendar write; `is_consequential(goal, params, explicit=True,
+# touches="world")` is True. Same act, opposite sides of the confirmation
+# gate, decided by whether the verb happened to be in a regex.
+#
+# Reproduced against the tree before the fix: act=<calendar act>,
+# explicit=True, touches="world" posted lane='device_calendar',
+# status='queued', consequence='read_only', approval=''. Neither server layer
+# refuses that row.
+#
+# The pin below is not "explicit+world is held". It is that THE ROW CARRIES
+# THE GATE'S OWN ANSWER, computed from every input the mint point has. Drop
+# any argument and a cell of the matrix disagrees.
+
+GATE_INPUTS = [(hold, explicit, touches)
+               for hold in (False, True)
+               for explicit in (False, True)
+               for touches in (None, "world", "read", "compute")]
+
+
+@pytest.mark.parametrize("hold,explicit,touches", GATE_INPUTS)
+def test_the_row_carries_the_gates_own_answer(monkeypatch, hold, explicit,
+                                              touches):
+    """Asked with NO declaration, which is the only way this can see the bug.
+
+    The first draft asked it with `act=calendar_act()`, and the device floor
+    below now holds every one of those cells whatever the gate says — so with
+    a declaration on the row this matrix would stay green with `touches`
+    dropped again. A plain row is the one that still moves when the argument
+    goes missing: `is_consequential(goal, explicit=True)` is False and
+    `is_consequential(goal, explicit=True, touches="world")` is True.
+    """
+    goal = "put dinner with Sara Thursday 7pm on my calendar"
+    want = bool(hold or core.is_consequential(
+        goal, {"source": "test", "now": "now"},
+        explicit=explicit, touches=touches))
+    posted = _queue(monkeypatch, goal, hold=hold,
+                    explicit=explicit, touches=touches)
+    assert (posted["consequence"] == "consequential") is want, posted
+    assert (posted["status"] == "awaiting_confirm") is want, posted
+
+
+# --------------------------------------------------------------------------
+# AND THE FLOOR UNDER ALL OF IT: A DEVICE WRITE IS NEVER READ-ONLY.
+#
+# Passing `touches` closed the cell the reviewer reproduced and left the rest
+# of the row open. Read the matrix above against a CALENDAR ACT:
+#
+#   explicit=True,  touches=None    -> is_consequential False
+#   explicit=False, touches="read"  -> is_consequential False
+#
+# Both mint `lane='device_calendar'`, `consequence='read_only'`,
+# `status='queued'`, `approval=''` — an unapproved calendar write standing in
+# the phone's queue, and `workflow_guard`'s NO_APPROVAL_NEEDED contains
+# `read_only`, so no server layer refuses it. Whether the owner has to tap is
+# decided by whether his verb happened to reach a regex and by which effect
+# channel triage filled in. That is a device lane that does not route through
+# the same gate, which the research names as a hole in the gate and not a
+# hand.
+#
+# The floor does not consult any of that. `device_lane(act)` is non-empty
+# only for a declaration whose act type is `calendar_write` and whose reach is
+# the owner's calendar store — the model saying, in a typed field, that this
+# errand leaves the machine. A row that says so is consequential, and no
+# wording, flag or missing argument can lower it.
+
+
+@pytest.mark.parametrize("hold,explicit,touches", GATE_INPUTS)
+def test_a_declared_device_write_is_never_minted_read_only(
+        monkeypatch, hold, explicit, touches):
+    posted = _queue(monkeypatch,
+                    "put dinner with Sara Thursday 7pm on my calendar",
+                    act=calendar_act(), hold=hold, explicit=explicit,
+                    touches=touches)
+    assert posted["lane"] == DEVICE_CALENDAR_LANE, posted
+    assert posted["consequence"] == "consequential", posted
+    assert posted["status"] == "awaiting_confirm", posted
+    assert posted["approval"] == "", posted
+
+
+def test_the_floor_holds_for_every_wording_a_device_act_can_carry(monkeypatch):
+    """The words vary, the declaration does not, the answer does not move.
+
+    Same invariance as the routing one and for the same reason: a floor that
+    read the goal would be the Law 1 violation wearing a different hat.
+    """
+    for goal in EVERY_GOAL:
+        posted = _queue(monkeypatch, goal, act=calendar_act(), explicit=True,
+                        touches=None)
+        assert posted["consequence"] == "consequential", (goal, posted)
+        assert posted["status"] == "awaiting_confirm", (goal, posted)
+
+
+def test_the_floor_is_the_declaration_and_not_the_lane_string(monkeypatch):
+    """Polarity: a row with no declaration is NOT floored into a hold.
+
+    `consequential = True` unconditionally would pass every assertion above
+    while destroying the read-only path the browser lane runs on.
+    """
+    posted = _queue(monkeypatch, "what time does the italian place close",
+                    touches="read")
+    assert posted["consequence"] == "read_only", posted
+    assert posted["status"] != "awaiting_confirm", posted
+
+
+def test_an_asked_for_calendar_write_is_still_held(monkeypatch):
+    """The instance, spelled out, because it is the one that ships.
+
+    The owner asking in so many words is authority to START the errand. It is
+    not authority to skip the tap on an act that leaves his world — that is
+    what `touches == "world"` sitting ABOVE the explicit escape means, and the
+    lane's own header claims it as the reason a device lane is not a hole in
+    the gate. The claim was true of `is_consequential` and false of the only
+    caller that mints a device row.
+    """
+    posted = _queue(monkeypatch,
+                    "put dinner with Sara Thursday 7pm on my calendar",
+                    act=calendar_act(), explicit=True, touches="world")
+    assert posted["lane"] == DEVICE_CALENDAR_LANE
+    assert posted["consequence"] == "consequential"
+    assert posted["status"] == "awaiting_confirm"
+    assert posted["approval"] == ""
+
+
+# --------------------------------------------------------------------------
+# THE ROW SAYS WHAT IT IS — and the phone is the one that reads it.
+#
+# `CalendarHandPolicy.decide` reads `params._workflow.act` and refuses on
+# `act_type`, `reach` and `executor` before it looks at anything else.
+# `_queue_job` used the act to CHOOSE the lane and then never put it on the
+# plan: `new_plan(...)` was called without `act=`. So every device row the
+# brain minted arrived at the phone with no act at all and was refused
+# `.actTypeNotAdmitted("")`, after which `report_unclaimed_device_work` texted
+# the owner "it just needs the Anticipy app open" about an app that was open
+# and refusing.
+#
+# This is the wire contract, tested as the wire, not as two constants that
+# agree with each other in Python.
+
+
+def _swift(name):
+    """A `static let` out of the phone's policy file."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "app" / "ios" / "Anticipy"
+           / "Backend" / "CalendarHandPolicy.swift").read_text()
+    m = re.search(r'static let %s = "([^"]+)"' % re.escape(name), src)
+    assert m, f"CalendarHandPolicy must name {name} exactly once"
+    return m.group(1)
+
+
+def test_a_device_row_carries_the_act_the_phone_will_accept(monkeypatch):
+    posted = _queue(monkeypatch, "dinner Thursday 7pm", act=calendar_act(),
+                    touches="world")
+    assert posted["lane"] == _swift("lane")
+    plan = json.loads(posted["params"])["_workflow"]
+    act = plan.get("act")
+    assert act, "a device-lane row with no act is refused by the phone"
+    assert act["act_type"] == _swift("writeActType"), act
+    assert act["reach"] == _swift("reach"), act
+    assert act["executor"] == _swift("executor"), act
+
+
+def test_the_brain_and_the_phone_spell_the_act_the_same():
+    """The constants, pinned in the direction that matters.
+
+    Each of these strings lived in exactly one file plus its own tests, and a
+    grep across the repo found zero overlap: the brain routed `phone_eventkit`
+    and the phone refused anything that was not `anticipy_phone`. Nothing was
+    red. `test_the_brain_and_the_backend_hook_spell_the_lane_the_same` pins
+    the LANE across two files and stops there.
+
+    AND IT PINS THEM IN A DIRECTION, which is the half a bare `==` leaves to
+    whoever reads the failure. The brain is canonical: it mints the row and it
+    enforces the gate, so `anticipy_core.py` names the contract and
+    `CalendarHandPolicy.swift` is the file that moves when these disagree.
+    Left symmetric, the cheapest way to green is to edit whichever side is
+    already open in the editor — and the side that is usually open is the one
+    that cannot be recalled once it is on a phone.
+    """
+    fix = ("the brain is canonical here: change CalendarHandPolicy.swift to "
+           "match brain/anticipy_core.py, never the other way round")
+    assert PHONE_CALENDAR_EXECUTOR == _swift("executor"), fix
+    assert PHONE_CALENDAR_ACT_TYPE == _swift("writeActType"), fix
+    assert PHONE_CALENDAR_REACH == _swift("reach"), fix
+    assert DEVICE_CALENDAR_LANE == _swift("lane"), fix
+
+
+def test_a_goal_with_no_declaration_leaves_no_act_on_the_row(monkeypatch):
+    """Floor polarity for the line above: the act is carried, never invented.
+
+    `act=act` must not become `act=act or something_the_goal_implies`.
+    """
+    for goal in CALENDAR_IN_PLAIN_ENGLISH:
+        posted = _queue(monkeypatch, goal, touches="world")
+        plan = json.loads(posted["params"])["_workflow"]
+        assert plan.get("act") in (None, {}), (goal, plan.get("act"))
+
+
+# --------------------------------------------------------------------------
+# THE SCOPE IS ONE VERB, AND THE BRAIN'S HALF MUST SAY SO.
+#
+# `DEVICE_EXECUTOR_LANES` was an executor->lane registry, so a second verb was
+# one dict line — `'phone_mail': DEVICE_CALENDAR_LANE` — plus a device-side
+# handler. No lane rename anybody has to type, no server change, and every
+# server refusal still passes: `deviceShapeRefusal` reads `workflow_id` and
+# `consequence` and never `act_type`. "The scope is in the lane string" was
+# not true of the brain's side of the seam.
+#
+# The registry is now keyed on the ACT, and it is pinned to exactly one entry,
+# so widening it is a diff that goes red and has to be defended.
+
+
+def test_a_second_verb_cannot_ride_the_calendar_lane():
+    mail = ActDeclaration(
+        act_type="mail_send", reach=PHONE_CALENDAR_REACH,
+        executor=PHONE_CALENDAR_EXECUTOR,
+        target=UndoInput(name="draft tag", provenance="minted_by_us",
+                         ref="mail_tag"))
+    assert device_lane(mail) == ""
+
+
+def test_the_device_registry_holds_exactly_the_one_calendar_act():
+    """A closed table, pinned whole.
+
+    Not `DEVICE_CALENDAR_LANE in .values()` — that stays green while a second
+    key sits beside the first. The whole dict, so any added row is red.
+    """
+    assert dict(DEVICE_ACT_LANES) == {
+        (PHONE_CALENDAR_ACT_TYPE, PHONE_CALENDAR_REACH,
+         PHONE_CALENDAR_EXECUTOR): DEVICE_CALENDAR_LANE}
+
+
+def test_the_right_executor_with_the_wrong_act_is_not_a_lane():
+    assert device_lane(calendar_act(act_type="calendar_undo")) == ""
+    assert device_lane(calendar_act(act_type="")) == ""
+
+
+# --------------------------------------------------------------------------
+# THE BRAIN MUST ROUTE ON EVERY FIELD THE PHONE REFUSES ON.
+#
+# Found while verifying the contract-strings finding, and not closed by it.
+# Count the fields each layer reads off the declaration:
+#
+#   brain  `device_lane`                     act_type, executor
+#   hook   `deviceShapeRefusal`              act_type
+#   phone  `CalendarHandPolicy.decide`       act_type, reach, executor
+#
+# `reach` is read by exactly one of the three, and it is the one that cannot
+# be recalled. So a declaration of `calendar_write` / `anticipy_phone` with
+# any other reach was routed ONTO the device lane by the brain, passed the
+# hook's act-type leg, arrived at the phone, and was refused
+# `.reachDisagrees` — after which `report_unclaimed_device_work` texts the
+# owner "it goes the moment the app is open" about an app that is open and
+# refusing. That is the same untruth the contract-strings finding was about,
+# reached through the one field that finding did not name, and no test in
+# this file could see it: every helper spelled all three from the constants
+# at once, so the three were never varied independently.
+#
+# The property, stated so it cannot rot: whatever the phone compares, the
+# brain compares too. Read straight out of the Swift file rather than from
+# this module's constants, because a brain that has drifted would otherwise
+# agree with itself.
+
+
+def test_the_brain_routes_on_every_field_the_phone_refuses_on():
+    """Vary one field at a time; each one alone must take the lane away.
+
+    Not `!=` against our own constants — the values come out of
+    `CalendarHandPolicy.swift`, so this is the wire contract and not two
+    Python names agreeing.
+    """
+    canonical = {"act_type": _swift("writeActType"),
+                 "reach": _swift("reach"),
+                 "executor": _swift("executor")}
+    assert device_lane(calendar_act(**canonical)) == DEVICE_CALENDAR_LANE, \
+        "the canonical triple must still route, or the test proves nothing"
+    for field in canonical:
+        for wrong in (canonical[field] + "_v2", "", "owner_gmail"):
+            act = calendar_act(**dict(canonical, **{field: wrong}))
+            assert device_lane(act) == "", (
+                f"the phone refuses a declaration whose {field} is {wrong!r}; "
+                f"the brain must not deliver one to it")

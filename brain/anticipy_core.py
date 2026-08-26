@@ -860,26 +860,101 @@ DEVICE_CALENDAR_LANE = "device_calendar"
 # The executor string and the lane string are deliberately DIFFERENT words. If
 # they were the same, a `device_lane` that simply echoed its argument would
 # pass every test of this file while being no registry at all.
-PHONE_CALENDAR_EXECUTOR = "phone_eventkit"
+#
+# THESE THREE LINES ARE THE ACT CONTRACT, AND THIS FILE IS ITS ONE AUTHORITY.
+#
+# The rule, decided 2026-08-26 and written here because Law 4 says a ruling
+# kept in a chat is re-litigated by the next session: THE BRAIN IS CANONICAL.
+# The server mints the row and the server enforces the gate, so the words on
+# the row are the brain's to choose. When
+# `test_the_brain_and_the_phone_spell_the_act_the_same` goes red, the file
+# that moves is `CalendarHandPolicy.swift`, never this one — and the same is
+# true of `backend/pb_hooks/research_lane.pb.js`, which reads `act_type` off
+# the row this file wrote. An earlier draft of this block claimed the opposite
+# ("these are the phone's words, not ours"), which is how a client file ends
+# up deciding what the server may mint.
+#
+# The values are the ones the phone already shipped, and that is a convenience
+# of history rather than a grant of authority: `CalendarHandPolicy.decide`
+# reads `params._workflow.act` and refuses on act_type, then reach, then
+# executor, before it looks at anything else, and it was already spelling them
+# this way. The first draft of THIS file invented a second vocabulary —
+# `phone_eventkit`, `calendar_event`, `owner_calendar` — and each string then
+# lived in exactly one file plus its own tests; a grep across the repo found
+# ZERO overlap and nothing anywhere was red. Every calendar errand would have
+# been routed to the device lane, refused on the device, left at `queued`, and
+# then `report_unclaimed_device_work` would have texted the owner "it just
+# needs the Anticipy app open on your phone" about an app that was open and
+# refusing — the same untruth as telling him to open Chrome for work Chrome
+# cannot do. `test_the_brain_and_the_phone_spell_the_act_the_same` reads the
+# Swift file and is what keeps these four strings from drifting again.
+PHONE_CALENDAR_EXECUTOR = "anticipy_phone"
+PHONE_CALENDAR_ACT_TYPE = "calendar_write"
+PHONE_CALENDAR_REACH = "device_calendar_store"
 
 # TYPED AND CLOSED, the same way `Provenance` is closed and for the same
-# reason: a new executor is a schema change visible in a diff, never a string
-# a model can invent at runtime. An unrecognised executor is not a new lane —
-# it is the lane everything already goes to.
-DEVICE_EXECUTOR_LANES: dict[str, str] = {
-    PHONE_CALENDAR_EXECUTOR: DEVICE_CALENDAR_LANE,
+# reason: a new device act is a schema change visible in a diff, never a
+# string a model can invent at runtime. An unrecognised act is not a new lane
+# — it is the lane everything already goes to.
+#
+# KEYED ON ALL THREE CONTRACT FIELDS, because that is what the far end reads.
+# `CalendarHandPolicy.decide` refuses on act_type, then reach, then executor;
+# an (act_type, executor) key left `reach` read by exactly one of the three
+# layers, and it was the layer that cannot be recalled. A declaration of
+# `calendar_write` / `anticipy_phone` with any other reach was routed onto
+# this lane here, passed `deviceShapeRefusal` (which reads act_type and not
+# reach), arrived at the phone and was refused `.reachDisagrees` — after which
+# `report_unclaimed_device_work` texts the owner "it goes the moment the app
+# is open" about an app that is open and refusing. The rule the key encodes:
+# WHATEVER THE PHONE COMPARES, THIS COMPARES TOO, so the brain never delivers
+# a row to a hand that is going to refuse it.
+# `test_the_brain_routes_on_every_field_the_phone_refuses_on` varies one field
+# at a time, reading the values out of the Swift file rather than out of this
+# module, so a brain that drifted cannot agree with itself.
+#
+# KEYED ON THE ACT, NOT ON THE EXECUTOR ALONE. As an executor->lane registry
+# this table made a second verb one dict line: `"phone_mail":
+# DEVICE_CALENDAR_LANE` plus a device-side handler, with no server change, no
+# new hook leg and no lane string anybody has to rename. Every server-side
+# refusal would still have passed — `deviceShapeRefusal` reads `workflow_id`
+# and `consequence` and never `act_type`. "The scope is in the lane string, so
+# widening it is a rename somebody has to type" was simply not true of this
+# side of the seam. It is true now: the key names the verb, and
+# `test_the_device_registry_holds_exactly_the_one_calendar_act` pins the whole
+# dict, so a second entry is red and has to be defended rather than merged.
+#
+# SCOPE IS CALENDAR WRITE AND EDIT, NOTHING ELSE
+# (research/2026-08-26-hands2-better-answer.md §4). Not mail, not reminders,
+# not contacts, not a general device lane for arbitrary work.
+DEVICE_ACT_LANES: dict[tuple[str, str, str], str] = {
+    (PHONE_CALENDAR_ACT_TYPE, PHONE_CALENDAR_REACH, PHONE_CALENDAR_EXECUTOR):
+        DEVICE_CALENDAR_LANE,
 }
 
 
 def device_lane(act) -> str:
     """Which device lane an act declaration is delivered on, or "".
 
-    Reads exactly one field of one typed object and looks it up in a closed
-    dict. It never sees the goal, never sees the transcript, and never sees a
-    date — so no wording, in any language, can move a job onto a device lane,
-    and no wording can keep a declared one off it. That is the whole of the
-    Law 1 argument: this decides DELIVERY from a stored declaration, it does
-    not decide what any sentence MEANT.
+    Reads exactly three fields of one typed object and looks the triple up in
+    a closed dict. It never sees the goal, never sees the transcript, and never
+    sees a date — so no wording, in any language, can move a job onto a device
+    lane, and no wording can keep a declared one off it. That is the whole of
+    the Law 1 argument: this decides DELIVERY from a stored declaration, it
+    does not decide what any sentence MEANT.
+
+    NOT THE WHOLE OF IT, THOUGH. This function cannot be the Law 1 guard on
+    its own, and reading it as one is how the device half went unpinned: a
+    word list cannot be written INTO a function whose only argument is an
+    `ActDeclaration`, so it gets written where the GOAL is, at the mint point
+    in `_queue_job`. The regression guard that matters is
+    `test_the_mint_point_routes_on_the_declaration_and_never_on_the_goal`,
+    which holds this declaration fixed and varies the words.
+
+    ALL THREE FIELDS, because no one of them is the errand. `anticipy_phone`
+    is only the phone, and the phone could grow a mail handler tomorrow; the
+    act type is what says this errand is a calendar write; and `reach` is what
+    says which store it lands in, which is the field the phone refuses on and
+    the hook does not read at all.
 
     Not `isinstance`-free by accident. A dict that happens to carry an
     `executor` key is what a corrupt row or a hand-written params blob looks
@@ -887,7 +962,8 @@ def device_lane(act) -> str:
     """
     if not isinstance(act, ActDeclaration):
         return ""
-    return DEVICE_EXECUTOR_LANES.get(act.executor, "")
+    return DEVICE_ACT_LANES.get(
+        (act.act_type, act.reach, act.executor), "")
 
 
 # A finalized recognizer line can cut a sentence at exactly the wrong place:
@@ -3605,7 +3681,13 @@ class Anticipy:
         # marked row back with a hardcoded `{"lane": ""}`, so a device job
         # that ever picked the marker up would be moved into his Chrome by a
         # pass that does not know the phone exists.
-        lane = device_lane(act) or lane
+        # Kept in a name because the lane string is not the fact — the
+        # research gate below can move this row to `lane="research"`, and the
+        # question the confirmation floor asks is "did the model DECLARE an
+        # act this phone executes", which does not stop being true because
+        # the browser was held off it.
+        device = device_lane(act)
+        lane = device or lane
         # THE RESEARCH GATE (HANDS 1 spec §5.4), asked here and only here.
         #
         # This is the one place in the brain that mints a job row, so it is the
@@ -3626,8 +3708,65 @@ class Anticipy:
         gate, procedure = self._research_gate(goal, touches, lane)
         if research.gate_holds_the_browser(gate.verdict):
             lane = RESEARCH_LANE
-        consequential = bool(hold or goal in IRREVERSIBLE
-                             or is_consequential(goal, params, explicit=explicit))
+        # THE GATE, ASKED WITH EVERYTHING THIS POINT IS HOLDING.
+        #
+        # `touches` was in hand — two lines up it went to `_research_gate`,
+        # and twenty lines above that to `_refines_pending` — and was dropped
+        # here. Read the order inside `is_consequential`: the deny-list, then
+        # `touches == "world"`, then `if explicit: return False`. Dropping
+        # `touches` moves an explicitly-asked-for calendar write from ABOVE
+        # the escape to BELOW it, so the same act lands on opposite sides of
+        # the confirmation gate depending on whether its verb happens to
+        # appear in `_VERBS`. Reproduced: `act=<calendar act>, explicit=True,
+        # touches="world"` posted `lane='device_calendar'`, `status='queued'`,
+        # `consequence='read_only'`, `approval=''` — and neither server layer
+        # refuses that row (workflow_guard's NO_APPROVAL_NEEDED contains
+        # `read_only`; research_lane's shape leg is inside its PATCH branch).
+        #
+        # MASKED, NOT ABSENT, before the `act=` parameter existed: every
+        # caller that passed `touches` also passed `hold`, and `hear()`'s
+        # explicit branch computes that `hold` from this same function WITH
+        # `touches` (see the note at "The EFFECTIVE hold"). So the gate lived
+        # in two places and one copy was missing an argument. `act=` is
+        # exactly the caller shape that unmasks it — the wiring commit has
+        # `act` and `touches` in hand at the mint point and no reason to think
+        # it must also recompute `hold`.
+        #
+        # PASSED WHOLE, never cherry-picked. Forwarding only `"world"` would
+        # be this call site deciding which of the model's answers count, which
+        # is the second copy of the gate all over again. `_IRREVERSIBLE_RE`
+        # still runs FIRST inside `is_consequential` and outranks every
+        # declaration, so the deny-list floor is untouched in both directions.
+        #
+        # AND THE FLOOR UNDER ALL OF IT: `device`. Passing `touches` closed
+        # the cell the review reproduced and left the rest of the row open.
+        # Read the matrix for a declared calendar write: explicit=True with
+        # touches=None is False, and explicit=False with touches="read" is
+        # False. Both minted `lane='device_calendar'`,
+        # `consequence='read_only'`, `status='queued'`, `approval=''` — an
+        # unapproved calendar write standing in the phone's queue, which no
+        # server layer refuses because workflow_guard's NO_APPROVAL_NEEDED
+        # contains `read_only`. Whether the owner had to tap came down to
+        # whether his verb reached a regex and which effect channel triage
+        # happened to fill in.
+        #
+        # NOT A WORD LIST WEARING A HAT. `device` is non-empty only for a
+        # typed `ActDeclaration` whose act type is `calendar_write` and whose
+        # executor is the phone — the model saying in a closed field that
+        # this errand leaves the machine. Reading that is reading a
+        # declaration, which is what Law 1 asks for; the goal is never
+        # consulted here, and `test_the_floor_holds_for_every_wording_a
+        # _device_act_can_carry` holds the declaration fixed and varies the
+        # words to prove it.
+        #
+        # DELIVERY IS STILL NOT PERMISSION, in the direction that matters:
+        # this floor can only ever ADD a confirmation. `test_the_floor_is_the
+        # _declaration_and_not_the_lane_string` is the polarity pin — a row
+        # with no declaration keeps the read-only path the browser runs on.
+        consequential = bool(hold or device or goal in IRREVERSIBLE
+                             or is_consequential(goal, params,
+                                                 explicit=explicit,
+                                                 touches=touches))
         owner_for_workflow = self.owner_ref or self.owner_id or "local-unowned"
         lineage = (params.get("lineage_key") or self._lineage_key
                    or self._source_event_id
@@ -3656,6 +3795,28 @@ class Anticipy:
                                    if str(value)),
             authority_text=str(params.get("source") or ""),
             facts=seed_facts,
+            # THE DECLARATION THAT CHOSE THE LANE, CARRIED ON THE ROW.
+            #
+            # It was read for routing and then thrown away: `new_plan` takes
+            # `act=` and this call did not pass it. So a row went out on
+            # `lane="device_calendar"` whose own embedded plan said nothing
+            # about a calendar at all, and the phone — which reads
+            # `params._workflow.act` and refuses `.actTypeNotAdmitted("")`
+            # before it looks at anything else — refused every single one.
+            # A lane the row cannot justify is worse than no lane: the
+            # server's shape legs have nothing to check either, which is why
+            # `deviceShapeRefusal` could only ever ask about `workflow_id` and
+            # `consequence`.
+            #
+            # Costs no digest. `scope_digest` hashes goal + facts +
+            # consequence + authority_text (brain/workflow.py:221), so an
+            # already-approved plan does not 409 on his own "yes".
+            #
+            # CARRIED, NEVER INVENTED: `act` is whatever triage declared and
+            # `None` when it declared nothing. A default here would be this
+            # function deciding what the errand touches, from the goal, which
+            # is the Law 1 violation the lane exists to avoid.
+            act=act,
             # NEVER on work the owner is about to approve. A card he is being
             # shown must be approvable: required-but-unfilled facts put the
             # plan in DRAFT, which the phone refuses to approve, so Send died
