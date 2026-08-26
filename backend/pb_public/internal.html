@@ -108,7 +108,7 @@
     into the deploy image, so <strong>every <code>railway up</code> replaces it
     wholesale</strong>, and on 25 Aug a routine backend deploy destroyed it. No gate
     could have caught that: a file no repo knows about is a file no diff can see.
-    Its source is now <code>backend/pb_public/internal/index.html</code>, so a deploy
+    Its source is now <code>backend/pb_public/internal.html</code>, so a deploy
     rebuilds it instead of deleting it. <strong>Do not hand-upload files to
     production.</strong>
   </div>
