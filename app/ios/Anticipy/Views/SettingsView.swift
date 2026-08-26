@@ -26,12 +26,26 @@ struct SettingsView: View {
     /// that trait, so nothing has to be told about the change.
     @AppStorage(AppTheme.key) private var themeChoice = AppTheme.light.rawValue
 
-    /// How long this phone has heard nothing, folded from the journal on disk.
-    /// Zero until the `.task` below has read it, and zero forever on a phone
-    /// whose owner has listening turned off — `ListenTally` hard-zeroes it
-    /// under `.stoppedByOwner`, so the row cannot appear over somebody's own
+    /// The measured line under the listening row — "Nothing heard for 6 hr
+    /// 20 min" — or nil when there is nothing to report.
+    ///
+    /// A SENTENCE RATHER THAN AN INT, and that is not tidying. This used to be
+    /// an `Int` the body compared against zero and handed to `PlainDuration`
+    /// inline, which meant the only thing any check could reach was the SHAPE
+    /// of the call: that the row asked `PlainDuration`, sat in a `.task`, ran
+    /// detached and passed `now:`. Which field it read and whether the seconds
+    /// arrived unchanged were pinned by nothing, and both survived being
+    /// mutated — `longestSilenceSeconds` for `unheardForSeconds` renders
+    /// "Nothing heard for 11 hr" on a phone that heard speech ten seconds ago,
+    /// and every check on this screen stayed green over it. The decision now
+    /// lives in `UnheardLine`, which is folded from real journals and compared
+    /// string for string by `run_interview_invite_tests.sh`.
+    ///
+    /// Nil until the `.task` below has read it, and nil again the moment the
+    /// owner turns listening off — `ListenTally` hard-zeroes the stretch under
+    /// `.stoppedByOwner`, so the row cannot appear over somebody's own
     /// deliberate silence.
-    @State private var unheard = 0
+    @State private var unheardLine: String?
 
     @State private var pairCode = ""
     @State private var pairOutcome: AnticipySession.PairOutcome?
@@ -80,6 +94,37 @@ struct SettingsView: View {
                 Text(listeningState)
                     .font(.callout)
                     .foregroundStyle(Theme.text)
+                    // ON THIS ROW RATHER THAN ON THE SECTION, and the row is
+                    // this one because this is the sentence the measured line
+                    // below exists to qualify.
+                    //
+                    // It was on the `Section`, two lines under a
+                    // `.listRowBackground` that reaches every row in the
+                    // section because that is what row modifiers do. Nobody
+                    // could say from reading it whether `.task` was pushed down
+                    // the same way — and if it is, this fold ran once per row,
+                    // four to seven times, each one a 512KB `queue.sync` on the
+                    // same serial queue `record()` takes from the audio thread.
+                    // Pinning it to a single row settles the question instead of
+                    // arguing it.
+                    //
+                    // KEYED, NOT BARE, which is the half that was actually
+                    // wrong. A bare `.task` runs on appear and never again, so
+                    // the number was captured before anything the owner does on
+                    // this screen. She opens Settings during an interruption,
+                    // reads "Nothing heard for 12 min", taps Stop listening —
+                    // the reaction the line is for — and the row goes on saying
+                    // it for the rest of the visit, over silence she just chose.
+                    // The same defect inverted is worse: the call ends, the
+                    // watchdog takes the microphone back, words are being
+                    // transcribed in front of her, and the row still claims
+                    // nothing has been heard since before lunch.
+                    //
+                    // The id is the two flags that decide what silence MEANS,
+                    // and both are needed. `capturing` alone cannot see the
+                    // stop-while-interrupted case at all: suspended already made
+                    // it false, so turning listening off does not change it.
+                    .task(id: listeningIntent) { unheardLine = await Self.unheardLine() }
 
                 // Ships in RELEASE, unlike the haptics panel further down. The
                 // stranger week is a release build on somebody else's phone,
@@ -112,17 +157,21 @@ struct SettingsView: View {
                 // sense is unmeasured is what law 1 exists to stop. That is
                 // `ListeningDiagnosticsView.swift:38-43` standing on a second
                 // screen, and it holds only while both screens word the same
-                // seconds the same way, which is why this asks `PlainDuration`
-                // instead of dividing by sixty.
+                // seconds the same way — which is why the wording is
+                // `PlainDuration`'s and the reading is `UnheardLine`'s, and
+                // neither of them is this file's.
                 //
-                // ABOVE ZERO ONLY, which is already the owner's own off switch:
-                // `ListenTally` hard-zeroes this under `.stoppedByOwner`
-                // (`ListenTally.swift:317`) because quiet after you turned it
-                // off is the ordinary state of a phone nobody is talking to and
-                // not a finding. So it can never nag somebody who chose the
-                // silence, and no second condition is needed to stop it.
-                if unheard > 0 {
-                    Text("Nothing heard for \(PlainDuration.words(unheard))")
+                // WHICH FIELD, WHETHER TO SPEAK AND IN WHAT WORDS ARE ALL ONE
+                // DECISION, and it is `UnheardLine.words`. Splitting them left
+                // the gate here, the field at the fold and the wording a third
+                // place, so a check could see all three and pin none: the row
+                // read `longestSilenceSeconds` — a historical maximum over the
+                // whole journal, not a stretch anybody is in — and reported
+                // eleven hours of silence over a phone that heard speech ten
+                // seconds ago, with the suite green. One function, folded from
+                // real journals in the tests, is what closes that.
+                if let unheardLine {
+                    Text(unheardLine)
                         .font(.callout)
                         .foregroundStyle(Theme.text2)
                 }
@@ -180,14 +229,16 @@ struct SettingsView: View {
                 }
             }
             .listRowBackground(Theme.card)
+            // The unheard fold used to sit here beside this, and does not any
+            // more — it is on the first row of the section, keyed. The reason it
+            // was never in this `onAppear` still stands and is the reason it is
+            // not in one now: `syncPause` is three field reads and a timer,
+            // while the fold reads up to 512KB off disk through a synchronous
+            // `queue.sync` and parses every line of it. That belongs off the
+            // main actor on the one screen people open when they want listening
+            // to STOP, which is the last screen in the app that may be slow to
+            // draw.
             .onAppear(perform: syncPause)
-            // DELIBERATELY NOT IN THE `onAppear` ABOVE. `syncPause` is three
-            // field reads and a timer; this reads up to 512KB off disk through
-            // a synchronous `queue.sync` and then parses every line of it.
-            // Putting the two together would hitch the first frame of the one
-            // screen people open when they want listening to STOP, which is the
-            // last screen in the app that may be slow to draw.
-            .task { unheard = await Self.unheardSeconds() }
 
             Section("Pendant") {
                 HStack {
@@ -806,7 +857,22 @@ struct SettingsView: View {
         d.formatted(date: .omitted, time: .shortened)
     }
 
-    /// How long this phone has heard nothing, as of right now.
+    /// WHAT THE MEASURED LINE HAS TO BE RE-READ ON: whether the owner wants
+    /// listening, and whether something has taken it away. Order is fixed and
+    /// both are load-bearing.
+    ///
+    /// Not `capturing`, which is the AND of these two and therefore cannot see
+    /// the case that matters most. During an interruption `capturing` is
+    /// already false; the owner then taps Stop listening and it is false still,
+    /// so a task keyed on it would not re-run, and the row would go on
+    /// reporting a stretch of silence at somebody who has just chosen silence.
+    /// That is the exact sentence this row must never say.
+    private var listeningIntent: [Bool] {
+        [session.listener.isListening, session.listener.suspended]
+    }
+
+    /// What this phone has heard nothing for, in words, as of right now — or
+    /// nil when there is nothing to report.
     ///
     /// Detached, because the fold is file I/O plus a parse of every line the
     /// journal holds and the caller is a view body.
@@ -818,10 +884,14 @@ struct SettingsView: View {
     /// and nothing wrote another line after it. `ListeningDiagnosticsView`
     /// passes it for the same reason and says so at `:138-145`; a reassuring
     /// wrong number is worse than no number, because it is believed.
-    private static func unheardSeconds() async -> Int {
+    ///
+    /// The tally goes to `UnheardLine` whole rather than one field being picked
+    /// out here. Picking the field here is what let it be the wrong field, in a
+    /// place no check could reach.
+    private static func unheardLine() async -> String? {
         await Task.detached(priority: .utility) {
-            ListenTally.of(ListenJournal.shared.persistedEvents,
-                           now: Date()).unheardForSeconds
+            UnheardLine.words(ListenTally.of(ListenJournal.shared.persistedEvents,
+                                             now: Date()))
         }.value
     }
 
@@ -1281,5 +1351,66 @@ enum InterviewInvitation {
         guard let last = parts.last else { return "" }
         guard parts.count > 1 else { return last }
         return parts.dropLast().joined(separator: ", ") + " and " + last
+    }
+}
+
+/// The one line on the Settings listening row that reports a MEASUREMENT: how
+/// long this phone has heard nothing, or nothing at all.
+///
+/// WHY IT IS A TYPE, 2026-08-26. The row's decision used to be spread across
+/// three places — the fold picked the field, the body compared it against zero,
+/// and the interpolation wrote the words — and every check any of them had was
+/// a check on the SHAPE of the call: that the row asked `PlainDuration`, sat in
+/// a `.task`, ran detached, passed `now:`. Which field it read and whether the
+/// seconds arrived unchanged were pinned by nothing. Both were mutated and both
+/// survived: `unheardForSeconds` swapped for `longestSilenceSeconds`, and the
+/// seconds doubled on the way to the formatter. The first of those is not a
+/// cosmetic wrong number. `longestSilenceSeconds` is a historical maximum over
+/// the whole journal, so on a day that had one long interruption in the morning
+/// the row reads "Nothing heard for 11 hr" all evening — present tense, about a
+/// phone that heard speech ten seconds ago. That is the reassuring wrong number
+/// `ListenTally`'s own comments were written against, pointed the other way: a
+/// number that is believed, and this time an alarming one.
+///
+/// FOLDED FROM REAL JOURNALS IN THE CHECKS, never from a hand-built tally. A
+/// `ListenTally()` with one field set proves nothing about which field the
+/// screen would have read — the cases in `run_interview_invite_tests.sh` build
+/// event lists where `longestSilenceSeconds` and `unheardForSeconds` are
+/// different numbers, so only one of them can produce the expected sentence.
+///
+/// IT NAMES A MAGNITUDE AND STOPS. Above zero is the only gate, and zero is not
+/// a threshold — it is the owner's own off switch, because `ListenTally`
+/// hard-zeroes this under `.stoppedByOwner` (`ListenTally.swift:317`): quiet
+/// after you turned it off is the ordinary state of a phone nobody is talking
+/// to, not a finding. Nothing else is compared against the number, because
+/// there is no recorded normal in this repo to draw a line from, and a rule
+/// invented while the sense is unmeasured is what law 1 exists to stop. A phone
+/// that has heard nothing for eleven hours and one that has heard nothing for
+/// four minutes both say so, and the reader judges.
+///
+/// PURE FOUNDATION, like `InterviewInvitation` above and for the same reason:
+/// the runner lifts this enum out of this file and compiles it against
+/// Foundation alone. Nothing here may reach for a Color, a Font or a View — a
+/// formatter that can reach for a colour is a formatter that will eventually
+/// return a red one.
+enum UnheardLine {
+
+    /// The sentence, or nil.
+    ///
+    /// Takes the whole tally rather than an Int, so the field it reads is
+    /// inside the thing being tested. That is the whole point: handing this an
+    /// already-chosen number would move the mutation that survived back out to
+    /// the call site, where nothing can see it.
+    ///
+    /// The words are `PlainDuration`'s. The diagnostics screen reports these
+    /// same seconds one tap deeper, and the no-verdict argument both screens
+    /// rest on holds only while "6 hr 20 min" here is not "6.3 hours" there.
+    static func words(_ tally: ListenTally) -> String? {
+        let seconds = tally.unheardForSeconds
+        // Zero is the owner's own silence and negative is a clock that moved
+        // backwards. Neither is a stretch anybody is missing, and there is no
+        // honest sentence to write about either.
+        guard seconds > 0 else { return nil }
+        return "Nothing heard for \(PlainDuration.words(seconds))"
     }
 }

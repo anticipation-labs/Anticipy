@@ -22,13 +22,25 @@
 #
 # Two instruments, because these can fail in two different ways:
 #
-#   The swiftc suite proves the WORDING — every combination, and the law legs
-#   that no table of answers can carry: never naming a grant she does not hold,
-#   never naming an absence, and never a fraction anywhere.
+#   The swiftc suites prove the ANSWER — `InterviewInvitation` over every
+#   combination of holdings and counts, and `UnheardLine` over folds of real
+#   journals. Both are lifted out of SettingsView.swift and compiled against
+#   Foundation alone, so neither can reach for a screen to make its decision.
 #
 #   The scans prove the SCREEN STILL ASKS — that the button, the caption and the
-#   listening row are wired to what is true rather than to a constant, and that
-#   no threshold, colour or verdict has grown onto the measured number.
+#   listening row are wired to those types rather than to a constant, that the
+#   measured line is re-read when the owner changes her mind on the screen she
+#   is standing on, and that no threshold, colour or verdict has grown onto it.
+#
+# WHAT THIS FILE ONCE CLAIMED AND COULD NOT DO, recorded because it is the
+# reason half of it was rewritten on 2026-08-26. The listening legs pinned the
+# SHAPE of one call — PlainDuration, a `.task`, detached, `now:` — and nothing
+# about its value. Swapping `unheardForSeconds` for `longestSilenceSeconds`, a
+# historical maximum that renders "Nothing heard for 11 hr" over a phone that
+# heard speech ten seconds ago, went green through every check here. So did
+# doubling the seconds on the way to the formatter. A wrong number on this row
+# is believed, which is worse than a missing one; the value lives in a type now,
+# and the type is folded from journals rather than assembled by hand.
 #
 # Exit code is the result. Non-zero means the section is telling somebody
 # something about themselves that is not so.
@@ -187,17 +199,56 @@ fi
 # FIX 8 — the measured silence, on the row people open
 # ======================================================================
 
-# 8. THE ROW EXISTS AND ASKS THE SHARED FORMATTER. Not six lines of arithmetic:
-#    the diagnostics screen reports these same `unheardForSeconds`, and the
-#    no-verdict argument both screens rest on holds only while "6 hr 20 min"
-#    here is not "6.3 hours" there.
-if ! grep -q 'Nothing heard for .(PlainDuration\.words(' "$out/settings.code.swift"; then
-    echo "Settings no longer reports how long the phone has heard nothing,"
-    echo "or has stopped asking PlainDuration how to word it."
+# 8. THE ROW EXISTS, AND THE DECISION BEHIND IT IS THE ONE THE SUITE COMPILES.
+#    `UnheardLine.words` picks the field, decides whether to speak, and asks
+#    PlainDuration for the words — one function, folded from real journals at
+#    the bottom of this file. The screen's job is to render what it returns.
+if ! grep -q 'UnheardLine\.words(' "$out/settings.code.swift"; then
+    echo "Settings no longer asks UnheardLine how long the phone has heard nothing."
     echo "The headline above that row is built from \`capturing\`, which is"
     echo "\`isListening && !suspended\` — the app's own intent flags. It says"
     echo "\"I'm listening on this phone.\" for exactly the thirty deaf hours"
-    echo "CLAUDE.md records. This line is the measured half."
+    echo "CLAUDE.md records. This line is the measured half, and the checks that"
+    echo "hold it are checks on UnheardLine's answer."
+    fail=1
+fi
+if ! grep -q 'Nothing heard for .(PlainDuration\.words(' "$out/settings.code.swift"; then
+    echo "The sentence has gone, or has stopped asking PlainDuration to word it."
+    echo "The diagnostics screen reports these same seconds one tap deeper, and"
+    echo "the no-verdict argument both screens rest on holds only while"
+    echo "\"6 hr 20 min\" here is not \"6.3 hours\" there."
+    fail=1
+fi
+
+# 8b. AND THE SCREEN DOES NOT PICK THE FIELD ITSELF. THE LEG THIS SUITE DID NOT
+#     HAVE. `longestSilenceSeconds` is a historical maximum over the whole
+#     journal; `unheardForSeconds` is the stretch being lived through. Reading
+#     the wrong one renders "Nothing heard for 11 hr" in the present tense on a
+#     phone that heard speech ten seconds ago — and while the choice was made in
+#     the view, that swap compiled, rendered and went green through every check
+#     in this file. It is made in one place now, inside the type the suite below
+#     folds real journals through, and this is what keeps it there.
+awk '/^enum UnheardLine \{/ { exit } { print }' \
+    "$out/settings.code.swift" > "$out/settings.screen.swift"
+# AN EMPTY HALF SATISFIES THE RULE BELOW BY CONTAINING NOTHING, which is how
+# three separate gate rules in this repo were found passing by matching nothing.
+# Move the enum above the view and everything the rule is about lands outside
+# what it reads. The screen has to actually be in here.
+if ! grep -q 'struct SettingsView: View' "$out/settings.screen.swift"; then
+    echo "The half of SettingsView.swift above \`enum UnheardLine\` no longer"
+    echo "holds the view. Either the enum moved to the top of the file or the"
+    echo "split broke, and the rule below is now reading an empty file — which"
+    echo "passes by containing nothing."
+    exit 2
+fi
+leaked=$(grep -nE 'unheardForSeconds|longestSilenceSeconds|listeningSeconds' \
+    "$out/settings.screen.swift" || true)
+if [ -n "$leaked" ]; then
+    echo "SettingsView reads a ListenTally field outside UnheardLine:"
+    printf '%s\n' "$leaked"
+    echo "Which field this row reports is the decision that was mutated and"
+    echo "survived. It belongs inside the type the checks fold journals through,"
+    echo "where a wrong field produces a wrong sentence and a case goes red."
     fail=1
 fi
 
@@ -206,8 +257,8 @@ fi
 #    `onAppear` beside it is three field reads; putting this there would hitch
 #    the first frame of the one screen people open when they want listening to
 #    STOP.
-if ! grep -q '\.task { unheard = await ' "$out/settings.code.swift"; then
-    echo "The unheard fold is no longer computed in a .task."
+if ! grep -qE '\.task\(id: [A-Za-z]+\) \{ unheardLine = await ' "$out/settings.code.swift"; then
+    echo "The unheard fold is no longer computed in a keyed .task."
     echo "persistedEvents is file I/O plus a parse of every line. In onAppear it"
     echo "hitches the first frame of the screen somebody opens to stop listening."
     fail=1
@@ -217,8 +268,75 @@ if ! grep -q 'Task\.detached' "$out/settings.code.swift"; then
     echo "A .task body is main-actor bound; the disk read has to leave it."
     fail=1
 fi
-if grep -qE 'onAppear.*persistedEvents|onAppear.*ListenTally\.of' "$out/settings.code.swift"; then
+if grep -qE 'onAppear.*persistedEvents|onAppear.*ListenTally\.of|onAppear.*UnheardLine' \
+        "$out/settings.code.swift"; then
     echo "The unheard fold has moved back into an onAppear."
+    fail=1
+fi
+
+# 9b. AND IT IS KEYED ON WHAT THE OWNER JUST DID. A BARE `.task` RUNS ONCE ON
+#     APPEAR AND NEVER AGAIN, which is a false present-tense measurement shown
+#     to somebody who is watching. She opens Settings during an interruption,
+#     reads "Nothing heard for 12 min", taps Stop listening — the reaction this
+#     line exists to produce — and the row goes on saying it for the rest of the
+#     visit, over silence she just chose. Inverted, it is worse: the call ends,
+#     the watchdog takes the microphone back, words are being transcribed in
+#     front of her, and the row still claims nothing has been heard since lunch.
+if grep -q '\.task { unheardLine' "$out/settings.code.swift"; then
+    echo "The unheard fold is back on a bare .task."
+    echo "It then reports a stretch of silence captured before the owner's tap,"
+    echo "including at somebody who has just chosen the silence."
+    fail=1
+fi
+#     BOTH FLAGS, and `capturing` is not a substitute for them. `capturing` is
+#     their AND, so during an interruption it is already false — turning
+#     listening off does not change it, and a task keyed on it would not re-run
+#     in the one case that matters most.
+intent=$(awk '
+    /private var listeningIntent/ { grab = 1 }
+    grab {
+        buf = buf $0 " "
+        n = gsub(/\{/, "{"); m = gsub(/\}/, "}")
+        depth += n - m
+        if (n > 0) seen = 1
+        if (seen && depth <= 0) { print buf; exit }
+    }
+' "$out/settings.code.swift")
+if [ -z "$intent" ]; then
+    echo "SettingsView no longer declares what the measured line is re-read on."
+    fail=1
+else
+    for flag in 'isListening' 'suspended'; do
+        printf '%s\n' "$intent" | grep -q "$flag" || {
+            echo "The unheard fold's key no longer reads \`$flag\`: $intent"
+            echo "Both are needed. During an interruption \`suspended\` has"
+            echo "already made \`capturing\` false, so the owner turning listening"
+            echo "OFF changes nothing a key built on it can see — and that is"
+            echo "exactly when the row must stop talking."
+            fail=1; }
+    done
+fi
+
+# 9c. ON A ROW, NOT ON THE SECTION. Two lines under where this modifier used to
+#     sit, `.listRowBackground(Theme.card)` is applied to the same `Section` and
+#     reaches every row in it, because that is what row modifiers do. Nobody
+#     could say from reading it whether `.task` was pushed down the same way —
+#     and if it is, this fold ran once per row, four to seven times, each one a
+#     512KB `queue.sync` on the same serial queue `record()` takes from the
+#     audio thread. Indentation is how a Section modifier and a row modifier are
+#     told apart here, so indentation is what this measures.
+task_indent=$(awk '/\.task\(id:/ { match($0, /^ */); print RLENGTH; exit }' \
+    "$out/settings.code.swift")
+sect_indent=$(awk '/Section\("Listening"\) \{/ { match($0, /^ */); print RLENGTH; exit }' \
+    "$out/settings.code.swift")
+if [ -z "$task_indent" ] || [ -z "$sect_indent" ]; then
+    echo "Could not locate the .task or the Listening section to compare them."
+    fail=1
+elif [ "$task_indent" -le "$((sect_indent + 4))" ]; then
+    echo "The unheard fold sits at the Section's own indentation ($task_indent"
+    echo "against a section at $sect_indent), which is where its modifiers go."
+    echo "A row modifier on a Section is applied to every row in it. Put it on"
+    echo "one row, so one visit is one read of the journal."
     fail=1
 fi
 
@@ -246,14 +364,21 @@ fi
 #     Anything else compared against this number is a rule deciding when silence
 #     becomes a finding, written while there is no recorded normal to draw it
 #     from. That is law 1, on the one screen that reports the senses.
-if ! grep -q 'if unheard > 0 {' "$out/settings.code.swift"; then
-    echo "The unheard row is no longer gated on \`unheard > 0\`."
-    echo "Either it now renders over somebody's own deliberate silence, or a"
+#
+#     The gate moved INTO `UnheardLine` with the field and the wording, so this
+#     reads the gate where it now is, and the suite below folds journals through
+#     it either side of zero. The screen renders an optional and can no longer
+#     hold an opinion about the number at all — which is the point of it being a
+#     `String?` rather than an `Int` the body compares.
+if ! grep -q 'seconds > 0' "$out/settings.code.swift"; then
+    echo "UnheardLine is no longer gated on \`seconds > 0\`."
+    echo "Either it now speaks over somebody's own deliberate silence, or a"
     echo "threshold has been put in front of it. Both are the same defect: a rule"
     echo "deciding when a measurement is worth saying."
     fail=1
 fi
-thresholds=$(grep -nE 'unheard[^A-Za-z][^/]*[<>]=?[[:space:]]*[1-9]' "$out/settings.code.swift" || true)
+thresholds=$(grep -nE '(unheard|seconds)[^A-Za-z][^/]*[<>]=?[[:space:]]*[1-9]' \
+    "$out/settings.code.swift" || true)
 if [ -n "$thresholds" ]; then
     echo "A threshold has grown onto the unheard number:"
     printf '%s\n' "$thresholds"
@@ -269,7 +394,7 @@ fi
 #     either one on this row is the screen deciding for the reader. The sentence
 #     takes the same weight the diagnostics screen gives it and stops.
 verdict=$(awk '
-    /if unheard > 0 \{/ { grab = 1; depth = 0; seen = 0 }
+    /if let unheardLine \{/ { grab = 1; depth = 0; seen = 0 }
     grab {
         buf = buf $0 " "
         n = gsub(/\{/, "{"); m = gsub(/\}/, "}")
@@ -386,3 +511,79 @@ echo "lifted InterviewInvitation from SettingsView.swift: $(wc -l < "$out/lifted
 
 swiftc -O "$out/InterviewInvitation.swift" "$tests" -o "$out/interviewinvitetests"
 "$out/interviewinvitetests"
+
+# ======================================================================
+# THE MEASURED LINE, AS A VALUE
+# ======================================================================
+#
+# THE INSTRUMENT THIS SUITE WAS MISSING. Everything above is a scan: it proves
+# the row asks the right type and that nothing has grown a colour or a
+# threshold. None of it can say what the row would actually PRINT, and that is
+# where the two surviving mutations lived — the wrong tally field, and the
+# seconds doubled on the way to the formatter. Both rendered a confident
+# sentence about somebody's own phone that was not true of it.
+#
+# Lifted and compiled, never copied, exactly as InterviewInvitation is above.
+# The difference is what it is compiled AGAINST: ListenTally and PlainDuration,
+# the real ones, so the cases fold real event lists rather than assembling a
+# tally by hand. A hand-built `ListenTally(unheardForSeconds: 600)` cannot tell
+# you which field the screen would have read; a day holding ten hours of morning
+# silence and ten minutes of current silence can, because only one of those two
+# numbers produces the expected sentence.
+awk '
+    /^enum UnheardLine \{/ { grab = 1 }
+    grab {
+        print
+        n = gsub(/\{/, "{"); m = gsub(/\}/, "}")
+        depth += n - m
+        if (depth <= 0 && seen) { exit }
+        if (n > 0) seen = 1
+    }
+' "$settings" > "$out/unheard.swift"
+
+if ! grep -q '^enum UnheardLine {' "$out/unheard.swift"; then
+    echo "Found no \`enum UnheardLine\` in SettingsView.swift."
+    echo "Either the type moved or this extraction broke; either way the one"
+    echo "sentence on that screen reporting a MEASUREMENT is back to being"
+    echo "checked only for the shape of its call, which is how a wrong number"
+    echo "shipped green last time."
+    exit 2
+fi
+opens=$(tr -cd '{' < "$out/unheard.swift" | wc -c | tr -d ' ')
+closes=$(tr -cd '}' < "$out/unheard.swift" | wc -c | tr -d ' ')
+if [ "$opens" != "$closes" ] || [ "$opens" = "0" ]; then
+    echo "The extracted UnheardLine has $opens '{' and $closes '}' — the"
+    echo "extraction is not bracketing the enum. These checks would test a fragment."
+    exit 2
+fi
+grep -q 'static func words' "$out/unheard.swift" || {
+    echo "The extracted UnheardLine is missing \`static func words\` — the lift is short."
+    exit 2; }
+# FOUNDATION ALONE, and here it is a stronger rule than usual: a formatter that
+# can reach for a Color is a formatter that will eventually return a red one.
+if grep -qE 'import (SwiftUI|UIKit|AppKit)|Theme\.|Color\.|Font\.' "$out/unheard.swift"; then
+    echo "UnheardLine has reached for the view layer:"
+    grep -nE 'import (SwiftUI|UIKit|AppKit)|Theme\.|Color\.|Font\.' "$out/unheard.swift"
+    echo "This row reports a measurement and takes no view on it. Nothing that"
+    echo "can give a number a colour belongs in the type that decides the number."
+    exit 2
+fi
+echo "lifted UnheardLine from SettingsView.swift: $(wc -l < "$out/unheard.swift" | tr -d ' ') lines"
+
+{
+    echo "import Foundation"
+    cat "$out/unheard.swift"
+} > "$out/UnheardLine.swift"
+
+journal="$app/Audio/ListenJournal.swift"
+facts="$app/Audio/ListenSessionFacts.swift"
+unheard_tests="$here/UnheardLineTests.swift"
+for f in "$journal" "$facts" "$unheard_tests"; do
+    [ -f "$f" ] || { echo "missing $f — the fold suite would compile nothing"; exit 2; }
+done
+
+swiftc -O \
+    "$journal" "$facts" "$tally" "$duration" \
+    "$out/UnheardLine.swift" "$unheard_tests" \
+    -o "$out/unheardlinetests"
+"$out/unheardlinetests"
