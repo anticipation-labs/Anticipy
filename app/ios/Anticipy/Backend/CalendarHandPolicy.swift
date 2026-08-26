@@ -92,6 +92,24 @@ enum CalendarHandPolicy {
     /// "supervised_read"; this is the device's own.
     static let lane = "device_calendar"
 
+    /// The lane, read the way the SERVER reads it — and this is not a second
+    /// copy of a rule, it is the same rule spelled the same way.
+    ///
+    /// `research_lane.pb.js` normalises with `.trim().toLowerCase()` once, and
+    /// every leg it runs inherits that: a row whose lane is `"Device_Calendar"`
+    /// IS a device row to the server — a browser is 403'd off it and
+    /// `deviceShapeRefusal` is applied to it. A phone comparing exactly would
+    /// call that same row somebody else's business, and it would sit at
+    /// `queued` with NO hand at all while `report_unclaimed_device_work`'s own
+    /// exact-match filter may not see it either. An orphan is worse than a
+    /// refusal, because a refusal is countable and an orphan is silence.
+    ///
+    /// Law 1 is not in play: this decides which HAND a stored lane string names,
+    /// it never decides what anybody's words meant.
+    static func normalizedLane(_ raw: String?) -> String {
+        (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     static let writeActType = "calendar_write"
     static let undoActType = "calendar_undo"
 
@@ -104,6 +122,18 @@ enum CalendarHandPolicy {
     /// single `EKEventStore` call behind a single decision, which is the only
     /// mechanical containment available.
     static let executor = "anticipy_phone"
+
+    /// THE ONE CONSEQUENCE THIS HAND RUNS, and it is a REQUIREMENT rather than
+    /// the absence of a refusal. See the check in `decide` for why: `read_only`
+    /// is the value that turns the server's own approval check off, and a hand
+    /// that only refused the values somebody thought of would run every value
+    /// they did not.
+    static let consequential = "consequential"
+
+    /// The Shelf 2 label, named so the §5.4 attack keeps its own enumerated
+    /// cause instead of collapsing into "not consequential". Two refusals that
+    /// share a code are two refusals nobody can tell apart in a journal.
+    static let actAndTellConsequence = "reversible_local"
 
     /// ACT TYPES THIS HAND MAY RUN WITHOUT A TAP. EMPTY, ON PURPOSE.
     ///
@@ -172,14 +202,21 @@ enum CalendarHandPolicy {
         let workflowVersion: Int?
         let scopeDigest: String?
         let consequence: String?
+        /// The `approval` COLUMN, as `AgentJob` already decodes it — the
+        /// server's own copy of the record, written by `job_fields` in
+        /// brain/workflow.py and cross-checked against the embedded one by
+        /// workflow_guard.pb.js on every write. The hand reads BOTH witnesses;
+        /// see the gate section of `decide`.
+        let approval: String?
         let params: String
 
         init(id: String, status: String, lane: String?, workflowID: String?,
              workflowVersion: Int?, scopeDigest: String?, consequence: String?,
-             params: String) {
+             approval: String?, params: String) {
             self.id = id; self.status = status; self.lane = lane
             self.workflowID = workflowID; self.workflowVersion = workflowVersion
             self.scopeDigest = scopeDigest; self.consequence = consequence
+            self.approval = approval
             self.params = params
         }
     }
@@ -271,9 +308,31 @@ enum CalendarHandPolicy {
         /// The plan claimed Shelf 2 for an act type this hand does not admit
         /// for act-and-tell. The §5.4 attack, arriving from the device side.
         case actAndTellNotAdmitted(String)
+        /// The work does not say it is consequential, so the server's approval
+        /// check may never have run on it at all. Names the value it read.
+        case consequenceNotConsequential(String)
         case rowDisagreesWithPlan
         case noApproval
-        case approvalUnbound
+        // THERE IS NO `approvalUnbound` HERE ANY MORE, AND ITS ABSENCE IS THE
+        // POINT. It was the enumerated cause of the second approval gate this
+        // hand used to carry — the one that read `plan_id`, `plan_version` and
+        // `scope_digest` off the blob and judged them, where
+        // `workflow_guard.pb.js: approvalRefusal` judges those AND owner_words
+        // or a bound gesture. That check is deleted; a cause nothing can return
+        // is a line that reads as a floor and holds nothing, and worse, it is a
+        // labelled socket inviting somebody to plug the decision back in. The
+        // binding this hand still does check is that the plan and the row agree
+        // (`rowDisagreesWithPlan`) and that the two copies of the server's own
+        // record agree (`approvalDisagreesWithTheRow`) — verification, never a
+        // second opinion about what a good approval looks like.
+        /// The server keeps its approval in a COLUMN as well as in the plan
+        /// blob. An empty or unreadable column is a row that never carried the
+        /// server's own record, whatever the blob says about itself.
+        case approvalNotOnTheRow
+        /// The two copies of the one record are not the same record. The
+        /// server refuses that on every write (workflow_guard.pb.js:90), so a
+        /// row that reaches this phone saying two things did not come from it.
+        case approvalDisagreesWithTheRow
         case actTargetUnbound
         case noUndoPlan
         case undoAddressesAnotherAct
@@ -296,9 +355,13 @@ enum CalendarHandPolicy {
             case .reachDisagrees:          return "calhand.reach_disagrees"
             case .executorDisagrees:       return "calhand.executor_disagrees"
             case .actAndTellNotAdmitted:   return "calhand.act_and_tell_not_admitted"
+            case .consequenceNotConsequential:
+                return "calhand.consequence_not_consequential"
             case .rowDisagreesWithPlan:    return "calhand.row_disagrees_with_plan"
             case .noApproval:              return "calhand.no_approval"
-            case .approvalUnbound:         return "calhand.approval_unbound"
+            case .approvalNotOnTheRow:     return "calhand.approval_not_on_the_row"
+            case .approvalDisagreesWithTheRow:
+                return "calhand.approval_disagrees_with_the_row"
             case .actTargetUnbound:        return "calhand.act_target_unbound"
             case .noUndoPlan:              return "calhand.no_undo_plan"
             case .undoAddressesAnotherAct: return "calhand.undo_addresses_another_act"
@@ -335,7 +398,7 @@ enum CalendarHandPolicy {
     static func decide(row: Row, now: Date, writableCalendar: Target?) -> Decision {
 
         // ---------------------------------------------------------- not ours
-        guard (row.lane ?? "") == lane else { return .nothing(.notThisHand) }
+        guard normalizedLane(row.lane) == lane else { return .nothing(.notThisHand) }
 
         switch row.status {
         case "done", "failed", "cancelled":  return .nothing(.alreadyTerminal)
@@ -374,10 +437,35 @@ enum CalendarHandPolicy {
         // "consequential" in the blob while the row says "reversible_local" is
         // the more interesting of the two disagreements, not the less. A floor
         // that reads only its preferred witness is a floor with a side door.
-        let claimsActAndTell = (plan["consequence"] as? String) == "reversible_local"
-            || (row.consequence ?? "") == "reversible_local"
-        if claimsActAndTell, !admittedForActAndTell.contains(actType) {
+        let statedConsequences = [plan["consequence"] as? String ?? "",
+                                  row.consequence ?? ""]
+        if statedConsequences.contains(actAndTellConsequence),
+           !admittedForActAndTell.contains(actType) {
             return .refuse(.actAndTellNotAdmitted(actType))
+        }
+
+        // AND THEN THE THING IT IS NOT ENOUGH TO REFUSE: `read_only`.
+        //
+        // That is the value that turns the SERVER's approval check OFF —
+        // `workflow_guard.pb.js: NO_APPROVAL_NEEDED = ["read_only"]`, and the
+        // leg that calls `approvalRefusal()` is skipped entirely for such a
+        // row. On a read_only row the approval blob sitting inside
+        // `params._workflow` was validated by NOTHING, so a hand that read it
+        // as "the server's own approval record" would be reading a field
+        // nobody checked. `deviceShapeRefusal` in research_lane.pb.js was
+        // written to refuse exactly this on this lane, but it lives inside
+        // `if (method === "PATCH"…)` — the row is BORN read_only on a POST that
+        // leg never sees, and this hand decides on a `queued` row, BEFORE any
+        // claim PATCH exists. So the phone cannot borrow that refusal.
+        //
+        // REQUIRED, NOT REFUSED. A refuse-list of the two values somebody
+        // thought of is a floor with a side door for every value they did not:
+        // a new consequence, a typo, an empty column. This names the one value
+        // this hand runs, and everything else — including nothing at all —
+        // refuses. Both witnesses again, for the same reason as the shelf claim
+        // above: they travelled separately and either one may be the honest one.
+        if let wrong = statedConsequences.first(where: { $0 != consequential }) {
+            return .refuse(.consequenceNotConsequential(wrong))
         }
 
         // ---------------------------------------- the row and the plan agree
@@ -395,16 +483,50 @@ enum CalendarHandPolicy {
         else { return .refuse(.rowDisagreesWithPlan) }
 
         // ------------------------------------------------------- the gate
-        // THE HAND DOES NOT CARRY A SECOND COPY OF THE CONFIRMATION GATE. It
-        // refuses to move without the server's own approval record, bound to
-        // this exact immutable version. A hand that decided for itself would
-        // be the hole the research names.
-        guard let approval = plan["approval"] as? [String: Any]
+        // THE HAND DOES NOT CARRY A SECOND COPY OF THE CONFIRMATION GATE, and
+        // a second copy that currently AGREES is still the bug — it is one edit
+        // away from disagreeing, and then the phone is quietly deciding what may
+        // happen to somebody's calendar. The copy this hand used to carry had
+        // already drifted, in the unsafe direction: it checked `plan_id`,
+        // `plan_version` and `scope_digest`, where
+        // `workflow_guard.pb.js: approvalRefusal` checks those AND requires
+        // either non-empty `owner_words` or a gesture of a kind we recognise
+        // whose actor IS the row's `owner_ref` and which is itself bound to this
+        // plan, version and scope — `(!words && !tapped)` is a 409 there. That
+        // decision lives there and nowhere else. This hand does not re-make it,
+        // does not "align" with it, and must never grow its own opinion about
+        // what a good approval looks like. It VERIFIES; it does not decide.
+        //
+        // What it verifies is that the SERVER's own record is here — in BOTH
+        // the places the server keeps it, saying the same thing:
+        //
+        //   * `job_fields` in brain/workflow.py writes the row's `approval`
+        //     COLUMN as `_canonical(...)` of the very dict `put_in_params`
+        //     embeds at `params._workflow.approval`;
+        //   * workflow_guard.pb.js:90 refuses any write where the two disagree.
+        //
+        // So the two copies are one artefact. A blob that says something the
+        // column does not is a blob that did not come through the gate — and
+        // reading only the embedded one, the load-bearing witness, would be the
+        // side door this file already refuses to leave open for `consequence`.
+        // It is also the reason the approval may not be read from anywhere else
+        // in `params`: a top-level `params.approval` is validated by no hook
+        // that has ever existed, so it is a field the caller writes for itself.
+        guard let approval = plan["approval"] as? [String: Any], !approval.isEmpty
         else { return .refuse(.noApproval) }
-        guard (approval["plan_id"] as? String) == planID,
-              (approval["plan_version"] as? Int) == planVersion,
-              (approval["scope_digest"] as? String) == planDigest
-        else { return .refuse(.approvalUnbound) }
+        guard let raw = row.approval?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty,
+              let onTheRow = try? JSONSerialization.jsonObject(with: Data(raw.utf8)),
+              let stamped = onTheRow as? [String: Any], !stamped.isEmpty
+        else { return .refuse(.approvalNotOnTheRow) }
+        // THE RECORD, NOT THE SERIALIZER. `_canonical` sorts its keys and drops
+        // its spaces; whatever wrote `params` need not have. Comparing the raw
+        // strings would make a floor out of somebody's whitespace — one that
+        // refuses every real row the day a writer changes. Parsing both and
+        // re-serializing them the one way compares what they SAY.
+        guard let mine = canonical(approval), let theirs = canonical(stamped),
+              mine == theirs
+        else { return .refuse(.approvalDisagreesWithTheRow) }
 
         // ------------------------------------------------- our own minted id
         // §5.4's ACT_TARGET_UNBOUND: without this the act declares nothing it
@@ -522,6 +644,36 @@ enum CalendarHandPolicy {
             return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         return true
+    }
+
+    /// ONE SPELLING FOR ONE RECORD, so the comparison above is of what two
+    /// witnesses SAY and not of how each of them happened to be typed.
+    ///
+    /// `brain/workflow.py: _canonical` is
+    /// `json.dumps(value, sort_keys=True, separators=(",", ":"),
+    /// ensure_ascii=False)`, and it is what writes the row's `approval` COLUMN.
+    /// Whatever wrote `params` was under no such obligation: a different key
+    /// order, a space after a colon, a `/` spelled either way. Comparing the
+    /// two raw strings would build a floor out of somebody's whitespace — one
+    /// that refuses every honest row the day a writer changes its formatter,
+    /// while still passing every test written before that day. The options
+    /// below are that Python call, term for term: `.sortedKeys` is
+    /// `sort_keys=True`, `JSONSerialization`'s default compaction is
+    /// `separators=(",", ":")`, and `.withoutEscapingSlashes` plus UTF-8 out is
+    /// `ensure_ascii=False`.
+    ///
+    /// NIL IS A REFUSAL, NOT A VALUE. A dictionary that will not serialize has
+    /// no canonical form, and the caller `guard let`s both sides for that
+    /// reason: if this returned a sentinel string on failure, two unserializable
+    /// records would compare EQUAL and the floor would lift on the one input it
+    /// understood least.
+    static func canonical(_ value: [String: Any]) -> String? {
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(
+                withJSONObject: value,
+                options: [.sortedKeys, .withoutEscapingSlashes])
+        else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 
     // MARK: - Senses

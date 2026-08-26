@@ -117,7 +117,43 @@ if printf '%s' "$body" | grep -qE 'undo\["steps"\][^!]*\bas\?[[:space:]]*\[Strin
     exit 2
 fi
 
+# ------------------------------------ every refusal cause is actually counted
+# §11: "Reasons are the enumerated refusal causes… not free text. A shelf that
+# refuses in prose cannot be widened on evidence, because nobody can count what
+# it refused." The suite's own census — `everyRefusal` — is what checks that no
+# two causes share a code. But `Refusal` carries associated values, so it cannot
+# be CaseIterable and nothing in Swift can enumerate it: the census is a list
+# somebody types, and a list somebody types goes stale in silence.
+#
+# IT HAD. Three causes added by the approval repair were never added to it, and
+# the gap was MEASURED, not guessed: giving two distinct causes the SAME code
+# left the suite green at 102 checks, because a case missing from the census
+# cannot collide with anything in it. That is the one failure this section
+# exists to catch, and it could not catch it.
+#
+# So the enum is counted here, in the file that runs the suite, and compared
+# against the number the suite asserts. Adding a cause and forgetting the
+# census is now red on the next run instead of quiet until somebody greps a
+# journal for a code that two different refusals were writing.
+cases=$(awk '/^[[:space:]]*enum Refusal/{e=1} e && /var code: String/{exit}
+             e && /^[[:space:]]*case [a-z]/{n++} END{print n+0}' "$policy")
+declared=$(grep -E '^let REFUSAL_CAUSES = [0-9]+' "$here/CalendarHandPolicyTests.swift" \
+           | grep -oE '[0-9]+' | head -1)
+if [ -z "$declared" ] || [ "$cases" -ne "$declared" ]; then
+    echo "The refusal census does not match the enum."
+    echo "  Refusal declares : ${cases} causes"
+    echo "  the suite counts : ${declared:-none}"
+    echo ""
+    echo "\`everyRefusal\` in CalendarHandPolicyTests.swift is the only census"
+    echo "there is — Refusal has associated values, so nothing enumerates it."
+    echo "A cause missing from that list is a cause whose code can silently"
+    echo "duplicate another one's, and then two refusals are one row in a"
+    echo "journal. Add the case to the list and update REFUSAL_CAUSES."
+    exit 2
+fi
+
 echo "the policy is pure, prose-free, and the shelf is shut in the source"
+echo "the refusal census covers all ${cases} causes the enum declares"
 
 # swiftc only permits top-level code in a file literally named main.swift.
 cp "$here/CalendarHandPolicyTests.swift" "$out/main.swift"

@@ -103,13 +103,30 @@ func params(actType: String = CalendarHandPolicy.writeActType,
     return json(["source": "put dinner with Priya Thursday 7", "_workflow": plan])
 }
 
+/// The SERVER's copy of the approval, as `job_fields` in brain/workflow.py
+/// writes it into the row's own column: `_canonical(...)` of the very same dict
+/// that `put_in_params` embeds in `params._workflow.approval`. Two witnesses to
+/// one record, which is why the hand can compare them without re-judging either.
+func approvalColumn(_ blob: [String: Any]? = nil) -> String {
+    json(blob ?? approvalBlob())
+}
+
 func row(status: String = "queued", lane: String? = CalendarHandPolicy.lane,
          workflowID: String? = PLAN, workflowVersion: Int? = VERSION,
          scopeDigest: String? = DIGEST, consequence: String? = "consequential",
+         // THE DEFAULT IS THE VALUE, NOT A `?? value` INSIDE THE BODY, and the
+         // difference is a check that could not fail. Written the other way,
+         // `row(approval: nil)` — the fixture for "the row carried no approval
+         // column at all", the load-bearing witness this hand refuses without —
+         // was silently handed the good column by the `??`, so the one case
+         // that pins the column's absence was testing the case where it is
+         // present. A fixture that cannot say "missing" cannot test missing.
+         approval: String? = approvalColumn(),
          params p: String? = nil) -> CalendarHandPolicy.Row {
     CalendarHandPolicy.Row(id: "job_991", status: status, lane: lane,
                            workflowID: workflowID, workflowVersion: workflowVersion,
                            scopeDigest: scopeDigest, consequence: consequence,
+                           approval: approval,
                            params: p ?? params())
 }
 
@@ -156,6 +173,21 @@ check("a job still at the gate is waiting, not refused",
 check("a job asking the owner a question is waiting, not refused",
       idle(decide(row(status: "needs_user"))) == .stillWaiting)
 
+// THE LANE IS READ THE WAY THE SERVER READS IT, and this is not a second copy
+// of a rule — it is the SAME rule, spelled the same way. research_lane.pb.js
+// normalises with `.trim().toLowerCase()` before every leg it runs, so a row
+// whose lane is "Device_Calendar" IS a device row to the server: a browser is
+// 403'd off it and deviceShapeRefusal is applied to it. A phone that compared
+// exactly would call that row somebody else's, and the row would sit at
+// `queued` with no hand at all and nobody reporting it. An orphan is worse
+// than a refusal, because a refusal is countable.
+check("a lane the server would normalise is this hand's row too",
+      written(decide(row(lane: "Device_Calendar"))) != nil)
+check("a lane with the whitespace the server trims is this hand's row too",
+      written(decide(row(lane: "  device_calendar  "))) != nil)
+check("a lane that is genuinely another lane is still not this hand's",
+      idle(decide(row(lane: "Research"))) == .notThisHand)
+
 // ============================================ 2. the gate did not move here
 // The research names duplicating the confirmation gate as the real risk: "a
 // device execution lane that does not route through the same gate is not a new
@@ -164,15 +196,102 @@ check("a job asking the owner a question is waiting, not refused",
 
 check("no approval record on the plan and the hand will not move",
       refusal(decide(row(params: params(approval: NSNull())))) == .noApproval)
-check("an approval for a different plan does not release this one",
+check("an empty approval object is no approval record",
+      refusal(decide(row(approval: json([String: Any]()),
+                         params: params(approval: [String: Any]()))))
+        == .noApproval)
+
+// WHERE THE APPROVAL HAS TO COME FROM, and the mutation this pins.
+//
+// M8: `(plan["approval"] …) ?? (top["approval"] …)` — accept an approval
+// sitting at the TOP level of params, outside `_workflow`. Nothing anywhere
+// reads a top-level `params.approval`: workflow_guard.pb.js:90 cross-checks
+// `embedded.approval` and no hook has ever looked at the other place. An
+// approval read from a key no gate validates is an approval the caller wrote.
+check("an approval outside the workflow blob is not an approval",
+      refusal(decide(row(params: json([
+          "source": "put dinner with Priya Thursday 7",
+          "approval": approvalBlob(),
+          "_workflow": [
+              "plan_id": PLAN, "version": VERSION, "scope_digest": DIGEST,
+              "consequence": "consequential",
+              "facts": [CalendarHandPolicy.titleKey: "Dinner with Priya",
+                        CalendarHandPolicy.startKey: START,
+                        CalendarHandPolicy.endKey: END],
+              "undo": undoPlan(),
+              "act": ["act_type": CalendarHandPolicy.writeActType,
+                      "reach": CalendarHandPolicy.reach,
+                      "executor": CalendarHandPolicy.executor,
+                      "target": ["name": "our id", "provenance": "minted_by_us",
+                                 "ref": "our_ref"]],
+          ]])))) == .noApproval)
+
+// BOTH WITNESSES TO ONE RECORD. `job_fields` in brain/workflow.py writes the
+// row's `approval` COLUMN from the same dict `put_in_params` embeds, and
+// workflow_guard.pb.js:90 refuses any write where the two disagree. So a row
+// that reaches this phone saying two different things did not come through the
+// gate — and a hand that read only the blob would be trusting the copy an
+// attacker gets to rewrite while ignoring the one the server wrote.
+check("a row carrying no approval column at all is refused",
+      refusal(decide(row(approval: nil))) == .approvalNotOnTheRow)
+check("a row whose approval column is blank is refused",
+      refusal(decide(row(approval: "   "))) == .approvalNotOnTheRow)
+check("a row whose approval column is not JSON is refused",
+      refusal(decide(row(approval: "approved!"))) == .approvalNotOnTheRow)
+check("a row whose approval column is a JSON array is not a record",
+      refusal(decide(row(approval: "[]"))) == .approvalNotOnTheRow)
+
+check("a blob claiming another plan than the column the server wrote is refused",
       refusal(decide(row(params: params(
-          approval: approvalBlob(planID: "pln_other"))))) == .approvalUnbound)
-check("an approval for an earlier version does not release this one",
+          approval: approvalBlob(planID: "pln_other")))))
+        == .approvalDisagreesWithTheRow)
+check("a blob claiming another version than the column is refused",
       refusal(decide(row(params: params(
-          approval: approvalBlob(version: VERSION - 1))))) == .approvalUnbound)
-check("an approval carrying a different scope digest does not release this one",
+          approval: approvalBlob(version: VERSION - 1)))))
+        == .approvalDisagreesWithTheRow)
+check("a blob claiming another scope digest than the column is refused",
       refusal(decide(row(params: params(
-          approval: approvalBlob(digest: "sha256:tampered"))))) == .approvalUnbound)
+          approval: approvalBlob(digest: "sha256:tampered")))))
+        == .approvalDisagreesWithTheRow)
+check("words added to the blob that the server never stored are refused",
+      refusal(decide(row(approval: approvalColumn(
+          ["plan_id": PLAN, "plan_version": VERSION, "scope_digest": DIGEST]),
+          params: params()))) == .approvalDisagreesWithTheRow)
+
+// THE RECORD, NOT THE SERIALIZER. `_canonical` writes the column with sorted
+// keys and no spaces; whatever wrote `params` need not have. A floor that
+// compared raw strings would be a floor made of somebody's whitespace, and it
+// would refuse every real row on the day a writer changed.
+check("the same record spelled in another key order still matches",
+      written(decide(row(approval:
+          "{ \"scope_digest\": \"\(DIGEST)\", \"approved_at\": \"2026-08-25T11:59:02Z\","
+          + " \"owner_words\": \"Tapped \u{201C}Send it\u{201D}.\","
+          + " \"plan_version\": \(VERSION), \"plan_id\": \"\(PLAN)\" }"))) != nil)
+
+// ★ WHAT THIS HAND DOES NOT DO, AND MUST NOT START DOING ★
+//
+// workflow_guard.pb.js:approvalRefusal additionally requires non-empty
+// `owner_words` OR a gesture of a kind we recognise whose actor IS the row's
+// owner and which is itself bound to this plan, version and scope. THAT
+// DECISION LIVES THERE AND NOWHERE ELSE. The research names duplicating it as
+// the actual risk — "a device execution lane that does not route through the
+// same gate is not a new hand, it is a hole in the gate" — and the copy this
+// hand used to carry had already drifted in the UNSAFE direction: it checked
+// three fields where the server checks five and a gesture's actor.
+//
+// So this record — no owner_words, no gesture, and the server's own column
+// agreeing with it — RUNS. Not because the hand judged it good: because the
+// hand does not judge, and a row like it cannot reach `queued` and
+// `consequential` without the server having judged it first. A second gate
+// that currently agrees is still the bug, because it is one edit from
+// disagreeing, and then the phone is quietly deciding what may happen to a
+// calendar. If somebody re-adds that decision here, THIS is the check that
+// goes red and asks them to say why there are two.
+let unwordedApproval: [String: Any] = ["plan_id": PLAN, "plan_version": VERSION,
+                                       "scope_digest": DIGEST]
+check("the hand verifies the server's record, it does not re-judge it",
+      written(decide(row(approval: approvalColumn(unwordedApproval),
+                         params: params(approval: unwordedApproval)))) != nil)
 
 // The row and the plan travelled separately to reach this phone.
 check("a row whose plan id disagrees with its own blob is refused",
@@ -207,6 +326,49 @@ check("the shelf claim is caught when only the row column makes it",
                          params: params(consequence: "consequential"))))
         == .actAndTellNotAdmitted(CalendarHandPolicy.writeActType))
 
+// ★ read_only IS THE VALUE THAT TURNS THE SERVER'S APPROVAL CHECK OFF ★
+//
+// workflow_guard.pb.js: `NO_APPROVAL_NEEDED = ["read_only"]`, and the leg that
+// runs `approvalRefusal()` is skipped entirely for such a row. So on a
+// read_only row the approval blob inside `params._workflow` was validated by
+// NOTHING — and a hand that refused only `reversible_local` would then treat
+// that unchecked blob as the server's own approval record and write the event.
+// The server's own device-shape refusal cannot cover for this either: it lives
+// inside `if (method === "PATCH"…)` in research_lane.pb.js, and the row is BORN
+// read_only on a POST that leg never sees.
+//
+// The fix is not another value on a refuse-list. It is REQUIRING the one value
+// this hand runs, so every value nobody thought of refuses too.
+check("a read_only row is refused, not run",
+      refusal(decide(row(consequence: "read_only",
+                         params: params(consequence: "read_only"))))?
+        .code == "calhand.consequence_not_consequential")
+check("...and the refusal names the value it would not run",
+      refusal(decide(row(consequence: "read_only",
+                         params: params(consequence: "read_only"))))
+        == .consequenceNotConsequential("read_only"))
+// Both witnesses again, and for the same reason as the shelf claim above: they
+// travelled separately, so agreement is the thing being checked, not either
+// copy on its own.
+check("read_only in the plan blob alone is still refused",
+      refusal(decide(row(consequence: "consequential",
+                         params: params(consequence: "read_only"))))
+        == .consequenceNotConsequential("read_only"))
+check("read_only in the row column alone is still refused",
+      refusal(decide(row(consequence: "read_only",
+                         params: params(consequence: "consequential"))))
+        == .consequenceNotConsequential("read_only"))
+// A REQUIREMENT, NOT A REFUSE-LIST. These two are the difference: neither
+// value is on anybody's list of dangerous words, and both refuse.
+check("a consequence nobody has ever heard of refuses",
+      refusal(decide(row(consequence: "harmless",
+                         params: params(consequence: "harmless"))))
+        == .consequenceNotConsequential("harmless"))
+check("no consequence at all refuses",
+      refusal(decide(row(consequence: nil,
+                         params: params(consequence: ""))))
+        == .consequenceNotConsequential(""))
+
 // A version written by the server's JavaScript arrives as a JSON float. If it
 // stopped binding, EVERY calendar errand would strand at `rowDisagreesWithPlan`
 // and the cause would read as tampering.
@@ -223,6 +385,8 @@ check("a plan version delivered as a JSON float still binds",
           id: "job_991", status: "queued", lane: CalendarHandPolicy.lane,
           workflowID: PLAN, workflowVersion: VERSION, scopeDigest: DIGEST,
           consequence: "consequential",
+          approval: json(["plan_id": PLAN, "plan_version": Double(VERSION),
+                          "scope_digest": DIGEST]),
           params: json(["_workflow": [
               "plan_id": PLAN, "version": Double(VERSION),
               "scope_digest": DIGEST, "consequence": "consequential",
@@ -539,15 +703,35 @@ check("a JSON array is not a plan", refusal(decide(row(params: "[1,2]")))
 // prose cannot be widened on evidence, because nobody can count what it
 // refused. A shared code is a refusal nobody can tell from another one.
 
+// A HAND-MAINTAINED LIST OF CASES IS A LIST THAT GOES STALE SILENTLY, and this
+// one had. `Refusal` carries associated values, so it cannot be `CaseIterable`
+// and no Swift construct will enumerate it — the list below is the only census
+// there is. The three causes the approval repair added were never added here,
+// and MEASURED rather than assumed: giving `.approvalNotOnTheRow` the code
+// `calhand.no_approval` — two refusals nobody could tell apart in a journal,
+// the exact thing this section exists to forbid — left the suite green at 102
+// checks, because an absent case cannot collide with anything.
+//
+// So the runner now counts the cases in the enum against the count asserted
+// here, and THAT is what fails when somebody adds the twenty-third cause and
+// forgets this line. A census nothing audits is a census.
 let everyRefusal: [CalendarHandPolicy.Refusal] = [
     .malformedParams, .actTypeNotAdmitted("a"), .reachDisagrees("a"),
-    .executorDisagrees("a"), .actAndTellNotAdmitted("a"), .rowDisagreesWithPlan,
-    .noApproval, .approvalUnbound, .actTargetUnbound, .noUndoPlan,
+    .executorDisagrees("a"), .actAndTellNotAdmitted("a"),
+    .consequenceNotConsequential("a"), .rowDisagreesWithPlan,
+    .noApproval, .approvalNotOnTheRow, .approvalDisagreesWithTheRow,
+    .actTargetUnbound, .noUndoPlan,
     .undoAddressesAnotherAct, .unknownProvenance("a"), .unresolvedReference("a"),
     .undoBindsNothing, .undoMissesTheTarget, .factsIncomplete(["a"]),
     .unreadableFact("a"), .endsBeforeItStarts, .startAlreadyPast,
     .noWritableCalendar,
 ]
+// The number the runner's census leg reads out of the enum and compares. It is
+// written as a literal on purpose: a count derived from the array itself would
+// agree with the array no matter what the enum said.
+let REFUSAL_CAUSES = 22
+check("the census covers every cause the enum declares",
+      everyRefusal.count == REFUSAL_CAUSES)
 let codes = everyRefusal.map(\.code)
 check("every refusal cause has its own code",
       Set(codes).count == everyRefusal.count)
