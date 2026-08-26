@@ -69,6 +69,14 @@ sh "$HERE/run_supervised_read_tests.sh"
 sh "$HERE/run_theme_contract_tests.sh"
 sh "$HERE/run_journal_tests.sh"
 sh "$HERE/run_tally_tests.sh"
+# How the tally's seconds are SAID. Beside it, because it is the same numbers
+# one step later: that suite folds a day of listening out of the journal, this
+# one holds the wording those seconds get on every screen that reports them.
+# The diagnostics screen kept it private; Settings and the home card are being
+# built against the same `unheardForSeconds`, and the argument all three rest on
+# is that no threshold decides what counts as too long — which holds only while
+# "6 hr 20 min" is not "6.3 hours" one screen over.
+sh "$HERE/run_duration_tests.sh"
 sh "$HERE/run_battery_tests.sh"
 sh "$HERE/run_watchdog_policy_tests.sh"
 sh "$HERE/run_resume_policy_tests.sh"

@@ -36,6 +36,7 @@
 		73A1C82CB7B99AB4795A3598 /* FirstRunOwnership.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC43B1EEB7B717196947EE8E /* FirstRunOwnership.swift */; };
 		78EE68DCD42670CAD7886BDC /* GlassControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */; };
 		7B0222C65B8F9DDFC8855FEF /* EnrollmentOfferPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */; };
+		7B3D5C1A0E9F42D6A1C83B04 /* PlainDuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6A94E8C7B10D53F82A6C19 /* PlainDuration.swift */; };
 		84AE67C98C92B710BDD9A786 /* ContextGrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0ADEE2467BA67E3131CEC1 /* ContextGrant.swift */; };
 		859C9A2572940C9366F344A8 /* ListenResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */; };
 		8E57577FB951B85FBF9F584F /* CaptureSourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */; };
@@ -77,6 +78,7 @@
 		25E2EB04173AB9206E285D54 /* OpusFrameAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusFrameAssembler.swift; sourceTree = "<group>"; };
 		279CD122187AC50931E7FBAB /* InterviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterviewView.swift; sourceTree = "<group>"; };
 		2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTranscriber.swift; sourceTree = "<group>"; };
+		2F6A94E8C7B10D53F82A6C19 /* PlainDuration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlainDuration.swift; sourceTree = "<group>"; };
 		347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerRoutePolicy.swift; sourceTree = "<group>"; };
 		368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantRadioPolicy.swift; sourceTree = "<group>"; };
 		36BD88F8F6F1384E8D4C3850 /* CaptureEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEnvelope.swift; sourceTree = "<group>"; };
@@ -210,6 +212,7 @@
 				B7A992D0567130EEE3198554 /* ListenWatchdogPolicy.swift */,
 				2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */,
 				8E88365017E289B62475F24B /* PhoneListener.swift */,
+				2F6A94E8C7B10D53F82A6C19 /* PlainDuration.swift */,
 				10D88DE584E748C59FCC7042 /* SpeakerTagger.swift */,
 				9CD1CE1C9359C9DF75AA38DE /* TranscriptCursor.swift */,
 				C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */,
@@ -365,6 +368,7 @@
 				4559433099E6DFABE6303A7A /* PendantManager.swift in Sources */,
 				FE3F2EC49604E6841F2D92F4 /* PendantRadioPolicy.swift in Sources */,
 				D87272FC45C0E3640E24CA7E /* PhoneListener.swift in Sources */,
+				7B3D5C1A0E9F42D6A1C83B04 /* PlainDuration.swift in Sources */,
 				C4D475F4BA8EF258C2B27C02 /* SettingsView.swift in Sources */,
 				F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */,
 				5C20EAC439DF3EF45ED23FE9 /* SupervisedReadView.swift in Sources */,

@@ -218,15 +218,14 @@ struct ListeningDiagnosticsView: View {
         }
     }
 
-    /// Units a person reads, never raw seconds. "3570" is not an answer to
-    /// "how long did it hear nothing".
+    /// Units a person reads, never raw seconds — spelled once, in
+    /// `PlainDuration`, and only forwarded here. Settings and the home card are
+    /// about to report the same stretch of silence off the same
+    /// `ListenTally.unheardForSeconds`, and three copies of six lines of
+    /// arithmetic is how one measurement becomes three different claims. The
+    /// refusal to give a verdict at the top of this file rests on the same
+    /// seconds reading the same way on every screen that reports them.
     private func duration(_ seconds: Int) -> String {
-        if seconds <= 0 { return "none" }
-        if seconds < 60 { return "\(seconds) seconds" }
-        let minutes = seconds / 60
-        if minutes < 60 { return "\(minutes) min" }
-        let hours = minutes / 60
-        let rest = minutes % 60
-        return rest == 0 ? "\(hours) hr" : "\(hours) hr \(rest) min"
+        PlainDuration.words(seconds)
     }
 }
