@@ -460,15 +460,56 @@ enum HomeCopy {
 
     // MARK: The microphone, taken away
 
-    /// "Taking it back" — for how long, when the phone measured it.
+    /// "Taking it back" — and, when the phone measured it, how long it has
+    /// heard nothing.
     ///
     /// When iOS takes the microphone and the watchdog never gets it back,
     /// `suspended` stays true and `isListening` stays true
     /// (`PhoneListener.swift:86`, `:457-460`), so this line claimed a recovery
     /// in the present tense for the rest of the day and read the same at four
-    /// seconds as at four hours. The gap is already measured — `ListenTally`
-    /// counts `unheardForSeconds` to the moment of reading under
-    /// `.stoppedByOther` — and naming it costs the sentence nothing it had.
+    /// seconds as at four hours. Something the phone measured belongs in it,
+    /// and there is exactly one such number to hand: `ListenTally.unheardForSeconds`.
+    ///
+    /// IT IS NOT THE AGE OF THE INTERRUPTION, and that is why the wording this
+    /// audit prescribed — "Mic interrupted 6 hr 20 min ago, still trying to
+    /// take it back. I've missed that stretch." — is refused here rather than
+    /// shipped. `ListenTally` folds the number as `end - lastHeardAt`
+    /// (`ListenTally.swift:318`), and `lastHeardAt` moves on a FLUSH, never on
+    /// a non-owner stop: `:231-237` leaves it deliberately where it was, "AND
+    /// THE CLOCK KEEPS RUNNING… Moving `lastHeardAt` here is what answered
+    /// '58 min' for a day that heard nothing after nine". So on a night that
+    /// started at ten, last heard a word at eleven and lost the microphone at
+    /// eight the next morning, this arrives as 9 hr 2 min TWO MINUTES after the
+    /// interruption. "Interrupted 9 hr 2 min ago" is wrong by nine hours, and
+    /// "I've missed that stretch" bills a loss for eight hours that were heard
+    /// and merely silent. The error has one direction — the value is always at
+    /// least the interruption's age and unbounded above it — so the sentence
+    /// could only ever overstate. A loss the phone did not measure is the one
+    /// thing this audit's own "What NOT to do" forbids outright, and an
+    /// overstatement is not made honest by being a caption.
+    ///
+    /// SO THE NUMBER IS SAID UNDER ITS TRUE LABEL, which the house already
+    /// owns: `UnheardLine.words` under the Settings listening row, and the
+    /// "Nothing heard for" row on the diagnostics screen. Not house style for
+    /// its own sake — both of those rest their whole refusal to give a verdict
+    /// on the screens "wording the same seconds the same way", and this card is
+    /// the third screen reading the same field. Cited by SYMBOL and not by line
+    /// because the Settings half moved into a type the same week this was
+    /// written; the fragment "Nothing heard for " + `PlainDuration.words` is
+    /// what the three of them actually share, and `HomeCopyTests` pins this
+    /// side of it so a rewording here cannot pass unseen.
+    ///
+    /// NOT YET ONE CALL, and that is a choice with a cost. Home could ask
+    /// `UnheardLine.words` outright, which would make drift impossible rather
+    /// than merely visible. It does not, because `UnheardLine` lives inside
+    /// SettingsView.swift and this suite lifts `HomeCopy` out and compiles it
+    /// against Foundation and `PlainDuration` alone — reaching into a second
+    /// screen's file would couple Home's green to edits nobody here can see.
+    /// Worth unifying once both sides have settled.
+    ///
+    /// The recovery clause keeps the words it always had, because "taking it
+    /// back…" is the one thing on this line that is true of what the app is
+    /// doing at the moment it is read.
     ///
     /// NIL IS AN ANSWER, and it is the common one. The caller passes a gap only
     /// when the journal ends in an interruption with time on it; `.unknown` is
@@ -483,8 +524,7 @@ enum HomeCopy {
     /// three screens now reporting this same stretch cannot word it three ways.
     static func micInterrupted(unheardForSeconds seconds: Int?) -> String {
         guard let seconds = seconds, seconds > 0 else { return "Mic interrupted, taking it back…" }
-        return "Mic interrupted \(PlainDuration.words(seconds)) ago, still trying to take it back. "
-            + "I've missed that stretch."
+        return "Mic interrupted, taking it back… Nothing heard for \(PlainDuration.words(seconds))."
     }
 
     // MARK: The empty state's examples
@@ -544,11 +584,31 @@ struct HomeView: View {
     /// The newest line already considered. Nil until the first poll populates
     /// the feed, which is what stops a cold launch asking about yesterday.
     @State private var lastSeenLineID: String?
-    /// How long the phone has heard nothing, when the record ends in an
-    /// interruption and only then. Nil is the ordinary value and the honest
-    /// one: nothing measured, nothing said — see `readInterruptionGap` for why
-    /// this is `@State` filled by a task rather than read where it is drawn.
-    @State private var interruptedGap: Int?
+    /// WHEN the phone last heard anything, if the record ends in an
+    /// interruption and only then — an instant, not a count of seconds, and
+    /// that difference is the whole of it.
+    ///
+    /// This held the elapsed seconds, read once and then drawn unchanged for as
+    /// long as the screen stayed up. `readInterruptionGap` is keyed on
+    /// `"\(suspended)|\(scenePhase)"`, and through an outage both halves are
+    /// constant, so nothing re-ran it: somebody on speakerphone with Anticipy
+    /// open read the same "4 min" at minute forty. A duration captured once and
+    /// then stated as now is the exact defect this line was rewritten to end,
+    /// and it does not stop being that defect because it is the caption rather
+    /// than the headline.
+    ///
+    /// AN INSTANT CANNOT GO STALE. The subtraction happens in `interruptedGap`,
+    /// where the label is drawn, against `Date()` — so every redraw re-reads it
+    /// for one subtraction and NO DISK AT ALL, and `AnticipyApp.startPolling`
+    /// republishes `backendReachable` every three seconds whether or not it
+    /// changed. That is how the number keeps moving while
+    /// `readInterruptionGap`'s "never on the poll" rule stays exactly as
+    /// strict as it was.
+    ///
+    /// Nil is the ordinary value and the honest one: nothing measured, nothing
+    /// said — see `readInterruptionGap` for why this is `@State` filled by a
+    /// task rather than read where it is drawn.
+    @State private var heardNothingSince: Date?
     /// Which source the open sheet is about, so a swipe-dismiss can be recorded
     /// as a decline. `contextAsk` is already nil by the time onDismiss runs.
     @State private var lastAskedSource: ContextSource?
@@ -1256,10 +1316,13 @@ struct HomeView: View {
             // worked, and because that flip is what re-arms it after a launch
             // that started offline.
             .task(id: verified) { await askWhetherWeCanReachThem() }
-            // HOW LONG THE MICROPHONE HAS BEEN GONE, asked on the three moments
-            // that can change the answer and on no others: the view appearing,
+            // WHEN THE PHONE LAST HEARD ANYTHING, asked on the three moments
+            // that can change that answer and on no others: the view appearing,
             // `suspended` flipping, and the app coming back to the foreground.
-            // Never on the poll — see `readInterruptionGap`.
+            // Never on the poll — see `readInterruptionGap`. The DURATION on
+            // the card moves without this running again, because what is stored
+            // is the instant and the subtraction happens at the draw — see
+            // `heardNothingSince`.
             .task(id: "\(session.listener.suspended)|\(scenePhase)") {
                 await readInterruptionGap()
             }
@@ -1540,12 +1603,14 @@ struct HomeView: View {
             // route change), say so while recovery runs — never glow
             // "Listening" over a dead microphone.
             //
-            // AND FOR HOW LONG, when the phone measured it. Recovery in the
-            // present tense reads the same at four seconds as at four hours,
-            // and the four-hour version of this line is the 30-hour-deaf case
-            // `CLAUDE.md` records — the gap belongs in the sentence that is
-            // already claiming to be working on it. The number comes from
-            // `interruptedGap`, which is nil unless the journal ends in an
+            // AND HOW LONG IT HAS HEARD NOTHING, when the phone measured it.
+            // Recovery in the present tense reads the same at four seconds as
+            // at four hours, and the four-hour version of this line is the
+            // 30-hour-deaf case `CLAUDE.md` records. The number is NOT the age
+            // of the interruption and is not worded as one — see
+            // `HomeCopy.micInterrupted` for the measurement it actually is and
+            // why claiming the other would have overstated the loss. It comes
+            // from `interruptedGap`, nil unless the journal ends in an
             // interruption with time on it, so nothing is invented here.
             if session.listener.suspended {
                 Label(HomeCopy.micInterrupted(unheardForSeconds: interruptedGap),
@@ -1694,11 +1759,12 @@ struct HomeView: View {
     /// the gap deliberately (`ListenTally.swift:58-60`: quiet after you turn it
     /// off is the ordinary state of a phone nobody is talking to, not a
     /// finding), and `.listening` has no gap to name. Each of those leaves
-    /// `interruptedGap` nil and the sentence exactly as it ships today.
+    /// `heardNothingSince` nil, so `interruptedGap` is nil and the sentence is
+    /// exactly the one that shipped before any of this.
     @MainActor
     private func readInterruptionGap() async {
         guard session.listener.suspended else {
-            interruptedGap = nil
+            heardNothingSince = nil
             return
         }
         // Detached for the same reason Settings' listening row is
@@ -1711,10 +1777,31 @@ struct HomeView: View {
             ListenTally.of(ListenJournal.shared.persistedEvents, now: Date())
         }.value
         guard case .stoppedByOther = tally.ending, tally.unheardForSeconds > 0 else {
-            interruptedGap = nil
+            heardNothingSince = nil
             return
         }
-        interruptedGap = tally.unheardForSeconds
+        // THE INSTANT, RECONSTRUCTED, rather than the seconds kept as they came
+        // — see `heardNothingSince` for why a stored count of seconds is a
+        // number that freezes and then goes on being stated as now. `Date()` is
+        // read HERE, after `.value` has returned, so the anchor can only land
+        // at or after the fold's own `lastHeardAt` and the duration drawn from
+        // it is never larger than what the phone measured. That is
+        // `PlainDuration`'s truncate-never-round rule held across the one
+        // subtraction that happens outside `PlainDuration`.
+        heardNothingSince = Date().addingTimeInterval(-Double(tally.unheardForSeconds))
+    }
+
+    /// How long the phone has heard nothing, as of this draw.
+    ///
+    /// Reads no disk and folds nothing: `heardNothingSince` is already the
+    /// answer, and this is the subtraction that turns it back into the number
+    /// the sentence wants. Nil in, nil out — and `HomeCopy.micInterrupted`
+    /// takes zero and below as "nothing measured", so a clock that moved
+    /// backwards under us falls back to the sentence with no number in it
+    /// rather than printing a negative.
+    private var interruptedGap: Int? {
+        guard let since = heardNothingSince else { return nil }
+        return Int(Date().timeIntervalSince(since))
     }
 
     /// What the control says, what tapping it does, and what sits beside the

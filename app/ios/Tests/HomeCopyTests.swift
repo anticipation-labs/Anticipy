@@ -178,17 +178,52 @@ struct HomeCopyTests {
              HomeCopy.micInterrupted(unheardForSeconds: -30),
              "Mic interrupted, taking it back…")
 
-        says("four minutes gone, named",
+        says("four minutes of silence, named as silence",
              HomeCopy.micInterrupted(unheardForSeconds: 260),
-             "Mic interrupted 4 min ago, still trying to take it back. I've missed that stretch.")
-        says("six hours and twenty minutes gone, in the same sentence",
+             "Mic interrupted, taking it back… Nothing heard for 4 min.")
+        says("six hours and twenty minutes, in the same sentence",
              HomeCopy.micInterrupted(unheardForSeconds: 22_800),
-             "Mic interrupted 6 hr 20 min ago, still trying to take it back. "
-             + "I've missed that stretch.")
-        says("forty-four seconds gone",
+             "Mic interrupted, taking it back… Nothing heard for 6 hr 20 min.")
+        says("forty-four seconds",
              HomeCopy.micInterrupted(unheardForSeconds: 44),
-             "Mic interrupted 44 seconds ago, still trying to take it back. "
-             + "I've missed that stretch.")
+             "Mic interrupted, taking it back… Nothing heard for 44 seconds.")
+
+        // THE NUMBER IS NEVER CALLED THE AGE OF THE INTERRUPTION, and this is
+        // the leg that keeps it that way. `ListenTally.unheardForSeconds` is
+        // `end - lastHeardAt`, and `ListenTally.swift:231-237` deliberately
+        // does NOT move `lastHeardAt` on a non-owner stop — so the value is
+        // time-since-last-speech, which is always at least the interruption's
+        // age and unbounded above it. Worded "interrupted N ago" it could only
+        // overstate; worded "I've missed that stretch" it bills a loss for
+        // hours that were heard and merely silent. Both are a loss the phone
+        // did not measure, which is the one thing the audit forbids by name.
+        var claimsAnAge: [String] = []
+        for seconds in [1, 44, 260, 3_599, 22_800, 200_000] {
+            let line = HomeCopy.micInterrupted(unheardForSeconds: seconds).lowercased()
+            for word in ["ago", "missed", "for the last", "since the"] where line.contains(word) {
+                claimsAnAge.append("\"\(word)\" at \(seconds)s")
+            }
+        }
+        check("the gap is never dated to the interruption and never called a loss"
+              + (claimsAnAge.isEmpty ? "" : " — \(claimsAnAge.prefix(3))"), claimsAnAge.isEmpty)
+
+        // ONE LABEL FOR ONE FIELD, ACROSS THREE SCREENS. Settings
+        // (`SettingsView.swift:125`) and the diagnostics screen
+        // (`ListeningDiagnosticsView.swift:43`) both report this same
+        // `unheardForSeconds` as "Nothing heard for …", and
+        // `SettingsView.swift:113-116` rests the entire refusal to give a
+        // verdict on the screens "wording the same seconds the same way". Home
+        // is the third screen. A different label here is not a style drift, it
+        // is the no-verdict argument coming apart.
+        var mislabelled: [String] = []
+        for seconds in [1, 44, 260, 3_599, 22_800, 200_000] {
+            let line = HomeCopy.micInterrupted(unheardForSeconds: seconds)
+            if !line.contains("Nothing heard for \(PlainDuration.words(seconds))") {
+                mislabelled.append("\(seconds)s: \(line)")
+            }
+        }
+        check("the house label carries the number on this screen too"
+              + (mislabelled.isEmpty ? "" : " — \(mislabelled.prefix(2))"), mislabelled.isEmpty)
 
         // THE WORDS COME FROM `PlainDuration` AND NOWHERE ELSE. Three screens
         // now report this same `ListenTally.unheardForSeconds`, and the refusal
@@ -206,9 +241,16 @@ struct HomeCopyTests {
 
         // The sentence never stops saying it is still trying, which is the
         // thing on the card that is actually true of the app's state.
-        check("the long version still says it is trying to take the mic back",
+        check("the long version still says it is taking the mic back",
               HomeCopy.micInterrupted(unheardForSeconds: 9_000)
-                .contains("still trying to take it back"))
+                .contains("taking it back…"))
+        // The recovery clause is the half of this line that IS true of what the
+        // app is doing at the moment it is read, so no length of silence is
+        // allowed to drop it.
+        check("every version says it, at every length",
+              [1, 44, 260, 3_599, 22_800, 200_000, 0].allSatisfy {
+                  HomeCopy.micInterrupted(unheardForSeconds: $0).contains("taking it back…")
+              })
 
         // ------------------------------------------------------------------
         // THE DAY-ZERO EXAMPLES. Hidden from VoiceOver, so a first-timer using

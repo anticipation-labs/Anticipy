@@ -108,6 +108,35 @@ for fn in ("browserHeadline", "browserBody", "browserButton"):
         bad.append("The browser card does not ask `HomeCopy.%s`. Its three\n"
                    "      sentences branch on ONE count; written in two places they\n"
                    "      drift, and the card then disagrees with itself." % fn)
+
+
+def one_argument(block, pattern, what, why):
+    """Every call matching `pattern` passes the same expression, character for
+    character.
+
+    ASKING WHETHER THE THREE NAMES APPEAR PROVES ONLY THAT THEY WERE CALLED.
+    Changing one call site to `HomeCopy.browserBody(waiting: waiting + 1)` left
+    the card reading "These need your Chrome" over "the 4 things below" with
+    "Set it up — 3 waiting" on the button, and every leg in this file stayed
+    green. One count means one expression, and this is the leg that says so.
+    """
+    found = re.findall(pattern, block)
+    seen = sorted({" ".join(a.split()) for a in found})
+    if len(seen) > 1:
+        bad.append("%s is passed %d different expressions (%s). %s"
+                   % (what, len(seen), "; ".join(seen), why))
+    return found
+
+
+one_argument(
+    card,
+    r"HomeCopy\.browser(?:Headline|Body|Button)\(waiting:\s*([^)]+)\)",
+    "The browser card's count",
+    "Its three sentences are one\n"
+    "      answer about one queue: a headline that says these need your Chrome,\n"
+    "      a body that says how many, and a button that prices the tap. Fed from\n"
+    "      two expressions the card disagrees with itself in front of the person\n"
+    "      it is asking for a permission.")
 if re.search(r'Text\("Set it up"\)', card):
     bad.append("The browser button is back to a bare \"Set it up\". The count on\n"
                "      the button is what prices the tap while the thumb is still\n"
@@ -135,6 +164,19 @@ if "InterviewQuestion.script.count" not in offer:
 for fn in ("interviewTitle", "interviewBody", "interviewButton"):
     if "HomeCopy.%s(" % fn not in offer:
         bad.append("The interview card does not ask `HomeCopy.%s`." % fn)
+one_argument(
+    offer,
+    r"HomeCopy\.interview(?:Title|Body|Button)\(answered:\s*([^,)]+)[,)]",
+    "The interview card's answered count",
+    "Three sentences about how much of\n"
+    "      the script is behind you, and two of them disagreeing is the same\n"
+    "      failure as the typed \"Six questions\" this card was fixed for.")
+one_argument(
+    offer,
+    r"HomeCopy\.interview(?:Body|Button)\(answered:[^,]+,\s*total:\s*([^)]+)\)",
+    "The interview card's total",
+    "The body and the button count out of\n"
+    "      the same script or they name two different scripts.")
 
 # 3. THE NUMERALS AND THE SENTENCES LIVE IN ONE PLACE.
 #
@@ -167,21 +209,80 @@ if reader is None:
                "      carry a duration if something reads the journal off the main\n"
                "      thread, and nothing else on this screen may.")
     reader = ""
-events = view.count("ListenJournal.shared.persistedEvents")
-if events != 1:
-    bad.append("`ListenJournal.shared.persistedEvents` is read %d times in this\n"
-               "      file; it belongs in `readInterruptionGap` and nowhere else. A\n"
-               "      second read is a synchronous disk hit somewhere that redraws."
-               % events)
-if "ListenJournal.shared.persistedEvents" not in reader:
-    bad.append("The journal read has moved out of `readInterruptionGap`, which\n"
-               "      is the only place on this screen that is off the main thread\n"
-               "      and off the three-second poll.")
-if "Task.detached" not in reader:
+#    THESE LEGS WERE TOKEN COUNTS AND TOKEN COUNTS PROVED NOTHING. They asked
+#    whether `Task.detached` and a journal read both appeared SOMEWHERE in this
+#    function. A mutation that left
+#
+#        _ = Task.detached(priority: .utility) { }
+#        let tally = ListenTally.of(ListenJournal.shared.persistedEvents, now: Date())
+#
+#    behind — the entire disk read and parse back on the main actor of an
+#    @MainActor func, precisely the regression the paragraph above claims to
+#    catch — went green through them. So the read is located structurally now:
+#    it has to sit INSIDE the closure's braces, not merely in the same file as
+#    one.
+#
+#    And it sweeps every accessor, not one. `persistedEvents` is one door onto
+#    that `queue.sync`; `ListenJournal.persistedLines` (`ListenJournal.swift:353`)
+#    is another onto the same files, and a leg naming only the first is blind to
+#    the second from the day somebody reaches for it in a view body.
+reads = re.findall(r"ListenJournal\.shared\.persisted\w*", view)
+if len(reads) != 1:
+    bad.append("The journal is read %d times in this file (%s); it belongs in\n"
+               "      `readInterruptionGap` and nowhere else. A second read is a\n"
+               "      synchronous `queue.sync` over two files plus a parse of every\n"
+               "      line in them, on the main thread, on a screen that redraws\n"
+               "      twenty times a minute."
+               % (len(reads), ", ".join(sorted(set(reads))) or "none"))
+
+
+def detached_body(block):
+    """The inside of the first `Task.detached` closure in `block`, braces-balanced."""
+    at = block.find("Task.detached")
+    if at < 0:
+        return None
+    brace = block.find("{", at)
+    if brace < 0:
+        return None
+    depth = 0
+    for i in range(brace, len(block)):
+        if block[i] == "{":
+            depth += 1
+        elif block[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return block[brace + 1:i]
+    return None
+
+
+detached = detached_body(reader)
+if detached is None:
     bad.append("`readInterruptionGap` no longer detaches. The fold is file I/O\n"
                "      plus a parse of every line the journal holds, and its caller is\n"
                "      a view.")
-if "now: Date()" not in reader:
+    detached = ""
+in_reader = len(re.findall(r"ListenJournal\.shared\.persisted\w*", reader))
+in_closure = len(re.findall(r"ListenJournal\.shared\.persisted\w*", detached))
+if in_reader == 0:
+    bad.append("The journal read has moved out of `readInterruptionGap`, which\n"
+               "      is the only place on this screen that is off the main thread\n"
+               "      and off the three-second poll.")
+elif in_closure != in_reader:
+    bad.append("`readInterruptionGap` reads the journal OUTSIDE its\n"
+               "      `Task.detached` closure (%d of %d reads are outside). A\n"
+               "      detached task standing next to a main-actor disk read is not a\n"
+               "      detached disk read; this function is `@MainActor`, so the read\n"
+               "      and the fold both have to be inside the braces."
+               % (in_reader - in_closure, in_reader))
+if "ListenTally.of(" not in detached:
+    bad.append("The fold has left the detached closure. Reading the lines off\n"
+               "      the main thread and then parsing every one of them back on it\n"
+               "      moves the cost rather than paying it somewhere else.")
+if not re.search(r"=\s*await\s+Task\.detached", reader):
+    bad.append("`readInterruptionGap` does not await the detached task into a\n"
+               "      value. A fire-and-forget `Task.detached` whose result nothing\n"
+               "      reads is a task that satisfies a grep and answers no question.")
+if "now: Date()" not in detached:
     bad.append("The tally is folded without `now:`. A fold that can only measure\n"
                "      to the journal's own last line answers \"58 min\" for a phone\n"
                "      that has been deaf since breakfast, because on that day the\n"
@@ -200,11 +301,44 @@ if gap_calls != 1:
                "      the listening card's suspended branch and nowhere else."
                % gap_calls)
 briefing = block_after("private var briefingText: String {")
-if briefing and "interruptedGap" in briefing:
+if briefing and ("interruptedGap" in briefing or "heardNothingSince" in briefing):
     bad.append("The briefing carries the interruption gap. `briefingText` is\n"
                "      captured ONCE into `briefingShown` and never recomputed, so a\n"
                "      duration put there freezes at whatever it was when the\n"
                "      typewriter ran and then goes on being stated as now.")
+
+# 4b. WHAT IS STORED IS THE INSTANT, WHICH IS WHY THE NUMBER CANNOT FREEZE.
+#
+#     Same defect, one layer down, and it survived the first pass of this fix.
+#     `.task(id:)` restarts only when the id VALUE changes, and the key on the
+#     interruption read is `"\(suspended)|\(scenePhase)"` — both halves constant
+#     for the whole of an outage. So it runs once at the transition and never
+#     again, and a stored COUNT OF SECONDS is then drawn unchanged for as long
+#     as the screen stays up: somebody on speakerphone with Anticipy open read
+#     the same "4 min" at minute forty.
+#
+#     The fix may NOT be to re-read on the poll — the leg above is the reason,
+#     and it is the expensive one. Storing the instant and subtracting at the
+#     draw costs one subtraction per redraw and no disk at all.
+if not re.search(r"@State private var heardNothingSince: Date\?", view):
+    bad.append("`heardNothingSince` is not a `Date?` on this view. The stored\n"
+               "      value has to be WHEN, not HOW LONG: a stored duration is read\n"
+               "      once at the interruption and then goes on being stated as now\n"
+               "      for as long as the screen is up, which is the defect this whole\n"
+               "      line was rewritten to end.")
+if re.search(r"@State private var interruptedGap", view):
+    bad.append("`interruptedGap` is `@State` again. Held rather than derived it\n"
+               "      is a duration that freezes; it belongs computed off\n"
+               "      `heardNothingSince` where the label is drawn.")
+derived = block_after("private var interruptedGap: Int? {")
+if derived is None or "Date().timeIntervalSince" not in derived:
+    bad.append("`interruptedGap` no longer subtracts `heardNothingSince` from\n"
+               "      `Date()` at the draw. That subtraction is the only thing making\n"
+               "      the number on the card move while the microphone stays gone.")
+if derived is not None and re.search(r"ListenJournal|ListenTally\.of\(", derived):
+    bad.append("`interruptedGap` reads the journal. It is evaluated on every\n"
+               "      redraw of Home — three seconds apart, all day — which is the\n"
+               "      one thing the leg above exists to keep off this screen.")
 
 # 5. THE DAY-ZERO EXAMPLES ARE READ OUT, NOT HIDDEN — AND STILL READ AS EXAMPLES.
 empty = block_after("private var emptyState: some View {")
