@@ -333,6 +333,181 @@ enum HomeFeedPolicy {
 
 // END ANCHOR: home feed placement
 
+// ANCHOR: home card copy
+
+/// The sentences on Home whose truth depends on a COUNT or on a MEASUREMENT.
+///
+/// They were written inline in three view bodies until two of them were caught
+/// saying the wrong number out loud. The browser card asked for two minutes of
+/// somebody's afternoon and never named what was waiting on the other side of
+/// it. The interview card opened "Six questions" — the numeral typed into the
+/// prose — so a person who had already answered three was told there were six,
+/// and nothing on the phone could tell it otherwise. A sentence with a number
+/// in it is a claim, and a claim belongs where a test can call it.
+///
+/// Pure Foundation, and anchored so `Tests/run_home_copy_tests.sh` compiles
+/// THIS source rather than a copy of these strings — a copy is honest only
+/// until somebody edits one side. The counts arrive as arguments instead of
+/// being read from `InterviewProgress` or `session.jobs` here, for the same
+/// reason `PlainDuration` takes an `Int`: the numbers stay the caller's, the
+/// wording stays here, and the runner needs neither a simulator nor a defaults
+/// database to ask what a card will say.
+///
+/// NO THRESHOLD LIVES HERE, AND NONE MAY. Nothing on this page decides that a
+/// queue is long or a silence has gone on too far; every sentence names what
+/// the phone counted and stops. `ListeningDiagnosticsView.swift:38-43` is the
+/// argument these sit inside — "a phone that has heard nothing for eleven hours
+/// and a phone that has heard nothing for four minutes both say so, and the
+/// reader judges" — and it is why there is no badge, no meter, no percentage
+/// and no colour anywhere below.
+enum HomeCopy {
+
+    // MARK: The browser ask
+
+    /// Whose Chrome, and how many things are standing in it.
+    ///
+    /// `waiting` cannot be zero: the card renders only under
+    /// `!handling.isEmpty`, which is also `browserOffer`'s own condition.
+    static func browserHeadline(waiting: Int) -> String {
+        waiting == 1 ? "This one needs your Chrome" : "These need your Chrome"
+    }
+
+    /// The cost and the payoff in one breath.
+    ///
+    /// The cost half is kept from the onboarding step this card replaces,
+    /// because it was the honest version: no password, a computer, one setting,
+    /// two minutes. Naming what she will NOT do is the rule
+    /// (`design/PREMIUM-FEEL.md:43-47`), so "I never ask for a password"
+    /// survives verbatim.
+    ///
+    /// What it lacked was the other side of the trade. Four costs and no payoff
+    /// reads as a chore, and the thing being bought was sitting three inches
+    /// below the card the whole time — so the queue joins the sentence that
+    /// asks for the two minutes. QUEUE DEPTH AND NOTHING ELSE: no elapsed time,
+    /// no "stalled", no countdown, no urgency the phone did not measure.
+    static func browserBody(waiting: Int) -> String {
+        // Singular gets its own tail rather than a spliced-in noun. "The thing
+        // below starts moving on their own" is what one shared ending produces,
+        // and a sentence that does not parse is a sentence nobody trusts.
+        let payoff = waiting == 1
+            ? "the thing below starts moving on its own"
+            : "the \(waiting) things below start moving on their own"
+        return "I work inside your own Chrome, using the accounts you're already signed in to. "
+            + "I never ask for a password. Two minutes on a computer, once — and \(payoff). "
+            + "There's one Chrome setting to flip; the guide shows you where."
+    }
+
+    /// What the tap buys, still legible with a thumb over the card.
+    ///
+    /// "Set it up" alone is a chore with no object. The count is the same one
+    /// the headline and the body branch on, from the same argument, so the
+    /// three cannot disagree.
+    static func browserButton(waiting: Int) -> String {
+        "Set it up — \(waiting) waiting"
+    }
+
+    // MARK: The interview ask
+
+    /// Whether she is asking to start or asking to finish.
+    static func interviewTitle(answered: Int) -> String {
+        answered == 0 ? "Want me to actually know you?" : "Want me to know the rest?"
+    }
+
+    /// What she already holds, said before what she still wants.
+    ///
+    /// Home used to gate on `!isComplete` alone and then describe the whole
+    /// script, so somebody who had sat through three answers was told there
+    /// were six questions — the work counted for nothing on the one screen that
+    /// asks for more of it. Settings had the sentence right at
+    /// `SettingsView.swift:893` ("You've answered 4 of 6") and Home ignored it.
+    ///
+    /// A COUNT OF REAL WORK, NOT OF ATTEMPTS. A skip records nothing at all
+    /// (`Interview.swift:113-118`), so a skipped question is simply still open
+    /// and cannot inflate this. No percentage, no meter, no bar: two counts and
+    /// the sentence they belong to.
+    static func interviewBody(answered: Int, total: Int) -> String {
+        guard answered > 0 else {
+            // Character-for-character what this card has always opened with,
+            // save for where the numeral comes from — see `spelledOut`.
+            return "\(spelledOut(total)) questions, in your words. I ask, you answer or skip. "
+                + "I never send anything on your behalf without your yes."
+        }
+        return "You've answered \(answered) of \(total). I've kept them. The rest are still open — "
+            + "I ask, you answer or skip. I never send anything on your behalf without your yes."
+    }
+
+    /// How much is left, on the button that spends it.
+    static func interviewButton(answered: Int, total: Int) -> String {
+        answered == 0 ? "Ask me" : "Ask me — \(max(0, total - answered)) left"
+    }
+
+    /// A count at the head of a sentence, in words.
+    ///
+    /// "Six questions, in your words" was typed, so the day a seventh question
+    /// ships the card goes on saying six at a script that no longer holds six.
+    /// Spelling it from `InterviewQuestion.script.count` leaves the sentence
+    /// identical to the character today and wrong on no day after.
+    ///
+    /// Words here and digits everywhere else on this card is not an
+    /// inconsistency: "You've answered 4 of 6" is a measurement of two counts
+    /// against each other, and this is prose opening a sentence. Digits past
+    /// twelve, where English stops being the shorter way to say it.
+    static func spelledOut(_ n: Int) -> String {
+        let words = ["Zero", "One", "Two", "Three", "Four", "Five", "Six",
+                     "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"]
+        return n >= 0 && n < words.count ? words[n] : "\(n)"
+    }
+
+    // MARK: The microphone, taken away
+
+    /// "Taking it back" — for how long, when the phone measured it.
+    ///
+    /// When iOS takes the microphone and the watchdog never gets it back,
+    /// `suspended` stays true and `isListening` stays true
+    /// (`PhoneListener.swift:86`, `:457-460`), so this line claimed a recovery
+    /// in the present tense for the rest of the day and read the same at four
+    /// seconds as at four hours. The gap is already measured — `ListenTally`
+    /// counts `unheardForSeconds` to the moment of reading under
+    /// `.stoppedByOther` — and naming it costs the sentence nothing it had.
+    ///
+    /// NIL IS AN ANSWER, and it is the common one. The caller passes a gap only
+    /// when the journal ends in an interruption with time on it; `.unknown` is
+    /// a record with no session line in it at all, and a duration invented for
+    /// that case would be a number about nothing. So the sentence that ships
+    /// today survives verbatim as the thing said whenever the phone cannot say
+    /// more.
+    ///
+    /// NO THRESHOLD AND NO VERDICT: "4 min" and "6 hr 20 min" are the same
+    /// sentence with a different measurement in it, and neither is coloured,
+    /// ranked or called too long. `PlainDuration` is asked for the words so the
+    /// three screens now reporting this same stretch cannot word it three ways.
+    static func micInterrupted(unheardForSeconds seconds: Int?) -> String {
+        guard let seconds = seconds, seconds > 0 else { return "Mic interrupted, taking it back…" }
+        return "Mic interrupted \(PlainDuration.words(seconds)) ago, still trying to take it back. "
+            + "I've missed that stretch."
+    }
+
+    // MARK: The empty state's examples
+
+    /// The two fixture strings the day-zero screen draws, and the one sentence
+    /// that reads them back.
+    ///
+    /// The example pair was `accessibilityHidden(true)`, so a first-timer using
+    /// VoiceOver got the promise — what she listens for — and no sample at all
+    /// of what arrives. The label is built FROM the fixtures rather than
+    /// alongside them: a hand-written copy of these two sentences would go
+    /// stale the first time somebody edited the cards, and a VoiceOver user
+    /// would then be read a screen that is not on the screen.
+    static let exampleHeard = "I'll get that invoice over to you tonight"
+    static let exampleGoal = "Draft the invoice email to Devon"
+    static var exampleCardsLabel: String {
+        "Example. When I catch something it looks like this. "
+            + "Heard: \(exampleHeard). Ready: \(exampleGoal)."
+    }
+}
+
+// END ANCHOR: home card copy
+
 /// Home = the proactive feed: what Anticipy heard, what it's handling,
 /// what needs your OK, and what's done — plus live connection health.
 struct HomeView: View {
@@ -369,6 +544,11 @@ struct HomeView: View {
     /// The newest line already considered. Nil until the first poll populates
     /// the feed, which is what stops a cold launch asking about yesterday.
     @State private var lastSeenLineID: String?
+    /// How long the phone has heard nothing, when the record ends in an
+    /// interruption and only then. Nil is the ordinary value and the honest
+    /// one: nothing measured, nothing said — see `readInterruptionGap` for why
+    /// this is `@State` filled by a task rather than read where it is drawn.
+    @State private var interruptedGap: Int?
     /// Which source the open sheet is about, so a swipe-dismiss can be recorded
     /// as a decline. `contextAsk` is already nil by the time onDismiss runs.
     @State private var lastAskedSource: ContextSource?
@@ -437,12 +617,19 @@ struct HomeView: View {
     /// with the rule, because an indent clearing a rule that is gone reads as
     /// a misaligned section against everything else in this scroll view.
     private var interviewOfferCard: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.snug) {
-            Text("Want me to actually know you?")
+        // WHAT SHE ALREADY HOLDS, read once for the whole card. The gate above
+        // asks only whether anything is left (`!isComplete`), so this card
+        // described the entire script to somebody who had already sat through
+        // half of it. Three separate reads — one per sentence — is how a title
+        // and a button come to disagree about the same defaults key.
+        let answered = InterviewProgress().answeredCount
+        let total = InterviewQuestion.script.count
+        return VStack(alignment: .leading, spacing: Theme.Space.snug) {
+            Text(HomeCopy.interviewTitle(answered: answered))
                 .font(Theme.display(24))
                 .foregroundStyle(Theme.text)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Six questions, in your words. I ask, you answer or skip. I never send anything on your behalf without your yes.")
+            Text(HomeCopy.interviewBody(answered: answered, total: total))
                 .font(Theme.aside)
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -451,7 +638,7 @@ struct HomeView: View {
                     Haptics.engage()
                     showInterview = true
                 } label: {
-                    Text("Ask me")
+                    Text(HomeCopy.interviewButton(answered: answered, total: total))
                 }
                 .buttonStyle(.glass)
                 // Equal weight, and it means it: declined once, never offered
@@ -500,22 +687,28 @@ struct HomeView: View {
     /// already in Settings, so this routes there rather than growing a second
     /// copy of pairing that can drift from the first.
     private var browserOfferCard: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.snug) {
-            Text(handling.count == 1 ? "This one needs your Chrome" : "These need your Chrome")
+        // The queue this card is standing over, counted once. Three sentences
+        // branch on it — the headline's grammar, the body's payoff and the
+        // button's label — and they are one question, so they ask it once and
+        // in one place (`HomeCopy`).
+        let waiting = handling.count
+        return VStack(alignment: .leading, spacing: Theme.Space.snug) {
+            Text(HomeCopy.browserHeadline(waiting: waiting))
                 .font(Theme.display(24))
                 .foregroundStyle(Theme.text)
                 .fixedSize(horizontal: false, vertical: true)
-            // Kept from the onboarding step this replaces, because it was the
-            // honest version: no password, a computer, one setting, two
-            // minutes. Naming what she will NOT do is the rule
-            // (`design/PREMIUM-FEEL.md:43-47`).
-            Text("I work inside your own Chrome, using the accounts you're already signed in to. I never ask for a password. It takes about two minutes, it has to happen on a computer, and there's one Chrome setting to flip. The guide shows you where.")
+            // The costs are kept from the onboarding step this replaces,
+            // because that was the honest version: no password, a computer,
+            // one setting, two minutes. Naming what she will NOT do is the
+            // rule (`design/PREMIUM-FEEL.md:43-47`). What the sentence lacked
+            // was the other side of the trade — see `HomeCopy.browserBody`.
+            Text(HomeCopy.browserBody(waiting: waiting))
                 .font(Theme.aside)
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: Theme.Space.snug) {
                 NavigationLink { SettingsView() } label: {
-                    Text("Set it up")
+                    Text(HomeCopy.browserButton(waiting: waiting))
                 }
                 .buttonStyle(.glass)
                 // A NavigationLink runs no action closure of its own, and this
@@ -1063,6 +1256,13 @@ struct HomeView: View {
             // worked, and because that flip is what re-arms it after a launch
             // that started offline.
             .task(id: verified) { await askWhetherWeCanReachThem() }
+            // HOW LONG THE MICROPHONE HAS BEEN GONE, asked on the three moments
+            // that can change the answer and on no others: the view appearing,
+            // `suspended` flipping, and the app coming back to the foreground.
+            // Never on the poll — see `readInterruptionGap`.
+            .task(id: "\(session.listener.suspended)|\(scenePhase)") {
+                await readInterruptionGap()
+            }
             .onChange(of: scenePhase) { phase in
                 if phase == .active {
                     Haptics.warmUp()
@@ -1339,10 +1539,22 @@ struct HomeView: View {
             // Honesty over pretense: when iOS takes the mic (call, Siri,
             // route change), say so while recovery runs — never glow
             // "Listening" over a dead microphone.
+            //
+            // AND FOR HOW LONG, when the phone measured it. Recovery in the
+            // present tense reads the same at four seconds as at four hours,
+            // and the four-hour version of this line is the 30-hour-deaf case
+            // `CLAUDE.md` records — the gap belongs in the sentence that is
+            // already claiming to be working on it. The number comes from
+            // `interruptedGap`, which is nil unless the journal ends in an
+            // interruption with time on it, so nothing is invented here.
             if session.listener.suspended {
-                Label("Mic interrupted, taking it back…", systemImage: "exclamationmark.triangle")
+                Label(HomeCopy.micInterrupted(unheardForSeconds: interruptedGap),
+                      systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(Theme.muted)
+                    // It wraps now — the same treatment the pending-lines
+                    // sentence below already needs for the same reason.
+                    .fixedSize(horizontal: false, vertical: true)
             }
             // Nothing you said is lost when the network is: say the count out
             // loud rather than let it look like she stopped hearing you.
@@ -1456,6 +1668,53 @@ struct HomeView: View {
         else { return }
         accountSaysNoNumber = owner.phone
             .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// How long the microphone has been gone, read off the journal — never on
+    /// the poll.
+    ///
+    /// THREADING IS THE WHOLE SHAPE OF THIS FUNCTION. `persistedEvents` is a
+    /// synchronous `queue.sync` over the journal's two files plus a parse of
+    /// every line in them (`Audio/ListenJournal.swift`), and this screen
+    /// redraws every three seconds — so the same read wired into a view body
+    /// would put disk I/O on the main thread twenty times a minute to move a
+    /// number by three seconds. It runs on the moments that can change the
+    /// answer instead: the view appearing, `suspended` flipping, and the scene
+    /// coming back to `.active`, which is the one that matters most — the
+    /// reader this sentence was written for is somebody opening the app an
+    /// hour after a call took the microphone.
+    ///
+    /// IT READS NOTHING WHILE THE MICROPHONE IS FINE. The guard is first, so on
+    /// an ordinary day this costs one comparison and touches no disk at all.
+    ///
+    /// SILENT UNLESS THE PHONE MEASURED IT, which is the rule the whole card
+    /// sits under. `.unknown` is a record with no session line in it — both
+    /// ends rotated away, or a phone that has never listened — and a gap
+    /// invented there would be a number about nothing. `.stoppedByOwner` zeroes
+    /// the gap deliberately (`ListenTally.swift:58-60`: quiet after you turn it
+    /// off is the ordinary state of a phone nobody is talking to, not a
+    /// finding), and `.listening` has no gap to name. Each of those leaves
+    /// `interruptedGap` nil and the sentence exactly as it ships today.
+    @MainActor
+    private func readInterruptionGap() async {
+        guard session.listener.suspended else {
+            interruptedGap = nil
+            return
+        }
+        // Detached for the same reason Settings' listening row is
+        // (`SettingsView.unheardSeconds`), and passing `now:` for the same
+        // reason both of them do: a fold that can only measure to the
+        // journal's own last line answers "58 min" for a phone that has been
+        // deaf since breakfast, because on that day the last line IS the
+        // failure.
+        let tally = await Task.detached(priority: .utility) {
+            ListenTally.of(ListenJournal.shared.persistedEvents, now: Date())
+        }.value
+        guard case .stoppedByOther = tally.ending, tally.unheardForSeconds > 0 else {
+            interruptedGap = nil
+            return
+        }
+        interruptedGap = tally.unheardForSeconds
     }
 
     /// What the control says, what tapping it does, and what sits beside the
@@ -1838,16 +2097,36 @@ struct HomeView: View {
             VStack(spacing: Theme.Space.snug) {
                 TranscriptRow(line: AnticipySession.TranscriptLine(
                     id: "demo-1",
-                    text: "I'll get that invoice over to you tonight",
+                    text: HomeCopy.exampleHeard,
                     decision: "act"))
                 ConfirmJobCard(job: AgentJob(
-                    id: "demo-2", goal: "Draft the invoice email to Devon",
+                    id: "demo-2", goal: HomeCopy.exampleGoal,
                     params: "", status: "awaiting_confirm", result: nil, created: ""))
             }
-            .opacity(0.42)
+            // 0.42 was faint enough that the sample was hard to read at all on
+            // the one screen whose whole job is showing what arrives. NOT full
+            // strength: the caption above plus a visibly quieter pair is what
+            // says "example", and a first-timer reading a fixture as a real job
+            // is a worse failure than a faint one.
+            .opacity(0.62)
             .blur(radius: 0.4)
             .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            // SAID OUT LOUD, rather than hidden. This was
+            // `accessibilityHidden(true)`, so a first-timer using VoiceOver got
+            // the promise — the three things she listens for — and no sample at
+            // all of what a caught thing looks like when it lands. The label
+            // reads the fixtures back verbatim (`HomeCopy.exampleCardsLabel`),
+            // and it opens with "Example." because the caption that carries
+            // that word for a sighted reader is a separate element.
+            //
+            // `.ignore` AND NOT `.contain`: contain leaves the children
+            // individually focusable, so VoiceOver would walk into the fixture
+            // card's inert "Send it" and "Not now" buttons — a decision to
+            // make about somebody's invoice, on a screen with no invoice and
+            // no working buttons. `.allowsHitTesting(false)` above stops the
+            // finger; this is the same refusal for the other pointer.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(HomeCopy.exampleCardsLabel)
         }
         .frame(maxWidth: .infinity)
     }
