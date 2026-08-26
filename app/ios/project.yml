@@ -299,7 +299,15 @@ settings:
     # trust the floor being wrong. The wider set is also the simpler one.
     #
     # 86 exists in history and is not these bytes.
-    CURRENT_PROJECT_VERSION: "88"
+    #
+    # 89: the Bluetooth permission string still told the owner "pendant audio is
+    # sent to Deepgram for live transcription", five hours after that path was
+    # deleted from both server and client. That sentence is what iOS renders at
+    # the prompt, so it is the one a person actually reads before deciding — and
+    # a false privacy promise is worse than the practice it describes. Info.plist
+    # only; no code changed, which is exactly why the build number has to move:
+    # 88 is already installed on a phone and says something different.
+    CURRENT_PROJECT_VERSION: "89"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
