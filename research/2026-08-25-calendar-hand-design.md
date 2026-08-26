@@ -83,3 +83,42 @@ The confirmation gate and the intent journal live server-side and in
 `extension/agent_loop.js`. A device lane routes through *that*, unchanged. A
 second approval check written for the phone is the hole, even on the day it
 agrees with the first.
+
+## The gate fires before the lane is consulted — verified 2026-08-25
+
+`brain/anticipy_core.py:585 is_consequential` settles the safety question
+structurally, and better than the design above assumed:
+
+```
+if touches == "world":
+    return True
+if explicit:
+    return False
+```
+
+The `world` check sits **above** the `explicit` escape. So a calendar write is
+held for approval even when the owner asked for it in so many words. Held is
+not a thing the device lane can opt out of, because the lane is chosen after
+the gate has already decided.
+
+Two consequences worth stating plainly:
+
+**1. The device lane cannot be a hole in the gate by construction.** It selects
+the executor *after* approval, not the requirement for one. The failure the
+research warned about — a second approval check written for the phone — is
+therefore not merely discouraged, it is unnecessary. Anything that looks like
+one in the diff is the bug.
+
+**2. SHELF 2 admissibility is not on the critical path.** Admissibility governs
+acting *unheld*. A held write does not need it. The minted id is still worth
+building for moment 11's "(undo)", but it is a convenience for the owner rather
+than the thing that makes the act legal — and that ordering matters, because a
+minted id built as a *permission* is one refactor away from someone deciding
+the approval is redundant.
+
+**3. `touches` is also the correct lane signal.** It is the model's declaration,
+made at triage, and the comment above it records that the two previous attempts
+at this question — a verb list, then a calculator-sniff — were both
+"pattern-matching wearing different coats". Routing the lane on `touches` plus
+the plan's declared effect is Law 1 compliant. Routing it on the word
+"calendar" would not be.
