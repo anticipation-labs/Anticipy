@@ -56,6 +56,12 @@ sh "$HERE/run_calendar_hand_tests.sh"
 sh "$HERE/run_local_ears_tests.sh"
 sh "$HERE/run_stale_extension_tests.sh"
 sh "$HERE/run_reachable_number_tests.sh"
+# Whether a field SAYS what just happened to it. Beside the reachable-number
+# suite because it is the other end of the same failure: that one asks whether
+# a number can be texted, this one asks whether a person was told when saving it
+# did not work. Settings had two caption states where it needed four, so "+44"
+# plus Save produced a silent false and nothing on the screen at all.
+sh "$HERE/run_field_caption_tests.sh"
 sh "$HERE/run_notifier_tests.sh"
 sh "$HERE/run_context_grant_tests.sh"
 sh "$HERE/run_interview_tests.sh"

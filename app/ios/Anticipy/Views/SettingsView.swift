@@ -30,12 +30,23 @@ struct SettingsView: View {
     @State private var pairOutcome: AnticipySession.PairOutcome?
     @State private var pairing = false
     @State private var phoneField = ""
-    @State private var phoneSaved = false
+    /// What the last save of this field came back with, as one value rather
+    /// than a lone `phoneSaved` flag. The flag had no room for a failure, so a
+    /// save that never reached the server left the caption on its neutral
+    /// default and said nothing at all. See `FieldCaption`.
+    @State private var phoneAttempt: FieldCaption.Attempt = .untried
+    /// In flight. Two taps used to fire two upserts with nothing on screen
+    /// between them; the pair row four sections down already had this.
+    @State private var savingPhone = false
     @State private var firstName = ""
     @State private var lastName = ""
     @State private var email = ""
     @State private var birthday = ""
-    @State private var detailsSaved = false
+    /// The same shape as `phoneAttempt`, for the same reason: `saveOwnerDetails`
+    /// comes back false on a dead connection and this section used to swallow
+    /// it exactly as the number section did.
+    @State private var detailsAttempt: FieldCaption.Attempt = .untried
+    @State private var savingDetails = false
     @State private var showVoiceEnroll = false
     /// The live timer behind a timed pause. Held here so a second visit to
     /// this screen can re-arm it rather than leaving a promise unattended.
@@ -84,10 +95,28 @@ struct SettingsView: View {
                 } else if session.listener.isListening {
                     Button("Stop listening") { stopNow() }
                         .ghostRow()
-                    Menu("Pause for a while") {
+                    // The menu holds the two REAL durations and nothing else.
+                    // It used to carry a third item, "Until I turn it back on",
+                    // calling the identical `stopNow()` as the button four
+                    // lines above and visible at the same moment — a menu
+                    // offering a choice already on screen. Which of the two
+                    // durations is the common one is not written down anywhere
+                    // in this repo, so neither is promoted out to a button;
+                    // that comes from watching somebody use it, not from here.
+                    //
+                    // Full-width label with a Spacer, so the row is as tappable
+                    // as the ghost buttons around it. A bare `Menu("…")` is hit
+                    // only on its own letters, which made it the one control in
+                    // this section with a smaller target than its neighbours.
+                    Menu {
                         Button("15 minutes") { pause(minutes: 15) }
                         Button("1 hour") { pause(minutes: 60) }
-                        Button("Until I turn it back on") { stopNow() }
+                    } label: {
+                        HStack {
+                            Text("Pause for a while")
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
                     }
                     .foregroundStyle(Theme.accent)
                     Text("Everything said near you is turned into text while this is on.")
@@ -179,17 +208,40 @@ struct SettingsView: View {
                     .keyboardType(.numbersAndPunctuation)
                     .textInputAutocapitalization(.never)
                 Button("Save details") {
+                    guard !savingDetails else { return }
+                    savingDetails = true
+                    // Read once, like the number field below: what was sent is
+                    // what the verdict is about, and typing while the request
+                    // is in flight must not collect somebody else's "Saved."
+                    let sent = (firstName, lastName, email, birthday)
                     Task {
-                        detailsSaved = await session.saveOwnerDetails(
-                            first: firstName, last: lastName, email: email, birthday: birthday)
-                        if detailsSaved { Haptics.success() }
+                        let ok = await session.saveOwnerDetails(
+                            first: sent.0, last: sent.1, email: sent.2, birthday: sent.3)
+                        savingDetails = false
+                        guard (firstName, lastName, email, birthday) == sent else { return }
+                        detailsAttempt = ok ? .saved : .failed
+                        if ok { Haptics.success() }
                     }
                 }
                 .ghostRow()
-                Text(detailsSaved ? "Saved. I can fill booking forms myself now."
-                                  : "Every booking and signup form asks for these. Payment details are never stored or filled.")
-                    .font(.caption)
-                    .foregroundStyle(Theme.muted)
+                .disabled(savingDetails)
+                // `complete: nil` — there is no completeness rule here and this
+                // component will not invent one. A first name is never half a
+                // name, an email is not validated anywhere in this app, and a
+                // birthday is parsed on the server. So the states reachable are
+                // neutral, saved and a save that did not land.
+                //
+                // THE THIRD ONE IS NEW. `saveOwnerDetails` comes back false on
+                // a dead connection and this caption used to fall straight back
+                // to its neutral sentence — the same swallow the number field
+                // below had, on the same screen, four sections apart.
+                FieldCaptionLine(
+                    text: firstName,
+                    complete: nil,
+                    attempt: detailsAttempt,
+                    words: .init(
+                        neutral: "Every booking and signup form asks for these. Payment details are never stored or filled.",
+                        saved: "Saved. I can fill booking forms myself now."))
             }
             .listRowBackground(Theme.card)
             .onAppear {
@@ -198,6 +250,11 @@ struct SettingsView: View {
                 if email.isEmpty { email = session.ownerEmail }
                 if birthday.isEmpty { birthday = session.ownerBirthday }
             }
+            // A verdict about the last save must not sit over the next edit.
+            .onChange(of: firstName) { _ in detailsAttempt = .untried }
+            .onChange(of: lastName) { _ in detailsAttempt = .untried }
+            .onChange(of: email) { _ in detailsAttempt = .untried }
+            .onChange(of: birthday) { _ in detailsAttempt = .untried }
 
             Section("Your voice") {
                 Text(session.speakerTagger.available
@@ -230,29 +287,82 @@ struct SettingsView: View {
 
             Section("Your number") {
                 HStack {
-                    TextField("+1 604 555 0123", text: $phoneField)
+                    // No "+1". The example used to assert a country the app
+                    // refuses to assume anywhere else: `e164` will not guess
+                    // one and `DiallingCode` reads this phone's own region, so
+                    // a North American code printed grey in the field was the
+                    // one place left still naming a country for somebody.
+                    TextField("604 555 0123", text: $phoneField)
                         .keyboardType(.phonePad)
                         .textContentType(.telephoneNumber)
                         .font(.callout.monospacedDigit())
                         .foregroundStyle(Theme.text)
+                    if savingPhone {
+                        // The same in-flight sign the pair row uses, so waiting
+                        // looks the same on both halves of this screen.
+                        WaveBars()
+                    }
                     // Inline beside the field, so it hugs its own word rather
                     // than spanning the row.
                     Button("Save") {
+                        guard !savingPhone else { return }
+                        savingPhone = true
+                        // READ ONCE, HERE. The old body read `phoneField`
+                        // inside the Task, so a digit typed while the request
+                        // was in flight was the digit that got saved — and the
+                        // verdict then landed on whatever the field held by the
+                        // time it came back. A caption saying "Saved." over a
+                        // number nobody saved is the same lie this whole fix is
+                        // about, arriving from the other direction.
+                        let sent = phoneField
                         Task {
-                            phoneSaved = await session.saveOwnerPhone(phoneField)
-                            if phoneSaved { Haptics.success() }
+                            let ok = await session.saveOwnerPhone(sent)
+                            savingPhone = false
+                            guard phoneField == sent else { return }
+                            phoneAttempt = ok ? .saved : .failed
+                            if ok { Haptics.success() }
                         }
                     }
                     .buttonStyle(.ghost)
-                    .disabled(phoneField.isEmpty)
+                    // GATED ON THE PREDICATE THAT ACTUALLY DECIDES, not on
+                    // emptiness. Two things were wrong with `phoneField.isEmpty`
+                    // and the prefill below makes the first of them permanent:
+                    // the field is never empty now, so that test stopped
+                    // meaning anything. And it never matched `saveOwnerPhone`,
+                    // which begins `guard let e = e164(raw) else { return false }`
+                    // — so "+44" lit the button, returned false, and reported
+                    // nothing. This is the same expression the first-run beat
+                    // gates its own Next button on.
+                    .disabled(session.e164(phoneField) == nil || savingPhone)
                 }
-                Text(phoneSaved ? "Saved. I'll reach you here."
-                                : "Where I text you when something needs your word.")
-                    .font(.caption)
-                    .foregroundStyle(Theme.muted)
+                // Four states where there were two. `saveOwnerPhone` returning
+                // false can now only be the connection: the button is unreachable
+                // while `e164` refuses the text, so the two failures that used to
+                // arrive as one silent `false` are two different sentences.
+                FieldCaptionLine(
+                    text: phoneField,
+                    complete: session.e164(phoneField) != nil,
+                    attempt: phoneAttempt,
+                    words: .init(
+                        neutral: "Where I text you when something needs your word.",
+                        saved: "Saved. I'll reach you here."))
             }
             .listRowBackground(Theme.card)
-            .onAppear { if phoneField.isEmpty { phoneField = session.ownerPhone } }
+            // The expression the first-run beat already runs, and for the same
+            // reason: `e164` refuses to invent a country, so a refusal is only
+            // a fix if the country is in front of the person rather than
+            // missing behind them. Somebody who has never saved a number met an
+            // empty field here, typed the number they have typed their whole
+            // life, and was refused — with, until now, nothing on screen saying
+            // what was missing.
+            .onAppear {
+                if phoneField.isEmpty {
+                    phoneField = session.ownerPhone.isEmpty
+                        ? DiallingCode.forThisPhone() : session.ownerPhone
+                }
+            }
+            // A "Saved." from the last number must not sit over the next one.
+            .onChange(of: phoneField) { _ in phoneAttempt = .untried }
 
             Section("Your computer") {
                 HStack {
@@ -285,15 +395,23 @@ struct SettingsView: View {
                     // A code that was right and a network that was down used to
                     // read as the same sentence, so people retyped a correct
                     // code for ten minutes. These are now two different truths.
+                    // And they now wear two weights rather than iOS's red and
+                    // orange — the borrowed red the pendant row above says in as
+                    // many words "appears nowhere else in the brand", and which
+                    // the theme contract's rule 2 exists to keep out of views.
+                    // `alarm` is this app's own word for a thing that is wrong.
+                    // The unreachable line is explicitly NOT the reader's fault
+                    // and says so, so it takes `text2` rather than a warning
+                    // colour arguing with its own sentence.
                     switch pairOutcome {
                     case .noMatch:
                         Text("That code didn't match. Check the Anticipy extension popup for the current one.")
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Theme.alarm)
                     case .unreachable:
                         Text("I can't reach Anticipy right now. That's my end, not your code.")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Theme.text2)
                         Button("Try again") { pair() }
                             .ghostRow()
                             .disabled(pairing)
@@ -362,6 +480,12 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.muted)
             }
+            // Every other section on this form paints its rows `Theme.card`.
+            // This one and "What I know about you" were missed, so they sat on
+            // the Form's default material instead — near-invisible on white, a
+            // different grey in dark, and in both cases a section that reads as
+            // not belonging to the page it is on.
+            .listRowBackground(Theme.card)
 
             Section("Between us") {
                 Text(voicePath)
@@ -479,19 +603,19 @@ struct SettingsView: View {
 
                 if !r.hardware {
                     Text("This iPhone reports no Taptic Engine. Nothing can buzz.")
-                        .font(.footnote).foregroundStyle(.red)
+                        .font(.footnote).foregroundStyle(Theme.alarm)
                 }
                 if r.lowPowerMode {
                     // The one blocker that IS readable. Stated plainly.
                     Text("Low Power Mode is ON. iPhone switches haptics off while it is. Turn it off in Settings › Battery.")
-                        .font(.footnote).foregroundStyle(.orange)
+                        .font(.footnote).foregroundStyle(Theme.text2)
                 }
                 if r.listening && !r.allowsHapticsWhileRecording {
                     // The smoking gun, if it ever shows up: build 33 asked for
                     // this and the request was made with try? — so a refusal
                     // was invisible until now.
                     Text("Found it: the microphone is refusing to let haptics play. That's mine to fix. Tell me you saw this.")
-                        .font(.footnote).foregroundStyle(.red)
+                        .font(.footnote).foregroundStyle(Theme.alarm)
                 }
                 if r.hardware && !r.lowPowerMode {
                     Text("If nothing buzzes either way: iPhone Settings › Sounds & Haptics › System Haptics must be ON. No app is allowed to read or change that switch. Only you can.")
@@ -505,7 +629,7 @@ struct SettingsView: View {
                      """)
                     .font(.caption2.monospaced()).foregroundStyle(Theme.muted)
                 if let err = r.error {
-                    Text(err).font(.caption2.monospaced()).foregroundStyle(.red)
+                    Text(err).font(.caption2.monospaced()).foregroundStyle(Theme.alarm)
                 }
             }
             #endif
@@ -555,6 +679,9 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.muted)
             }
+            // The second of the two sections that were missing this. See the
+            // Appearance section above for the argument.
+            .listRowBackground(Theme.card)
 
             Section {
                 Button("Replay the welcome tour") { confirmReplay = true }

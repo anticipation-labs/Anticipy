@@ -716,3 +716,212 @@ struct BreathingDot: View {
             .accessibilityHidden(true)
     }
 }
+
+// MARK: - What a field says about itself
+
+/// The four things a text field can be saying, decided in ONE place.
+///
+/// WHY THIS IS A TYPE AND NOT A THIRD COPY OF AN `if`. Three fields in this app
+/// take a phone number — the door (`AuthView`), the first-run beat
+/// (`OnboardingView`) and Settings — and until this existed they had three
+/// different sets of states. Settings had two: a neutral line and a "Saved."
+/// line. It had no line for a number `e164` refuses and no line for a save that
+/// never reached the server, so a person typing "+44" and pressing Save was
+/// told nothing at all: `saveOwnerPhone` returned false, the saved flag stayed
+/// false, and the caption went on showing its neutral default. An invisible
+/// failure on the one field a text — the only channel this product has outside
+/// the app — is sent to.
+///
+/// NOTHING HERE DECIDES WHAT ANYBODY MEANT. The state comes from a predicate
+/// the caller already owns (`e164` refusing a number, an upsert coming back
+/// false) and from whether the field is empty. The sentences below are this
+/// app's own copy for those states, not a classifier.
+///
+/// The two sentences that must NOT vary by screen are constants here. The two
+/// that must — what the field is FOR, and what saving it bought — stay at the
+/// call site, because "Where I text you when something needs your word" and
+/// "Saved. I'll reach you here." are answers to a particular screen's question.
+enum FieldCaption {
+
+    /// What the last save this field attempted came back with.
+    ///
+    /// One value rather than two booleans: `saved && failed` is not a state a
+    /// field can be in, and a pair of flags is exactly how it becomes one. The
+    /// old Settings code kept `phoneSaved` alone, which is the same shape with
+    /// the failure half missing.
+    enum Attempt: Equatable {
+        /// Nothing has been sent since the person last touched this field.
+        case untried
+        case saved
+        case failed
+    }
+
+    enum State: Equatable {
+        case neutral
+        case valid
+        case notYetValid
+        case saveFailed
+        case saved
+    }
+
+    /// The sentence for a save that did not reach the server. ONE copy, because
+    /// somebody who meets it in Settings and again in first run is meeting the
+    /// same event, and two wordings for one event is how a product stops
+    /// sounding like one person.
+    ///
+    /// It names the cause and it does not blame the reader. `upsertOwnerPhone`
+    /// comes back false for a network that is not there; the number in the
+    /// field was already accepted by `e164` before the button was tappable.
+    static let couldNotSave = "I couldn't save that just now. I need a connection to keep it."
+
+    /// The sentence for a number `e164` refuses. It names what is missing —
+    /// the country code — because `e164` refuses to invent one, and a refusal
+    /// with no reason on screen is the dead end `DiallingCode` exists to close.
+    static let numberNotYetWhole = "That doesn't look like a full number yet — country code and all."
+
+    /// Which of the five, given what is in the field and what came back.
+    ///
+    /// `complete` is nil for a field with no completeness rule at all — a first
+    /// name is never half a name — and passing `true` there would be a claim
+    /// this type has no business making.
+    ///
+    /// THE ORDER IS THE ARGUMENT. An answer from the server outranks anything
+    /// the field can say about itself: it is newer, and it is about this exact
+    /// text, because every caller clears `attempt` on a keystroke. So a verdict
+    /// can never sit over a number it was not about.
+    ///
+    /// An empty field is neutral, never wrong. Nobody has typed anything yet,
+    /// and telling them what is missing from nothing is the app criticising its
+    /// own blank.
+    static func state(text: String, complete: Bool?, attempt: Attempt) -> State {
+        switch attempt {
+        case .saved: return .saved
+        case .failed: return .saveFailed
+        case .untried: break
+        }
+        guard let complete else { return .neutral }
+        if text.isEmpty { return .neutral }
+        return complete ? .valid : .notYetValid
+    }
+
+    /// The state as it will actually be SHOWN, given whether this call site has
+    /// a sentence of its own for a valid-but-unsaved value.
+    ///
+    /// A field with nothing extra to say there falls back to its neutral line,
+    /// and — the part that matters — to neutral's plain treatment. The
+    /// champagne tick means one thing in this app. Putting it beside "Where I
+    /// text you when something needs your word." would make it mean two: a
+    /// number that is dialable, and a number that is SAVED. On the screen where
+    /// saving is a separate button four points to the right, that is precisely
+    /// the confusion this whole component exists to stop.
+    static func rendered(_ state: State, hasValidWords: Bool) -> State {
+        (state == .valid && !hasValidWords) ? .neutral : state
+    }
+
+    /// One field's sentences.
+    struct Words: Equatable {
+        /// What the field is for, when there is nothing else to report.
+        var neutral: String
+        /// What saving it bought. Said in the first person, like the rest.
+        var saved: String
+        /// What a valid-but-unsaved value is worth saying, or nil when it is
+        /// worth saying nothing. See `rendered`.
+        var valid: String?
+        /// What a value the field's own rule refuses looks like. Defaulted to
+        /// the phone wording because every validated field in this app is a
+        /// phone field; a field passing `complete: nil` never reaches this
+        /// state, so the default cannot be read on one.
+        var notYetValid: String
+        var failed: String
+
+        init(neutral: String,
+             saved: String,
+             valid: String? = nil,
+             notYetValid: String = FieldCaption.numberNotYetWhole,
+             failed: String = FieldCaption.couldNotSave) {
+            self.neutral = neutral
+            self.saved = saved
+            self.valid = valid
+            self.notYetValid = notYetValid
+            self.failed = failed
+        }
+    }
+
+    static func sentence(_ state: State, _ words: Words) -> String {
+        switch state {
+        case .neutral: return words.neutral
+        case .valid: return words.valid ?? words.neutral
+        case .notYetValid: return words.notYetValid
+        case .saveFailed: return words.failed
+        case .saved: return words.saved
+        }
+    }
+}
+
+/// The caption under one field, in whichever of the four states it is in.
+///
+/// READY FOR THE OTHER TWO PHONE FIELDS, and deliberately not wired into them
+/// here — they are being edited by other hands this week. Each is one line:
+///
+///     // OnboardingView, the number beat
+///     FieldCaptionLine(text: phone,
+///                      complete: session.e164(phone) != nil,
+///                      attempt: phoneAttempt,
+///                      words: .init(neutral: "",
+///                                   saved: "Saved. I'll text you there.",
+///                                   valid: "That's you"))
+///
+/// Adopting it there is what makes the drift structural rather than a habit:
+/// the refusal sentence and the connection sentence would then exist once.
+///
+/// TYPE AND COLOUR ARE BOTH EXISTING ROLES. Twelve point — `.caption`, the
+/// register every other caption on the Settings form is already in — with
+/// weight, not size, carrying the affirmative. `.caption` rather than
+/// `Theme.meta`, which is the same twelve points at the same weight but fixed:
+/// `Font.system(size:)` does not answer Dynamic Type, and a failure message
+/// somebody cannot enlarge is a failure message somebody cannot read.
+///
+/// NO ALARM COLOUR ON THE FAILURE, on purpose. `Theme.alarm` is this app's word
+/// for something destructive, and a save that did not reach the server destroys
+/// nothing — the number is still in the field. `text2` is the app's "read this
+/// one" against `muted`'s "this is here if you want it", which is the same pair
+/// the first-run beat uses for the same two sentences.
+struct FieldCaptionLine: View {
+    private let state: FieldCaption.State
+    private let words: FieldCaption.Words
+
+    init(text: String,
+         complete: Bool?,
+         attempt: FieldCaption.Attempt,
+         words: FieldCaption.Words) {
+        self.words = words
+        self.state = FieldCaption.rendered(
+            FieldCaption.state(text: text, complete: complete, attempt: attempt),
+            hasValidWords: words.valid != nil)
+    }
+
+    private var sentence: String { FieldCaption.sentence(state, words) }
+
+    var body: some View {
+        switch state {
+        case .saved, .valid:
+            // The tick that already means "this is settled" on the first-run
+            // beat. `Label` reads its title to VoiceOver and treats the symbol
+            // as decoration, so the sentence is what is heard.
+            Label(sentence, systemImage: "checkmark.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .fixedSize(horizontal: false, vertical: true)
+        case .saveFailed:
+            Text(sentence)
+                .font(.caption)
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+        case .notYetValid, .neutral:
+            Text(sentence)
+                .font(.caption)
+                .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
