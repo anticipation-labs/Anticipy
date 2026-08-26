@@ -209,6 +209,86 @@ final class AnticipyBackend {
     // Nothing in this app calls it any more, so the refusal is a backstop
     // rather than a thing this file has to interpret.
 
+    /// Who the server says this account is.
+    ///
+    /// Added because the phone had no way to ASK. Every owner field on the
+    /// device is a write-only mirror: the app puts them there at sign-up and
+    /// in Settings and never reads one back, so the same account on a second
+    /// handset — or on the same handset after a reinstall — knew nothing about
+    /// itself, and the screens that ask "can I reach you?" answered from the
+    /// device rather than from the account.
+    ///
+    /// THE NUMBER LIVES IN TWO COLUMNS, and this is the whole reason this is
+    /// not a one-line record fetch. `owners.phone` is what sign-up wrote and
+    /// nothing updates again — Settings saves through `upsertOwnerPhone`,
+    /// which writes `owner_profile`. And `owner_profile.phone` is the one that
+    /// carries: it is the row an inbound text is routed through
+    /// (backend/pb_hooks/sms.pb.js:167) and the row a live run refuses to
+    /// start without (proof/live_day.py:105). So the profile answers when it
+    /// has a number, and the account record answers for the accounts that have
+    /// never been through Settings. Reading only the account record would hand
+    /// back the number somebody replaced months ago and call it current.
+    ///
+    /// THROWS rather than returning an empty owner when it could not ask. The
+    /// caller's decision turns on the difference: "" means the account has no
+    /// number and the phone should stop claiming one, and a thrown error means
+    /// nothing has been learned and nothing should change.
+    func fetchOwner(id: String) async throws -> Owner {
+        let data = try await readData(
+            from: baseURL.appendingPathComponent("api/collections/owners/records/\(id)"))
+        // A 200 carrying something this cannot parse is "I could not ask",
+        // never "you have no number". Defaulting to [:] here would have made a
+        // proxy's HTML error page read as an account with no phone on file and
+        // wiped a good one — the same swallow, one layer down, that the rest of
+        // this call is built to avoid.
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw BackendError(status: -1)
+        }
+        let saved = try await savedPhone(ownerRef: id)
+        return Owner(id: (root["id"] as? String) ?? id,
+                     email: (root["email"] as? String) ?? "",
+                     phone: saved.isEmpty ? ((root["phone"] as? String) ?? "") : saved)
+    }
+
+    /// The number Settings last saved for this account, or "" when there is no
+    /// profile row or the row has no number. A missing row is a 200 carrying an
+    /// empty `items`, so the ONLY exit that reports an absence is the server
+    /// saying so; every other way out throws. That is what keeps `fetchOwner`
+    /// unable to report a number's absence when what actually happened was a
+    /// dead network.
+    private func savedPhone(ownerRef: String) async throws -> String {
+        let listURL = baseURL.appendingPathComponent("api/collections/owner_profile/records")
+        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        let filter = "owner_ref=\"\(ownerRef)\""
+        let encodedFilter = filter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
+        comps.percentEncodedQuery = "filter=\(encodedFilter)&sort=-updated&perPage=1"
+        // Not `return ""`: an unbuildable URL is a failure to ask, and the one
+        // thing this function may never do is report a number's absence for
+        // any reason other than the server saying so.
+        guard let url = comps.url else { throw BackendError(status: -1) }
+        let data = try await readData(from: url)
+        // A body with no `items` is not a profile row saying "no number" — it is
+        // not a list answer at all, so nothing was learned. An EMPTY `items` is
+        // the answer, and the difference matters: the second means this account
+        // has never been through Settings, the first means a proxy or a captive
+        // portal answered instead of the server, and `return ""` there would
+        // have handed back the number sign-up wrote and called it current.
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = root["items"] as? [[String: Any]] else { throw BackendError(status: -1) }
+        return (items.first?["phone"] as? String) ?? ""
+    }
+
+    /// What the server holds about the person, as opposed to what this handset
+    /// remembers about them.
+    struct Owner {
+        let id: String
+        let email: String
+        /// E.164, or "" when this account has no number anywhere on the server.
+        /// Empty is an answer here, never a failure — `fetchOwner` throws for
+        /// that.
+        let phone: String
+    }
+
     /// Store the owner's number where the brain reads it. Updates the
     /// existing row for this owner rather than piling up duplicates.
     func upsertOwnerPhone(ownerID: String, phone: String) async -> Bool {

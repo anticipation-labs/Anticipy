@@ -81,6 +81,54 @@ struct AnticipyApp: App {
     }
 }
 
+/// WHO THIS PHONE THINKS YOU ARE — the device-local mirrors of the account
+/// holder, named in one place.
+///
+/// Five UserDefaults keys hold a copy of the person so a booking form can be
+/// filled without a round trip. Sign-out took the credentials and left all
+/// five, and cable install is the only way this app gets onto a device, so the
+/// phone having passed through somebody else's hands is the normal case rather
+/// than the edge one (FirstRunOwnership argues the same thing at more length).
+/// What that cost: the second person to open a handed-on phone met the door
+/// already carrying the FIRST person's email address, under the title "Welcome
+/// back."; read their first name in the tour; and reached the number beat with
+/// their number already ticked as confirmed — so the new account's
+/// confirmations would have been texted to the old owner's handset.
+///
+/// The keys live here, rather than being written out at each site, because the
+/// LIST is the part that drifts: `forgetMeOnThisPhone` in SettingsView has
+/// always cleared all five while `signOut` cleared none, and nothing in the
+/// repo could see the difference. A sixth mirror added to the session and not
+/// to `keys` is caught by app/ios/Tests/run_owner_mirror_tests.sh.
+///
+/// `ownerID` is deliberately NOT one of these. It is this device's
+/// pre-accounts identity — the `legacy_uuid` that `claimLegacy` hands the
+/// server so rows made before there were accounts can be adopted rather than
+/// orphaned — so clearing it on sign-out would strand the very rows it is the
+/// only pointer to. Forgetting the person and rotating the device are
+/// different acts; only Settings' "Forget me on this phone" does the second.
+enum OwnerMirror {
+    static let phone = "ownerPhone"
+    static let firstName = "ownerFirstName"
+    static let lastName = "ownerLastName"
+    static let email = "ownerEmail"
+    static let birthday = "ownerBirthday"
+
+    /// Every mirror above. Adding a constant without adding it here is the
+    /// exact drift this type exists to stop, and is what the gate reads.
+    static let keys = [phone, firstName, lastName, email, birthday]
+
+    /// Forget whoever this phone was last used by.
+    ///
+    /// Removing the key rather than writing "" reads identically everywhere it
+    /// is read — @AppStorage falls back to its declared default, and
+    /// AnticipyVocabulary's `string(forKey:)` goes nil — and it leaves nothing
+    /// on disk to be found later.
+    static func clear(in defaults: UserDefaults = .standard) {
+        for key in keys { defaults.removeObject(forKey: key) }
+    }
+}
+
 /// App-level state: transcript, agent jobs, backend health. Polls the backend
 /// so the proactive feed stays live while the app is open.
 @MainActor
@@ -243,11 +291,14 @@ final class AnticipySession: ObservableObject {
         }
     }
 
-    @AppStorage("ownerPhone") var ownerPhone = ""
-    @AppStorage("ownerFirstName") var ownerFirstName = ""
-    @AppStorage("ownerLastName") var ownerLastName = ""
-    @AppStorage("ownerEmail") var ownerEmail = ""
-    @AppStorage("ownerBirthday") var ownerBirthday = ""
+    // The five device-local mirrors of the account holder. Keyed through
+    // OwnerMirror so the list that clears them cannot drift away from the list
+    // that declares them; see that type for what the drift cost.
+    @AppStorage(OwnerMirror.phone) var ownerPhone = ""
+    @AppStorage(OwnerMirror.firstName) var ownerFirstName = ""
+    @AppStorage(OwnerMirror.lastName) var ownerLastName = ""
+    @AppStorage(OwnerMirror.email) var ownerEmail = ""
+    @AppStorage(OwnerMirror.birthday) var ownerBirthday = ""
 
     var backend: AnticipyBackend {
         AnticipyBackend(
@@ -707,6 +758,21 @@ final class AnticipySession: ObservableObject {
         await backend.claimLegacy(legacyUUID: ownerID)
         await reportTimeZone()
         await refresh()
+        // ASK AGAIN, but only while this phone believes there is nothing to
+        // reach the person on. `signIn` is the only other place that asks, and
+        // it asks at the worst network moment in the app — the second after a
+        // sign-in form, often on the connection that made them sign in again —
+        // so a read that failed there used to leave the phone holding "" until
+        // the next sign-out and sign-in. Empty is the one state the screens
+        // read as a FACT about the account ("I have no way to reach you"),
+        // which is why it is the one state worth re-asking about.
+        //
+        // Last in this function, and gated: an account that genuinely has no
+        // number pays one read per launch, and nothing here stands between a
+        // launch and the feed.
+        if ownerPhone.isEmpty, let owner = try? await backend.fetchOwner(id: accountID) {
+            ownerPhone = owner.phone
+        }
     }
 
     /// Save the owner's number where the brain can read it, so texting works
@@ -1242,6 +1308,28 @@ final class AnticipySession: ObservableObject {
             // otherwise a new customer sees the literal placeholder
             // "you@example.com" after signing up with their real address.
             ownerEmail = email.trimmingCharacters(in: .whitespaces).lowercased()
+            // AND THE NUMBER FROM THE SERVER, rather than from whatever this
+            // handset happened to be carrying. `ownerPhone` is device-local and
+            // is written by exactly two things — `saveOwnerPhone` and `signUp` —
+            // so signing into an existing account on a new phone, or on the same
+            // phone after a reinstall, left it empty while the server held a
+            // real number, and every screen that answers "can I reach you?"
+            // answered from the handset instead of from the account. Now that
+            // sign-out clears the mirrors, this read is the only thing that puts
+            // a true one back.
+            //
+            // An answer of "" is a FACT and is written through: the account has
+            // no number, and leaving a stale one on the phone is how the last
+            // owner's number used to survive a sign-out.
+            //
+            // A read that FAILED is not that fact, so it changes nothing. On a
+            // train, in a tunnel, `try?` collapses "the account has no number"
+            // and "I could not ask" into the same nil — and telling somebody
+            // with a number on file that we have no way to reach them is the
+            // same confident falsehood this whole change is about.
+            if let owner = try? await backend.fetchOwner(id: id) {
+                ownerPhone = owner.phone
+            }
             // Adopt this device's pre-accounts rows onto the account before the
             // first refresh, so the feed is already theirs when it paints.
             await backend.claimLegacy(legacyUUID: ownerID)
@@ -1274,6 +1362,15 @@ final class AnticipySession: ObservableObject {
         // outlives the session that raised it, so without this the next person
         // to pick up the phone reads what the last one was asked to approve.
         notifier.clearAll()
+        // And forget the PERSON, not just their session. The fourth catch of
+        // this same class in this one function — the ears kept transcribing,
+        // the parent_line pointer crossed accounts, the notifications outlived
+        // the session, and all along the five owner mirrors outlived the owner.
+        // Nothing here is a credential, which is exactly why it was missed:
+        // they are the answers to "who are you", and the next person to open
+        // this phone was shown them as if they were their own. The list lives
+        // in OwnerMirror so this line cannot fall behind the one in Settings.
+        OwnerMirror.clear()
         pendingCount = unsent.count
     }
 
