@@ -307,7 +307,40 @@ settings:
     # a false privacy promise is worse than the practice it describes. Info.plist
     # only; no code changed, which is exactly why the build number has to move:
     # 88 is already installed on a phone and says something different.
-    CURRENT_PROJECT_VERSION: "89"
+    # 90: the phone can decide what to do with a calendar errand, and the
+    # Bluetooth sentence stops coming back from the dead.
+    #
+    # `Backend/CalendarHandPolicy.swift` is rung 0 of
+    # research/2026-08-26-hands2-better-answer.md: the app already holds full
+    # calendar access and already polls the job channel every three seconds, so
+    # what was missing was never plumbing, it was a DECISION. The policy is pure
+    # Foundation — no EventKit, no store, no clock of its own — so "what will
+    # the hand do with this job" is answerable on a laptop.
+    #
+    # WHAT MAKES IT LEGAL, and it is the whole reason the type exists.
+    # docs/superpowers/specs/2026-08-24-shelf-2-redesign.md §4: "An act is
+    # admissible only when undoing it requires nothing the act produced."
+    # EKEvent.eventIdentifier is assigned BY EVENTKIT ON SAVE, so an undo that
+    # looks it up is exactly the shape §6.1 excludes by name. So the id is
+    # MINTED BY US before the act, rides on the event's `url`, and the undo is a
+    # SEARCH for our own id — never a lookup of theirs. It rides on `url` and
+    # not on `notes` because the permission string the owner already read says
+    # "She never reads the notes or the invitees", and an undo that searched
+    # notes would read the notes of every event in its window.
+    #
+    # THE BYTES MOVE AND THE BEHAVIOUR DOES NOT. Nothing calls the policy yet:
+    # the EKEventStore executor behind it is NOT written, deliberately, because
+    # a calendar write is not in the admitted set (brain/workflow.py
+    # ADMITTED_ACT_TYPES has one member and it is `local_draft`) and §10.1's
+    # conditions 2, 3 and 6 are unmet. `admittedForActAndTell` is EMPTY: this
+    # hand refuses to move without the server's own approval record bound to the
+    # exact plan version, so it carries no second copy of the confirmation gate.
+    #
+    # And the Bluetooth permission string. Build 89 fixed it in Info.plist and
+    # not in project.yml, which is the file `xcodegen generate` writes FROM — so
+    # adding any source file resurrects the vendor sentence. Fixed at the source
+    # this time. See the note on the key itself.
+    CURRENT_PROJECT_VERSION: "90"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -414,7 +447,19 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - audio
-        NSBluetoothAlwaysUsageDescription: Anticipy connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.
+        # BUILD 89 FIXED THIS SENTENCE IN Info.plist AND NOT HERE, AND THIS FILE
+        # IS THE ONE THAT WINS. `xcodegen generate` regenerates Info.plist from
+        # these properties, so the next person to run it — required for any new
+        # source file — silently wrote the vendor sentence back on top of the
+        # fix. That is where the uncommitted Info.plist change in this tree came
+        # from, and it is why `run_build_number_tests.sh` was already red before
+        # anything in build 90 was written.
+        #
+        # The lane it described was deleted from both server and client in build
+        # 84. This is what iOS renders at the prompt, so it is the sentence a
+        # person actually reads before deciding, and a false privacy promise is
+        # worse than the practice it describes.
+        NSBluetoothAlwaysUsageDescription: Anticipy connects to your pendant over Bluetooth. The pendant does not transcribe yet — its audio used to be sent to a transcription company, and that was removed because raw audio should never leave your devices. Only needed if you have a pendant.
         # These describe what actually happens: capture continues in the
         # background, and the resulting TEXT is sent to Anticipy's server so she
         # can act on it. The old strings promised "on-device transcription" and

@@ -30,6 +30,15 @@ sh "$HERE/run_capture_source_tests.sh"
 sh "$HERE/run_first_run_tests.sh"
 sh "$HERE/run_enrollment_offer_tests.sh"
 sh "$HERE/run_job_receipt_tests.sh"
+# The phone as a HAND, for one verb. Placed beside the receipt because it is the
+# same argument from the other end: that one asks what the server proved before
+# the card says "done", this one asks what has to be true before the phone
+# touches the calendar at all. Its load-bearing leg is that the undo resolves
+# from an id WE minted — EKEvent.eventIdentifier is assigned by EventKit ON
+# SAVE, and an undo that needs it is the shape the Shelf 2 spec excludes by
+# name. Early, like the three above it: `set -eu` stops this file at the first
+# failure, so a suite placed late is a suite that may never run.
+sh "$HERE/run_calendar_hand_tests.sh"
 # LOCAL-FIRST rule 1, the iOS half: no vendor socket, no vendor credential, no
 # retry loop against a permanent refusal, and copy that says what is true.
 sh "$HERE/run_local_ears_tests.sh"
