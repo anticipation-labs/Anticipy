@@ -312,6 +312,14 @@ const MIGRATIONS = args[1];
 
 const logs = [];
 let up = null;
+// REAL POCKETBASE FIELDS EXPOSE `type` AS A METHOD, NOT A PROPERTY.
+// This mock handed back the raw spec object, where `type` is a plain string —
+// so `String(image.type) !== "file"` was FALSE here and TRUE in production, and
+// the migration passed every test while PocketBase refused to boot on it for
+// weeks. A mock that is kinder than the runtime is not a test; it is a way of
+// not finding out. Verified against pocketbase 0.30.4: `image.type()` returns
+// "file" and `image.type` is a native function.
+const asField = (f) => f && Object.assign({}, f, { type: () => f.type });
 const ctx = {
   console: { log: (...p) => logs.push(p.map(String).join(' ')) },
   migrate: (u) => { up = u; },
@@ -326,7 +334,7 @@ const ctx = {
     this.deleteRule = spec.deleteRule;
     this.indexes = [];
     this.fields = {
-      getByName: (n) => this.rawFields.filter((f) => f.name === n)[0] || null,
+      getByName: (n) => asField(this.rawFields.filter((f) => f.name === n)[0]) || null,
     };
   },
   Field: function (spec) { Object.assign(this, spec); },
@@ -354,7 +362,7 @@ const app = {
     if (drop === 'updateRule') copy.updateRule = '';
     if (drop === 'deleteRule') copy.deleteRule = '';
     copy.fields = {
-      getByName: (n) => copy.rawFields.filter((f) => f.name === n)[0] || null,
+      getByName: (n) => asField(copy.rawFields.filter((f) => f.name === n)[0]) || null,
     };
     return copy;
   },
