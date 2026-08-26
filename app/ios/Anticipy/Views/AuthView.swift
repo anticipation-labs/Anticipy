@@ -115,9 +115,17 @@ struct AuthView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// THE GREETING MOVED, SO THE DOOR STOPPED SAYING IT TWICE.
+    ///
+    /// This read "I'm Anticipy." and the welcome beat opens with "I'm
+    /// Anticipy. I listen, I remember what matters, and I quietly do the
+    /// work." — which was a repetition even when the door came first, and is a
+    /// plain contradiction now that the welcome beat comes BEFORE it. By the
+    /// time somebody reaches this screen they have been introduced; what they
+    /// have not done is make the thing theirs.
     private var title: String {
         switch mode {
-        case .signUp: return "I'm Anticipy."
+        case .signUp: return "Let's make it yours."
         case .signIn: return "Welcome back."
         case .forgot: return "Let's get you back in."
         case .code:   return "Check your phone."
@@ -137,9 +145,21 @@ struct AuthView: View {
     /// Both figures are the shipped budget, not invention:
     /// `CONSUMER-FEEL-DIRECTION-2026-08-03.md` §5 opens the door at 0:00 and
     /// leaves it at 0:20, and lands on Home at 1:00.
+    ///
+    /// AND THEY SURVIVED THE REORDER, deliberately. The first half of this
+    /// sentence was rewritten to name the three things the screen actually
+    /// asks for — the prescription for that rewrite dropped both numbers, and
+    /// dropping them would have put the door back to being the one screen in
+    /// first run that sets no expectation at all. The numbers are still true
+    /// after the reorder because the reorder moved two beats, it did not add
+    /// or remove one: this screen is still about twenty seconds of typing, and
+    /// the whole run is still about a minute. "In all" means the whole run,
+    /// which is why it does not become false by being read twenty seconds
+    /// later than it used to be. `run_first_run_copy_tests.sh` holds the
+    /// second half of the sentence verbatim.
     private var subtitle: String {
         switch mode {
-        case .signUp: return "Make an account and I'll start keeping your day for you. Twenty seconds here, about a minute in all."
+        case .signUp: return "An email, a password, and the number I text you on. Twenty seconds here, about a minute in all."
         case .signIn: return "Your email and password, and everything's where you left it."
         case .forgot: return "Tell me the email you signed up with and I'll text you a code."
         case .code:   return "I've sent a 6-digit code to your phone. Enter it and pick a new password."

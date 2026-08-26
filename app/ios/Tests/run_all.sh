@@ -28,6 +28,13 @@ sh "$HERE/run_capture_source_tests.sh"
 # after it is unreachable today. That is pre-existing and not fixed here, but a
 # suite nobody can reach is a suite nobody has.
 sh "$HERE/run_first_run_tests.sh"
+# WHICH screen that first run opens on, now that the sign-in door stands in
+# the middle of it. The two beats that ask for nothing moved in front of the
+# door, which makes three states real that nobody can reach by tapping:
+# force-quitting between the second beat and the door, signing out and handing
+# the phone on, and reinstalling onto an account that already exists. Beside
+# the ownership suite, and early, for the reachability reason above.
+sh "$HERE/run_first_run_route_tests.sh"
 # Whose phone is this — the same question one step earlier. First-run ownership
 # decides whether the TOUR replays for a new account; this decides whether the
 # five device-local answers to "who are you" go with the account that left.

@@ -93,9 +93,29 @@ if ! grep -q '@AppStorage(FirstRunOwnership.flagKey)' "$root"; then
 fi
 
 # And the routing must still be what the flag decides, or none of it matters.
-if ! grep -q 'else if hasOnboarded {' "$root"; then
-    echo "AnticipyApp no longer routes to Home on the onboarding flag."
+#
+# FOLLOWED, AS THE MESSAGE BELOW ASKED. This read `else if hasOnboarded {` and
+# the chain it was reading is gone: two beats of the walkthrough moved in front
+# of the sign-in door, so the routing is a decision over three durable facts
+# rather than two nested ifs, and it lives in `FirstRunRoute.decide`. The flag
+# is still what sends somebody to Home — it is now one of the arguments rather
+# than the second `if` — so the check follows it there. Which screen each of
+# the six states opens on is walked by run_first_run_route_tests.sh; what is
+# checked HERE is only that the tour flag still reaches the decision at all.
+if ! grep -q 'FirstRunRoute.decide(' "$root"; then
+    echo "AnticipyApp no longer routes on a first-run decision."
     echo "Whatever decides that now is what these checks should follow."
+    exit 2
+fi
+if ! grep -q 'hasOnboarded: hasOnboarded' "$root"; then
+    echo "The routing decision is no longer given the onboarding flag."
+    echo "Clearing it in signIn then re-routes nothing: the stranger lands"
+    echo "straight on the feed with no microphone primer, which is the whole"
+    echo "bug this suite exists for."
+    exit 2
+fi
+if ! grep -q 'case .home:' "$root"; then
+    echo "AnticipyApp no longer has a route to Home."
     exit 2
 fi
 echo "sign-in consults the policy, clears the flag, and routing still reads it"

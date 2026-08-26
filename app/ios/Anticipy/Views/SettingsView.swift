@@ -16,6 +16,11 @@ struct SettingsView: View {
     /// string, which is exactly how a rename leaves a "Replay the welcome
     /// tour" button that silently replays nothing.
     @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
+    /// AND THE INTRODUCTION, because "Replay the welcome tour" names it. The
+    /// two pre-auth beats are in front of the sign-in door now, so clearing
+    /// only `hasOnboarded` would replay the microphone and the number and skip
+    /// the welcome — the one screen the button and its alert both promise.
+    @AppStorage(FirstRunOwnership.introKey) private var hasSeenIntro = false
     /// When a timed pause is due to end, as seconds since the reference date;
     /// 0 means "not paused". On disk rather than in @State so the deadline
     /// survives walking away from this screen — the promise on the label has
@@ -792,7 +797,13 @@ struct SettingsView: View {
                 Button("Replay the welcome tour") { confirmReplay = true }
                     .ghostRow()
                     .alert("Replay the welcome tour?", isPresented: $confirmReplay) {
-                        Button("Replay it") { hasOnboarded = false }
+                        // BOTH FLAGS. The alert below says "It's the few
+                        // screens you saw when you first opened me", and two
+                        // of those screens are now in front of the door.
+                        Button("Replay it") {
+                            hasOnboarded = false
+                            hasSeenIntro = false
+                        }
                         Button("Not now", role: .cancel) { }
                     } message: {
                         Text("It's the few screens you saw when you first opened me. Nothing you've set up changes. Your number, your details and your pendant all stay exactly as they are.")

@@ -57,6 +57,7 @@
 		C4D475F4BA8EF258C2B27C02 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94C340A3EF64050C750BCD7 /* SettingsView.swift */; };
 		CC601CF895488D6287CAE43B /* LifeContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2204C09ACF068DDA67C8698 /* LifeContext.swift */; };
 		D87272FC45C0E3640E24CA7E /* PhoneListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E88365017E289B62475F24B /* PhoneListener.swift */; };
+		DE2EC9071B7B6679C15CD663 /* FirstRunRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A21EEC853025953C7054F27 /* FirstRunRoute.swift */; };
 		DF7FA9230D7805FDA8A970B1 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F02D4F43DF4322168E31300 /* Notifier.swift */; };
 		E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A935B05F51033496D5EF92C9 /* HapticEngine.swift */; };
 		ED4C192DBA74F48570C51171 /* ListenControlPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AEC26D9D9B455416E10BED /* ListenControlPolicy.swift */; };
@@ -90,6 +91,7 @@
 		57259004332BAAB061719DF1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		57AEC26D9D9B455416E10BED /* ListenControlPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenControlPolicy.swift; sourceTree = "<group>"; };
 		5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */ = {isa = PBXFileReference; path = "speaker-embedding.onnx"; sourceTree = "<group>"; };
+		6A21EEC853025953C7054F27 /* FirstRunRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstRunRoute.swift; sourceTree = "<group>"; };
 		6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentOfferPolicy.swift; sourceTree = "<group>"; };
 		6FAF817396F0334028162D23 /* EnrollmentInvite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentInvite.swift; sourceTree = "<group>"; };
 		70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyApp.swift; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 				C2B835B3131A011B32F5BC29 /* ContextTrigger.swift */,
 				CC63113A7DFEF69864A019F5 /* DiallingCode.swift */,
 				DC43B1EEB7B717196947EE8E /* FirstRunOwnership.swift */,
+				6A21EEC853025953C7054F27 /* FirstRunRoute.swift */,
 				A935B05F51033496D5EF92C9 /* HapticEngine.swift */,
 				46B2C841F09576CCA3A85B50 /* Info.plist */,
 				EDB2A40B487A55305B6FC7A2 /* Interview.swift */,
@@ -344,6 +347,7 @@
 				9AD34E051260F373C845DFB3 /* EnrollmentInvite.swift in Sources */,
 				7B0222C65B8F9DDFC8855FEF /* EnrollmentOfferPolicy.swift in Sources */,
 				73A1C82CB7B99AB4795A3598 /* FirstRunOwnership.swift in Sources */,
+				DE2EC9071B7B6679C15CD663 /* FirstRunRoute.swift in Sources */,
 				78EE68DCD42670CAD7886BDC /* GlassControls.swift in Sources */,
 				E0399DE3177D5DBB578A47FB /* HapticEngine.swift in Sources */,
 				A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */,
@@ -435,7 +439,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 93;
+				CURRENT_PROJECT_VERSION = 94;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -514,7 +518,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 93;
+				CURRENT_PROJECT_VERSION = 94;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

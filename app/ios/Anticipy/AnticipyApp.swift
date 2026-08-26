@@ -10,6 +10,10 @@ struct AnticipyApp: App {
     /// declared in FirstRunOwnership because the account lifecycle clears it
     /// and two copies of the string would be a clear that clears nothing.
     @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
+    /// WHETHER THIS PERSON HAS BEEN INTRODUCED TO THE PRODUCT YET. Also
+    /// declared in FirstRunOwnership, and cleared on the same lines as the
+    /// tour flag — see the note beside `introKey`.
+    @AppStorage(FirstRunOwnership.introKey) private var hasSeenIntro = false
     /// LIGHT UNLESS YOU CHOSE DARK. This line used to read
     /// `.preferredColorScheme(.dark)` a few lines down, which is why the app
     /// was dark for everybody with no way out of it.
@@ -27,21 +31,60 @@ struct AnticipyApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if !session.isSignedIn {
-                    // The door comes first. Everything past it belongs to a
-                    // person; nothing before it does.
+                // THE DOOR NO LONGER COMES FIRST, and that is the change.
+                // It used to: a stranger typed an email, a password AND a
+                // phone number before the product had produced one single
+                // thing of its own. The two beats that ask for nothing —
+                // the introduction and how she works — happen in front of
+                // it now, and the two that need an account stay behind it.
+                //
+                // The microphone primer is one of the two that stay, and
+                // that is a safety property rather than a preference:
+                // `heard` attempts a live push before it ever queues, so a
+                // microphone running before an account exists would post a
+                // stranger's room to the server. FirstRunRoute's header
+                // argues it in full; nothing here may move `.mic` forward.
+                //
+                // Which screen, for which of the six states, is decided by
+                // a pure type so the states nobody can reach by tapping —
+                // force-quitting between the second beat and the door, a
+                // second person signing in on a handed-on phone — are
+                // walked by run_first_run_route_tests.sh instead of by
+                // somebody with a simulator and a hunch.
+                switch FirstRunRoute.decide(hasSeenIntro: hasSeenIntro,
+                                            isSignedIn: session.isSignedIn,
+                                            hasOnboarded: hasOnboarded) {
+                case .intro:
+                    // Pre-auth. Nothing durable about an ACCOUNT may be
+                    // written from here — there is no account — so this
+                    // closure records the one fact that did happen and
+                    // stops. The route flips to `.door` on the next frame
+                    // because `hasSeenIntro` is what it reads.
+                    OnboardingView(segment: .intro, onFinished: {
+                        hasSeenIntro = true
+                    })
+                    .transition(.opacity)
+                case .door:
                     AuthView()
                         .transition(.opacity)
-                } else if hasOnboarded {
+                case .home:
                     HomeView()
                         .transition(.opacity)
-                } else {
-                    OnboardingView(onFinished: {
+                case .tour(let segment):
+                    OnboardingView(segment: segment, onFinished: {
                         // Order matters, and it is the whole fix: write the
                         // durable fact FIRST, then decorate. The old code did
                         // it the other way round — the flag was the last line
                         // of a 2.4s animation — so an interrupted animation
                         // meant doing all five steps again.
+                        //
+                        // Both flags, because `.whole` is a journey through
+                        // the introduction as well as the tour: a person who
+                        // walked all four beats behind the door has been
+                        // introduced, and leaving `hasSeenIntro` false would
+                        // send them back through the two pre-auth beats the
+                        // next time they signed out. Idempotent in `.rest`.
+                        hasSeenIntro = true
                         hasOnboarded = true
                         celebrating = true
                     })
@@ -70,6 +113,10 @@ struct AnticipyApp: App {
             // The three biggest state changes in the product used to hard-cut.
             .animation(Theme.springSlow, value: session.isSignedIn)
             .animation(Theme.springSlow, value: hasOnboarded)
+            // The fourth of them now: clearing the second pre-auth beat is a
+            // whole-screen change like the other three, and a hard cut there
+            // would be the one hard cut left in first run.
+            .animation(Theme.springSlow, value: hasSeenIntro)
             .environmentObject(pendant)
             .environmentObject(session)
             // Pinning the scheme is also what makes every Theme token resolve:
@@ -766,6 +813,17 @@ final class AnticipySession: ObservableObject {
         case .adopt:
             onboardedAccount = accountID
         case .replay:
+            // AND THE INTRODUCTION WITH IT — but only when this phone already
+            // carries somebody's first run. `arriving` answers `.replay` for a
+            // brand-new sign-up too (an empty owner id is not the id just
+            // minted), and clearing the intro flag there would walk every new
+            // customer through the welcome typewriter and the how-it-works
+            // cards a second time, forty seconds after the first. Read BEFORE
+            // the two lines below overwrite what it is reading.
+            if !FirstRunRoute.introSurvivesReplay(onboardedAccount: onboardedAccount,
+                                                  hasOnboarded: hasOnboarded) {
+                hasSeenIntro = false
+            }
             hasOnboarded = false
             onboardedAccount = accountID
         }
@@ -1252,6 +1310,11 @@ final class AnticipySession: ObservableObject {
     /// clearing the flag here re-routes the app to the tour on the next frame.
     @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
     @AppStorage(FirstRunOwnership.ownerKey) private var onboardedAccount = ""
+    /// AND WHETHER THE PERSON HOLDING IT HAS BEEN INTRODUCED. Cleared on the
+    /// same `.replay` decision as the tour flag, on the line below it, at both
+    /// sites — a different person is about to use this phone, and the two
+    /// pre-auth beats are part of what they have not been shown.
+    @AppStorage(FirstRunOwnership.introKey) private var hasSeenIntro = false
 
     /// Make an account. The device's existing `ownerID` rides up as
     /// `legacy_uuid`, so everything already stamped with it — jobs, profile,
@@ -1314,6 +1377,17 @@ final class AnticipySession: ObservableObject {
             case .adopt:
                 onboardedAccount = id
             case .replay:
+                // AND THE INTRODUCTION WITH IT — but only when this phone already
+                // carries somebody's first run. `arriving` answers `.replay` for a
+                // brand-new sign-up too (an empty owner id is not the id just
+                // minted), and clearing the intro flag there would walk every new
+                // customer through the welcome typewriter and the how-it-works
+                // cards a second time, forty seconds after the first. Read BEFORE
+                // the two lines below overwrite what it is reading.
+                if !FirstRunRoute.introSurvivesReplay(onboardedAccount: onboardedAccount,
+                                                      hasOnboarded: hasOnboarded) {
+                    hasSeenIntro = false
+                }
                 hasOnboarded = false
                 onboardedAccount = id
             }

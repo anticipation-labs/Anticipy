@@ -391,7 +391,24 @@ settings:
     # property doing three live reads. A comment that misdirects the next
     # reader is a defect in a codebase whose first rule is to read the comment
     # above the line, so 92 and these bytes disagree about that too.
-    CURRENT_PROJECT_VERSION: "93"
+    # 94: the sign-in door is no longer the first thing the product says. A
+    # stranger used to type an email, a password AND a phone number before the
+    # app had produced one single thing of its own; the two beats that ask for
+    # nothing — the introduction, and how she works — happen in front of the
+    # door now, and the door stops saying "I'm Anticipy." a second time after
+    # the welcome beat has already said it. What sits behind the door is
+    # unchanged, deliberately: the microphone primer may not move, because
+    # `heard` attempts a live push before it queues and a microphone running
+    # before an account exists posts a stranger's room to the server.
+    #
+    # A person can now be in three states no build before this one had: they
+    # can force-quit between the introduction and the door, hand the phone to
+    # somebody who signs into their own account halfway through, or reinstall
+    # onto an account that already exists. `FirstRunRoute` decides all six
+    # states and `hasSeenIntro` is what makes the first of them survive a
+    # relaunch — so 93 and these bytes disagree about which screen a launch
+    # opens on, which is the largest thing a build number can disagree about.
+    CURRENT_PROJECT_VERSION: "94"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

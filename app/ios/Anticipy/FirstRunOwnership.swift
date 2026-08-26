@@ -55,6 +55,28 @@ enum FirstRunOwnership {
     static let flagKey = "hasOnboarded"
     static let ownerKey = "onboardedAccount"
 
+    /// AND THE THIRD, for the two beats that now happen in front of the door.
+    ///
+    /// STORED PER DEVICE, GOVERNED PER ACCOUNT. It has to be stored on the
+    /// handset because at the moment it is written there is no account to key
+    /// it to — a person walking the introduction has not made one yet, which
+    /// is the entire point of moving those beats. But an introduction is said
+    /// to a PERSON, not to a handset, and a purely per-device flag would
+    /// re-open the exact hole this file was written to close, on the two beats
+    /// it just moved: the installer opens the app, walks welcome and
+    /// how-it-works, sets the flag, and the real owner who signs up next is
+    /// never introduced to the product at all.
+    ///
+    /// So it is cleared on the SAME `Decision` that clears `flagKey`, on the
+    /// same lines, at all three sites. The two cannot drift apart because
+    /// neither is ever written without the other, and
+    /// `run_first_run_route_tests.sh` reads those sites rather than trusting
+    /// the pairing.
+    ///
+    /// Declared here for the reason above: a second copy of the string is how
+    /// a rename leaves behind a clear that silently clears nothing.
+    static let introKey = "hasSeenIntro"
+
     /// What to do with the tour flag. `replay` means clear it — the person
     /// about to use this phone has not been shown first run.
     enum Decision: Equatable {

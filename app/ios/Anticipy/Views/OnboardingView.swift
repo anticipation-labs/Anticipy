@@ -2,7 +2,17 @@ import SwiftUI
 import Speech
 
 /// First-run walkthrough: welcome → how it works → may I listen → where to
-/// reach you.
+/// reach you — and the sign-in door now stands between the second and the
+/// third of them.
+///
+/// This view is instantiated with a `FirstRunSegment` and carries only that
+/// segment's pages. The reason it is split at all is that a stranger used to
+/// type an email, a password AND a phone number before the product had
+/// produced one single thing of its own; the two beats that ask for nothing
+/// moved in front of the door and the two that need an account stayed behind
+/// it. Which segment shows on which launch is `FirstRunRoute.decide`, and the
+/// microphone beat may never be moved into `.intro` — `heard` pushes live
+/// before it queues, so that is a stranger's room on the server, not a demo.
 ///
 /// Two things used to be wrong at the shape level. The pendant was presented as
 /// the microphone, so a stranger with no hardware finished believing they
@@ -33,10 +43,39 @@ struct OnboardingView: View {
     /// saved. Recording the fact and celebrating it are now two different jobs.
     let onFinished: () -> Void
 
-    @State private var step = 0
+    /// WHICH BEATS THIS INSTANCE IS CARRYING. The walkthrough is split across
+    /// the sign-in door now: `.intro` is the two beats in front of it, `.rest`
+    /// is the two behind it, and `.whole` is all four for somebody who reached
+    /// the tour without the introduction — a second person signing in on a
+    /// handed-on phone. `AnticipyApp` picks one through `FirstRunRoute`.
+    let segment: FirstRunSegment
+
+    /// Whether the two pre-auth beats have been cleared on this device. Written
+    /// HERE as well as by the caller, because the beat is cleared here and a
+    /// durable fact belongs on the line that makes it true rather than at the
+    /// tail of whatever animation happens to follow.
+    @AppStorage(FirstRunOwnership.introKey) private var hasSeenIntro = false
+
+    /// THE ABSOLUTE BEAT INDEX, in every segment. `.rest` starts at
+    /// `Step.mic` = 2 rather than at 0, which is what lets the progress track
+    /// stay a plain function of `step` and lets every `Step.x` comparison in
+    /// this file keep meaning what it meant.
+    @State private var step: Int
     /// The step we were on before the last change, so a *swipe* off the number
     /// step can save it too. Only the Continue button ever used to save.
-    @State private var lastStep = 0
+    ///
+    /// SEEDED FROM THE SAME PLACE AS `step`. Left at 0 in `.rest` it would
+    /// record a `previous` that nobody was ever on; that cannot produce a
+    /// wrong save today, because only `previous == Step.phone` matters and
+    /// 0 is not 3, but it is a wrong value one edit away from mattering.
+    @State private var lastStep: Int
+
+    init(segment: FirstRunSegment, onFinished: @escaping () -> Void) {
+        self.segment = segment
+        self.onFinished = onFinished
+        _step = State(initialValue: segment.firstStep)
+        _lastStep = State(initialValue: segment.firstStep)
+    }
 
     // Phone number
     @State private var phone = ""
@@ -74,27 +113,43 @@ struct OnboardingView: View {
     /// it cannot pay back. See EnrollmentInvite for the whole argument.
     @State private var inviting = false
 
-    /// Four beats. The browser was a fifth until `design/day-zero.md:237-239`
-    /// took it out of first run; nothing here may exceed the ~70-second budget
-    /// in `CONSUMER-FEEL-DIRECTION-2026-08-03.md` §5.
-    private enum Step {
-        static let welcome = 0
-        static let howItWorks = 1
-        static let mic = 2
-        static let phone = 3
-        static let count = 4
-    }
+    /// Four beats, and they live in `FirstRunRoute.swift` now — the routing
+    /// has to name them too, and Foundation-only is what lets the six launch
+    /// states be walked without a simulator. The alias is what keeps every
+    /// `Step.mic`, `.tag(Step.phone)` and `step += 1` in this file untouched.
+    ///
+    /// The browser was a fifth beat until `design/day-zero.md` took it out of
+    /// first run; nothing here may exceed the ~70-second budget in
+    /// `CONSUMER-FEEL-DIRECTION-2026-08-03.md` §5.
+    private typealias Step = FirstRunBeat
 
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                progressTrack
+                // NO NUMBER IS HONEST IN FRONT OF THE DOOR, so no number is
+                // shown there. On how-it-works pre-auth the person has one
+                // beat behind them, and the track's rule is that it never
+                // opens at 1; the other available number, the absolute
+                // "3 of 5", counts an account nobody has made yet. Both
+                // permitted numbers are forbidden. `FirstRunSegment.showsTrack`
+                // carries the derivation so it can be read without a screen.
+                //
+                // This does NOT replace the opacity modifier inside
+                // `progressTrack`. That one is about `.whole`, where welcome
+                // is a real page and must still not be counted. Two
+                // mechanisms, two different reasons, both needed.
+                if segment.showsTrack {
+                    progressTrack
+                }
                 TabView(selection: $step) {
-                    welcome.tag(Step.welcome)
-                    howItWorks.tag(Step.howItWorks)
-                    micPrimer.tag(Step.mic)
-                    yourNumber.tag(Step.phone)
+                    // The pages this segment carries, and only those. A
+                    // `micPrimer` rendered in `.intro` is not a cosmetic
+                    // mistake — it is a microphone in front of an account,
+                    // and `heard` pushes live before it queues.
+                    ForEach(segment.pages, id: \.self) { beat in
+                        page(beat).tag(beat)
+                    }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(Theme.springSlow, value: step)
@@ -128,6 +183,22 @@ struct OnboardingView: View {
         }
     }
 
+    /// One beat by its absolute index. `default` is unreachable while
+    /// `FirstRunSegment.pages` only ever holds these four, which
+    /// `run_first_run_route_tests.sh` asserts along with `FirstRunBeat.count`
+    /// — a fifth beat added to the indices and not to this switch goes red
+    /// there rather than rendering a blank page on a stranger's first run.
+    @ViewBuilder
+    private func page(_ beat: Int) -> some View {
+        switch beat {
+        case Step.welcome:    welcome
+        case Step.howItWorks: howItWorks
+        case Step.mic:        micPrimer
+        case Step.phone:      yourNumber
+        default:              EmptyView()
+        }
+    }
+
     /// The last beat is cleared. Offer the voice invite if it can actually
     /// work, otherwise end the walkthrough exactly as it always did.
     ///
@@ -136,6 +207,18 @@ struct OnboardingView: View {
     /// two exits come to disagree about whether a tour is over.
     @MainActor
     private func finish() {
+        // IN FRONT OF THE DOOR, "the last beat is cleared" means the door is
+        // next — not that first run is over. A voice-enrolment offer raised
+        // here would be asking a stranger to record their voice for an account
+        // that does not exist. On the shipping build EnrollmentOfferPolicy
+        // returns false anyway, because sherpa-onnx is unlinked and
+        // `SpeakerTagger.available` is therefore false — but leaning on that
+        // is accidental safety, and accidental safety is what this whole
+        // change is about.
+        guard segment.endsTheTour else {
+            onFinished()
+            return
+        }
         if EnrollmentOfferPolicy.presents(
             engineAvailable: session.speakerTagger.available,
             hasOwnerProfile: session.speakerTagger.hasOwnerProfile) {
@@ -170,6 +253,23 @@ struct OnboardingView: View {
     /// shrinking to illegible, and at accessibility sizes they would wrap and
     /// shove the TabView down the screen — the same reason only the live beat
     /// has ever said its name here.
+    ///
+    /// -- THE INVARIANT THE NEXT AGENT WILL OTHERWISE "FIX" ---------------
+    ///
+    /// `pageCount` is ALWAYS `Step.count`, never `segment.pages.count`, and
+    /// `step` is always the absolute beat index. So the microphone beat reads
+    /// "May I listen?  4 of 5" whichever way the person got there, and that is
+    /// true of both of them rather than a rounding error: the ordinal counts
+    /// the beats BEHIND you, not a position in a fixed order. A fresh stranger
+    /// arrives having done Hello, How I work and Your account; somebody whose
+    /// tour replayed after a second person signed in arrives having done Your
+    /// account, Hello and How I work. Three beats each, so four is right for
+    /// each.
+    ///
+    /// `beatNames` is only ever RENDERED IN ORDER in `.whole`, where its order
+    /// is the true one. No screen ever shows a name in an order that is false
+    /// for the person reading it, which is why the array does not need — and
+    /// must not get — a per-segment permutation.
     private var progressTrack: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
             Text(FirstRunTrack.name(step: step, pageCount: Step.count))
@@ -354,9 +454,22 @@ struct OnboardingView: View {
             phoneSaveFailed = false
         }
 
-        if step < Step.count - 1 {
+        // THIS SEGMENT'S LAST PAGE, not the fourth beat. `Step.count - 1` is
+        // 3, so in `.intro` how-it-works (1) is less than it and Continue used
+        // to step to a page tagged 2 that this segment does not carry: a blank
+        // screen, in front of the door, with no way forward. That dead end is
+        // exactly what a routing-only version of this change produces.
+        if step < segment.lastStep {
             withAnimation(Theme.spring) { step += 1 }
         } else {
+            // THE DURABLE FACT FIRST, then anything decorative — the rule the
+            // caller's own `onFinished` comment argues, applied one level
+            // down. Clearing the last page of `.intro` is what "they have been
+            // introduced" MEANS, and it is written synchronously here rather
+            // than left to a closure that a torn-down view may never call.
+            // Idempotent in `.rest`, and in `.whole` it records the same fact
+            // the caller records a moment later.
+            hasSeenIntro = true
             // The last step is cleared. Say so and let the caller write it
             // down; nothing about the celebration can strand anyone now.
             finish()
