@@ -350,7 +350,27 @@ settings:
     # and these bytes disagree about what the app told somebody about their own
     # account. That is the reason the number moves even though no feature was
     # added.
-    CURRENT_PROJECT_VERSION: "91"
+    #
+    # 92: the rest of the mobile UX audit
+    # (research/2026-08-25-mobile-ux-audit.md) — first run, home, Settings, the
+    # context ask and the diagnostics screen, written by separate agents in one
+    # tree and compiled together for the first time here. What moved is what
+    # the screens SAY. Settings stopped telling somebody two false things about
+    # themselves, and its one measured number is a value now rather than a
+    # sentence. Home says what it counted — the queue, the answers, the
+    # silence, the sample — and the interruption line names the silence it
+    # measured, not an age nobody took. First run counts the account it has
+    # just made, confirms what it already holds, and ends three ways. The ask
+    # names what a yes buys, and a yes shows what it took. PlainDuration is a
+    # new file because three screens were about to say the same seconds three
+    # different ways; it has exactly those three callers. CalendarHandPolicy
+    # gained the clauses that refuse a row the gate never saw — bytes only, it
+    # still has no call site and no executor, exactly as at 91.
+    #
+    # Same reason the number moved at 91: every one of these is a sentence a
+    # person reads and believes, so build 91 and these bytes disagree about
+    # what the app told somebody about their own account.
+    CURRENT_PROJECT_VERSION: "92"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
