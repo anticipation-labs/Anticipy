@@ -138,11 +138,136 @@
 //       is refused. Polarity is a floor: unrecognised is a rejection, never a
 //       default.
 //
+//   (c) Its declared act must be a CALENDAR act. Until this leg existed the
+//       lane was calendar-only by client convention and by nothing the server
+//       checked: the shape was two questions — has a workflow, is consequential
+//       — and neither looked at what the act IS. `workflow_guard.pb.js:598`
+//       reads `embedded.act` only inside `if (live && consequence === SHELF2)`,
+//       and this lane forbids `reversible_local`, so a device row's act
+//       declaration was inspected by no hook anywhere. Combine that with the
+//       lane forgery closed below and ANY approved errand — a send, a payment —
+//       satisfied every server-side device-lane leg. That is the general device
+//       execution lane the research declines by name in the same paragraph that
+//       recommends this one.
+//
+//       THE ADMITTED SET IS THE PHONE'S OWN VOCABULARY, not a third opinion:
+//       `calendar_write` and `calendar_undo`, the two constants
+//       `CalendarHandPolicy.swift:95-96` refuses everything else against, and
+//       the first of them is `brain/anticipy_core.py`'s
+//       `PHONE_CALENDAR_ACT_TYPE`. Three layers spelled these strings three
+//       different ways once already and nothing anywhere was red, so the test
+//       pins this list against BOTH other files rather than restating it.
+//
+//       THIS IS NOT A LAW 1 VIOLATION, and the distinction is the one
+//       `device_lane()` already makes: `act_type` is a typed field of a stored
+//       declaration the model made at triage, not a word taken out of what
+//       somebody said. No wording moves a row onto this lane and no wording
+//       keeps a declared one off it. A leg keyed on the GOAL would be the
+//       violation; this one never sees the goal.
+//
 // The shape legs fire only while the write leaves the row LIVE (queued or
 // running), which is the same guard workflow_guard puts on its own legs and for
 // the same recorded reason: a refusal on every write "blocks even the write that
 // would park or fail it, so the row would hang until its lease expired". A
 // malformed device errand must always still be failable.
+//
+// AND THEY FIRE ON A CREATE, WHICH IS HOW EVERY ROW IS BORN. They used to sit
+// inside `method === "PATCH"`, so a POST walked past all of them: one request
+// carrying `{lane:"device_calendar", status:"queued", consequence:"read_only"}`
+// minted a live, unapproved device errand and neither hook asked anything —
+// `workflow_guard.pb.js:24` returns before any leg exists when `workflow_id` is
+// blank, and `read_only` is exempt at :534 when it is not. The byte-identical
+// row arriving as a PATCH was 403'd twice, so the invariant was real and absent
+// on the path rows actually take. `workflow_guard.pb.js:202-220` carries the
+// scar for exactly this shape — "A CREATE HAS NO `old` … a job created
+// `running` skipped Shelf 2's whole admission" — and this lane repeated it.
+//
+// The CLAIM legs below stay PATCH-only on purpose. A create that names itself
+// `claimed_by` is a row born with a label on it; it still cannot RUN until a
+// PATCH moves it to `running`, and that PATCH is what the routing legs judge.
+// Widening them to the create path would change the research and supervised
+// lanes, which this card does not own and no finding asks about.
+//
+// LANE 4 — THE LANE ITSELF IS EVIDENCE, so it may not be written by a claimant.
+//
+// Every leg above reads `lane` off the stored row, and `lane` was a column the
+// one caller this lane trusts could write. `guard.pb.js:449` lets an account
+// session PATCH any field of its own job row; the EVIDENCE map that protects
+// `lane` (guard.pb.js:261) sits only in the agent-credential branch. So the
+// claim at LANE 3 — "a claimant that could name its own lane could name its way
+// out of every leg here" — was true of the extension and false of the phone,
+// which is the caller the routing leg hands the whole lane to.
+//
+// Two vectors, both driven before this leg existed and both admitted:
+//
+//   (a) PATCH `{lane:"device_calendar", status:"queued", consequence:"read_only"}`
+//       onto a lane-less row. At hook time the STORED lane is still "", so every
+//       shape leg skipped, and the row landed live in the device lane in the
+//       exact state leg (b) forbids.
+//   (b) The same claim in two writes instead of one. Write 1
+//       `{lane:"device_calendar"}` → next. Write 2 `{claimed_by:"phone",
+//       status:"running"}` → next. In ONE write it is 403 "your phone does not
+//       run browser errands — it approves them"; split in two it was not. After
+//       it the phone is executor-of-record for an approved BROWSER errand, holds
+//       the lease, and can write its own `done` receipt — a real-world action
+//       falsely marked complete, which is workflow_guard's own opening sentence.
+//
+// So `lane` is read body-or-row the way `consequence` already is, AND a PATCH
+// may not change it. The lane is minted with the row and is immutable after,
+// which is what makes every downstream check on it worth anything: if the lane
+// can be forged, no leg keyed on it means a thing. Echoing the stored value back
+// unchanged stays allowed — PocketBase clients resend fields, and refusing that
+// breaks ordinary work for no gain (the same allowance `guard.pb.js` makes for
+// `owner_ref`).
+//
+// SEPARATION OF DUTIES, on the one lane where the gate cannot see it.
+//
+// `workflow_guard.pb.js:170-175` — "a browser token is execution authority,
+// never owner authority" — is the leg that stops an executor approving the plan
+// it is about to run. It is keyed on `agentCaller` (:36), the
+// X-Anticipy-Agent-ID header. The phone never sends it
+// (AnticipyBackend.swift:144 carries the account token alone), so on the device
+// lane, where the executor IS the phone, that leg cannot fire. Before rung 0 the
+// approver (phone) and the executor (extension) were different credentials,
+// which is the only reason :178 could ever bite; the routing leg below collapses
+// them into one.
+//
+// Driven: an owner-session PATCH moving `awaiting_confirm` → `queued` carrying
+// `approval={plan_id, plan_version, scope_digest, gesture:{kind:"tap", actor:…}}`
+// — every field supplied by the same request — passed this hook AND
+// workflow_guard. The byte-identical body with an agent credential is 409 "an
+// executor cannot rewrite or approve its plan". The hand minted the tap for the
+// act it was about to perform, in one request, and the database — "the final
+// authority" — could not tell it from a real tap.
+//
+// THE LEG IS A REFUSAL AND NOTHING ELSE, and that distinction is load-bearing.
+// This file still contains no approval check: it never parses an approval, never
+// reads a field inside one, and can never let a row through BECAUSE one is
+// present — which is asserted by driving it, not by promising it. It asks one
+// question, does this write CHANGE the approval column, and if it does then the
+// row may not go live or be claimed in the same breath. So the tap lands on a
+// held row, workflow_guard evaluates it against the version and digest already
+// stored there rather than against a plan the same request wrote, and a separate
+// later write releases it. Two writes where there was one.
+//
+// AND ON THE CREATE, WHICH IS THE HALF THAT WAS STILL OPEN. The leg above asks
+// whether THIS write changes the approval while the row goes live or is claimed.
+// A POST that arrives already approved changes it while the row is still HELD,
+// so the two-write rule was satisfied by one request that minted the errand and
+// its tap together — and the bare `{status:"queued"}` that followed changed no
+// approval at all. Driven end to end against both hooks, every mirror field
+// workflow_guard compares supplied by the same caller in the same request:
+// POST held-with-tap -> next/next; PATCH release -> next/next; PATCH claim and
+// run -> next/next. Three writes, no owner anywhere, and a live errand the
+// database records as approved. A row that does not yet exist cannot have been
+// tapped, so a create may not carry an approval on this lane at all.
+//
+// WHAT THIS DOES NOT FIX, said plainly so nobody reads it as fixed: the phone is
+// still the only owner credential in the system, so on this lane the thing that
+// approves and the thing that executes remain the same key. No leg in a hook can
+// mint a second credential. What is closed is the one-request forge; the residual
+// is architectural, it is named in `research/2026-08-26-hands2-better-answer.md`
+// §4's third cost, and it belongs to a card rather than to this file.
 
 routerUse((e) => {
   // Everything lives INSIDE the handler: PocketBase serializes hook
@@ -169,7 +294,51 @@ routerUse((e) => {
   // allowlist of one, and the one is the strictest — see the header for why
   // both of the other two are holes rather than options.
   const DEVICE_CONSEQUENCE = "consequential";
+  // THE PHONE'S OWN TWO WORDS (CalendarHandPolicy.swift:95-96), and the first
+  // is also brain/anticipy_core.py's PHONE_CALENDAR_ACT_TYPE. An ARRAY, for the
+  // reason stated twice below: a keyed lookup is truthy for "constructor".
+  // `test_device_lane.mjs` reads both of those files and pins this list against
+  // them, because the three layers already spelled these strings three
+  // different ways once with nothing red anywhere.
+  const DEVICE_ACT_TYPES = ["calendar_write", "calendar_undo"];
   const LIVE = ["queued", "running"];
+
+  // The act types this write puts on the table, one entry per place that spoke:
+  // the stored row, then this request. `null` means "that place declared no act
+  // I could read" — unparseable params, no `_workflow`, no `act`, an `act_type`
+  // that is not a string. Every one of those is the same answer, because a
+  // refusal that distinguishes them is a refusal telling a forger which shape to
+  // send next.
+  //
+  // NEVER MERGED INTO ONE VALUE. Two places speak and both have to be right,
+  // exactly as `stated()` below treats `workflow_id` and `consequence`: the row
+  // says it, and this write does not un-say it.
+  const declaredActTypes = (b, rec) => {
+    const out = [];
+    const read = (raw) => {
+      // A row's `params` is always a string; a request body's may already be an
+      // object. `String({})` is "[object Object]", which does not parse, so
+      // stringifying first would refuse a well-formed errand for the shape its
+      // client happened to send it in.
+      let parsed = raw;
+      if (typeof parsed === "string") {
+        try { parsed = JSON.parse(parsed); } catch (_) { return null; }
+      }
+      // ONE TRUTHINESS GUARD PER HOP and no `typeof` checks, because property
+      // access on a primitive is `undefined` rather than a throw: a params blob
+      // that is a number, a string or an array has no `act_type` to find and
+      // falls out here on its own. A `typeof` guard beside each of these would
+      // be a predicate no input can distinguish from its own absence, which is
+      // the thing this hook's superuser comment already refuses to keep.
+      const wf = parsed ? parsed["_workflow"] : null;
+      const act = wf ? wf["act"] : null;
+      const t = act ? act["act_type"] : null;
+      return typeof t === "string" && t.trim() ? t.trim() : null;
+    };
+    if (rec) out.push(read(rec.getString("params")));
+    if (b["params"] != null) out.push(read(b["params"]));
+    return out;
+  };
 
   // Why a device errand is not safe to run, or "" when it is. Returns the
   // reason rather than a boolean so the refusal can say which leg failed —
@@ -222,6 +391,26 @@ routerUse((e) => {
       return "a calendar errand must be held for a tap; this one says \""
         + consequence + "\"";
     }
+    // WHAT THE ERRAND ACTUALLY IS. Read from the same two places, and refused
+    // the same way: the row declares a calendar act and this write does not
+    // re-declare it as something else.
+    //
+    // Undeclared is REFUSED, not defaulted. A device row that carries no act at
+    // all is a row nothing has said is a calendar errand, and "we could not tell"
+    // is the answer a floor turns into a rejection. Nothing legitimate loses:
+    // `device_lane()` returns "" for an act it cannot read, so the brain cannot
+    // mint an act-less device row in the first place.
+    const acts = declaredActTypes(b, rec);
+    const strangers = acts.filter(
+      (t) => t !== null && DEVICE_ACT_TYPES.indexOf(t) < 0);
+    if (!acts.length || strangers.length || acts.some((t) => t === null)) {
+      if (strangers.length) {
+        return "the device lane carries calendar acts and nothing else; this "
+          + "one declares \"" + strangers[0] + "\"";
+      }
+      return "a calendar errand has to say which calendar act it is; this one "
+        + "declares none";
+    }
     return "";
   };
 
@@ -262,25 +451,50 @@ routerUse((e) => {
     return e.next();
   }
 
-  // 2. What a browser may claim, and on what evidence.
-  if (method === "PATCH" && path.startsWith("/api/collections/jobs/records/")) {
+  // 2. What a browser may claim, and on what evidence — and what a device
+  // errand must BE, on the CREATE that mints it as well as on every write after.
+  const creates = method === "POST" && path === "/api/collections/jobs/records";
+  const updates = method === "PATCH"
+    && path.startsWith("/api/collections/jobs/records/");
+  if (creates || updates) {
     let b = {};
     try { b = e.requestInfo().body || {}; } catch (_) { b = {}; }
     // ONE READ OF THE ROW for every leg below. The shape legs need it whether
     // or not this write is a claim, so it can no longer live inside the claim
-    // branch.
+    // branch. A create has no row to read, which is the whole of finding 1: the
+    // legs that only ever consulted one were absent on the path rows take.
     let rec = null;
-    try { rec = e.app.findRecordById("jobs", path.split("/").pop()); } catch (_) {}
+    if (updates) {
+      try { rec = e.app.findRecordById("jobs", path.split("/").pop()); } catch (_) {}
+    }
     // NORMALISED ONCE, so every comparison below inherits it. Raw
     // `getString("lane")` against an exact-match literal let `Supervised_Read`
     // or ` research ` escape the research refusal and the lease requirement
-    // at the same time - and `lane` was, until the guard fix that accompanies
-    // this, a column the claimant could write itself.
+    // at the same time.
+    const norm = (v) => String(v == null ? "" : v).trim().toLowerCase();
+    const rowLane = rec ? norm(rec.getString("lane")) : "";
+    const bodyLane = ("lane" in b) ? norm(b["lane"]) : null;
+
+    // ---- THE LANE IS EVIDENCE. See LANE 4 in the header: `guard.pb.js:449`
+    // lets an account session PATCH any field of its own job row, and its
+    // EVIDENCE map protects `lane` only in the agent-credential branch — so the
+    // caller this lane hands itself to could name its own lane, in one write or
+    // split across two. The lane is minted with the row and immutable after.
     //
-    // Read off the ROW and never off the body, for the same reason the
-    // supervised lease is: a claimant that could name its own lane could name
-    // its way out of every leg here in the same breath as claiming.
-    const lane = (rec ? rec.getString("lane") : "").trim().toLowerCase();
+    // KEYED ON THE METHOD, not on `rec`. A PATCH whose row cannot be read is a
+    // request PocketBase is about to 404 anyway; treating its body as the
+    // authority on the lane would be the one place a not-found row minted one.
+    if (updates && bodyLane !== null && bodyLane !== rowLane) {
+      return e.json(403, {
+        error: "a job's lane is decided when it is minted, never rewritten",
+        detail: "the lane says which hand may run this errand, so a claimant "
+          + "that could name it could name its way out of every check on it",
+      });
+    }
+    // Body-or-row, the way `consequence` already is. On a create the body is the
+    // only place that can speak; on an update the leg above has already refused
+    // the two ever disagreeing, so this is the row's own value by construction.
+    const lane = bodyLane !== null ? bodyLane : rowLane;
 
     // ---- SHAPE. Every caller, the worker included: this is a question about
     // the row, not about who is writing it. Only while the write leaves the row
@@ -288,7 +502,8 @@ routerUse((e) => {
     if (lane === DEVICE_LANE) {
       const status = String(b["status"] != null ? b["status"]
         : (rec ? rec.getString("status") : ""));
-      if (LIVE.indexOf(status) >= 0) {
+      const live = LIVE.indexOf(status) >= 0;
+      if (live) {
         const why = deviceShapeRefusal(b, rec, DEVICE_CONSEQUENCE);
         if (why) {
           return e.json(403, {
@@ -297,7 +512,60 @@ routerUse((e) => {
           });
         }
       }
+      // ---- SEPARATION OF DUTIES. See the header: workflow_guard's "an executor
+      // cannot rewrite or approve its plan" is keyed on the agent header, which
+      // the phone does not send, so on the one lane where the executor IS the
+      // phone that leg cannot fire.
+      //
+      // NOT AN APPROVAL CHECK, and the shape of the expression is the proof: the
+      // approval is compared, never parsed, and the only thing this can do with
+      // one is refuse. A row is never let through because an approval is
+      // present — `test_device_lane.mjs` drives that rather than trusting it.
+      //
+      // Echo stays allowed. A client resending the stored value is not changing
+      // it, and refusing that would break ordinary work for no gain.
+      const stored = rec ? rec.getString("approval") : "";
+      const rewritesApproval = b["approval"] != null
+        && String(b["approval"]) !== stored;
+      // A ROW THAT DOES NOT YET EXIST CANNOT HAVE BEEN TAPPED.
+      //
+      // The leg below fires on a write that CHANGES the approval while the row
+      // goes live or is claimed, and that left the create shaped hole open: a
+      // POST arriving already approved changes the column while the row is
+      // still HELD, so the two-write rule was satisfied by ONE request that
+      // minted the errand and its tap together, and the bare `{status:"queued"}`
+      // afterwards changed no approval at all. Driven end to end against both
+      // hooks, with every mirror field workflow_guard compares supplied by the
+      // same caller: POST held-with-tap -> next/next, PATCH release ->
+      // next/next, PATCH claim+run -> next/next. Three writes, no owner, a live
+      // errand the database records as approved.
+      //
+      // Separate from the transition case because the argument is different: a
+      // 403 that explains itself is a 403 nobody works around. It costs nothing
+      // legitimate — `brain/pb.py` never writes this column on any request and
+      // `extension/background.js` never writes one either. A tap is always a
+      // later write onto a row he has already been shown.
+      if (creates && rewritesApproval) {
+        return e.json(403, {
+          error: "the tap and the errand it releases are two separate writes",
+          detail: "an errand that does not yet exist has not been tapped; mint "
+            + "it held, show it to him, then write the tap onto the row",
+        });
+      }
+      if (rewritesApproval
+          && (live || ("claimed_by" in b) || b["status"] === "running")) {
+        return e.json(403, {
+          error: "the tap and the errand it releases are two separate writes",
+          detail: "a hand may not mint the approval for the act it is about to "
+            + "perform; leave the errand held, write the tap, then release it",
+        });
+      }
     }
+
+    // The claim legs are about a transition, and a create is not one. See the
+    // header: a row born `claimed_by` still cannot RUN until a PATCH moves it,
+    // and that PATCH is what these judge.
+    if (creates) return e.next();
 
     const claims = ("claimed_by" in b) || b["status"] === "running";
     if (claims && !fromWorker) {
