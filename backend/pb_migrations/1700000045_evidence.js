@@ -100,8 +100,26 @@ migrate((app) => {
   // missing".
   const fresh = app.findCollectionByNameOrId("evidence");
   const image = fresh.fields.getByName("image");
-  if (!image || String(image.type) !== "file") {
-    throw new Error("evidence.image did not land as a file field");
+  // `type` is a METHOD on the Go-backed field object, not a property. Reading
+  // it as `image.type` yields the function itself, `String()` of that is its
+  // source text, and the comparison can NEVER be true — so this check failed on
+  // a field that had landed perfectly. Verified against pocketbase 0.30.4 on a
+  // scratch instance: the stored field is
+  //   {"name":"image","id":"file3309110367","maxSize":400000,
+  //    "mimeTypes":["image/jpeg","image/png"]}
+  // an `id` prefixed `file`, which is exactly what was being asserted.
+  //
+  // This is why the evidence host has NEVER been live. The migration threw on
+  // every boot, PocketBase refuses to start when a migration throws, and the
+  // collection therefore did not exist in production — so `/evidence/share`
+  // answered PocketBase's own 404 and everyone read that as "not deployed yet".
+  // 1700000013:35-40 already recorded that these are Go-backed objects needing
+  // String() before comparison; what it did not say is that some of their
+  // members are methods, and String() of a method is not an error, it is a
+  // plausible-looking string that never matches.
+  if (!image || String(image.type()) !== "file") {
+    throw new Error("evidence.image did not land as a file field; got type=" +
+      (image ? String(image.type()) : "no field"));
   }
   const landed = (rule) => String(rule === null || rule === undefined ? "null" : rule);
   if (landed(fresh.updateRule) !== "null" || landed(fresh.deleteRule) !== "null") {
