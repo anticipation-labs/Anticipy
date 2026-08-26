@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Anticipy — the board</title>
+<link rel="stylesheet" href="/site.css">
+<script src="/theme.js"></script>
+<style>
+  body { font-family: var(--sans); background: var(--bg); color: var(--text);
+         margin: 0; -webkit-font-smoothing: antialiased; }
+  .page { max-width: 1080px; margin: 0 auto; padding: 32px 24px 96px; }
+  header.top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+               margin-bottom: 8px; }
+  h1 { font-family: var(--display); font-size: 34px; font-weight: 600;
+       letter-spacing: -0.01em; margin: 0; }
+  .stamp { color: var(--muted); font-size: 13px; }
+  .lede { color: var(--text-2); font-size: 15px; line-height: 1.6;
+          max-width: 62ch; margin: 12px 0 28px; }
+
+  .scoreboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+                gap: 12px; margin-bottom: 14px; }
+  .gate { background: var(--card); border: 1px solid var(--edge); border-radius: 12px;
+          padding: 14px 16px; }
+  .gate b { display: block; font-size: 12px; letter-spacing: 0.06em;
+            text-transform: uppercase; color: var(--muted); font-weight: 600;
+            margin-bottom: 6px; }
+  .gate .v { font-family: var(--display); font-size: 22px; }
+  .green { color: #4a8f5f; } .red { color: var(--alarm); } .amber { color: var(--accent); }
+  .gate .n { display: block; font-size: 12.5px; color: var(--text-2); margin-top: 4px;
+             line-height: 1.45; }
+
+  .note { border-left: 3px solid var(--accent); background: var(--surface);
+          padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 22px 0 34px;
+          font-size: 14px; line-height: 1.65; color: var(--text-2); }
+  .note strong { color: var(--text); }
+
+  h2 { font-family: var(--display); font-size: 13px; font-weight: 600;
+       letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+       margin: 34px 0 14px; display: flex; align-items: center; gap: 10px; }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--edge); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+           gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--edge); border-radius: 14px;
+          padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 9px; }
+  .card:hover { border-color: var(--edge-lit); }
+  .card h3 { font-family: var(--display); font-size: 18px; font-weight: 600;
+             margin: 0; letter-spacing: -0.005em; }
+  .say { font-size: 14px; line-height: 1.6; color: var(--text-2); margin: 0; }
+  .ev { font-size: 12.5px; line-height: 1.55; color: var(--muted); margin: 0;
+        border-top: 1px dashed var(--edge); padding-top: 9px; }
+  .ev code { font-size: 11.5px; background: var(--surface); padding: 1px 5px;
+             border-radius: 4px; color: var(--text-2); }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+         font-weight: 600; padding: 3px 9px; border-radius: 999px;
+         border: 1px solid var(--edge-lit); color: var(--text-2); }
+  .t-done { background: rgba(74,143,95,0.12); border-color: rgba(74,143,95,0.35); color: #4a8f5f; }
+  .t-open { background: rgba(200,169,126,0.12); border-color: rgba(200,169,126,0.4); color: var(--accent); }
+  .t-block { background: rgba(201,106,90,0.12); border-color: rgba(201,106,90,0.38); color: var(--alarm); }
+  .who { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  .conflict { border: 1px solid var(--alarm); border-radius: 14px; padding: 18px 20px;
+              background: rgba(201,106,90,0.06); }
+  .conflict h3 { color: var(--alarm); font-family: var(--display); font-size: 17px;
+                 margin: 0 0 8px; }
+  .conflict p { font-size: 14px; line-height: 1.65; color: var(--text-2); margin: 0 0 8px; }
+
+  footer.foot { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--edge);
+                font-size: 13px; line-height: 1.7; color: var(--muted); }
+  .themetoggle { margin-left: auto; }
+  @media (max-width: 560px) { .page { padding: 22px 16px 70px; } h1 { font-size: 27px; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <h1>The board</h1>
+    <span class="stamp">measured 25 Aug 2026</span>
+    <button class="themetoggle" type="button" data-theme-toggle aria-label="Switch theme">◐</button>
+  </header>
+
+  <p class="lede">
+    Every card below is checked against the code, not against memory. Where a gate
+    can prove something, the gate's word is used and named. The previous board was
+    hand-maintained and drifted 112 commits out of date, so this one states its
+    evidence and where that evidence came from.
+  </p>
+
+  <div class="scoreboard">
+    <div class="gate"><b>done_gate</b><span class="v amber">5 / 6</span>
+      <span class="n">Only leg 6 fails: a stranger. That is the finish line.</span></div>
+    <div class="gate"><b>stranger_gate</b><span class="v green">9 / 9</span>
+      <span class="n">Everything a machine can check before the week is green.</span></div>
+    <div class="gate"><b>tejas_gate</b><span class="v red">leg 6 red</span>
+      <span class="n">Speaker tagger not linked. See the conflict below.</span></div>
+    <div class="gate"><b>tape_gate</b><span class="v red">red on purpose</span>
+      <span class="n">Law 2's expiry. Red is the law working; green means the tape is gone.</span></div>
+  </div>
+
+  <div class="note">
+    <strong>This page now lives in git, and that is the point.</strong>
+    The board that was here before existed only on the production server — it had
+    been uploaded by hand and was never committed. <code>pb_public</code> is baked
+    into the deploy image, so <strong>every <code>railway up</code> replaces it
+    wholesale</strong>, and on 25 Aug a routine backend deploy destroyed it. No gate
+    could have caught that: a file no repo knows about is a file no diff can see.
+    Its source is now <code>backend/pb_public/internal/index.html</code>, so a deploy
+    rebuilds it instead of deleting it. <strong>Do not hand-upload files to
+    production.</strong>
+  </div>
+
+  <h2>Done — seven cards</h2>
+  <div class="cards">
+
+    <div class="card">
+      <div class="row"><span class="tag t-done">Done</span><span class="who">Jose</span></div>
+      <h3>EARS</h3>
+      <p class="say">She can hear you. The phone listens, sends what it heard, and the
+      server writes it down.</p>
+      <p class="ev">Live rows arriving from <code>iphone-b87</code>. The ears once went
+      deaf for 30 hours with every gate green — <code>are_the_ears_live.py</code> now
+      uses the server's own row count as a control, so a quiet night and a dead
+      microphone stop looking identical.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-done">Done</span><span class="who">Jose</span></div>
+      <h3>SORTER</h3>
+      <p class="say">She reads what she heard and works out what actually matters.</p>
+      <p class="ev"><code>done_gate</code> leg 3 — “she judges right”.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-done">Done</span><span class="who">Jose</span></div>
+      <h3>LIBRARY</h3>
+      <p class="say">She remembers what she learned — and, the part that was missing,
+      she forgets it when it stops being true.</p>
+      <p class="ev"><code>valid_until</code> and <code>expire_stale()</code> in
+      <code>brain/memory.py</code>. Facts are retired, never deleted, so a wrong
+      answer can still be traced back.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-done">Done</span><span class="who">Jose</span></div>
+      <h3>MOUTH</h3>
+      <p class="say">She texts you, you text back, and she reads the reply.</p>
+      <p class="ev"><code>done_gate</code> leg 4. Replies were being silently discarded
+      because two profile rows both claimed the same number; fixed, and
+      <code>does_she_reach_them.py</code> now catches a number where messages pile up
+      undelivered.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-done">Done</span><span class="who">Jose</span></div>
+      <h3>HANDS 1</h3>
+      <p class="say">The browser extension does things on a page.</p>
+      <p class="ev">Every click is written to the intent journal <em>before</em> it
+      happens, so the record survives even when the act fails.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-done">Done</span><span class="who">Claude · Jose</span></div>
+      <h3>SHELF 2</h3>
+      <p class="say">She may only act on her own when undoing it needs nothing the act
+      produced.</p>
+      <p class="ev"><code>docs/superpowers/specs/2026-08-24-shelf-2-redesign.md</code>.
+      Exactly one action passes that bar today, deliberately — a short honest list
+      beats a long dishonest one.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-done">Done</span><span class="who">Claude</span></div>
+      <h3>PHONE-AS-PENDANT</h3>
+      <p class="say">The phone survives a real day — calls, Siri, pockets, and a
+      battery that has to last.</p>
+      <p class="ev">The old board still said battery was “not started”; it is measured
+      at <code>ListenTally.swift:105</code>, and the feed shows which ear heard you at
+      <code>HeardGroup.swift:129</code>. Both landed after the card was last touched.</p>
+    </div>
+  </div>
+
+  <h2>Answered by deciding not to build it</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="row"><span class="tag t-open">Declined</span><span class="who">Jose</span></div>
+      <h3>HANDS 2 — the API ladder</h3>
+      <p class="say">Should she log into your Google account and act through the API?
+      No. That answer is the deliverable, not a delay.</p>
+      <p class="ev">We counted the demand: <strong>41 of 50</strong> moments need no
+      service at all and <strong>0 of 50</strong> need Gmail reading. The cost is a
+      permanent secret to guard, an annual security review, and a vendor inside the
+      trust path. <code>research/2026-08-26-hands2-better-answer.md</code>.
+      Being built instead: the phone itself as a calendar hand — no password, no
+      token, no Google review.</p>
+    </div>
+  </div>
+
+  <h2>Blocked</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="row"><span class="tag t-block">Blocked</span><span class="who">Jose</span></div>
+      <h3>HANDS 3</h3>
+      <p class="say">She does it while you watch.</p>
+      <p class="ev">Waiting on HANDS 2's ruling to settle before its own shape can be
+      decided.</p>
+    </div>
+  </div>
+
+  <h2>Open</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="row"><span class="tag t-open">Open</span><span class="who">Claude · Jose · Omar</span></div>
+      <h3>WIRE IT ALL</h3>
+      <p class="say">One person goes end to end with nothing held for them.</p>
+      <p class="ev">This is <code>done_gate</code> leg 6 — the only failing leg in the
+      product. Every machine-checkable prerequisite is green (<code>stranger_gate</code>
+      9/9).</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-open">Yours</span><span class="who">Jose · Omar</span></div>
+      <h3>0 · READ ME</h3>
+      <p class="say">The tick-list that belongs to the owners.</p>
+      <p class="ev">Not something an agent can sign off.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-open">Yours</span><span class="who">Jose</span></div>
+      <h3>Read the Brief</h3>
+      <p class="say">The Brief is the one document: what we are building, the definition
+      of done, and the fifty moments.</p>
+      <p class="ev"><code>docs/BRIEF.html</code>. Board last recorded 0 / 3.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-open">Started</span><span class="who">Jose</span></div>
+      <h3>macOS meeting recorder</h3>
+      <p class="say">The Mac hears the meeting the phone cannot.</p>
+      <p class="ev"><code>app/macos/</code> exists and builds. Not finished.</p>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="tag t-open">Started</span><span class="who">Jose</span></div>
+      <h3>iOS phone &amp; FaceTime recorder</h3>
+      <p class="say">She hears the call, not just the room.</p>
+      <p class="ev"><code>CallPresencePolicy.swift</code> exists. Not finished.</p>
+    </div>
+  </div>
+
+  <h2>The one real contradiction</h2>
+  <div class="conflict">
+    <h3>tejas_gate leg 6 — the speaker tagger</h3>
+    <p>The gate demands the “who is speaking” engine be linked.
+    <code>packageProductDependencies</code> is an empty list, so <code>speaker</code>
+    stays empty on every event while a 25&nbsp;MB model ships inside every build doing
+    nothing.</p>
+    <p><strong>But linking it is what made builds 76–80 deaf.</strong> Those builds
+    delivered zero rows — the phone stopped hearing entirely. One gate demands what
+    another failure recorded as fatal.</p>
+    <p>Whoever takes this needs the sherpa-onnx crash fixed first. <em>Do not silence
+    the gate to make the board green.</em></p>
+  </div>
+
+  <footer class="foot">
+    <p><strong>What “done” means here.</strong> Seven cards are complete in code and one
+    is answered by declining it. By the Brief's own definition none of it counts yet:
+    only lived days declare done, and no cold stranger has lived a clean week. That is
+    the single leg still red.</p>
+    <p><strong>The machine is built and every part of it has been proven to work.
+    Nobody has lived with it yet.</strong></p>
+    <p>Source of truth: <code>docs/BOARD-STATE-2026-08-25.md</code> in the repo. Re-run
+    the scoreboards yourself — <code>done_gate.py</code>, <code>stranger_gate.py</code>,
+    <code>tejas_gate.py</code>, <code>tape_gate.py</code> — and believe them over this
+    page.</p>
+  </footer>
+
+</div>
+</body>
+</html>
