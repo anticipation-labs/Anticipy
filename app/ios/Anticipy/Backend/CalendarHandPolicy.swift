@@ -65,9 +65,26 @@ import Foundation
 /// hand only after the owner has already tapped. The hand does not carry a
 /// second copy of the confirmation gate — the research names duplicating it as
 /// the real risk (*"a device execution lane that does not route through the
-/// same gate is not a new hand, it is a hole in the gate"*) — it refuses to
-/// move without the server's own approval record, bound to this exact plan id,
-/// version and scope digest. That is a floor, not a gate: it can only hold.
+/// same gate is not a new hand, it is a hole in the gate"*).
+///
+/// AND THEN BE EXACT ABOUT WHAT IS LEFT, because a floor described in a header
+/// that the code does not have is worse than no description at all: the next
+/// reader trusts it and stops looking. This sentence used to say the hand
+/// "refuses to move without the server's own approval record, bound to this
+/// exact plan id, version and scope digest". IT CHECKS NONE OF THAT, and it
+/// must not. What it checks is that the server's own record is HERE — in both
+/// of the places the server keeps it, the row's `approval` column and
+/// `params._workflow.approval` — and that the two say the same thing, compared
+/// as records and not as strings. It never reads a field inside one.
+///
+/// Whether an approval is bound to this plan, this version and this scope, and
+/// whether the owner's words or his own tap stand behind it, is decided by
+/// `workflow_guard.pb.js: approvalRefusal` and nowhere else. The copy this hand
+/// used to carry judged three of those where the server judges five and a
+/// gesture's actor, so it was already disagreeing in the unsafe direction — and
+/// a second gate that AGREES is still the bug, one edit from disagreeing. This
+/// is a floor, not a gate: it can only hold, and what it holds against is a row
+/// whose two witnesses were not written by the same server.
 ///
 /// ── POLARITY ─────────────────────────────────────────────────────────────
 ///

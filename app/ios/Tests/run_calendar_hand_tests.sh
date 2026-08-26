@@ -96,6 +96,38 @@ if ! printf '%s' "$body" \
     exit 2
 fi
 
+# ------------------------------------ the provenance set is closed, in the source
+# §5.2, quoted two lines above the constant itself: "A fourth provenance tag is
+# a schema change, VISIBLE IN A DIFF, not a string a model can invent at
+# runtime." Nothing enforced that. Adding `returned_by_provider` — the tag the
+# shape §6.1 excludes by name would want — left the suite green at 108 checks
+# and every leg here silent, and an undo input carrying it then RESOLVES the
+# moment `held` has any value under it. That is the counterparty filling the
+# recipe after the act, which is the one thing the checker exists to refuse.
+#
+# The suite asserts the membership as a value; this reads the DECLARATION, which
+# is the half the spec's sentence is actually about. It is spelled as "sort the
+# tags out of the literal and compare the names" rather than as a match on the
+# line, so re-ordering or re-wrapping the three tags stays green — a leg that
+# went red on somebody's line break would be a leg people learn to edit.
+# A set that stopped being a literal at all — computed, unioned, read from a
+# row — extracts as nothing and is red here, which is the same hole with better
+# manners.
+tags=$(printf '%s' "$body" | tr '\n' ' ' \
+    | sed -n 's/.*provenanceTags:[[:space:]]*Set<String>[[:space:]]*=[[:space:]]*\[\([^]]*\)\].*/\1/p' \
+    | tr -d ' "' | tr ',' '\n' | grep -v '^$' | sort | tr '\n' ' ')
+if [ "$tags" != "constant minted_by_us owner_supplied " ]; then
+    echo "The closed provenance set is not the three tags the spec names."
+    echo "  the source declares : ${tags:-nothing this leg can read}"
+    echo "  §5.2 names          : constant minted_by_us owner_supplied"
+    echo ""
+    echo "A fourth tag is a SCHEMA CHANGE and has to be defended in a diff: it"
+    echo "is what lets an undo input resolve to a value the counterparty filled"
+    echo "in after the act, which is the shape §6.1 excludes by name and the"
+    echo "reason this type mints its own id instead."
+    exit 2
+fi
+
 # ----------------------------------------- the undo never reads a name or step
 # §5.2: "The checker resolves every reference and refuses on any that does not
 # resolve. It never inspects a field name and never parses prose." A checker

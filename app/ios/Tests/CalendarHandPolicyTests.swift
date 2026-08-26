@@ -87,6 +87,11 @@ func params(actType: String = CalendarHandPolicy.writeActType,
             consequence: String = "consequential",
             planID: String = PLAN, version: Int = VERSION,
             digest: String = DIGEST,
+            /// Keys struck OFF the blob entirely, which is a different fixture
+            /// from a key present and empty — `plan["plan_id"] as? String ?? ""`
+            /// reads both as "", and only a test that can say "absent" can tell
+            /// the reader which of the two it pinned.
+            drop: Set<String> = [],
             dropAct: Bool = false) -> String {
     var act: [String: Any] = ["act_type": actType, "reach": reach, "executor": executor]
     if let target { act["target"] = target }
@@ -100,6 +105,7 @@ func params(actType: String = CalendarHandPolicy.writeActType,
         "approval": approval ?? approvalBlob(),
     ]
     if !dropAct { plan["act"] = act }
+    for key in drop { plan.removeValue(forKey: key) }
     return json(["source": "put dinner with Priya Thursday 7", "_workflow": plan])
 }
 
@@ -240,6 +246,12 @@ check("a row whose approval column is not JSON is refused",
       refusal(decide(row(approval: "approved!"))) == .approvalNotOnTheRow)
 check("a row whose approval column is a JSON array is not a record",
       refusal(decide(row(approval: "[]"))) == .approvalNotOnTheRow)
+// An EMPTY record on the row is the same absence wearing braces, and it has to
+// refuse as an ABSENCE: read as a record it would be a record, and the only
+// thing left to say about it would be that it disagrees with the blob — which
+// names the wrong defect. The row never carried the server's copy at all.
+check("a row whose approval column is an empty record carried no record at all",
+      refusal(decide(row(approval: "{}"))) == .approvalNotOnTheRow)
 
 check("a blob claiming another plan than the column the server wrote is refused",
       refusal(decide(row(params: params(
@@ -293,6 +305,47 @@ check("the hand verifies the server's record, it does not re-judge it",
       written(decide(row(approval: approvalColumn(unwordedApproval),
                          params: params(approval: unwordedApproval)))) != nil)
 
+// ★ AND THE FIELDS INSIDE AN APPROVAL ARE NOT THIS HAND'S TO READ, EITHER ★
+//
+// The check above pins the ONE shape the deleted gate used to refuse. These pin
+// the rule it was an instance of, because a second gate does not have to come
+// back wearing the same clothes: it can come back as a binding check, as a
+// "whose tap was that", or as a freshness rule. Each row below is one the
+// SERVER's `approvalRefusal` would have opinions about, each is identical in
+// both witnesses — so it came through that gate — and each RUNS here. Not
+// because the hand judged it good: because the hand does not judge. If any of
+// these three goes red, somebody has put an opinion about what a good approval
+// looks like back on the phone, and the question to answer is why there are two
+// places that decide it, not how to make the two agree.
+let approvalForAnotherPlan: [String: Any] = [
+    "plan_id": "pln_somebody_elses_errand", "plan_version": VERSION + 4,
+    "scope_digest": "sha256:another", "owner_words": "for another errand"]
+check("an approval bound to another plan entirely is the server's business, not this hand's",
+      written(decide(row(approval: approvalColumn(approvalForAnotherPlan),
+                         params: params(approval: approvalForAnotherPlan)))) != nil)
+
+// workflow_guard requires a gesture's `actor` to BE the row's owner_ref. That
+// is the check this hand is most likely to be handed back "for safety", and it
+// is the one it can do worst: the row it decides on carries no owner_ref at all.
+let approvalTappedByAStranger: [String: Any] = [
+    "plan_id": PLAN, "plan_version": VERSION, "scope_digest": DIGEST,
+    "gesture": ["kind": "tap", "actor": "usr_not_the_owner", "plan_id": PLAN,
+                "plan_version": VERSION, "scope_digest": DIGEST]]
+check("an approval carrying somebody else's tap is still not re-judged here",
+      written(decide(row(approval: approvalColumn(approvalTappedByAStranger),
+                         params: params(approval: approvalTappedByAStranger)))) != nil)
+
+// Nothing in this file reads a clock against `approved_at`, and a hand that
+// started to would be a gate again — a plan approved before a queue stalled is
+// a question for the server that minted the record, and the row's own staleness
+// is `startAlreadyPast`, which is checked from the FACTS and not from a
+// signature's timestamp.
+var approvalStampedLongAgo = approvalBlob()
+approvalStampedLongAgo["approved_at"] = "2019-03-04T09:00:00Z"
+check("an approval the server stamped long ago is not this hand's to expire",
+      written(decide(row(approval: approvalColumn(approvalStampedLongAgo),
+                         params: params(approval: approvalStampedLongAgo)))) != nil)
+
 // The row and the plan travelled separately to reach this phone.
 check("a row whose plan id disagrees with its own blob is refused",
       refusal(decide(row(workflowID: "pln_other"))) == .rowDisagreesWithPlan)
@@ -300,8 +353,42 @@ check("a row whose version disagrees with its own blob is refused",
       refusal(decide(row(workflowVersion: 9))) == .rowDisagreesWithPlan)
 check("a row whose scope digest disagrees with its own blob is refused",
       refusal(decide(row(scopeDigest: "sha256:other"))) == .rowDisagreesWithPlan)
-check("a row with no scope digest at all is refused",
+check("a row whose scope digest is blank while its blob carries one is refused",
       refusal(decide(row(scopeDigest: ""))) == .rowDisagreesWithPlan)
+
+// ★ AND THE CASE EQUALITY CANNOT SEE: BOTH SIDES EMPTY ★
+//
+// Every check above pins a DISAGREEMENT, and an empty string agrees with an
+// empty string. `plan["plan_id"] as? String ?? ""` reads a missing key and an
+// empty one identically, so a row carrying nothing at all walks all three
+// equality legs. What stops it is the two `!isEmpty` clauses in front of them,
+// and those are the phone's mirror of two server floors:
+//
+//   * workflow_guard.pb.js:24 — `if (!workflow) return e.next()`. A row with no
+//     workflow_id is WAVED THROUGH: `approvalRefusal()` never runs on it. It is
+//     the case research_lane.pb.js `deviceShapeRefusal` names FIRST, "a calendar
+//     errand with no workflow skips the confirmation gate entirely".
+//   * `approvalRefusal()` rejects on `!scope`, so a row with no scope_digest can
+//     never have been approved server-side at all.
+//
+// So these are not tidiness. They are the difference between "the gate said yes"
+// and "the gate was never asked", and the hand's whole job is to refuse the
+// second. Dropping either clause used to leave this suite green.
+check("an empty plan id on the row AND its blob is refused, not matched",
+      refusal(decide(row(workflowID: "", params: params(planID: ""))))
+        == .rowDisagreesWithPlan)
+check("a blob carrying no plan id at all, on a row carrying none either, is refused",
+      refusal(decide(row(workflowID: nil, params: params(drop: ["plan_id"]))))
+        == .rowDisagreesWithPlan)
+check("an empty scope digest on the row AND its blob is refused, not matched",
+      refusal(decide(row(scopeDigest: "", params: params(digest: ""))))
+        == .rowDisagreesWithPlan)
+check("a blob carrying no scope digest at all, on a row carrying none either, is refused",
+      refusal(decide(row(scopeDigest: nil, params: params(drop: ["scope_digest"]))))
+        == .rowDisagreesWithPlan)
+check("a blob carrying no version at all, on a row carrying none either, is refused",
+      refusal(decide(row(workflowVersion: nil, params: params(drop: ["version"]))))
+        == .rowDisagreesWithPlan)
 
 // THE §5.4 ATTACK, ARRIVING FROM THE DEVICE SIDE. A plan that labels itself
 // Shelf 2 gets no exemption from a label: the admitted set here is EMPTY.
@@ -407,6 +494,13 @@ check("a plan version delivered as a JSON float still binds",
 
 check("a plan with no act declaration at all is refused",
       refusal(decide(row(params: params(dropAct: true)))) == .actTypeNotAdmitted(""))
+// An act declaration that names no act is the same refusal as no declaration,
+// and it says so with the same empty string: what came through claimed to be an
+// act and said nothing about which one. (This pins the OUTCOME, not the clause:
+// `!actType.isEmpty` and the admitted-types guard below it produce the same
+// decision for "", so no test can tell the two spellings apart.)
+check("an act declaration that names no act at all is refused",
+      refusal(decide(row(params: params(actType: "")))) == .actTypeNotAdmitted(""))
 check("an act type this hand does not run is refused by name",
       refusal(decide(row(params: params(actType: "gmail_draft"))))
         == .actTypeNotAdmitted("gmail_draft"))
@@ -446,11 +540,43 @@ check("an undo written for a different act is refused",
       refusal(decide(row(params: params(undo: undoPlan(actType: "local_draft")))))
         == .undoAddressesAnotherAct)
 
+// ★ THE SET IS CLOSED, AND WHAT IS IN IT IS THE SCHEMA ★
+//
+// §5.2: "A fourth provenance tag is a schema change, visible in a diff, not a
+// string a model can invent at runtime." The check below pins only that a tag
+// OUTSIDE the set refuses — it cannot notice the set GROWING, because the tag
+// it names would then be inside it. Adding `returned_by_provider` (the tag
+// §6.1's excluded shape wants) left this suite green at 108, and an undo input
+// carrying it then resolves the moment `held` has any value under it: the
+// counterparty fills the recipe, which is the one shape this type exists to
+// refuse. The membership is therefore asserted as a value here, and read off
+// the declaration itself in run_calendar_hand_tests.sh — the suite catches a
+// set widened however it is spelled, the runner catches a set that stopped
+// being a literal a diff can show.
+check("the provenance set is exactly the three tags §5.2 names",
+      CalendarHandPolicy.provenanceTags == ["minted_by_us", "owner_supplied", "constant"])
+
 check("an undo input wearing a tag outside the closed set is refused",
       refusal(decide(row(params: params(undo: undoPlan(inputs: [
           ["name": "our id", "provenance": "minted_by_us", "ref": "our_ref"],
           ["name": "id", "provenance": "returned_by_eventkit", "ref": "our_ref"],
       ]))))) == .unknownProvenance("returned_by_eventkit"))
+
+// AND CLOSED AT THE PLACE IT IS READ, not only where it is written. A
+// membership assertion cannot see `|| provenance == "returned_by_provider"`
+// bolted onto the check itself — the constant would still hold three tags and
+// the runner's leg would still be quiet. So the tag §6.1 excludes BY NAME, a
+// tag that reads like one of ours, a case-fold of one we DO admit, and no tag
+// at all are each put through the checker.
+for tag in ["returned_by_provider", "provider_supplied", "Minted_By_Us", ""] {
+    var strange: [String: Any] = ["name": "our id", "ref": "our_ref"]
+    if !tag.isEmpty { strange["provenance"] = tag }
+    check("an undo input tagged \(tag.isEmpty ? "with nothing at all" : tag) does not resolve",
+          refusal(decide(row(params: params(undo: undoPlan(inputs: [
+              ["name": "our id", "provenance": "minted_by_us", "ref": "our_ref"],
+              strange,
+          ]))))) == .unknownProvenance(tag))
+}
 
 // ★ THE ONE THIS WHOLE TYPE EXISTS FOR ★
 //
@@ -500,6 +626,20 @@ check("a NON-target reference held as whitespace does not resolve either",
                  "owner_supplied": ["calendar_start": "   "],
                  "constant": ["undo_window_padding": 86400]])))))
         == .unresolvedReference("calendar_start"))
+// A REFERENCE WITH NO NAME IS NOT A REFERENCE, and this is the one input that
+// tells `resolves`'s first clause from nothing: a `held` bucket can carry a
+// value under the empty key as easily as under any other, and then a lookup by
+// "" SUCCEEDS and an input that names nothing has "resolved". §5.2's checker
+// resolves what a plan points at; a plan that points at nothing is refused for
+// pointing at nothing.
+check("an undo input whose reference names nothing does not resolve",
+      refusal(decide(row(params: params(undo: undoPlan(
+          inputs: [["name": "our id", "provenance": "minted_by_us", "ref": "our_ref"],
+                   ["name": "the padding", "provenance": "constant", "ref": ""]],
+          held: ["minted_by_us": ["our_ref": OUR_REF],
+                 "constant": ["": 86400, "undo_window_padding": 86400]])))))
+        == .unresolvedReference(""))
+
 check("a reference into a bucket that does not exist does not resolve",
       refusal(decide(row(params: params(undo: undoPlan(
           held: ["minted_by_us": ["our_ref": OUR_REF],
