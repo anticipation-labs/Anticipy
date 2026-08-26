@@ -71,7 +71,14 @@ VENDOR_KEYS = ("DEEPGRAM_API_KEY", "ASSEMBLYAI_API_KEY", "SPEECHMATICS_API_KEY")
 SHIPPED = ("backend/pb_hooks", "backend/pb_migrations", "brain",
            "app/ios/Anticipy", "extension")
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", "tests", "test"}
-EXTS = (".py", ".js", ".mjs", ".swift")
+# .plist and .html are here because of a miss on 2026-08-26. The gate was
+# GREEN while app/ios/Anticipy/Info.plist still told the owner, in the words iOS
+# shows at the permission prompt, that "pendant audio is sent to Deepgram for
+# live transcription" — five hours after that path was deleted. A false privacy
+# promise is worse than the practice it describes: it tells somebody their audio
+# goes somewhere it does not, and says nothing about wherever it actually went.
+# The gate only read code, and the sentence a person actually reads is not code.
+EXTS = (".py", ".js", ".mjs", ".swift", ".plist", ".html")
 
 
 def _is_comment(line: str, ext: str) -> bool:

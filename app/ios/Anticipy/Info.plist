@@ -30,7 +30,7 @@
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Anticipy connects to your pendant over Bluetooth. When it is connected, pendant audio is sent to Deepgram for live transcription. Only needed if you have a pendant.</string>
+	<string>Anticipy connects to your pendant over Bluetooth. The pendant does not transcribe yet — its audio used to be sent to a transcription company, and that was removed because raw audio should never leave your devices. Only needed if you have a pendant.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Anticipy reads what is coming up in the next month — the title and the time, nothing else — so she knows what you already have on. She never reads the notes or the invitees, and never puts anything in your calendar unless you ask her to.</string>
 	<key>NSCalendarsUsageDescription</key>
