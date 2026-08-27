@@ -477,7 +477,15 @@ settings:
     # accent is the BRAND and is still champagne, this is the colour of a
     # CONTROL, and merging them would mean restyling the brand silently
     # restyles every switch in the app.
-    CURRENT_PROJECT_VERSION: "101"
+    #
+    # 102 removes the second back button. SheetChrome draws its own circular
+    # leading button and every screen using it is PUSHED onto a NavigationStack
+    # that draws one too, so 101 shipped a system chevron sitting directly above
+    # a circle doing the same job. Hiding the SYSTEM bar rather than our own
+    # button is what the supplied screens do -- their header is the whole
+    # chrome, the title centres against it, the trailing control shares the row
+    # -- and reclaiming the bar's space is what lifts that row into it.
+    CURRENT_PROJECT_VERSION: "102"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO

@@ -223,6 +223,29 @@ struct SheetChrome<Content: View>: View {
             header
         }
         .onPreferenceChange(SheetHeaderHeightKey.self) { headerHeight = $0 }
+        // ONE BACK BUTTON, NOT TWO.
+        //
+        // This chrome draws its own circular leading button, and every screen
+        // using it is PUSHED onto a NavigationStack that draws one as well — so
+        // the first build shipped a system chevron sitting directly above a
+        // champagne circle that did the same thing. Two controls, one job, and
+        // the eye reads the top one as the real one.
+        //
+        // Hiding the system bar rather than our own button is what the supplied
+        // screens do: their header is the whole chrome, the title is centred
+        // against IT, and the trailing control sits on the same row. Hiding
+        // ours instead would leave the title stranded below a plain chevron and
+        // the info button with nothing to align to.
+        //
+        // Reclaiming the bar's space is also what moves the row UP into it, so
+        // the button lands where the system one used to be — which is the
+        // alignment the design asks for and the reason this is one modifier
+        // rather than a set of paddings tuned by hand.
+        .toolbar(.hidden, for: .navigationBar)
+        // Belt and braces for anything that presents this WITHOUT hiding the
+        // bar — a sheet inside a NavigationView, say. The bar can come back;
+        // a second back button must not come with it.
+        .navigationBarBackButtonHidden(true)
     }
 
     private var header: some View {
