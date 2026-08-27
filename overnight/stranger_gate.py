@@ -1026,13 +1026,49 @@ def _clears(lifecycle: str, flag: str, key: str, literal: str) -> str:
 def leg_4_onboarding_is_per_account(root: str = ROOT) -> str:
     src = strip_previews(strip_comments(read(root, APP)))
     m = re.search(r"\}\s*else if (\w+)\s*\{\s*\n\s*HomeView\(\)", src)
-    if not m:
-        raise LegFailed(
-            f"{APP} no longer routes to HomeView on a single onboarding flag, "
-            "so this leg cannot find what to follow — which counts as failing. "
-            "Re-point it at whatever now decides that a signed-in person skips "
-            "the tour.")
-    flag = m.group(1)
+    if m:
+        flag = m.group(1)
+    else:
+        # THE ROUTING MOVED, AND THIS LEG FOLLOWED IT RATHER THAN BEING
+        # RELAXED. On 2026-08-27 the app stopped deciding this inline — the
+        # first-run order changed so the introduction happens BEFORE the
+        # sign-up door — and the decision moved into `FirstRunRoute.decide`.
+        # This leg went red naming exactly that ("no longer routes to HomeView
+        # on a single onboarding flag ... re-point it"), which is the message
+        # working: the property it guards did not change at all. A handed-on
+        # phone must not skip the tour for the next person, and a cable install
+        # means the phone passed through somebody else's hands first.
+        #
+        # It reads the ROUTER'S OWN GUARD rather than guessing which of the
+        # three arguments matters. `decide` takes hasSeenIntro, isSignedIn and
+        # hasOnboarded; only one of them returns `.home`, and picking by name
+        # would be this leg inventing the answer it is supposed to check.
+        # `hasSeenIntro` in particular is deliberately per-PHONE — an
+        # introduction is a property of the handset — so a leg that demanded
+        # every flag be per-account would fail correct code.
+        if not re.search(r"case\s+\.home:\s*\n\s*HomeView\(\)", src):
+            raise LegFailed(
+                f"{APP} no longer routes to HomeView on a single onboarding "
+                "flag, and there is no `case .home:` carrying HomeView either, "
+                "so this leg cannot find what to follow — which counts as "
+                "failing. Re-point it at whatever now decides that a signed-in "
+                "person skips the tour.")
+        router_rel = "app/ios/Anticipy/FirstRunRoute.swift"
+        if not os.path.exists(os.path.join(root, router_rel)):
+            raise LegFailed(
+                f"{APP} routes on `case .home:` but {router_rel} is not in this "
+                "tree, so nothing here can say which flag sends a signed-in "
+                "person past the tour. Re-point the leg at the new router.")
+        router = strip_previews(strip_comments(read(root, router_rel)))
+        rm = re.search(r"guard\s+!(\w+)\s+else\s*\{\s*return\s+\.home\s*\}",
+                       router)
+        if not rm:
+            raise LegFailed(
+                f"{router_rel} no longer gates `.home` on a single negated "
+                "flag, so this leg cannot tell which value lets a signed-in "
+                "person skip the tour. Re-point it at the new guard.")
+        flag = rm.group(1)
+        note(f"routing moved to {router_rel}; `.home` is gated on `{flag}`")
     key = swift_appstorage_key(src, flag)
     if not key:
         raise LegFailed(
