@@ -228,7 +228,7 @@ struct SheetChrome<Content: View>: View {
     private var header: some View {
         ZStack {
             Text(title)
-                .font(Theme.display(19, weight: .semibold))
+                .font(.system(size: 19, weight: .bold))
                 .foregroundStyle(Theme.text)
                 .multilineTextAlignment(.center)
                 // The title wraps rather than clipping, and the header grows
@@ -495,7 +495,7 @@ private func linkedSentence(_ lead: String,
     var middle = AttributedString(link.text)
     middle.link = link.url
     middle.underlineStyle = .single
-    middle.foregroundColor = Theme.accent
+    middle.foregroundColor = Theme.systemControl
     out.append(middle)
     out.append(AttributedString(trail))
     return out
@@ -528,7 +528,7 @@ struct FootnoteText: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, SheetMetric.rowPadH)
-            .tint(Theme.accent)
+            .tint(Theme.systemControl)
     }
 }
 
@@ -872,7 +872,7 @@ struct ValueRow: View, CardRowContent {
                 .textContentType(contentType)
                 .submitLabel(submit)
                 .onSubmit(onSubmit)
-                .tint(Theme.accent)
+                .tint(Theme.systemControl)
                 .accessibilityLabel(Text(label))
         }
         .padding(.horizontal, SheetMetric.rowPadH)
@@ -907,7 +907,7 @@ struct SelectRow: View, CardRowContent {
                      glyphColor: Theme.text2) {
                 Image(systemName: "checkmark")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.systemControl)
                     // Held even when unselected, so choosing does not shove the
                     // title of every row in the card sideways.
                     .opacity(isSelected ? 1 : 0)
@@ -1107,7 +1107,7 @@ struct InfoRow: View, CardRowContent {
                     .foregroundStyle(Theme.muted)
                     .lineLimit(SheetKit.lineLimit(for: .subtitle))
                     .fixedSize(horizontal: false, vertical: true)
-                    .tint(Theme.accent)
+                    .tint(Theme.systemControl)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

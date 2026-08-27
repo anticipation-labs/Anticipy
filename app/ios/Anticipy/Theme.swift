@@ -51,6 +51,21 @@ enum Theme {
     /// The accent as a LETTER or a stroke: champagne on ink, a darkened bronze
     /// on white (5.8:1 on the darkest ground it sits on). Anything the eye has
     /// to READ or a line it has to FOLLOW uses this.
+    /// The colour iOS itself uses for a switch, a checkmark, a selected state.
+    ///
+    /// SEPARATE FROM `accent` ON PURPOSE, and the separation is the whole point
+    /// rather than a naming preference. `accent` is the BRAND — champagne, the
+    /// colour of a confirmed field and a live beat, and it stays that. This is
+    /// the colour of a CONTROL, and Jose asked for the supplied screens exactly:
+    /// their toggles, checkmarks and selected rings are the system blue every
+    /// iPhone owner already reads as "this is switchable".
+    ///
+    /// Two names because they answer different questions. Merge them and the
+    /// next person who wants to restyle the brand silently restyles every
+    /// switch in the app, or the reverse — which is how a design system stops
+    /// being able to say what a colour is FOR.
+    static let systemControl = Color.accentColor
+
     static let accent = themed(0x7C5729, 0xC8A97E)
     /// The accent as a FILL, and the brand's signature: champagne in both
     /// themes, because #C8A97E carries #0C0C0C at 8.8:1. A filled button
