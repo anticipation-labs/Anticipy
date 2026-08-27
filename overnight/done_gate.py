@@ -98,7 +98,57 @@ def leg_1_hears() -> str:
         tail = out.strip().splitlines()[-6:]
         raise LegFailed("cursor tests FAIL: " + " / ".join(t.strip() for t in tail))
 
-    return "spoken words survive the recogniser's rewrites, once each"
+    # AND THEN ASK A REAL PHONE, because everything above this line is a Swift
+    # test in this checkout and cannot tell a working product from a silent one.
+    #
+    # THIS LEG READ GREEN FOR 76 HOURS OVER A PROVABLY DEAF PHONE. On
+    # 2026-08-27 `are_the_ears_live.py` exited 1 — newest speech of all time
+    # 2026-08-24 01:30Z from `iphone-b75`, while the backend answered
+    # throughout — and this leg said "SHE HEARS YOU" the whole time, because
+    # `run_cursor_tests.sh` proves the emission layer's ARITHMETIC and nothing
+    # about delivery. The alarm for exactly this existed, was correct, and was
+    # wired to nothing: CLAUDE.md and AGENTS.md named it, no gate ran it.
+    #
+    # That is the second time. CLAUDE.md says this file exists "because the ears
+    # went deaf for 30 hours and nothing noticed"; it then happened again for
+    # longer, with the alarm already written. A check nobody runs is a comment.
+    ears = os.path.join(ROOT, "overnight/are_the_ears_live.py")
+    if not os.path.exists(ears):
+        raise LegFailed(
+            "the live half of this leg is gone: overnight/are_the_ears_live.py "
+            "is not in this tree, so nothing here can tell a deaf phone from a "
+            "quiet one")
+    try:
+        live = subprocess.run([sys.executable, ears], cwd=ROOT,
+                              capture_output=True, text=True, timeout=180)
+    except subprocess.TimeoutExpired:
+        raise LegFailed("the live ears check timed out after 3 minutes")
+    note((live.stdout or "").strip()[-900:])
+
+    # 1 is DEAF and fails this leg. 2 is UNPROVEN — the backend could not be
+    # read, or the whole system was idle — and must NOT fail it: a genuinely
+    # quiet night is quiet on both halves, and turning the build red for one
+    # would teach everybody to ignore this leg, which is how the alarm came to
+    # be unhooked in the first place.
+    if live.returncode == 1:
+        tail = (live.stdout or "").strip().splitlines()
+        said = next((t.strip() for t in reversed(tail) if "FAIL" in t), "")
+        raise LegFailed(
+            "the cursor is correct but NOTHING IS ARRIVING. " + said
+            + " — run `python3 overnight/are_the_ears_live.py` for the two "
+              "clocks. A phone that heard nothing and a phone that heard and "
+              "could not deliver are different failures: Settings -> Listening "
+              "separates them with `Words sent` and `Lines that did not reach "
+              "the server`")
+    if live.returncode != 0:
+        # Said out loud rather than swallowed. The leg passes, but its sentence
+        # may not claim the ears are alive when nothing proved it.
+        return ("spoken words survive the recogniser's rewrites, once each — "
+                "but the live half is UNPROVEN, so nothing here says a phone "
+                "delivered anything")
+
+    return ("spoken words survive the recogniser's rewrites, once each, and a "
+            "real phone reached the server")
 
 
 # --------------------------------------------------------------------------
