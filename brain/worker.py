@@ -164,6 +164,43 @@ def run_nightly_consolidation(memory, now: float | None = None) -> None:
         if now - getattr(memory, "_nightly_attempt_ts", 0.0) < CONSOLIDATE_RETRY_SECONDS:
             return
         memory._nightly_attempt_ts = now
+
+        # AGEING, BEFORE DISTILLING, and the ordering is the argument.
+        #
+        # `expire_stale` was written, tested and called by NOTHING: `grep -rn
+        # expire_stale brain/` returned exactly one line, its own definition at
+        # memory.py:2180. A sweep nobody runs is a comment, and this one had a
+        # second gap behind it — `valid_until` is a parameter no caller ever
+        # passed, so even once it runs there is nothing with a horizon to
+        # retire yet. That half belongs to whoever teaches extraction to set a
+        # horizon; this half is the loop that will run it when they do, and it
+        # is safe to land first precisely because a sweep over zero horizons
+        # retires zero rows.
+        #
+        # FIRST, not after. The ranker already sinks an old fact through decay,
+        # but a decayed fact is still TRUE — merely lower down. A fact past its
+        # horizon is wrong in kind: on Monday, "Dana is in Montreal Friday to
+        # Sunday" is not faded, it is false. Consolidation reads facts and
+        # writes the profile layer, so expiring afterwards would distil a wrong
+        # fact into the layer that answers questions, then retire the source it
+        # came from and leave the conclusion standing.
+        #
+        # Retired, never deleted, with `retired_by` left NULL so "that date
+        # passed" stays distinguishable from "you told me something that
+        # contradicts this" — two different answers to why she stopped
+        # believing it, and a person asking deserves the right one.
+        try:
+            expired = memory.expire_stale(now=now)
+        except Exception as exc:
+            # Never let ageing take consolidation down with it. This runs on a
+            # poll tick and the distillation below is the reason the pass
+            # exists; a sweep that throws must cost the night's expiry, not the
+            # night's memory.
+            print(f"consolidation: expiry skipped ({exc})")
+        else:
+            if expired:
+                print(f"consolidation: retired {expired} fact(s) past their horizon")
+
         totals = {"episodes": 0, "new": 0, "merged": 0}
         for _ in range(CONSOLIDATE_MAX_BATCHES):
             out = memory.consolidate(now=now)
