@@ -33,10 +33,13 @@ Backup: RobotShop.ca RB-See-855 at $24.03 — but verified only **2 units left**
 
 ## Cart 3 — JLC3DP (upload `case_v7/stl/front_v7.stl` + `back_v7.stl`)
 
-SLM Titanium (TC4), sandblasted, 16 sets (15 + 1 fit-test), **plus** 16 resin
-(SLA, Imagine Black) backup sets in the same order so the date can't slip.
-Estimate **$550–800** incl. DHL — real number comes from the upload quote;
-order the Ti fit-test set FIRST if the quote allows split shipping.
+SLM Titanium (TC4), Silver Gray, 16 sets (15 + 1 fit-test). **Live quote pulled
+2026-08-27** by uploading the two STLs to jlc3dp.com: front $13.92 + back $5.84
+= **$19.76 USD/set**; 16 sets = **$316.16 USD (~$435 CAD)**, 5-day build.
+Standard shipping quoted $21 USD but is 8–13 business days — pick **DHL
+Express** at checkout (a few days, extra ~$30–50) to hold the 2-week schedule.
+Optionally add 16 resin (SLA, Imagine Black) backup sets (~$15 total) in the
+same order so the date can't slip.
 
 ## Cart 4 — Apple Developer Program (TestFlight): **$135**
 
@@ -44,10 +47,10 @@ order the Ti fit-test set FIRST if the quote allows split shipping.
 
 | | CAD |
 |---|---|
-| Carts 1–4 | ≈ $1,695 |
+| Carts 1–4 (DigiKey $378 + Amazon ~$400 + JLC3DP ~$500 w/ DHL + Apple $135) | ≈ $1,415 |
 | Outbound shipping 12 × ~$20 (Xpresspost/Purolator, UN3481 label, cells at ~50 %) | $240 |
-| **Contingency +15 %** | ≈ $290 |
-| **Total** | **≈ $2,225** |
+| **Contingency +15 %** | ≈ $250 |
+| **Total** | **≈ $1,905** |
 
 Order carts 1, 2, 4 today; cart 3 the moment you approve the STLs (files are
 ready in this repo). Nothing is ordered yet — every cart needs your card.
