@@ -100,7 +100,18 @@ URLS = [
     "",
     "https://gc.ca/forms",
     "https://réserver.fr/x",
-    "https://xn--rserver-bva.fr/x",
+    # The A-LABEL OF THE LINE ABOVE, and it must stay that. The pair exists to
+    # prove a Unicode host and its punycode form reach the same answer in both
+    # languages; point it at a different domain and the pair proves nothing.
+    #
+    # This read "bva" until 2026-08-27, one letter off "bya", which is not a
+    # host at all: Python's urlsplit leaves an ASCII hostname alone and
+    # `parse_host` accepts it through `_HOST_CHARS`, while some Node/ICU builds
+    # reject a malformed A-label outright. So the corpus agreed on one machine
+    # and disagreed on another, and a PARITY test that depends on which Node you
+    # have is the one kind of failure this file exists to make impossible.
+    # Found by Omar running the suite on his own machine.
+    "https://xn--rserver-bya.fr/x",
     "ftp://example.com/x",
     "https://www.wikihow.com/claim-a-warranty",
     "https://help.example.com/a",
