@@ -60,7 +60,7 @@
   <p class="lede">Anticipy listens for work you want done, remembers what you tell it,
     and—only after you approve a task—can carry out that exact task in your Chrome.
     That requires personal data. This page says exactly what moves and why.</p>
-  <p class="updated">Last updated August 12, 2026</p>
+  <p class="updated">Last updated August 27, 2026</p>
 
   <section class="plain">
     <h2>The short version</h2>
@@ -74,12 +74,34 @@
     <ul>
       <li><strong>Your account and profile:</strong> email, phone number, name,
         birthday if you add it, timezone, and facts you choose to tell Anticipy.</li>
-      <li><strong>What Anticipy hears:</strong> the finalized text transcript is sent
-        to Anticipy's backend. When on-device speech recognition is available, raw
-        microphone audio stays on the phone. Otherwise iOS may send audio to Apple's
-        speech-recognition service to produce that text. If you use an Anticipy pendant,
-        its Opus audio is sent to Deepgram for live transcription; the finalized text
-        then follows the same Anticipy backend path.</li>
+      <li><strong>What Anticipy hears:</strong> Anticipy listens through this
+        iPhone's own microphone, and keeps listening while the app is in the
+        background — that is what the app is for, and it is why the app declares
+        the audio background mode. Only the finalized <em>text</em> transcript is
+        sent to Anticipy's backend. When this iPhone can perform speech
+        recognition on-device, the raw microphone audio never leaves the phone.
+        On a device that cannot, iOS sends the audio to Apple's speech-recognition
+        service to produce that text. Anticipy sends raw audio to no one else.</li>
+      <li><strong>What Anticipy reads, only after you say yes:</strong> each of
+        these is asked for separately, in the moment it is needed, and each can be
+        stopped in Settings with one tap.
+        <ul>
+          <li><strong>Calendar</strong> — the title and the time of what is coming
+            up in the next month, at most fifteen events, sent as short lines. Not
+            the notes, not the invitees, nothing in the past, and never the
+            calendar itself. Nothing is written to your calendar unless you ask
+            for it.</li>
+          <li><strong>Contacts</strong> — names only, at most forty, sent once, so
+            Anticipy knows who you mean when you say one. Never a phone number, an
+            email address, or a postal address: those three things never leave
+            this phone. Anticipy never messages anyone in your contacts on its
+            own.</li>
+          <li><strong>Mail</strong> — read once, in the front window, while you
+            watch. A handful of lines about who you are talking to and what is in
+            flight. Never the mailbox, never a message, never an attachment.
+            Anticipy never sends, replies to, or deletes mail.</li>
+        </ul>
+        Anything Anticipy gets wrong from these, you can tap and remove.</li>
       <li><strong>Work and memory:</strong> requests, approvals, task state, results,
         and the text memories needed to answer later questions.</li>
     </ul>
@@ -115,9 +137,19 @@
       <li><strong>Twilio</strong> carries text messages between Anticipy and your phone.</li>
       <li><strong>Apple speech recognition</strong> may process microphone audio only
         when this iPhone cannot perform the recognition on-device.</li>
-      <li><strong>Deepgram</strong> processes live audio from a paired Anticipy pendant
-        to produce transcript text. The app receives a short-lived access token; the
-        long-lived Deepgram key remains on Anticipy's backend.</li>
+      <!-- DEEPGRAM IS GONE AND MAY NOT COME BACK QUIETLY. This entry described a
+           lane that no longer exists: the client method and TranscriberClient
+           were deleted, and the server route now answers 410 GONE naming its
+           reason (backend/pb_hooks/transcription_token.pb.js) rather than 404,
+           because a 404 reads as "wrong URL" and gets retried while a refusal
+           gets obeyed. `overnight/no_vendor_ears.py` fails the build if any
+           vendor speech lane reappears in the code OR in a .plist, and it was
+           extended to read .html after a shipped string was found still naming
+           a vendor the product had stopped using. A privacy policy that lists a
+           processor receiving nothing is not cautious, it is false: it tells a
+           reader their audio goes somewhere it does not, and it would have been
+           the one document contradicting design/LOCAL-FIRST.md rule 1 — "RAW
+           AUDIO NEVER LEAVES A DEVICE. Not to Deepgram, not to anyone." -->
     </ul>
     <p>These processors receive data only to deliver their part of Anticipy. Their own
       retention and security terms also apply to the data they process.</p>
