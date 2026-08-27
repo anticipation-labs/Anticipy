@@ -115,11 +115,15 @@ fi
 #    file starts reading `hasConnected` off a CXCall, there are two answers to
 #    where a conversation begins and they will disagree on the day it matters.
 #
-#    AND THIS LEG REPORTS WHAT IT FOUND rather than passing by matching nothing.
-#    The policy has no call site yet — the CallKit adapter that would feed it is
-#    not built — and a rule about call sites that quietly passes over zero of
-#    them is the same shape as a gate whose anchor was renamed.
-sites=$(grep -rl 'CallPresencePolicy' "$app" 2>/dev/null | grep -v 'CallPresencePolicy.swift' || true)
+#    THE ADAPTER NOW EXISTS, and these two legs were written before it did.
+#    CallSense.swift is the one file allowed to read a CXCall, because building
+#    the policy's inputs is exactly what an adapter is for — a rule that forbade
+#    that would forbid feeding the policy at all. Every OTHER file is still held
+#    to the old line. Naming the policy in a comment is not re-implementing it,
+#    so the test is what a file DOES with a CXCall, never whether it mentions
+#    the type.
+sites=$(grep -rl 'CXCall' "$app" 2>/dev/null \
+    | grep -v 'CallPresencePolicy.swift' || true)
 if [ -n "$sites" ]; then
     for f in $sites; do
         if ! grep -q 'CallPresencePolicy\.decide(' "$f"; then
@@ -131,7 +135,8 @@ if [ -n "$sites" ]; then
     done
 fi
 folders=$(grep -rl 'hasConnected' "$app" 2>/dev/null \
-    | grep -v 'CallPresencePolicy.swift' || true)
+    | grep -v 'CallPresencePolicy.swift' \
+    | grep -v 'CallSense.swift' || true)
 if [ -n "$folders" ]; then
     echo "Something outside CallPresencePolicy is reading a call's hasConnected:"
     printf '  %s\n' $folders

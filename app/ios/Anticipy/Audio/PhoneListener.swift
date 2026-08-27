@@ -146,6 +146,8 @@ final class PhoneListener: NSObject, ObservableObject {
     private var silenceFlush: DispatchWorkItem?
     private var watchdog: Timer?
     private var observersInstalled = false
+    /// Held for the life of the process, like the observers.
+    private var callSense: CallSense?
 
     /// Held only across an interruption, and worth ROUGHLY THIRTY SECONDS —
     /// not a phone call.
@@ -348,6 +350,7 @@ final class PhoneListener: NSObject, ObservableObject {
         // DispatchQueue.main.async, so this guard is race-free.
         guard !isListening else { return }
         installObserversOnce()
+        installCallSenseOnce()
         // OFF BY DEFAULT IN EVERY APP, and until it is on `batteryLevel` is
         // -1.0 forever. `BatteryReadingPolicy` correctly refuses that as
         // unreadable, so without this one line the journal records no readings,
@@ -375,7 +378,42 @@ final class PhoneListener: NSObject, ObservableObject {
         // multi-mic devices. A haptics build must NOT quietly change the
         // transcription pipeline on a hunch — if the diagnostic proves the mode
         // is what mutes the Taptic Engine, that becomes its own change.
-        try? session.setCategory(.record, mode: .measurement, options: .duckOthers)
+        // MIXABLE, BECAUSE `.record` COULD NOT SHARE THE PHONE WITH ANYTHING.
+        //
+        // `.record` is an exclusive category: the moment another app starts
+        // playing, iOS interrupts this session, the engine stops, `suspended`
+        // goes true, and the background assertion above — worth roughly thirty
+        // seconds — is all that keeps the process alive. Put a YouTube video
+        // on and walk away and she is not listening; leave it playing and the
+        // app is eventually suspended outright, which is the "crashes when
+        // media plays" report. `.duckOthers` did not soften that either: it is
+        // only consulted for categories that can mix at all, so on `.record` it
+        // was decoration on an exclusive session.
+        //
+        // `.playAndRecord` + `.mixWithOthers` is the only combination that lets
+        // her keep a live input while another app owns playback —
+        // `.mixWithOthers` is REFUSED on `.record`, so this is a category
+        // change or it is nothing.
+        //
+        // `.defaultToSpeaker` is not optional here and is the part most likely
+        // to be dropped by someone tidying this line: `.playAndRecord` routes
+        // output to the RECEIVER by default, so without it the first effect of
+        // this change is somebody's music jumping to the earpiece the moment
+        // she starts listening.
+        //
+        // `.measurement` is UNCHANGED and deliberately so. The note below is
+        // about the mode, not the category, and it still stands: minimal input
+        // processing, primary mic pinned, matching Apple's own SFSpeechRecognizer
+        // sample. This commit moves exactly one thing.
+        //
+        // UNPROVEN ON A DEVICE. The simulator has no second app playing audio,
+        // so nothing here proves the route survives a real YouTube session, and
+        // `.playAndRecord` can change which input is chosen on a multi-mic
+        // phone. The read-back below prints what the session ACTUALLY became;
+        // check it on a handset with something playing before believing this.
+        try? session.setCategory(.playAndRecord, mode: .measurement,
+                                 options: [.mixWithOthers, .defaultToSpeaker,
+                                           .allowBluetooth])
         // iOS MUTES the Taptic Engine for the whole app while a .record session
         // is active, so the buzz can't bleed into the mic. She starts listening
         // milliseconds after launch (keepListening is a standing state), so
@@ -506,6 +544,44 @@ final class PhoneListener: NSObject, ObservableObject {
     }
 
     // ------------------------------------------------------------- healing
+
+    /// Give the call policy something to see, once.
+    ///
+    /// `CallPresencePolicy` shipped correct and INERT — 44 passing checks and
+    /// no call site, with `run_all.sh` printing that fact on every run. This is
+    /// the line that ends it. Kept beside `installObserversOnce` because it is
+    /// the same kind of thing: a sense installed once for the life of the
+    /// process, never per session.
+    ///
+    /// WHY THE CALL SENSE AND THE INTERRUPTION OBSERVER BOTH EXIST. The
+    /// interruption notification says the microphone went away; it never says
+    /// why, so a forty-minute call and a forty-minute silence arrive identical.
+    /// The sense answers the why, and it answers it EARLIER — CallKit reports a
+    /// call connecting before iOS takes the input away. Neither replaces the
+    /// other: the observer is the backstop for every interruption that is not a
+    /// call, and this is the one that can name the commonest one.
+    private func installCallSenseOnce() {
+        guard callSense == nil else { return }
+        callSense = CallSense(
+            standDown: { [weak self] in
+                guard let self, self.isListening else { return }
+                // HONEST, and the same word the interruption path uses: the
+                // microphone is gone. `suspended`'s observer takes the
+                // background assertion, so saying it here buys the running time
+                // as a side effect of admitting it, which is the ordering the
+                // interruption observer already relies on.
+                self.suspended = true
+            },
+            retake: { [weak self] in
+                guard let self, self.isListening else { return }
+                // Ask, do not assume. The call ending is a claim about the
+                // call, not about the route — `retryCapture` mints a new
+                // request ONLY if capture actually came back, and returns at
+                // the 0 Hz guard if it has not, leaving `suspended` true for
+                // the next attempt.
+                self.retryCapture(cause: .routeChange)
+            })
+    }
 
     private func installObserversOnce() {
         guard !observersInstalled else { return }

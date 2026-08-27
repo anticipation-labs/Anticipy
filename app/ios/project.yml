@@ -450,7 +450,25 @@ settings:
     # the appearance picker and the About sheet. 98 and these bytes disagree
     # about which view the Settings row opens at all, which is as large as a
     # build-number disagreement gets short of the app not launching.
-    CURRENT_PROJECT_VERSION: "99"
+    #
+    # 100 changes the audio session category, which is the largest thing on
+    # this list and the one to look at first if a build behaves strangely.
+    # `.record` is exclusive: any other app playing audio interrupted her, the
+    # engine stopped, and the background assertion -- worth roughly thirty
+    # seconds -- was all that kept the process alive, so a YouTube video left
+    # running meant she stopped listening and was eventually suspended. That is
+    # the "crashes when media plays" report. `.playAndRecord` + `.mixWithOthers`
+    # is the only combination that lets her keep an input while another app owns
+    # playback, and `.mixWithOthers` is REFUSED on `.record`, so this is a
+    # category change or it is nothing. `.defaultToSpeaker` rides with it
+    # because `.playAndRecord` otherwise routes output to the receiver and
+    # somebody's music would jump to the earpiece.
+    #
+    # 100 also gives CallPresencePolicy its first call site. It shipped correct
+    # and inert -- 44 checks, zero callers -- and CallSense is the CXCallObserver
+    # adapter that ends that. 99 and these bytes disagree about whether the app
+    # knows a call is happening at all.
+    CURRENT_PROJECT_VERSION: "100"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
