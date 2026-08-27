@@ -483,7 +483,7 @@ var S = {
   route: "today",
   param: null,
   q: "",
-  data: { people:[], tracks:[], todos:[], events:[], notifs:[], comments:[], activity:[], expenses:[], passwords:[], config:{}, channels:{} },
+  data: { people:[], tracks:[], todos:[], events:[], notifs:[], comments:[], activity:[], expenses:[], passwords:[], notes:[], config:{}, channels:{} },
   // mtFilter defaults to "all": most tasks are born without a due date, and a
   // default "Today" view greeted their owner with "Nothing in this view."
   ui: { mtFilter:"all", mtView:"list", mtSort:"due", atFilter:"everyone", calOff:0, calDeadlines:true, exScope:"mine",
@@ -918,7 +918,7 @@ function refresh(){
   // key-mode sign-ins had a bell that could never ring.
   if (!S.session && S.me) url += "?actor_id=" + encodeURIComponent(S.me.id);
   return api(url).then(function(st){
-    ["people","tracks","todos","events","notifs","comments","activity","expenses","passwords"].forEach(function(k){ S.data[k] = st[k] || []; });
+    ["people","tracks","todos","events","notifs","comments","activity","expenses","passwords","notes"].forEach(function(k){ S.data[k] = st[k] || []; });
     S.data.config = st.config || S.data.config; S.data.channels = st.channels || {};
     if (st.via_session) S.viaSession = true;
     if (S.me){ var fresh = person(S.me.id); if (fresh) S.me = Object.assign({}, S.me, fresh); }
@@ -936,13 +936,14 @@ var NAV = [
   { r:"projects",      label:"Projects" },
   { r:"calendar",      label:"Calendar" },
   { r:"expenses",      label:"Expenses" },
+  { r:"notes",         label:"Notes" },
   { r:"vault",         label:"Passwords" },
   { r:"notifications", label:"Notifications" },
   { r:"people",        label:"People", admin:true },
   { r:"settings",      label:"Settings" }
 ];
 var TITLES = { today:"Today", mytasks:"My Tasks", alltasks:"All Tasks", team:"Team", projects:"Projects",
-               project:"Project", calendar:"Calendar", expenses:"Expenses", vault:"Passwords", notifications:"Notifications", people:"People", settings:"Settings" };
+               project:"Project", calendar:"Calendar", expenses:"Expenses", notes:"Notes", vault:"Passwords", notifications:"Notifications", people:"People", settings:"Settings" };
 
 function nav(route, param){
   S.route = route; S.param = param || null; S.ui.sideOpen = false;
@@ -989,7 +990,7 @@ function render(){
   var v = $("view"); v.innerHTML = "";
   v.classList.toggle("wide", S.route === "alltasks");
   var fn = ({ today:viewToday, mytasks:viewMyTasks, alltasks:viewAllTasks, team:viewTeam, projects:viewProjects,
-              project:viewProject, calendar:viewCalendar, expenses:viewExpenses, vault:viewVault,
+              project:viewProject, calendar:viewCalendar, expenses:viewExpenses, notes:viewNotes, vault:viewVault,
               notifications:viewNotifs, people:viewPeople, settings:viewSettings })[S.route];
   if (!fn) fn = viewToday;
   fn(v);
@@ -2142,6 +2143,87 @@ function addExpenseModal(){
     };
     acts.appendChild(c); acts.appendChild(sv); box.appendChild(acts);
     t.onkeydown = function(e2){ if (e2.key === "Enter") sv.onclick(); };
+  });
+}
+
+/* ========================= NOTES ========================================= */
+/* One shared notebook. Anyone can edit any note — three people don't need
+   private notebooks inside their own dashboard; updated_by keeps it honest. */
+function viewNotes(v){
+  var tb = el("div","toolbar");
+  tb.appendChild(el("p","lead","Team notes — things that shouldn't live in chat scrollback."));
+  tb.appendChild(el("div","sp"));
+  var add = el("button","btn dark","+ New note");
+  add.onclick = function(){ noteModal(null); };
+  tb.appendChild(add);
+  v.appendChild(tb);
+
+  var rows = S.data.notes.slice();
+  if (!rows.length){ v.appendChild(el("div","empty","No notes yet. First one could be the studio wifi, honestly.")); return; }
+  var wrap = el("div","rows");
+  rows.forEach(function(n){
+    var r = el("div","row");
+    r.onclick = function(){ noteModal(n); };
+    var tt = el("div","tt");
+    tt.appendChild(el("span","txt", n.title || "(untitled)"));
+    if (n.track) tt.appendChild(el("span","chip proj", tname(n.track)));
+    r.appendChild(tt);
+    var meta = el("div","meta");
+    var first = (n.body || "").split("\n")[0].slice(0, 60);
+    if (first) meta.appendChild(el("span","muted", first));
+    meta.appendChild(el("span","muted", pname(n.updated_by) + " · " + dayLabel((n.updated || "").slice(0,10))));
+    r.appendChild(meta);
+    wrap.appendChild(r);
+  });
+  v.appendChild(wrap);
+}
+function noteModal(existing){
+  openModal(function(box){
+    box.appendChild(el("h3", null, existing ? "Edit note" : "New note"));
+    var t = document.createElement("input"); t.type = "text"; t.placeholder = "Title";
+    t.style.cssText = "width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:8px;font-size:15px;font-weight:600;margin-bottom:8px";
+    t.value = existing ? (existing.title || "") : "";
+    box.appendChild(t);
+    var b = document.createElement("textarea"); b.rows = 12; b.placeholder = "Write it down\u2026";
+    b.style.cssText = "width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:8px;font-size:14px;line-height:1.55;resize:vertical";
+    b.value = existing ? (existing.body || "") : "";
+    box.appendChild(b);
+    var f = el("div","f"); f.style.marginTop = "8px";
+    f.appendChild(el("span",null,"Project (optional)"));
+    var proj = document.createElement("select");
+    var none = el("option", null, "No project"); none.value = ""; proj.appendChild(none);
+    liveTracks().forEach(function(tr){
+      var o = el("option", null, tr.name); o.value = tr.id;
+      if (existing && existing.track === tr.id) o.selected = true;
+      proj.appendChild(o);
+    });
+    f.appendChild(proj); box.appendChild(f);
+    if (existing){
+      box.appendChild(el("p","hint","Last touched by " + pname(existing.updated_by) + "."));
+    }
+    var acts = el("div","acts");
+    if (existing && S.me && (existing.created_by === S.me.id || isAdmin())){
+      var del = el("button","btn danger","Delete");
+      del.onclick = function(){
+        if (!confirm("Delete “" + (existing.title || "this note") + "”? There is no undo.")) return;
+        api("/internal/notes/delete", { body:{ actor_id:S.me.id, note_id:existing.id } })
+          .then(function(){ closeModal(); return refresh(); }).then(render).catch(fail);
+      };
+      acts.appendChild(del);
+    }
+    var c = el("button","btn","Cancel"); c.onclick = closeModal;
+    var sv = el("button","btn dark", existing ? "Save" : "Add");
+    sv.onclick = function(){
+      if (!t.value.trim() && !b.value.trim()){ t.focus(); return; }
+      sv.disabled = true;
+      var body = { actor_id:S.me.id, title:t.value.trim(), body:b.value, track:proj.value };
+      if (existing) body.note_id = existing.id;
+      api("/internal/notes", { body: body })
+        .then(function(){ closeModal(); return refresh(); })
+        .then(render).catch(function(e2){ sv.disabled = false; fail(e2); });
+    };
+    acts.appendChild(c); acts.appendChild(sv); box.appendChild(acts);
+    if (!existing) t.focus();
   });
 }
 
