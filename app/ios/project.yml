@@ -435,7 +435,14 @@ settings:
     # each of three — and becomes a list of sources wearing their answer, with
     # the promises one tap in. 96 and these bytes disagree about what that
     # screen shows, which is a person's own question about what she may read.
-    CURRENT_PROJECT_VERSION: "97"
+    #
+    # 98 is screen 4: Profile. Name, email, birthday and number on one screen
+    # with ONE confirm control -- a circular header button, greyed until there
+    # is something to save -- where 97 had two Save buttons in two sections and
+    # a person who edited both had to find both. 97 and these bytes disagree
+    # about where the control that writes to the server is, which is the largest
+    # thing a build number can disagree about on an editable screen.
+    CURRENT_PROJECT_VERSION: "98"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
