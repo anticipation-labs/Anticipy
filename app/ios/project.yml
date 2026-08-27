@@ -429,7 +429,13 @@ settings:
     # number that did not move would let a build with the library and a build
     # without it wear the same name while the next commit starts deleting the
     # 968-line Form they replace.
-    CURRENT_PROJECT_VERSION: "96"
+    #
+    # 97 is the first screen built on the library 96 landed: "What I can see"
+    # stops printing every source expanded — name, promises, revoke, watch, for
+    # each of three — and becomes a list of sources wearing their answer, with
+    # the promises one tap in. 96 and these bytes disagree about what that
+    # screen shows, which is a person's own question about what she may read.
+    CURRENT_PROJECT_VERSION: "97"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
