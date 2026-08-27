@@ -419,7 +419,17 @@ settings:
     # about. The microphone still may not move, and on 95 the suite reads the
     # page map and the beat guard that keep it where it is rather than assuming
     # them.
-    CURRENT_PROJECT_VERSION: "95"
+    #
+    # 96 lands the settings design system Jose asked for from seven supplied
+    # screens: SettingsKit's chrome, card, section, footnote and eight row
+    # variants. Nothing on screen has moved yet — no view consumes it in this
+    # build — so 95 and these bytes agree about every pixel a person can reach.
+    # It gets its own number because the file list changed: this project globs
+    # `sources: - Anticipy`, so two new files enter the target here, and a
+    # number that did not move would let a build with the library and a build
+    # without it wear the same name while the next commit starts deleting the
+    # 968-line Form they replace.
+    CURRENT_PROJECT_VERSION: "96"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
