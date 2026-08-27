@@ -83,3 +83,45 @@ only leg left. Everything a machine can check ahead of that week is green.
 
 **The machine is built and every part has been proven to work. Nobody has lived
 with it yet.**
+
+---
+
+## CORRECTION, 2026-08-27: the table above overstates seven cards
+
+Written the day after, against a full audit of all seventeen. **Not one card is
+complete**, and the "DONE" column above is wrong wherever it appears.
+
+**The headline: the ears have been deaf for 76.5 hours.**
+`overnight/are_the_ears_live.py` exits 1. Newest speech of ALL TIME is
+2026-08-24 01:30Z from `iphone-b75`, while the backend answered throughout.
+
+The row above claiming EARS is "**DONE** — live rows from `iphone-b87`" is
+FALSE, and I wrote it. Production holds zero rows from b87 and zero from any
+build after 75. The tree is on build 102. Every capture change since 24 Aug is
+unproven, because nothing has arrived to prove it with.
+
+**Why no gate caught it.** `done_gate` leg 1 SHE HEARS YOU is green right now,
+over a provably deaf phone, because leg 1 runs Swift tests in this checkout and
+never consults `are_the_ears_live.py`. Nothing in done_gate, stranger_gate or
+tejas_gate invokes that file — it is named only in CLAUDE.md, AGENTS.md and
+research notes. The alarm exists and is wired to nothing.
+
+**SORTER is not what leg 3 proves.** Leg 3 judges four single LINES against a
+live model. That is the line-by-line judge this card exists to replace, so leg 3
+being green is orthogonal to it. The segment judge is demoted to shadow
+unconditionally at `brain/worker.py:2706-2717`; no value of
+ANTICIPY_SEGMENT_TRIAGE lets it write back.
+
+**LIBRARY's ageing half has no caller and no producer.** `expire_stale` is
+defined at `brain/memory.py:2180` and grep across brain/ returns exactly that
+one line. `valid_until` is a parameter no caller ever passes.
+
+**Three cards are BUILT-NOT-WIRED** — code that exists, is tested, and is
+reachable by nothing: HANDS 2's device lane (inert at both ends at once, which
+is why no test caught it), SHELF 2 (the one admitted act type has no producer,
+so nothing has ever been act-and-told), and the macOS recorder (whose suite is
+on no scoreboard: grep for macos across overnight/ and run_all.sh returns
+empty).
+
+The honest count is **0 of 17**. The pattern in this file was calling a card done
+because a gate leg was green, without asking what that leg actually measures.
