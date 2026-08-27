@@ -767,7 +767,7 @@ struct HomeView: View {
                 .foregroundStyle(Theme.text2)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: Theme.Space.snug) {
-                NavigationLink { SettingsView() } label: {
+                NavigationLink { SettingsHomeView() } label: {
                     Text(HomeCopy.browserButton(waiting: waiting))
                 }
                 .buttonStyle(.glass)
@@ -1282,7 +1282,7 @@ struct HomeView: View {
                     // So `GlassyIconStyle` is for glyph buttons that have to
                     // supply their own affordance, like the send arrow on the
                     // compose line. In a toolbar the system already did it.
-                    NavigationLink { SettingsView() } label: {
+                    NavigationLink { SettingsHomeView() } label: {
                         Image(systemName: "slider.horizontal.3")
                             // The colour it had before any of this: a muted
                             // dark, the same weight as the mark opposite it.

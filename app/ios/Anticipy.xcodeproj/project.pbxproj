@@ -15,6 +15,7 @@
 		1741E2E9969BA00F175A514B /* ContextTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B835B3131A011B32F5BC29 /* ContextTrigger.swift */; };
 		18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0AB97746861DA294983C3B /* AnticipyBackend.swift */; };
 		1C9C98C649D0B723997B9A85 /* TranscriptFlushPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */; };
+		2226A4EFE78AB9C94C015716 /* SettingsListeningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35BF4F0710D0F39FD92F0289 /* SettingsListeningView.swift */; };
 		2B855264D97A859EBDF101ED /* CallPresencePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F489EEF872DEA09B32DB3E2F /* CallPresencePolicy.swift */; };
 		400041E5EB5F764473B76A1E /* ContextAskSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D918825F71DB13464C228B73 /* ContextAskSheet.swift */; };
 		434BC104FF3BF99836CFD0FF /* ListenSessionFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E42FAE41F167B3CDF925213 /* ListenSessionFacts.swift */; };
@@ -34,6 +35,7 @@
 		6B99B2021748028CD2676754 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57259004332BAAB061719DF1 /* Theme.swift */; };
 		732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */; };
 		73A1C82CB7B99AB4795A3598 /* FirstRunOwnership.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC43B1EEB7B717196947EE8E /* FirstRunOwnership.swift */; };
+		77C50AE5F8AA2A1DD97A86EB /* SettingsHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8521207AAF8A1D75E0BC61ED /* SettingsHomeView.swift */; };
 		78EE68DCD42670CAD7886BDC /* GlassControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */; };
 		7B0222C65B8F9DDFC8855FEF /* EnrollmentOfferPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */; };
 		84AE67C98C92B710BDD9A786 /* ContextGrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0ADEE2467BA67E3131CEC1 /* ContextGrant.swift */; };
@@ -85,6 +87,7 @@
 		279CD122187AC50931E7FBAB /* InterviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterviewView.swift; sourceTree = "<group>"; };
 		2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTranscriber.swift; sourceTree = "<group>"; };
 		347F8F94513CF0FA870620CE /* AnswerRoutePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerRoutePolicy.swift; sourceTree = "<group>"; };
+		35BF4F0710D0F39FD92F0289 /* SettingsListeningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsListeningView.swift; sourceTree = "<group>"; };
 		368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantRadioPolicy.swift; sourceTree = "<group>"; };
 		36BD88F8F6F1384E8D4C3850 /* CaptureEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEnvelope.swift; sourceTree = "<group>"; };
 		3BC4BDEF755D6F5BC4138F18 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
@@ -106,6 +109,7 @@
 		7686379B8FF9FE21D398381F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		8095C94E5CB8E9048543E8B5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		82A5C0CD5302B692C964648D /* CalendarHandPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarHandPolicy.swift; sourceTree = "<group>"; };
+		8521207AAF8A1D75E0BC61ED /* SettingsHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsHomeView.swift; sourceTree = "<group>"; };
 		85B5A12F03C8D0BCE68493B9 /* SettingsProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsProfileView.swift; sourceTree = "<group>"; };
 		8E88365017E289B62475F24B /* PhoneListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneListener.swift; sourceTree = "<group>"; };
 		9CD1CE1C9359C9DF75AA38DE /* TranscriptCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptCursor.swift; sourceTree = "<group>"; };
@@ -247,8 +251,10 @@
 				7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */,
 				3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */,
 				5D657B61BDB55AEC37E034E7 /* SettingsAccessView.swift */,
+				8521207AAF8A1D75E0BC61ED /* SettingsHomeView.swift */,
 				0BE63B13B2A36AB4DB9EA566 /* SettingsKit.swift */,
 				C112A671A60C1CCDA902CE04 /* SettingsKitPolicy.swift */,
+				35BF4F0710D0F39FD92F0289 /* SettingsListeningView.swift */,
 				85B5A12F03C8D0BCE68493B9 /* SettingsProfileView.swift */,
 				E94C340A3EF64050C750BCD7 /* SettingsView.swift */,
 				714D2B06ED11248D1924DC9A /* SupervisedReadView.swift */,
@@ -386,8 +392,10 @@
 				D87272FC45C0E3640E24CA7E /* PhoneListener.swift in Sources */,
 				AFAF6DC8B8CB3AFF88CA6F48 /* PlainDuration.swift in Sources */,
 				A9F3E184E914DEA54C1653A4 /* SettingsAccessView.swift in Sources */,
+				77C50AE5F8AA2A1DD97A86EB /* SettingsHomeView.swift in Sources */,
 				A7D57FEE8635078FB72C3B13 /* SettingsKit.swift in Sources */,
 				971583FBD4A7D9FACD05AF00 /* SettingsKitPolicy.swift in Sources */,
+				2226A4EFE78AB9C94C015716 /* SettingsListeningView.swift in Sources */,
 				BAE76BA75023579091C26239 /* SettingsProfileView.swift in Sources */,
 				C4D475F4BA8EF258C2B27C02 /* SettingsView.swift in Sources */,
 				F5866E656A5499F27D4A8734 /* SpeakerTagger.swift in Sources */,
@@ -455,7 +463,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 98;
+				CURRENT_PROJECT_VERSION = 99;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -534,7 +542,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 98;
+				CURRENT_PROJECT_VERSION = 99;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

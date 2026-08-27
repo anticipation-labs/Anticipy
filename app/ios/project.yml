@@ -442,7 +442,15 @@ settings:
     # a person who edited both had to find both. 97 and these bytes disagree
     # about where the control that writes to the server is, which is the largest
     # thing a build number can disagree about on an editable screen.
-    CURRENT_PROJECT_VERSION: "98"
+    #
+    # 99 is the last two of the seven screens: Listening, and the Settings root
+    # that now opens when anyone taps Settings. The pause durations came out of
+    # a Menu and onto the screen as a pick-one group, so a person no longer taps
+    # to find out what the choices are, and the root gained the identity pill,
+    # the appearance picker and the About sheet. 98 and these bytes disagree
+    # about which view the Settings row opens at all, which is as large as a
+    # build-number disagreement gets short of the app not launching.
+    CURRENT_PROJECT_VERSION: "99"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
