@@ -43,3 +43,7 @@ venv/
 /chrome/linux-*/
 /chrome/mac-*/
 /chrome/win*-*/
+
+# Xcode per-user window/scheme state. Machine-local, changes on every
+# open, and belongs to whoever opened the project rather than to the app.
+xcuserdata/
