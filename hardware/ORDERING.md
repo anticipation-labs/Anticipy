@@ -4,11 +4,17 @@ All prices CAD, research estimates from live listings 2026-08-27; the checkout
 page is the truth — expect ±10 % plus tax. **+15 % contingency is line-itemed
 at the bottom (your stated margin of error).**
 
-## Cart 1 — RobotShop.ca (ships from Quebec, 18 in stock at last check)
+## Cart 1 — DigiKey Canada (verified 2026-08-27: 1,471 in stock)
 
 | Item | SKU | Qty | Est. |
 |---|---|---|---|
-| Seeed XIAO nRF52840 **Sense** | RB-See-855 / mfr 102010469 | 15 | 15 × $24.03 ≈ **$360** |
+| Seeed XIAO nRF52840 **Sense** | DigiKey 1597-102010469-ND / mfr 102010469 | 15 | 15 × $25.22 = **$378.30 CAD** |
+
+Free shipping over $100 CAD. Note: ships without headers (fine — we solder
+wires or the carrier PCB directly).
+
+Backup: RobotShop.ca RB-See-855 at $24.03 — but verified only **2 units left**
+(2026-08-27), so DigiKey is the primary source.
 
 ## Cart 2 — Amazon.ca (1–3 day delivery)
 
