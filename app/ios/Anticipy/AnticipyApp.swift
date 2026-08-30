@@ -120,6 +120,22 @@ struct AnticipyApp: App {
             // whole-screen change like the other three, and a hard cut there
             // would be the one hard cut left in first run.
             .animation(Theme.springSlow, value: hasSeenIntro)
+            // THE WIDGET'S DOORBELL. A Lock Screen or home tile taps through
+            // the anticipy scheme — the constant lives in the widget target —
+            // and the answer is the same start the feed's button uses:
+            // permission prompts, the account gate, everything the ordinary
+            // path does, just without the walk to the app first. A URL this
+            // app does not recognise is ignored, like any door knocked on by
+            // mistake. `startListening` guards its own state (already
+            // listening, mic denied), so the widget can never double-start
+            // her.
+            .onOpenURL { url in
+                guard url.scheme?.lowercased() == "anticipy" else { return }
+                let host = url.host?.lowercased() ?? ""
+                if host == "listen" {
+                    session.startListening()
+                }
+            }
             .environmentObject(pendant)
             .environmentObject(session)
             // Pinning the scheme is also what makes every Theme token resolve:

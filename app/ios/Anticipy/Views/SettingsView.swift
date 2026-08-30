@@ -498,6 +498,21 @@ struct SettingsView: View {
                             .foregroundStyle(Theme.muted)
                     }
                 }
+                // THE MAC EAR. Same brain, second surface: the Mac listener
+                // transcribes on device (SpeechTranscriber, nothing leaves
+                // the Mac) and posts the words to the same events the phone
+                // feeds, so the day is one day no matter which device heard
+                // it. Onboarding mentions it; the row stays in Settings for
+                // the person who skipped onboarding's mention at 2 a.m.
+                if let macDownload = URL(string: backendURL + "/mac/Anticipy-for-Mac.zip") {
+                    Link(destination: macDownload) {
+                        Label("Download Anticipy for Mac", systemImage: "laptopcomputer.and.arrow.down")
+                    }
+                    .ghostRow()
+                    Text("Menu bar app. Sign in with this account, click the mic, and the Mac hears its half of the day. Meetings are detected and offered — recording starts only when you click.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.muted)
+                }
                 if !session.agentPaired {
                     if let setup = URL(string: backendURL + "/setup.html") {
                         Link(destination: setup) {

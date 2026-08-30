@@ -508,7 +508,23 @@ settings:
     # through. New files: SpeechAnalyzerEngine, TranscriptionEnginePolicy;
     # PhoneListener's request seam, LocalTranscriber's engine dispatch, the
     # assembler's gap ledger, and the tests that pin all of it.
-    CURRENT_PROJECT_VERSION: "105"
+    #
+    # 106: the widget that rings the doorbell. A Lock Screen / home tile
+    # (AnticipyWidget target) taps through the anticipy URL scheme and the
+    # app's onOpenURL hands the tap to startListening — permission prompts,
+    # the account gate, everything the feed's own button does, without the
+    # walk to the app first. The scheme is registered on the app target's
+    # info properties; the extension target embeds here, so the file list
+    # changed — which alone would move the number.
+    # 107: the Mac ear joins the day. Settings' "Your computer" section
+    # gains the download row for Anticipy-for-Mac (served from the same
+    # backend that serves the extension), and the Mac app itself lands in
+    # app/macos/AnticipyMac — menu bar, meeting detection through
+    # MeetingOfferPolicy's own law (offer first, recording only on the
+    # owner's click), on-device SpeechTranscriber, and transcripts posted
+    # with the same capture envelope the phone sends. 106 and these bytes
+    # disagree about what a signed-in phone offers its owner.
+    CURRENT_PROJECT_VERSION: "107"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -541,11 +557,64 @@ schemes:
     archive:
       config: Release
 targets:
+  AnticipyMac:
+    type: application
+    platform: macOS
+    sources:
+      - ../macos/AnticipyMac
+      - ../macos/Anticipy/Capture/MeetingOfferPolicy.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.mac
+        MARKETING_VERSION: "1.1.0"
+        # LITERAL, and it moves in lockstep with the app's number: the
+        # build-number gate reads the shared pbxproj and cannot tell an iOS
+        # literal from a Mac one, and two products answering "which build
+        # are you holding" with different numbers is the exact disease this
+        # gate exists to prevent.
+        CURRENT_PROJECT_VERSION: "107"
+        DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CF_DISPLAY_NAME: "Anticipy"
+        INFOPLIST_KEY_LSUIElement: true
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Anticipy listens through your microphone when you ask it to, so it can catch what you commit to. Audio stays on this Mac; the words are sent to Anticipy's server so she can act on them."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Anticipy turns what it hears into text on this Mac, then sends that text to her server so she can remember it and act on it."
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+
+  AnticipyWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Widget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.app.widget
+        # LITERALS, on purpose: run_build_number_tests.sh greps the generated
+        # pbxproj for any CURRENT_PROJECT_VERSION that differs from the app's,
+        # and a nested "$(CURRENT_PROJECT_VERSION)" reads as exactly that.
+        # These move with the app target's numbers, by hand, in the same
+        # commit.
+        MARKETING_VERSION: "1.1.0"
+        DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CF_DISPLAY_NAME: "Anticipy"
+        INFOPLIST_KEY_NS_EXTENSION_NS_EXTENSION_POINT_IDENTIFIER: com.apple.widgetkit-extension
+        SWIFT_VERSION: "5.0"
+
   Anticipy:
     type: application
     platform: iOS
     sources:
       - Anticipy
+    dependencies:
+      # The one-tap ear: a widget extension with NO app group, NO AppIntent
+      # and NO shared container — the tap opens the app with anticipy://listen
+      # (see the URL scheme in info properties) and the app does the rest.
+      # Nothing here for provisioning to refuse on a fresh account.
+      - target: AnticipyWidget
     # NO DEPENDENCIES, and this is the second time sherpa-onnx has been taken
     # out of this line. Read 9069765a before putting it back.
     #
@@ -598,6 +667,14 @@ targets:
       path: Anticipy/Info.plist
       properties:
         CFBundleDisplayName: Anticipy
+        CFBundleIconName: AppIcon
+        # The widget's doorbell. A Lock Screen or home tile taps through this
+        # scheme and the app's onOpenURL starts listening — no AppIntent, no
+        # App Group, nothing for provisioning to refuse on a fresh account.
+        CFBundleURLTypes:
+          - CFBundleURLName: ai.anticipy.listen
+            CFBundleURLSchemes:
+              - anticipy
         CFBundleIconName: AppIcon
         # References the build settings above so the version can never
         # drift: on 2026-08-15 this literal silently overwrote the
