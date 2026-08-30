@@ -15,6 +15,13 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
     steps:
       - uses: actions/checkout@v4
+      - name: Use Xcode 26 (Apple requires the iOS 26 SDK for uploads)
+        run: |
+          ls /Applications | grep -i xcode || true
+          X26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          echo "Selected: $X26"
+          sudo xcode-select -s "$X26"
+          xcodebuild -version
       - name: Install xcodegen
         run: brew install xcodegen
       - name: Generate Xcode project
