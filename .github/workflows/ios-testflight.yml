@@ -36,7 +36,7 @@ jobs:
             -project Anticipy.xcodeproj -scheme Anticipy \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath $RUNNER_TEMP/Anticipy.xcarchive \
-            -allowProvisioningUpdates -allowCloudSigning \
+            -allowProvisioningUpdates \
             -authenticationKeyPath $RUNNER_TEMP/asc/AuthKey.p8 \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
       - name: Export and upload to TestFlight
