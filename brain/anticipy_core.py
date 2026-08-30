@@ -4044,8 +4044,43 @@ class Anticipy:
             # exception, leaving a log that read completely normal.
             response = getattr(e, "response", None)
             if response is not None:
-                print(f"queue write refused {response.status_code} for "
+                status = getattr(response, "status_code", None)
+                print(f"queue write refused {status} for "
                       f"{goal!r}: {str(response.text)[:400]}")
+                # A 400 on create is, in production, the workflow_id unique
+                # index saying THIS PLAN ALREADY HAS A ROW — the re-mentions
+                # law says a plan already running absorbs its re-mention, so
+                # absorb: find the row wearing this plan's identity and amend
+                # it in place, returning ITS id, exactly as a fresh create
+                # would have. Falling back to None here would read as "already
+                # waiting on him" and silently drop the plan's new content.
+                if status == 400:
+                    try:
+                        wid = workflow_fields.get("workflow_id") or ""
+                        if wid:
+                            found = pb.get(
+                                f"{self.backend_url}/api/collections/jobs/records",
+                                params={"filter": f'workflow_id="{wid}"',
+                                        "owner_ref": self.owner_ref or ""},
+                                timeout=10,
+                            )
+                            rows = (found.json() or {}).get("items") or []
+                            if len(rows) == 1:
+                                existing = rows[0]
+                                amend = {"goal": goal, "params": json.dumps(params)}
+                                if self.owner_ref:
+                                    amend["owner_ref"] = self.owner_ref
+                                r2 = pb.patch(
+                                    f"{self.backend_url}/api/collections/jobs/records/{existing['id']}",
+                                    json=amend, timeout=10,
+                                )
+                                r2.raise_for_status()
+                                print(f"queue write absorbed into existing job "
+                                      f"{existing['id']} for {goal!r}")
+                                return existing["id"]
+                    except Exception as absorb_error:
+                        print(f"absorb into existing job failed for {goal!r}: "
+                              f"{type(absorb_error).__name__}: {absorb_error}")
             else:
                 print(f"queue write never reached the backend for {goal!r}: "
                       f"{type(e).__name__}: {e}")
@@ -4513,6 +4548,12 @@ class Anticipy:
                 print(f"workflow merge refused for {job_id}: {e}")
                 return
         fields["params"] = json.dumps(merged)
+        # THE IDENTITY DOES NOT MOVE. An amendment changes what the plan SAYS,
+        # never which plan it is: workflow_id carries a unique index, and a
+        # merge that minted a fresh plan_id here would turn the amend into a
+        # 400 (or, worse, a second row for one plan). The row keeps its
+        # identity; the version bump carries the change.
+        fields.pop("workflow_id", None)
         try:
             r = pb.patch(f"{self.backend_url}/api/collections/jobs/records/{job_id}",
                          json=fields, timeout=10)
