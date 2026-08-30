@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 60
     env:
       DEVELOPMENT_TEAM: "49T86P9XGW"
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Install xcodegen
@@ -18,38 +20,25 @@ jobs:
       - name: Generate Xcode project
         working-directory: app/ios
         run: xcodegen generate
-      - name: Import distribution certificate
-        env:
-          DISTRIBUTION_P12: ${{ secrets.DISTRIBUTION_P12 }}
-          DISTRIBUTION_P12_PASSWORD: ${{ secrets.DISTRIBUTION_P12_PASSWORD }}
-        run: |
-          CERT_PATH=$RUNNER_TEMP/distribution.p12
-          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain-db
-          echo -n "$DISTRIBUTION_P12" | base64 --decode -o $CERT_PATH
-          security create-keychain -p "" "$KEYCHAIN_PATH"
-          security set-keychain-settings -t 3600 "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$DISTRIBUTION_P12_PASSWORD" -T /usr/bin/codesign
-          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '" ')
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN_PATH"
       - name: Write App Store Connect API key
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           mkdir -p $RUNNER_TEMP/asc
           echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
-      - name: Archive
+      - name: Bump build number above Apple's latest
+        working-directory: app/ios
+        run: xcrun agvtool next-version -all || echo "agvtool bump skipped"
+      - name: Archive (cloud signing — Apple holds the key)
         working-directory: app/ios
         run: |
           xcodebuild archive \
             -project Anticipy.xcodeproj -scheme Anticipy \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath $RUNNER_TEMP/Anticipy.xcarchive \
-            -allowProvisioningUpdates \
+            -allowProvisioningUpdates -allowCloudSigning \
             -authenticationKeyPath $RUNNER_TEMP/asc/AuthKey.p8 \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       - name: Export and upload to TestFlight
         working-directory: app/ios
         run: |
@@ -62,9 +51,3 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
           xcrun altool --upload-app -t ios -f $RUNNER_TEMP/export/*.ipa \
             --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      - name: Cleanup keychain
-        if: always()
-        run: security delete-keychain $RUNNER_TEMP/build.keychain-db || true
