@@ -524,7 +524,7 @@ settings:
     # owner's click), on-device SpeechTranscriber, and transcripts posted
     # with the same capture envelope the phone sends. 106 and these bytes
     # disagree about what a signed-in phone offers its owner.
-    CURRENT_PROJECT_VERSION: "107"
+    CURRENT_PROJECT_VERSION: "108"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -572,7 +572,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "107"
+        CURRENT_PROJECT_VERSION: "108"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
@@ -601,8 +601,17 @@ targets:
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CF_DISPLAY_NAME: "Anticipy"
-        INFOPLIST_KEY_NS_EXTENSION_NS_EXTENSION_POINT_IDENTIFIER: com.apple.widgetkit-extension
         SWIFT_VERSION: "5.0"
+    info:
+      # EXPLICIT, not the INFOPLIST_KEY_ shorthand: that build setting does
+      # not exist for the extension point, and Apple's validator answered
+      # with "Missing Info.plist key. The NSExtensionPointIdentifier key
+      # must be present in the NSExtension dictionary" — the bounce that
+      # cost build 106's successor its upload.
+      path: Widget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
   Anticipy:
     type: application

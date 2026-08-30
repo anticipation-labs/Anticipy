@@ -59,5 +59,16 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath $RUNNER_TEMP/asc/AuthKey.p8 \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-          xcrun altool --upload-app -t ios -f $RUNNER_TEMP/export/*.ipa \
-            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          # THE GATE THAT WAS MISSING: altool printed "Failed to upload
+          # package / STATE_ERROR.VALIDATION_ERROR" and still exited 0 —
+          # the run read green while Apple received nothing. The pipeline
+          # verdict must be Apple's verdict, so grep it out of altool's own
+          # mouth and fail the step if the words are not there.
+          set -o pipefail
+          out=$(xcrun altool --upload-app -t ios -f $RUNNER_TEMP/export/*.ipa \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1) || true
+          echo "$out"
+          echo "$out" | grep -q "UPLOAD SUCCEEDED" || {
+            echo "::error::Apple refused the upload — see the validation error above"
+            exit 1
+          }
