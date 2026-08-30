@@ -610,6 +610,7 @@ targets:
       # cost build 106's successor its upload.
       path: Widget/Info.plist
       properties:
+        CFBundleDisplayName: Anticipy
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
