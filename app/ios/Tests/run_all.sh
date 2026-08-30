@@ -7,6 +7,9 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 sh "$HERE/run_cursor_tests.sh"
+# The gap law and the engine seam — the gap measured, drained, marked; the
+# recognizer swappable under a cursor that never learns which engine spoke.
+sh "$HERE/run_gap_engine_tests.sh"
 sh "$HERE/run_heard_tests.sh"
 sh "$HERE/run_flush_policy_tests.sh"
 # WHEN the words started and WHEN the flush produced them — two instants, not

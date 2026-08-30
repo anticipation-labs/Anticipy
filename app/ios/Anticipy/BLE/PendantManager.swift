@@ -59,6 +59,13 @@ final class PendantManager: NSObject, ObservableObject {
     /// Reassembled Opus frames are handed to the audio pipeline.
     var onOpusFrame: ((Data) -> Void)?
 
+    /// Fired whenever the assembler measures airtime nobody captured — a
+    /// packet-index jump on the live stream. The wall-clock gap of a full
+    /// disconnect is a different number with a different owner: the session
+    /// marks it from reconnect time. Both exist so the transcript can carry
+    /// a mark instead of a model's invention.
+    var onGap: ((TimeInterval) -> Void)?
+
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
     private var frameAssembler = OpusFrameAssembler()
@@ -298,6 +305,8 @@ extension PendantManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         switch c.uuid {
         case Self.audioUUID:
             if let frame = frameAssembler.accept(data) { onOpusFrame?(frame) }
+            let gap = frameAssembler.takeGapSeconds()
+            if gap > 0 { onGap?(gap) }
         case Self.batteryLevelUUID:
             if let level = data.first { battery = Int(level) }
         default:

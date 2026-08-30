@@ -16,6 +16,7 @@ struct SettingsView: View {
     /// string, which is exactly how a rename leaves a "Replay the welcome
     /// tour" button that silently replays nothing.
     @AppStorage(FirstRunOwnership.flagKey) private var hasOnboarded = false
+    @AppStorage(ListenEnginePolicy.legacyFlagKey) private var useLegacyRecognizer = false
     /// AND THE INTRODUCTION, because "Replay the welcome tour" names it. The
     /// two pre-auth beats are in front of the sign-in door now, so clearing
     /// only `hasOnboarded` would replay the microphone and the number and skip
@@ -244,6 +245,23 @@ struct SettingsView: View {
             // to STOP, which is the last screen in the app that may be slow to
             // draw.
             .onAppear(perform: syncPause)
+
+            Section("Speech engine") {
+                // The escape hatch, exposed. iOS 26's SpeechTranscriber is the
+                // default ears — four times the measured accuracy of the
+                // legacy recognizer, still entirely on device. This switch is
+                // the way back without a rebuild, for the day it misbehaves on
+                // hardware nobody tested. `ListenEnginePolicy` reads this key
+                // and the flag wins over the OS check; the next request the
+                // listener takes honours it, mid-session swaps included.
+                Toggle("Use the older recognizer", isOn: $useLegacyRecognizer)
+                if useLegacyRecognizer {
+                    Text("Slower to forgive mumbled words, but known.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+            .listRowBackground(Theme.card)
 
             Section("Pendant") {
                 HStack {

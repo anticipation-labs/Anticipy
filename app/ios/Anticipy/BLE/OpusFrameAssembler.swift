@@ -9,6 +9,11 @@ import Foundation
 struct OpusFrameAssembler {
     static let maximumFrameBytes = 4096
 
+    /// Omi-wire audio packets carry 160 samples at 16 kHz — one packet is
+    /// 10 ms of airtime. A packet-index jump is therefore a gap with a
+    /// measurable length, and the length is honest arithmetic, not a guess.
+    static let packetSeconds: TimeInterval = 0.010
+
     private var buffer = Data()
     private var frameIsValid = false
     private var previousPacketIndex: UInt16?
@@ -16,6 +21,19 @@ struct OpusFrameAssembler {
 
     private(set) var droppedFrames = 0
     private(set) var peakBufferedBytes = 0
+
+    /// Airtime nobody captured, accumulated since the last drain. This is
+    /// the number the gap law exists for: the transcript must carry a
+    /// marker of this length, never a model's invention across the silence.
+    private(set) var gapSeconds: TimeInterval = 0
+
+    /// Hands over and clears the accumulated gap. Draining, not reading —
+    /// a gap reported twice is a lie told once and repeated.
+    mutating func takeGapSeconds() -> TimeInterval {
+        let gap = gapSeconds
+        gapSeconds = 0
+        return gap
+    }
 
     /// Accept one full GATT notification. Returns the previous complete frame
     /// when this packet starts the next one.
@@ -31,6 +49,17 @@ struct OpusFrameAssembler {
         let packetIsContinuous = previousPacketIndex.map {
             index == $0 &+ 1
         } ?? true
+        if !packetIsContinuous, let prev = previousPacketIndex {
+            // The 16-bit counter wrapped — the distance across the wrap is
+            // what the arithmetic below recovers. A reorder reads as a jump
+            // too, and gets counted the same way: it IS airtime that never
+            // arrived at this decoder, whatever the radio did with it.
+            var delta = Int(index) - Int(prev)
+            if delta <= 0 { delta += 65536 }
+            if delta > 1 {
+                gapSeconds += TimeInterval(delta - 1) * Self.packetSeconds
+            }
+        }
         previousPacketIndex = index
 
         if counter == 0 {

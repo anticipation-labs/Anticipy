@@ -143,6 +143,19 @@ final class PhoneListener: NSObject, ObservableObject {
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    // iOS 26's SpeechTranscriber, when the device has it. Nil on the legacy
+    // path — the two engines never run at once, and everything downstream
+    // (cursor, flushes, journal, orphan buffers) is engine-blind on purpose:
+    // the recognizer is the one swappable part, not the listening rules.
+    private var analyzerEngine: (any ListenRequestEngine)?
+    private var usingAnalyzer = false
+    /// An engine that cannot provision its model is an outage to route
+    /// around, not to retry into forever: three failures and this session
+    /// finishes on the legacy recognizer. Session-scoped on purpose — the
+    /// next listen starts optimistic again, because maybe the download
+    /// finished while the phone sat in a pocket.
+    private var analyzerFailures = 0
+    private var analyzerDisabledForSession = false
     private var silenceFlush: DispatchWorkItem?
     private var watchdog: Timer?
     private var observersInstalled = false
@@ -506,8 +519,12 @@ final class PhoneListener: NSObject, ObservableObject {
             // sent. Only its one-word verdict ever leaves the phone.
             self.speaker?.accept(buffer)
             self.orphanLock.lock()
-            if self.acceptingAudio, let req = self.request {
-                req.append(buffer)
+            if self.acceptingAudio {
+                if self.usingAnalyzer {
+                    self.analyzerEngine?.append(buffer)
+                } else if let req = self.request {
+                    req.append(buffer)
+                }
             } else if self.isListening {
                 // No request is taking audio right now (swap in flight).
                 // Hold it — do NOT drop it — and replay into the next one.
@@ -887,6 +904,15 @@ final class PhoneListener: NSObject, ObservableObject {
     }
 
     private func startRecognition() {
+        if #available(iOS 26.0, *), ListenEnginePolicy.usesAnalyzerNow,
+           !analyzerDisabledForSession {
+            // The engine is non-optional on an iOS 26 device; the failure
+            // modes (model missing, locale uncovered) surface as onError and
+            // land in the three-strike fallback, not in a nil bind here.
+            runAnalyzerRequest(SpeechAnalyzerRequestEngine.make(locale: Locale(identifier: "en_US")))
+            return
+        }
+        usingAnalyzer = false
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         // Rebuilt per request, not cached: this fires on every swap, so a
@@ -945,57 +971,8 @@ final class PhoneListener: NSObject, ObservableObject {
                 self.lastResultAt = Date()
 
                 if let result {
-                    // A window reset replaces the text instead of extending it
-                    // (a 12s sentence collapsing to "Of August"). There used to
-                    // be a character-count guess here that banked the tail and
-                    // zeroed the cursor — which then said the short text again.
-                    // The cursor re-finds the said words in whatever the
-                    // recogniser now believes, so a collapse needs no special
-                    // case and no magic number.
-                    self.partial = result.bestTranscription.formattedString
-                    // Stamped where a revision actually arrives. This is the
-                    // evidence that tells "still talking, the clock ran out"
-                    // (a cut) from "stopped talking" (a finished thought), and
-                    // without it the flush can only ever report the second.
-                    self.lastPartialAt = Date()
-                    // Show the cursor EVERY hypothesis, not just the ones we
-                    // flush on. That is what lets it notice the recognizer
-                    // throwing away a decode window and hand back the words
-                    // that window held (`banked`) before they are gone — the
-                    // 12-second sentence collapsing to "Of August". Nothing
-                    // else in the app remembers unsent speech.
-                    let update = self.cursor.observe(self.partial)
-                    if let banked = update.banked?
-                        .trimmingCharacters(in: .whitespacesAndNewlines),
-                        !banked.isEmpty, !self.enrolling {
-                        // Banked words are older than the ones still pending,
-                        // so the pending mark is the earliest honest answer to
-                        // "when did these appear". Absent one, they appeared
-                        // now, which continues nothing.
-                        self.deliver(banked, reason: nil,
-                                     wordsAppearedAt: self.pendingSince ?? Date())
-                    }
-                    // AFTER the banked line, never before it. Banked words are
-                    // words the cursor is handing over BECAUSE the window died
-                    // under them — they were never sent, and arming the guard
-                    // in front of them would suppress the one delivery that
-                    // exists to stop speech being lost. The line at risk is
-                    // the NEXT one: the replaced window's own text, which is
-                    // the already-sent audio decoded again.
-                    if update.didReset { self.lineageBrokeAt = Date() }
-                    if result.isFinal {
-                        // A final usually just polishes wording, so a couple of
-                        // new words is noise — EXCEPT when the task is ending
-                        // with speech never sent at all. That is not a polish,
-                        // it is the whole monologue, and gating it away is how
-                        // a continuous talker's words reached nobody.
-                        self.flushTail(reason: .final)
-                        // A final arriving mid-conversation is Apple's task
-                        // limit landing, not the speaker stopping.
-                        self.swapRecognition(flushPending: false, cause: .taskLimit)
-                    } else if update.changed || update.didReset {
-                        self.scheduleSilenceFlush()
-                    }
+                    self.absorbRecognized(result.bestTranscription.formattedString,
+                                          isFinal: result.isFinal)
                 } else if error != nil {
                     // The recognizer died. Whatever was heard is real speech —
                     // emit it, then take a fresh one; buffered audio carries
@@ -1163,6 +1140,128 @@ final class PhoneListener: NSObject, ObservableObject {
     /// The same rule now governs every write above the 0 Hz guard in
     /// `configureAndStartEngine`. It did not, and the two `.noted` lines that
     /// escaped it evicted the whole ring in 27 minutes of one phone call.
+    /// Everything one recognizer revision means — shared by BOTH engines.
+    /// `isFinal` reaches here true only from the legacy path, where it means
+    /// Apple's task limit landed mid-speech: flush what was held, take a
+    /// fresh task. The analyzer engine finalizes progressively and passes
+    /// false: its finalization is wording settling, not a limit, and tearing
+    /// the request down on it would burn battery for nothing. Its swaps
+    /// belong to the watchdog, exactly as before.
+    private func absorbRecognized(_ text: String, isFinal: Bool) {
+        // A window reset replaces the text instead of extending it
+        // (a 12s sentence collapsing to "Of August"). There used to
+        // be a character-count guess here that banked the tail and
+        // zeroed the cursor — which then said the short text again.
+        // The cursor re-finds the said words in whatever the
+        // recogniser now believes, so a collapse needs no special
+        // case and no magic number.
+        partial = text
+        // Stamped where a revision actually arrives. This is the
+        // evidence that tells "still talking, the clock ran out"
+        // (a cut) from "stopped talking" (a finished thought), and
+        // without it the flush can only ever report the second.
+        lastPartialAt = Date()
+        // Show the cursor EVERY hypothesis, not just the ones we
+        // flush on. That is what lets it notice the recognizer
+        // throwing away a decode window and hand back the words
+        // that window held (`banked`) before they are gone — the
+        // 12-second sentence collapsing to "Of August". Nothing
+        // else in the app remembers unsent speech.
+        let update = cursor.observe(partial)
+        if let banked = update.banked?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !banked.isEmpty, !enrolling {
+            // Banked words are older than the ones still pending,
+            // so the pending mark is the earliest honest answer to
+            // "when did these appear". Absent one, they appeared
+            // now, which continues nothing.
+            deliver(banked, reason: nil,
+                    wordsAppearedAt: pendingSince ?? Date())
+        }
+        // AFTER the banked line, never before it. Banked words are
+        // words the cursor is handing over BECAUSE the window died
+        // under them — they were never sent, and arming the guard
+        // in front of them would suppress the one delivery that
+        // exists to stop speech being lost. The line at risk is
+        // the NEXT one: the replaced window's own text, which is
+        // the already-sent audio decoded again.
+        if update.didReset { lineageBrokeAt = Date() }
+        if isFinal {
+            // A final usually just polishes wording, so a couple of
+            // new words is noise — EXCEPT when the task is ending
+            // with speech never sent at all. That is not a polish,
+            // it is the whole monologue, and gating it away is how
+            // a continuous talker's words reached nobody.
+            flushTail(reason: .final)
+            // A final arriving mid-conversation is Apple's task
+            // limit landing, not the speaker stopping.
+            swapRecognition(flushPending: false, cause: .taskLimit)
+        } else if update.changed || update.didReset {
+            scheduleSilenceFlush()
+        }
+    }
+
+    /// The iOS 26 request. Same contract as the legacy one below — same reset
+    /// block, same orphan replay, same identity guard, same journal events —
+    /// a different recognizer and nothing else. A request that cannot
+    /// provision its model counts toward the three-strike session fallback
+    /// rather than spinning: `onError` here is an outage, and the retry rule
+    /// this codebase already wrote down for 410s applies — only the
+    /// recoverable kind may be retried.
+    @available(iOS 26.0, *)
+    private func runAnalyzerRequest(_ engine: SpeechAnalyzerRequestEngine) {
+        usingAnalyzer = true
+        requestBornAt = Date()
+        lastResultAt = Date()
+        // Everything the cursor knew about what it had already sent dies
+        // here — the same break the legacy path takes, for the same reason:
+        // the orphan replay below re-decodes held audio through a cursor
+        // with no record of the first decode, and the duplicate guard has
+        // to know the seam exists.
+        lineageBrokeAt = Date()
+        cursor.reset()
+        partial = ""
+        pendingSince = nil
+        // `cutAt` is deliberately NOT cleared here. Speech can cross a swap
+        // seam — the orphan buffer exists to replay it — and a cut whose
+        // words continue half a second later on a new engine is a true link.
+        lastPartialAt = nil
+        everEmittedThisTask = false
+
+        orphanLock.lock()
+        analyzerEngine = engine
+        acceptingAudio = true
+        let held = orphanBuffers
+        orphanBuffers.removeAll()
+        orphanLock.unlock()
+        for b in held { engine.append(b) }
+
+        engine.onResult = { [weak self, weak engine] text, isFinal in
+            guard let self, let engine else { return }
+            DispatchQueue.main.async {
+                // Only the CURRENT engine may touch shared state — a
+                // superseded engine's late callbacks must never clobber or
+                // double-emit. The tail a finishing engine emits after the
+                // swap has already happened is deliberately rejected: its
+                // audio was orphan-replayed into the replacement, so the
+                // words arrive once, from the engine that owns them.
+                guard self.analyzerEngine === engine else { return }
+                self.lastResultAt = Date()
+                self.absorbRecognized(text, isFinal: isFinal)
+            }
+        }
+        engine.onError = { [weak self, weak engine] in
+            guard let self, let engine else { return }
+            DispatchQueue.main.async {
+                guard self.analyzerEngine === engine else { return }
+                self.analyzerFailures &+= 1
+                if self.analyzerFailures >= 3 { self.analyzerDisabledForSession = true }
+                self.swapRecognition(flushPending: true, cause: .error)
+            }
+        }
+        engine.begin()
+    }
+
     private func swapRecognition(flushPending: Bool, cause: ListenEvent.SwapCause,
                                  alreadyReported: Bool = false) {
         if !alreadyReported {
@@ -1180,6 +1279,11 @@ final class PhoneListener: NSObject, ObservableObject {
         task?.cancel()
         task = nil
         request = nil
+        // The analyzer finalizes its tail through finish(); whatever arrives
+        // after the replacement is installed is identity-guarded away, and
+        // the orphan replay re-decodes the seam either way.
+        analyzerEngine?.finish()
+        analyzerEngine = nil
         guard isListening else { return }
         startRecognition()
     }
@@ -1227,6 +1331,11 @@ final class PhoneListener: NSObject, ObservableObject {
         watchdog?.invalidate()
         watchdog = nil
         silenceFlush?.cancel()
+        // The engine outlives this stop only as a corpse; finishing it is
+        // what delivers the tail it was still holding.
+        analyzerEngine?.finish()
+        analyzerEngine = nil
+        usingAnalyzer = false
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         orphanLock.lock()

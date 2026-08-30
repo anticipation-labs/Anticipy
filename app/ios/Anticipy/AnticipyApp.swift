@@ -1274,23 +1274,53 @@ final class AnticipySession: ObservableObject {
     /// -- What would make it speak ------------------------------------------
     ///
     /// An on-device transcriber. `Audio/LocalTranscriber.swift` is the
-    /// intended home and is NOT ready: it is 43 lines with zero call sites, it
-    /// wants `AVAudioPCMBuffer`, the pendant emits Opus `Data`, and there is no
-    /// Opus decoder in this target. That decoder is the real work, and it is
-    /// not started here. Until it exists the pendant is a battery with a
-    /// microphone nobody reads, and the app says so on both screens that
-    /// mention it rather than showing a Listening label over silence.
+    /// intended home and its ENGINE side is now ready: it selects Apple's
+    /// iOS 26 SpeechTranscriber where the device has it (2.12% word error
+    /// against the legacy recognizer's 9.02%, still entirely on device) and
+    /// accepts the same 16 kHz mono PCM buffers, gap skips included. What is
+    /// still missing is unchanged and is the real work: the pendant emits
+    /// Opus `Data`, this target has no Opus decoder, and nothing here may
+    /// ship raw audio off the phone to have someone else's decoder do it.
+    /// Until that decoder exists the pendant is a battery with a microphone
+    /// nobody reads, and the app says so on both screens that mention it
+    /// rather than showing a Listening label over silence. The gap law is
+    /// live regardless: `onGap` reports airtime the radio lost, and the feed
+    /// carries the mark.
     func startPendantTranscription(_ pendant: PendantManager) async {
         // Not a guard on `isSignedIn` or the pendant's state: there is nothing
         // to start under any condition, and a version of this that returned
         // early on some paths would leave `onOpusFrame` set on the others.
         pendant.onOpusFrame = nil
+        // The gap law starts HERE, even though the frames themselves are
+        // dropped at the source: the assembler still measures the airtime
+        // the radio lost, and the feed still says so. A pendant that lost a
+        // minute is shown as having lost a minute — never as a silence the
+        // transcript politely glosses over.
+        pendant.onGap = { [weak self] seconds in
+            self?.recordPendantGap(seconds)
+        }
         pendantCapturing = false
     }
 
     func stopPendantTranscription(_ pendant: PendantManager) {
         pendant.onOpusFrame = nil
+        pendant.onGap = nil
         pendantCapturing = false
+    }
+
+    /// The hole, made visible. A gap line never goes through the transcript
+    /// push path — the brain must never be asked to triage dead air — and it
+    /// is formatted by GapMarker so the wording is one decision, tested,
+    /// not three strings typed in three places. The ListenJournal is NOT
+    /// written here: its event enum is gate-pinned, and a gap is not a
+    /// session stop — journaling a hole as a stopped session is how a
+    /// journal starts hiding the stops that were real. Journaling gaps
+    /// properly is one new case + one describe line, declared as follow-up.
+    private func recordPendantGap(_ seconds: TimeInterval) {
+        let marker = GapMarker.text(seconds)
+        DispatchQueue.main.async { [weak self] in
+            self?.sessionLines.append(SessionLine(text: marker))
+        }
     }
 
     /// True when iOS has already been told no and will not ask again — the app

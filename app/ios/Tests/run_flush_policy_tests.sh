@@ -163,7 +163,7 @@ if ! awk '/private func startRecognition/,/^    }/' "$code" \
     exit 2
 fi
 # ...and so does a decode window replaced mid-task, which is the commoner half.
-if ! grep -qE 'update\.didReset.*self\.lineageBrokeAt = Date\(\)' "$code"; then
+if ! grep -qE 'update\.didReset.*lineageBrokeAt = Date\(\)' "$code"; then
     echo "PhoneListener ignores the cursor telling it the window was replaced."
     exit 2
 fi
@@ -171,8 +171,8 @@ fi
 # over BECAUSE the window died under them. They were never sent. Arming in
 # front of them suppresses the one delivery that exists to stop speech being
 # lost — the 12-second sentence collapsing to "Of August".
-banked_line=$(grep -n 'self.deliver(banked' "$code" | head -1 | cut -d: -f1)
-arm_line=$(grep -nE 'update\.didReset.*self\.lineageBrokeAt = Date\(\)' "$code" \
+banked_line=$(grep -n 'deliver(banked' "$code" | head -1 | cut -d: -f1)
+arm_line=$(grep -nE 'update\.didReset.*lineageBrokeAt = Date\(\)' "$code" \
            | head -1 | cut -d: -f1)
 if [ -z "$banked_line" ] || [ -z "$arm_line" ] || [ "$arm_line" -lt "$banked_line" ]; then
     echo "PhoneListener arms the echo guard before it hands over banked words."
