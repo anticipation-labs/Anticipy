@@ -40,7 +40,7 @@ from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            NOT_HIS, check_sufficiency, fill_gaps_from_memory,
                            party_verdict, PARTY_YES, PARTY_UNASKED,
                            PARTY_UNANSWERED, ends_in_the_world,
-                           work_is_licensed, LICENCE_YES,
+                           work_is_licensed, LICENCE_YES, plan_is_settled,
                            unsupported_names,
                            unsupported_counts, read_into_a_machine,
                            not_speech_evidence,
@@ -1992,7 +1992,19 @@ class Anticipy:
             may_look = (decision.owes == "nobody" and decision.decision == "act"
                         and goal and not decision.missing
                         and not is_consequential(goal))
-            if not may_look:
+            # "nobody" is right about musing and wrong about a plan the
+            # speakers actually SETTLED: "we should really go out… Earl's
+            # tomorrow at 2:30… yeah for sure I'd be down" reads as mutual
+            # non-obligation, and this lane dropped it in total silence
+            # (seen live, 2026-08-12). A settled consequential plan falls
+            # through to the ambient lane below — prepared, held, one text —
+            # never into this hole. "machine" keeps its silence.
+            settled = (decision.owes == "nobody" and goal
+                       and addressee in AMBIENT_ADDRESSEES
+                       and (is_consequential(goal)
+                            or ends_in_the_world(self.llm, line, goal))
+                       and plan_is_settled(self.llm, line, goal))
+            if not may_look and not settled:
                 reason = ("operating a machine by voice — it is already doing it"
                           if decision.owes == "machine"
                           else "no obligation to anyone")
@@ -2008,29 +2020,36 @@ class Anticipy:
                     reason=f"not his to do: {reason} — {goal!r}",
                     addressee=addressee, owes=decision.owes),
                     "anticipy_says": None}
-            params = {"source": line, "now": self._now_line(), "lane": "ambient"}
-            params = self._keeping(params, mem.get("commitment_id"))
-            job_id = self._queue_job(goal, params)
-            if not self._backed_by_a_card(goal, job_id, "quiet-lookup"):
-                # No card, so no LoopRecord either: a "handling" loop with no
-                # job id can never close (review_loops has nothing to poll)
-                # and status_report() would read it out as work in hand.
-                self._prev = (line, time.time())
+            if not settled:
+                params = {"source": line, "now": self._now_line(),
+                          "lane": "ambient"}
+                params = self._keeping(params, mem.get("commitment_id"))
+                job_id = self._queue_job(goal, params)
+                if not self._backed_by_a_card(goal, job_id, "quiet-lookup"):
+                    # No card, so no LoopRecord either: a "handling" loop with
+                    # no job id can never close (review_loops has nothing to
+                    # poll) and status_report() would read it out as work in
+                    # hand.
+                    self._prev = (line, time.time())
+                    return {"memory": mem, "decision": Decision(
+                        decision="ignore", goal="",
+                        reason=("nothing queued for the quiet lookup "
+                                f"{goal!r} — no card exists, so nothing is "
+                                "claimed"),
+                        addressee=addressee, owes="nobody"),
+                        "anticipy_says": None}
+                self.loops.append(LoopRecord(
+                    commitment_id=mem.get("commitment_id") or -1,
+                    what=goal, status="handling", job_id=job_id))
+                self._prev = None
                 return {"memory": mem, "decision": Decision(
-                    decision="ignore", goal="",
-                    reason=("nothing queued for the quiet lookup "
-                            f"{goal!r} — no card exists, so nothing is claimed"),
+                    decision="ignore", goal=goal,
+                    reason="no firm obligation yet — looking quietly, saying nothing",
                     addressee=addressee, owes="nobody"),
                     "anticipy_says": None}
-            self.loops.append(LoopRecord(
-                commitment_id=mem.get("commitment_id") or -1,
-                what=goal, status="handling", job_id=job_id))
-            self._prev = None
-            return {"memory": mem, "decision": Decision(
-                decision="ignore", goal=goal,
-                reason="no firm obligation yet — looking quietly, saying nothing",
-                addressee=addressee, owes="nobody"),
-                "anticipy_says": None}
+            # A SETTLED overheard plan reaches here only by falling through:
+            # the ambient lane below prepares it, holds it, and spends the
+            # one text — it must not die inside the no-obligation lane.
 
         # Someone ELSE took it on. Remember it — he may want it tracked, and
         # a promise made to him is exactly the sort of loop that goes quiet —
@@ -2246,7 +2265,8 @@ class Anticipy:
                 before = {j.get("id") for j in self._pending_jobs()}
                 job_id = self._queue_job(goal, params, hold=True,
                                          touches=decision.touches)
-                fresh = bool(job_id) and job_id not in before
+                fresh = (bool(job_id) and job_id not in before
+                         and not getattr(self, "_running_dup", None))
                 if fresh:
                     self.loops.append(LoopRecord(
                         commitment_id=mem.get("commitment_id") or -1,
@@ -2611,22 +2631,39 @@ class Anticipy:
             # already been told about; a dead POST means no card at all, and
             # those two must never take the same branch.
             write_failed = job_id == QUEUE_WRITE_FAILED
-            repeat = not write_failed and not (
-                bool(job_id) and job_id not in before_ids)
-            loop = LoopRecord(
-                commitment_id=mem.get("commitment_id") or -1,
-                what=decision.goal,
-                status="awaiting_ok" if held else "handling",
-                job_id=job_id,
-            )
-            self.loops.append(loop)
+            running_dup = getattr(self, "_running_dup", None)
+            repeat = bool(running_dup) or (
+                not write_failed
+                and not (bool(job_id) and job_id not in before_ids))
+            if not running_dup:
+                loop = LoopRecord(
+                    commitment_id=mem.get("commitment_id") or -1,
+                    what=decision.goal,
+                    status="awaiting_ok" if held else "handling",
+                    job_id=job_id,
+                )
+                self.loops.append(loop)
             # Her words are GENERATED for this exact moment — a template can
             # never sound like a person.
-            handled = self._voice({
-                "situation": "held for approval" if held else "quietly started",
-                "heard": line, "goal": decision.goal,
-                "assumption": decision.assumption,
-            }) or self.say_handling(decision.goal, held)
+            if running_dup:
+                # The plan is ALREADY EXECUTING: never re-ask for approval
+                # ("I'll hold off" about work in motion is a lie in both
+                # directions) and never claim it finished. One reassurance,
+                # and only in-thread — ambient chatter about a moving plan
+                # earns no text at all.
+                handled = (self._voice({
+                    "situation": "he mentioned work that is ALREADY in "
+                                 "motion — one short reassurance; never "
+                                 "re-ask approval, never claim it finished",
+                    "heard": line, "goal": decision.goal,
+                }) or f"Already on it — {decision.goal} is moving.") \
+                    if explicit else None
+            else:
+                handled = self._voice({
+                    "situation": "held for approval" if held else "quietly started",
+                    "heard": line, "goal": decision.goal,
+                    "assumption": decision.assumption,
+                }) or self.say_handling(decision.goal, held)
             # Details first, browser second: before anything irreversible she
             # texts the owner — their go-ahead releases the held job.
             #
@@ -2771,7 +2808,7 @@ class Anticipy:
                     params["assumption"] = decision.assumption
                 job_id = self._queue_job(decision.goal, params, hold=True,
                                          explicit=explicit)
-                if job_id:
+                if job_id and not getattr(self, "_running_dup", None):
                     self.loops.append(LoopRecord(
                         commitment_id=mem.get("commitment_id") or -1,
                         what=decision.goal, status="awaiting_ok",
@@ -3509,6 +3546,7 @@ class Anticipy:
                    explicit: bool = False,
                    touches: str | None = None,
                    act: Optional[ActDeclaration] = None) -> Optional[str]:
+        self._running_dup = None
         # A held card supersedes the parked question: the plan the fragment
         # was asking about has since completed itself, and the card's own
         # one-text asks whatever is still missing. Two question texts for
@@ -3577,6 +3615,17 @@ class Anticipy:
                 return None
         if (not declared_new_task
                 and is_consequential(goal, params, explicit=explicit)):
+            # A plan ALREADY MOVING is not a new card. "Sounds good" after
+            # her own "got it, booking it" went back through triage, missed
+            # the running job (the dedupe below only saw pending ones) and
+            # forked a second held card whose text — "I'll hold off until
+            # you give me the word" — contradicted the booking she was doing
+            # at that very moment (live 2026-08-12). One plan in motion
+            # absorbs every re-mention of itself until it lands.
+            for j in self._running_jobs():
+                if self._same_plan(goal, j.get("goal") or ""):
+                    self._running_dup = j["id"]
+                    return j["id"]
             open_plan = self._open_plan
             if open_plan and time.time() - open_plan[1] < OPEN_PLAN_WINDOW:
                 job_id = open_plan[0]
@@ -4689,6 +4738,20 @@ class Anticipy:
             except Exception:
                 pass
         return False
+
+    def _running_jobs(self) -> list[dict]:
+        """Work already released and executing right now."""
+        try:
+            filt = 'status="running"'
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt = f"({filt}) && {owner_filter}"
+            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 10, "sort": "-created"},
+                       timeout=10)
+            return r.json().get("items", []) if r.ok else []
+        except Exception:
+            return []
 
     def _pending_jobs(self) -> list[dict]:
         """Everything still waiting — queued or held for his yes."""

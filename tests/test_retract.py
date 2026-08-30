@@ -31,8 +31,10 @@ class _R:
 def _get(url, params=None, timeout=None, **kw):
     if "/jobs/" not in url:
         return _R({"items": []})
-    return _R({"items": [j for j in JOBS
-                         if j["status"] in ("awaiting_confirm", "queued")]})
+    filt = (params or {}).get("filter", "")
+    want = [s for s in ("awaiting_confirm", "queued", "running")
+            if f'"{s}"' in filt] or ["awaiting_confirm", "queued"]
+    return _R({"items": [j for j in JOBS if j["status"] in want]})
 
 
 def _post(url, json=None, timeout=None, **kw):

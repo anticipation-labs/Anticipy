@@ -58,8 +58,9 @@ class _R:
 
 
 class Rig:
-    """An in-memory jobs table that answers the two filters _queue_job asks:
-    the pending pool, and 'the card this lineage is holding'."""
+    """An in-memory jobs table that answers the three filters _queue_job asks:
+    the pending pool, 'the card this lineage is holding', and the running
+    pool."""
 
     def __init__(self, card=None, lineage_hit=True):
         self.jobs = [card] if card else []
@@ -74,6 +75,9 @@ class Rig:
                 return _R({"items": []})
             return _R({"items": [j for j in self.jobs
                                  if j.get("status") == "awaiting_confirm"]})
+        if 'status="running"' in flt:
+            return _R({"items": [j for j in self.jobs
+                                 if j.get("status") == "running"]})
         return _R({"items": [j for j in self.jobs
                              if j.get("status") in ("awaiting_confirm",
                                                     "queued")]})

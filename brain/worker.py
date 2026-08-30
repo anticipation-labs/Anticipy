@@ -4014,7 +4014,8 @@ def main() -> None:
                                goal=out["decision"].goal or "",
                                source=(ev.get("source") or ""))
                 print(f"heard: {line!r} -> {decision}"
-                      f" ({out['decision'].goal or 'no goal'})")
+                      f" ({out['decision'].goal or 'no goal'})"
+                      f" [{getattr(out['decision'], 'reason', '') or '-'}]")
 
             # THE one answer path. An owner answers a question by text (Twilio
             # webhook -> pb_hooks -> events) or by typing into the app (the app

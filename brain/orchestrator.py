@@ -1510,6 +1510,39 @@ def work_is_licensed(llm, quotes, goal: str) -> str:
     return LICENCE_UNANSWERED
 
 
+SETTLED_SYSTEM = """A conversation between the owner and someone else was
+overheard, and one plan was extracted from it. One question: did the
+speakers actually SETTLE on this plan — a mutual agreement to a concrete
+thing, naming the essentials that make it real (a place and a day or time,
+a specific deliverable) — as opposed to musing that commits nobody?
+
+"We should really go out for dinner" alone is musing. The same sentence
+followed by a named place, a day and "yeah for sure I'd be down for that"
+is a settled plan, even though nobody said the word "book". "We should do
+Tofino sometime" names a place but settles nothing.
+
+Reply ONLY with compact JSON: {"settled": true|false}"""
+
+
+def plan_is_settled(llm, line: str, goal: str) -> bool:
+    """The tiebreaker for owes="nobody". Triage reads mutual "we should…
+    yeah for sure" phrasing as no firm obligation, and the no-obligation
+    lane then drops the plan in total silence — a fully specified dinner
+    the owner audibly agreed to died this way (seen live, 2026-08-12).
+    Asked as its own question, the model separates a settled plan from
+    musing. Only an explicit true escalates; absent, malformed or
+    dead-model replies leave the quiet behaviour exactly as it was."""
+    if not goal or not llm or not getattr(llm, "live", False):
+        return False
+    try:
+        res = llm.chat(SETTLED_SYSTEM,
+                       f"HEARD: {line}\n\nPLAN: {goal}", temperature=0.0)
+        raw = json.loads(_extract_json(res.text))
+    except Exception:
+        return False
+    return raw.get("settled") is True
+
+
 def check_sufficiency(llm, goal: str) -> list:
     """What would someone have to be TOLD before this could be started?
 
