@@ -1,0 +1,22 @@
+{
+  "board": { "design_settings": { "defaults": {} } },
+  "meta": { "filename": "anticipy_r1.kicad_pro", "version": 3 },
+  "net_settings": { "classes": [ { "name": "Default", "clearance": 0.15, "track_width": 0.15, "via_diameter": 0.5, "via_drill": 0.25, "uvia_diameter": 0.3, "uvia_drill": 0.1, "wire_width": 6, "bus_width": 12, "line_style": 0, "microvia": false, "diff_pair_gap": 0.15, "diff_pair_via_gap": 0.25, "diff_pair_width": 0.2 } ], "meta": { "version": 4 } },
+  "erc": { "erc_exclusions": [], "meta": { "version": 0 }, "rule_severities": { "lib_symbol_issues": "ignore", "lib_symbol_mismatch": "ignore" },
+    "pin_map": [
+      [0,0,0,0,0,0,1,0,0,0,0,2],
+      [0,1,0,1,0,0,1,0,1,0,0,2],
+      [0,0,0,0,0,0,1,0,1,0,0,2],
+      [0,1,0,1,0,0,1,0,2,0,0,2],
+      [0,0,0,0,0,0,0,0,0,0,0,2],
+      [0,0,0,0,0,0,0,0,0,0,0,2],
+      [1,1,1,1,0,0,1,0,1,0,0,2],
+      [0,0,0,0,0,0,0,0,0,0,0,2],
+      [0,1,1,2,0,0,1,0,2,2,2,2],
+      [0,0,0,0,0,0,0,0,2,0,0,2],
+      [0,0,0,0,0,0,0,0,2,0,0,2],
+      [2,2,2,2,2,2,2,2,2,2,2,2]
+    ] },
+  "schematic": { "legacy_lib_dir": "", "legacy_lib_list": [] },
+  "sheets": [], "text_variables": {}
+}
