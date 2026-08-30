@@ -36,6 +36,7 @@ jobs:
             -project Anticipy.xcodeproj -scheme Anticipy \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath $RUNNER_TEMP/Anticipy.xcarchive \
+            DEVELOPMENT_TEAM=49T86P9XGW CODE_SIGN_STYLE=Automatic \
             -allowProvisioningUpdates \
             -authenticationKeyPath $RUNNER_TEMP/asc/AuthKey.p8 \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
@@ -46,6 +47,7 @@ jobs:
             -archivePath $RUNNER_TEMP/Anticipy.xcarchive \
             -exportOptionsPlist ExportOptions.plist \
             -exportPath $RUNNER_TEMP/export \
+            DEVELOPMENT_TEAM=49T86P9XGW CODE_SIGN_STYLE=Automatic \
             -allowProvisioningUpdates \
             -authenticationKeyPath $RUNNER_TEMP/asc/AuthKey.p8 \
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
