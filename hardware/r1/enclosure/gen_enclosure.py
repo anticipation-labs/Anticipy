@@ -7,14 +7,15 @@ Outputs (into hardware/r1/enclosure/out/):
   - enclosure_assembly.step                          assembled model
   - enclosure_exploded.step / enclosure_exploded.svg exploded view
 
-Envelope: 51 x 21 x 11 mm capsule. PCB: 47 x 18 x 0.8 mm.
+Envelope: 51 x 25.5 x 11 mm capsule. PCB: 47 x 18 x 0.8 mm.
+Battery bay sized for widely-available 20mm-wide pouch cells
+(302035: 36x20x3.0, EEMB 502030: 32x20.5x5.3) with clearance.
 Stack (bottom to top):
   0.8 alu rear face
-  4.7 battery bay (EEMB LP451235: 4.5 thick + 0.2 clearance)
+  5.6 battery bay
   0.8 PCB
   2.6 top-component headroom (MDBT50Q ~2.0 + margin)
   0.8 alu front face
-  = 9.7 of 11.0 (1.3 mm in PC frame lips)
 """
 
 import os
@@ -24,7 +25,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 os.makedirs(OUT, exist_ok=True)
 
 # envelope
-L, W, H = 51.0, 21.0, 11.0
+L, W, H = 51.0, 25.5, 11.0
 END_R = 9.0          # capsule end radius
 FACE_T = 0.8         # aluminum face thickness
 WALL = 1.2           # PC perimeter wall
@@ -33,7 +34,7 @@ LIP = 0.65           # PC lip holding each alu face
 # PCB
 PCB_L, PCB_W, PCB_T = 47.0, 18.0, 0.8
 PCB_CLR = 0.15
-BATT_L, BATT_W, BATT_T = 35.5, 12.5, 4.7   # LP451235 + clearance
+BATT_L, BATT_W, BATT_T = 37.0, 21.5, 5.6   # 302035 / EEMB 502030 + clearance
 TOP_HEADROOM = 2.6
 BOT_BAY = BATT_T
 
@@ -43,6 +44,8 @@ cavity_h = BOT_BAY + PCB_T + TOP_HEADROOM  # 8.1
 assert cavity_h <= center_h - 0.2, "stack does not fit PC center"
 assert PCB_L + 2 * PCB_CLR <= L - 2 * WALL, "PCB too long for cavity"
 assert PCB_W + 2 * PCB_CLR <= W - 2 * WALL, "PCB too wide for cavity"
+assert BATT_W + 1.0 <= W - 2 * WALL - 0.5, "battery bay too wide for cavity"
+assert PCB_L > BATT_L + 1.0 + 4.0, "PCB must span battery-bay opening lengthwise"
 
 # features (PCB coordinate origin = PCB top-left corner; enclosure centered)
 USB_W, USB_H = 9.6, 3.6                    # USB-C opening in left end wall
