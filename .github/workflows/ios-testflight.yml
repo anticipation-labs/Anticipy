@@ -24,8 +24,9 @@ jobs:
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
-          mkdir -p $RUNNER_TEMP/asc
+          mkdir -p $RUNNER_TEMP/asc $HOME/.appstoreconnect/private_keys
           echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
+          cp $RUNNER_TEMP/asc/AuthKey.p8 $HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
       - name: Bump build number above Apple's latest
         working-directory: app/ios
         run: xcrun agvtool next-version -all || echo "agvtool bump skipped"
