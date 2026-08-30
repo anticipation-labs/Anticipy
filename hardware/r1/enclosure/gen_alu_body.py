@@ -7,8 +7,10 @@ Everything the user touches is aluminum:
                          (same approach as PLAUD: aluminum shell with a small
                          radio-transparent plastic window over the antenna)
 
-Envelope 51 x 25.5 x 11 mm. PCB 47 x 18 x 0.8. Battery bay 37 x 21.5 x 5.6
-(302035 / EEMB 502030 pouch cells).
+Envelope 51 x 22 x 11 mm (PLAUD NotePin is 51 x 21 x 11; we stay within
++1 mm). PCB 47 x 18 x 0.8. Battery bay 37.5 x 12.5 x 5.2 for a 12 mm-wide
+protected pouch cell (401230 / 501235 class). The wider dated-delivery
+cells (302035 / EEMB 502030) are bench-validation only, case open.
 
 Retention: internal slide-and-lock clasp (no glue, no screws, no printed
 parts, nothing visible from outside).
@@ -35,7 +37,7 @@ import ezdxf
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 os.makedirs(OUT, exist_ok=True)
 
-L, W, H = 51.0, 25.5, 11.0
+L, W, H = 51.0, 22.0, 11.0
 FACE_T = 1.0          # aluminum top plate (SendCutSend/JLC 1.0mm)
 FLOOR_T = 1.0         # machined floor of the unibody
 WALL = 1.5            # unibody side wall
@@ -44,7 +46,7 @@ BODY_H = H - FACE_T   # 10.0
 
 PCB_L, PCB_W, PCB_T = 47.0, 18.0, 0.8
 PCB_CLR = 0.15
-BATT_L, BATT_W, BATT_T = 37.0, 21.5, 5.6
+BATT_L, BATT_W, BATT_T = 37.5, 12.5, 5.2
 TOP_HEADROOM = 2.6
 
 cavity_h = BATT_T + PCB_T + TOP_HEADROOM            # 9.0
