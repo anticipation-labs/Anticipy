@@ -10,8 +10,8 @@ FLOOR_T, PLATE_T = 1.0, 1.0
 CAV_H = 8.00
 IN_L, IN_W = 48.0, 19.0
 PCB_T, TOP_CLR, BATT_CLR = 0.8, 0.20, 0.25
-PLATE_RELIEF = 0.70          # milled into plate underside over J1 / U1
-FLOOR_POCKET = 0.40          # milled into cavity floor under the cell
+PLATE_RELIEF = 0.80          # milled into plate underside over J1 / U1
+FLOOR_POCKET = 0.60          # milled into cavity floor under the cell
 ANT_X = 11.0                 # cell must stay at x <= this (module antenna end)
 SKIP = ("J2", "J3")          # leads soldered straight to the pads
 
