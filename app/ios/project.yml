@@ -530,7 +530,9 @@ settings:
     # detail pages, Appearance and Advanced stop changing things from the
     # index, notifications gain quiet-hour controls, ambient motion and
     # haptics are configurable, and the looping Home dots are removed.
-    CURRENT_PROJECT_VERSION: "109"
+    # 110: the browser connector's last-seen age uses the same shared duration
+    # language as every other screen instead of showing placeholder arithmetic.
+    CURRENT_PROJECT_VERSION: "110"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -580,7 +582,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "109"
+        CURRENT_PROJECT_VERSION: "110"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES

@@ -94,7 +94,7 @@ private struct SettingsBrowserConnectorView: View {
             GroupedCard {
                 StateRow("Status", systemImage: "safari", state: status)
                 if let seconds = session.agentLastSeenSeconds {
-                    StateRow("Last seen", state: seconds < 60 ? "(seconds) sec ago" : "(seconds / 60) min ago")
+                    StateRow("Last seen", state: "\(PlainDuration.words(seconds)) ago")
                 }
             }
 
