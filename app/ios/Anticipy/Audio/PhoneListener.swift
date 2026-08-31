@@ -140,6 +140,18 @@ final class PhoneListener: NSObject, ObservableObject {
     var enrolling = false
 
     private var engine = AVAudioEngine()
+    /// True only after this exact engine accepted its input tap. A route
+    /// rebuild replaces the engine instead of removing and reinstalling a tap
+    /// on the same input node: `installTap` raises an Objective-C exception,
+    /// and terminates the process, when AVFAudio still sees the old tap during
+    /// route churn.
+    private var tapInstalled = false
+    /// Route notifications are delivered synchronously on the main queue.
+    /// Re-entering AVFAudio from inside one is what the build 75/109/111 crash
+    /// reports show, so the rebuild happens on the next main-queue turn and
+    /// duplicate notifications collapse into one job.
+    private var scheduledAudioRecovery: DispatchWorkItem?
+    private var scheduledAudioRecoveryCause: ListenEvent.SwapCause?
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
@@ -511,41 +523,59 @@ final class PhoneListener: NSObject, ObservableObject {
             suspended = true
             return
         }
-        input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            guard let self else { return }
-            // The same audio the recognizer hears also feeds the on-device
-            // voice check — a short rolling window, never stored, never
-            // sent. Only its one-word verdict ever leaves the phone.
-            self.speaker?.accept(buffer)
-            self.orphanLock.lock()
-            if self.acceptingAudio {
-                if self.usingAnalyzer {
-                    self.analyzerEngine?.append(buffer)
-                } else if let req = self.request {
-                    req.append(buffer)
+        // Every call after the first goes through replaceCaptureEngine(), so
+        // there cannot already be a tap on this bus. Keep the guard anyway:
+        // `installTap` enforces its one-tap rule with NSException, not Error,
+        // and a future caller must stand down instead of terminating the app.
+        guard !tapInstalled else {
+            engine.stop()
+            suspended = true
+            return
+        }
+        let installed = AudioTapExceptionShield.perform {
+            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+                guard let self else { return }
+                // The same audio the recognizer hears also feeds the on-device
+                // voice check — a short rolling window, never stored, never
+                // sent. Only its one-word verdict ever leaves the phone.
+                self.speaker?.accept(buffer)
+                self.orphanLock.lock()
+                if self.acceptingAudio {
+                    if self.usingAnalyzer {
+                        self.analyzerEngine?.append(buffer)
+                    } else if let req = self.request {
+                        req.append(buffer)
+                    }
+                } else if self.isListening {
+                    // No request is taking audio right now (swap in flight).
+                    // Hold it — do NOT drop it — and replay into the next one.
+                    // A COUNTER, NOT A JOURNAL CALL. This closure runs on the
+                    // audio thread; the journal now touches a file, and parking
+                    // audio behind a disk write to report dropped audio would be
+                    // the joke writing itself. The watchdog reports this from the
+                    // main queue instead.
+                    if self.orphanBuffers.count < 600 {
+                        self.orphanBuffers.append(buffer)
+                    } else {
+                        self.orphanDropped &+= 1
+                    }
                 }
-            } else if self.isListening {
-                // No request is taking audio right now (swap in flight).
-                // Hold it — do NOT drop it — and replay into the next one.
-                // A COUNTER, NOT A JOURNAL CALL. This closure runs on the
-                // audio thread; the journal now touches a file, and parking
-                // audio behind a disk write to report dropped audio would be
-                // the joke writing itself. The watchdog reports this from the
-                // main queue instead.
-                if self.orphanBuffers.count < 600 {
-                    self.orphanBuffers.append(buffer)
-                } else {
-                    self.orphanDropped &+= 1
+                self.orphanLock.unlock()
+                // Cheap liveness beacon (~3x/sec), off the audio thread.
+                self.bufferTick &+= 1
+                if self.bufferTick % 32 == 0 {
+                    DispatchQueue.main.async { self.lastBufferAt = Date() }
                 }
-            }
-            self.orphanLock.unlock()
-            // Cheap liveness beacon (~3x/sec), off the audio thread.
-            self.bufferTick &+= 1
-            if self.bufferTick % 32 == 0 {
-                DispatchQueue.main.async { self.lastBufferAt = Date() }
             }
         }
+        guard installed else {
+            if !suspended {
+                ListenJournal.shared.record(.sessionStopped(cause: .unrecoveredFailure))
+            }
+            suspended = true
+            return
+        }
+        tapInstalled = true
         engine.prepare()
         try? engine.start()
         // Capture coming BACK is as much a fact about the session as capture
@@ -639,17 +669,55 @@ final class PhoneListener: NSObject, ObservableObject {
             guard let self, self.isListening else { return }
             let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
             if raw.flatMap(AVAudioSession.RouteChangeReason.init) == .categoryChange { return }
-            self.recoverAudio(cause: .routeChange)
+            self.scheduleAudioRecovery(cause: .routeChange)
         }
         nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification,
                        object: nil, queue: .main) { [weak self] _ in
             guard let self, self.isListening else { return }
-            self.engine = AVAudioEngine()   // QA1749: the old engine is dead forever
             // Not a route change: media services died and took the engine
             // with them. A reader sent to AirPods and cables by a mislabelled
             // line is a reader who never looks at the engine.
-            self.recoverAudio(cause: .error)
+            self.scheduleAudioRecovery(cause: .error)
         }
+    }
+
+    /// Leave AVAudioSession's notification stack before touching AVAudioEngine.
+    /// YouTube can cause several route notifications in one turn; all of them
+    /// describe one current route, so only the most severe pending cause needs
+    /// a rebuild.
+    private func scheduleAudioRecovery(cause: ListenEvent.SwapCause) {
+        guard isListening else { return }
+        if scheduledAudioRecoveryCause != .error {
+            scheduledAudioRecoveryCause = cause
+        }
+        guard scheduledAudioRecovery == nil else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.scheduledAudioRecovery = nil
+            guard self.isListening,
+                  let cause = self.scheduledAudioRecoveryCause else {
+                self.scheduledAudioRecoveryCause = nil
+                return
+            }
+            self.scheduledAudioRecoveryCause = nil
+            self.recoverAudio(cause: cause)
+        }
+        scheduledAudioRecovery = work
+        DispatchQueue.main.async(execute: work)
+    }
+
+    /// Retire the whole graph. Reusing the input node and doing
+    /// removeTap/installTap back-to-back is the crash: AVFAudio can still see
+    /// the first tap while a route is settling, and its one-tap precondition is
+    /// an uncatchable-in-Swift exception. A new engine has a new input bus and
+    /// therefore no possible prior tap. Hold the retired engine until the next
+    /// main turn so teardown also happens outside the notification callback.
+    private func replaceCaptureEngine() {
+        let retiredEngine = engine
+        engine = AVAudioEngine()
+        tapInstalled = false
+        retiredEngine.stop()
+        DispatchQueue.main.async { _ = retiredEngine }
     }
 
     /// Ask iOS for a little more running time while the microphone is gone.
@@ -723,7 +791,7 @@ final class PhoneListener: NSObject, ObservableObject {
     /// statement that does the thing it describes.
     private func retryCapture(cause: ListenEvent.SwapCause) {
         guard isListening else { return }
-        engine.stop()
+        replaceCaptureEngine()
         configureAndStartEngine()
         // Still not ours. `configureAndStartEngine` reconciles `suspended`
         // itself and only clears it when the engine really came up, so this is
@@ -755,8 +823,9 @@ final class PhoneListener: NSObject, ObservableObject {
         // evicts the entire ring in twenty-seven — the session the journal
         // exists to explain, gone, replaced by one repeated sentence.
         let alreadyDown = suspended
-        engine.stop()
+        replaceCaptureEngine()
         configureAndStartEngine()
+        guard !suspended else { return }
         // A live request's format was fixed by its first buffer; the new route
         // may differ, so start fresh — flushing whatever was pending first.
         swapRecognition(flushPending: true, cause: cause,
@@ -1330,13 +1399,19 @@ final class PhoneListener: NSObject, ObservableObject {
         lastBatteryReading = nil
         watchdog?.invalidate()
         watchdog = nil
+        scheduledAudioRecovery?.cancel()
+        scheduledAudioRecovery = nil
+        scheduledAudioRecoveryCause = nil
         silenceFlush?.cancel()
         // The engine outlives this stop only as a corpse; finishing it is
         // what delivers the tail it was still holding.
         analyzerEngine?.finish()
         analyzerEngine = nil
         usingAnalyzer = false
-        engine.inputNode.removeTap(onBus: 0)
+        if tapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
         engine.stop()
         orphanLock.lock()
         acceptingAudio = false

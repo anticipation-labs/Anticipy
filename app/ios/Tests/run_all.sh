@@ -133,6 +133,10 @@ sh "$HERE/run_control_policy_tests.sh"
 # not made.
 sh "$HERE/run_call_presence_tests.sh"
 sh "$HERE/run_interruption_contract_tests.sh"
+# The crash boundary beside the interruption contract: route notifications
+# leave AVAudioSession's stack before rebuilding, the tap-bearing engine is
+# retired rather than reused, and AVFAudio's NSException becomes a retry.
+sh "$HERE/run_audio_recovery_tests.sh"
 # Not a logic suite: it asks whether the build number still identifies these
 # bytes. Last, because it is the one leg that reads git rather than source, and
 # a red one here means "bump it before you commit", not "the code is wrong".

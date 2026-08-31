@@ -532,7 +532,10 @@ settings:
     # haptics are configurable, and the looping Home dots are removed.
     # 110: the browser connector's last-seen age uses the same shared duration
     # language as every other screen instead of showing placeholder arithmetic.
-    CURRENT_PROJECT_VERSION: "110"
+    # 111: route recovery retires the old audio engine instead of reinstalling
+    # a tap on its input node, and a narrow Objective-C boundary turns any
+    # transient AVFAudio tap exception into a retry instead of an app crash.
+    CURRENT_PROJECT_VERSION: "111"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -582,7 +585,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "110"
+        CURRENT_PROJECT_VERSION: "111"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
@@ -766,4 +769,5 @@ targets:
           NSAllowsLocalNetworking: true
     settings:
       base:
+        SWIFT_OBJC_BRIDGING_HEADER: Anticipy/Anticipy-Bridging-Header.h
         PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.app
