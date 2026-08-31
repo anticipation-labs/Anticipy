@@ -336,7 +336,7 @@ if ! code "$auth" | grep -q "Let's make it yours."; then
     echo "The door lost the title that replaced the second introduction."
     exit 2
 fi
-if ! code "$auth" | grep -q 'An email, a password, and the number I text you on'; then
+if ! code "$auth" | grep -q 'Create your account with an email, password, and phone number'; then
     echo "The door no longer names what it is asking for."
     echo "It is three fields before the product has produced anything, and"
     echo "saying which three is the least it can do."

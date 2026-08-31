@@ -75,11 +75,11 @@ enum FirstRunEnding: Equatable {
     var sentence: String {
         switch self {
         case .listening:
-            return "Give me a day. You'll see."
+            return "Listening is on. You can stop it from Home at any time."
         case .blocked:
-            return "iOS has my microphone switched off, so I can't hear anything yet. It's one tap in Settings."
+            return "Microphone access is off. You can turn it on in iOS Settings."
         case .silent:
-            return "I can't hear anything yet. The switch is on the home screen, whenever you're ready."
+            return "Listening is off. Turn it on from Home when you want to capture a conversation."
         }
     }
 }

@@ -32,7 +32,7 @@ struct SettingsAccessView: View {
     @State private var opened: ContextSource?
 
     var body: some View {
-        SheetChrome(title: "What I can see", leading: .back) {
+        SheetChrome(title: "Data access", leading: .back) {
             dismiss()
         } content: {
             GroupedCard {
@@ -46,8 +46,7 @@ struct SettingsAccessView: View {
                 }
             }
 
-            FootnoteText("She only reads a source after you say yes, and you "
-                         + "can stop any of them in one tap.")
+            FootnoteText("Anticipy asks before accessing a source. Open any source to review or remove access.")
         }
         // `navigationDestination(item:)` would read better and is iOS 17. The
         // floor here is 16 — the same floor `LifeContext` still writes its
@@ -92,7 +91,7 @@ struct SettingsAccessView: View {
     static func answer(for source: ContextSource) -> String {
         let grants = ContextGrants()
         if grants.granted(source) { return "Allowed" }
-        return grants.mayAsk(source) ? "She'll ask" : "Not now"
+        return grants.mayAsk(source) ? "Available" : "Not now"
     }
 }
 
@@ -119,7 +118,7 @@ struct SettingsSourceView: View {
             }
 
             if granted {
-                SectionHeader("What she reads")
+                SectionHeader("Data used")
                 GroupedCard {
                     ForEach(source.promises, id: \.self) { promise in
                         InfoRow(promise)
@@ -131,7 +130,7 @@ struct SettingsSourceView: View {
                 // something instantaneous teaches people the offer is decorative.
                 if !source.isOnDevice {
                     GroupedCard {
-                        NavRow("Watch me read \(source.label.lowercased())",
+                        NavRow("Supervised read",
                                systemImage: "eye") {
                             Haptics.engage()
                             watching = true
@@ -144,7 +143,7 @@ struct SettingsSourceView: View {
                 // elsewhere in Settings guard things that cannot be undone;
                 // this can be undone by asking again.
                 GroupedCard {
-                    DestructiveRow("Stop reading \(source.label.lowercased())",
+                    DestructiveRow("Remove access to \(source.label.lowercased())",
                                    systemImage: "hand.raised") {
                         Haptics.engage()
                         ContextGrants().revoke(source)
@@ -152,8 +151,7 @@ struct SettingsSourceView: View {
                     }
                 }
             } else {
-                FootnoteText("She hasn't read this. She'll ask when something "
-                             + "you said needs it, and you can say no.")
+                FootnoteText("Anticipy has not used this source. It will ask when a task needs access, and you can decline.")
             }
         }
         .navigationDestination(isPresented: $watching) {

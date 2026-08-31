@@ -159,10 +159,10 @@ struct AuthView: View {
     /// second half of the sentence verbatim.
     private var subtitle: String {
         switch mode {
-        case .signUp: return "An email, a password, and the number I text you on. Twenty seconds here, about a minute in all."
-        case .signIn: return "Your email and password, and everything's where you left it."
-        case .forgot: return "Tell me the email you signed up with and I'll text you a code."
-        case .code:   return "I've sent a 6-digit code to your phone. Enter it and pick a new password."
+        case .signUp: return "Create your account with an email, password, and phone number. About twenty seconds here and one minute from start to finish."
+        case .signIn: return "Enter the email and password for your Anticipy account."
+        case .forgot: return "Enter your account email to receive a recovery code by text."
+        case .code:   return "Enter the 6-digit code from your phone, then choose a new password."
         }
     }
 
@@ -194,7 +194,7 @@ struct AuthView: View {
                 // to pass, with the reason nowhere on screen.
                 ruleLine("A number I can text, country code and all",
                          satisfied: reachable)
-                Text("Your number is how I reach you when something needs your word, and how you get back in if you forget your password.")
+                Text("Your phone number is used for recovery and time-sensitive approvals.")
                     .font(.system(size: 15))
                     .lineSpacing(2)
                     .foregroundStyle(Theme.text2)

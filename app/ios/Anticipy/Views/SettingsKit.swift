@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The five components a settings-style sheet is built from, and the eight row
 /// variants that go in them.
@@ -72,6 +73,18 @@ private enum SheetMetric {
     static let headerCircle: CGFloat = 36
     static let headerTap: CGFloat = 44
     static let headerGlyph: CGFloat = 15
+}
+
+/// The app is portrait-only, so the physical top inset is stable for the life
+/// of the process. Cache it the first time Settings appears: while one pushed
+/// page replaces another, UIKit can momentarily report zero for every window
+/// even though the display cutout has not moved.
+private enum SheetWindowInset {
+    static let top: CGFloat = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap(\.windows)
+        .map(\.safeAreaInsets.top)
+        .max() ?? 0
 }
 
 // ------------------------------------------------------------------ 1. chrome
@@ -148,14 +161,10 @@ struct SheetHeaderButton: View {
 /// COMPONENT 1: SHEET CHROME.
 ///
 /// A FIXED header row — circular button on the left, centred bold title,
-/// optional circular button on the right — with the content SCROLLING UNDER it.
-/// The header does not move.
-///
-/// "Scrolls under" is a `ZStack`, not a `safeAreaInset`: the content's top
-/// padding is the header's MEASURED height, so at AX5, when the serif title
-/// wraps to two lines and the header grows, the first card moves down with it
-/// instead of starting underneath it. A constant there would be right at one
-/// text size and wrong at eleven.
+/// optional circular button on the right — with the content scrolling under
+/// it. NavigationStack does not preserve the top safe area once a destination
+/// pushes another destination, so the chrome owns that inset explicitly. The
+/// header is still measured, and grows with a wrapped accessibility-size title.
 ///
 /// The dimmed, blurred backdrop and the large top corner radius belong to the
 /// PRESENTATION, not to this view — apply `.sheetChromePresentation()` to the
@@ -192,6 +201,13 @@ struct SheetChrome<Content: View>: View {
     @State private var scrolled = false
     private let space = "SheetChromeScroll"
 
+    /// A second-level destination can inherit a safe area already consumed by
+    /// its parent's header. The window remains the source of truth for the
+    /// physical status-bar cutout at every navigation depth.
+    private var topInset: CGFloat {
+        SheetWindowInset.top
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             Theme.bg.ignoresSafeArea()
@@ -202,7 +218,7 @@ struct SheetChrome<Content: View>: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Theme.Space.base)
-                .padding(.top, headerHeight + Theme.Space.base)
+                .padding(.top, topInset + headerHeight + Theme.Space.base)
                 .padding(.bottom, Theme.Space.wide)
                 .background {
                     GeometryReader { geo in
@@ -220,8 +236,9 @@ struct SheetChrome<Content: View>: View {
                 }
             }
 
-            header
+            header.padding(.top, topInset)
         }
+        .ignoresSafeArea(edges: .top)
         .onPreferenceChange(SheetHeaderHeightKey.self) { headerHeight = $0 }
         // ONE BACK BUTTON, NOT TWO.
         //
@@ -757,6 +774,44 @@ struct NavRow: View, CardRowContent {
         // the label and the value below.
         .accessibilityLabel(Text(title))
         .accessibilityValue(Text(value ?? ""))
+    }
+}
+
+/// A row that performs an immediate action. It deliberately has no chevron:
+/// chevrons are reserved for rows that open another page.
+struct ActionRow: View, CardRowContent {
+    private let title: String
+    private let subtitle: String?
+    private let systemImage: String?
+    private let isEnabled: Bool
+    private let action: () -> Void
+
+    init(_ title: String, subtitle: String? = nil, systemImage: String? = nil,
+         isEnabled: Bool = true, action: @escaping () -> Void) {
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+        self.isEnabled = isEnabled
+        self.action = action
+    }
+
+    var dividerInset: SheetKit.DividerInset {
+        SheetKit.dividerInset(hasGlyph: systemImage != nil)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            RowShell(systemImage: systemImage, title: title, subtitle: subtitle,
+                     titleBold: false,
+                     titleColor: isEnabled ? Theme.text : Theme.muted,
+                     glyphColor: isEnabled ? Theme.text2 : Theme.muted) {
+                EmptyView()
+            }
+        }
+        .buttonStyle(CardRowButtonStyle())
+        .disabled(!isEnabled)
+        .accessibilityLabel(Text(title))
+        .accessibilityHint(Text(subtitle ?? ""))
     }
 }
 

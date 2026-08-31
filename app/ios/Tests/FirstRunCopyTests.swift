@@ -183,8 +183,9 @@ check("iOS having refused is its own ending",
 check("declining is not the same event as being refused",
       FirstRunEnding.of(listening: false, micBlocked: false) == .silent)
 
-check("the listening ending is unchanged, to the character",
-      FirstRunEnding.listening.sentence == "Give me a day. You'll see.")
+check("the listening ending says what is on and where to stop it",
+      FirstRunEnding.listening.sentence ==
+        "Listening is on. You can stop it from Home at any time.")
 
 let endings: [FirstRunEnding] = [.listening, .blocked, .silent]
 check("three endings, three sentences",
@@ -204,8 +205,8 @@ for ending in endings {
 // AND THE TWO THAT NAME A PROBLEM MUST NAME THE SWITCH. A sentence that says
 // she cannot hear and stops there is the guilt-worded dismiss wearing the
 // house voice; both of these say where the control is and then stop.
-check("the declined ending points at the switch on Home",
-      FirstRunEnding.silent.sentence.contains("home screen"))
+check("the declined ending points at the control on Home",
+      FirstRunEnding.silent.sentence.contains("Home"))
 check("the refused ending points at iOS Settings",
       FirstRunEnding.blocked.sentence.contains("Settings"))
 // Neither one asks again. The ask was made one screen back and answered.

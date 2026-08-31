@@ -86,6 +86,10 @@ struct GlassCTAStyle: ButtonStyle {
                 .padding(.vertical, 11)
                 .padding(.horizontal, 24)
                 .background { plate }
+                // The cast shadow is visual depth, not part of the button.
+                // Without an explicit shape SwiftUI lets that shadow enlarge
+                // the hit region into a secondary control directly below it.
+                .contentShape(Capsule())
                 .scaleEffect(down ? 0.9 : 1)
                 // Not Theme.spring: the navbar gives its tap its own faster
                 // spring, and a 0.9 scale on the app's 0.35 response reads as

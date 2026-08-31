@@ -94,9 +94,8 @@ struct SettingsProfileView: View {
                 complete: nil,
                 attempt: detailsAttempt,
                 words: .init(
-                    neutral: "Every booking and signup form asks for these. "
-                        + "Payment details are never stored or filled.",
-                    saved: "Saved. I can fill booking forms myself now."))
+                    neutral: "Used for approved booking and signup forms. Payment details are never stored or filled.",
+                    saved: "Profile details saved."))
 
             SectionHeader("Your number")
 
@@ -111,8 +110,8 @@ struct SettingsProfileView: View {
                 complete: session.e164(phoneField) != nil,
                 attempt: phoneAttempt,
                 words: .init(
-                    neutral: "Where I text you when something needs your word.",
-                    saved: "Saved. I'll reach you here."))
+                    neutral: "Used for recovery and time-sensitive approvals.",
+                    saved: "Phone number saved."))
 
             // NO DESTRUCTIVE ROW HERE, deliberately, and this is the one place
             // this screen departs from the design it copies.

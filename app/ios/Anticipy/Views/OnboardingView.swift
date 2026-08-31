@@ -366,23 +366,13 @@ struct OnboardingView: View {
 
             if let skip = skipLabel {
                 Button {
-                    // The number is the last page now, so "Skip for now" has
-                    // nowhere to advance to — it ends the walkthrough instead.
-                    // It still saves the name and email they DID type: the
-                    // onChange(of: step) hook that normally does that on the
-                    // way out cannot fire when the step never changes.
-                    if step == Step.phone {
-                        phoneSkipped = true
-                        savePhoneOnLeaving()
-                        finish()
-                        return
-                    }
-                    withAnimation(Theme.spring) { step += 1 }
+                    skipCurrentStep()
                 } label: {
                     Text(skip)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.ghost)
+                .accessibilityIdentifier("onboarding-skip")
             } else {
                 // The one control that must be the same object on every page
                 // was the one thing that moved: reserve the skip row's height
@@ -392,6 +382,27 @@ struct OnboardingView: View {
         }
         .padding(.horizontal, 28)
         .padding(.bottom, 18)
+    }
+
+    /// Skip is explicit per beat instead of incrementing an arbitrary tag.
+    /// Naming the destination makes adding or reordering a beat fail visibly
+    /// here instead of silently skipping to whichever integer comes next.
+    @MainActor
+    private func skipCurrentStep() {
+        Haptics.engage()
+        switch step {
+        case Step.mic:
+            withAnimation(Theme.spring) { step = Step.phone }
+        case Step.phone:
+            // The number is the last page, so its opt-out ends the walkthrough.
+            // Save any name or email they did provide because onChange(of:
+            // step) cannot run when the selection itself does not change.
+            phoneSkipped = true
+            savePhoneOnLeaving()
+            finish()
+        default:
+            assertionFailure("Only microphone and profile beats can be skipped")
+        }
     }
 
     @MainActor
@@ -547,7 +558,7 @@ struct OnboardingView: View {
     @State private var welcomeStage = 0
 
     private static let welcomeLine =
-        "I'm Anticipy. I listen, I remember what matters, and I quietly do the work."
+        "Capture conversations, keep track of commitments, and turn them into follow-ups."
 
     private var welcome: some View {
         stepBody(spacing: 22) {
@@ -606,16 +617,16 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.text)
             // Phone-first. The pendant used to be described as the thing that
             // hears you, in an app whose microphone is the phone's.
-            stepCard(icon: "iphone", title: "I listen through your phone",
-                     text: "Your phone's microphone is my ears. You switch me on, and I turn what I hear into text.")
+            stepCard(icon: "iphone", title: "Listen on your phone",
+                     text: "Turn listening on when you want Anticipy to transcribe nearby speech.")
                 .opacity(cardsShown >= 1 ? 1 : 0)
                 .offset(y: cardsShown >= 1 ? 0 : 14)
-            stepCard(icon: "sparkles", title: "I remember what matters",
-                     text: "I catch the things you say you'll do (“I'll send that over”) and hold them until they're done.")
+            stepCard(icon: "sparkles", title: "Keep track of commitments",
+                     text: "Anticipy collects follow-ups, names, dates, and open questions in one place.")
                 .opacity(cardsShown >= 2 ? 1 : 0)
                 .offset(y: cardsShown >= 2 ? 0 : 14)
-            stepCard(icon: "cursorarrow.click.2", title: "I do the work",
-                     text: "I set things up in Chrome on your computer, using accounts you're already signed in to. I ask you here first. Nothing goes out until you say yes.")
+            stepCard(icon: "cursorarrow.click.2", title: "Approve actions",
+                     text: "Connect Chrome to complete web tasks with accounts already signed in. Anticipy asks before anything is sent.")
                 .opacity(cardsShown >= 3 ? 1 : 0)
                 .offset(y: cardsShown >= 3 ? 0 : 14)
             Text("If you ever have an Anticipy pendant, you can pair it in Settings. You don't need one. Your phone is enough.")
@@ -669,7 +680,7 @@ struct OnboardingView: View {
                 .font(Theme.display(30))
                 .tracking(-0.5)
                 .foregroundStyle(Theme.text)
-            Text("This is the whole product, so here's exactly what happens.")
+            Text("Anticipy uses your microphone only while listening is on.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
                 .foregroundStyle(Theme.text)
@@ -679,16 +690,16 @@ struct OnboardingView: View {
             // AI-built layout there is, and this is where someone decides
             // whether to hand over their microphone. The count is not what
             // that argument is about; the treatment is.
-            promiseLine(title: "What's said near your phone becomes text",
-                        text: "You, and the people talking with you. That's how I catch what you've promised and what you need.")
-            promiseLine(title: "I keep going in the background",
-                        text: "Your phone can be in your pocket or on another app. I stay on until you stop me.")
-            promiseLine(title: keepsAudioOnDevice ? "The audio stays on this iPhone" : "This iPhone needs Apple to do the transcribing",
+            promiseLine(title: "Nearby speech becomes text",
+                        text: "This can include other people in the room, so let them know when listening is on.")
+            promiseLine(title: "Listening can continue in the background",
+                        text: "It stays on until you stop or pause it from the app.")
+            promiseLine(title: keepsAudioOnDevice ? "Audio stays on this iPhone" : "Apple provides speech recognition on this iPhone",
                         text: keepsAudioOnDevice
-                           ? "Only the text comes to me, because text is what I can act on."
-                           : "So the audio goes to Apple, not to me. The text comes to me, because text is what I can act on.")
-            promiseLine(title: "You decide when I'm on",
-                        text: "I'm off until you tap. There's a switch on the home screen, and off means off.")
+                           ? "Anticipy sends the resulting text to its server to create follow-ups."
+                           : "Audio is handled by Apple for transcription. Anticipy receives the resulting text.")
+            promiseLine(title: "You control listening",
+                        text: "Listening starts only after you turn it on. Stop and pause controls are always available in Settings.")
             // THE COST, WITH THE RECEIPT FOR IT, at the moment of consent.
             // The largest cost in the product is stated two lines above this
             // one — "I keep going in the background" — with no bound on it, and
@@ -718,11 +729,11 @@ struct OnboardingView: View {
             // cover several days. The screen's "Today" heading is a heading,
             // not a window, and this sentence may not borrow a scope the
             // arithmetic underneath it does not have.
-            promiseLine(title: "You can see exactly what I cost",
-                        text: "Settings shows how much battery I used and how long I listened, and the log behind it. You don't have to take my word for it.")
+            promiseLine(title: "Review usage and activity",
+                        text: "Settings shows listening time, battery use, starts, stops, and silent periods.")
 
             if micPriming {
-                TypewriterText(text: "Two taps from iOS. Both of them are me.",
+                TypewriterText(text: "iOS will ask for microphone and speech recognition access.",
                                font: .system(size: 15), color: Theme.text2)
                     .transition(.opacity)
             }
@@ -730,7 +741,7 @@ struct OnboardingView: View {
             if session.listener.isListening {
                 HStack(spacing: 8) {
                     BreathingDot(size: 8)
-                    Text("I'm listening. Thank you.")
+                    Text("Listening is on.")
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                 }
@@ -1079,6 +1090,7 @@ struct RadarRipple: View {
     var delay: Double = 0
     @State private var expand = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
 
     var body: some View {
         Circle()
@@ -1087,13 +1099,13 @@ struct RadarRipple: View {
             .scaleEffect(expand ? (inward ? 1.0 : 1.45) : (inward ? 1.45 : 1.0))
             .opacity(expand ? 0 : 0.8)
             .animation(
-                reduceMotion ? .default
+                (reduceMotion || !ambientMotion) ? .default
                     // 3.2s: twice the app's 1.6s ambient harmonic, so the
                     // ring and the breathing dot move as one organism.
                     : .easeOut(duration: 3.2).repeatForever(autoreverses: false).delay(delay),
                 value: expand
             )
-            .onAppear { if !reduceMotion { expand = true } }
+            .onAppear { if !reduceMotion && ambientMotion { expand = true } }
             .accessibilityHidden(true)
     }
 }

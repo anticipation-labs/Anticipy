@@ -64,13 +64,17 @@ final class Notifier {
     }
 
     static func inQuietHours(_ date: Date = Date(),
-                             calendar: Calendar = .current) -> Bool {
+                             calendar: Calendar = .current,
+                             schedule: NotificationQuietSchedule = .current) -> Bool {
+        guard let hours = schedule.hours else { return false }
         let hour = calendar.component(.hour, from: date)
-        return hour >= quietStartHour || hour < quietEndHour
+        return hour >= hours.start || hour < hours.end
     }
 
     /// Everything the owner is currently blocking, raised once each.
     func announce(jobs: [AgentJob], now: Date = Date()) async {
+        guard AppPreferences.bool(forKey: AppPreferences.notificationsKey,
+                                  default: true) else { return }
         let waiting = jobs.filter { Self.isWaitingOnOwner($0) }
         guard !waiting.isEmpty else { return }
         await askIfNeeded()
@@ -124,7 +128,10 @@ final class Notifier {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = .default
+        if AppPreferences.bool(forKey: AppPreferences.notificationSoundKey,
+                               default: true) {
+            content.sound = .default
+        }
         content.userInfo = ["jobID": id]
         let request = UNNotificationRequest(
             identifier: "anticipy-job-\(id)", content: content, trigger: nil)

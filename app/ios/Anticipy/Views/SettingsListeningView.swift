@@ -73,7 +73,7 @@ struct SettingsListeningView: View {
                         stopNow()
                     }
                 } else {
-                    NavRow("Start listening", systemImage: "waveform") {
+                    ActionRow("Start listening", systemImage: "waveform") {
                         Haptics.engage()
                         startNow()
                     }
@@ -87,13 +87,13 @@ struct SettingsListeningView: View {
             // armed on a previous visit shows as chosen when this reopens.
             GroupedCard {
                 SelectRow("15 minutes",
-                          subtitle: "Then she starts again on her own.",
+                          subtitle: "Listening resumes automatically.",
                           isSelected: isPaused(minutes: 15)) {
                     Haptics.engage()
                     pause(minutes: 15)
                 }
                 SelectRow("1 hour",
-                          subtitle: "Then she starts again on her own.",
+                          subtitle: "Listening resumes automatically.",
                           isSelected: isPaused(minutes: 60)) {
                     Haptics.engage()
                     pause(minutes: 60)
@@ -101,9 +101,9 @@ struct SettingsListeningView: View {
             }
 
             if let ends = pauseEnds {
-                FootnoteText("Paused. She starts again at "
+                FootnoteText("Paused. Listening resumes at "
                              + ends.formatted(date: .omitted, time: .shortened)
-                             + ", unless you start her sooner.")
+                             + ", unless you start it sooner.")
             }
 
             // Ships in RELEASE, unlike the haptics panel. The stranger week is
@@ -111,9 +111,8 @@ struct SettingsListeningView: View {
             // reading is the day something went wrong on it — a DEBUG-only
             // diagnostic cannot be read from the one device in question.
             GroupedCard {
-                DisclosureRow("Find out what listening actually did",
-                              subtitle: "Every start, stop and silence, with the "
-                                  + "log behind it.",
+                DisclosureRow("Listening activity",
+                              subtitle: "Review starts, stops, silent periods, and battery readings.",
                               systemImage: "list.bullet.rectangle") {
                     Haptics.engage()
                     showDiagnostics = true

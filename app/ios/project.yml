@@ -524,7 +524,13 @@ settings:
     # owner's click), on-device SpeechTranscriber, and transcripts posted
     # with the same capture envelope the phone sends. 106 and these bytes
     # disagree about what a signed-in phone offers its owner.
-    CURRENT_PROJECT_VERSION: "108"
+    # 108: the automated consumer walk now reaches and proves every page it
+    # names, and the two defects it exposed were repaired.
+    # 109: Settings becomes a real page hierarchy. Connectors have individual
+    # detail pages, Appearance and Advanced stop changing things from the
+    # index, notifications gain quiet-hour controls, ambient motion and
+    # haptics are configurable, and the looping Home dots are removed.
+    CURRENT_PROJECT_VERSION: "109"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -574,7 +580,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "108"
+        CURRENT_PROJECT_VERSION: "109"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES

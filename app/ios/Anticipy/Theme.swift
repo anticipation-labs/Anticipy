@@ -515,6 +515,7 @@ enum Haptics {
     /// Wake the engine so the NEXT touch is instant. Cheap; call it when the
     /// app becomes active. Each fire below also re-prepares for the same reason.
     static func warmUp() {
+        guard AppPreferences.bool(forKey: AppPreferences.hapticsKey, default: true) else { return }
         // The CoreHaptics engine is warmed so the DIAGNOSTIC can use it. The
         // app's own feedback below stays on UIFeedbackGenerator — the
         // documented API for UI feedback — until the diagnostic proves
@@ -524,16 +525,36 @@ enum Haptics {
         rigidGen.prepare(); noticeGen.prepare()
     }
 
-    static func tap() { lightGen.impactOccurred(); lightGen.prepare() }
+    static func tap() {
+        guard enabled else { return }
+        lightGen.impactOccurred(); lightGen.prepare()
+    }
     /// A page turn is a selection, and iOS users expect the tick.
     private static let selectionGen = UISelectionFeedbackGenerator()
-    static func pageTurn() { selectionGen.selectionChanged(); selectionGen.prepare() }
-    static func engage() { mediumGen.impactOccurred(); mediumGen.prepare() }
-    static func success() { noticeGen.notificationOccurred(.success); noticeGen.prepare() }
-    static func warning() { noticeGen.notificationOccurred(.warning); noticeGen.prepare() }
+    static func pageTurn() {
+        guard enabled else { return }
+        selectionGen.selectionChanged(); selectionGen.prepare()
+    }
+    static func engage() {
+        guard enabled else { return }
+        mediumGen.impactOccurred(); mediumGen.prepare()
+    }
+    static func success() {
+        guard enabled else { return }
+        noticeGen.notificationOccurred(.success); noticeGen.prepare()
+    }
+    static func warning() {
+        guard enabled else { return }
+        noticeGen.notificationOccurred(.warning); noticeGen.prepare()
+    }
+
+    private static var enabled: Bool {
+        AppPreferences.bool(forKey: AppPreferences.hapticsKey, default: true)
+    }
 
     /// Two soft rising taps — the feeling of two things finding each other.
     static func pairing() {
+        guard enabled else { return }
         softGen.impactOccurred(intensity: 0.6)
         mediumGen.prepare()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
@@ -544,6 +565,7 @@ enum Haptics {
 
     /// A crisp double-tap: something she promised is now done.
     static func taskDone() {
+        guard enabled else { return }
         rigidGen.impactOccurred(intensity: 0.7)
         rigidGen.prepare()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
@@ -554,6 +576,7 @@ enum Haptics {
 
     /// One barely-there tick as her words start to appear.
     static func herMessage() {
+        guard enabled else { return }
         softGen.impactOccurred(intensity: 0.45)
         softGen.prepare()
     }
@@ -585,6 +608,7 @@ struct TypewriterText: View {
     @State private var typing = false
     @State private var caret = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AppPreferences.typedResponsesKey) private var typedResponses = true
 
     var body: some View {
         Text(shown)
@@ -617,7 +641,7 @@ struct TypewriterText: View {
             .task(id: text) {
                 // Reduce Motion means "don't animate at me" — typing IS an
                 // animation, so the whole sentence simply appears.
-                if reduceMotion {
+                if reduceMotion || !typedResponses {
                     shown = text
                     typing = false
                     onDone?()
@@ -654,6 +678,7 @@ struct TypewriterText: View {
 struct WaveBars: View {
     @State private var up = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
 
     var body: some View {
         HStack(spacing: 3) {
@@ -664,9 +689,9 @@ struct WaveBars: View {
                     // nobody can see. On black it resolves to champagne.
                     .fill(Theme.accent)
                     .frame(width: 3, height: 10)
-                    .scaleEffect(y: (up && !reduceMotion) ? 1.0 : 0.4)
+                    .scaleEffect(y: (up && !reduceMotion && ambientMotion) ? 1.0 : 0.4)
                     .animation(
-                        reduceMotion ? .default
+                        (reduceMotion || !ambientMotion) ? .default
                             : .easeInOut(duration: 0.8)
                                 .repeatForever(autoreverses: true)
                                 .delay([0, 0.13, 0.27][i]),
@@ -679,28 +704,6 @@ struct WaveBars: View {
     }
 }
 
-/// One dot of a staggered sequence — the same 1.6s breath as BreathingDot,
-/// offset so a row of them pulses in order.
-struct PulseDot: View {
-    var delay: Double = 0
-    @State private var up = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Circle()
-            .fill(Theme.accent)
-            .frame(width: 6, height: 6)
-            .opacity((up && !reduceMotion) ? 1.0 : 0.35)
-            .animation(
-                reduceMotion ? .default
-                    : .easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(delay),
-                value: up
-            )
-            .onAppear { up = true }
-            .accessibilityHidden(true)
-    }
-}
-
 /// The app's heartbeat: the champagne dot breathing slowly whenever she is
 /// listening or working. A still screen reads as dead; a breathing one is her.
 struct BreathingDot: View {
@@ -708,10 +711,11 @@ struct BreathingDot: View {
     var active: Bool = true
     @State private var up = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
 
     /// A forever-repeating pulse is exactly what Reduce Motion exists to stop,
     /// and this one sits on the home screen the whole time she is listening.
-    private var animates: Bool { active && !reduceMotion }
+    private var animates: Bool { active && !reduceMotion && ambientMotion }
 
     var body: some View {
         Circle()

@@ -2156,25 +2156,22 @@ struct HomeView: View {
                 .font(Theme.display(40))
                 .tracking(-1.0)
                 .foregroundStyle(Theme.text)
-            Text("Live your day. I listen, I understand, and I handle the follow-through, asking before anything is sent.")
+            Text("Turn on listening during a conversation. Anticipy keeps track of follow-ups, names, dates, and messages that need a response.")
                 .font(.system(size: 17))
                 .lineSpacing(3)
                 .foregroundStyle(Theme.text2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 300)
-            // Motion is the only thing that distinguishes WAITING from
-            // BROKEN: three dots pulsing in sequence beside what she's
-            // listening for.
             VStack(alignment: .leading, spacing: Theme.Space.snug) {
-                manifestRow("things you say you'll do", delay: 0)
-                manifestRow("names and dates you mention", delay: 0.53)
-                manifestRow("anything that needs a reply", delay: 1.07)
+                manifestRow("Commitments and follow-ups")
+                manifestRow("People, dates, and details")
+                manifestRow("Messages that need a response")
             }
             .padding(.top, Theme.Space.tight)
             Rectangle().fill(Theme.edge).frame(height: 0.5)
                 .padding(.vertical, Theme.Space.snug)
-            Text("WHEN I CATCH SOMETHING, IT LOOKS LIKE THIS")
+            Text("EXAMPLE")
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
@@ -2218,9 +2215,13 @@ struct HomeView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func manifestRow(_ text: String, delay: Double) -> some View {
+    private func manifestRow(_ text: String) -> some View {
         HStack(spacing: Theme.Space.snug) {
-            PulseDot(delay: delay)
+            Image(systemName: "checkmark")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 12)
+                .accessibilityHidden(true)
             Text(text)
                 .font(.system(size: 17))
                 .foregroundStyle(Theme.text2)

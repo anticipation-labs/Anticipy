@@ -48,7 +48,28 @@ final class WalkTests: XCTestCase {
         let button = app.buttons[label].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: timeout),
                       "Expected a \(label) button")
-        button.tap()
+        if button.isHittable {
+            button.tap()
+        } else {
+            // Page-style TabViews can report a visible footer button outside
+            // the collection cell's hit frame. Tap its actual centre so the
+            // walk tests the control the screenshot shows, rather than an
+            // accessibility-frame quirk in the simulator.
+            button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+    }
+
+    /// Custom settings chrome must stay below the physical status bar at every
+    /// navigation depth. Existence alone missed a bug where alternate nested
+    /// destinations rendered the title at y=0 while remaining tappable.
+    private func requireChrome(_ title: String, in app: XCUIApplication) {
+        let heading = require(title, in: app)
+        XCTAssertGreaterThan(heading.frame.minY, 44,
+                             "\(title) title overlaps the status bar")
+        let back = app.buttons["Back"].firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 2))
+        XCTAssertGreaterThan(back.frame.minY, 44,
+                             "\(title) back button overlaps the status bar")
     }
 
     /// Walks the real first-run route, signs in to the local walkthrough
@@ -89,6 +110,16 @@ final class WalkTests: XCTestCase {
         password.typeText("walkthrough123")
         tap("Sign in", in: app)
 
+        // iOS may offer to save the walkthrough password. It is a system
+        // sheet over the app, not part of Anticipy's route, and its presence
+        // can swallow the first tap on the consent screen while still leaving
+        // that screen visible to accessibility. Clear it before screenshots
+        // or route assertions so the walk records and operates the app itself.
+        let passwordOffer = app.buttons["Not Now"].firstMatch
+        if passwordOffer.waitForExistence(timeout: 2) {
+            passwordOffer.tap()
+        }
+
         // Record the consent page but take its explicit first-class exit. The
         // visual audit does not need to start capturing a simulated room.
         require("May I listen?", in: app, timeout: 10)
@@ -125,46 +156,71 @@ final class WalkTests: XCTestCase {
         XCTAssertEqual(listeningState.value as? String, "Off")
         snap("10-listening")
         app.swipeUp(); snap("11-listening-scrolled"); app.swipeDown()
-        row("Find out what listening actually did")
+        row("Listening activity")
         require("Listening right now", in: app)
         snap("12-listening-diagnostics")
         app.swipeUp(); snap("13-listening-diagnostics-scrolled")
         back()
         back()
-        row("What I can see")
+        row("Notifications")
+        requireChrome("Notifications", in: app)
+        require("Quiet hours", in: app)
+        snap("14-notifications")
+        back()
+
+        row("Connectors")
+        requireChrome("Connectors", in: app)
         require("Your calendar", in: app)
-        snap("14-access")
+        snap("15-connectors")
         row("Your calendar")
         require("Right now", in: app)
-        snap("15-calendar-access")
+        snap("16-calendar-access")
+        back()
+        row("Browser")
+        requireChrome("Browser", in: app)
+        require("Status", in: app)
+        snap("17-browser-connector")
+        back()
+        row("Mac app")
+        requireChrome("Mac app", in: app)
+        require("Download Anticipy for Mac", in: app)
+        snap("18-mac-connector")
+        back()
+        row("Pendant")
+        requireChrome("Pendant", in: app)
+        require("Status", in: app)
+        snap("19-pendant-connector")
         back(); back()
+
         row("Profile")
         require("First name", in: app)
-        snap("16-profile")
+        snap("20-profile")
         XCTAssertFalse(app.staticTexts[
             "That doesn't look like a full number yet — country code and all."
         ].exists, "Unchanged profile details must not show a phone validation error")
         back()
 
-        row("Pendant, voice, browser and the rest")
-        require("Listening", in: app)
-        snap("17-legacy-settings-top")
-        for index in 1...5 {
-            app.swipeUp()
-            snap("legacy-settings-scroll-\(index)")
-        }
+        row("Advanced")
+        requireChrome("Advanced", in: app)
+        require("Haptic feedback", in: app)
+        snap("21-advanced")
         back()
-
-        let info = app.buttons["About Anticipy"].firstMatch
-        XCTAssertTrue(info.waitForExistence(timeout: 3))
-        info.tap()
-        require("About", in: app); snap("about")
-        tap("Close", in: app)
 
         // A consumer app also has to survive its own alternate appearance.
         // Exercise the real picker rather than injecting a launch preference.
+        row("Appearance")
+        requireChrome("Appearance", in: app)
+        require("Light", in: app)
+        snap("22-appearance")
         row("Dark")
-        snap("settings-dark")
-        back(); snap("home-dark")
+        snap("23-appearance-dark")
+        back()
+
+        row("About Anticipy")
+        require("About", in: app)
+        snap("24-about-dark")
+        back()
+        snap("25-settings-dark")
+        back(); snap("26-home-dark")
     }
 }

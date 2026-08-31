@@ -213,7 +213,7 @@ if code "$auth" | grep -q 'about ten seconds'; then
     echo "half before it understates the rest by six times."
     exit 2
 fi
-if ! code "$auth" | grep -q 'Twenty seconds here, about a minute in all'; then
+if ! code "$auth" | grep -q 'About twenty seconds here and one minute from start to finish'; then
     echo "The door no longer anchors the whole run."
     exit 2
 fi
@@ -240,7 +240,7 @@ fi
 # 6. THE COST, WITH THE RECEIPT FOR IT. Every clause of the fifth promise has to
 #    name a row that exists, or the consent screen is making a promise about a
 #    screen that cannot keep it.
-if ! code "$onboard" | grep -q 'You can see exactly what I cost'; then
+if ! code "$onboard" | grep -q 'Review usage and activity'; then
     echo "The microphone primer no longer says what listening costs."
     echo "\"I keep going in the background\" is the largest cost in the product"
     echo "and it is stated with no bound; the phone has been measuring the real"
@@ -266,7 +266,7 @@ fi
 # still on disk and ListenJournal rotates on BYTES, never at midnight, so those
 # rows can span days. The primer may not borrow a scope the arithmetic under it
 # has not got, and it may not invent a drain figure this repo has never recorded.
-primer=$(code "$onboard" | grep -A2 'You can see exactly what I cost')
+primer=$(code "$onboard" | grep -A2 'Review usage and activity')
 if printf '%s\n' "$primer" | grep -q '%'; then
     echo "The cost promise carries a percentage."
     echo "ListeningDiagnosticsView's \"NO VERDICT\" note states there is no recorded drain"
