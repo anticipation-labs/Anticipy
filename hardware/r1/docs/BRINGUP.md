@@ -30,7 +30,7 @@ Tag-Connect TC2030-IDC-NL cable, nRF Connect on a phone.
 
 ## 5. Peripheral tests (test firmware)
 
-- [ ] SPI flash: read JEDEC ID = `EF 40 18` (W25Q128JV).
+- [ ] SPI flash: read JEDEC ID = `C2 20 19` (MX25L25645G, 256 Mbit / 32 MB). Addressing is 4-byte above 128 Mbit: use EN4B (0xB7) or the 4-byte opcodes (0x13 read, 0x12 page program, 0xDC block erase).
 - [ ] Accelerometer: I2C addr 0x18 WHO_AM_I = `0x33` (LIS2DH12); INT1 fires on tap.
 - [ ] Both PDM mics: record 2 s, check both channels show audio, no rail noise.
 - [ ] Button: BTN P1.06 reads low when pressed.

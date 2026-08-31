@@ -175,9 +175,15 @@ COMPONENTS = [
          pins={"1": P3V3, "2": GND}),   # MK2 decoupling
     # ------------------------------------------------------------ SPI flash
     dict(
-        ref="U5", sym="Memory_Flash:W25Q128JVS",
+        ref="U5", sym="Memory_Flash:MX25L3233FM2",
         fp="Package_SO:SOIC-8_5.3x5.3mm_P1.27mm",
-        value="W25Q128JVSIQ", mpn="Winbond W25Q128JVSIQ",
+        value="MX25L25645GMI-08G", mpn="Macronix MX25L25645GMI-08G",
+        # 256 Mbit (32 MB) in the standard SOP-8 208-mil pattern, so this is
+        # the only >16 MB NOR that needs no layout change: Winbond's 32/64 MB
+        # parts are WSON-8 8x6 or SOIC-16 300-mil.  Above 128 Mbit the address
+        # is 4 bytes — firmware must use 4-byte-address opcodes (see
+        # docs/STORAGE.md).  /WP and /HOLD are tied high, so quad/QPI modes
+        # stay disabled.
         pins={"1": "FLASH_CS", "2": "FLASH_MISO", "3": P3V3,   # /WP
               "4": GND, "5": "FLASH_MOSI", "6": "FLASH_SCK",
               "7": P3V3, "8": P3V3},                            # /HOLD, VCC

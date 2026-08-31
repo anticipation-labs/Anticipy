@@ -6222,7 +6222,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "W25Q128JVSIQ"
+		(property "Value" "MX25L25645GMI-08G"
 			(at 0 -3.6 180)
 			(layer "B.Fab")
 			(uuid "788891ab-8af2-422a-ab19-749f42aa9de1")

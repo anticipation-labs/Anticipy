@@ -6,7 +6,7 @@ GPIO names taken from the KiCad MDBT50Q symbol (module pin -> nRF52840 port pin)
 |-------------|-----------|---------------|-----------|-------|
 | PDM_CLK     | 48        | P0.24         | out       | Shared clock, both mics |
 | PDM_DATA    | 49        | P0.25         | in        | MK1 = one channel, MK2 = other (SELECT strapping) |
-| FLASH_CS    | 37        | P0.13         | out       | W25Q128JV SPI CS, active low |
+| FLASH_CS    | 37        | P0.13         | out       | MX25L25645G SPI CS, active low |
 | FLASH_SCK   | 36        | P0.14         | out       | |
 | FLASH_MOSI  | 39        | P0.15         | out       | |
 | FLASH_MISO  | 38        | P0.16         | in        | |
