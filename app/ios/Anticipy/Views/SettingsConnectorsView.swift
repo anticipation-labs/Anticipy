@@ -135,11 +135,18 @@ private struct SettingsBrowserConnectorView: View {
                     FootnoteText("Enter the six-digit code shown by the Anticipy browser extension.")
                 }
 
-                if let setup = URL(string: backendURL + "/setup.html") {
+                if let setup = ComputerSetupLinks.browser(baseURL: backendURL) {
                     GroupedCard {
-                        ActionRow("Open setup guide", systemImage: "arrow.up.right.square") {
+                        ActionRow("Open browser setup", systemImage: "arrow.up.right.square") {
                             UIApplication.shared.open(setup)
                         }
+                        ShareLink(item: setup,
+                                  subject: Text("Set up Anticipy in Chrome"),
+                                  message: Text("Open this on your computer to connect Anticipy to Chrome.")) {
+                            Label("Send setup to computer", systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .ghostRow()
                     }
                 }
             }
@@ -193,12 +200,19 @@ private struct SettingsMacConnectorView: View {
                         systemImage: "person.crop.circle")
             }
 
-            if let download = URL(string: backendURL + "/mac/Anticipy-for-Mac.zip") {
+            if let setup = ComputerSetupLinks.mac(baseURL: backendURL) {
                 GroupedCard {
-                    ActionRow("Download Anticipy for Mac",
-                              systemImage: "arrow.down.circle") {
-                        UIApplication.shared.open(download)
+                    ActionRow("Open Mac setup",
+                              systemImage: "arrow.up.right.square") {
+                        UIApplication.shared.open(setup)
                     }
+                    ShareLink(item: setup,
+                              subject: Text("Get Anticipy for Mac"),
+                              message: Text("Open this on your Mac to install Anticipy.")) {
+                        Label("Send setup to Mac", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .ghostRow()
                 }
             }
 

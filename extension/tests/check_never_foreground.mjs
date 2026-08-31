@@ -27,7 +27,7 @@ const read = (f) => readFileSync(join(ext, f), "utf8");
 const failures = [];
 
 const FILES = ["agent_loop.js", "background.js", "popup.js", "onboarding.js", "page_map.js"];
-const ALLOWED_GRANTS = { "agent_loop.js": 1, "background.js": 4 }; // pinned: re-audit to change
+const ALLOWED_GRANTS = { "agent_loop.js": 1, "background.js": 5 }; // pinned: re-audit to change
 const MARKER = /FOCUS-OK\((owner-click|owner-install|focus-restore)\)/;
 
 // 1. Syntax: both service-worker modules must parse as ES modules.

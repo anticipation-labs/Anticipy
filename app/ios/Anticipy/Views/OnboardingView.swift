@@ -1,9 +1,10 @@
 import SwiftUI
 import Speech
+import UIKit
 
 /// First-run walkthrough: welcome → how it works → may I listen → where to
-/// reach you — and the sign-in door now stands between the second and the
-/// third of them.
+/// reach you → optional computer handoff — and the sign-in door stands between
+/// the second and the third of them.
 ///
 /// This view is instantiated with a `FirstRunSegment` and carries only that
 /// segment's pages. The reason it is split at all is that a stranger used to
@@ -21,13 +22,10 @@ import Speech
 /// thing the app ever said to anyone was a system alert. The primer is here to
 /// stop that. Every step is still skippable; nothing blocks the app.
 ///
-/// The browser used to be a fifth page here, and it was the one page nobody
-/// could finish on the phone in their hand. `design/day-zero.md:237-239` moved
-/// it out: "It is asked just-in-time, when an errand actually needs hands,
-/// which also returns the ~70-second budget and removes a step from what the
-/// audit called a six-step wall." The pairing ceremony lives in Settings,
-/// where it always did; Home offers it the first time an errand is actually
-/// parked for want of hands — see `HomeView.browserOfferCard`.
+/// Computer setup is an optional HANDOFF, never an install task on the phone:
+/// each hosted Railway page can be opened or sent through the native share
+/// sheet, and the whole beat has a one-tap exit. Home and Settings keep the same
+/// routes for anybody who takes that exit.
 struct OnboardingView: View {
     @EnvironmentObject var session: AnticipySession
     /// Called the instant the last step is cleared. The CALLER writes the
@@ -101,11 +99,14 @@ struct OnboardingView: View {
     // Microphone
     @State private var micAsked = false
 
-    /// The voice invite, raised once the four beats are cleared. NOT a fifth
-    /// beat: `design/day-zero.md:237-239` already removed one page from this
-    /// walkthrough for exceeding the ~70-second budget, so the four keep their
-    /// names, their count and their progress track, and this is a screen after
-    /// them rather than inside them.
+    // Computer handoff
+    @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
+    @State private var pairCode = ""
+    @State private var pairOutcome: AnticipySession.PairOutcome?
+    @State private var pairingBrowser = false
+
+    /// The voice invite, raised once the walkthrough is cleared. It remains a
+    /// screen after the counted beats rather than another item in their track.
     ///
     /// Raised only when `EnrollmentOfferPolicy` says it can work. On the
     /// shipping build sherpa-onnx is unlinked, `SpeakerTagger.available` is
@@ -113,14 +114,13 @@ struct OnboardingView: View {
     /// it cannot pay back. See EnrollmentInvite for the whole argument.
     @State private var inviting = false
 
-    /// Four beats, and they live in `FirstRunRoute.swift` now — the routing
+    /// Five beats, and they live in `FirstRunRoute.swift` now — the routing
     /// has to name them too, and Foundation-only is what lets the six launch
     /// states be walked without a simulator. The alias is what keeps every
     /// `Step.mic`, `.tag(Step.phone)` and `step += 1` in this file untouched.
     ///
-    /// The browser was a fifth beat until `design/day-zero.md` took it out of
-    /// first run; nothing here may exceed the ~70-second budget in
-    /// `CONSUMER-FEEL-DIRECTION-2026-08-03.md` §5.
+    /// The computer handoff is short and fully skippable; installation remains
+    /// on the hosted pages rather than turning this view into a setup manual.
     private typealias Step = FirstRunBeat
 
     var body: some View {
@@ -186,7 +186,7 @@ struct OnboardingView: View {
     /// One beat by its absolute index. `default` is unreachable while
     /// `FirstRunSegment.pages` only ever holds these four, which
     /// `run_first_run_route_tests.sh` asserts along with `FirstRunBeat.count`
-    /// — a fifth beat added to the indices and not to this switch goes red
+    /// — a beat added to the indices and not to this switch goes red
     /// there rather than rendering a blank page on a stranger's first run.
     @ViewBuilder
     private func page(_ beat: Int) -> some View {
@@ -195,6 +195,7 @@ struct OnboardingView: View {
         case Step.howItWorks: howItWorks
         case Step.mic:        micPrimer
         case Step.phone:      yourNumber
+        case Step.computer:   computerSetup
         default:              EmptyView()
         }
     }
@@ -315,9 +316,9 @@ struct OnboardingView: View {
             if session.listener.isListening || session.micBlocked || micAsked { return "Continue" }
             return "Yes, start listening"
         case Step.phone:
-            // The last page, now the browser has left first run, so the button
-            // has to read like an ending instead of promising another page.
-            return savingPhone ? "Saving…" : "Start living your day"
+            return savingPhone ? "Saving…" : "Continue"
+        case Step.computer:
+            return "Start living your day"
         default:
             return "Continue"
         }
@@ -328,10 +329,8 @@ struct OnboardingView: View {
     private var skipLabel: String? {
         switch step {
         case Step.mic: return "Not right now"
-        // NAMES THE PAGE, BECAUSE IT DOES NOT SKIP. This read "Skip for now",
-        // and "for now" promises a second pass that does not exist: the branch
-        // below sets `phoneSkipped`, saves, and calls `finish()` — it ends
-        // first run. All three fields on this beat really do live in Settings:
+        // NAMES THE PAGE, BECAUSE IT DOES NOT SKIP. All three fields on this
+        // beat really do live in Settings:
         // first name and email in its `Section("You")`, the number in its
         // `Section("Your number")`. So the honest label is the page, not the
         // delay.
@@ -344,6 +343,7 @@ struct OnboardingView: View {
         // correct fix. Section titles are user-visible copy, they move with
         // their fields, and `run_first_run_copy_tests.sh` greps for them.
         case Step.phone: return "I'll do this in Settings."
+        case Step.computer: return "I'll connect my computer later"
         default: return nil
         }
     }
@@ -394,14 +394,15 @@ struct OnboardingView: View {
         case Step.mic:
             withAnimation(Theme.spring) { step = Step.phone }
         case Step.phone:
-            // The number is the last page, so its opt-out ends the walkthrough.
-            // Save any name or email they did provide because onChange(of:
-            // step) cannot run when the selection itself does not change.
+            // Save anything they did provide, then take the same optional
+            // computer handoff as the primary route.
             phoneSkipped = true
             savePhoneOnLeaving()
+            withAnimation(Theme.spring) { step = Step.computer }
+        case Step.computer:
             finish()
         default:
-            assertionFailure("Only microphone and profile beats can be skipped")
+            assertionFailure("Only microphone, profile, and computer beats can be skipped")
         }
     }
 
@@ -1012,6 +1013,156 @@ struct OnboardingView: View {
         .animation(Theme.spring, value: showingPhoneField)
     }
 
+    // MARK: - Computer handoff
+
+    /// One optional beat, two hosted destinations. The phone does not pretend
+    /// it can install either computer surface: Open lets somebody inspect the
+    /// guide, and Send uses iOS's own share sheet so AirDrop, Messages and Mail
+    /// are available without three bespoke integrations.
+    private var computerSetup: some View {
+        stepBody(alignment: .leading, spacing: 16) {
+            Text("Your computer")
+                .font(Theme.display(30))
+                .tracking(-0.5)
+                .foregroundStyle(Theme.text)
+            Text("Send each setup to the computer where you’ll use it. You can do either one now or come back in Settings.")
+                .font(.system(size: 17))
+                .lineSpacing(3)
+                .foregroundStyle(Theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            browserHandoffCard
+            macHandoffCard
+        }
+        .onChange(of: pairCode) { value in
+            pairOutcome = nil
+            let digits = String(value.filter(\.isNumber).prefix(6))
+            if digits != value { pairCode = digits }
+        }
+    }
+
+    private var browserHandoffCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: session.agentPaired ? "checkmark.circle.fill" : "safari")
+                    .font(.title3)
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Browser").font(.body.weight(.semibold)).foregroundStyle(Theme.text)
+                    Text(session.agentPaired ? "Connected" : "Not connected")
+                        .font(.caption).foregroundStyle(Theme.muted)
+                }
+            }
+            Text("The setup page installs the Chrome extension, shows your six-digit code, and confirms when this browser is linked.")
+                .font(.footnote).foregroundStyle(Theme.text2)
+
+            if let url = ComputerSetupLinks.browser(baseURL: backendURL) {
+                Link(destination: url) {
+                    Label("Open browser setup", systemImage: "arrow.up.right.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.ghost)
+                ShareLink(item: url,
+                          subject: Text("Set up Anticipy in Chrome"),
+                          message: Text("Open this on your computer to connect Anticipy to Chrome.")) {
+                    Label("Send to computer", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.ghost)
+            }
+
+            if !session.agentPaired {
+                Divider().overlay(Theme.edge)
+                TextField("6-digit code from the setup page", text: $pairCode)
+                    .keyboardType(.numberPad)
+                    .textContentType(.oneTimeCode)
+                    .font(.title3.monospacedDigit())
+                    .foregroundStyle(Theme.text)
+                    .padding(14)
+                    .background(Theme.surface,
+                                in: RoundedRectangle(cornerRadius: Theme.Radius.small,
+                                                     style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small,
+                                              style: .continuous)
+                        .strokeBorder(Theme.edge, lineWidth: 1))
+                    .accessibilityIdentifier("onboarding-browser-code")
+                Button {
+                    pairBrowser()
+                } label: {
+                    Text(pairingBrowser ? "Connecting…" : "Connect browser")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+                .disabled(pairCode.count != 6 || pairingBrowser)
+                if let pairOutcomeMessage {
+                    Text(pairOutcomeMessage)
+                        .font(.caption)
+                        .foregroundStyle(pairOutcome == .noMatch ? Theme.alarm : Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .anticipyCard()
+    }
+
+    private var macHandoffCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "laptopcomputer")
+                    .font(.title3)
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mac app").font(.body.weight(.semibold)).foregroundStyle(Theme.text)
+                    Text("Meeting recorder").font(.caption).foregroundStyle(Theme.muted)
+                }
+            }
+            Text("The Mac app records your microphone and meeting audio as separate local tracks, then syncs transcript text to this account.")
+                .font(.footnote).foregroundStyle(Theme.text2)
+            if let url = ComputerSetupLinks.mac(baseURL: backendURL) {
+                Link(destination: url) {
+                    Label("Open Mac setup", systemImage: "arrow.up.right.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.ghost)
+                ShareLink(item: url,
+                          subject: Text("Get Anticipy for Mac"),
+                          message: Text("Open this on your Mac to install Anticipy.")) {
+                    Label("Send to Mac", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.ghost)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .anticipyCard()
+    }
+
+    private var pairOutcomeMessage: String? {
+        switch pairOutcome {
+        case .noMatch: return "That code didn’t match. Use the current code on the setup page."
+        case .unreachable: return "Anticipy couldn’t connect just now. Your code is still here; try again when you have a connection."
+        case .paired: return "Browser connected."
+        case nil: return nil
+        }
+    }
+
+    private func pairBrowser() {
+        guard pairCode.count == 6, !pairingBrowser else { return }
+        pairingBrowser = true
+        let code = pairCode
+        Task {
+            let result = await session.pairAgent(code: code)
+            pairOutcome = result
+            pairingBrowser = false
+            if result == .paired { Haptics.pairing() }
+        }
+    }
+
     /// A fact she already holds, shown as settled instead of asked for again.
     ///
     /// EVERY PIECE OF THIS IS ALREADY IN THE PRODUCT. The tick, the accent and
@@ -1132,7 +1283,8 @@ enum FirstRunTrack {
     /// Short because the live one renders on a single line beside its count on
     /// a 375pt phone.
     static let beatNames = ["Your account", "Hello", "How I work",
-                            "May I listen?", "Where to reach you"]
+                            "May I listen?", "Where to reach you",
+                            "Your computer"]
 
     static var count: Int { beatNames.count }
 

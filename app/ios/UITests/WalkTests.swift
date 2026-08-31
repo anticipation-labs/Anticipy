@@ -128,7 +128,13 @@ final class WalkTests: XCTestCase {
 
         require("This is what I have.", in: app)
         snap("06-account-confirmation")
-        tap("Start living your day", in: app)
+        tap("Continue", in: app)
+
+        require("Your computer", in: app)
+        require("Send to computer", in: app)
+        require("Send to Mac", in: app)
+        snap("07-computer-handoff")
+        tap("I'll connect my computer later", in: app)
 
         // HOME — the Settings control is the proof that first run really
         // ended. A missing control now fails the test instead of producing a
@@ -136,13 +142,13 @@ final class WalkTests: XCTestCase {
         let settings = app.buttons["Settings"].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 10),
                       "First run never reached Home")
-        snap("07-home")
-        app.swipeUp(); snap("08-home-scrolled"); app.swipeDown()
+        snap("08-home")
+        app.swipeUp(); snap("09-home-scrolled"); app.swipeDown()
 
         // SETTINGS
         settings.tap()
         require("Settings", in: app)
-        snap("09-settings-home")
+        snap("10-settings-home")
 
         let row = { (label: String) in
             let element = app.descendants(matching: .any)
@@ -183,7 +189,8 @@ final class WalkTests: XCTestCase {
         back()
         row("Mac app")
         requireChrome("Mac app", in: app)
-        require("Download Anticipy for Mac", in: app)
+        require("Open Mac setup", in: app)
+        require("Send setup to Mac", in: app)
         snap("18-mac-connector")
         back()
         row("Pendant")

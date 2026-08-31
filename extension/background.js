@@ -21,7 +21,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.11.0";
+const ENGINE_BUILD = "0.11.1";
 
 const BACKEND_LLM = "backend-proxy";
 // Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier
@@ -88,6 +88,35 @@ const ownerLaneFilter = (status, ownerRef) =>
 // filter names the lane explicitly, exactly as `noteResearchWaiting` does.
 const supervisedReadFilter = (ownerRef) =>
   `status="queued" && owner_ref="${ownerRef}" && lane="supervised_read"`;
+
+// The public setup page becomes live only on the exact backend this install is
+// configured to use. Checking the complete origin + path here means a random
+// page cannot ask the bridge for a pairing code merely because the extension
+// already has broad browser permissions for its actual work.
+async function isHostedSetupPage(value) {
+  try {
+    const root = `${await backendBase()}/`;
+    const expected = new URL("setup.html", root);
+    const candidate = new URL(value);
+    return candidate.origin === expected.origin
+      && candidate.pathname === expected.pathname;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function installHostedSetupBridge(tabId, url) {
+  if (tabId == null || !(await isHostedSetupPage(url))) return false;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["setup_bridge.js"],
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
 // ---------------------------------------------------------------- pairing
 // Each install registers itself once with a 6-digit pair code. The phone app
@@ -1781,6 +1810,20 @@ async function retryJob(id) {
 // check picks it up within a poll and stops where it is.
 chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
   if (!msg || !msg.type) return;
+  // Only setup_bridge.js asks this, and that file is injected only after the
+  // exact hosted-page check above. Return the disposable display code and the
+  // linked bit; the private per-agent credential never enters page JavaScript.
+  if (msg.type === "anticipy-setup-state") {
+    ensureRegistered()
+      .then(() => chrome.storage.local.get(["pairCode", "paired", "ownerRef"]))
+      .then((s) => respond({
+        ok: true,
+        code: s.pairCode || "",
+        linked: !!s.paired || !!s.ownerRef,
+      }))
+      .catch(() => respond({ ok: false, code: "", linked: false }));
+    return true;
+  }
   // The pairing page's pulse. In a brand-new profile Chrome has been observed
   // to create NO alarms at all (probed live 2026-08-14: getAll() still empty
   // 95s after install), and a worker kept alive by DevTools/automation never
@@ -1842,11 +1885,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
 chrome.runtime.onInstalled.addListener((details) => {
   ensureWakeAlarms().catch(() => {});
   ensureRegistered();
-  // First-run welcome: a guided setup page, not a paragraph in a README.
+  // If installation began from the hosted guide, keep the person on that one
+  // page and turn it into the live pairing surface. Direct installs still get
+  // the packaged fallback page, so no route ends in silence.
   if (details.reason === "install") {
-    // FOCUS-OK(owner-install): installing the extension IS the owner's own
-    // action — the pairing page is the one thing allowed to open focused.
-    chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html"), active: true });
+    chrome.tabs.query({}).then(async (tabs) => {
+      for (const tab of tabs) {
+        if (await installHostedSetupBridge(tab.id, tab.url || "")) return;
+      }
+      // FOCUS-OK(owner-install): installing the extension IS the owner's own
+      // action — the pairing page is the one thing allowed to open focused.
+      chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html"), active: true });
+    }).catch(() => {
+      // FOCUS-OK(owner-install): the query failed, but this is still the
+      // owner's install gesture and the packaged pairing page is its fallback.
+      chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html"), active: true });
+    });
+  }
+});
+
+// Existing installs also light up the hosted page. Optional chaining keeps
+// older test stubs and Chrome variants from turning a missing event into a
+// service-worker load failure; onInstalled above still covers first setup.
+chrome.tabs.onUpdated?.addListener?.((tabId, change, tab) => {
+  if (change.status === "complete" && tab?.url) {
+    installHostedSetupBridge(tabId, tab.url);
   }
 });
 chrome.runtime.onStartup.addListener(() => {

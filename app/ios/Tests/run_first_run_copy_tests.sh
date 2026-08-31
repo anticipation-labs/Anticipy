@@ -46,7 +46,7 @@ code() { grep -vE '^[[:space:]]*//' "$1"; }
 # The logic below is worthless if the screens have stopped consulting it.
 
 # 1. THE TRACK. Not "does FirstRunTrack exist" — does the label the person reads
-#    come from it. `beatNames[step]` left against a five-element array is this
+#    come from it. `beatNames[step]` left against a six-element array is this
 #    fix going half-done: the numbers read 2, 3, 4, 5 while every beat wears the
 #    name of the one before it.
 for call in 'FirstRunTrack.name(step: step' \
@@ -61,8 +61,8 @@ for call in 'FirstRunTrack.name(step: step' \
 done
 if code "$onboard" | grep -qE 'beatNames\[step\]'; then
     echo "The track indexes beatNames[step] again."
-    echo "Against a five-element array that misnames every beat by one: the"
-    echo "count says 3 of 5 and the name above it says the beat before."
+    echo "Against a six-element array that misnames every beat by one: the"
+    echo "count says 3 of 6 and the name above it says the beat before."
     exit 2
 fi
 
@@ -218,12 +218,11 @@ if ! code "$auth" | grep -q 'About twenty seconds here and one minute from start
     exit 2
 fi
 
-# 5. THE LABEL THAT PROMISED A SECOND PASS. "Skip for now" ended first run: its
-#    branch sets phoneSkipped, saves, and calls finish().
+# 5. THE LABEL THAT PROMISED A SECOND PASS. "Skip for now" never named where
+#    the deferred profile work actually lives.
 if code "$onboard" | grep -q 'Skip for now'; then
     echo "The number beat's opt-out says \"Skip for now\" again."
-    echo "That branch calls finish() — it ends first run. \"For now\" promises"
-    echo "a second pass that does not exist."
+    echo "The profile is deferred to Settings, so the button has to name it."
     exit 2
 fi
 if ! code "$onboard" | grep -q "I'll do this in Settings"; then

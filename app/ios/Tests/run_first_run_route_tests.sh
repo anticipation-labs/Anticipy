@@ -96,11 +96,11 @@ if ! printf '%s\n' "$intro_arm" | grep -q 'segment: .intro'; then
 fi
 
 # And the view can only render the pages its segment carries. `segment.pages`
-# is the list of indices the TabView walks — a TabView listing all four
+# is the list of indices the TabView walks — a TabView listing all five
 # unconditionally renders the primer whatever the segment says.
 if ! code "$onboard" | grep -q 'ForEach(segment.pages'; then
     echo "OnboardingView no longer builds its pages from segment.pages."
-    echo "A TabView that lists all four beats renders the microphone primer in"
+    echo "A TabView that lists all five beats renders the microphone primer in"
     echo "front of the door whatever the routing decided."
     exit 2
 fi
@@ -124,7 +124,7 @@ fi
 code "$onboard" > "$out/onboard.code.swift"
 pagefn=$(span "$out/onboard.code.swift" 'func page[(]')
 [ -n "$pagefn" ] || { echo "OnboardingView has no func page(_:) for this suite to read."; exit 2; }
-for pair in 'welcome:welcome' 'howItWorks:howItWorks' 'mic:micPrimer' 'phone:yourNumber'; do
+for pair in 'welcome:welcome' 'howItWorks:howItWorks' 'mic:micPrimer' 'phone:yourNumber' 'computer:computerSetup'; do
     beat=${pair%%:*}
     view=${pair#*:}
     if ! printf '%s\n' "$pagefn" | grep -qE "case Step\.$beat:[[:space:]]+$view\$"; then
@@ -221,8 +221,8 @@ fi
 # an account nobody has made. Both permitted numbers are forbidden.
 if ! code "$onboard" | grep -q 'if segment.showsTrack'; then
     echo "The progress track is no longer withheld in front of the door."
-    echo "Every number available there is false: \"1 of 5\" opens the track at"
-    echo "1, which its own rule forbids, and \"3 of 5\" counts an account"
+    echo "Every number available there is false: \"1 of 6\" opens the track at"
+    echo "1, which its own rule forbids, and \"3 of 6\" counts an account"
     echo "nobody has made yet."
     exit 2
 fi
@@ -237,7 +237,7 @@ fi
 # THE INVARIANT. `pageCount` is what the track counts over, never how many
 # pages the current segment happens to carry. Handing it segment.pages.count is
 # the obvious-looking tidy-up that renames every beat — the compiled checks
-# show the microphone beat wearing "Where to reach you" under it.
+# show the microphone beat wearing "Your computer" under it.
 if code "$onboard" | grep -q 'pageCount: segment'; then
     echo "The track is being told a segment's page count."
     echo "That renames every beat: in the post-door segment the microphone"

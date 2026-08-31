@@ -31,35 +31,38 @@ func check(_ name: String, _ ok: Bool) {
     if !ok { failures += 1 }
 }
 
-// The four pages OnboardingView actually has. Written once here, so that if the
+// The five pages OnboardingView actually has. Written once here, so that if the
 // walkthrough gains or loses a page these checks move with it rather than
 // quietly testing a shape the app no longer has.
-let pages = 4
+let pages = 5
 
 // ===================================================== THE TRACK, AND THE DOOR
 //
 // The whole fix in one line: the first thing this track can say about somebody
 // is no longer that they are at the beginning.
 
-check("the track counts five beats, not four", FirstRunTrack.count == 5)
+check("the track counts six beats, including the account", FirstRunTrack.count == 6)
 check("the first beat is the account they already made",
       FirstRunTrack.beatNames.first == "Your account")
 check("one beat is behind the first page of this view",
       FirstRunTrack.offset(pageCount: pages) == 1)
 
 // The honest delta the audit named: "How I work" was 2 of 4 and is now 3 of 5.
-check("the welcome beat is Hello, second of five",
+check("the welcome beat is Hello, second of six",
       FirstRunTrack.name(step: 0, pageCount: pages) == "Hello"
         && FirstRunTrack.ordinal(step: 0, pageCount: pages) == 2)
-check("how-it-works is third of five, not second of four",
+check("how-it-works is third of six",
       FirstRunTrack.name(step: 1, pageCount: pages) == "How I work"
         && FirstRunTrack.ordinal(step: 1, pageCount: pages) == 3)
-check("the microphone beat is fourth of five",
+check("the microphone beat is fourth of six",
       FirstRunTrack.name(step: 2, pageCount: pages) == "May I listen?"
         && FirstRunTrack.ordinal(step: 2, pageCount: pages) == 4)
-check("the number beat is last of five",
+check("the number beat is fifth of six",
       FirstRunTrack.name(step: 3, pageCount: pages) == "Where to reach you"
         && FirstRunTrack.ordinal(step: 3, pageCount: pages) == 5)
+check("the computer handoff is last of six",
+      FirstRunTrack.name(step: 4, pageCount: pages) == "Your computer"
+        && FirstRunTrack.ordinal(step: 4, pageCount: pages) == 6)
 
 // THE RULE, stated as a rule rather than as four examples. While the door is
 // behind this view, no page of it may be called the first thing that happened.
@@ -69,8 +72,8 @@ for step in 0 ..< pages {
 }
 
 // EVERY NAME MOVED WITH THE COUNT. Leaving `beatNames[step]` against a
-// five-element array is the shape of this fix going half-done: the numbers
-// would read 2, 3, 4, 5 while every beat wore the name of the one before it.
+// six-element array is the shape of this fix going half-done: the numbers
+// would move while every beat wore the name of the one before it.
 check("no beat wears the name of the beat before it",
       (0 ..< pages).allSatisfy {
           FirstRunTrack.name(step: $0, pageCount: pages)
@@ -80,12 +83,12 @@ check("no beat wears the name of the beat before it",
 // The spoken count and the printed count are built from one place, so they
 // cannot drift into disagreeing about which beat somebody is standing on.
 check("VoiceOver hears the same count the screen prints",
-      FirstRunTrack.spokenLabel(step: 1, pageCount: pages) == "Step 3 of 5, How I work")
+      FirstRunTrack.spokenLabel(step: 1, pageCount: pages) == "Step 3 of 6, How I work")
 
-// CLAMPED, NOT TRUSTED. A fifth Step added without a fifth name is a subscript
+// CLAMPED, NOT TRUSTED. A Step added without a name is a subscript
 // out of range — a crash, on a stranger's first run, out of a copy change.
 check("a step past the end does not walk off the array",
-      FirstRunTrack.name(step: 99, pageCount: pages) == "Where to reach you")
+      FirstRunTrack.name(step: 99, pageCount: pages) == "Your computer")
 check("a negative step does not walk off the array",
       FirstRunTrack.name(step: -5, pageCount: pages) == "Your account")
 check("more pages than names still answers",

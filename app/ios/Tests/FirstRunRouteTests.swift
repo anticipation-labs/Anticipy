@@ -193,7 +193,8 @@ check("3. an interrupted first run resumes at the microphone",
 check("3. and resumes AT it, not before it",
       three.route.segment?.firstStep == FirstRunBeat.mic)
 check("3. with no second trip through the door and no replayed introduction",
-      three.route.segment?.pages == [FirstRunBeat.mic, FirstRunBeat.phone])
+      three.route.segment?.pages == [FirstRunBeat.mic, FirstRunBeat.phone,
+                                     FirstRunBeat.computer])
 
 // 4. Signed out, then reopened by the SAME person.
 var four = Phone()
@@ -219,9 +220,10 @@ five.signsOut()
 five.signsIn(personB)
 check("5. a second person on a handed-on phone gets the whole tour",
       five.route == .tour(.whole))
-check("5. all four beats, in their true order",
+check("5. all five in-app beats, in their true order",
       five.route.segment?.pages == [FirstRunBeat.welcome, FirstRunBeat.howItWorks,
-                                    FirstRunBeat.mic, FirstRunBeat.phone])
+                                    FirstRunBeat.mic, FirstRunBeat.phone,
+                                    FirstRunBeat.computer])
 check("5. and both flags were cleared together, so neither can drift",
       !five.hasSeenIntro == !five.hasOnboarded)
 
@@ -359,9 +361,9 @@ check("the pre-auth segment ends at how-it-works",
       FirstRunSegment.intro.lastStep == FirstRunBeat.howItWorks)
 check("which is NOT where the old predicate ended",
       FirstRunSegment.intro.lastStep != FirstRunBeat.count - 1)
-check("the two post-door segments still end at the number beat",
-      FirstRunSegment.rest.lastStep == FirstRunBeat.phone
-      && FirstRunSegment.whole.lastStep == FirstRunBeat.phone)
+check("the two post-door segments end at the optional computer handoff",
+      FirstRunSegment.rest.lastStep == FirstRunBeat.computer
+      && FirstRunSegment.whole.lastStep == FirstRunBeat.computer)
 // Every segment's first and last page really are its own first and last, so
 // `step` and `lastStep` seed to a page the person can be standing on.
 for segment in [FirstRunSegment.intro, .rest, .whole] {
@@ -408,28 +410,32 @@ check("and the two that render no walkthrough report none",
 // ===================================================== WHAT THE TRACK COUNTS
 //
 // FirstRunTrack is LIFTED out of OnboardingView.swift by the runner, never
-// copied, so these read the shipped arithmetic. Five names, with the account
-// counted first, is what the previous fix shipped and this one must not undo.
-check("the track still names five beats, account first",
+// copied, so these read the shipped arithmetic. Six names, with the account
+// counted first and the optional handoff last, is what the UI renders.
+check("the track names six beats, account first",
       FirstRunTrack.beatNames == ["Your account", "Hello", "How I work",
-                                  "May I listen?", "Where to reach you"])
-check("and still counts five", FirstRunTrack.count == 5)
+                                  "May I listen?", "Where to reach you",
+                                  "Your computer"])
+check("and counts six", FirstRunTrack.count == 6)
 
 // THE INVARIANT. `step` is the absolute beat index in every segment and
 // `pageCount` is always FirstRunBeat.count, so the microphone beat reads
-// "4 of 5" whichever way the person arrived at it. That is true of both of
+// "4 of 6" whichever way the person arrived at it. That is true of both of
 // them rather than a rounding error: the ordinal counts the beats BEHIND you.
 // A fresh stranger has done Hello, How I work, Your account. A person whose
 // tour replayed has done Your account, Hello, How I work. Three each.
 let micOrdinal = FirstRunTrack.ordinal(step: FirstRunBeat.mic,
                                        pageCount: FirstRunBeat.count)
-check("the microphone beat is the fourth of five", micOrdinal == 4)
+check("the microphone beat is the fourth of six", micOrdinal == 4)
 check("and it is named for what it asks",
       FirstRunTrack.name(step: FirstRunBeat.mic,
                          pageCount: FirstRunBeat.count) == "May I listen?")
-check("the number beat closes the count at five",
+check("the number beat is fifth",
       FirstRunTrack.ordinal(step: FirstRunBeat.phone,
                             pageCount: FirstRunBeat.count) == 5)
+check("the computer handoff closes the count at six",
+      FirstRunTrack.ordinal(step: FirstRunBeat.computer,
+                            pageCount: FirstRunBeat.count) == 6)
 // THE TRAP THIS ARITHMETIC SETS, named so nobody walks into it. `pageCount` is
 // how many pages the TRACK is counting over, not how many the current segment
 // happens to carry. Handing it `segment.pages.count` looks like the obvious
@@ -438,7 +444,7 @@ check("the number beat closes the count at five",
 // the failure is a wrong word on a screen rather than a crash.
 check("a segment page count would misname the microphone beat",
       FirstRunTrack.name(step: FirstRunBeat.mic,
-                         pageCount: FirstRunSegment.rest.pages.count) == "Where to reach you")
+                         pageCount: FirstRunSegment.rest.pages.count) == "Your computer")
 check("while the absolute count names it correctly",
       FirstRunTrack.name(step: FirstRunBeat.mic,
                          pageCount: FirstRunBeat.count) == "May I listen?")
@@ -456,15 +462,22 @@ check("and the honest pre-auth ordinal would open the track at 1",
       && FirstRunSegment.intro.pages.firstIndex(of: FirstRunBeat.howItWorks) == 1)
 check("so the pre-auth segment shows neither", !FirstRunSegment.intro.showsTrack)
 
-// A fifth beat added to the indices and not to OnboardingView's page builder
+// A beat added to the indices and not to OnboardingView's page builder
 // would render a blank page on somebody's first run. There is no way to see a
 // SwiftUI switch from here, so the tripwire is the count the switch was
 // written against.
-check("there are still four beats behind the five names", FirstRunBeat.count == 4)
+check("there are five in-app beats behind the six names", FirstRunBeat.count == 5)
 check("and every page in every segment is one of them",
       [FirstRunSegment.intro, .rest, .whole].allSatisfy { segment in
           segment.pages.allSatisfy { (0 ..< FirstRunBeat.count).contains($0) }
       })
+
+check("browser handoff follows the configured backend",
+      ComputerSetupLinks.browser(baseURL: "http://127.0.0.1:8090")?.absoluteString
+        == "http://127.0.0.1:8090/setup.html")
+check("Mac handoff follows the configured backend without a double slash",
+      ComputerSetupLinks.mac(baseURL: "https://example.test/")?.absoluteString
+        == "https://example.test/mac.html")
 
 print(failures == 0 ? "all first-run route checks passed" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -504,9 +504,15 @@ struct SettingsView: View {
                 // feeds, so the day is one day no matter which device heard
                 // it. Onboarding mentions it; the row stays in Settings for
                 // the person who skipped onboarding's mention at 2 a.m.
-                if let macDownload = URL(string: backendURL + "/mac/Anticipy-for-Mac.zip") {
-                    Link(destination: macDownload) {
-                        Label("Download Anticipy for Mac", systemImage: "laptopcomputer.and.arrow.down")
+                if let macSetup = ComputerSetupLinks.mac(baseURL: backendURL) {
+                    Link(destination: macSetup) {
+                        Label("Open Mac setup", systemImage: "laptopcomputer")
+                    }
+                    .ghostRow()
+                    ShareLink(item: macSetup,
+                              subject: Text("Get Anticipy for Mac"),
+                              message: Text("Open this on your Mac to install Anticipy.")) {
+                        Label("Send setup to Mac", systemImage: "square.and.arrow.up")
                     }
                     .ghostRow()
                     Text("Menu bar app. Sign in with this account, click the mic, and the Mac hears its half of the day. Meetings are detected and offered — recording starts only when you click.")
@@ -514,9 +520,15 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.muted)
                 }
                 if !session.agentPaired {
-                    if let setup = URL(string: backendURL + "/setup.html") {
+                    if let setup = ComputerSetupLinks.browser(baseURL: backendURL) {
                         Link(destination: setup) {
-                            Label("Set up your browser, step-by-step guide", systemImage: "safari")
+                            Label("Open browser setup", systemImage: "safari")
+                        }
+                        .ghostRow()
+                        ShareLink(item: setup,
+                                  subject: Text("Set up Anticipy in Chrome"),
+                                  message: Text("Open this on your computer to connect Anticipy to Chrome.")) {
+                            Label("Send setup to computer", systemImage: "square.and.arrow.up")
                         }
                         .ghostRow()
                     }

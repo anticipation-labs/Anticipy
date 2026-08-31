@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get Anticipy for Mac</title>
+<meta name="description" content="Install Anticipy for Mac and record meetings with your permission.">
+<link rel="stylesheet" href="/site.css">
+<script src="/theme.js"></script>
+<style>
+  body { font-size:16px; line-height:1.55; }
+  .wrap { max-width:720px; margin:0 auto; padding:28px 20px 72px; }
+  .masthead { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .hero { padding:54px 0 30px; }
+  h1, h2 { font-family:var(--display); font-weight:400; color:var(--text); }
+  h1 { margin:0 0 12px; font-size:clamp(38px, 8vw, 58px); line-height:1.02; letter-spacing:-1.5px; }
+  h2 { margin:0; font-size:22px; }
+  .lead { max-width:590px; margin:0; color:var(--text-2); font-size:18px; }
+  .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
+  .actions .btn { margin:0; flex:none; white-space:nowrap; }
+  .phone-card { display:none; }
+  .steps { list-style:none; margin:8px 0 0; padding:0; counter-reset:step; }
+  .step { counter-increment:step; display:grid; grid-template-columns:38px 1fr; gap:14px;
+          padding:24px 0; border-top:1px solid var(--edge); }
+  .step::before { content:counter(step); display:grid; place-items:center; width:34px; height:34px;
+                  border-radius:50%; border:1px solid var(--edge-lit); color:var(--accent);
+                  font-size:13px; font-weight:700; }
+  .step p { margin:8px 0 0; color:var(--text-2); }
+  .permission-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:16px; }
+  .permission { padding:14px; border:1px solid var(--edge); border-radius:14px; background:var(--card); }
+  .permission strong { display:block; color:var(--text); font-size:14px; }
+  .permission span { color:var(--text-3); font-size:12px; }
+  .truth { margin-top:24px; padding:18px 20px; border-radius:16px; background:var(--surface); color:var(--text-2); }
+  .truth p { margin:0; }
+  .truth strong { color:var(--text); }
+  .footer { display:flex; flex-wrap:wrap; gap:24px; margin-top:34px; color:var(--text-3); font-size:14px; }
+  @media (max-width:900px) and (pointer:coarse) and (hover:none) {
+    .hero { padding-top:42px; }
+    .computer-only { display:none; }
+    .phone-card { display:block; margin-top:22px; padding:20px; border:1px solid var(--edge);
+                  border-radius:18px; background:var(--card); }
+    .phone-card p { margin:0 0 14px; color:var(--text-2); }
+    .phone-card .btn { width:100%; margin:0; }
+  }
+  @media (max-width:560px) { .permission-grid { grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion:no-preference) {
+    .hero, .step { animation:rise .45s cubic-bezier(.2,.7,.3,1) both; }
+    .step:nth-child(1) { animation-delay:.08s; } .step:nth-child(2) { animation-delay:.13s; }
+    .step:nth-child(3) { animation-delay:.18s; }
+    @keyframes rise { from { opacity:0; transform:translateY(10px); } }
+  }
+</style>
+</head>
+<body>
+<svg hidden aria-hidden="true"><symbol id="arw" viewBox="0 0 20 15"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M1 7.5h17M12.2 1.7 18 7.5l-5.8 5.8"/></symbol></svg>
+<main class="wrap">
+  <header class="masthead">
+    <div class="logo"><div class="pill" aria-hidden="true"></div><span class="wordmark">Anticipy</span></div>
+    <button class="themetoggle" type="button" data-theme-toggle><span class="onlight">Dark</span><span class="ondark">Light</span></button>
+  </header>
+
+  <section class="hero">
+    <h1>Bring Anticipy to your Mac.</h1>
+    <p class="lead">Capture both sides of meetings, transcribe them on your Mac, and keep the recording under your control.</p>
+    <div class="actions computer-only">
+      <a class="btn" href="/mac/Anticipy-for-Mac.zip" download>Download for Mac</a>
+      <button class="fwd" type="button" data-share>
+        <svg class="arrow enter" aria-hidden="true"><use href="#arw"/></svg><span>Share this page</span>
+        <svg class="arrow leave" aria-hidden="true"><use href="#arw"/></svg><span class="wipe"><i></i><i></i></span>
+      </button>
+    </div>
+    <div class="phone-card">
+      <p>Send this page to the Mac where you take meetings.</p>
+      <button class="btn" type="button" data-share>Send to your Mac</button>
+      <p style="margin:10px 0 0; color:var(--text-3); font-size:14px">Choose AirDrop, Messages, Mail, or another share option.</p>
+    </div>
+  </section>
+
+  <ol class="steps">
+    <li class="step"><div>
+      <h2>Install the app</h2>
+      <p>Download the ZIP, open it, then move <strong>AnticipyMac</strong> to Applications. The app is signed and notarized by Apple.</p>
+      <a class="btn computer-only" href="/mac/Anticipy-for-Mac.zip" download style="margin-top:16px">Download Anticipy for Mac</a>
+    </div></li>
+    <li class="step"><div>
+      <h2>Allow the three things it needs</h2>
+      <p>macOS asks once. Anticipy cannot hear a complete meeting without all three.</p>
+      <div class="permission-grid">
+        <div class="permission"><strong>Microphone</strong><span>Your side</span></div>
+        <div class="permission"><strong>System Audio</strong><span>Everyone else</span></div>
+        <div class="permission"><strong>Speech Recognition</strong><span>On-device transcript</span></div>
+      </div>
+    </div></li>
+    <li class="step"><div>
+      <h2>Sign in and record</h2>
+      <p>Use the same Anticipy account as your iPhone. Start and stop from the menu-bar icon; nothing records until you start it.</p>
+    </div></li>
+  </ol>
+
+  <section class="truth"><p><strong>Your audio stays local.</strong> Anticipy saves separate microphone and meeting-audio tracks on your Mac. Only transcript text syncs to your Anticipy account when you are signed in.</p></section>
+  <footer class="footer"><a href="/privacy.html">Privacy</a><a href="/setup.html">Set up Chrome</a><a href="mailto:hello@anticipationlabs.com">Help</a></footer>
+  <p id="announcer" class="sr-only" role="status" aria-live="polite"></p>
+</main>
+<script>
+(function () {
+  var announcer = document.getElementById("announcer");
+  function copy(text, done) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else { done(false); }
+  }
+  document.querySelectorAll("[data-share]").forEach(function (button) {
+    var original = button.textContent.trim();
+    button.addEventListener("click", function () {
+      var payload = { title:"Get Anticipy for Mac", text:"Open this on your Mac to install Anticipy.", url:window.location.href };
+      if (navigator.share) {
+        navigator.share(payload).catch(function (error) {
+          if (error && error.name !== "AbortError") announcer.textContent = "The share sheet could not open.";
+        });
+      } else {
+        copy(window.location.href, function (ok) {
+          button.textContent = ok ? "Link copied" : "Copy this page’s address";
+          announcer.textContent = ok ? "Setup link copied." : "Copy failed.";
+          window.setTimeout(function () { button.textContent = original; }, 2200);
+        });
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

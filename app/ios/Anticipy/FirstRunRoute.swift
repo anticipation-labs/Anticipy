@@ -31,18 +31,34 @@ import Foundation
 /// runner can walk every one of them, exactly as `FirstRunOwnership` is
 /// walked by `run_first_run_tests.sh`.
 
-/// The four beats, by absolute index. Moved verbatim out of `OnboardingView`'s
+/// The five in-app beats, by absolute index. Moved out of `OnboardingView`'s
 /// private `Step`, which is now a typealias onto this — so every `Step.mic`,
 /// `.tag()` and `step += 1` in that file still means what it meant.
 ///
-/// The browser was a fifth until `design/day-zero.md` took it out of first run
-/// for exceeding the ~70-second budget; nothing may be added here.
+/// Computer setup used to be omitted because the old browser page was a long
+/// task nobody could complete on the phone. It is back as one OPTIONAL handoff
+/// beat: the phone opens or shares hosted setup pages, while installation still
+/// happens on the computer. Skipping it ends first run immediately.
 enum FirstRunBeat {
     static let welcome = 0
     static let howItWorks = 1
     static let mic = 2
     static let phone = 3
-    static let count = 4
+    static let computer = 4
+    static let count = 5
+}
+
+/// The two public handoff pages, derived from the backend the app is actually
+/// using. Keeping the paths here gives onboarding and Settings one source of
+/// truth and keeps local walkthrough builds on their local server.
+enum ComputerSetupLinks {
+    static func browser(baseURL: String) -> URL? {
+        URL(string: baseURL)?.appendingPathComponent("setup.html")
+    }
+
+    static func mac(baseURL: String) -> URL? {
+        URL(string: baseURL)?.appendingPathComponent("mac.html")
+    }
 }
 
 /// Which beats one instance of `OnboardingView` is carrying.
@@ -58,7 +74,7 @@ enum FirstRunSegment: Equatable {
     case intro
     /// After the door, for somebody who already had the introduction.
     case rest
-    /// After the door, all four beats — a different person has arrived on a
+    /// After the door, all five beats — a different person has arrived on a
     /// phone whose introduction was spent on somebody else.
     case whole
 
@@ -67,10 +83,12 @@ enum FirstRunSegment: Equatable {
         case .intro:
             return [FirstRunBeat.welcome, FirstRunBeat.howItWorks]
         case .rest:
-            return [FirstRunBeat.mic, FirstRunBeat.phone]
+            return [FirstRunBeat.mic, FirstRunBeat.phone,
+                    FirstRunBeat.computer]
         case .whole:
             return [FirstRunBeat.welcome, FirstRunBeat.howItWorks,
-                    FirstRunBeat.mic, FirstRunBeat.phone]
+                    FirstRunBeat.mic, FirstRunBeat.phone,
+                    FirstRunBeat.computer]
         }
     }
 
@@ -215,7 +233,7 @@ enum FirstRunRoute: Equatable {
             // and contradicted the paragraph above it while doing so.
             //
             // A completed tour on this handset is proof the introduction was
-            // given on it, because until the door moved all four beats sat
+            // given on it, because until the door moved every in-app beat sat
             // BEHIND it and `hasOnboarded` could not be earned without walking
             // them. That is the adoption argument `FirstRunOwnership` already
             // makes about the pre-upgrade flag, not a second guess about who is
