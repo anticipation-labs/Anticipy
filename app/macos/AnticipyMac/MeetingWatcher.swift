@@ -1,16 +1,19 @@
 import AppKit
 import CoreAudio
 import Foundation
-import UserNotifications
+@preconcurrency import UserNotifications
 
 /// Watches Core Audio's process list for a two-way conversation and OFFERS
 /// to listen. This is MeetingOfferPolicy's law running in a menu: detection
 /// is automatic, recording starts explicitly — the click belongs to the
 /// owner. (The policy file in this repo is plain Foundation and is used
 /// directly; this watcher supplies the only thing it cannot: the readings.)
+@MainActor
 final class MeetingWatcher: ObservableObject {
 
     @Published var inMeeting: Bool = false
+    @Published private(set) var activePID: Int32?
+    @Published private(set) var activeBundleID: String?
 
     /// The owner can ask for hands-off mornings: when this is on, a detected
     /// meeting starts the listener without the click. Default OFF — the
@@ -25,10 +28,14 @@ final class MeetingWatcher: ObservableObject {
     private var timer: Timer?
     private var history: [[ProcessAudioObservation]] = []
 
+    init() {
+        start()
+    }
+
     func start() {
         guard timer == nil else { return }
         let t = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { [weak self] _ in
-            self?.poll()
+            Task { @MainActor in self?.poll() }
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t
@@ -49,6 +56,8 @@ final class MeetingWatcher: ObservableObject {
         let was = inMeeting
         if case .offer(let pid, let bundleID) = offer {
             inMeeting = true
+            activePID = pid
+            activeBundleID = bundleID
             if !was { onMeetingDetected?() }
             if !autoStart, !was {
                 let name = bundleID ?? "This Mac"
@@ -57,6 +66,8 @@ final class MeetingWatcher: ObservableObject {
             }
         } else {
             inMeeting = false
+            activePID = nil
+            activeBundleID = nil
             if was { onMeetingEnded?() }
         }
     }
@@ -105,10 +116,11 @@ extension ProcessAudioObservation {
             func cstr(_ sel: AudioObjectPropertySelector) -> String? {
                 var a = AudioObjectPropertyAddress(mSelector: sel, mScope: kAudioObjectPropertyScopeGlobal,
                                                    mElement: kAudioObjectPropertyElementMain)
-                var cfstr: CFString? = nil
+                var value: Unmanaged<CFString>?
                 var sz = UInt32(MemoryLayout<CFString?>.size)
-                guard AudioObjectGetPropertyData(obj, &a, 0, nil, &sz, &cfstr) == noErr, let s = cfstr as String? else { return nil }
-                return s
+                guard AudioObjectGetPropertyData(obj, &a, 0, nil, &sz, &value) == noErr,
+                      let value else { return nil }
+                return value.takeUnretainedValue() as String
             }
             let pid = Int32(u32(kAudioProcessPropertyPID) ?? 0)
             let bundle = cstr(kAudioProcessPropertyBundleID)

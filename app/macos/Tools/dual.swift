@@ -32,13 +32,16 @@ final class Counter: @unchecked Sendable {
     private(set) var buffers = 0
     private(set) var frames: Int64 = 0
     private(set) var peak: Float = 0
+    private(set) var lifetimePeak: Float = 0
     func add(_ f: Int64, _ p: Float) {
-        lock.lock(); buffers += 1; frames += f; peak = max(peak, p); lock.unlock()
+        lock.lock(); buffers += 1; frames += f; peak = max(peak, p)
+        lifetimePeak = max(lifetimePeak, p); lock.unlock()
     }
     func snapshot() -> (Int, Int64, Float) {
         lock.lock(); defer { lock.unlock() }; return (buffers, frames, peak)
     }
     func resetPeak() { lock.lock(); peak = 0; lock.unlock() }
+    func maximumPeak() -> Float { lock.lock(); defer { lock.unlock() }; return lifetimePeak }
 }
 let near = Counter(), far = Counter()
 final class Once: @unchecked Sendable {
@@ -105,7 +108,17 @@ if !flag("--near-only") {
         farStatus = "FAILED: could not resolve pid \(tapPID) to a process object"
     }
     if farStatus == "not attempted" {
-        let d = CATapDescription(stereoMixdownOfProcesses: targets)
+        let d: CATapDescription
+        if targets.isEmpty {
+            // A meeting app may replace its audio subprocess without warning
+            // (Chrome's Audio Service Helper does this routinely). The app's
+            // production path therefore follows system output rather than a
+            // single PID, and this gate exercises that same path.
+            d = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+            d.isProcessRestoreEnabled = true
+        } else {
+            d = CATapDescription(stereoMixdownOfProcesses: targets)
+        }
         d.uuid = UUID()
         d.name = "Anticipy concurrent-capture probe"
         d.isPrivate = true
@@ -202,10 +215,12 @@ for t in 1...seconds {
 
 let (nb, nf, _) = near.snapshot()
 let (fb, ff, _) = far.snapshot()
+let nearPeak = near.maximumPeak()
+let farPeak = far.maximumPeak()
 print("")
 print("SUMMARY")
-print("  NEAR: \(nearStatus) | buffers=\(nb) frames=\(nf)")
-print("  FAR : \(farStatus) | buffers=\(fb) frames=\(ff)")
+print("  NEAR: \(nearStatus) | buffers=\(nb) frames=\(nf) peak=\(nearPeak)")
+print("  FAR : \(farStatus) | buffers=\(fb) frames=\(ff) peak=\(farPeak)")
 print("  seconds in which BOTH delivered: \(bothSeconds)/\(seconds)")
 print("  FAR first-callback buffer list: \(farShape.text ?? "never called")")
 
@@ -216,5 +231,7 @@ if aggID != kAudioObjectUnknown {
 if tapID != kAudioObjectUnknown { AudioHardwareDestroyProcessTap(tapID) }
 engine?.stop()
 
-// exit code: 0 only when both streams delivered concurrently for a majority of seconds
-exit(bothSeconds * 2 > seconds ? 0 : 1)
+// A perfectly shaped zero stream is macOS's missing-permission signature. It
+// must fail this live gate even though callbacks and sample rates look right.
+let deliveredRealAudio = bothSeconds * 2 > seconds && nearPeak > 0 && farPeak > 0
+exit(deliveredRealAudio ? 0 : 1)

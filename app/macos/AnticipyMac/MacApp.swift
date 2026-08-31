@@ -15,12 +15,11 @@ struct AnticipyMacApp: App {
     var body: some Scene {
         MenuBarExtra {
             VStack {
-                switch pocketbase.isSignedIn {
-                case true:
-                    ListenSection(listener: listener, meetings: meetings)
-                    Divider()
+                ListenSection(listener: listener, meetings: meetings)
+                Divider()
+                if pocketbase.isSignedIn {
                     Button("Sign out (\(pocketbase.ownerEmail))") { pocketbase.signOut() }
-                case false:
+                } else {
                     SignInSection()
                 }
                 Divider()
@@ -31,21 +30,27 @@ struct AnticipyMacApp: App {
         } label: {
             let image: String = {
                 if meetings.inMeeting { return "waveform.badge.magnifyingglass" }
-                return listener.state == .listening ? "mic.fill" : "mic.slash"
+                return listener.state.isCapturing ? "mic.fill" : "mic.slash"
             }()
             Image(systemName: image)
         }
         .menuBarExtraStyle(.window)
         .onChange(of: meetings.inMeeting) { _, inMeeting in
-            guard inMeeting, meetings.autoStart else { return }
-            if listener.state != .listening { listener.start() }
+            if inMeeting, meetings.autoStart, !listener.state.isCapturing {
+                listener.start(reason: .detectedMeeting(bundleID: meetings.activeBundleID))
+            } else if !inMeeting, listener.startedForDetectedMeeting,
+                      listener.state.isCapturing {
+                listener.stop()
+            }
         }
         .onChange(of: listener.lines.count) { _, _ in
             // One push per line, at the listener's own cadence.
-            guard let line = listener.lines.last, !line.posted else { return }
+            guard let line = listener.lines.last else { return }
             pocketbase.postTranscript(text: line.text,
                                       startedAt: line.startedAt,
-                                      endedAt: line.endedAt)
+                                      endedAt: line.endedAt,
+                                      speaker: line.channel == .owner ? "owner" : "other",
+                                      source: line.channel == .owner ? "mac_mic" : "mac_system")
         }
     }
 }
@@ -56,32 +61,40 @@ struct ListenSection: View {
     @EnvironmentObject var pocketbase: PocketBase
 
     var body: some View {
-        Button(listener.state == .listening ? "Stop listening" : "Start listening") {
+        Button(listener.state == .finishing ? "Finishing recording…"
+               : listener.state.isCapturing ? "Stop recording" : "Start recording") {
             toggle()
         }
+        .disabled(listener.state == .finishing)
         Toggle("Start automatically in meetings", isOn: $meetings.autoStart)
-        Text(meetings.inMeeting ? "A conversation is happening on this Mac." : meetingQuiet)
+        Text(meetings.inMeeting ? "A call is active on this Mac." : meetingQuiet)
             .font(.caption)
             .foregroundStyle(.secondary)
-        if listener.state == .listening {
-            Text("\(listener.lines.count) line\(listener.lines.count == 1 ? "" : "s") heard this session")
+        if listener.state.isCapturing || listener.state == .starting || listener.state == .finishing {
+            Text(listener.healthSentence)
                 .font(.caption)
+                .foregroundStyle(listener.state == .degraded ? .orange : .secondary)
+            Text("\(listener.lines.count) transcript line\(listener.lines.count == 1 ? "" : "s") saved")
+                .font(.caption2)
                 .foregroundStyle(.secondary)
         }
         if listener.state == .denied {
-            Text("Speech recognition is unavailable or was refused.")
+            Text(listener.healthSentence)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        if listener.currentArchiveURL != nil || listener.lastArchiveURL != nil {
+            Button("Show recording in Finder") { listener.revealLastRecording() }
+        }
     }
 
-    private var meetingQuiet: String { "No conversation on this Mac right now." }
+    private var meetingQuiet: String { "No call detected." }
 
     private func toggle() {
-        if listener.state == .listening {
+        if listener.state.isCapturing || listener.state == .starting {
             listener.stop()
         } else {
-            listener.start()
+            listener.start(reason: .manual)
         }
     }
 }
@@ -95,7 +108,7 @@ struct SignInSection: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Text("Sign in with your Anticipy account")
+            Text("Sign in to sync transcripts")
                 .font(.headline)
             TextField("Email", text: $email)
                 .textFieldStyle(.roundedBorder)

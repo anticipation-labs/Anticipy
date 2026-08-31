@@ -1,224 +1,396 @@
+import AppKit
 import AVFoundation
 import Foundation
 import Speech
 
-/// The Mac's ears. Same engine as the phone (iOS/macOS 26 SpeechTranscriber),
-/// same law: audio is decoded in memory, never written, never uploaded.
-///
-/// Threading: the analyzer's results arrive on a background task and are
-/// marshalled to main; the flush timer owns the line lifecycle. A "line" is
-/// a stretch of speech bracketed by silence (2.5 s) or a 15 s ceiling — the
-/// same shape the phone sends, so the segmenter sees one kind of day no
-/// matter which device heard it.
+/// Owns one two-sided meeting session: the owner's microphone, the Mac's
+/// system output, one on-device transcriber per side, and a local archive.
+@MainActor
 @available(macOS 26.0, *)
 final class MacListener: NSObject, ObservableObject {
-
     enum State: String {
-        case idle, starting, listening, denied
+        case idle, starting, recording, degraded, finishing, denied
+
+        var isCapturing: Bool { self == .recording || self == .degraded }
     }
 
-    @Published var state: State = .idle
-    @Published var lastLine: String = ""
-    /// Every line this session produced, newest last. The menu shows a count;
-    /// the debug window shows the words.
-    @Published var lines: [Line] = []
-
-    struct Line: Identifiable {
-        let id = UUID()
-        let text: String
-        let startedAt: Date
-        let endedAt: Date
-        var posted: Bool = false
+    enum StartReason: Equatable {
+        case manual
+        case detectedMeeting(bundleID: String?)
     }
 
-    var onLine: ((Line) -> Void)?
+    @Published private(set) var state: State = .idle
+    @Published private(set) var lastLine = ""
+    @Published private(set) var lines: [MeetingTranscriptLine] = []
+    @Published private(set) var liveOwnerText = ""
+    @Published private(set) var liveSystemText = ""
+    @Published private(set) var healthSentence = ""
+    @Published private(set) var currentArchiveURL: URL?
+    @Published private(set) var lastArchiveURL: URL?
 
     private let audioEngine = AVAudioEngine()
-    private var transcriber: SpeechTranscriber?
-    private var analyzer: SpeechAnalyzer?
-    private var inputBuilder: AsyncStream<AnalyzerInput>.Continuation?
-    private var resultsTask: Task<Void, Never>?
-    private var analyzeTask: Task<Void, Never>?
-
-    /// When the current line's words first appeared.
-    private var lineStartedAt: Date?
-    private var lastSpeechAt: Date?
-    private var pendingText: [String] = []
+    private var microphoneTapInstalled = false
+    private var systemCapture: SystemAudioCapture?
+    private var ownerSpeech: MacSpeechPipeline?
+    private var systemSpeech: MacSpeechPipeline?
+    private var archive: MeetingArchive?
+    private var ownerLines = MeetingLinePolicy()
+    private var systemLines = MeetingLinePolicy()
+    private var ownerMeter = AudioCaptureMeter()
+    private var systemMeter = AudioCaptureMeter()
+    private var ownerSampleRate = 48_000.0
+    private var systemSampleRate = 48_000.0
     private var flushTimer: Timer?
+    private var healthTimer: Timer?
+    private var routeObserver: NSObjectProtocol?
+    private var systemEmptyWindows = 0
+    private var systemRestartAttempts = 0
+    private var stopCompletionsRemaining = 0
+    private var startReason: StartReason = .manual
+    private var sessionID: UUID?
+    private var endingState: State = .idle
+    private var endingSentence = "Recording saved on this Mac."
 
-    private let silenceFlush: TimeInterval = 2.5
-    private let ceilingFlush: TimeInterval = 15.0
-
-    static func isSupported() -> Bool {
-        if #available(macOS 26.0, *) { return SpeechTranscriber.isAvailable }
+    var startedForDetectedMeeting: Bool {
+        if case .detectedMeeting = startReason { return true }
         return false
     }
 
-    func start() {
+    static func isSupported() -> Bool { SpeechTranscriber.isAvailable }
+
+    func start(reason: StartReason = .manual) {
         guard state == .idle || state == .denied else { return }
-        guard #available(macOS 26.0, *) else {
-            state = .denied
-            return
-        }
         state = .starting
+        healthSentence = "Opening the microphone and system audio…"
+        startReason = reason
+        let requestedSessionID = UUID()
+        sessionID = requestedSessionID
 
-        SFSpeechRecognizer.requestAuthorization { [weak self] _ in
-            DispatchQueue.main.async {
-                Task { await self?.beginListening() }
-            }
-        }
-    }
-
-    @available(macOS 26.0, *)
-    private func beginListening() async {
-        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: "en_US")) else {
-            state = .denied
-            return
-        }
-        let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
-        let analyzer = SpeechAnalyzer(modules: [transcriber])
-        self.transcriber = transcriber
-        self.analyzer = analyzer
-
-        var builder: AsyncStream<AnalyzerInput>.Continuation!
-        let stream = AsyncStream<AnalyzerInput> { builder = $0 }
-        inputBuilder = builder
-
-        let inputTask = Task {
-            do { try await analyzer.start(inputSequence: stream) } catch { await self.reportError() }
-        }
-        analyzeTask = inputTask
-        resultsTask = Task { [weak self] in
-            do {
-                for try await result in transcriber.results {
-                    let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !text.isEmpty else { continue }
-                    await MainActor.run {
-                        self?.absorb(text, isFinal: result.isFinal)
-                    }
-                }
-            } catch { /* session finished or failed; the menu reflects state */ }
-        }
-
-        // The model may need a one-time download on a fresh machine. Done
-        // before the tap opens, so the first words are not the test case.
-        Task {
-            if let install = try? await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                try? await install.downloadAndInstall()
-            }
-            let format = (try? await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]))
-                ?? AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)
-            guard let format else {
-                await MainActor.run { self.state = .denied }
+        Task { [weak self] in
+            guard let self else { return }
+            let speechAllowed = await Self.requestSpeechPermission()
+            let microphoneAllowed = await AVCaptureDevice.requestAccess(for: .audio)
+            guard self.sessionID == requestedSessionID,
+                  self.state == .starting else { return }
+            guard speechAllowed, microphoneAllowed else {
+                self.sessionID = nil
+                self.state = .denied
+                self.healthSentence = "Anticipy needs Microphone and Speech Recognition permission in Privacy & Security."
                 return
             }
-            await MainActor.run { self.openTap(format: format) }
+            self.beginCapture()
         }
     }
 
-    @available(macOS 26.0, *)
-    private func openTap(format: AVAudioFormat) {
-        let input = audioEngine.inputNode
-        let tapFormat = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1) ?? input.outputFormat(forBus: 0)
-        var converter: AVAudioConverter? = format != tapFormat ? AVAudioConverter(from: tapFormat, to: format) : nil
-
-        input.installTap(onBus: 0, bufferSize: 4_096, format: tapFormat) { [weak self] buffer, _ in
-            guard let self else { return }
-            let yield: (AVAudioPCMBuffer) -> Void = { pcm in
-                self.inputBuilder?.yield(AnalyzerInput(buffer: pcm, bufferStartTime: nil))
-            }
-            if let converter {
-                let ratio = format.sampleRate / tapFormat.sampleRate
-                guard let out = AVAudioPCMBuffer(pcmFormat: format,
-                                                 frameCapacity: AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1_024) else { return }
-                var consumed = false
-                var err: NSError?
-                let status = converter.convert(to: out, error: &err) { _, outStatus in
-                    if consumed { outStatus.pointee = .noDataNow; return nil }
-                    consumed = true
-                    outStatus.pointee = .haveData
-                    return buffer
-                }
-                if status != .error, err == nil, out.frameLength > 0 {
-                    yield(out)
-                }
-            } else {
-                yield(buffer)
-            }
-        }
-        audioEngine.prepare()
+    private func beginCapture() {
         do {
-            try audioEngine.start()
-            state = .listening
+            let bundleID: String?
+            if case .detectedMeeting(let detected) = startReason { bundleID = detected }
+            else { bundleID = nil }
+            let archive = try MeetingArchive(detectedBundleID: bundleID)
+            self.archive = archive
+            currentArchiveURL = archive.directoryURL
         } catch {
+            sessionID = nil
             state = .denied
+            healthSentence = "Anticipy could not create a local meeting folder: \(error.localizedDescription)"
+            return
+        }
+
+        lines = []
+        lastLine = ""
+        liveOwnerText = ""
+        liveSystemText = ""
+        ownerLines = MeetingLinePolicy()
+        systemLines = MeetingLinePolicy()
+        ownerMeter = AudioCaptureMeter()
+        systemMeter = AudioCaptureMeter()
+        systemEmptyWindows = 0
+        systemRestartAttempts = 0
+
+        let ownerSpeech = makeSpeechPipeline(label: "owner", channel: .owner)
+        let systemSpeech = makeSpeechPipeline(label: "system", channel: .system)
+        self.ownerSpeech = ownerSpeech
+        self.systemSpeech = systemSpeech
+        ownerSpeech.begin()
+        systemSpeech.begin()
+
+        do {
+            try openMicrophone()
+        } catch {
+            let sentence = "The microphone could not start: \(error.localizedDescription)"
+            tearDownAudio()
+            finishSession(endingIn: .denied, sentence: sentence)
+            return
+        }
+
+        do {
+            try openSystemAudio()
+            state = .recording
+            healthSentence = "Microphone is recording. Waiting for sound from the meeting."
+        } catch {
+            state = .degraded
+            healthSentence = error.localizedDescription
+        }
+
+        flushTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) {
+            [weak self] _ in Task { @MainActor in self?.flushReadyLines() }
+        }
+        healthTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) {
+            [weak self] _ in Task { @MainActor in self?.checkStreamHealth() }
+        }
+        routeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: audioEngine, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.restoreMicrophoneAfterRouteChange() }
+            }
+    }
+
+    private func makeSpeechPipeline(label: String,
+                                    channel: MeetingCaptureChannel) -> MacSpeechPipeline {
+        let speech = MacSpeechPipeline(label: label)
+        speech.onResult = { [weak self] text, isFinal in
+            guard let self else { return }
+            if channel == .owner { self.liveOwnerText = text }
+            else { self.liveSystemText = text }
+            self.lastLine = text
+            guard isFinal else { return }
+            if channel == .owner { self.ownerLines.absorbFinal(text, at: Date()) }
+            else { self.systemLines.absorbFinal(text, at: Date()) }
+        }
+        speech.onError = { [weak self] in
+            guard let self, self.state.isCapturing else { return }
+            self.state = .degraded
+            self.healthSentence = "One on-device transcript lane stopped. Audio is still being saved locally."
+        }
+        return speech
+    }
+
+    private func openMicrophone() throws {
+        if microphoneTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            microphoneTapInstalled = false
+        }
+        audioEngine.stop()
+        let input = audioEngine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            throw NSError(domain: "ai.anticipy.mac.microphone", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "The selected microphone has no readable format."])
+        }
+        ownerSampleRate = format.sampleRate
+        let meter = ownerMeter
+        let archive = archive
+        let speech = ownerSpeech
+        input.installTap(onBus: 0, bufferSize: 2_048, format: format) { buffer, _ in
+            guard let owned = buffer.anticipyCopy() else { return }
+            meter.record(owned)
+            archive?.record(owned, channel: .owner)
+            speech?.append(owned)
+        }
+        microphoneTapInstalled = true
+        audioEngine.prepare()
+        try audioEngine.start()
+    }
+
+    private func openSystemAudio() throws {
+        systemCapture?.stop()
+        let capture = SystemAudioCapture()
+        let meter = systemMeter
+        let archive = archive
+        let speech = systemSpeech
+        let format = try capture.start { buffer in
+            meter.record(buffer)
+            archive?.record(buffer, channel: .system)
+            speech?.append(buffer)
+        }
+        systemSampleRate = format.sampleRate
+        systemCapture = capture
+    }
+
+    private func restoreMicrophoneAfterRouteChange() {
+        guard state.isCapturing else { return }
+        do {
+            try openMicrophone()
+            healthSentence = "The microphone route changed and Anticipy reconnected it."
+        } catch {
+            state = .degraded
+            healthSentence = "The microphone changed and could not be reopened: \(error.localizedDescription)"
         }
     }
 
-    private func absorb(_ text: String, isFinal: Bool) {
+    private func flushReadyLines() {
         let now = Date()
-        if lineStartedAt == nil { lineStartedAt = now }
-        lastSpeechAt = now
-        if !pendingText.lastFrameContains(text) {
-            pendingText.append(text)
-        }
-        lastLine = text
-        scheduleFlush()
-        if pendingText.joined(separator: " ").count > 400 {
-            flushNow()
-        }
+        if ownerLines.shouldFlush(at: now) { flush(channel: .owner, at: now) }
+        if systemLines.shouldFlush(at: now) { flush(channel: .system, at: now) }
     }
 
-    private func scheduleFlush() {
-        flushTimer?.invalidate()
-        flushTimer = Timer.scheduledTimer(withTimeInterval: silenceFlush, repeats: false) { [weak self] _ in
-            self?.flushNow()
-        }
-    }
-
-    /// Emits the pending line. Silence or the ceiling ends a line; nothing
-    /// else does. The envelope keeps both instants so the segmenter measures
-    /// real speech, not flush-to-flush drift.
-    func flushNow() {
-        flushTimer?.invalidate()
-        flushTimer = nil
-        guard !pendingText.isEmpty else { return }
-        let text = pendingText.joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        pendingText.removeAll()
-        let startedAt = lineStartedAt ?? Date()
-        let endedAt = lastSpeechAt ?? Date()
-        lineStartedAt = nil
-        lastSpeechAt = nil
-        guard !text.isEmpty else { return }
-        let line = Line(text: text, startedAt: startedAt, endedAt: endedAt)
+    private func flush(channel: MeetingCaptureChannel, at now: Date = Date()) {
+        let line: MeetingTranscriptLine?
+        if channel == .owner { line = ownerLines.take(channel: channel, at: now) }
+        else { line = systemLines.take(channel: channel, at: now) }
+        guard let line else { return }
         lines.append(line)
-        onLine?(line)
+        lastLine = line.text
+        archive?.append(line)
     }
 
-    private func reportError() {
-        DispatchQueue.main.async { [weak self] in self?.state = .denied }
+    private func checkStreamHealth() {
+        guard state.isCapturing else { return }
+        let policy = CaptureStreamHealthPolicy()
+        var ownerVerdict = policy.verdict(ownerMeter.takeWindow(
+            elapsedSeconds: 4, expectedSampleRate: ownerSampleRate))
+        if ownerVerdict == .silentSinceStart, ownerMeter.hasEverCarriedSignal {
+            ownerVerdict = .healthy
+        }
+
+        let systemWindow = systemMeter.takeWindow(elapsedSeconds: 4,
+                                                  expectedSampleRate: systemSampleRate)
+        var systemVerdict = policy.verdict(systemWindow)
+        if systemVerdict == .silentSinceStart, systemMeter.hasEverCarriedSignal {
+            systemVerdict = .healthy
+        }
+
+        if !ownerVerdict.isUsable {
+            state = .degraded
+            healthSentence = policy.sentence(ownerVerdict, streamName: "The microphone")
+            return
+        }
+
+        if !systemMeter.hasEverDelivered {
+            healthSentence = "Microphone is carrying audio. Waiting for sound from the meeting."
+            return
+        }
+
+        if systemVerdict == .notDelivering || systemVerdict == .starved {
+            systemEmptyWindows += 1
+            if systemEmptyWindows >= 3 { restartSystemAudio() }
+            else {
+                healthSentence = "Microphone is carrying audio. System audio paused; Anticipy is watching the connection."
+            }
+            return
+        }
+
+        systemEmptyWindows = 0
+        if systemVerdict == .silentSinceStart {
+            state = .degraded
+            healthSentence = policy.sentence(systemVerdict, streamName: "System audio")
+        } else {
+            state = .recording
+            systemRestartAttempts = 0
+            healthSentence = "Microphone and meeting audio are both carrying sound."
+        }
+    }
+
+    private func restartSystemAudio() {
+        guard systemRestartAttempts < 5 else {
+            state = .degraded
+            healthSentence = "System audio stopped after it had worked. Microphone audio is still being saved."
+            return
+        }
+        systemRestartAttempts += 1
+        systemEmptyWindows = 0
+        do {
+            try openSystemAudio()
+            healthSentence = "Chrome or the audio route changed; Anticipy rebuilt the system-audio connection."
+        } catch {
+            state = .degraded
+            healthSentence = "System audio could not reconnect: \(error.localizedDescription)"
+        }
     }
 
     func stop() {
-        flushNow()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
-        inputBuilder?.finish()
-        analyzeTask?.cancel()
-        resultsTask?.cancel()
-        transcriber = nil
-        analyzer = nil
-        state = .idle
+        guard state != .idle, state != .finishing else { return }
+        sessionID = nil
+        if state == .starting, ownerSpeech == nil, systemSpeech == nil,
+           archive == nil {
+            state = .idle
+            healthSentence = "Recording start cancelled."
+            return
+        }
+        flushTimer?.invalidate(); flushTimer = nil
+        healthTimer?.invalidate(); healthTimer = nil
+        if let routeObserver { NotificationCenter.default.removeObserver(routeObserver) }
+        routeObserver = nil
+        tearDownAudio()
+        finishSession(endingIn: .idle,
+                      sentence: "Recording saved on this Mac.")
     }
-}
 
-private extension Array where Element == String {
-    /// The recognizer revises its running text; keeping every revision would
-    /// repeat the sentence. Keep the frame only when it is not the tail
-    /// restated.
-    func lastFrameContains(_ text: String) -> Bool {
-        guard let last = last else { return false }
-        return text.contains(last) || last.contains(text)
+    private func finishSession(endingIn finalState: State, sentence: String) {
+        sessionID = nil
+        state = .finishing
+        healthSentence = "Finishing the local transcript…"
+        endingState = finalState
+        endingSentence = sentence
+        let lanes = [ownerSpeech, systemSpeech].compactMap { $0 }
+        stopCompletionsRemaining = lanes.count
+        guard !lanes.isEmpty else {
+            finishArchive()
+            return
+        }
+        for lane in lanes {
+            lane.finish { [weak self] in self?.speechLaneFinished() }
+        }
     }
+
+    private func speechLaneFinished() {
+        stopCompletionsRemaining -= 1
+        guard stopCompletionsRemaining <= 0 else { return }
+        flush(channel: .owner)
+        flush(channel: .system)
+        ownerSpeech = nil
+        systemSpeech = nil
+        finishArchive()
+    }
+
+    private func finishArchive() {
+        let archive = archive
+        self.archive = nil
+        currentArchiveURL = nil
+        guard let archive else {
+            state = endingState
+            healthSentence = endingSentence
+            return
+        }
+        archive.finish { [weak self] url in
+            guard let self else { return }
+            self.lastArchiveURL = url
+            self.healthSentence = self.endingSentence
+            self.state = self.endingState
+        }
+    }
+
+    private func tearDownAudio() {
+        if microphoneTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            microphoneTapInstalled = false
+        }
+        audioEngine.stop()
+        systemCapture?.stop()
+        systemCapture = nil
+    }
+
+    func revealLastRecording() {
+        guard let url = lastArchiveURL ?? currentArchiveURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    private static func requestSpeechPermission() async -> Bool {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized:
+            return true
+        case .denied, .restricted:
+            return false
+        case .notDetermined:
+            return await withCheckedContinuation { continuation in
+                SFSpeechRecognizer.requestAuthorization { status in
+                    continuation.resume(returning: status == .authorized)
+                }
+            }
+        @unknown default:
+            return false
+        }
+    }
+
 }

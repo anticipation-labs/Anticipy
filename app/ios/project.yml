@@ -576,6 +576,8 @@ targets:
     sources:
       - ../macos/AnticipyMac
       - ../macos/Anticipy/Capture/MeetingOfferPolicy.swift
+      - ../macos/Anticipy/Capture/CaptureStreamHealth.swift
+      - ../macos/Anticipy/Capture/MeetingLinePolicy.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.mac
@@ -588,11 +590,12 @@ targets:
         CURRENT_PROJECT_VERSION: "111"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CF_DISPLAY_NAME: "Anticipy"
-        INFOPLIST_KEY_LSUIElement: true
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Anticipy listens through your microphone when you ask it to, so it can catch what you commit to. Audio stays on this Mac; the words are sent to Anticipy's server so she can act on them."
-        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Anticipy turns what it hears into text on this Mac, then sends that text to her server so she can remember it and act on it."
+        CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_CODE_SIGN_FLAGS: --timestamp
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ../macos/AnticipyMac/Info.plist
         SWIFT_VERSION: "5.0"
         MACOSX_DEPLOYMENT_TARGET: "26.0"
 

@@ -17,6 +17,7 @@
 		1741E2E9969BA00F175A514B /* ContextTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B835B3131A011B32F5BC29 /* ContextTrigger.swift */; };
 		18A477FBAFC0AF1ADB1EAF87 /* AnticipyBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0AB97746861DA294983C3B /* AnticipyBackend.swift */; };
 		1C9C98C649D0B723997B9A85 /* TranscriptFlushPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C854FBF3563751CDDDC67B41 /* TranscriptFlushPolicy.swift */; };
+		21FB55497244F1FCA4A4638F /* MeetingLinePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67F59C25BFE7B3ABC119078B /* MeetingLinePolicy.swift */; };
 		2226A4EFE78AB9C94C015716 /* SettingsListeningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35BF4F0710D0F39FD92F0289 /* SettingsListeningView.swift */; };
 		25AC3D0AB8C53BB238F8DADB /* MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 170948F89E867C9222007A29 /* MacApp.swift */; };
 		2B855264D97A859EBDF101ED /* CallPresencePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F489EEF872DEA09B32DB3E2F /* CallPresencePolicy.swift */; };
@@ -35,6 +36,7 @@
 		559F9FEC6235905176009C57 /* VoiceEnrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2259A21DAB72161C7B02E791 /* VoiceEnrollView.swift */; };
 		57F25F7D221433600AB7BFCE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 11B56391BC84404B937B150F /* Assets.xcassets */; };
 		58D4754CC27965D6D4E9F986 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */; };
+		5B7D702B926CB81B51978B95 /* CaptureStreamHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE8B7CF6DBBEFF9A3B65B788 /* CaptureStreamHealth.swift */; };
 		5C20EAC439DF3EF45ED23FE9 /* SupervisedReadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 714D2B06ED11248D1924DC9A /* SupervisedReadView.swift */; };
 		5FA2179643C000C7B5FF7E6D /* PocketBase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58D936A5FA96EE7F5165FA7 /* PocketBase.swift */; };
 		644DB43B78A19265EFFC8F0D /* AnticipyVocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EA3914C2F3E611680CF7A63 /* AnticipyVocabulary.swift */; };
@@ -43,6 +45,7 @@
 		6620D110891CC9F096396E66 /* BoundedOpusQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5E6323CB981788A4DA02394 /* BoundedOpusQueue.swift */; };
 		68D70E24AEE5564D0E6516E3 /* ListeningDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 098931E67CC0A16625780FF6 /* ListeningDiagnosticsView.swift */; };
 		6B99B2021748028CD2676754 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57259004332BAAB061719DF1 /* Theme.swift */; };
+		730A5684F1E30D15AEE90090 /* SystemAudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44EE6D586B100AA327DF8117 /* SystemAudioCapture.swift */; };
 		732C774FEFE3FE53217548CA /* LocalTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1BB76AD5C8C31F5FFC05B4 /* LocalTranscriber.swift */; };
 		73A1C82CB7B99AB4795A3598 /* FirstRunOwnership.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC43B1EEB7B717196947EE8E /* FirstRunOwnership.swift */; };
 		7503B1784CE72A192DDCFCC9 /* AnticipyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE83FE536791B38970763A70 /* AnticipyWidget.swift */; };
@@ -50,6 +53,7 @@
 		77C50AE5F8AA2A1DD97A86EB /* SettingsHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8521207AAF8A1D75E0BC61ED /* SettingsHomeView.swift */; };
 		78EE68DCD42670CAD7886BDC /* GlassControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5BDFB6645EE440CDCB4F5E /* GlassControls.swift */; };
 		7B0222C65B8F9DDFC8855FEF /* EnrollmentOfferPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */; };
+		80DC7AFF766F5DB06FB2DFC4 /* MacSpeechPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BCCB7A2DFDAA24296594034 /* MacSpeechPipeline.swift */; };
 		84AE67C98C92B710BDD9A786 /* ContextGrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0ADEE2467BA67E3131CEC1 /* ContextGrant.swift */; };
 		859C9A2572940C9366F344A8 /* ListenResumePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */; };
 		8E57577FB951B85FBF9F584F /* CaptureSourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD680DFB54A1BBE979377745 /* CaptureSourcePolicy.swift */; };
@@ -69,6 +73,7 @@
 		ACABFE3C263343D8760C012E /* TranscriptCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD1CE1C9359C9DF75AA38DE /* TranscriptCursor.swift */; };
 		AEFEBCEF687B0E15744B4F03 /* JobReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = E468B3BEC49CF56CD1534BED /* JobReceipt.swift */; };
 		AFAF6DC8B8CB3AFF88CA6F48 /* PlainDuration.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85554F5FECCC71A22EE1415 /* PlainDuration.swift */; };
+		B23152621C6BD6575C5920D3 /* MeetingArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEEECB8F1CF1EE154576228B /* MeetingArchive.swift */; };
 		BAE76BA75023579091C26239 /* SettingsProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85B5A12F03C8D0BCE68493B9 /* SettingsProfileView.swift */; };
 		BB4CB3D71899B31D2887B1B8 /* DiallingCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC63113A7DFEF69864A019F5 /* DiallingCode.swift */; };
 		BED64104EF9A77E836CD99FA /* VoiceRoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 207A8CDCA54C6822477BF1AD /* VoiceRoster.swift */; };
@@ -141,9 +146,11 @@
 		368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantRadioPolicy.swift; sourceTree = "<group>"; };
 		36BD88F8F6F1384E8D4C3850 /* CaptureEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEnvelope.swift; sourceTree = "<group>"; };
 		3A581005E2008896C62D01C5 /* WalkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkTests.swift; sourceTree = "<group>"; };
+		3B0C892A3E61C142BCBEC2DE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3BC4BDEF755D6F5BC4138F18 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		3D0F625D01E618BC4532F6BE /* TranscriptionEnginePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionEnginePolicy.swift; sourceTree = "<group>"; };
+		44EE6D586B100AA327DF8117 /* SystemAudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioCapture.swift; sourceTree = "<group>"; };
 		46B2C841F09576CCA3A85B50 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4DF24B489F9AF85E2D2C05BB /* MeetingWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingWatcher.swift; sourceTree = "<group>"; };
 		4E42FAE41F167B3CDF925213 /* ListenSessionFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenSessionFacts.swift; sourceTree = "<group>"; };
@@ -157,8 +164,11 @@
 		5AD649EF4BF446EEADCF3E44 /* Anticipy-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Anticipy-Bridging-Header.h"; sourceTree = "<group>"; };
 		5BFC5E07E4D0F9F2C46C4FD8 /* speaker-embedding.onnx */ = {isa = PBXFileReference; path = "speaker-embedding.onnx"; sourceTree = "<group>"; };
 		5D657B61BDB55AEC37E034E7 /* SettingsAccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAccessView.swift; sourceTree = "<group>"; };
+		67F59C25BFE7B3ABC119078B /* MeetingLinePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingLinePolicy.swift; sourceTree = "<group>"; };
 		6A21EEC853025953C7054F27 /* FirstRunRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstRunRoute.swift; sourceTree = "<group>"; };
 		6AAA7B7566A7DC53CBE0E558 /* EnrollmentOfferPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentOfferPolicy.swift; sourceTree = "<group>"; };
+		6BCCB7A2DFDAA24296594034 /* MacSpeechPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSpeechPipeline.swift; sourceTree = "<group>"; };
+		6CF2EF851436093AE0B3741B /* AnticipyMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AnticipyMac.entitlements; sourceTree = "<group>"; };
 		6FAF817396F0334028162D23 /* EnrollmentInvite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentInvite.swift; sourceTree = "<group>"; };
 		70F94DFAC73C7499BAB34464 /* AnticipyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnticipyApp.swift; sourceTree = "<group>"; };
 		714D2B06ED11248D1924DC9A /* SupervisedReadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupervisedReadView.swift; sourceTree = "<group>"; };
@@ -177,6 +187,7 @@
 		A58D936A5FA96EE7F5165FA7 /* PocketBase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketBase.swift; sourceTree = "<group>"; };
 		A66BCAC2FE553220A46D105D /* ListenJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenJournal.swift; sourceTree = "<group>"; };
 		A935B05F51033496D5EF92C9 /* HapticEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticEngine.swift; sourceTree = "<group>"; };
+		AE8B7CF6DBBEFF9A3B65B788 /* CaptureStreamHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureStreamHealth.swift; sourceTree = "<group>"; };
 		B27DD46DE7A23040898AA184 /* MeetingOfferPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingOfferPolicy.swift; sourceTree = "<group>"; };
 		B2B45F56D6F5D89BF7758E83 /* CallSense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSense.swift; sourceTree = "<group>"; };
 		B7A992D0567130EEE3198554 /* ListenWatchdogPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenWatchdogPolicy.swift; sourceTree = "<group>"; };
@@ -193,6 +204,7 @@
 		D1EFA0D8400AB2A0659BBCA8 /* SettingsNotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsNotificationsView.swift; sourceTree = "<group>"; };
 		D918825F71DB13464C228B73 /* ContextAskSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextAskSheet.swift; sourceTree = "<group>"; };
 		DC43B1EEB7B717196947EE8E /* FirstRunOwnership.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstRunOwnership.swift; sourceTree = "<group>"; };
+		DEEECB8F1CF1EE154576228B /* MeetingArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingArchive.swift; sourceTree = "<group>"; };
 		DF0ADEE2467BA67E3131CEC1 /* ContextGrant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextGrant.swift; sourceTree = "<group>"; };
 		DF9F21774275ABF326AAC99C /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		DFAFAF3DD2B73755BB35E975 /* ListenResumePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListenResumePolicy.swift; sourceTree = "<group>"; };
@@ -360,6 +372,8 @@
 		612AAB06F19A456685E8FB01 /* Capture */ = {
 			isa = PBXGroup;
 			children = (
+				AE8B7CF6DBBEFF9A3B65B788 /* CaptureStreamHealth.swift */,
+				67F59C25BFE7B3ABC119078B /* MeetingLinePolicy.swift */,
 				B27DD46DE7A23040898AA184 /* MeetingOfferPolicy.swift */,
 			);
 			name = Capture;
@@ -388,10 +402,15 @@
 		C262ED7A43471956D5A67A44 /* AnticipyMac */ = {
 			isa = PBXGroup;
 			children = (
+				6CF2EF851436093AE0B3741B /* AnticipyMac.entitlements */,
+				3B0C892A3E61C142BCBEC2DE /* Info.plist */,
 				170948F89E867C9222007A29 /* MacApp.swift */,
 				F5B6A682B649BB6199773248 /* MacListener.swift */,
+				6BCCB7A2DFDAA24296594034 /* MacSpeechPipeline.swift */,
+				DEEECB8F1CF1EE154576228B /* MeetingArchive.swift */,
 				4DF24B489F9AF85E2D2C05BB /* MeetingWatcher.swift */,
 				A58D936A5FA96EE7F5165FA7 /* PocketBase.swift */,
+				44EE6D586B100AA327DF8117 /* SystemAudioCapture.swift */,
 			);
 			name = AnticipyMac;
 			path = ../macos/AnticipyMac;
@@ -633,11 +652,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5B7D702B926CB81B51978B95 /* CaptureStreamHealth.swift in Sources */,
 				25AC3D0AB8C53BB238F8DADB /* MacApp.swift in Sources */,
 				755B798B98E05E8BB572F8D4 /* MacListener.swift in Sources */,
+				80DC7AFF766F5DB06FB2DFC4 /* MacSpeechPipeline.swift in Sources */,
+				B23152621C6BD6575C5920D3 /* MeetingArchive.swift in Sources */,
+				21FB55497244F1FCA4A4638F /* MeetingLinePolicy.swift in Sources */,
 				45260835F08B4BDC1BB2C7A4 /* MeetingOfferPolicy.swift in Sources */,
 				FAF29E8319FA1B25021EE947 /* MeetingWatcher.swift in Sources */,
 				5FA2179643C000C7B5FF7E6D /* PocketBase.swift in Sources */,
+				730A5684F1E30D15AEE90090 /* SystemAudioCapture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -678,21 +702,22 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ../macos/AnticipyMac/AnticipyMac.entitlements;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 111;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CF_DISPLAY_NAME = Anticipy;
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Anticipy listens through your microphone when you ask it to, so it can catch what you commit to. Audio stays on this Mac; the words are sent to Anticipy's server so she can act on them.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Anticipy turns what it hears into text on this Mac, then sends that text to her server so she can remember it and act on it.";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ../macos/AnticipyMac/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.1.0;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = ai.anticipy.mac;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -784,21 +809,22 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ../macos/AnticipyMac/AnticipyMac.entitlements;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 111;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CF_DISPLAY_NAME = Anticipy;
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Anticipy listens through your microphone when you ask it to, so it can catch what you commit to. Audio stays on this Mac; the words are sent to Anticipy's server so she can act on them.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Anticipy turns what it hears into text on this Mac, then sends that text to her server so she can remember it and act on it.";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ../macos/AnticipyMac/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.1.0;
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = ai.anticipy.mac;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;

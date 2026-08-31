@@ -172,5 +172,42 @@ for v: CaptureStreamVerdict in [.healthy, .notDelivering, .starved, .silentSince
             && !s.contains("nobody spoke") && !s.contains("no one was talking"))
 }
 
+// ===================================================================
+// MeetingLinePolicy — finalized phrases, silence, and a real ceiling
+// ===================================================================
+
+let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+var ownerLine = MeetingLinePolicy(silenceSeconds: 2.5, ceilingSeconds: 15)
+ownerLine.absorbFinal("I will send it today.", at: t0)
+check("a finalized phrase waits through ordinary speaking pauses",
+      !ownerLine.shouldFlush(at: t0.addingTimeInterval(2.4)))
+check("2.5 seconds of silence closes a line",
+      ownerLine.shouldFlush(at: t0.addingTimeInterval(2.5)))
+
+// A duplicate final result can appear while an analyzer is being finalized;
+// the durable transcript must still contain the phrase once.
+ownerLine.absorbFinal("I will send it today.", at: t0.addingTimeInterval(0.2))
+let emittedOwner = ownerLine.take(channel: .owner,
+                                  at: t0.addingTimeInterval(2.7))
+check("an emitted line keeps microphone provenance", emittedOwner?.channel == .owner)
+check("an adjacent duplicate final is stored once",
+      emittedOwner?.text == "I will send it today.")
+check("taking a line resets the accumulator", !ownerLine.hasFinalText)
+
+var ceilingLine = MeetingLinePolicy(silenceSeconds: 2.5, ceilingSeconds: 15)
+for offset in stride(from: 0.0, through: 14.0, by: 2.0) {
+    ceilingLine.absorbFinal("phrase \(Int(offset))", at: t0.addingTimeInterval(offset))
+}
+check("continuous speech still closes at the 15-second ceiling",
+      ceilingLine.shouldFlush(at: t0.addingTimeInterval(15)))
+let emittedSystem = ceilingLine.take(channel: .system,
+                                     at: t0.addingTimeInterval(15))
+check("a far-side line keeps system-audio provenance",
+      emittedSystem?.channel == .system)
+check("the capture envelope starts at the first final phrase",
+      emittedSystem?.startedAt == t0)
+check("the capture envelope ends at the last final phrase",
+      emittedSystem?.endedAt == t0.addingTimeInterval(14))
+
 print(failures == 0 ? "all capture-core checks passed" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -19,8 +19,11 @@ out=$(mktemp -d)
 cleanup() {
     if [ -s "$out/pids" ]; then
         while read -r p; do
-            kill "$p" 2>/dev/null
-            wait "$p" 2>/dev/null
+            # Helpers are expected to have exited already or to end by signal.
+            # Cleanup must never replace the capture probe's own verdict with
+            # 143 (SIGTERM) when the measured gate actually passed.
+            kill "$p" 2>/dev/null || true
+            wait "$p" 2>/dev/null || true
         done < "$out/pids"
     fi
     rm -rf "$out"
@@ -84,6 +87,19 @@ echo "=== NEAR + FAR, concurrently, for 15 seconds ==="
 echo "    NEAR = the microphone, via AVAudioEngine"
 echo "    FAR  = a Core Audio process tap over every process"
 echo ""
+# Produce a small, known system-output signal throughout tap startup. The old
+# probe opened FAR successfully but could report zero callbacks simply because
+# its proxy held the microphone without playing anything. This makes FAR a
+# measured live gate rather than an inference from an OSStatus.
+(
+    i=0
+    while [ "$i" -lt 10 ]; do
+        afplay -v 0.12 /System/Library/Sounds/Submarine.aiff
+        sleep 0.4
+        i=$((i + 1))
+    done
+) > /dev/null 2>&1 &
+echo $! >> "$out/pids"
 set +e
 "$out/dual" --seconds 15
 rc=$?

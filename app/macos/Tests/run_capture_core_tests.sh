@@ -104,6 +104,7 @@ cp "$here/CaptureCoreTests.swift" "$out/main.swift"
 swiftc -O \
     "$app/Capture/MeetingOfferPolicy.swift" \
     "$app/Capture/CaptureStreamHealth.swift" \
+    "$app/Capture/MeetingLinePolicy.swift" \
     "$out/main.swift" \
     -o "$out/capturecoretests"
 "$out/capturecoretests"
