@@ -137,6 +137,9 @@ const nextConfig = {
       // The team notebook.
       { source: "/internal/notes", destination: `${FELLOWSHIP_ORIGIN}/internal/notes` },
       { source: "/internal/notes/delete", destination: `${FELLOWSHIP_ORIGIN}/internal/notes/delete` },
+      // The welcome screen's cast list and the settings password change.
+      { source: "/internal/people/faces", destination: `${FELLOWSHIP_ORIGIN}/internal/people/faces` },
+      { source: "/internal/me/password", destination: `${FELLOWSHIP_ORIGIN}/internal/me/password` },
       { source: "/internal/fellows", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows` },
       { source: "/internal/fellows/remove", destination: `${FELLOWSHIP_ORIGIN}/internal/fellows/remove` },
       // These three existed in the backend and nowhere here, so past the site
