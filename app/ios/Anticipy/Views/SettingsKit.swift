@@ -671,7 +671,11 @@ private struct TrailingValue: View {
             .foregroundStyle(Theme.muted)
             .lineLimit(SheetKit.lineLimit(for: .trailingValue))
             .truncationMode(.tail)
-            .layoutPriority(-1)
+            // A negative priority lets an otherwise flexible one-line title
+            // consume the whole row. That made the inert `StateRow` lose even
+            // a two-letter value such as "Off" while the tappable form looked
+            // fine because its chevron kept the trailing stack alive.
+            .layoutPriority(0)
             .accessibilityHidden(true)
     }
 }

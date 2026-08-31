@@ -550,6 +550,8 @@ schemes:
       config: Debug
     test:
       config: Debug
+      targets:
+        - AnticipyUITests
     profile:
       config: Release
     analyze:
@@ -582,6 +584,20 @@ targets:
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Anticipy turns what it hears into text on this Mac, then sends that text to her server so she can remember it and act on it."
         SWIFT_VERSION: "5.0"
         MACOSX_DEPLOYMENT_TARGET: "26.0"
+
+  AnticipyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: Anticipy
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.anticipy.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Anticipy
+        SWIFT_VERSION: "5.0"
 
   AnticipyWidget:
     type: app-extension

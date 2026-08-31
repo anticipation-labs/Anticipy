@@ -86,7 +86,12 @@ struct SettingsProfileView: View {
 
             FieldCaptionLine(
                 text: firstName + lastName + email + birthday,
-                complete: detailsChanged,
+                // These fields have no shared completeness rule. Passing
+                // `detailsChanged` here made an unchanged, already-saved
+                // profile render the phone component's "country code" error.
+                // The attempt still carries save success or failure; nil only
+                // prevents this view from inventing validation it does not own.
+                complete: nil,
                 attempt: detailsAttempt,
                 words: .init(
                     neutral: "Every booking and signup form asks for these. "

@@ -56,6 +56,7 @@
 		9AD34E051260F373C845DFB3 /* EnrollmentInvite.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FAF817396F0334028162D23 /* EnrollmentInvite.swift */; };
 		9D99735C613237B976EDFB95 /* PendantBatteryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0C300D8A79FC68733630D6 /* PendantBatteryPolicy.swift */; };
 		9FB3C2E50F6F7C0BE7F7DC8D /* AnticipyWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 76E33D65DC012620958D319F /* AnticipyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9FCDE459DE0871E64A2694E0 /* WalkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A581005E2008896C62D01C5 /* WalkTests.swift */; };
 		A0C6AC3D27BE2A2D7D82A6D4 /* OnboardingFinale.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7458BC7F8EBF91A246AAB60C /* OnboardingFinale.swift */; };
 		A2E9C7BEAE17336D2AAC4448 /* HeardGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */; };
 		A7D57FEE8635078FB72C3B13 /* SettingsKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BE63B13B2A36AB4DB9EA566 /* SettingsKit.swift */; };
@@ -91,6 +92,13 @@
 			remoteGlobalIDString = 48E5E442C72440DF8B4DFB49;
 			remoteInfo = AnticipyWidget;
 		};
+		ADFC6E7FF79EED96F0EE40EB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 053E0002B5B783EA0A998BBC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DAE7A87E11F66CDF4E58573B;
+			remoteInfo = Anticipy;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -125,6 +133,7 @@
 		35BF4F0710D0F39FD92F0289 /* SettingsListeningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsListeningView.swift; sourceTree = "<group>"; };
 		368691500357FCAF594BFF34 /* PendantRadioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendantRadioPolicy.swift; sourceTree = "<group>"; };
 		36BD88F8F6F1384E8D4C3850 /* CaptureEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEnvelope.swift; sourceTree = "<group>"; };
+		3A581005E2008896C62D01C5 /* WalkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkTests.swift; sourceTree = "<group>"; };
 		3BC4BDEF755D6F5BC4138F18 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		3C0E01BACE08AB40DAA1B77B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		3D0F625D01E618BC4532F6BE /* TranscriptionEnginePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionEnginePolicy.swift; sourceTree = "<group>"; };
@@ -176,6 +185,7 @@
 		E0B72B7E633EA125C09A7923 /* ConversationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationCard.swift; sourceTree = "<group>"; };
 		E2204C09ACF068DDA67C8698 /* LifeContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeContext.swift; sourceTree = "<group>"; };
 		E468B3BEC49CF56CD1534BED /* JobReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobReceipt.swift; sourceTree = "<group>"; };
+		E9464305444D641C792685AE /* AnticipyUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AnticipyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E94C340A3EF64050C750BCD7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		EC042E78CD54BA32A917FDA4 /* HeardGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeardGroup.swift; sourceTree = "<group>"; };
 		EDB2A40B487A55305B6FC7A2 /* Interview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interview.swift; sourceTree = "<group>"; };
@@ -241,6 +251,7 @@
 				08375CF4CC336658A454A94D /* Anticipy */,
 				C262ED7A43471956D5A67A44 /* AnticipyMac */,
 				612AAB06F19A456685E8FB01 /* Capture */,
+				66CFA0C1AF05DCB4D7EF26EE /* UITests */,
 				28D66B0D13DE22BA63D7CD47 /* Widget */,
 				6A539E9BBDA1A25C8270B543 /* Products */,
 			);
@@ -333,11 +344,20 @@
 			path = ../macos/Anticipy/Capture;
 			sourceTree = "<group>";
 		};
+		66CFA0C1AF05DCB4D7EF26EE /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				3A581005E2008896C62D01C5 /* WalkTests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
 		6A539E9BBDA1A25C8270B543 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				008EC9F3B3E9368F8EBD22BF /* Anticipy.app */,
 				CD8A3FEA6C02688EEB19A92F /* AnticipyMac.app */,
+				E9464305444D641C792685AE /* AnticipyUITests.xctest */,
 				76E33D65DC012620958D319F /* AnticipyWidget.appex */,
 			);
 			name = Products;
@@ -392,6 +412,24 @@
 			productReference = 76E33D65DC012620958D319F /* AnticipyWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		61D51CB870A3320778D679FF /* AnticipyUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7CD8866BA8BBAFD236C9842A /* Build configuration list for PBXNativeTarget "AnticipyUITests" */;
+			buildPhases = (
+				2972DB97139B556281427BF2 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4E0D6AC466B4881764D599D1 /* PBXTargetDependency */,
+			);
+			name = AnticipyUITests;
+			packageProductDependencies = (
+			);
+			productName = AnticipyUITests;
+			productReference = E9464305444D641C792685AE /* AnticipyUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		DAE7A87E11F66CDF4E58573B /* Anticipy */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 6CFE374B7746E8D6878C55A0 /* Build configuration list for PBXNativeTarget "Anticipy" */;
@@ -429,6 +467,11 @@
 						DevelopmentTeam = "$(DEVELOPMENT_TEAM)";
 						ProvisioningStyle = Automatic;
 					};
+					61D51CB870A3320778D679FF = {
+						DevelopmentTeam = "$(DEVELOPMENT_TEAM)";
+						ProvisioningStyle = Automatic;
+						TestTargetID = DAE7A87E11F66CDF4E58573B;
+					};
 					DAE7A87E11F66CDF4E58573B = {
 						DevelopmentTeam = "$(DEVELOPMENT_TEAM)";
 						ProvisioningStyle = Automatic;
@@ -450,6 +493,7 @@
 			projectRoot = "";
 			targets = (
 				0AAF6B1BB88F945F58338262 /* AnticipyMac */,
+				61D51CB870A3320778D679FF /* AnticipyUITests */,
 				48E5E442C72440DF8B4DFB49 /* AnticipyWidget */,
 				DAE7A87E11F66CDF4E58573B /* Anticipy */,
 			);
@@ -470,6 +514,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2972DB97139B556281427BF2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9FCDE459DE0871E64A2694E0 /* WalkTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		465B6D7E5FF0789D0FB52693 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -569,6 +621,11 @@
 			target = 48E5E442C72440DF8B4DFB49 /* AnticipyWidget */;
 			targetProxy = 3EEC526855534D9EA379653D /* PBXContainerItemProxy */;
 		};
+		4E0D6AC466B4881764D599D1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DAE7A87E11F66CDF4E58573B /* Anticipy */;
+			targetProxy = ADFC6E7FF79EED96F0EE40EB /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -612,6 +669,24 @@
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
+		};
+		3BC1961406488B4EC4216ECD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ai.anticipy.app.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Anticipy;
+			};
+			name = Release;
 		};
 		4FB9ED2DD3FA376CBE2D7A30 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -808,6 +883,24 @@
 			};
 			name = Debug;
 		};
+		D8EB5178507E66A80BE2FAD0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ai.anticipy.app.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Anticipy;
+			};
+			name = Debug;
+		};
 		EE383BCAC0DCD8AFAC6616D7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -846,6 +939,15 @@
 			buildConfigurations = (
 				7F942D65F0A2CF813B886BE5 /* Debug */,
 				02D5A08145E7DB035DFE6FE5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7CD8866BA8BBAFD236C9842A /* Build configuration list for PBXNativeTarget "AnticipyUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D8EB5178507E66A80BE2FAD0 /* Debug */,
+				3BC1961406488B4EC4216ECD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
