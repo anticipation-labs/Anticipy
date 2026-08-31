@@ -10,7 +10,7 @@ GPIO names taken from the KiCad MDBT50Q symbol (module pin -> nRF52840 port pin)
 | FLASH_SCK   | 36        | P0.14         | out       | |
 | FLASH_MOSI  | 39        | P0.15         | out       | |
 | FLASH_MISO  | 38        | P0.16         | in        | |
-| I2C_SDA     | 19        | P0.26         | io        | LIS2DH12 (addr 0x18, SDO/SA0 tied to GND) |
+| I2C_SDA     | 19        | P0.26         | io        | LIS2DH (addr 0x18, SDO/SA0 tied to GND) |
 | I2C_SCL     | 16        | P0.27         | out       | 4.7k pull-ups to +3V3 (R8, R9) |
 | ACC_INT1    | 13        | P0.28         | in        | Motion wake interrupt |
 | BTN         | 57        | P1.06         | in, pull-up | SW1 to GND, active low |

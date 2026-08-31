@@ -29,7 +29,7 @@ Digital package for a rush (48h-class) build at any capable local PCB/PCBA vendo
 ## Assembly notes
 
 - Double-sided SMT. Reflow both sides (BOM parts are all reflow-safe).
-- U2 (BQ24075, VQFN-16) and U6 (LIS2DH12, LGA-14) need good paste/stencil control.
+- U2 (BQ24075, VQFN-16) and U6 (LIS2DH, LGA-14) need good paste/stencil control.
 - MK1/MK2 (Knowles SPH0641LU4H-1) are **bottom-port mics**: the port holes in the
   PCB must stay free of paste/flux — flag to the assembler.
 - J4 (Tag-Connect TC2030-IDC-NL) is **bare pads, no part to place** — remove from

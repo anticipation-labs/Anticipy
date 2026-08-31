@@ -195,7 +195,7 @@ COMPONENTS = [
     dict(
         ref="U6", sym="Sensor_Motion:LIS2DH",
         fp="Package_LGA:LGA-14_2x2mm_P0.35mm_LayoutBorder3x4y",
-        value="LIS2DH12TR", mpn="ST LIS2DH12TR",
+        value="LIS2DHTR", mpn="ST LIS2DHTR",
         pins={"1": "I2C_SCL", "2": "I2C_SDA",
               "3": GND,          # SDO/SA0 -> addr 0x18
               "4": P3V3,         # CS high = I2C mode

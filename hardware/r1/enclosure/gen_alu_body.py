@@ -188,13 +188,14 @@ plate_W = W - 2 * (WALL - REBATE_W) - 0.2
 plate = cq.Workplane("XY").placeSketch(capsule(plate_L, plate_W)).extrude(FACE_T)
 for (px, py), d in ((MIC1, MIC_D), (MIC2, MIC_D), (BTN, BTN_D), (LED, LED_D)):
     plate = plate.faces(">Z").workplane().pushPoints([(px, py)]).hole(d)
+# antenna opening runs out to the plate end: the 0.9mm rim an enclosed
+# window would leave is below any minimum feature size, and the open notch
+# keeps the plate a single solid so it instant-quotes
+notch_L = plate_L / 2 - (AW_X - AW_L / 2) + 1.0
 plate = plate.cut(
     cq.Workplane("XY")
-    .rect(AW_L, AW_W)
-    .extrude(FACE_T)
-    .edges("|Z")
-    .fillet(AW_R)
-    .translate((AW_X, 0, 0))
+    .box(notch_L, AW_W, FACE_T, centered=(False, True, False))
+    .translate((AW_X - AW_L / 2, 0, 0))
 )
 # L-hooks on plate underside: vertical leg + outward foot
 for tx in HOOK_XS:
@@ -217,6 +218,9 @@ for tx in HOOK_XS:
 
 # --- POM lock keys (fill the notch gap after the locking slide) ---
 key = cq.Workplane("XY").box(SLIDE - 0.1, FOOT_D + HOOK_CLR / 2 - 0.05, LEG_DROP - 0.1, centered=(True, True, False))
+
+plate_solids = plate.solids().vals()
+assert len(plate_solids) == 1, f"plate must be one solid, got {len(plate_solids)}"
 
 cq.exporters.export(body, os.path.join(OUT, "alu_body.step"))
 cq.exporters.export(plate, os.path.join(OUT, "alu_face_front_v3.step"))

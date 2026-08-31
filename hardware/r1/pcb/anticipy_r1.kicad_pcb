@@ -7552,7 +7552,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "LIS2DH12TR"
+		(property "Value" "LIS2DHTR"
 			(at 0 -1.8 180)
 			(layer "B.Fab")
 			(uuid "1a7627be-aec5-4df9-9953-be5dba410dd5")
