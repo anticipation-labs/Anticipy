@@ -121,16 +121,15 @@ try:
             if not isinstance(e, dict):
                 continue
             p = e.get("path") or ""
-            n = ((e.get("manifest") or {}).get("name") or "")
-            state = anticipy_record_state(e)
+            if not os.path.isabs(p):
+                p = os.path.join(os.path.dirname(prefs), p)
+            state = anticipy_record_state(e, p)
             if state is None:
                 # Chrome preserves the old unpacked path after removal. It is
                 # useful diagnostic evidence, but it is not an installation.
                 if "anticipy" in p.lower():
                     tombstones.append(f"{profile}:{_id}")
                 continue
-            if not os.path.isabs(p):
-                p = os.path.join(os.path.dirname(prefs), p)
             if os.path.isdir(p):
                 target = enabled if state == "enabled" else disabled
                 target.setdefault(p, []).append(profile)

@@ -64,3 +64,26 @@ def test_enabled_and_disabled_installs_require_a_real_manifest():
     disabled = {"manifest": {"name": "Anticipy"}, "disable_reasons": [1]}
     assert anticipy_record_state(enabled) == "enabled"
     assert anticipy_record_state(disabled) == "disabled"
+
+
+def test_current_chrome_reads_the_unpacked_manifest_from_disk(tmp_path):
+    (tmp_path / "manifest.json").write_text(
+        '{"name":"Anticipy","version":"0.11.1"}', encoding="utf-8")
+    enabled = {
+        "path": str(tmp_path),
+        "location": 4,
+        "disable_reasons": [],
+        "active_permissions": {"api": ["storage"]},
+    }
+    disabled = {**enabled, "disable_reasons": [1]}
+
+    assert anticipy_record_state(enabled, str(tmp_path)) == "enabled"
+    assert anticipy_record_state(disabled, str(tmp_path)) == "disabled"
+
+
+def test_path_only_tombstone_cannot_be_revived_by_a_leftover_folder(tmp_path):
+    (tmp_path / "manifest.json").write_text(
+        '{"name":"Anticipy","version":"0.11.1"}', encoding="utf-8")
+    tombstone = {"path": str(tmp_path), "location": 4}
+
+    assert anticipy_record_state(tombstone, str(tmp_path)) is None

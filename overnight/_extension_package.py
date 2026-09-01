@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping
 
 
-def anticipy_record_state(record: Mapping) -> str | None:
+def anticipy_record_state(
+        record: Mapping, unpacked_root: str | None = None) -> str | None:
     """Classify a Chrome preference record without mistaking a tombstone.
 
     Chrome retains the path and extension ID after an unpacked extension is
@@ -15,6 +17,20 @@ def anticipy_record_state(record: Mapping) -> str | None:
     """
     manifest = record.get("manifest") or {}
     name = manifest.get("name") or ""
+    if "anticipy" not in name.lower() and unpacked_root:
+        # Current Chrome keeps the path, permissions and disable state in
+        # Secure Preferences but no longer mirrors the unpacked manifest into
+        # that record. Read the manifest Chrome is actually loading. Requiring
+        # an explicit disable_reasons key separates a live modern record from
+        # older path-only tombstones, which omit it entirely.
+        if record.get("location") != 4 or "disable_reasons" not in record:
+            return None
+        try:
+            with open(os.path.join(unpacked_root, "manifest.json"),
+                      encoding="utf-8") as source:
+                name = str((json.load(source) or {}).get("name") or "")
+        except (OSError, ValueError, TypeError):
+            return None
     if "anticipy" not in name.lower():
         return None
     return "disabled" if record.get("disable_reasons") else "enabled"
