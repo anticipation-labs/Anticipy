@@ -73,7 +73,10 @@ for prefs in sorted(glob.glob(os.path.join(base, "*", "Secure Preferences"))):
             continue
         name = ((e.get("manifest") or {}).get("name") or "")
         path = e.get("path") or ""
-        if "anticipy" not in (name + path).lower():
+        # A removed unpacked extension leaves a path-only tombstone in Secure
+        # Preferences. It does not appear on chrome://extensions and Chrome
+        # cannot run it. Require the stored manifest, which a real card has.
+        if "anticipy" not in name.lower():
             continue
         # Chrome writes an absolute path for a folder you picked yourself and a
         # profile-relative one for a copy it made. Resolve both.
@@ -84,7 +87,8 @@ for prefs in sorted(glob.glob(os.path.join(base, "*", "Secure Preferences"))):
             continue
         seen.add(full)
         label = f"{profile} ({names.get(profile)})" if names.get(profile) else profile
-        print("\t".join([full, label, ext_id]))
+        status = "disabled" if e.get("disable_reasons") else "enabled"
+        print("\t".join([full, label, ext_id, status]))
 PY
 )
 
@@ -92,8 +96,8 @@ if [ -z "$FOUND" ]; then
   cat <<EOF
 Anticipy is not loaded in any Chrome profile on this Mac.
 
-Nothing can do this for you: Chrome 151 blocks --load-extension on the stable
-channel, so it is five clicks, once, by hand.
+Chrome's stable channel blocks command-line extension loading. Use Chrome's
+own Load unpacked screen once:
 
   1. Open Chrome, go to    chrome://extensions
   2. Turn ON "Developer mode"  — the switch at the TOP RIGHT of that page
@@ -127,10 +131,10 @@ LIST=$(mktemp)
 trap 'rm -f "$LIST"' EXIT
 printf '%s\n' "$FOUND" > "$LIST"
 
-while IFS="$TAB" read -r DEST LABEL EXT_ID; do
+while IFS="$TAB" read -r DEST LABEL EXT_ID STATUS; do
   [ -n "$DEST" ] || continue
   echo "chrome : $DEST"
-  echo "         profile $LABEL, extension id $EXT_ID"
+  echo "         profile $LABEL, extension id $EXT_ID, $STATUS"
   if [ "$DEST" = "$SRC" ]; then
     # The good case, and the one that used to end in rsync copying a folder
     # over itself: Chrome is reading this checkout directly, so the code on

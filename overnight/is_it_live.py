@@ -12,7 +12,7 @@ anybody's report. Run it. It prints what is true.
 
     python3 overnight/is_it_live.py
 """
-import json, os, re, subprocess, sys, tempfile, urllib.request, zipfile
+import io, json, os, re, subprocess, sys, urllib.request, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -21,6 +21,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # .env.local named a different backend. Explicit environment still wins.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _env  # noqa: E402  sibling module; gates are run as scripts
+from _extension_package import (  # noqa: E402
+    anticipy_record_state,
+    compare_package_tree,
+)
 _ENV_LOADED = _env.load_and_announce(ROOT)
 BASE = os.environ.get("ANTICIPY_BACKEND_URL",
                       "https://backend-production-61e0a.up.railway.app")
@@ -62,38 +66,53 @@ except Exception as e:
 # 3. The served extension must BE the source, not merely claim its version.
 src_manifest = json.load(open(os.path.join(ROOT, "extension", "manifest.json")))
 src_version = src_manifest["version"]
+package_files = {}
 try:
     blob = fetch(f"/{zip_name}.zip", binary=True)
-    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as fh:
-        fh.write(blob); tmp = fh.name
-    with zipfile.ZipFile(tmp) as z:
-        names = z.namelist()
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        names = [name for name in z.namelist() if not name.endswith("/")]
         man = next(n for n in names if n.endswith("manifest.json"))
         live_version = json.loads(z.read(man))["version"]
-        loop = next(n for n in names if n.endswith("agent_loop.js"))
-        live_loop = z.read(loop).decode("utf-8", "replace")
-    os.unlink(tmp)
+        package_files = {name: z.read(name) for name in names}
 
     check("the served extension's version matches source",
           live_version == src_version, f"served {live_version}, source {src_version}")
 
-    # The version alone is not evidence. Compare the actual bytes of the file
-    # that does the work -- this is the check that would have caught 0.8.2
-    # being served with none of that day's code in it.
-    src_loop = open(os.path.join(ROOT, "extension", "agent_loop.js")).read()
-    same = live_loop.strip() == src_loop.strip()
-    check("the served extension IS the source, byte for byte", same,
-          "identical" if same else
-          f"differs: served {len(live_loop)} chars, source {len(src_loop)}")
+    # The version alone is not evidence, and neither is one representative
+    # file. This gate used to compare ONLY agent_loop.js. On 2026-08-31 both
+    # folders Chrome loaded had that one current file but an old manifest and
+    # background worker and no setup bridge; the gate printed EVERYTHING
+    # SHIPPED over an extension that could not light up the hosted pairing
+    # page. Compare the complete committed package to the live download, then
+    # compare every packaged file to source.
+    committed_path = os.path.join(
+        ROOT, "backend", "pb_public", f"{zip_name}.zip")
+    committed = open(committed_path, "rb").read()
+    exact_artifact = blob == committed
+    check("the served ZIP is the committed artifact, byte for byte",
+          exact_artifact,
+          "identical" if exact_artifact else
+          f"served {len(blob)} bytes, committed {len(committed)} bytes")
+
+    source_diffs = compare_package_tree(
+        package_files, os.path.join(ROOT, "extension"))
+    check("every served extension file matches source",
+          not source_diffs,
+          "all packaged files identical" if not source_diffs else
+          "differs: " + ", ".join(source_diffs[:5]))
 except Exception as e:
     check("the served extension is readable", False, str(e)[:80])
 
-# 4. What his own Chrome is really running -- the copy Chrome reads, not a zip.
+# 4. What Chrome will load on Reload -- every Anticipy folder, not one lucky
+# file in the first match. The active MV3 worker is an in-memory browser state
+# this filesystem gate cannot see, so this deliberately does not claim that a
+# just-synced folder is already running; Chrome still requires Reload.
 try:
     import glob
     chrome_base = os.path.expanduser("~/Library/Application Support/Google/Chrome")
-    installed = ""
+    enabled, disabled, tombstones = {}, {}, []
     for prefs in glob.glob(os.path.join(chrome_base, "*", "Secure Preferences")):
+        profile = os.path.basename(os.path.dirname(prefs))
         try:
             d = json.load(open(prefs))
         except Exception:
@@ -103,18 +122,38 @@ try:
                 continue
             p = e.get("path") or ""
             n = ((e.get("manifest") or {}).get("name") or "")
-            if "anticipy" in (n + p).lower() and os.path.isdir(p):
-                installed = p
-                break
-        if installed:
-            break
-    if installed:
-        chrome_loop = open(os.path.join(installed, "agent_loop.js")).read()
-        same = chrome_loop.strip() == src_loop.strip()
-        check("YOUR Chrome is running the current code", same,
-              installed if same else f"{installed} is behind — run sh extension/sync-to-chrome.sh")
+            state = anticipy_record_state(e)
+            if state is None:
+                # Chrome preserves the old unpacked path after removal. It is
+                # useful diagnostic evidence, but it is not an installation.
+                if "anticipy" in p.lower():
+                    tombstones.append(f"{profile}:{_id}")
+                continue
+            if not os.path.isabs(p):
+                p = os.path.join(os.path.dirname(prefs), p)
+            if os.path.isdir(p):
+                target = enabled if state == "enabled" else disabled
+                target.setdefault(p, []).append(profile)
+    check("Chrome has exactly one enabled Anticipy agent",
+          sum(len(v) for v in enabled.values()) == 1,
+          (f"{sum(len(v) for v in enabled.values())} enabled, "
+           f"{sum(len(v) for v in disabled.values())} disabled, "
+           f"{len(tombstones)} removed record(s)"))
+    if enabled:
+        stale = []
+        for path, profiles in enabled.items():
+            diffs = compare_package_tree(package_files, path)
+            if diffs:
+                stale.append(
+                    f"{path} ({'/'.join(sorted(profiles))}): " +
+                    ", ".join(diffs[:4]))
+        check("every folder Chrome loads contains the current package",
+              not stale,
+              f"{len(enabled)} folder(s), all identical; press Reload to activate"
+              if not stale else " | ".join(stale[:2]))
     else:
-        rows.append(("....", "your Chrome install was not found (not loaded unpacked?)", ""))
+        check("the enabled Chrome agent contains the current package", False,
+              "no enabled install; use Load unpacked once")
 except Exception as e:
     rows.append(("....", "could not inspect your Chrome", str(e)[:60]))
 

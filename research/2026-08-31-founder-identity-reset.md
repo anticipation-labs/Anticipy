@@ -12,10 +12,20 @@ the repository.
 
 - `jose_anticipy_system` was fetched before the operation. Local HEAD and
   `origin/jose_anticipy_system` were both `446260ef`.
-- `overnight/is_it_live.py` passed all legs after the reset. Railway serves
-  extension `0.11.1`; the served ZIP is byte-for-byte the committed extension;
-  and the extension loaded in Omar's Chrome is the same current code. The old
-  `0.5.1` text in the local folder name is not the extension version.
+- Railway serves extension `0.11.1`, and the served ZIP is byte-for-byte the
+  committed artifact. The first run of `overnight/is_it_live.py` nevertheless
+  produced a false Chrome pass because its installed-copy leg compared only
+  `agent_loop.js`. Both folders Chrome had recorded contained that current
+  file while still carrying a `0.11.0` manifest, a stale `background.js`, and
+  no current `setup_bridge.js`. Both on-disk folders were synchronized to the
+  complete `0.11.1` package. The gate now compares every packaged file in
+  every recorded Anticipy folder and has a regression test reproducing the
+  partial-match failure. A direct check of `chrome://extensions` then showed
+  that the active Default profile has no Anticipy card at all: the two paths
+  in Secure Preferences are removed-extension tombstones, not live installs.
+  The gate and sync script now require a real stored manifest and refuse to
+  call a tombstone loaded. The old `0.5.1` text in one leftover folder name is
+  not its extension version.
 - App Store Connect reported iOS `1.1.0 (113)` as `VALID`, unexpired, and
   `IN_BETA_TESTING`. This is the successful consumer-computer-onboarding
   upload from commit `3f7c0116` and includes the audio-route crash fix, the Mac
@@ -94,7 +104,11 @@ after the environment change.
   under the normal fourteen-generation private-backup retention policy.
 - All temporary `codex-*` superusers used for the operation were removed while
   the server was paused.
-- Backend health and all live browser-agent byte/version gates passed last.
+- Backend health, the live download, and the served/source package byte gates
+  passed last. The Chrome leg is correctly red: there is presently no enabled
+  Anticipy install in the active Chrome profile. Installing one fresh unpacked
+  copy from `extension/` is the remaining browser step; browser-extension
+  installation requires action-time user confirmation.
 
 The supplied work emails still appear in the separate `internal_people`,
 `fellows`, and `fellow_applications` business records. Those are not Anticipy
@@ -111,3 +125,11 @@ updating it in place, then install build 113 from TestFlight. Credentials,
 onboarding state and the pre-account UUID are stored in the app's UserDefaults,
 so removing the app is the step that clears the phone-side copy. The server-side
 accounts and durable memory are already gone.
+
+Chrome's Default profile has two removed Anticipy preference records but no
+installed Anticipy card. The two old folders were synchronized defensively, yet
+Chrome does not run either one. Load `extension/` once with **Load unpacked**;
+that creates one new `0.11.1` card with a fresh extension identity and empty
+local pairing storage, avoiding both the dead credential and duplicate-agent
+state. Enter its new six-digit pairing code in the freshly installed iPhone
+app.
