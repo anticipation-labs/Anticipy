@@ -9,6 +9,6 @@ COPY brain /srv/brain
 # kills the supervisor before main() exists and leaves Railway reporting a
 # RUNNING container with a brain that never started. The pip package is the
 # tzdb that zoneinfo falls back to when /usr/share/zoneinfo is absent.
-RUN pip install --no-cache-dir requests httpx tzdata
+RUN pip install --no-cache-dir requests httpx tzdata boto3
 ENV PYTHONUNBUFFERED=1
 CMD ["python", "-m", "brain.supervisor"]

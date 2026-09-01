@@ -22,6 +22,7 @@ import time
 from typing import Callable
 
 from . import pb
+from . import state_backup
 from . import worker
 
 
@@ -29,6 +30,8 @@ PB = os.environ.get("ANTICIPY_PB", "http://127.0.0.1:8090")
 DISCOVERY_SECONDS = max(2, int(os.environ.get("ANTICIPY_OWNER_DISCOVERY_SECONDS", "15")))
 MAX_OWNER_WORKERS = max(1, int(os.environ.get("ANTICIPY_MAX_OWNER_WORKERS", "100")))
 STATE_ROOT = os.environ.get("ANTICIPY_STATE_ROOT", "/data/owners")
+STATE_VOLUME_ROOT = os.environ.get("ANTICIPY_STATE_VOLUME_ROOT", "/data")
+STATE_BACKUP_SECONDS = max(300, int(os.environ.get("ANTICIPY_STATE_BACKUP_SECONDS", "86400")))
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 
 
@@ -312,6 +315,10 @@ def main() -> None:
     print(f"supervisor up · pb={PB} · isolated-owner-limit={MAX_OWNER_WORKERS}")
 
     last_webhook = 0.0
+    # Wait for owner children to start before the first snapshot. A failed
+    # upload retries in fifteen minutes; a missing configuration is an
+    # intentional no-op so this image can safely precede its credentials.
+    next_state_backup = time.monotonic() + 30
     while not stopping:
         # The Twilio number must keep pointing at us, and exactly one process
         # may check. That job used to be handed to the first-sorted owner's
@@ -347,6 +354,18 @@ def main() -> None:
                 purge_deleted_owners(live_refs={o["id"] for o in owners})
             except Exception as exc:
                 print(f"purge pass failed (retrying): {exc}")
+
+        if time.monotonic() >= next_state_backup:
+            try:
+                uploaded = state_backup.backup_state_to_s3(STATE_VOLUME_ROOT)
+                if uploaded:
+                    print(f"worker state backup verified · key={uploaded}")
+                next_state_backup = time.monotonic() + STATE_BACKUP_SECONDS
+            except Exception as exc:
+                # A backup failure must be visible and retried, but it must not
+                # stop owner workers or the webhook watchdog.
+                print(f"WORKER STATE BACKUP FAILED (retrying): {exc}")
+                next_state_backup = time.monotonic() + min(900, STATE_BACKUP_SECONDS)
 
         deadline = time.monotonic() + DISCOVERY_SECONDS
         while not stopping and time.monotonic() < deadline:

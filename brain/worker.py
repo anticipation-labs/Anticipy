@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+from pathlib import Path
 import re
 import time
 from urllib.parse import urlparse
@@ -718,10 +719,20 @@ def _clock_state() -> dict:
 
 
 def _save_clock_state(state: dict) -> None:
+    path = Path(CLOCK_STATE)
+    temporary = path.with_name(path.name + ".tmp")
     try:
-        json.dump(state, open(CLOCK_STATE, "w"))
-    except Exception:
-        pass
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with temporary.open("w") as handle:
+            json.dump(state, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except Exception as exc:
+        # The old valid file remains in place because only the temporary file
+        # was opened. A swallowed half-write used to reset the outreach clock
+        # to its permissive defaults after a worker was terminated mid-save.
+        print(f"clock state save failed (old state preserved): {exc}")
 
 
 def clock_should_run(now: float, state: dict) -> bool:

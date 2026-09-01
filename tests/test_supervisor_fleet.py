@@ -17,6 +17,7 @@
      number really was repointed at a stranger's Vercel app on 2026-08-03.
 """
 import types
+import json
 
 import pytest
 
@@ -149,3 +150,21 @@ def test_a_standalone_worker_still_checks_its_own_number():
     src = inspect.getsource(W.main)
     assert 'os.environ.get("ANTICIPY_SUPERVISED") != "1"' in src
     assert "ensure_inbound_webhook()" in src
+
+
+def test_clock_state_write_failure_preserves_the_last_valid_state(tmp_path, monkeypatch):
+    """SIGTERM during json.dump must not replace a valid outreach clock with
+    a half-written file that _clock_state reads as permissive defaults."""
+    path = tmp_path / "clock_state.json"
+    previous = {"last_outreach_ts": 123, "reached_loop_ids": ["kept"]}
+    path.write_text(json.dumps(previous))
+    monkeypatch.setattr(W, "CLOCK_STATE", str(path))
+
+    def interrupted_dump(_state, handle):
+        handle.write('{"last_outreach_ts":')
+        raise RuntimeError("terminated mid-write")
+
+    monkeypatch.setattr(W.json, "dump", interrupted_dump)
+    W._save_clock_state({"last_outreach_ts": 999})
+
+    assert json.loads(path.read_text()) == previous

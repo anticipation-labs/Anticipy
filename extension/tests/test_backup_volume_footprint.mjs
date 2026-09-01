@@ -29,6 +29,13 @@ const check = (name, ok) => {
 const settings = {
   backups: { cron: "", cronMaxKeep: 0, s3: { enabled: false } },
 };
+const env = {
+  ANTICIPY_BACKUP_S3_BUCKET: "anticipy-pocketbase-backups-production",
+  ANTICIPY_BACKUP_S3_ENDPOINT: "https://account.r2.cloudflarestorage.com",
+  ANTICIPY_BACKUP_S3_ACCESS_KEY: "bucket-scoped-access-key",
+  ANTICIPY_BACKUP_S3_SECRET: "bucket-scoped-secret",
+  ANTICIPY_BACKUP_S3_REGION: "auto",
+};
 
 const files = readdirSync(dir).filter((f) => f.endsWith(".js")).sort();
 const touching = files.filter((f) =>
@@ -43,6 +50,7 @@ for (const file of touching) {
     // Migrations are applied forward at container boot; the down function is
     // never reached there, so only the up function is exercised here.
     migrate: (up) => { up({ settings: () => settings, save: () => {} }); },
+    $os: { getenv: (name) => env[name] || "" },
   };
   const names = Object.keys(globals);
   new Function(...names, src)(...names.map((n) => globals[n]));
@@ -65,6 +73,14 @@ check("archives kept on the data volume are capped at two",
 // the newest snapshot was taken mid-corruption.
 check("at least two generations are still kept",
   offVolume || settings.backups.cronMaxKeep >= 2);
+
+check("production backups use the dedicated private bucket",
+  settings.backups.s3.bucket === env.ANTICIPY_BACKUP_S3_BUCKET);
+check("R2 uses its explicit endpoint and auto region",
+  settings.backups.s3.endpoint === env.ANTICIPY_BACKUP_S3_ENDPOINT &&
+  settings.backups.s3.region === "auto" && settings.backups.s3.forcePathStyle === true);
+check("fourteen off-volume generations are retained",
+  offVolume && settings.backups.cronMaxKeep === 14);
 
 if (failures) { console.error(`test_backup_volume_footprint: ${failures} failed`); process.exit(1); }
 console.log("test_backup_volume_footprint: all passed");
