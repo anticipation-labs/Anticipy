@@ -5,6 +5,12 @@ on:
     paths: ['app/ios/**', '.github/workflows/ios-testflight.yml']
   workflow_dispatch:
 
+# Every runner gets a different ephemeral signing identity. Serializing this
+# job makes it safe to retire only earlier runners' API-created identities.
+concurrency:
+  group: ios-testflight-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: macos-15
@@ -34,7 +40,7 @@ jobs:
           mkdir -p $RUNNER_TEMP/asc $HOME/.appstoreconnect/private_keys
           echo -n "$ASC_KEY_P8" | base64 --decode -o $RUNNER_TEMP/asc/AuthKey.p8
           cp $RUNNER_TEMP/asc/AuthKey.p8 $HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
-      - name: Keep one cloud-signing certificate slot free
+      - name: Clear orphaned cloud-signing certificates
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
         run: |

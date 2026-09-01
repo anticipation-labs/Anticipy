@@ -3,9 +3,10 @@
 
 GitHub's macOS runner owns an ephemeral private key for every development
 certificate Xcode creates through the API. When that runner disappears the
-certificate remains but its private key does not, so enough successful uploads
-eventually fill Apple's development-certificate pool. This script removes only
-the oldest exact ``DEVELOPMENT / Created via API`` record when the pool is full.
+certificate remains but its private key does not, so successful uploads fill
+Apple's deliberately small development-certificate pool. The serialized iOS
+release job cannot reuse any certificate from an earlier runner, so this script
+removes its exact ``DEVELOPMENT / Created via API`` leftovers before signing.
 Named development and every distribution certificate are outside its reach.
 
 It also chooses the next build number from App Store Connect's live authority,
@@ -28,11 +29,6 @@ from typing import Any
 
 
 API = "https://api.appstoreconnect.apple.com"
-# Apple's certificates API has returned thirteen previously minted development
-# records for this team, while Xcode's cloud-signing service refuses to mint a
-# new one when twelve are still active. Treat twelve as full and leave a second
-# slot as propagation headroom rather than building exactly on the boundary.
-DEVELOPMENT_CERTIFICATE_LIMIT = 12
 REVOCATION_SETTLE_SECONDS = 20
 CI_CERTIFICATE_NAME = "Created via API"
 
@@ -137,24 +133,24 @@ def next_build_number(live_versions: list[str], source: int) -> int:
     return max([source, *numeric]) + 1
 
 
-def select_certificate_to_revoke(certificates: list[dict[str, Any]],
-                                 limit: int = DEVELOPMENT_CERTIFICATE_LIMIT
-                                 ) -> dict[str, Any] | None:
+def select_certificates_to_revoke(
+        certificates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     development = [item for item in certificates
                    if (item.get("attributes") or {}).get("certificateType")
                    == "DEVELOPMENT"]
-    if len(development) < limit:
-        return None
     disposable = [item for item in development
                   if (item.get("attributes") or {}).get("displayName")
                   == CI_CERTIFICATE_NAME]
-    if not disposable:
+    # Apple documents two development certificates per individual. If both
+    # visible records are named, this automation has no safe target and must
+    # stop instead of taking somebody's working Mac identity.
+    if len(development) >= 2 and not disposable:
         raise RuntimeError(
             "development certificate pool is full, but none are exact "
             f"{CI_CERTIFICATE_NAME!r} CI records; refusing to revoke a named key")
-    return min(disposable,
-               key=lambda item: (item.get("attributes") or {})
-               .get("expirationDate", ""))
+    return sorted(disposable,
+                  key=lambda item: (item.get("attributes") or {})
+                  .get("expirationDate", ""))
 
 
 def live_next_build(client: Client, bundle_id: str,
@@ -180,18 +176,15 @@ def live_next_build(client: Client, bundle_id: str,
 def free_signing_slot(client: Client, dry_run: bool) -> None:
     certificates = client.request(
         "GET", "/v1/certificates", {"limit": 200})["data"]
-    target = select_certificate_to_revoke(certificates)
-    if target is None:
-        print("App Store Connect development-certificate slot is already free")
+    targets = select_certificates_to_revoke(certificates)
+    if not targets:
+        print("No orphaned CI development certificates need cleanup")
         return
-    attributes = target.get("attributes") or {}
-    if dry_run:
-        verb = "Would revoke"
-    else:
-        client.request("DELETE", "/v1/certificates/" + target["id"])
-        verb = "Revoked"
-    print(f"{verb} one orphaned CI development certificate "
-          f"(expires {attributes.get('expirationDate', 'unknown')}); "
+    if not dry_run:
+        for target in targets:
+            client.request("DELETE", "/v1/certificates/" + target["id"])
+    verb = "Would revoke" if dry_run else "Revoked"
+    print(f"{verb} {len(targets)} orphaned CI development certificate(s); "
           "named and distribution certificates were not eligible")
     if not dry_run:
         # The REST listing reflects deletion before Xcode's signing backend

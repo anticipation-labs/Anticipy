@@ -28,19 +28,11 @@ def test_next_build_uses_apple_not_the_stale_repo_number():
     assert asc.next_build_number(["112"], source=114) == 115
 
 
-def test_a_free_certificate_pool_deletes_nothing():
-    rows = [_certificate("DEVELOPMENT", "Created via API", str(i), str(i))
-            for i in range(11)]
-    assert asc.select_certificate_to_revoke(rows) is None
+def test_an_empty_certificate_pool_deletes_nothing():
+    assert asc.select_certificates_to_revoke([]) == []
 
 
-def test_twelve_certificates_is_already_full_for_cloud_signing():
-    rows = [_certificate("DEVELOPMENT", "Created via API", str(i), str(i))
-            for i in range(12)]
-    assert asc.select_certificate_to_revoke(rows)["id"] == "0"
-
-
-def test_only_the_oldest_exact_ci_development_certificate_is_eligible():
+def test_every_ci_leftover_but_no_named_or_distribution_key_is_eligible():
     rows = [
         _certificate("DEVELOPMENT", "Created via API",
                      f"2027-08-{day:02d}", f"ci-{day}")
@@ -51,14 +43,17 @@ def test_only_the_oldest_exact_ci_development_certificate_is_eligible():
         _certificate("IOS_DISTRIBUTION", "Omar Ebrahim",
                      "2027-01-01", "distribution"),
     ]
-    assert asc.select_certificate_to_revoke(rows)["id"] == "ci-1"
+    assert [item["id"] for item in
+            asc.select_certificates_to_revoke(rows)] == [
+                f"ci-{day}" for day in range(1, 13)
+            ]
 
 
 def test_a_full_named_pool_fails_instead_of_revoking_a_developer():
     rows = [_certificate("DEVELOPMENT", f"Developer {i}", str(i), str(i))
             for i in range(13)]
     try:
-        asc.select_certificate_to_revoke(rows)
+        asc.select_certificates_to_revoke(rows)
     except RuntimeError as error:
         assert "refusing to revoke a named key" in str(error)
     else:
