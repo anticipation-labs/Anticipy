@@ -28,7 +28,12 @@ from typing import Any
 
 
 API = "https://api.appstoreconnect.apple.com"
-DEVELOPMENT_CERTIFICATE_LIMIT = 13
+# Apple's certificates API has returned thirteen previously minted development
+# records for this team, while Xcode's cloud-signing service refuses to mint a
+# new one when twelve are still active. Treat twelve as full and leave a second
+# slot as propagation headroom rather than building exactly on the boundary.
+DEVELOPMENT_CERTIFICATE_LIMIT = 12
+REVOCATION_SETTLE_SECONDS = 20
 CI_CERTIFICATE_NAME = "Created via API"
 
 
@@ -188,6 +193,11 @@ def free_signing_slot(client: Client, dry_run: bool) -> None:
     print(f"{verb} one orphaned CI development certificate "
           f"(expires {attributes.get('expirationDate', 'unknown')}); "
           "named and distribution certificates were not eligible")
+    if not dry_run:
+        # The REST listing reflects deletion before Xcode's signing backend
+        # does. A run on 2026-09-01 reached archive nine seconds after DELETE
+        # and was still told the pool was full, so wait outside that window.
+        time.sleep(REVOCATION_SETTLE_SECONDS)
 
 
 def main() -> int:

@@ -30,8 +30,14 @@ def test_next_build_uses_apple_not_the_stale_repo_number():
 
 def test_a_free_certificate_pool_deletes_nothing():
     rows = [_certificate("DEVELOPMENT", "Created via API", str(i), str(i))
-            for i in range(12)]
+            for i in range(11)]
     assert asc.select_certificate_to_revoke(rows) is None
+
+
+def test_twelve_certificates_is_already_full_for_cloud_signing():
+    rows = [_certificate("DEVELOPMENT", "Created via API", str(i), str(i))
+            for i in range(12)]
+    assert asc.select_certificate_to_revoke(rows)["id"] == "0"
 
 
 def test_only_the_oldest_exact_ci_development_certificate_is_eligible():
