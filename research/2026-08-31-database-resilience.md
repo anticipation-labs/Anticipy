@@ -8,8 +8,8 @@
 - The measured customer database is about 264 MB.
 - PocketBase's disposable request ledger is a separate SQLite file,
   `/pb_data/auxiliary.db`.
-- Scheduled PocketBase backups currently live under `/pb_data/backups` on the
-  same volume as the database they are meant to recover.
+- PocketBase is configured to write scheduled backups to a private R2 bucket;
+  the Railway volume keeps only the newest local pre-migration archive.
 - The brain worker has a second Railway volume. It contains the founder's
   legacy memory database plus nine owner state directories; a PocketBase-only
   recovery would therefore lose durable assistant memory.
@@ -51,10 +51,12 @@ bucket and separate retention policy.
 
 The private bucket `anticipy-pocketbase-backups-production` was created and
 verified with public access disabled, server-side AES-256 encryption, and a
-one-day abort rule for incomplete multipart uploads. Automatic production
-uploads still require a long-lived Object Read & Write token restricted to
-this bucket; the broad build-artifact credential must never be installed on
-the backend or worker.
+one-day abort rule for incomplete multipart uploads. The production account
+token `anticipy-production-database-backups` has Object Read & Write access to
+that bucket only and a non-expiring production lifetime. A live scope probe
+could read/write/delete its own object in the backup bucket while Cloudflare
+denied the same credential access to `anticipy-downloads`. The broad
+build-artifact credential was not installed on the backend or worker.
 
 ## Recovery boundary
 
@@ -66,10 +68,9 @@ An operationally complete generation has two parts:
    with `PRAGMA quick_check`, accompanied by per-file SHA-256 hashes, uploaded
    with server-side encryption, and retained for fourteen generations.
 
-The worker uploader fails loudly on partial configuration and on symlinks,
-invalid JSON, failed SQLite checks, wrong uploaded size, or missing digest
-metadata. It is dormant when no backup configuration exists, allowing its
-image to be staged before bucket-scoped credentials are added.
+The worker uploader fails loudly on absent or partial production configuration
+and on symlinks, invalid JSON, failed SQLite checks, wrong uploaded size, or
+missing digest metadata.
 
 ## Restore proof and bootstrap copy
 
@@ -83,7 +84,21 @@ jobs, and 446 agent rows. Its 144,812,113-byte archive was uploaded under the
 The worker volume's 18 durable SQLite/JSON files, spanning all nine owner
 directories and the legacy root databases, were snapshotted through the new
 backup path and uploaded under `worker/bootstrap/`. The downloaded archive's
-CRC, all 18 file lengths, and all 18 manifest SHA-256 hashes passed. These are
-one-time recovery generations made with the existing local build credential;
-automatic Railway uploads must wait for the bucket-scoped credential described
-above.
+CRC, all 18 file lengths, and all 18 manifest SHA-256 hashes passed.
+
+## Production proof
+
+- Backend deployment `3a80fc9a-a063-4589-957e-696c0b9bbefe` succeeded.
+  Migration 53 is present in the live `_migrations` table, the settings row is
+  encrypted rather than JSON plaintext, `/api/health` returns 200, and the
+  request ledger was 4 KB after restart.
+- Worker deployment `48c75e12-d103-4024-a86e-b8d722e77060` succeeded and wrote
+  `worker/state-20260901T035746Z.zip` from the production volume. A separate
+  download verified the ZIP CRC and every length and SHA-256 for all 18 files.
+- The exact PocketBase 0.30.4 native backup engine was run against the final
+  restricted R2 configuration. It created an R2 archive that was independently
+  downloaded, CRC-tested, extracted, and passed `PRAGMA quick_check`; the
+  disposable verification object was then removed. Production PocketBase now
+  runs its daily schedule at 09:00 UTC with fourteen generations retained.
+- The implementation is commit `50378915`. The full Python suite passed 2,337
+  tests and the extension runner passed all 68 suites before deployment.
