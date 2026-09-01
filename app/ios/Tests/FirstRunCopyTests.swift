@@ -139,11 +139,18 @@ for hasEmail in [true, false] {
 // sign-out, so this is the shape almost every real first run arrives in.
 check("the ordinary first run confirms two facts and asks for one",
       ConfirmBeat.lead(hasEmail: true, hasPhone: true, hasFirstName: false)
-        == "Your email and number are already on your account. The one thing I'm missing is your first name — it's what a booking form asks for that I can't work out.")
+        == "Your email and number are already on your account. The one thing I'm missing is your first name — it's what a booking form asks for that I can't work out. I'll use text messages and in-app alerts.")
 
 check("with nothing missing it stops asking",
       ConfirmBeat.lead(hasEmail: true, hasPhone: true, hasFirstName: true)
-        == "Your email and number are already on your account. Have a look before we start.")
+        == "Your email and number are already on your account. Have a look before we start. I'll use text messages and in-app alerts.")
+
+check("an account without a number says exactly where alerts go",
+      ConfirmBeat.reachChannel(hasPhone: false)
+        == "Without a number, approvals and results stay in the app. Add one later if you want text messages too.")
+check("an account with a number names both live channels",
+      ConfirmBeat.reachChannel(hasPhone: true)
+        == "I'll use text messages and in-app alerts.")
 
 // THE TITLE IS A CLAIM TOO. "This is what I have." over a page holding nothing
 // is the same falsehood one register quieter, so with nothing on file the beat

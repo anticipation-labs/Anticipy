@@ -19,9 +19,11 @@ func check(_ name: String, _ got: AnswerRoutePolicy.Route,
     }
 }
 
-func route(_ status: String, answer: String, uncertain: Bool = false,
+func route(_ status: String, workflowState: String? = nil,
+           answer: String, uncertain: Bool = false,
            ending: String? = nil) -> AnswerRoutePolicy.Route {
-    AnswerRoutePolicy.route(status: status, effectUncertain: uncertain,
+    AnswerRoutePolicy.route(status: status, workflowState: workflowState,
+                            effectUncertain: uncertain,
                             answer: answer, endsTheErrand: ending)
 }
 
@@ -51,6 +53,14 @@ func runAnswerRoutes() {
     check("a one-word answer still counts as an answer",
           route("needs_user", answer: "4th"),
           .toTheBrain("4th"))
+
+    check("a newly minted draft takes details, not approval",
+          route("awaiting_confirm", workflowState: "draft", answer: "Monday at ten"),
+          .toTheBrain("Monday at ten"))
+
+    check("an empty draft answer cannot become a tap",
+          route("awaiting_confirm", workflowState: "draft", answer: ""),
+          .nothingToSend)
 
     // ---- consent is a different thing, and stays on the job ----------------
     // invariant 2: an approval authorises an action, and the browser agent reads it

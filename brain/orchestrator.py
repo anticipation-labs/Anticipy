@@ -10,6 +10,7 @@ import json
 import os
 import re
 from dataclasses import dataclass, asdict
+from datetime import datetime
 from typing import Optional
 
 from .llm import LLM
@@ -483,14 +484,17 @@ Reply ONLY with compact JSON: {"owner_committed": true|false}"""
         if goal in ("null", ""):
             goal = None
         # The strong second opinion, spent only where it pays: a verdict
-        # about to become an action or a question. Ignores never re-judge —
-        # they are 95% of traffic and the cheap model's specialty. The
+        # about to become an action/question OR any extracted goal. An
+        # `ignore` carrying no goal is the cheap model's ordinary 95% case;
+        # `ignore + goal` is not ordinary silence — downstream it mints quiet
+        # research and shows "Looking into it". Live, a transcription/model
+        # invention about quantum work took exactly that path. The
         # strong verdict REPLACES the cheap one in either direction: it may
         # demote a hallucinated act to ignore just as it may sharpen a goal,
         # and every downstream guard (inherited_errand, the second look, the
         # shard floor) still runs on whatever it says. live is checked so a
         # keyless rig's heuristic can never quietly overrule a real model.
-        if (decision in ("act", "ask") and self.strong
+        if ((decision in ("act", "ask") or bool(goal)) and self.strong
                 and getattr(self.strong, "live", False)):
             try:
                 second = self.strong.chat(TRIAGE_SYSTEM, transcript_line,
@@ -1354,6 +1358,118 @@ options? A sealed dinner plan ends in a reservation whether the task says
 "book", "plan" or "arrange" it.
 
 Reply ONLY with compact JSON: {"ends_in_the_world": true|false}"""
+
+
+CALENDAR_PLAN_SYSTEM = """A personal assistant is choosing the narrow hand
+that may carry out one proposed task. The phone hand can do exactly ONE thing:
+create one event in the OWNER'S OWN calendar with EventKit. It cannot email or
+invite attendees, negotiate availability, book a service, send a message, or
+change somebody else's calendar. A browser hand handles all of those.
+
+ONE QUESTION: is the exact real-world effect requested here only creating an
+event in the owner's own calendar? Judge the full heard words and the proposed
+task by meaning, never by a keyword.
+
+Reply ONLY with one compact JSON object:
+{"calendar_write": true|false,
+ "calendar_title": "title stated or faithfully implied by the task, or null",
+ "calendar_start": "ISO-8601 instant with numeric UTC offset, or null",
+ "calendar_end": "ISO-8601 instant with numeric UTC offset, or null",
+ "missing": ["calendar_title"|"calendar_start"|"calendar_end"]}
+
+When calendar_write is false, use nulls and an empty missing list. When it is
+true, resolve relative dates against CURRENT LOCAL TIME. Never invent a time,
+date, duration, or default event length. You may compute the end only when the
+owner supplied an end or an explicit duration. Every absent calendar field
+must be named in missing, and every field named in missing must be null."""
+
+
+# Four states, because "the task is not a calendar write" and "nobody gave a
+# readable answer" send the row down the same existing browser lane for very
+# different reasons. The latter must stay visible in logs and tests.
+CALENDAR_YES = "yes"
+CALENDAR_NO = "no"
+CALENDAR_UNASKED = "unasked"
+CALENDAR_UNANSWERED = "unanswered"
+CALENDAR_FACTS = ("calendar_title", "calendar_start", "calendar_end")
+
+
+@dataclass(frozen=True)
+class CalendarPlanVerdict:
+    state: str
+    facts: dict
+    required: tuple[str, ...]
+
+
+def calendar_plan_verdict(llm, line: str, goal: str,
+                          local_now: str) -> CalendarPlanVerdict:
+    """Return a typed calendar artifact, or an explicit non-answer state.
+
+    This is Law 1's own-question shape: it sees the authorizing words, the
+    proposed work and current local time, and it alone decides what those words
+    mean. Python only validates the closed transport shape and ISO instants.
+    Missing or malformed replies never select the phone lane.
+    """
+    empty = CalendarPlanVerdict(CALENDAR_UNASKED, {}, ())
+    if not goal or not line or not llm or not getattr(llm, "live", False):
+        return empty
+    try:
+        res = llm.chat(
+            CALENDAR_PLAN_SYSTEM,
+            f"CURRENT LOCAL TIME: {local_now}\nHEARD: {line}\nTASK: {goal}",
+            temperature=0.0,
+        )
+        raw = json.loads(_extract_json(res.text))
+    except Exception as exc:
+        print(f"calendar: the hand-selection question went unanswered — {exc!r}")
+        return CalendarPlanVerdict(CALENDAR_UNANSWERED, {}, ())
+    # `bool` is a subclass of `int` in Python, so membership in
+    # `(True, False)` would also admit 1 and 0. The transport contract is a JSON
+    # boolean, exactly; numbers are malformed and fail closed.
+    if not isinstance(raw, dict) or type(raw.get("calendar_write")) is not bool:
+        print(f"calendar: unreadable hand-selection reply -> {raw!r}")
+        return CalendarPlanVerdict(CALENDAR_UNANSWERED, {}, ())
+    if raw["calendar_write"] is False:
+        return CalendarPlanVerdict(CALENDAR_NO, {}, ())
+    missing = raw.get("missing")
+    if (not isinstance(missing, list)
+            or any(name not in CALENDAR_FACTS for name in missing)
+            or len(set(missing)) != len(missing)):
+        print(f"calendar: unreadable missing-facts reply -> {raw!r}")
+        return CalendarPlanVerdict(CALENDAR_UNANSWERED, {}, ())
+    facts = {}
+    for name in CALENDAR_FACTS:
+        value = raw.get(name)
+        if value is None:
+            if name not in missing:
+                print(f"calendar: absent {name} was not declared missing")
+                return CalendarPlanVerdict(CALENDAR_UNANSWERED, {}, ())
+            continue
+        if not isinstance(value, str) or not value.strip() or name in missing:
+            print(f"calendar: contradictory {name} in reply -> {raw!r}")
+            return CalendarPlanVerdict(CALENDAR_UNANSWERED, {}, ())
+        facts[name] = value.strip()
+    # Timestamp parsing is transport validation, not a decision about what the
+    # words meant. The phone accepts the same two ISO-8601 widths and requires
+    # an actual offset; refusing here prevents a row only the phone can see and
+    # only the phone will reject.
+    instants = {}
+    for name in ("calendar_start", "calendar_end"):
+        if name not in facts:
+            continue
+        try:
+            instant = datetime.fromisoformat(facts[name].replace("Z", "+00:00"))
+            if instant.tzinfo is None or instant.utcoffset() is None:
+                raise ValueError("timezone offset missing")
+            instants[name] = instant
+        except Exception:
+            print(f"calendar: {name} is not an offset ISO-8601 instant")
+            return CalendarPlanVerdict(CALENDAR_UNANSWERED, {}, ())
+    if ("calendar_start" in instants and "calendar_end" in instants
+            and instants["calendar_end"] <= instants["calendar_start"]):
+        print("calendar: the proposed event does not end after it starts")
+        return CalendarPlanVerdict(CALENDAR_UNANSWERED, {}, ())
+    return CalendarPlanVerdict(CALENDAR_YES, facts, tuple(missing))
 
 
 def ends_in_the_world(llm, line: str, goal: str) -> bool:

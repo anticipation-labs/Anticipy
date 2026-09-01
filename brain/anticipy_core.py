@@ -32,7 +32,8 @@ from .asking import ask_line, question_line
 from .compute import compute_answer
 from .llm import LLM, now_line, owner_tz
 from .memory import OVERHEARD, RETIRED_EXCLUDED, RETIRED_QUOTED, Memory
-from .workflow import (ActDeclaration, Consequence, approve as approve_plan,
+from .workflow import (ActDeclaration, Consequence, UndoInput, UndoPlan,
+                       approve as approve_plan,
                        cancel as cancel_plan, from_params as workflow_from_params,
                        merge as merge_plan, new_plan, put_in_params)
 from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
@@ -40,6 +41,7 @@ from .orchestrator import (Brain, Decision, IRREVERSIBLE, ADDRESSEES,
                            NOT_HIS, check_sufficiency, fill_gaps_from_memory,
                            party_verdict, PARTY_YES, PARTY_UNASKED,
                            PARTY_UNANSWERED, ends_in_the_world,
+                           calendar_plan_verdict, CALENDAR_YES,
                            work_is_licensed, LICENCE_YES, plan_is_settled,
                            unsupported_names,
                            unsupported_counts, read_into_a_machine,
@@ -891,6 +893,77 @@ DEVICE_CALENDAR_LANE = "device_calendar"
 PHONE_CALENDAR_EXECUTOR = "anticipy_phone"
 PHONE_CALENDAR_ACT_TYPE = "calendar_write"
 PHONE_CALENDAR_REACH = "device_calendar_store"
+PHONE_CALENDAR_TAG_REF = "calendar_event_tag"
+PHONE_CALENDAR_FACTS = ("calendar_title", "calendar_start", "calendar_end")
+
+
+def calendar_act_declaration() -> ActDeclaration:
+    """The exact typed act the phone calendar hand accepts.
+
+    Minting the tag's VALUE belongs to the undo artifact below. The declaration
+    names the reference both sides will address, so correspondence is fixed
+    before EventKit creates anything.
+    """
+    return ActDeclaration(
+        act_type=PHONE_CALENDAR_ACT_TYPE,
+        reach=PHONE_CALENDAR_REACH,
+        executor=PHONE_CALENDAR_EXECUTOR,
+        target=UndoInput(name="event tag", provenance="minted_by_us",
+                         ref=PHONE_CALENDAR_TAG_REF),
+    )
+
+
+def _calendar_undo(act: ActDeclaration, facts: dict) -> UndoPlan:
+    """An undo whose references all exist before the calendar write.
+
+    Start/end may still be missing on a draft. `workflow.merge` mechanically
+    copies later owner-supplied facts into this held bucket before the plan can
+    be approved, so the phone never has to derive either value from prose.
+    """
+    tag = (act.target if isinstance(act.target, UndoInput)
+           else UndoInput(name="event tag", provenance="minted_by_us",
+                          ref=PHONE_CALENDAR_TAG_REF))
+    start = UndoInput(name="event start", provenance="owner_supplied",
+                      ref="calendar_start")
+    end = UndoInput(name="event end", provenance="owner_supplied",
+                    ref="calendar_end")
+    padding = UndoInput(name="search window padding", provenance="constant",
+                        ref="calendar_undo_padding_seconds")
+    held = {
+        "minted_by_us": {tag.ref: secrets.token_urlsafe(18)},
+        "owner_supplied": {
+            key: facts[key] for key in (start.ref, end.ref)
+            if facts.get(key) not in (None, "")
+        },
+        "constant": {padding.ref: 24 * 60 * 60},
+    }
+    return UndoPlan(
+        act_type=PHONE_CALENDAR_ACT_TYPE,
+        steps=("find the event carrying our pre-minted tag and remove it",),
+        inputs=(tag, start, end, padding),
+        held=held,
+    )
+
+
+def _missing_fact_question(missing, fallback="") -> str:
+    """One honest sentence for a draft card, from typed missing fields."""
+    names = set(str(name) for name in (missing or ()))
+    calendar = [name for name in PHONE_CALENDAR_FACTS if name in names]
+    if calendar:
+        labels = {
+            "calendar_title": "what to call the event",
+            "calendar_start": "when it starts",
+            "calendar_end": "when it ends",
+        }
+        wanted = [labels[name] for name in calendar]
+        if len(wanted) == 1:
+            return f"I still need {wanted[0]}."
+        return "I still need " + ", ".join(wanted[:-1]) + " and " + wanted[-1] + "."
+    if fallback:
+        return "I still need: " + str(fallback).strip().rstrip(".?") + "."
+    if names:
+        return "I still need " + ", ".join(sorted(names)) + "."
+    return ""
 
 # TYPED AND CLOSED, the same way `Provenance` is closed and for the same
 # reason: a new device act is a schema change visible in a diff, never a
@@ -3757,6 +3830,29 @@ class Anticipy:
             if current:
                 self._merge_into(refined, current, goal, params)
             return refined
+
+        # CHOOSE THE NARROW PHONE HAND FROM A TYPED MODEL ARTIFACT, NEVER FROM
+        # THE GOAL'S WORDING. Triage has already declared that this task reaches
+        # the world; this separate question asks whether that effect is exactly
+        # one event in the owner's own calendar and resolves the three facts the
+        # EventKit hand reads. A no, timeout, malformed reply or missing model
+        # changes nothing: the existing browser lane remains the fallback.
+        # `hold` is part of the call-site evidence, not a meaning shortcut:
+        # every live world-touching hear() path computes it from `touches`
+        # before arriving here. Requiring it keeps the research gate's free
+        # stale-cache sift free — a raw/test caller that supplies an internally
+        # inconsistent `touches="world", hold=False` falls back to the browser,
+        # never into a more privileged device lane.
+        if act is None and touches == "world" and hold:
+            calendar = calendar_plan_verdict(
+                self.llm,
+                str(params.get("source") or ""),
+                goal,
+                str(params.get("now") or self._now_line()),
+            )
+            if calendar.state == CALENDAR_YES:
+                act = calendar_act_declaration()
+                params = dict(params, **calendar.facts)
         # Route read-only work to the worker's research arm (roadmap §6).
         # Without a Brave key the worker has no way to run it, so the job
         # keeps the browser lane rather than queueing for an executor that
@@ -3879,6 +3975,18 @@ class Anticipy:
         seed_facts = {k: params[k] for k in
                       ("time", "party_size", "date", "location")
                       if params.get(k) not in (None, "")}
+        calendar_undo = None
+        if device:
+            calendar_facts = {
+                key: params[key] for key in PHONE_CALENDAR_FACTS
+                if params.get(key) not in (None, "")
+            }
+            seed_facts.update(calendar_facts)
+            required = tuple(dict.fromkeys(
+                tuple(required)
+                + tuple(key for key in PHONE_CALENDAR_FACTS
+                        if key not in calendar_facts)))
+            calendar_undo = _calendar_undo(act, calendar_facts)
         workflow = new_plan(
             owner_ref=owner_for_workflow,
             lineage_key=str(lineage),
@@ -3914,13 +4022,13 @@ class Anticipy:
             # function deciding what the errand touches, from the goal, which
             # is the Law 1 violation the lane exists to avoid.
             act=act,
-            # NEVER on work the owner is about to approve. A card he is being
-            # shown must be approvable: required-but-unfilled facts put the
-            # plan in DRAFT, which the phone refuses to approve, so Send died
-            # with "I couldn't reach Anticipy" and nothing explained why
-            # (live, 2026-08-16). His approval IS the answer to a missing
-            # detail. The hold protects work that runs WITHOUT him.
-            required=() if (consequential or hold) else required,
+            undo=calendar_undo,
+            # A TAP IS NOT AN ANSWER. Clearing required facts on held work made
+            # an under-specified draft LOOK approvable while the workflow layer
+            # correctly refused it. Drafts now keep exactly what is missing;
+            # the app asks for those values and offers approval only after a
+            # later merge has filled them.
+            required=required,
         )
         # WHICH EARS HEARD THIS, STAMPED ONCE, HERE.
         #
@@ -4018,6 +4126,10 @@ class Anticipy:
             body = {"goal": goal, "params": json.dumps(params),
                     "device_id": "anticipy", "owner": self.owner_id,
                     "lane": lane, **workflow_fields}
+            question = _missing_fact_question(
+                workflow.missing, fallback=params.get("missing") or "")
+            if question:
+                body["result"] = question
             if self.owner_ref:
                 body["owner_ref"] = self.owner_ref
             r = pb.post(

@@ -1068,6 +1068,32 @@ def _shelf2_lane(plan: Plan) -> Plan:
     return replace(plan, state=PlanState.AWAITING_APPROVAL, reason=why)
 
 
+def _undo_with_owner_facts(undo: Optional[UndoPlan],
+                           facts: Mapping[str, Any]) -> Optional[UndoPlan]:
+    """Refresh provenance-held owner values when a draft is answered.
+
+    This does not infer a field and it does not read prose. An undo input that
+    explicitly addresses `(owner_supplied, ref)` resolves from the plan fact
+    carrying that exact `ref`. Calendar drafts depend on this: start/end are
+    unknown when the plan is minted, and must become resolvable before the
+    approved write reaches EventKit.
+    """
+    if not undo:
+        return undo
+    refs = {item.ref for item in undo.inputs
+            if item.provenance == "owner_supplied" and item.ref}
+    if not refs:
+        return undo
+    held = {str(k): dict(v) for k, v in undo.held.items()
+            if isinstance(v, Mapping)}
+    bucket = dict(held.get("owner_supplied") or {})
+    for ref in refs:
+        if facts.get(ref) not in (None, ""):
+            bucket[ref] = facts[ref]
+    held["owner_supplied"] = bucket
+    return replace(undo, held=held)
+
+
 def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
           facts: Optional[Mapping[str, Any]] = None,
           authority_text: Optional[str] = None,
@@ -1086,6 +1112,7 @@ def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
     next_goal = (goal or plan.goal).strip()
     next_authority = (plan.authority_text if authority_text is None
                       else authority_text.strip())
+    next_undo = _undo_with_owner_facts(plan.undo, next_facts)
     events = list(plan.source_event_ids)
     if source_event_id.strip() and source_event_id.strip() not in events:
         events.append(source_event_id.strip())
@@ -1102,6 +1129,7 @@ def merge(plan: Plan, *, expected_version: int, goal: Optional[str] = None,
         goal=next_goal,
         authority_text=next_authority,
         facts=next_facts,
+        undo=next_undo,
         source_event_ids=tuple(events),
         state=next_state,
         approval=None,
@@ -1135,6 +1163,7 @@ def approve(plan: Plan, *, expected_version: int, owner_words: str,
         next_facts = dict(plan.facts)
         next_facts.update(clean)
         out = replace(plan, version=plan.version + 1, facts=next_facts,
+                      undo=_undo_with_owner_facts(plan.undo, next_facts),
                       approval=None, lease=None, receipt=None)
     if out.missing:
         raise WorkflowViolation("approval cannot invent missing required facts")

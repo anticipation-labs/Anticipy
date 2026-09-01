@@ -218,15 +218,19 @@ if ! code "$auth" | grep -q 'About twenty seconds here and one minute from start
     exit 2
 fi
 
-# 5. THE LABEL THAT PROMISED A SECOND PASS. "Skip for now" never named where
-#    the deferred profile work actually lives.
+# 5. THE LABEL NAMES THE CONSEQUENCE. Leaving the number blank means in-app
+#    delivery only; a vague promise to deal with it later hid why no text came.
 if code "$onboard" | grep -q 'Skip for now'; then
     echo "The number beat's opt-out says \"Skip for now\" again."
     echo "The profile is deferred to Settings, so the button has to name it."
     exit 2
 fi
-if ! code "$onboard" | grep -q "I'll do this in Settings"; then
-    echo "The number beat's opt-out no longer names the page it defers to."
+if ! code "$onboard" | grep -q "Use in-app alerts only"; then
+    echo "The number beat's opt-out no longer says where alerts will go."
+    exit 2
+fi
+if ! code "$onboard" | grep -q "Without a number, approvals and results stay in the app"; then
+    echo "The number beat no longer explains why an account without a number gets no text."
     exit 2
 fi
 # And the microphone's opt-out is NOT the one being renamed. It is a full-width,
@@ -310,8 +314,8 @@ for quote in "I'm not listening yet, tap Listen with phone" \
              "the owner's standing wish, not a fact about the"; do
     grep -qF "$quote" "$home" || missing_citation "$home" "$quote"
 done
-# The number beat's opt-out says "I'll do this in Settings." and names the two
-# sections that have to hold those three fields for that to be true.
+# The number remains editable in the two named Settings sections even though
+# the first-run opt-out now explains the immediate in-app-only consequence.
 for quote in 'Section("You")' 'Section("Your number")' \
              "Find out what listening actually did"; do
     grep -qF "$quote" "$settings" || missing_citation "$settings" "$quote"

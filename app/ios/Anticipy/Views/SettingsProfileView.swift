@@ -110,7 +110,9 @@ struct SettingsProfileView: View {
                 complete: session.e164(phoneField) != nil,
                 attempt: phoneAttempt,
                 words: .init(
-                    neutral: "Used for recovery and time-sensitive approvals.",
+                    neutral: phoneField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "No number means in-app alerts only. Add one for text approvals and results."
+                        : "This number receives text approvals and results; they also stay in the app.",
                     saved: "Phone number saved."))
 
             // NO DESTRUCTIVE ROW HERE, deliberately, and this is the one place

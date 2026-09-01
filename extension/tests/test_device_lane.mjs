@@ -540,6 +540,74 @@ check("even a superuser may not rewrite a lane",
   drive(lane, { ...CLAIM, auth: { id: "su1" }, superuser: true, rows: lanelessRow(),
                 body: { lane: DEVICE_LANE } }).outcome?.status === 403);
 
+// THE ONE TRANSITION IS THE RESEARCH GATE RELEASING ITS OWN HOLD. It is not
+// a claimant choosing a lane: the authenticated worker annotates a queued row
+// carrying the durable one-use marker, clears that marker, and returns the row
+// to the ordinary browser lane without touching the canonical workflow.
+const researchWorkflow = {
+  plan_id: "wf-research", version: 1, state: "queued",
+  consequence: "consequential", goal: "schedule the team sync",
+};
+const heldResearchParams = {
+  source: "schedule the team sync next Monday",
+  now: "Monday 9:00 AM America/Vancouver",
+  _workflow: researchWorkflow,
+  _research_gate: { verdict: "research", why: "look it up first", handback: true },
+};
+const releasedResearchParams = {
+  ...heldResearchParams,
+  procedure: { steps: ["open the calendar"], sources: ["https://example.test"] },
+  _research_gate: {
+    verdict: "research", why: "looked it up before the browser opened",
+    researched: true,
+  },
+};
+const researchRow = (fields = {}) => ({
+  "jobs/job1": record("job1", {
+    lane: "research", status: "queued",
+    params: JSON.stringify(heldResearchParams), ...fields,
+  }),
+});
+const handback = (overrides = {}) => drive(lane, {
+  ...CLAIM, rows: researchRow(), headers: asWorker,
+  body: { lane: "", params: JSON.stringify(releasedResearchParams) },
+  ...overrides,
+}).outcome;
+
+check("the authenticated worker may release a marked research hold to the browser",
+  handback() === "next");
+check("a bare worker marker cannot release a research hold",
+  handback({ headers: { "X-Anticipy-Worker": "1" } })?.status === 403);
+check("an owner session cannot release a research hold",
+  handback({ headers: {}, auth: ownerAuth })?.status === 403);
+check("a browser agent cannot release a research hold",
+  handback({ headers: agentHeaders })?.status === 403);
+check("a running research job cannot use the queued annotation handback",
+  handback({ rows: researchRow({ status: "running" }) })?.status === 403);
+check("an unmarked research row cannot be moved",
+  handback({ rows: researchRow({ params: JSON.stringify({
+    ...heldResearchParams,
+    _research_gate: { verdict: "research", why: "already released" },
+  }) }) })?.status === 403);
+check("the handback must clear its one-use marker",
+  handback({ body: { lane: "", params: JSON.stringify({
+    ...releasedResearchParams,
+    _research_gate: { ...releasedResearchParams._research_gate, handback: true },
+  }) } })?.status === 403);
+check("the handback cannot rewrite the embedded workflow",
+  handback({ body: { lane: "", params: JSON.stringify({
+    ...releasedResearchParams,
+    _workflow: { ...researchWorkflow, goal: "send a different message" },
+  }) } })?.status === 403);
+check("the handback cannot smuggle a status transition into the annotation write",
+  handback({ body: {
+    lane: "", status: "running", params: JSON.stringify(releasedResearchParams),
+  } })?.status === 403);
+check("the worker cannot turn a research hold into a device-lane job",
+  handback({ body: {
+    lane: DEVICE_LANE, params: JSON.stringify(releasedResearchParams),
+  } })?.status === 403);
+
 // ECHO STAYS ALLOWED, or PocketBase clients resending fields break ordinary
 // work for no gain — the same allowance guard.pb.js makes for `owner_ref`. And
 // the echo has to be normalised the way the comparison is, or the allowance is

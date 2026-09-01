@@ -1686,7 +1686,7 @@ final class AnticipySession: ObservableObject {
         let answer = ownerAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let ownerWords = job.effect_uncertain == true
             ? "I checked the site; the action did not happen. Try again."
-            : (job.status == "needs_user" ? answer : "Tapped “Send it”.")
+            : (job.status == "needs_user" ? answer : "Tapped “Approve”.")
         if job.status == "needs_user" && job.effect_uncertain != true && ownerWords.isEmpty {
             throw WorkflowWriteError.malformed
         }
@@ -2048,6 +2048,7 @@ final class AnticipySession: ObservableObject {
         let trimmed = ownerAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch AnswerRoutePolicy.route(
             status: job.status,
+            workflowState: job.workflow_state,
             effectUncertain: job.effect_uncertain == true,
             answer: trimmed,
             endsTheErrand: Self.answerThatEndsTheErrand(trimmed)) {

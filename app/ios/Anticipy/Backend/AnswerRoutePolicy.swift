@@ -58,6 +58,7 @@ enum AnswerRoutePolicy {
     ///     than recomputed. That rule lives in AnticipyApp.swift and has its own
     ///     runner; a second copy here would be a second answer to "is this over".
     static func route(status: String,
+                      workflowState: String? = nil,
                       effectUncertain: Bool,
                       answer: String,
                       endsTheErrand: String?) -> Route {
@@ -67,7 +68,8 @@ enum AnswerRoutePolicy {
         // is the other thing entirely: she could not tell whether her submit
         // landed, and the tap means "I checked, it did not happen" — an
         // assertion about the world, which the job records.
-        guard status == "needs_user", !effectUncertain else { return .approval }
+        let needsDetails = status == "needs_user" || workflowState == "draft"
+        guard needsDetails, !effectUncertain else { return .approval }
 
         if let ending = endsTheErrand { return .endTheErrand(ending) }
         if trimmed.isEmpty { return .nothingToSend }

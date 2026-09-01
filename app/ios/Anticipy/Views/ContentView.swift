@@ -2275,14 +2275,16 @@ struct ConfirmJobCard: View {
     @EnvironmentObject var session: AnticipySession
     @State private var answer = ""
 
-    private var stuck: Bool { job.status == "needs_user" }
+    private var stuck: Bool {
+        job.status == "needs_user" || job.workflow_state == "draft"
+    }
     private var uncertain: Bool { job.effect_uncertain == true }
     private var sending: Bool { session.inFlight.contains(job.id) }
     private var failed: Bool { session.failedWrites.contains(job.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(stuck ? "Stuck. I need you" : "Ready. Say the word",
+            Label(stuck ? "I need one detail" : "Ready for approval",
                   systemImage: stuck ? "hand.raised" : "checkmark.seal")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.accent)
@@ -2344,7 +2346,7 @@ struct ConfirmJobCard: View {
                             }
                         } else {
                             Text(uncertain ? "I checked, try again"
-                                 : (failed ? "Try again" : (stuck ? "Send answer" : "Send it")))
+                                 : (failed ? "Try again" : (stuck ? "Send answer" : "Approve")))
                         }
                     }
                     .frame(maxWidth: .infinity)

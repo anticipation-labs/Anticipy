@@ -165,6 +165,24 @@ def test_remembering_his_surname_is_not_progress_on_a_blocked_task(monkeypatch):
     assert all(j["status"] == "needs_user" for j in jobs), jobs
 
 
+def test_an_ambiguous_detail_lists_the_blocked_jobs_not_an_empty_approval_menu(
+        monkeypatch):
+    jobs = _pb(monkeypatch, [
+        {"id": "code", "goal": "Finish the signup", "status": "needs_user",
+         "result": "I need the verification code", "params": "{}"},
+        {"id": "phone", "goal": "Book the table", "status": "needs_user",
+         "result": "I need the reservation phone", "params": "{}"}])
+    c = _spoken(monkeypatch, {
+        "intent": "answer", "pending_id": None, "pending_ids": [],
+        "changes": {"verification_code": "428913"}, "reply": "Got it.",
+    })
+    out = c.on_reply("+15550001", "the code is 428913")
+    assert "which one should i answer" in out["reply"].lower()
+    assert "1) Finish the signup" in out["reply"]
+    assert "2) Book the table" in out["reply"]
+    assert all(j["status"] == "needs_user" for j in jobs), jobs
+
+
 # --------------------------------------------------------- matching answers
 
 def _name_pair():

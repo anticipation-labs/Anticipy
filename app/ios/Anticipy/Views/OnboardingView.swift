@@ -329,11 +329,11 @@ struct OnboardingView: View {
     private var skipLabel: String? {
         switch step {
         case Step.mic: return "Not right now"
-        // NAMES THE PAGE, BECAUSE IT DOES NOT SKIP. All three fields on this
-        // beat really do live in Settings:
-        // first name and email in its `Section("You")`, the number in its
-        // `Section("Your number")`. So the honest label is the page, not the
-        // delay.
+        // NAMES THE CONSEQUENCE, BECAUSE THAT IS WHAT THE CHOICE DOES. All
+        // three fields still live in Settings — first name/email in
+        // `Section("You")`, the number in `Section("Your number")` — but a
+        // promise to visit that page later hid the fact that no number means
+        // no SMS right now. The full explanation sits in ConfirmBeat below.
         //
         // CITED BY SECTION NAME RATHER THAN LINE NUMBER, deliberately. This
         // comment used to give two line ranges in SettingsView, and both were
@@ -342,7 +342,7 @@ struct OnboardingView: View {
         // tells the truth would have found no fields there and reverted a
         // correct fix. Section titles are user-visible copy, they move with
         // their fields, and `run_first_run_copy_tests.sh` greps for them.
-        case Step.phone: return "I'll do this in Settings."
+        case Step.phone: return "Use in-app alerts only"
         case Step.computer: return "I'll connect my computer later"
         default: return nil
         }
@@ -909,7 +909,7 @@ struct OnboardingView: View {
                         phoneSaveFailed = false
                     }
                 if phoneSaved {
-                    Label("Saved. I'll text you there.", systemImage: "checkmark.circle.fill")
+                    Label("Saved. Texts and in-app alerts are on.", systemImage: "checkmark.circle.fill")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.accent)
                 } else if !phone.isEmpty, session.e164(phone) != nil {
@@ -1359,9 +1359,19 @@ enum ConfirmBeat {
         }
         return [held, stillNeeded(hasEmail: hasEmail,
                                   hasPhone: hasPhone,
-                                  hasFirstName: hasFirstName)]
+                                  hasFirstName: hasFirstName),
+                reachChannel(hasPhone: hasPhone)]
             .compactMap { $0 }
             .joined(separator: " ")
+    }
+
+    /// The account can exist without a number, so the consequence of that
+    /// choice belongs on the choice screen. A missing Twilio destination is
+    /// in-app delivery, not a text that mysteriously failed to arrive.
+    static func reachChannel(hasPhone: Bool) -> String {
+        hasPhone
+            ? "I'll use text messages and in-app alerts."
+            : "Without a number, approvals and results stay in the app. Add one later if you want text messages too."
     }
 
     /// "The one thing I'm missing" is only allowed to be said when one thing is

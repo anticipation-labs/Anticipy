@@ -543,7 +543,13 @@ settings:
     # repeatForever transactions that can capture ScrollView layout changes
     # and wander across the screen. Their scale is derived from an animation
     # timeline, so their positions are structurally constant.
-    CURRENT_PROJECT_VERSION: "113"
+    # 116: a draft calendar request now asks for its missing time instead of
+    # presenting a dead "Send it" approval, approval and answer taps route to
+    # their distinct server paths, and first run states plainly whether alerts
+    # stay in-app or also arrive by text. Builds 114 and 115 were already used
+    # by the cloud release of source build 113, so this source identity starts
+    # above both of them.
+    CURRENT_PROJECT_VERSION: "116"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -595,7 +601,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "113"
+        CURRENT_PROJECT_VERSION: "116"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

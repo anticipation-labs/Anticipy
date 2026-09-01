@@ -35,8 +35,9 @@ import requests
 
 from . import pb
 
-from .anticipy_core import TEXTING_STYLE, memory_notes
+from .anticipy_core import TEXTING_STYLE, _missing_fact_question, memory_notes
 from .llm import LLM
+from .orchestrator import CALENDAR_YES, calendar_plan_verdict
 from .workflow import (approve as approve_plan, cancel as cancel_plan,
                        from_params as workflow_from_params,
                        merge as merge_plan, put_in_params)
@@ -535,7 +536,7 @@ class Conversation:
             # unsure); _amend's single-pending fallback resolves it.
             acted = self._amend(pending_id, changes, owner_text=text)
             if acted == "ambiguous":
-                parsed["reply"] = self._which_one()
+                parsed["reply"] = self._which_one(include_blocked=True)
                 acted, asked_back = None, True
         elif intent == "answer":
             # The owner is ANSWERING her question — that answer belongs on the
@@ -543,10 +544,20 @@ class Conversation:
             # dropped one-word answers entirely via the fragment guard, and
             # re-triaged longer ones into DUPLICATE jobs, while the reply
             # cheerfully said "Sunday it is".
-            if changes:
-                acted = self._amend(pending_id, changes, owner_text=text)
+            blocked = self._blocked()
+            if changes or pending_id or len(blocked) == 1:
+                # The words are evidence even when the generic classifier did
+                # not choose a field name. A typed workflow can structure them
+                # in `_amend`; dropping them here forked a new task while the
+                # original draft stayed unanswered. With several blocked jobs
+                # and no model-picked id, however, an unstructured sentence is
+                # not evidence of WHICH job it answers. Do not turn a surname
+                # into a booking detail or offer an empty pending-card menu;
+                # the truth guard below will restate what is actually missing.
+                acted = self._amend(
+                    pending_id, changes or {"owner_answer": text}, owner_text=text)
                 if acted == "ambiguous":
-                    parsed["reply"] = self._which_one()
+                    parsed["reply"] = self._which_one(include_blocked=True)
                     acted, asked_back = None, True
             if not acted and not asked_back and not learned and not resumed:
                 # Nothing absorbed it — treat it as a fresh thought.
@@ -729,7 +740,12 @@ Use {"facts": {}} when there is nothing durable."""
         how she knows she asked even after a restart — the thread is in memory
         and dies with the process; this does not."""
         try:
-            filt = 'status="needs_user"'
+            # A newly minted DRAFT is also stopped for information. Its legacy
+            # row status stays awaiting_confirm because PocketBase admits new
+            # workflow rows through that entry state, but the canonical state
+            # is what decides whether the owner owes details or approval.
+            filt = ('(status="needs_user" || '
+                    '(status="awaiting_confirm" && workflow_state="draft"))')
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt += f" && {owner_filter}"
@@ -1357,7 +1373,8 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         except Exception:
             return {}
 
-    def _which_one(self, cancel: bool = False) -> str:
+    def _which_one(self, cancel: bool = False,
+                   include_blocked: bool = False) -> str:
         """Offer the choice NUMBERED.
 
         She used to list them joined by "or", which gave him no way to pick
@@ -1370,8 +1387,9 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         still be resolved after a restart."""
         # Calling something off must be able to name a blocked task too, or
         # she offers a list that does not contain the thing he wants stopped.
-        pending = self._open_work() if cancel else self._pending()
-        verb = "call off" if cancel else "go ahead with"
+        pending = self._open_work() if (cancel or include_blocked) else self._pending()
+        verb = ("call off" if cancel else
+                "answer" if include_blocked else "go ahead with")
         if not pending:
             return "Nothing's waiting on you right now — what do you mean?"
         self._offered = [p["id"] for p in pending]
@@ -1743,6 +1761,29 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             params = json.loads(job.get("params") or "{}")
         except Exception:
             params = {}
+        workflow = workflow_from_params(params)
+        # The generic reply classifier is not a calendar parser. Re-read the
+        # original authority together with this answer through the same typed
+        # question that selected the EventKit hand, then merge only facts that
+        # survived that artifact's closed-shape and ISO validation.
+        if (workflow and workflow.act
+                and workflow.act.act_type == "calendar_write"
+                and workflow.missing and owner_text.strip()):
+            calendar = calendar_plan_verdict(
+                self.llm,
+                f"{workflow.authority_text}\nOWNER ANSWER: {owner_text}",
+                workflow.goal,
+                str(params.get("now") or ""),
+            )
+            if calendar.state == CALENDAR_YES:
+                changes = dict(changes or {})
+                # `owner_answer` is only a lossless envelope used when the
+                # generic reply classifier could not name a field. Once this
+                # typed artifact has resolved the calendar facts, the raw
+                # envelope is no longer a plan fact and must not widen the
+                # approved scope or its digest.
+                changes.pop("owner_answer", None)
+                changes.update(calendar.facts)
         need = (job.get("result") or params.get("needed") or "").strip()
         if job.get("status") == "needs_user":
             changes = self._drop_unquoted_codes(changes, owner_text)
@@ -1774,7 +1815,6 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
             corrections = dict(params.get("corrections") or {})
             corrections.update(changes)
             params["corrections"] = corrections
-        workflow = workflow_from_params(params)
         if workflow and job.get("status") != "needs_user":
             try:
                 # An answer must be able to FILL the fact the plan is
@@ -1826,6 +1866,8 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
         fields = {"params": json.dumps(params)}
         if workflow:
             fields.update(workflow.job_fields())
+            fields["result"] = _missing_fact_question(
+                workflow.missing, fallback=params.get("missing") or "")
             fields["params"] = json.dumps(params)
         return self._flip(job["id"], fields, "amended")
 

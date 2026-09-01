@@ -170,8 +170,15 @@ func runReceipts() {
     let done = JobReceiptPolicy.doneCard(goal: "Book a table for two", result: booked)
     checkDetail("the receipt leads, untouched", done.lead, booked)
     checkDetail("the goal drops to context", done.context, "Book a table for two")
-    if done.hasReceipt { print("  ok   a receipt is reported as a receipt") }
-    else { print("  FAIL a receipt is not reported as one"); failures += 1 }
+    // A result sentence is not the server's verified receipt column. This
+    // aggregate runner predated JobReceipt and silently kept asserting the old
+    // unsafe behavior after the dedicated receipt suite corrected it.
+    if !done.hasReceipt, done.unproven != nil {
+        print("  ok   a claim without server proof is named as unproven")
+    } else {
+        print("  FAIL a claim without server proof is presented as a receipt")
+        failures += 1
+    }
 
     // Done with nothing to show for it is a claim without a receipt (ex 106:
     // "Tempted to say 'done.' Only with the receipt in hand."). The old card

@@ -79,7 +79,7 @@ enum JobReceiptPolicy {
     ///     against the effect it claims to prove. Rows predate that column, so
     ///     nil or empty means "this row does not say" — which is not a
     ///     mismatch, and must not be read as one.
-    static func doneCard(goal: String, result: String?, receipt: String?,
+    static func doneCard(goal: String, result: String?, receipt: String? = nil,
                          effectKey: String? = nil) -> Card {
         let said = (result ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let parsed = JobReceipt.parse(receipt)

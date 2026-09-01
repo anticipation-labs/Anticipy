@@ -171,16 +171,16 @@ def test_sms_rejections_are_logged():
 
 # ------------------------------------------------- ask-then-run-anyway
 
-def test_a_card_he_must_approve_is_always_approvable(monkeypatch):
-    # Live 2026-08-16, and this one was MY regression. Asked-for details were
-    # made REQUIRED plan facts, which parks a plan in DRAFT. But the brain
-    # still showed him a card saying "Send it" — and the phone refuses to
-    # approve a draft, so Send failed with "I couldn't reach Anticipy Claude
-    # version" and nothing anywhere explained why. His dinner never queued.
+def test_missing_details_are_an_answer_card_before_approval(monkeypatch):
+    # Live 2026-08-16 first established that a DRAFT must never masquerade as
+    # an approval card. Live 2026-08-31 established the other half: treating
+    # the tap itself as the missing answer sent an underspecified team-sync
+    # job onward, where it sat forever and could only invent the time.
     #
-    # The rule: a card the owner is being asked to approve must be
-    # approvable. HIS APPROVAL IS THE ANSWER. Holding for missing facts
-    # protects work that runs WITHOUT him, not work he is standing over.
+    # The rule is now precise: a card the owner is being asked to APPROVE must
+    # be approvable; a draft is an ANSWER card and keeps every real missing
+    # fact until the owner supplies it. The iOS copy/button policy separately
+    # pins that distinction ("Send answer" versus "Approve").
     #
     # And triage writes prose into `missing` — that day it held "The current
     # date is Saturday, August 15, 2026. Tomorrow is Sunday..." and the word
@@ -221,9 +221,13 @@ def test_a_card_he_must_approve_is_always_approvable(monkeypatch):
         "source": "book cactus club west van tomorrow",
         "missing": ["time", "party size"]}, hold=True)
     wf = _json.loads(posted["params"])["_workflow"]
-    assert wf["state"] == "awaiting_approval", "a held card must be approvable"
-    assert tuple(wf["required"]) == (), "a card he approves holds no required facts"
-    assert posted["workflow_state"] == "awaiting_approval"
+    assert wf["state"] == "draft", "missing details must remain an answer card"
+    assert tuple(wf["required"]) == ("time", "party_size")
+    assert tuple(k for k in wf["required"] if k not in wf["facts"]) == (
+        "time", "party_size")
+    assert posted["workflow_state"] == "draft"
+    assert posted["status"] == "awaiting_confirm"
+    assert "time" in posted["result"] and "party size" in posted["result"]
 
 
 def test_the_answer_fills_required_facts_even_with_odd_keys(monkeypatch):

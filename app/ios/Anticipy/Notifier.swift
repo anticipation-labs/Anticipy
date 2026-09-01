@@ -111,10 +111,16 @@ final class Notifier {
     static func words(for job: AgentJob) -> (String, String) {
         let goal = job.goal.trimmingCharacters(in: .whitespacesAndNewlines)
         let shortGoal = goal.count > 60 ? String(goal.prefix(57)) + "…" : goal
+        if job.workflow_state == "draft" {
+            let asked = (job.result ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let question = asked.isEmpty ? shortGoal : asked
+            let trimmed = question.count > 140 ? String(question.prefix(137)) + "…" : question
+            return ("I need one detail", trimmed)
+        }
         if job.status == "awaiting_confirm" {
             return ("Ready when you are", shortGoal.isEmpty
                     ? "Something's ready for your OK."
-                    : "\(shortGoal). Say the word and I'll do it.")
+                    : "\(shortGoal). Approve it when it looks right.")
         }
         let asked = (job.result ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         // job.result carries the question it stopped on. Prefer his own

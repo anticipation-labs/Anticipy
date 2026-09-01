@@ -475,6 +475,75 @@ routerUse((e) => {
     const rowLane = rec ? norm(rec.getString("lane")) : "";
     const bodyLane = ("lane" in b) ? norm(b["lane"]) : null;
 
+    // THE ONE LEGITIMATE LANE HANDOFF IS A RELEASE BY THE RESEARCH GATE,
+    // never a claimant choosing a different hand for itself. The worker parks
+    // browser work on `research` at mint time, annotates it, clears the durable
+    // handback marker, and returns it to the ordinary browser lane. Treating
+    // that as an ordinary rewrite made the gate a one-way door: live job
+    // y6epuw0ekxoc6qe sat queued forever while every pass received this 403.
+    //
+    // This is deliberately narrower than `fromWorker`: even the authenticated
+    // worker may move only a queued research row, only to the empty browser
+    // lane, only while the STORED marker authorises this exact transition, and
+    // only in the same write that clears it. The embedded workflow and every
+    // non-research param must be preserved. A service credential is not
+    // permission to rewrite a plan.
+    const ordered = (value) => {
+      if (Array.isArray(value)) return value.map(ordered);
+      if (value && typeof value === "object") {
+        const out = {};
+        for (const key of Object.keys(value).sort()) out[key] = ordered(value[key]);
+        return out;
+      }
+      return value;
+    };
+    const sameJSON = (a, c) => JSON.stringify(ordered(a)) === JSON.stringify(ordered(c));
+    const parsedObject = (raw) => {
+      let value = raw;
+      if (typeof value === "string") {
+        try { value = JSON.parse(value || "{}"); } catch (_) { return null; }
+      }
+      return value && typeof value === "object" && !Array.isArray(value)
+        ? value : null;
+    };
+    const isResearchHandback = () => {
+      if (!updates || !fromWorker || !rec || rowLane !== "research"
+          || bodyLane !== "" || rec.getString("status") !== "queued") return false;
+      const keys = Object.keys(b);
+      if (keys.some((key) => key !== "lane" && key !== "params")
+          || keys.indexOf("params") < 0) return false;
+      const before = parsedObject(rec.getString("params"));
+      const after = parsedObject(b["params"]);
+      if (!before || !after || !sameJSON(before["_workflow"], after["_workflow"])) {
+        return false;
+      }
+      const oldGate = parsedObject(before["_research_gate"]);
+      const newGate = parsedObject(after["_research_gate"]);
+      if (!oldGate || !newGate || oldGate["handback"] !== true
+          || Object.prototype.hasOwnProperty.call(newGate, "handback")
+          || typeof newGate["researched"] !== "boolean") return false;
+      for (const key of Object.keys(before)) {
+        if (key === "_research_gate" || key === "procedure") continue;
+        if (!Object.prototype.hasOwnProperty.call(after, key)
+            || !sameJSON(before[key], after[key])) return false;
+      }
+      for (const key of Object.keys(after)) {
+        if (key === "_research_gate" || key === "procedure") continue;
+        if (!Object.prototype.hasOwnProperty.call(before, key)) return false;
+      }
+      for (const key of Object.keys(oldGate)) {
+        if (key === "handback" || key === "why" || key === "researched") continue;
+        if (!Object.prototype.hasOwnProperty.call(newGate, key)
+            || !sameJSON(oldGate[key], newGate[key])) return false;
+      }
+      for (const key of Object.keys(newGate)) {
+        if (key === "why" || key === "researched") continue;
+        if (!Object.prototype.hasOwnProperty.call(oldGate, key)) return false;
+      }
+      return true;
+    };
+    const researchHandback = isResearchHandback();
+
     // ---- THE LANE IS EVIDENCE. See LANE 4 in the header: `guard.pb.js:449`
     // lets an account session PATCH any field of its own job row, and its
     // EVIDENCE map protects `lane` only in the agent-credential branch — so the
@@ -484,7 +553,7 @@ routerUse((e) => {
     // KEYED ON THE METHOD, not on `rec`. A PATCH whose row cannot be read is a
     // request PocketBase is about to 404 anyway; treating its body as the
     // authority on the lane would be the one place a not-found row minted one.
-    if (updates && bodyLane !== null && bodyLane !== rowLane) {
+    if (updates && bodyLane !== null && bodyLane !== rowLane && !researchHandback) {
       return e.json(403, {
         error: "a job's lane is decided when it is minted, never rewritten",
         detail: "the lane says which hand may run this errand, so a claimant "
