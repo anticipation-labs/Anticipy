@@ -26,17 +26,15 @@ the repository.
   The gate and sync script now require a real stored manifest and refuse to
   call a tombstone loaded. The old `0.5.1` text in one leftover folder name is
   not its extension version.
-- App Store Connect reported iOS `1.1.0 (113)` as `VALID`, unexpired, and
-  `IN_BETA_TESTING`. This is the successful consumer-computer-onboarding
-  upload from commit `3f7c0116` and includes the audio-route crash fix, the Mac
-  recorder and browser/Mac onboarding.
-- The only later iOS source change is the expected-extension literal from
-  `0.11.0` to `0.11.1`. Build 113 already treats a browser version ahead of its
-  literal as current, so it does not reject or nag about extension `0.11.1`.
-- The next automatic TestFlight upload is presently blocked: the latest CI run
-  reached Apple's development-certificate ceiling. This does not invalidate or
-  remove build 113, but the certificate hygiene must be repaired before the
-  next iOS upload.
+- App Store Connect now reports iOS `1.1.0 (115)` as `VALID`, unexpired, and
+  `IN_BETA_TESTING`. It contains the audio-route crash fix, the Mac recorder,
+  browser/Mac onboarding, extension `0.11.1` compatibility, and the anchored
+  listening-indicator repair from `a8a3c128`.
+- The automatic TestFlight upload is no longer blocked. Eleven unusable
+  `DEVELOPMENT / Created via API` records left by ephemeral GitHub runners were
+  revoked; no named development, distribution, or Developer ID certificate was
+  touched. The serialized release workflow now cleans only those exact CI
+  leftovers and chooses its build number from App Store Connect's live history.
 
 ## Recovery point and process failure
 
@@ -121,7 +119,7 @@ three requested login addresses.
 ## Phone ceremony
 
 To exercise the new-user path, delete Anticipy from the iPhone rather than
-updating it in place, then install build 113 from TestFlight. Credentials,
+updating it in place, then install build 115 from TestFlight. Credentials,
 onboarding state and the pre-account UUID are stored in the app's UserDefaults,
 so removing the app is the step that clears the phone-side copy. The server-side
 accounts and durable memory are already gone.
