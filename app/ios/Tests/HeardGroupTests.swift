@@ -157,6 +157,15 @@ enum Cases {
             line("a", "t", decision: "ignore", goal: "first thing"),
             line("b", "t", decision: "ignore", goal: "second thing"),
            ]).front.title, "First thing")
+
+        let corrected = HeardGroup(id: "x", lines: [
+            line("a", "book downtown", decision: "act", goal: "book dinner downtown"),
+            line("b", "actually Burnaby", decision: "act", goal: "book dinner in Burnaby"),
+        ])
+        eq("recap uses the latest corrected goal",
+           corrected.latestGoalTitle, "Book dinner in Burnaby")
+        eq("the conversation card title remains stable",
+           corrected.goalTitle, "Book dinner downtown")
     }
 
     static func rung2OpeningLine() {

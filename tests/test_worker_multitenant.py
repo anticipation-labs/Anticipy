@@ -19,10 +19,10 @@ class Reply:
 
 
 def test_every_history_and_profile_read_is_bound_to_active_owner(monkeypatch):
-    filters = []
+    reads = []
 
-    def fake_get(_url, **kwargs):
-        filters.append((kwargs.get("params") or {}).get("filter", ""))
+    def fake_get(url, **kwargs):
+        reads.append((url, (kwargs.get("params") or {}).get("filter", "")))
         return Reply()
 
     monkeypatch.setattr(W, "ACTIVE_OWNER_REF", "owner_alpha")
@@ -38,8 +38,48 @@ def test_every_history_and_profile_read_is_bound_to_active_owner(monkeypatch):
     W.raised_and_ignored("renew the parking permit")
     W.link_candidates()
 
-    assert len(filters) == 10
-    assert all('owner_ref="owner_alpha"' in filt for filt in filters), filters
+    # Ten collection/history reads use an owner_ref filter. fetch_owner_phone
+    # additionally falls back to the exact owners/<account-id> record only
+    # when no profile row exists; that URL is itself account-scoped.
+    filtered = [filt for url, filt in reads if "/owners/records/" not in url]
+    exact_owner = [url for url, _ in reads if "/owners/records/" in url]
+    assert len(filtered) == 10
+    assert all('owner_ref="owner_alpha"' in filt for filt in filtered), reads
+    assert exact_owner == [
+        f"{W.PB}/api/collections/owners/records/owner_alpha"
+    ]
+
+
+def test_an_existing_profile_with_an_empty_phone_is_authoritative(monkeypatch):
+    reads = []
+
+    def fake_get(url, **kwargs):
+        reads.append(url)
+        if "/owner_profile/records" in url:
+            return Reply({"items": [{"phone": ""}]})
+        return Reply({"phone": "+16045550101"})
+
+    monkeypatch.setattr(W.pb, "get", fake_get)
+    assert W.fetch_owner_phone("owner_alpha") == ""
+    assert not any("/owners/records/" in url for url in reads), (
+        "an explicit profile clear must not resurrect the sign-up number")
+
+
+def test_a_missing_profile_uses_the_account_seed_and_a_failed_read_is_unknown(
+        monkeypatch):
+    class Refused(Reply):
+        ok = False
+
+    def seeded(url, **kwargs):
+        if "/owner_profile/records" in url:
+            return Reply({"items": []})
+        return Reply({"phone": "+16045550101"})
+
+    monkeypatch.setattr(W.pb, "get", seeded)
+    assert W.fetch_owner_phone("owner_alpha") == "+16045550101"
+
+    monkeypatch.setattr(W.pb, "get", lambda *args, **kwargs: Refused())
+    assert W.fetch_owner_phone("owner_alpha") is None
 
 
 def test_brain_output_is_stamped_with_both_canonical_and_legacy_owner(monkeypatch):

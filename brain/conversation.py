@@ -225,7 +225,8 @@ class TwilioTransport:
     message: Twilio has accepted it, and no handset has seen it yet.
     """
 
-    def __init__(self, voice_arm):
+    def __init__(self, voice_arm,
+                 before_send: Optional[Callable[[str], bool]] = None):
         if voice_arm is None:
             # Worker construction is `TwilioTransport(voice) if voice else
             # MockTransport()`. A None arm would have made every send raise
@@ -233,8 +234,20 @@ class TwilioTransport:
             raise ValueError("TwilioTransport needs a VoiceArm; use MockTransport "
                              "when Twilio is not configured")
         self.voice = voice_arm
+        # The destination is authorization, not merely an address. Production
+        # supplies a callback that re-reads the signed-in owner's canonical
+        # profile at the last possible boundary before Twilio. This belongs on
+        # the transport rather than only on Anticipy.notify_owner: replies to an
+        # inbound SMS travel through Conversation.say directly and otherwise
+        # retain a number that may have been removed after the inbound event was
+        # accepted. Returning None preserves Conversation's normal reply result
+        # (and therefore the in-app copy) while making the external effect an
+        # honest non-delivery.
+        self.before_send = before_send
 
-    def send(self, to: str, body: str, media=None) -> dict:
+    def send(self, to: str, body: str, media=None) -> Optional[dict]:
+        if self.before_send is not None and not self.before_send(to):
+            return None
         # ONLY PASSED WHEN THERE IS ONE. Transports and arms that predate the
         # picture are still in the tree and still in production — the SMS
         # webhook's suppressing transport, proof/smoke_worker.py's `T`, every

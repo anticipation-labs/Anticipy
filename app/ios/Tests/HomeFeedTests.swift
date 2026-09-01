@@ -53,8 +53,8 @@ enum HomeFeedTests {
         HomeFeedPolicy.settled(status: status, effectUncertain: effectUncertain)
     }
 
-    /// A Done section as the screen hands it over: newest-CREATED first, each
-    /// row reduced to the two fields the cap is allowed to read.
+    /// A Done section as the screen hands it over: newest terminal update
+    /// first, each row reduced to the two fields the cap is allowed to read.
     static func shelved(_ rows: [(String, Bool?)], shelf: Int = 8) -> [Int] {
         HomeFeedPolicy.shelved(rows.map { (status: $0.0, effectUncertain: $0.1) },
                                shelf: shelf)
@@ -65,9 +65,8 @@ enum HomeFeedTests {
         Array(repeating: ("done", Bool?.some(false)), count: n)
     }
 
-    static func unreachable(_ phone: String, _ accountSaysNoNumber: Bool?) -> Bool {
-        HomeFeedPolicy.sayUnreachable(ownerPhone: phone,
-                                      accountSaysNoNumber: accountSaysNoNumber)
+    static func unreachable(_ state: OwnerMirror.PhoneState) -> Bool {
+        HomeFeedPolicy.sayUnreachable(phoneState: state)
     }
 
     static func main() {
@@ -217,12 +216,9 @@ enum HomeFeedTests {
         // WHAT DONE'S CAP MAY CUT
         // ------------------------------------------------------------------
         //
-        // The section is drawn newest-CREATED first, because `created` is the
-        // only timestamp `AgentJob` carries, and it is capped. So a job started
-        // this morning and stopped tonight is the OLDEST terminal row and the
-        // cap cuts it — putting "it may already have gone through" back out of
-        // sight through the display instead of through the filter. The cap
-        // counts settled cards only.
+        // The section is drawn newest terminal update first and capped. A
+        // warning-bearing cancellation can still age past ordinary receipts,
+        // so the cap counts settled cards only rather than swallowing it.
 
         check("a cancellation is never settled", !settled("cancelled"))
         check("a cancellation is not settled even when the row says false",
@@ -316,36 +312,46 @@ enum HomeFeedTests {
         // SAYING THERE IS NO WAY TO REACH SOMEBODY
         // ------------------------------------------------------------------
 
-        check("no number, and the account says it has none: say so",
-              unreachable("", true))
+        check("the canonical account has no number: say so",
+              unreachable(.none))
 
         // THE GUARD THAT KEEPS THIS FROM BEING A CONFIDENT LIE, and it is the
-        // ACCOUNT that answers, never the device-local mirror. `nil` is "nobody
-        // has managed to ask" — a real and common state, because both owner
-        // reads in AnticipyApp.swift are `try?` and one of them runs AFTER the
-        // refresh that flips `connection` to `.ready`. Home is the app's
-        // highest-traffic surface and it does not get to tell somebody with a
-        // number on file to go and add one.
-        check("nobody has asked yet: say nothing", !unreachable("", nil))
-        check("nobody has asked and the mirror holds a number: say nothing",
-              !unreachable("+16045550142", nil))
+        // ACCOUNT that answers, never the device-local mirror. Unknown is a
+        // real state after a failed read; Home must not turn it into "none".
+        check("nobody has asked successfully yet: say nothing",
+              !unreachable(.unknown))
 
-        // The account answered, and it HAS a number this phone has not read
-        // back yet. Silence, and the mirror catches up on its own.
-        check("the account has a number: say nothing", !unreachable("", false))
-        check("the account has a number and so does the mirror: say nothing",
-              !unreachable("+16045550142", false))
+        check("a canonical valid number says nothing", !unreachable(.valid))
+        check("a canonical malformed number gets repair copy, not no-number copy",
+              !unreachable(.invalid))
 
-        // BOTH HALVES MUST AGREE. A phone still holding a number the account
-        // has since dropped stays quiet rather than calling itself unreachable
-        // on one screen while Settings shows the number on another.
-        check("a mirror holding a number outvotes the account's empty",
-              !unreachable("+16045550142", true))
-
-        // A field holding a space cannot be texted.
-        check("a blank number is no number", unreachable("   ", true))
-        check("a newline is no number", unreachable("\n", true))
-        check("a tab is no number", unreachable("\t", true))
+        // One completed job is one result on Home. The worker writes both the
+        // terminal job and an anticipy_says receipt linked by external_event_id;
+        // the visible Done card owns that result while it is on the shelf.
+        let visibleTerminalIDs: Set<String> = ["job-17"]
+        let matchingEventIsVisible = HomeFeedPolicy.showsDoneEvent(
+            externalEventID: "job-result:job-17",
+            visibleTerminalJobIDs: visibleTerminalIDs)
+        check("one terminal job plus its linked result event renders once",
+              1 + (matchingEventIsVisible ? 1 : 0) == 1)
+        let briefingEventIsVisible = HomeFeedPolicy.showsDoneEvent(
+            externalEventID: "job-result:job-17",
+            visibleTerminalJobIDs: visibleTerminalIDs)
+        check("Done plus both event-backed Home surfaces still renders one result",
+              1 + (matchingEventIsVisible ? 1 : 0)
+                + (briefingEventIsVisible ? 1 : 0) == 1)
+        check("a result whose terminal card is off the shelf remains visible",
+              HomeFeedPolicy.showsDoneEvent(
+                externalEventID: "job-result:job-18",
+                visibleTerminalJobIDs: visibleTerminalIDs))
+        check("an unrelated external event namespace remains visible",
+              HomeFeedPolicy.showsDoneEvent(
+                externalEventID: "calendar-result:job-17",
+                visibleTerminalJobIDs: visibleTerminalIDs))
+        check("an empty job-result id does not swallow an event",
+              HomeFeedPolicy.showsDoneEvent(
+                externalEventID: "job-result:",
+                visibleTerminalJobIDs: visibleTerminalIDs))
 
         if failures > 0 {
             print("HomeFeedTests: \(failures) failed")

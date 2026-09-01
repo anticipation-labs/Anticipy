@@ -52,18 +52,24 @@ routerAdd("POST", "/auth/reset/request", (e) => {
   } catch (_) { return same(); }
   if (!owner) return same();
 
-  let phone = String(owner.getString("phone") || "").trim();
-  if (!phone) {
-    // The account row is not the only place a phone lives: onboarding writes
-    // owner_profile, and a person who signed up without a number (or changed
-    // it in their profile afterwards) has one there and none here. Falling
-    // through to same() made their ONLY recovery route silently do nothing —
-    // a locked-out owner with no error to act on. Found 2026-08-15.
-    try {
-      const profile = e.app.findFirstRecordByFilter(
-        "owner_profile", "owner_ref = {:ref}", { ref: owner.id });
-      if (profile) phone = String(profile.getString("phone") || "").trim();
-    } catch (_) {}
+  // Once a profile exists it is the canonical route, INCLUDING an explicit
+  // empty phone. Falling back from that empty to owners.phone silently
+  // re-affiliates the immutable sign-up number after the person removed it.
+  // Only an account with no profile row at all may use the sign-up seed.
+  let phone = "";
+  try {
+    const profiles = e.app.findRecordsByFilter(
+      "owner_profile", "owner_ref = {:ref}", "-updated", 1, 0,
+      { ref: owner.id });
+    if (profiles.length > 0) {
+      phone = String(profiles[0].getString("phone") || "").trim();
+    } else {
+      phone = String(owner.getString("phone") || "").trim();
+    }
+  } catch (_) {
+    // Unknown is not absent. A failed profile read must never resurrect a
+    // stale account number, so fail closed behind the enumeration-safe reply.
+    return same();
   }
   if (!phone) return same();   // nothing to text; still say the same thing
 

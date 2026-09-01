@@ -9,17 +9,15 @@ lines repeated in the log every single sweep for hours:
 
 Both notification sites composed FIRST, with a live model call, and only then
 asked the transport to deliver. notify_owner refuses a message when a
-transport is configured and the person's number is missing, and the caller
-deliberately does not record an undelivered message as said — that is how a
-transient Twilio failure gets its retry. But a missing phone number is not
-transient: nothing about the account changes between two sweeps, so the retry
-recomposed the identical sentence, at model prices, every two seconds.
+transport is configured and the person's number is missing. The old caller
+treated that exactly like a transient Twilio failure and deliberately recorded
+nothing, so the identical sentence was recomposed at model prices every two
+seconds.
 
-So: decide deliverability BEFORE composing (Anticipy.can_notify_owner, asked
-through worker.can_reach_owner), treat structurally-undeliverable as handled
-rather than as a failure to retry, and keep the retry for real failures. The
-assertions here are on the MODEL CALL COUNT, because that is the thing that
-was costing money.
+Now the app result is primary and independent of SMS. The transport gets at
+most one best-effort attempt, with its attempted/sent/failed/skipped outcome
+recorded separately; an uncertain external effect is never blindly repeated.
+The assertions here pin both the model cost and the one-attempt boundary.
 """
 import types
 
@@ -58,8 +56,10 @@ class Twilio:
     def __init__(self, fails=False):
         self.fails = fails
         self.sent = []
+        self.attempts = 0
 
     def text(self, to, message):
+        self.attempts += 1
         if self.fails:
             raise RuntimeError("Twilio 503")
         self.sent.append((to, message))
@@ -165,25 +165,25 @@ def test_the_unreachable_account_is_reported_once_not_every_cycle(
         "the hours of repeating log lines were the visible half of this bug")
 
 
-# ------------------------------------------------ a real failure still retries
+# ------------------------------ an optional text failure stays honest and safe
 
-def test_a_transient_send_failure_still_retries(monkeypatch):
-    """This is why the message was never recorded as said in the first place,
-    and it must survive the fix: a number IS configured, Twilio is throwing,
-    and the answer has to go out when it comes back."""
+def test_a_transient_send_failure_keeps_the_app_result_and_does_not_repeat(monkeypatch):
+    """A number is configured and Twilio throws. The result is still delivered
+    in app, and an uncertain external effect is never repeated blindly."""
     daytime(monkeypatch)
     a, llm, voice = brain(monkeypatch, phone="+15145550101", fails=True)
     backend(monkeypatch, [stamped(FINISHED)])
     for _ in range(3):
         W.report_finished_jobs(a)
-    assert llm.calls == 3, "a 5xx is not a reason to give up on the answer"
-    assert FINISHED["id"] not in W.REPORTED
+    assert llm.calls == 1
+    assert voice.attempts == 1
+    assert FINISHED["id"] in W.REPORTED
 
-    # ...and the moment the transport recovers, it lands.
+    # Recovery changes future work, not this already-attempted external effect.
     voice.fails = False
     W.report_finished_jobs(a)
-    assert [m for _, m in voice.sent], "the recovered send must deliver"
-    assert FINISHED["id"] in W.REPORTED, "delivered once, never twice"
+    assert voice.sent == []
+    assert voice.attempts == 1
 
 
 def test_a_reachable_owner_is_still_told(monkeypatch):

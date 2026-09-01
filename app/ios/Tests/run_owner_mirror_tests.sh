@@ -34,7 +34,8 @@ trap 'rm -rf "$out"' EXIT
 
 session="$app/AnticipyApp.swift"
 backend="$app/Backend/AnticipyBackend.swift"
-for f in "$session" "$backend"; do
+settings="$app/Views/SettingsProfileView.swift"
+for f in "$session" "$backend" "$settings"; do
     [ -f "$f" ] || { echo "missing $f"; exit 2; }
 done
 
@@ -69,5 +70,35 @@ if [ "${copies:-0}" -gt 0 ]; then
     echo "      Renaming one in OwnerMirror is silent there."
 fi
 
-swiftc -O "$here/OwnerMirrorTests.swift" -o "$out/ownermirrortests"
-"$out/ownermirrortests" "$session" "$backend"
+# Compile the REAL pure replacement and profile-precedence policies beside the
+# scanner tests. The lifecycle cases below therefore execute production code,
+# including the crucial distinction between a missing profile value (nil) and
+# an explicit empty one ("").
+awk '/^enum OwnerMirror \{/,/^\}/' "$session" > "$out/owner_mirror.swift"
+awk '/^enum PendingSpeechRetention \{/,/^\}/' "$session" > "$out/pending_retention.swift"
+awk '/^enum AccountDeletionPolicy \{/,/^\}/' "$session" > "$out/account_deletion.swift"
+awk '/^enum ActionWritePolicy \{/,/^\}/' "$session" > "$out/action_write.swift"
+awk '/^enum OwnerProfileCanonical \{/,/^\}/' "$backend" > "$out/profile_canonical.swift"
+awk '/^enum AgentUnpairPolicy \{/,/^\}/' "$backend" > "$out/agent_unpair.swift"
+if ! grep -q 'struct Values' "$out/owner_mirror.swift" \
+   || ! grep -q 'afterDeviceForget' "$out/pending_retention.swift" \
+   || ! grep -q 'static func outcome' "$out/account_deletion.swift" \
+   || ! grep -q 'static func reconcile' "$out/action_write.swift" \
+   || ! grep -q 'static func value' "$out/profile_canonical.swift" \
+   || ! grep -q 'static func succeeded' "$out/agent_unpair.swift"; then
+    echo "could not extract owner/profile/unpair production policies"
+    exit 2
+fi
+{
+    echo 'import Foundation'
+    cat "$out/owner_mirror.swift"
+    cat "$out/pending_retention.swift"
+    cat "$out/account_deletion.swift"
+    cat "$out/action_write.swift"
+    cat "$out/profile_canonical.swift"
+    cat "$out/agent_unpair.swift"
+    sed '1{/^import Foundation$/d;}' "$here/OwnerMirrorTests.swift"
+} > "$out/main.swift"
+
+swiftc -O "$out/main.swift" -o "$out/ownermirrortests"
+"$out/ownermirrortests" "$session" "$backend" "$settings"

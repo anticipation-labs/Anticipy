@@ -198,6 +198,40 @@ enum OwnerMirror {
     /// exact drift this type exists to stop, and is what the gate reads.
     static let keys = [phone, firstName, lastName, email, birthday]
 
+    /// One complete account answer. Rehydration replaces this value whole; it
+    /// never merges non-empty fields into the handset's previous answer. That
+    /// distinction is what lets a canonical empty clear an old value and what
+    /// prevents account B from inheriting any field account A happened to have.
+    struct Values: Equatable {
+        let phone: String
+        let firstName: String
+        let lastName: String
+        let email: String
+        let birthday: String
+
+        static let empty = Values(phone: "", firstName: "", lastName: "",
+                                  email: "", birthday: "")
+
+        func replacing(with canonical: Values) -> Values { canonical }
+    }
+
+    /// Text reachability learned from the account record, never inferred from
+    /// an old @AppStorage value. `unknown` means the read has not succeeded.
+    enum PhoneState: Equatable {
+        case unknown
+        case none
+        case invalid
+        case valid
+    }
+
+    static func phoneState(forCanonicalPhone phone: String,
+                           isValid: Bool) -> PhoneState {
+        if phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .none
+        }
+        return isValid ? .valid : .invalid
+    }
+
     /// Forget whoever this phone was last used by.
     ///
     /// Removing the key rather than writing "" reads identically everywhere it
@@ -206,6 +240,241 @@ enum OwnerMirror {
     /// on disk to be found later.
     static func clear(in defaults: UserDefaults = .standard) {
         for key in keys { defaults.removeObject(forKey: key) }
+    }
+}
+
+/// The one queue rule that is intentionally wider than an account. Ordinary
+/// pending-speech controls remove only the signed-in person's rows; a device
+/// Forget promise must also erase sealed rows from prior accounts and legacy
+/// rows whose account stamp is nil. Generic so the production queue and the
+/// three-account regression fixture execute this same implementation.
+enum PendingSpeechRetention {
+    static func afterDeviceForget<Element>(_ rows: [Element]) -> [Element] { [] }
+}
+
+/// Translate `/me/delete` evidence into copy without claiming an incremental
+/// operation was atomic. The endpoint can remove several tables before one
+/// fails, and a lost HTTP response leaves the client unable to know whether the
+/// account closed at all.
+enum AccountDeletionPolicy {
+    struct Outcome: Equatable {
+        let ok: Bool
+        let message: String
+    }
+
+    private struct Payload: Decodable {
+        let ok: Bool?
+        let message: String?
+        let deleted: [String: Int]?
+        let failed: [String]?
+        let accountDeleted: Bool?
+        let memoryPurge: String?
+
+        enum CodingKeys: String, CodingKey {
+            case ok, message, deleted, failed
+            case accountDeleted = "account_deleted"
+            case memoryPurge = "memory_purge"
+        }
+    }
+
+    static let unverified = Outcome(
+        ok: false,
+        message: "I couldn't verify how far deletion got. Sign in again if the account still exists, then check what's left before trying again."
+    )
+
+    static func outcome(status: Int, body: String) -> Outcome {
+        let payload = body.data(using: .utf8)
+            .flatMap { try? JSONDecoder().decode(Payload.self, from: $0) }
+        let purge = (payload?.memoryPurge ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        // Closing the account and deleting PocketBase rows are not the last
+        // physical effect. The worker owns a private per-account memory file,
+        // so the endpoint first records a durable purge request and reports
+        // whether it is scheduled (the production response) or already done.
+        // A 200 missing either proof is unknown, never "gone".
+        let success = status == 200 && payload?.ok == true
+            && payload?.accountDeleted == true
+            && (purge == "scheduled" || purge == "purged")
+        var message: String
+        if success && purge == "purged" {
+            message = "Your account, records, and private memory are gone."
+        } else if success {
+            message = "Your account is closed and its records are deleted. The final private-memory purge is scheduled and may finish shortly."
+        } else if let returned = payload.flatMap({ $0.message })?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !returned.isEmpty {
+            message = returned
+        } else if status == 401 || status == 403 {
+            message = "I couldn't prove it was you. Sign out, sign back in, and check again."
+        } else {
+            message = "I couldn't verify that everything was deleted. Sign in again if the account still exists, then check what's left before trying again."
+        }
+
+        let removed = (payload?.deleted ?? [:])
+            .filter { $0.value > 0 }
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key) (\($0.value))" }
+        if !success && !removed.isEmpty {
+            message += " Already removed: " + removed.joined(separator: ", ") + "."
+        }
+        let failed = (payload?.failed ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .sorted()
+        if !failed.isEmpty {
+            message += " Still needs deletion: " + failed.joined(separator: ", ") + "."
+        }
+        return Outcome(ok: success, message: message)
+    }
+}
+
+/// A PATCH can reach PocketBase even when its HTTP response never reaches the
+/// phone. Decide retry safety from a canonical read of that exact job, not from
+/// the transport error that happened after the request left.
+enum ActionWritePolicy {
+    enum Reconciliation: Equatable {
+        case accepted
+        case safeToRetry
+        case unverified
+    }
+
+    static func isVerifiedRefusal(status: Int) -> Bool {
+        (400..<500).contains(status) && status != 408
+    }
+
+    static func reconcile(originalStatus: String,
+                          expectedStatus: String,
+                          observedStatus: String?) -> Reconciliation {
+        guard let observedStatus else { return .unverified }
+        if observedStatus == expectedStatus { return .accepted }
+        // Exact unchanged state wins before the post-approval list below:
+        // `needs_user` can be both the original status and a later status, and
+        // treating the unchanged original as progress would hide a card whose
+        // PATCH did nothing.
+        if observedStatus == originalStatus { return .safeToRetry }
+        // Approval can be claimed and advance again before the canonical read
+        // returns. Any ordinary post-approval state proves retrying the same
+        // approval would be unsafe even though `queued` was never observed.
+        if expectedStatus == "queued",
+           ["running", "done", "failed", "cancelled", "needs_user"]
+            .contains(observedStatus) {
+            return .accepted
+        }
+        return .unverified
+    }
+}
+
+/// An asynchronous poll belongs to the account and refresh generation that
+/// started it. Network calls yield the main actor; during that yield the owner
+/// can sign out, another owner can sign in, or a newer manual refresh can
+/// supersede the poll. A response is publishable only while all three facts
+/// still match.
+enum RefreshAccountPolicy {
+    struct Lease: Equatable {
+        let generation: Int
+        let accountID: String
+    }
+
+    static func isCurrent(_ lease: Lease,
+                          generation: Int,
+                          accountID: String,
+                          isSignedIn: Bool) -> Bool {
+        isSignedIn
+            && !lease.accountID.isEmpty
+            && lease.generation == generation
+            && lease.accountID == accountID
+    }
+}
+
+/// A settings write belongs to the exact authenticated session that started
+/// it. The backend instance already snapshots that session for the request;
+/// this lease prevents a delayed account-A success from repainting account B's
+/// device mirrors after a sign-out/sign-in occurs during the network yield.
+enum AccountWriteLeasePolicy {
+    struct Lease: Equatable {
+        let accountID: String
+        let authToken: String
+    }
+
+    static func begin(accountID: String, authToken: String,
+                      isSignedIn: Bool) -> Lease? {
+        guard isSignedIn, !accountID.isEmpty, !authToken.isEmpty else { return nil }
+        return Lease(accountID: accountID, authToken: authToken)
+    }
+
+    static func isCurrent(_ lease: Lease, accountID: String,
+                          authToken: String, isSignedIn: Bool) -> Bool {
+        isSignedIn
+            && lease.accountID == accountID
+            && lease.authToken == authToken
+    }
+}
+
+/// Idempotency and restart state for an in-app answer. The durable id is a
+/// function of the authenticated account and the exact question row, so the
+/// same tap keeps the same identity across response loss, retries, and process
+/// death. Only the identity is persisted; the person's answer text is not.
+enum AppReplyWritePolicy {
+    static let storageKey = "pendingAppReplyWritesV1"
+
+    struct Pending: Codable, Equatable {
+        let accountID: String
+        let eventID: String
+        let externalEventID: String
+    }
+
+    enum CanonicalRead: Equatable {
+        case present
+        case absent
+        case unknown
+    }
+
+    enum Reconciliation: Equatable {
+        case accepted
+        case safeToRetry
+        case unverified
+    }
+
+    static func externalEventID(accountID: String, eventID: String) -> String? {
+        let account = accountID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let event = eventID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !account.isEmpty, !event.isEmpty else { return nil }
+        return "app-reply:\(account):\(event)"
+    }
+
+    static func pending(accountID: String, eventID: String) -> Pending? {
+        guard let external = externalEventID(accountID: accountID,
+                                             eventID: eventID) else { return nil }
+        return Pending(accountID: accountID, eventID: eventID,
+                       externalEventID: external)
+    }
+
+    static func upserting(_ pending: Pending,
+                           in records: [Pending]) -> [Pending] {
+        records.filter {
+            !($0.accountID == pending.accountID && $0.eventID == pending.eventID)
+        } + [pending]
+    }
+
+    static func removing(_ pending: Pending,
+                          from records: [Pending]) -> [Pending] {
+        records.filter {
+            !($0.accountID == pending.accountID && $0.eventID == pending.eventID)
+        }
+    }
+
+    static func eventIDsToRestore(accountID: String,
+                                  from records: [Pending]) -> Set<String> {
+        Set(records.filter { $0.accountID == accountID }.map(\.eventID))
+    }
+
+    static func reconcile(_ read: CanonicalRead) -> Reconciliation {
+        switch read {
+        case .present: return .accepted
+        case .absent: return .safeToRetry
+        case .unknown: return .unverified
+        }
     }
 }
 
@@ -293,6 +562,9 @@ final class AnticipySession: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var bag = Set<AnyCancellable>()
     private var seenDoneJobIDs = Set<String>()
+    /// Invalidated by every new refresh and every account boundary. It is not
+    /// persisted: this is a lifetime token for in-flight work, not user state.
+    private var refreshGeneration = 0
     let listener = PhoneListener()
     /// NO PENDANT TRANSCRIBER. `TranscriberClient` was deleted with this
     /// change: it opened a websocket to a speech vendor and streamed the
@@ -367,8 +639,24 @@ final class AnticipySession: ObservableObject {
         set {
             unsentStore = (try? JSONEncoder().encode(newValue))
                 .flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            pendingCount = newValue.count
+            pendingCount = pendingLinesOwnedByCurrentAccount(in: newValue).count
         }
+    }
+
+    /// A persisted queue can contain rows from an earlier account. They stay
+    /// account-stamped so they can never be delivered to, or inspected by,
+    /// whoever signs in next. Legacy rows without an account are deliberately
+    /// not claimed: guessing ownership of private speech would be worse than
+    /// leaving an unattributable row unread.
+    private func pendingLinesOwnedByCurrentAccount(
+        in queue: [BufferedLine]
+    ) -> [BufferedLine] {
+        guard !accountID.isEmpty else { return [] }
+        return queue.filter { $0.account == accountID }
+    }
+
+    private func refreshPendingCount() {
+        pendingCount = pendingLinesOwnedByCurrentAccount(in: unsent).count
     }
 
     // The five device-local mirrors of the account holder. Keyed through
@@ -379,6 +667,61 @@ final class AnticipySession: ObservableObject {
     @AppStorage(OwnerMirror.lastName) var ownerLastName = ""
     @AppStorage(OwnerMirror.email) var ownerEmail = ""
     @AppStorage(OwnerMirror.birthday) var ownerBirthday = ""
+    /// The server-derived reachability answer for the currently signed-in
+    /// account. This is deliberately not persisted: after a process launch the
+    /// account must be read before any screen promises that texts can arrive.
+    @Published private(set) var canonicalOwnerPhoneState: OwnerMirror.PhoneState = .unknown
+    private var canonicalOwnerRefreshGeneration = 0
+
+    private var currentOwnerMirror: OwnerMirror.Values {
+        OwnerMirror.Values(phone: ownerPhone,
+                           firstName: ownerFirstName,
+                           lastName: ownerLastName,
+                           email: ownerEmail,
+                           birthday: ownerBirthday)
+    }
+
+    /// Full replacement is intentional. Assigning every field, including an
+    /// empty string, is the difference between rehydration and a lossy merge.
+    private func replaceOwnerMirror(with canonical: OwnerMirror.Values) {
+        let replacement = currentOwnerMirror.replacing(with: canonical)
+        ownerPhone = replacement.phone
+        ownerFirstName = replacement.firstName
+        ownerLastName = replacement.lastName
+        ownerEmail = replacement.email
+        ownerBirthday = replacement.birthday
+    }
+
+    private func applyCanonicalOwner(_ owner: AnticipyBackend.Owner) {
+        replaceOwnerMirror(with: OwnerMirror.Values(
+            phone: owner.phone,
+            firstName: owner.firstName,
+            lastName: owner.lastName,
+            email: owner.email,
+            birthday: owner.birthday))
+        canonicalOwnerPhoneState = OwnerMirror.phoneState(
+            forCanonicalPhone: owner.phone,
+            isValid: e164(owner.phone) != nil)
+    }
+
+    /// Read the complete canonical profile for this account. A failed request
+    /// changes nothing; a successful request replaces all five mirrors even
+    /// when one or more canonical values are explicitly empty.
+    @discardableResult
+    func refreshCanonicalOwner() async -> Bool {
+        guard isSignedIn else {
+            canonicalOwnerPhoneState = .unknown
+            return false
+        }
+        let requestedAccount = accountID
+        canonicalOwnerRefreshGeneration += 1
+        let generation = canonicalOwnerRefreshGeneration
+        guard let owner = try? await backend.fetchOwner(id: requestedAccount),
+              isSignedIn, accountID == requestedAccount,
+              generation == canonicalOwnerRefreshGeneration else { return false }
+        applyCanonicalOwner(owner)
+        return true
+    }
 
     var backend: AnticipyBackend {
         AnticipyBackend(
@@ -396,11 +739,12 @@ final class AnticipySession: ObservableObject {
 
     init() {
         if ownerID.isEmpty { ownerID = UUID().uuidString }
+        if isSignedIn { restorePendingAppReplyState() }
         // Seed from disk. The count is otherwise only written by the `unsent`
         // setter, so a relaunch with lines still queued reported "0 waiting"
         // until the next failed push — and the screens that reassure you your
         // words survived read exactly this number.
-        pendingCount = unsent.count
+        refreshPendingCount()
         listener.onLine = { [weak self] line, startedAt, endedAt, continues in
             Task { await self?.heard(line, from: .phoneMic, at: startedAt,
                                      endedAt: endedAt,
@@ -557,7 +901,7 @@ final class AnticipySession: ObservableObject {
         guard backendReachable, !unsent.isEmpty, !accountID.isEmpty else { return }
         let queue = unsent
         unsent = []
-        var failed: [BufferedLine] = []
+        var retained: [BufferedLine] = []
         // The parent of a queued cut is the row posted immediately before it
         // IN THIS FLUSH, and nothing else. `lastTranscriptEventID` cannot
         // serve: it may hold a line posted live AFTER these words were spoken,
@@ -571,9 +915,12 @@ final class AnticipySession: ObservableObject {
         for line in queue {
             // Never post one person's words into another person's account.
             // A line with no recorded owner predates this field and cannot be
-            // attributed, so it is dropped rather than guessed at.
+            // attributed. Keep foreign/unattributed rows sealed under their
+            // existing stamp instead of sending them or deleting them merely
+            // because another account happened to reconnect first.
             guard line.account == accountID else {
                 previousInThisFlush = ""
+                retained.append(line)
                 continue
             }
             let parent = line.continuesPrevious == true ? previousInThisFlush : ""
@@ -596,22 +943,22 @@ final class AnticipySession: ObservableObject {
                     .posted(ok: false,
                             detail: .shelved(again: true, failure: Self.postFailureShape(error))))
                 previousInThisFlush = ""
-                failed.append(line)
+                retained.append(line)
             }
         }
-        if !failed.isEmpty { unsent = failed + unsent }
+        if !retained.isEmpty { unsent = retained + unsent }
     }
 
     /// Anticipy's latest spoken line, only while it's actually fresh — a
     /// remark from an hour ago rereading itself forever feels haunted.
     /// An unparseable date shows the line rather than silently killing the
     /// feature on a backend format drift; only a parsed-and-stale date hides it.
-    var freshAnticipySays: String? {
+    var freshAnticipyEvent: BrainEvent? {
         guard let ev = anticipySays.first,
               let text = ev.text, !text.isEmpty else { return nil }
         if let date = Self.parsePBDate(ev.created),
            Date().timeIntervalSince(date) >= 15 * 60 { return nil }
-        return text
+        return ev
     }
 
     func startPolling() {
@@ -624,37 +971,82 @@ final class AnticipySession: ObservableObject {
         }
     }
 
+    private func beginRefreshLease() -> RefreshAccountPolicy.Lease? {
+        guard isSignedIn else { return nil }
+        refreshGeneration &+= 1
+        return RefreshAccountPolicy.Lease(generation: refreshGeneration,
+                                          accountID: accountID)
+    }
+
+    private func invalidateRefreshes() {
+        refreshGeneration &+= 1
+    }
+
+    private func refreshLeaseIsCurrent(
+        _ lease: RefreshAccountPolicy.Lease
+    ) -> Bool {
+        RefreshAccountPolicy.isCurrent(
+            lease,
+            generation: refreshGeneration,
+            accountID: accountID,
+            isSignedIn: isSignedIn)
+    }
+
     func refresh() async {
+        guard let lease = beginRefreshLease() else { return }
         let b = backend
-        backendReachable = await b.isReachable()
-        guard backendReachable else {
+        let requestedOwnerID = ownerID
+        let reachable = await b.isReachable()
+        guard refreshLeaseIsCurrent(lease) else { return }
+        backendReachable = reachable
+        guard reachable else {
             agentOnline = false
             connection = .offline
             return
         }
         await flushUnsent()
+        guard refreshLeaseIsCurrent(lease) else { return }
         // /api/health is NOT behind the guard hook, so "reachable" says nothing
         // about whether our reads are allowed. Only a real read can promote us
         // to .ready — otherwise the app reports itself perfectly healthy while
         // every read is being refused.
         do {
-            let fetched = try await b.fetchJobs(owner: ownerID)
-            // Retire each held value the moment the server says the same thing,
-            // so this can never pin a stale status indefinitely - the overlay
-            // survives exactly as long as the disagreement does.
-            for job in fetched where confirmedStatus[job.id] == job.status {
-                confirmedStatus.removeValue(forKey: job.id)
-            }
+            let fetched = try await b.fetchJobs(owner: requestedOwnerID)
+            guard refreshLeaseIsCurrent(lease) else { return }
             jobs = fetched.map { job in
                 guard let held = confirmedStatus[job.id] else { return job }
-                return job.withStatus(held)
+                switch ActionWritePolicy.reconcile(
+                    originalStatus: held.original,
+                    expectedStatus: held.expected,
+                    observedStatus: job.status) {
+                case .accepted:
+                    // The confirmed state arrived or already advanced. Never
+                    // pin `queued` over a worker that has reached running/done.
+                    confirmedStatus.removeValue(forKey: job.id)
+                    return job
+                case .safeToRetry:
+                    // This is the one legitimate stale read: PocketBase's
+                    // collection query still shows the pre-write state even
+                    // though the PATCH response already confirmed acceptance.
+                    return job.withStatus(held.expected)
+                case .unverified:
+                    // A different canonical state wins over a local overlay;
+                    // keeping the overlay here can make a card lie forever.
+                    confirmedStatus.removeValue(forKey: job.id)
+                    return job
+                }
             }
             connection = .ready
             // Raised from the poll on purpose: the app keeps running while it
             // listens (background audio), so a local notification from here
             // reaches a locked screen without a push server.
-            await notifier.announce(jobs: jobs)
+            await notifier.announce(jobs: jobs, stillCurrent: { [weak self] in
+                guard let self else { return false }
+                return self.refreshLeaseIsCurrent(lease)
+            })
+            guard refreshLeaseIsCurrent(lease) else { return }
         } catch let e as AnticipyBackend.BackendError {
+            guard refreshLeaseIsCurrent(lease) else { return }
             connection = .refused(e.status)
             if e.status == 401 || e.status == 403 {
                 // A signed-in session that is being refused is over — the
@@ -664,14 +1056,17 @@ final class AnticipySession: ObservableObject {
                 // forward. Seen for real in the simulator: an account removed
                 // server-side left the app in a permanent refused state.
                 if !authToken.isEmpty {
-                    signOut()
+                    expireSession()
                     return
                 }
             }
         } catch {
+            guard refreshLeaseIsCurrent(lease) else { return }
             connection = .offline
         }
-        if let events = try? await b.fetchEvents() {
+        let fetchedEvents = try? await b.fetchEvents()
+        guard refreshLeaseIsCurrent(lease) else { return }
+        if let events = fetchedEvents {
             // Server view of the stream: heard lines with the brain's verdict,
             // plus everything Anticipy said/texted back.
             var serverLines = events
@@ -729,7 +1124,9 @@ final class AnticipySession: ObservableObject {
         }
         seenDoneJobIDs = doneIDs
         // Connection health from the extension's heartbeat, not guesswork.
-        if let agent = try? await b.fetchAgent(owner: ownerID) {
+        let fetchedAgent = try? await b.fetchAgent(owner: requestedOwnerID)
+        guard refreshLeaseIsCurrent(lease) else { return }
+        if let agent = fetchedAgent {
             agentPaired = agent.paired ?? false
             staleExtensionVersion = Self.staleExtension(agent.browser)
             if let seen = agent.last_seen, let date = Self.parsePBDate(seen) {
@@ -817,6 +1214,9 @@ final class AnticipySession: ObservableObject {
     /// claim endpoint is idempotent; repeating it is the recovery mechanism.
     func resumeSignedInAccount() async {
         guard isSignedIn else { return }
+        adoptLocalPersonStateOnAuthenticatedLaunch(for: accountID)
+        restorePendingAppReplyState()
+        refreshPendingCount()
         // THE PRE-UPGRADE FLAG. A phone updating to this build has
         // hasOnboarded = true and no owner recorded, because the owner key did
         // not exist when it was written. That state is unambiguous: the tour
@@ -849,46 +1249,69 @@ final class AnticipySession: ObservableObject {
         await backend.claimLegacy(legacyUUID: ownerID)
         await reportTimeZone()
         await refresh()
-        // ASK AGAIN, but only while this phone believes there is nothing to
-        // reach the person on. `signIn` is the only other place that asks, and
-        // it asks at the worst network moment in the app — the second after a
-        // sign-in form, often on the connection that made them sign in again —
-        // so a read that failed there used to leave the phone holding "" until
-        // the next sign-out and sign-in. Empty is the one state the screens
-        // read as a FACT about the account ("I have no way to reach you"),
-        // which is why it is the one state worth re-asking about.
-        //
-        // Last in this function, and gated: an account that genuinely has no
-        // number pays one read per launch, and nothing here stands between a
-        // launch and the feed.
-        if ownerPhone.isEmpty, let owner = try? await backend.fetchOwner(id: accountID) {
-            ownerPhone = owner.phone
-        }
+        // Re-read the WHOLE profile on every authenticated launch. A cached
+        // non-empty value is not evidence that the account still says it, and
+        // an empty canonical value must be able to clear an older handset
+        // mirror. The helper leaves all five values untouched when the read
+        // itself fails, so a tunnel is never mistaken for a profile update.
+        await refreshCanonicalOwner()
     }
 
     /// Save the owner's number where the brain can read it, so texting works
     /// without anyone hand-editing a server variable.
     func saveOwnerPhone(_ raw: String) async -> Bool {
-        guard let e = e164(raw) else { return false }
-        let ok = await backend.upsertOwnerPhone(ownerID: ownerID, phone: e)
-        if ok { ownerPhone = e }
-        return ok
+        guard let e = e164(raw),
+              let lease = AccountWriteLeasePolicy.begin(
+                accountID: accountID, authToken: authToken, isSignedIn: isSignedIn)
+        else { return false }
+        let requestedBackend = backend
+        guard await requestedBackend.upsertOwnerPhone(ownerID: ownerID, phone: e),
+              AccountWriteLeasePolicy.isCurrent(
+                lease, accountID: accountID, authToken: authToken,
+                isSignedIn: isSignedIn) else { return false }
+        ownerPhone = e
+        canonicalOwnerPhoneState = .valid
+        return true
+    }
+
+    /// Remove the SMS route while keeping results available in the app. The
+    /// authenticated endpoint clears every account/profile copy atomically,
+    /// then this reads through the same canonical path used by sign-in. The UI
+    /// reports success only after the stale signup number did not reappear.
+    func removeOwnerPhone() async -> Bool {
+        guard isSignedIn,
+              await backend.removeOwnerPhone(),
+              await refreshCanonicalOwner() else { return false }
+        return canonicalOwnerPhoneState == .none
+            && ownerPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Her one record of who you are — used to fill the name/email/phone that
     /// every booking form asks for. Payment details are never stored here.
     func saveOwnerDetails(first: String, last: String, email: String, birthday: String = "") async -> Bool {
-        let ok = await backend.upsertOwner(ownerID: ownerID, fields: [
-            "first_name": first.trimmingCharacters(in: .whitespaces),
-            "last_name": last.trimmingCharacters(in: .whitespaces),
-            "email": email.trimmingCharacters(in: .whitespaces),
-            "birthday": birthday.trimmingCharacters(in: .whitespaces),
-        ])
-        if ok {
-            ownerFirstName = first; ownerLastName = last; ownerEmail = email
-            if !birthday.isEmpty { ownerBirthday = birthday }
-        }
-        return ok
+        guard let lease = AccountWriteLeasePolicy.begin(
+            accountID: accountID, authToken: authToken, isSignedIn: isSignedIn)
+        else { return false }
+        let values = OwnerMirror.Values(
+            phone: ownerPhone,
+            firstName: first.trimmingCharacters(in: .whitespaces),
+            lastName: last.trimmingCharacters(in: .whitespaces),
+            email: email.trimmingCharacters(in: .whitespaces),
+            birthday: birthday.trimmingCharacters(in: .whitespaces))
+        let requestedBackend = backend
+        guard await requestedBackend.upsertOwner(ownerID: ownerID, fields: [
+            "first_name": values.firstName,
+            "last_name": values.lastName,
+            "email": values.email,
+            "birthday": values.birthday,
+        ]), AccountWriteLeasePolicy.isCurrent(
+            lease, accountID: accountID, authToken: authToken,
+            isSignedIn: isSignedIn) else { return false }
+        ownerFirstName = values.firstName
+        ownerLastName = values.lastName
+        ownerEmail = values.email
+        ownerBirthday = values.birthday
+        return true
     }
 
     // MARK: - Day zero: the two things that live on this phone
@@ -1223,20 +1646,43 @@ final class AnticipySession: ObservableObject {
     /// behind — both of which must reach the person as "not done", because the
     /// whole point of this endpoint is that "deleted" can be believed.
     func deleteEverythingOnServer() async -> (ok: Bool, message: String) {
+        guard let lease = AccountWriteLeasePolicy.begin(
+            accountID: accountID, authToken: authToken, isSignedIn: isSignedIn)
+        else { return (false, "Sign in before asking Anticipy to delete an account.") }
+        let requestedBackend = backend
         do {
-            let (status, _) = try await backend.deleteAccount()
-            switch status {
-            case 200:
-                return (true, "Done. It's gone, and so is your account.")
-            case 409:
-                return (false, "I deleted your data but couldn't close the account. What's gone stays gone. Try again.")
-            case 401, 403:
-                return (false, "I couldn't prove it was you. Sign out, sign back in, and ask again.")
-            default:
-                return (false, "I couldn't finish, so I stopped rather than tell you I had. Nothing was half-deleted. Try again.")
+            let (status, body) = try await requestedBackend.deleteAccount()
+            let outcome = AccountDeletionPolicy.outcome(status: status, body: body)
+            // A successful server deletion is also a device-forget boundary.
+            // Erase sealed prior-account and unstamped legacy speech before
+            // this method signs out and removes Settings from the navigation
+            // tree. The view must never schedule a later, unscoped sign-out.
+            if outcome.ok {
+                // This is safe even when another account arrived: remove only
+                // rows whose durable owner stamp is the deleted account.
+                clearPendingLinesOwned(by: lease.accountID)
+                clearPendingAppRepliesOwned(by: lease.accountID)
+
+                let stillCurrent = AccountWriteLeasePolicy.isCurrent(
+                    lease, accountID: accountID, authToken: authToken,
+                    isSignedIn: isSignedIn)
+                // Deleting the account can make the regular poll expire this
+                // exact session before the DELETE response returns. That is
+                // still A's boundary, provided no explicit sign-out or new
+                // account replaced its retained local-person stamp.
+                let expiredSameAccount = !isSignedIn && accountID.isEmpty
+                    && authToken.isEmpty && localPersonAccountID == lease.accountID
+                guard stillCurrent || expiredSameAccount else {
+                    return (true, "The original account was deleted. This iPhone changed accounts before local cleanup finished, so the current account was left untouched.")
+                }
+                clearAllPendingLinesOnDevice()
+                clearAllPendingAppRepliesOnDevice()
+                signOut()
             }
+            return (outcome.ok, outcome.message)
         } catch {
-            return (false, "I couldn't reach my side. Nothing was deleted.")
+            return (AccountDeletionPolicy.unverified.ok,
+                    AccountDeletionPolicy.unverified.message)
         }
     }
 
@@ -1348,6 +1794,11 @@ final class AnticipySession: ObservableObject {
     /// on the pre-accounts identity.
     @AppStorage("authToken") private var authToken = ""
     @AppStorage("accountID") var accountID = ""
+    /// The account that owns device-only voice, interview, and consent state.
+    /// It survives an expired token so re-authenticating as the same person
+    /// does not erase their setup, while a genuinely different account gets a
+    /// clean device boundary before any of that state can be shown.
+    @AppStorage("localPersonAccountID") private var localPersonAccountID = ""
     var isSignedIn: Bool { !accountID.isEmpty && !authToken.isEmpty }
 
     /// THE TOUR FLAG AND ITS OWNER. Same two keys AnticipyApp routes on — see
@@ -1405,8 +1856,15 @@ final class AnticipySession: ObservableObject {
     func signIn(email: String, password: String) async -> String? {
         do {
             let (token, id) = try await backend.authWithPassword(email: email, password: password)
+            // Any poll that crossed the authentication request belongs to the
+            // session that existed before this account arrived. Invalidate it
+            // before publishing the new credentials.
+            invalidateRefreshes()
             authToken = token
             accountID = id
+            prepareLocalPersonStateForSignIn(for: id)
+            restorePendingAppReplyState()
+            refreshPendingCount()
             // WHOSE TOUR FLAG IS ON THIS PHONE? This is the ONE moment the
             // person holding it can change, and sign-UP reaches it too
             // (signUp ends in signIn).
@@ -1448,28 +1906,11 @@ final class AnticipySession: ObservableObject {
             // otherwise a new customer sees the literal placeholder
             // "you@example.com" after signing up with their real address.
             ownerEmail = email.trimmingCharacters(in: .whitespaces).lowercased()
-            // AND THE NUMBER FROM THE SERVER, rather than from whatever this
-            // handset happened to be carrying. `ownerPhone` is device-local and
-            // is written by exactly two things — `saveOwnerPhone` and `signUp` —
-            // so signing into an existing account on a new phone, or on the same
-            // phone after a reinstall, left it empty while the server held a
-            // real number, and every screen that answers "can I reach you?"
-            // answered from the handset instead of from the account. Now that
-            // sign-out clears the mirrors, this read is the only thing that puts
-            // a true one back.
-            //
-            // An answer of "" is a FACT and is written through: the account has
-            // no number, and leaving a stale one on the phone is how the last
-            // owner's number used to survive a sign-out.
-            //
-            // A read that FAILED is not that fact, so it changes nothing. On a
-            // train, in a tunnel, `try?` collapses "the account has no number"
-            // and "I could not ask" into the same nil — and telling somebody
-            // with a number on file that we have no way to reach them is the
-            // same confident falsehood this whole change is about.
-            if let owner = try? await backend.fetchOwner(id: id) {
-                ownerPhone = owner.phone
-            }
+            // Replace every device mirror with the account/profile record, not
+            // merely the phone. The provisional auth email above keeps a useful
+            // default if this first read fails; a successful read is canonical
+            // and writes through empty fields as well as populated ones.
+            await refreshCanonicalOwner()
             // Adopt this device's pre-accounts rows onto the account before the
             // first refresh, so the feed is already theirs when it paints.
             await backend.claimLegacy(legacyUUID: ownerID)
@@ -1485,13 +1926,38 @@ final class AnticipySession: ObservableObject {
     func signOut() {
         authToken = ""
         accountID = ""
+        listener.stop()
+        clearSignedInSurface()
+        purgeLocalPersonState()
+        localPersonAccountID = ""
+    }
+
+    /// A refused/expired credential ends the authenticated session, but it is
+    /// not evidence that the person asked us to delete device-only enrollment,
+    /// consent, or interview progress. Keep those under their account stamp so
+    /// a same-account re-auth restores them; the interactive sign-in boundary
+    /// purges them if the next successful sign-in belongs to somebody else.
+    private func expireSession() {
+        authToken = ""
+        accountID = ""
+        listener.stop()
+        clearSignedInSurface()
+    }
+
+    /// Clear anything that could render or act after authentication has ended.
+    /// This is shared by explicit sign-out and token expiry; neither path may
+    /// keep listening, display the previous account's words, or leave its
+    /// errands on the lock screen.
+    private func clearSignedInSurface() {
+        // A network response already on its way back must not repopulate this
+        // screen (or its lock-screen notifications) after the account leaves.
+        invalidateRefreshes()
         // CLOSE THE EARS. signOut cleared the credentials and nothing else:
         // the AVAudioEngine tap stayed installed and the room kept being
         // transcribed behind the sign-in door. The views that normally stop
         // the microphone are torn down the instant isSignedIn flips, so
         // nothing was left to do it. keepListening stays as the person's
         // standing preference — it is honoured again when they sign back in.
-        listener.stop()
         // And forget which row the last line was. Sign out, sign in as someone
         // else in the same launch, speak past the ceiling before anything
         // posts, and the first cut line went up with the new owner_ref and the
@@ -1511,7 +1977,79 @@ final class AnticipySession: ObservableObject {
         // this phone was shown them as if they were their own. The list lives
         // in OwnerMirror so this line cannot fall behind the one in Settings.
         OwnerMirror.clear()
-        pendingCount = unsent.count
+        canonicalOwnerPhoneState = .unknown
+        canonicalOwnerRefreshGeneration += 1
+        // Raw and derived account state is just as identifying as the profile
+        // mirrors. In particular, Developer Speech Stream makes these arrays
+        // inspectable; retaining them across a sign-in boundary would let the
+        // next account read the previous person's words whenever its first
+        // refresh was offline.
+        transcript = []
+        sessionLines = []
+        anticipySays = []
+        jobs = []
+        ownerReplies = []
+        failedWrites = []
+        unverifiedWrites = []
+        pendingJobWrites = [:]
+        inFlight = []
+        confirmedStatus = [:]
+        seenDoneJobIDs = []
+        agentPaired = false
+        agentOnline = false
+        agentLastSeenSeconds = nil
+        staleExtensionVersion = nil
+        backendReachable = false
+        connection = .loading
+
+        UserDefaults.standard.removeObject(forKey: AppPreferences.developerModeKey)
+        refreshPendingCount()
+    }
+
+    /// Remove person-owned state that has no server round-trip. Called for an
+    /// explicit sign-out/forget and before a different account adopts the
+    /// device, never merely because a seven-day token expired.
+    private func purgeLocalPersonState() {
+        speakerTagger.roster.forgetEverything()
+        InterviewProgress().reopenAll()
+        ContextGrants().resetAll()
+        for source in ContextSource.allCases {
+            UserDefaults.standard.removeObject(forKey: Self.sentKey(source))
+        }
+        UserDefaults.standard.removeObject(forKey: "interview.declined")
+        UserDefaults.standard.removeObject(forKey: "browserOfferDeferred")
+        UserDefaults.standard.removeObject(forKey: "firstOpenedAt")
+    }
+
+    /// One-time migration for installs that predate `localPersonAccountID`.
+    /// Reaching this path means the app launched with a valid authenticated
+    /// account already on disk, so an empty stamp can safely be adopted by that
+    /// account. This exception must not be shared with the sign-in path below.
+    private func adoptLocalPersonStateOnAuthenticatedLaunch(for account: String) {
+        guard !account.isEmpty else { return }
+        if localPersonAccountID.isEmpty {
+            localPersonAccountID = account
+            return
+        }
+        if localPersonAccountID != account {
+            clearSignedInSurface()
+            purgeLocalPersonState()
+        }
+        localPersonAccountID = account
+    }
+
+    /// A successful interactive sign-in is not the one-time launch migration.
+    /// An empty stamp here may be stale data left after an older build signed
+    /// out, so it is purged before the new account is allowed to own the phone.
+    /// A retained stamp equal to `account` is the token-expiry case and keeps
+    /// voice enrollment, consent, and interview progress intact.
+    private func prepareLocalPersonStateForSignIn(for account: String) {
+        guard !account.isEmpty else { return }
+        if localPersonAccountID != account {
+            clearSignedInSurface()
+            purgeLocalPersonState()
+        }
+        localPersonAccountID = account
     }
 
     /// Ask for a reset code by text. Deliberately returns nothing to report:
@@ -1537,7 +2075,98 @@ final class AnticipySession: ObservableObject {
     /// with a copy of the key string, so renaming it would have left a delete
     /// button that silently deleted nothing.
     func clearPendingLines() {
-        unsent = []
+        guard !accountID.isEmpty else { return }
+        clearPendingLinesOwned(by: accountID)
+    }
+
+    private func clearPendingLinesOwned(by ownerAccount: String) {
+        guard !ownerAccount.isEmpty else { return }
+        unsent = unsent.filter { $0.account != ownerAccount }
+    }
+
+    private func restorePendingAppReplyState() {
+        guard isSignedIn else { return }
+        unverifiedWrites.formUnion(
+            AppReplyWritePolicy.eventIDsToRestore(
+                accountID: accountID, from: pendingAppReplies))
+    }
+
+    private func rememberPendingAppReply(_ pending: AppReplyWritePolicy.Pending) {
+        pendingAppReplies = AppReplyWritePolicy.upserting(
+            pending, in: pendingAppReplies)
+    }
+
+    private func removePendingAppReply(_ pending: AppReplyWritePolicy.Pending) {
+        pendingAppReplies = AppReplyWritePolicy.removing(
+            pending, from: pendingAppReplies)
+    }
+
+    private func pendingAppReply(eventID: String) -> AppReplyWritePolicy.Pending? {
+        pendingAppReplies.first {
+            $0.accountID == accountID && $0.eventID == eventID
+        }
+    }
+
+    private func clearAllPendingAppRepliesOnDevice() {
+        pendingAppReplies = []
+        unverifiedWrites = []
+    }
+
+    private func clearPendingAppRepliesOwned(by ownerAccount: String) {
+        guard !ownerAccount.isEmpty else { return }
+        let removedEventIDs = Set(pendingAppReplies.lazy
+            .filter { $0.accountID == ownerAccount }
+            .map(\.eventID))
+        pendingAppReplies.removeAll { $0.accountID == ownerAccount }
+        unverifiedWrites.subtract(removedEventIDs)
+    }
+
+    /// Device-wide erasure for the two operations whose copy promises this
+    /// handset is forgotten. Unlike `clearPendingLines`, this must include
+    /// nil-stamped legacy rows and sealed speech from every prior account.
+    private func clearAllPendingLinesOnDevice() {
+        unsent = PendingSpeechRetention.afterDeviceForget(unsent)
+    }
+
+    /// The words waiting for a network, exposed read-only for Privacy & Data.
+    /// The storage envelope stays private so no view can rewrite ownership,
+    /// timestamps, or delivery flags around the queue.
+    var pendingSpeechLines: [String] {
+        pendingLinesOwnedByCurrentAccount(in: unsent).map(\.text)
+    }
+
+    /// Remove this account from the handset while leaving its server data
+    /// intact. Browser disconnect is verified before the credentials are
+    /// dropped; the Bool lets Settings say when the local forget succeeded but
+    /// Chrome could not be reached to complete its half.
+    func forgetThisPhone() async -> Bool {
+        guard let lease = AccountWriteLeasePolicy.begin(
+            accountID: accountID, authToken: authToken, isSignedIn: isSignedIn)
+        else { return false }
+        let requestedBackend = backend
+        stopListening()
+        clearAllPendingLinesOnDevice()
+        clearAllPendingAppRepliesOnDevice()
+        let oldIdentity = ownerID
+        let browserDisconnected = await requestedBackend.unpairAgent(owner: oldIdentity)
+        let stillCurrent = AccountWriteLeasePolicy.isCurrent(
+            lease, accountID: accountID, authToken: authToken,
+            isSignedIn: isSignedIn)
+        let expiredSameAccount = !isSignedIn && accountID.isEmpty
+            && authToken.isEmpty && localPersonAccountID == lease.accountID
+        // A completion from an old Settings task cannot sign out the next
+        // person or rotate the identity underneath their freshly paired app.
+        guard stillCurrent || expiredSameAccount else { return false }
+        let notice = browserDisconnected
+            ? "This iPhone was forgotten. Its local profile and speech queue are gone, and the browser link is disconnected."
+            : "This iPhone was forgotten locally, but Anticipy could not verify that every browser link was disconnected. Remove the Anticipy extension in Chrome before pairing again."
+        // Settings disappears as soon as signOut flips the app route. Persist
+        // the outcome first so the Auth screen that replaces it can show the
+        // browser failure instead of writing into a view that no longer exists.
+        UserDefaults.standard.set(notice, forKey: AppPreferences.postSignOutNoticeKey)
+        signOut()
+        ownerID = UUID().uuidString
+        return browserDisconnected
     }
 
     /// Open this app's page in iOS Settings. The whole app had no route there.
@@ -1606,6 +2235,31 @@ final class AnticipySession: ObservableObject {
     /// Jobs whose last write failed, so the card can say so and offer Retry
     /// instead of buzzing success and leaving the card sitting there.
     @Published var failedWrites: Set<String> = []
+    /// Requests whose transport ended without a trustworthy server verdict.
+    /// These are deliberately separate from refused writes: retrying one can
+    /// duplicate an action the server already accepted.
+    @Published private(set) var unverifiedWrites: Set<String> = []
+    /// Unknown app-reply writes survive a process restart as owner-scoped
+    /// identities. No answer text is written here; the exact server lookup
+    /// needs only the idempotency id.
+    @AppStorage(AppReplyWritePolicy.storageKey) private var pendingAppReplyStore = ""
+    private var pendingAppReplies: [AppReplyWritePolicy.Pending] {
+        get {
+            guard !pendingAppReplyStore.isEmpty else { return [] }
+            return (try? JSONDecoder().decode(
+                [AppReplyWritePolicy.Pending].self,
+                from: Data(pendingAppReplyStore.utf8))) ?? []
+        }
+        set {
+            pendingAppReplyStore = (try? JSONEncoder().encode(newValue))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        }
+    }
+    private struct PendingJobWrite {
+        let originalStatus: String
+        let expectedStatus: String?
+    }
+    private var pendingJobWrites: [String: PendingJobWrite] = [:]
     /// Statuses the server has ALREADY ACCEPTED, held over the feed until a
     /// fetch agrees with them.
     ///
@@ -1616,7 +2270,11 @@ final class AnticipySession: ObservableObject {
     /// (PocketBase gives no read-after-write guarantee across requests), so
     /// without this the card visibly snaps back to "waiting for your OK" for one
     /// poll after she was told yes.
-    private var confirmedStatus: [String: String] = [:]
+    private struct ConfirmedJobStatus {
+        let original: String
+        let expected: String
+    }
+    private var confirmedStatus: [String: ConfirmedJobStatus] = [:]
     /// Jobs with a write in flight — the card disables itself, so a tap that
     /// looks like it did nothing can't be tapped again into a double send.
     @Published var inFlight: Set<String> = []
@@ -2158,9 +2816,12 @@ final class AnticipySession: ObservableObject {
     /// ever job-shaped.
     private func write(id: String,
                        expected: String? = nil,
+                       reconciling job: AgentJob? = nil,
                        _ body: @escaping () async throws -> Void) async -> Bool {
         inFlight.insert(id)
         failedWrites.remove(id)
+        unverifiedWrites.remove(id)
+        pendingJobWrites.removeValue(forKey: id)
         // Still a defer, for the throwing path and for any caller with no
         // expected status - removing it twice is harmless on a Set.
         defer { inFlight.remove(id) }
@@ -2181,20 +2842,111 @@ final class AnticipySession: ObservableObject {
             // has accepted. What changed is that the ALREADY-CONFIRMED result
             // is shown at once, and the reconciling read happens behind it.
             inFlight.remove(id)
-            if let expected { confirmedStatus[id] = expected }
+            if let expected, let job {
+                confirmedStatus[id] = ConfirmedJobStatus(
+                    original: job.status, expected: expected)
+            }
             Task { await refresh() }
             return true
         } catch {
-            failedWrites.insert(id)
-            Haptics.warning()
-            return false
+            if let refusal = error as? AnticipyBackend.BackendError,
+               ActionWritePolicy.isVerifiedRefusal(status: refusal.status) {
+                failedWrites.insert(id)
+                Haptics.warning()
+                return false
+            }
+
+            guard let job else {
+                // An app_reply event has no job row whose status proves whether
+                // the event landed. Do not turn response loss into a retry.
+                unverifiedWrites.insert(id)
+                Haptics.warning()
+                return false
+            }
+
+            let pending = PendingJobWrite(originalStatus: job.status,
+                                          expectedStatus: expected)
+            pendingJobWrites[id] = pending
+            // Give a PATCH whose response connection died a moment to finish
+            // before asking PocketBase for the exact canonical row.
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            let reconciliation = await reconcilePendingJob(id: id, pending: pending)
+            switch reconciliation {
+            case .accepted:
+                Haptics.success()
+                Task { await refresh() }
+                return true
+            case .safeToRetry:
+                failedWrites.insert(id)
+                Haptics.warning()
+                return false
+            case .unverified:
+                unverifiedWrites.insert(id)
+                Haptics.warning()
+                return false
+            }
         }
     }
 
     private func write(_ job: AgentJob,
                        expected: String? = nil,
                        _ body: @escaping () async throws -> Void) async -> Bool {
-        await write(id: job.id, expected: expected, body)
+        await write(id: job.id, expected: expected, reconciling: job, body)
+    }
+
+    /// Re-read the exact row after a response-lost write. This is the only
+    /// action exposed while an uncertain card is on screen; it never sends the
+    /// mutation again.
+    func reconcileWrite(_ job: AgentJob) async {
+        guard let pending = pendingJobWrites[job.id],
+              !inFlight.contains(job.id) else { return }
+        inFlight.insert(job.id)
+        defer { inFlight.remove(job.id) }
+        switch await reconcilePendingJob(id: job.id, pending: pending) {
+        case .accepted:
+            Haptics.success()
+            Task { await refresh() }
+        case .safeToRetry:
+            failedWrites.insert(job.id)
+            Haptics.tap()
+        case .unverified:
+            unverifiedWrites.insert(job.id)
+            Haptics.warning()
+        }
+    }
+
+    private func reconcilePendingJob(
+        id: String,
+        pending: PendingJobWrite
+    ) async -> ActionWritePolicy.Reconciliation {
+        guard let fetched = try? await backend.fetchJob(id: id) else {
+            return .unverified
+        }
+        if let index = jobs.firstIndex(where: { $0.id == fetched.id }) {
+            jobs[index] = fetched
+        }
+        let result: ActionWritePolicy.Reconciliation
+        if let expected = pending.expectedStatus {
+            result = ActionWritePolicy.reconcile(
+                originalStatus: pending.originalStatus,
+                expectedStatus: expected,
+                observedStatus: fetched.status)
+        } else {
+            result = fetched.status == pending.originalStatus ? .unverified : .accepted
+        }
+        switch result {
+        case .accepted:
+            confirmedStatus.removeValue(forKey: id)
+            failedWrites.remove(id)
+            unverifiedWrites.remove(id)
+            pendingJobWrites.removeValue(forKey: id)
+        case .safeToRetry:
+            unverifiedWrites.remove(id)
+            pendingJobWrites.removeValue(forKey: id)
+        case .unverified:
+            unverifiedWrites.insert(id)
+        }
+        return result
     }
 
     /// Answer a question she asked that has no task behind it — "Want me to
@@ -2216,10 +2968,137 @@ final class AnticipySession: ObservableObject {
         // The view disables Send for this, but the guard cannot only live in
         // the view: an empty answer would record a turn of nothing and mark her
         // question closed.
-        guard !trimmed.isEmpty else { return false }
-        return await write(id: event.id) {
-            try await self.backend.pushEvent(kind: "app_reply", text: trimmed)
+        guard !trimmed.isEmpty, isSignedIn,
+              let pending = pendingAppReply(eventID: event.id)
+                ?? AppReplyWritePolicy.pending(accountID: accountID,
+                                               eventID: event.id) else { return false }
+        return await writeAppReply(pending, text: trimmed)
+    }
+
+    /// A reply POST is not safe to retry from its transport error. Persist its
+    /// durable identity before the request leaves, then resolve any uncertain
+    /// completion by reading that exact owner-scoped event back.
+    private func writeAppReply(_ pending: AppReplyWritePolicy.Pending,
+                               text: String) async -> Bool {
+        guard isSignedIn, accountID == pending.accountID else { return false }
+        let id = pending.eventID
+        let requestedAccount = accountID
+        let requestedToken = authToken
+        let b = backend
+
+        rememberPendingAppReply(pending) // before the first network yield
+        inFlight.insert(id)
+        failedWrites.remove(id)
+        unverifiedWrites.remove(id)
+        defer { inFlight.remove(id) }
+
+        do {
+            try await b.pushEvent(kind: "app_reply", text: text,
+                                  externalEventID: pending.externalEventID)
+            guard isSignedIn, accountID == requestedAccount,
+                  authToken == requestedToken else { return false }
+            removePendingAppReply(pending)
+            failedWrites.remove(id)
+            unverifiedWrites.remove(id)
+            Haptics.success()
+            Task { await refresh() }
+            return true
+        } catch {
+            guard isSignedIn, accountID == requestedAccount,
+                  authToken == requestedToken else { return false }
+            if let refusal = error as? AnticipyBackend.BackendError,
+               ActionWritePolicy.isVerifiedRefusal(status: refusal.status) {
+                // PocketBase reports a unique external_event_id collision as a
+                // 400/409. That can mean the earlier response-lost request won,
+                // so these two statuses still require the exact canonical read.
+                if refusal.status == 400 || refusal.status == 409 {
+                    let read = await canonicalAppReplyRead(pending, backend: b)
+                    guard isSignedIn, accountID == requestedAccount,
+                          authToken == requestedToken else { return false }
+                    return applyAppReplyReconciliation(
+                        AppReplyWritePolicy.reconcile(read), pending: pending)
+                }
+                // This request was refused before acceptance. Its stable id is
+                // deterministic, so a later retry will still use the same one.
+                removePendingAppReply(pending)
+                failedWrites.insert(id)
+                Haptics.warning()
+                return false
+            }
+
+            // Give a request whose response connection died time to commit,
+            // then ask for this durable id rather than guessing from the feed.
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard isSignedIn, accountID == requestedAccount,
+                  authToken == requestedToken else { return false }
+            let read = await canonicalAppReplyRead(pending, backend: b)
+            guard isSignedIn, accountID == requestedAccount,
+                  authToken == requestedToken else { return false }
+            return applyAppReplyReconciliation(
+                AppReplyWritePolicy.reconcile(read), pending: pending)
         }
+    }
+
+    private func canonicalAppReplyRead(
+        _ pending: AppReplyWritePolicy.Pending,
+        backend: AnticipyBackend
+    ) async -> AppReplyWritePolicy.CanonicalRead {
+        do {
+            return try await backend.hasEvent(
+                kind: "app_reply", externalEventID: pending.externalEventID)
+                ? .present : .absent
+        } catch {
+            return .unknown
+        }
+    }
+
+    @discardableResult
+    private func applyAppReplyReconciliation(
+        _ result: AppReplyWritePolicy.Reconciliation,
+        pending: AppReplyWritePolicy.Pending
+    ) -> Bool {
+        let id = pending.eventID
+        switch result {
+        case .accepted:
+            removePendingAppReply(pending)
+            failedWrites.remove(id)
+            unverifiedWrites.remove(id)
+            Haptics.success()
+            Task { await refresh() }
+            return true
+        case .safeToRetry:
+            removePendingAppReply(pending)
+            unverifiedWrites.remove(id)
+            failedWrites.insert(id)
+            Haptics.warning()
+            return false
+        case .unverified:
+            // Keep the persisted identity. A restart restores this card to the
+            // same Check outcome state instead of silently enabling a resend.
+            failedWrites.remove(id)
+            unverifiedWrites.insert(id)
+            Haptics.warning()
+            return false
+        }
+    }
+
+    /// Reconcile is the only action offered while outcome is unknown. It does
+    /// not resend the person's words; it reads the exact idempotency row and
+    /// turns the card into received, safe-to-retry, or still-unverified.
+    func reconcileAnswer(_ event: BrainEvent) async {
+        guard isSignedIn, !inFlight.contains(event.id),
+              let pending = pendingAppReply(eventID: event.id) else { return }
+        let requestedAccount = accountID
+        let requestedToken = authToken
+        let b = backend
+        inFlight.insert(event.id)
+        defer { inFlight.remove(event.id) }
+
+        let read = await canonicalAppReplyRead(pending, backend: b)
+        guard isSignedIn, accountID == requestedAccount,
+              authToken == requestedToken else { return }
+        _ = applyAppReplyReconciliation(
+            AppReplyWritePolicy.reconcile(read), pending: pending)
     }
 
     /// Identity is the server event id (or a stable local id until the

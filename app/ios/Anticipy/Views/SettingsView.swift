@@ -1199,8 +1199,9 @@ struct SettingsView: View {
             serverDeleteNote = outcome.message
             if outcome.ok {
                 Haptics.taskDone()
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                session.signOut()
+                // `deleteEverythingOnServer` performs the account-leased
+                // sign-out before it returns. This legacy screen must not
+                // schedule an unscoped sign-out after another account arrives.
             }
         }
     }

@@ -10,6 +10,7 @@ import SwiftUI
 /// a link they have to hunt for.
 struct AuthView: View {
     @EnvironmentObject var session: AnticipySession
+    @AppStorage(AppPreferences.postSignOutNoticeKey) private var postSignOutNotice = ""
 
     enum Mode { case signUp, signIn, forgot, code }
     @State private var mode: Mode = .signUp
@@ -37,6 +38,20 @@ struct AuthView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
                     header
+                    if !postSignOutNotice.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(postSignOutNotice)
+                                .font(.callout)
+                                .foregroundStyle(Theme.text2)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button("Got it") { postSignOutNotice = "" }
+                                .buttonStyle(.ghost)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .anticipyCard()
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("Device forget result")
+                    }
                     fields
                     // A failure painted in the success colour reads correct
                     // at a glance and wrong on reading. Sand, in a card, with
@@ -69,6 +84,7 @@ struct AuthView: View {
                 .animation(Theme.spring, value: mode)
                 .animation(Theme.spring, value: problem)
                 .animation(Theme.spring, value: note)
+                .animation(Theme.spring, value: postSignOutNotice)
             }
             .scrollDismissesKeyboard(.interactively)
         }

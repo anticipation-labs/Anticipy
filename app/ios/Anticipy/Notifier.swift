@@ -1,6 +1,13 @@
 import Foundation
 import UserNotifications
 
+/// `UNUserNotificationCenter.add` can complete after sign-out has already run
+/// `clearAll`. In that ordering the clear happens first and the stale request
+/// is installed second, so the add completion must remove its own identifier.
+enum NotificationLeasePolicy {
+    static func removeAfterAdd(stillCurrent: Bool) -> Bool { !stillCurrent }
+}
+
 /// THE ORGAN THIS APP DID NOT HAVE.
 ///
 /// Until now there was no `UNUserNotificationCenter` anywhere in the product.
@@ -72,21 +79,27 @@ final class Notifier {
     }
 
     /// Everything the owner is currently blocking, raised once each.
-    func announce(jobs: [AgentJob], now: Date = Date()) async {
+    func announce(jobs: [AgentJob], now: Date = Date(),
+                  stillCurrent: @escaping @MainActor () -> Bool) async {
         guard AppPreferences.bool(forKey: AppPreferences.notificationsKey,
-                                  default: true) else { return }
+                                  default: true), stillCurrent() else { return }
         let waiting = jobs.filter { Self.isWaitingOnOwner($0) }
         guard !waiting.isEmpty else { return }
         await askIfNeeded()
-        guard authorized else { return }
+        // Permission UI yields the main actor. The account that supplied these
+        // jobs may have left while the sheet was open.
+        guard stillCurrent(), authorized else { return }
 
         for job in waiting where !raised.contains(job.id) {
+            guard stillCurrent() else { return }
             raised.insert(job.id)
             let (title, body) = Self.words(for: job)
             if Self.inQuietHours(now) {
                 held.append((job.id, title, body))   // morning, not never
             } else {
-                await post(id: job.id, title: title, body: body)
+                await post(id: job.id, title: title, body: body,
+                           stillCurrent: stillCurrent)
+                guard stillCurrent() else { return }
             }
         }
         // Anything parked overnight goes out once the hours end.
@@ -94,10 +107,14 @@ final class Notifier {
             let due = held
             held.removeAll()
             for item in due {
-                await post(id: item.id, title: item.title, body: item.body)
+                guard stillCurrent() else { return }
+                await post(id: item.id, title: item.title, body: item.body,
+                           stillCurrent: stillCurrent)
+                guard stillCurrent() else { return }
             }
         }
         // A job that stopped waiting can raise again if it comes back round.
+        guard stillCurrent() else { return }
         let stillWaiting = Set(waiting.map(\.id))
         raised = raised.intersection(stillWaiting)
     }
@@ -130,7 +147,8 @@ final class Notifier {
         return ("I need you for a second", trimmed)
     }
 
-    private func post(id: String, title: String, body: String) async {
+    private func post(id: String, title: String, body: String,
+                      stillCurrent: @escaping @MainActor () -> Bool) async {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -139,9 +157,18 @@ final class Notifier {
             content.sound = .default
         }
         content.userInfo = ["jobID": id]
+        let identifier = "anticipy-job-\(id)"
         let request = UNNotificationRequest(
-            identifier: "anticipy-job-\(id)", content: content, trigger: nil)
-        try? await UNUserNotificationCenter.current().add(request)
+            identifier: identifier, content: content, trigger: nil)
+        let centre = UNUserNotificationCenter.current()
+        try? await centre.add(request)
+        // `clearAll()` may have run while add was suspended. Remove this exact
+        // request both ways (pending and already delivered) if its account or
+        // generation no longer owns the completion.
+        if NotificationLeasePolicy.removeAfterAdd(stillCurrent: stillCurrent()) {
+            centre.removePendingNotificationRequests(withIdentifiers: [identifier])
+            centre.removeDeliveredNotifications(withIdentifiers: [identifier])
+        }
     }
 
     /// Signing out must not leave someone else's errands on the lock screen.

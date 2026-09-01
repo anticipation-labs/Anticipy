@@ -115,7 +115,7 @@ struct ConversationCard: View {
             case .looking:
                 HStack(spacing: 5) {
                     Image(systemName: "magnifyingglass").accessibilityHidden(true)
-                    Text("Looking into it. I'll text you what I find")
+                    Text("Looking into it. I'll bring the result back here.")
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Theme.accent.opacity(0.85))

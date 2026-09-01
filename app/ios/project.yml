@@ -549,7 +549,15 @@ settings:
     # stay in-app or also arrive by text. Builds 114 and 115 were already used
     # by the cloud release of source build 113, so this source identity starts
     # above both of them.
-    CURRENT_PROJECT_VERSION: "116"
+    # 119: Home becomes a calm consumer surface: raw speech moves behind
+    # authenticated developer diagnostics, Done becomes a swipeable receipt
+    # deck, and brain-authored insights replace transcript chatter. Actions are
+    # app-first and recoverable after response loss, account switches cannot
+    # inherit stale refreshes or alerts, phone removal fails closed at every
+    # delivery boundary, and independent profile saves merge atomically on the
+    # authenticated account. Builds 117 and 118 were consumed by the cloud
+    # release pipeline while this source work was in progress.
+    CURRENT_PROJECT_VERSION: "119"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -601,7 +609,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "116"
+        CURRENT_PROJECT_VERSION: "119"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
@@ -766,8 +774,9 @@ targets:
         # "Anticipy's server" and "her server", not "Anticipy": once the name
         # lost its suffix, "sent to Anticipy so she can act" named the same
         # thing twice in one sentence and read like a bug.
-        NSMicrophoneUsageDescription: Anticipy listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy's server so she can act on them. You control when she is listening.
-        NSSpeechRecognitionUsageDescription: Anticipy turns what she hears into text on your phone, then sends that text to her server so she can remember it and act on it.
+        NSMicrophoneUsageDescription: Anticipy listens through your microphone, including in the background, only while listening is on. Supported iPhones recognize speech on-device; otherwise iOS may use Apple's speech service. The resulting text is sent to Anticipy's server so she can act on it.
+        NSSpeechRecognitionUsageDescription: Anticipy uses iPhone speech recognition to turn audio into text. Supported iPhones do this on-device; otherwise iOS may send audio to Apple's speech service. Anticipy sends the resulting text to her server so she can remember it and act on it.
+        NSFaceIDUsageDescription: Anticipy uses Face ID only to unlock developer diagnostics on this iPhone.
         # Day zero, the two sources that live on this phone. Both strings say
         # what is actually read, because both are narrower than the permission
         # iOS grants: titles and times for a month, and names with no numbers.

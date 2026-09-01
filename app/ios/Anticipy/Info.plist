@@ -48,10 +48,12 @@
 	<string>Anticipy reads what is coming up in the next month — the title and the time, nothing else — so she knows what you already have on. She never reads the notes or the invitees, and never puts anything in your calendar unless you ask her to.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Anticipy reads the names in your contacts so she knows who you mean when you say one. She never reads a number, an email or an address, and never messages anyone on her own.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Anticipy uses Face ID only to unlock developer diagnostics on this iPhone.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Anticipy listens through your microphone, including while the app is in the background, so she can catch what you commit to. Audio stays on your phone; the words are sent to Anticipy's server so she can act on them. You control when she is listening.</string>
+	<string>Anticipy listens through your microphone, including in the background, only while listening is on. Supported iPhones recognize speech on-device; otherwise iOS may use Apple's speech service. The resulting text is sent to Anticipy's server so she can act on it.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Anticipy turns what she hears into text on your phone, then sends that text to her server so she can remember it and act on it.</string>
+	<string>Anticipy uses iPhone speech recognition to turn audio into text. Supported iPhones do this on-device; otherwise iOS may send audio to Apple's speech service. Anticipy sends the resulting text to her server so she can remember it and act on it.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

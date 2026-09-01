@@ -644,6 +644,9 @@ vm.createContext(isolated);
 const handler = vm.runInContext('(' + handlerSource + ')', isolated);
 
 const owner = { id: 'own1', getString: (k) => (k === 'phone' ? scenario.phone : '') };
+const profile = {
+  getString: (k) => (k === 'phone' ? (scenario.profilePhone || '') : ''),
+};
 const e = {
   requestInfo: () => ({ body: { email: 'owner@example.com' } }),
   json: (status, body) => ({ status: status, body: body }),
@@ -652,7 +655,12 @@ const e = {
       if (collection === 'owners') return owner;
       throw new Error('no rows');
     },
-    findRecordsByFilter: () => [],
+    findRecordsByFilter: (collection) => {
+      if (collection === 'owner_profile') {
+        return scenario.profilePresent ? [profile] : [];
+      }
+      return [];
+    },
     findCollectionByNameOrId: (name) => name,
     save: (record) => { saved.push(record.data); },
   },
@@ -671,9 +679,14 @@ process.stdout.write(JSON.stringify({
 
 
 def request_reset(*, twilio_status=201, **over):
+    account_phone = over.pop("account_phone", "+16045550111")
+    profile_present = over.pop("profile_present", False)
+    profile_phone = over.pop("profile_phone", "")
     scenario = {
         "env": env(**over),
-        "phone": "+16045550111",
+        "phone": account_phone,
+        "profilePresent": profile_present,
+        "profilePhone": profile_phone,
         "twilioStatus": twilio_status,
     }
     proc = subprocess.run(
@@ -726,6 +739,13 @@ def test_a_successful_reset_send_does_record_the_code():
     out = request_reset()
     assert len(out["saved"]) == 1
     assert out["saved"][0]["code_hash"].startswith("sha256:")
+
+
+def test_an_explicitly_empty_profile_never_resurrects_the_signup_number():
+    out = request_reset(profile_present=True, profile_phone="",
+                        account_phone="+16045550111")
+    assert out["requests"] == []
+    assert out["saved"] == []
 
 
 # --------------------------------------------- the proof, run as a real program

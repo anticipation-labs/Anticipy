@@ -1,4 +1,6 @@
 import SwiftUI
+import LocalAuthentication
+import Speech
 
 /// The settings index. Every row opens one focused page, so a chevron always
 /// means navigation and no preference changes accidentally on the index.
@@ -9,7 +11,8 @@ struct SettingsHomeView: View {
     @State private var route: Route?
 
     private enum Route: Hashable {
-        case profile, listening, notifications, connectors, appearance, advanced, about
+        case profile, listening, notifications, connectors, personalization
+        case privacyData, appearance, advanced, about
     }
 
     var body: some View {
@@ -41,12 +44,22 @@ struct SettingsHomeView: View {
                 NavRow("Notifications", systemImage: "bell") {
                     Haptics.engage(); route = .notifications
                 }
+                NavRow("Personalization", systemImage: "person.text.rectangle") {
+                    Haptics.engage(); route = .personalization
+                }
             }
 
             SectionHeader("Connections")
             GroupedCard {
                 NavRow("Connectors", systemImage: "link") {
                     Haptics.engage(); route = .connectors
+                }
+            }
+
+            SectionHeader("Privacy")
+            GroupedCard {
+                NavRow("Privacy & Data", systemImage: "hand.raised") {
+                    Haptics.engage(); route = .privacyData
                 }
             }
 
@@ -76,6 +89,8 @@ struct SettingsHomeView: View {
             case .listening: SettingsListeningView(session: session)
             case .notifications: SettingsNotificationsView()
             case .connectors: SettingsConnectorsView(session: session)
+            case .personalization: SettingsPersonalizationView(session: session)
+            case .privacyData: SettingsPrivacyDataView(session: session)
             case .appearance: SettingsAppearanceView()
             case .advanced: SettingsAdvancedView()
             case .about: SettingsAboutView()
@@ -98,11 +113,29 @@ struct SettingsHomeView: View {
 /// the build is the half that cannot answer it.
 private struct SettingsAboutView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(AppPreferences.developerModeKey) private var developerMode = false
+    @State private var buildTaps = 0
+    @State private var tapGeneration = 0
+    @State private var authenticating = false
+    @State private var authenticationContext: LAContext?
+    @State private var unlockError: String?
 
     private var version: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
         return "Anticipy \(v) (\(b))"
+    }
+
+    /// Mirrors the recognizer decision used by PhoneListener. Some older
+    /// devices cannot perform speech recognition locally; on those devices iOS
+    /// may send microphone audio to Apple's speech service, so About must say
+    /// that plainly instead of making an unconditional local-audio promise.
+    private var speechPrivacyPath: String {
+        let onDevice = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))?
+            .supportsOnDeviceRecognition ?? false
+        return onDevice
+            ? "Microphone audio is turned into text on this iPhone, then the text is sent to Anticipy's server so it can create and complete work."
+            : "This iPhone may use Apple's speech service to turn microphone audio into text. Anticipy then sends the text—not an audio recording—to its server so it can create and complete work."
     }
 
     var body: some View {
@@ -111,6 +144,12 @@ private struct SettingsAboutView: View {
         } content: {
             GroupedCard {
                 InfoRow(version)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: registerBuildTap)
+            }
+
+            if developerMode {
+                FootnoteText("Developer mode is on. Its diagnostics are under Advanced.")
             }
 
             GroupedCard {
@@ -126,7 +165,71 @@ private struct SettingsAboutView: View {
                 }
             }
 
-            FootnoteText("Microphone audio stays on this iPhone. Anticipy sends the resulting text to its server so it can create and complete work.")
+            FootnoteText(speechPrivacyPath)
+        }
+        .alert("Developer mode stayed locked", isPresented: Binding(
+            get: { unlockError != nil },
+            set: { if !$0 { unlockError = nil } }
+        )) {
+            Button("OK", role: .cancel) { unlockError = nil }
+        } message: {
+            Text(unlockError ?? "This iPhone could not verify its owner.")
+        }
+    }
+
+    /// Seven deliberate taps make the control discoverable to a developer who
+    /// knows it is there without turning About into another settings page.
+    /// Authentication is the actual gate; the taps merely ask to approach it.
+    private func registerBuildTap() {
+        guard !developerMode, !authenticating else { return }
+        buildTaps += 1
+        tapGeneration += 1
+        let generation = tapGeneration
+
+        if buildTaps >= 7 {
+            buildTaps = 0
+            authenticateOwner()
+            return
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard generation == tapGeneration else { return }
+            buildTaps = 0
+        }
+    }
+
+    /// Device-owner authentication can use Face ID, Touch ID, or the iPhone's
+    /// passcode. It protects a local diagnostics surface; it is not a passkey
+    /// and it grants no additional backend permission.
+    private func authenticateOwner() {
+        let context = LAContext()
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            unlockError = "Set a passcode, Face ID, or Touch ID on this iPhone before unlocking diagnostics."
+            return
+        }
+
+        authenticating = true
+        authenticationContext = context
+        context.evaluatePolicy(
+            .deviceOwnerAuthentication,
+            localizedReason: "Unlock Anticipy developer diagnostics"
+        ) { success, evaluationError in
+            DispatchQueue.main.async {
+                authenticating = false
+                authenticationContext = nil
+                if success {
+                    developerMode = true
+                    Haptics.success()
+                    return
+                }
+                if let laError = evaluationError as? LAError,
+                   laError.code == .userCancel || laError.code == .appCancel {
+                    return
+                }
+                unlockError = "This iPhone could not verify its owner. Nothing changed."
+            }
         }
     }
 }

@@ -246,57 +246,44 @@ else:
                    "      fix undid: it reaches only people who already have errands\n"
                    "      stuck." % (at + 1, min(gate) + 1))
 
-# 6. AND IT IS THE ACCOUNT THAT ANSWERS, not the device-local mirror.
-#    `ownerPhone` is empty in exactly the same way whether the account has no
-#    number or this launch has not read it yet, and both owner reads in
-#    AnticipyApp.swift are `try?` with one of them running AFTER the refresh
-#    that flips `connection` to `.ready`. So the answer is fetched here, and a
-#    read that failed leaves nil and says nothing.
-#    AND IT MUST START AT nil. `Bool? = false` is still an optional and still
-#    compiles, and it silences the whole fix: the read is guarded on the state
-#    being nil, so it never asks, and the sentence is never said again. `= true`
-#    is the opposite failure and just as reachable.
-decl = [l.strip() for l in lines
-        if re.search(r"\bvar accountSaysNoNumber\b", l) and "@State" in l]
-if decl != ["@State private var accountSaysNoNumber: Bool?"]:
-    bad.append("`accountSaysNoNumber` is not declared as a three-state optional\n"
-               "      starting at nil: %s\n"
-               "      Its nil — \"nobody has managed to ask\" — is the whole guard. A\n"
-               "      Bool collapses it into \"you have no number\"; a `= false`\n"
-               "      compiles, stops the read from ever running, and retires the\n"
-               "      sentence in silence." % (decl or "declared nowhere"))
-if "backend.fetchOwner(" not in view:
-    bad.append("Home no longer reads the owner record. `fetchOwner` THROWS when\n"
-               "      it could not ask and returns \"\" only as a fact — that\n"
-               "      distinction is the only evidence this sentence has.")
-#    AND THE READ STAYS BEHIND AN EMPTY MIRROR. That condition is the whole
-#    cost argument for asking here at all: a phone that already holds a number
-#    never issues this request. Drop it and every launch pays for a question it
-#    already has the answer to.
-read = block_after("private func askWhetherWeCanReachThem() async")
+# 6. AND IT IS AN EXPLICIT CANONICAL STATE, not a cached-string inference.
+#    Unknown, none, malformed, and valid are four different product promises.
+#    Home delegates the read to the session, whose account-bound canonical
+#    owner refresh also rehydrates Settings. The short retry is bounded and a
+#    foreground transition re-arms it; none of this may join the 3-second poll.
+if "accountSaysNoNumber" in view:
+    bad.append("Home still carries the old Bool? reachability inference. It cannot\n"
+               "      distinguish a malformed number from a valid one and duplicates\n"
+               "      the canonical state now owned by AnticipySession.")
+read = block_after("private func refreshCanonicalOwnerForReachability() async")
 if read is None:
-    bad.append("`askWhetherWeCanReachThem` is gone, so nothing gathers the\n"
-               "      evidence the unreachable sentence stands on.")
-elif "await askWhetherWeCanReachThem()" not in view:
-    bad.append("`askWhetherWeCanReachThem` is declared and never called. Nothing\n"
-               "      then answers `accountSaysNoNumber`, it stays nil for the life of\n"
-               "      the screen, and the sentence is retired without a word — which\n"
-               "      is the shape of the original defect, not a change to it.")
-elif "session.ownerPhone" not in read or ".isEmpty" not in read:
-    bad.append("The owner read is no longer gated on an EMPTY `session.ownerPhone`.\n"
-               "      That gate is why a second read of this record is affordable:\n"
-               "      a phone that already holds a number must never issue it.")
-sets = [l.strip() for l in lines
-        if re.search(r"\baccountSaysNoNumber\s*=[^=]", l) and "@State" not in l]
-if not sets:
-    bad.append("Nothing ever answers `accountSaysNoNumber`, so the unreachable\n"
-               "      sentence can never be said at all.")
-for l in sets:
-    if "owner.phone" not in l:
-        bad.append("`accountSaysNoNumber` is answered by something other than the\n"
-                   "      account record: %s\n"
-                   "      It must come from `owner.phone`, or the guard is decoration."
-                   % l)
+    bad.append("`refreshCanonicalOwnerForReachability` is gone, so Home has no\n"
+               "      bounded recovery after an owner read starts offline.")
+else:
+    if "session.refreshCanonicalOwner()" not in read:
+        bad.append("Home no longer delegates reachability to the shared canonical\n"
+                   "      owner/profile read.")
+    if "0..<3" not in read or "Task.sleep" not in read:
+        bad.append("The unknown canonical phone state has no bounded retry. It can\n"
+                   "      remain `checking` for the whole foreground session.")
+if 'session.accountID)' not in view or ".task(id:" not in view:
+    bad.append("The canonical owner refresh is not keyed across account changes.")
+if view.count("refreshCanonicalOwnerForReachability()") < 3:
+    bad.append("Canonical reachability is not refreshed from both the task and\n"
+               "      foreground paths (plus its declaration). A launch failure can\n"
+               "      otherwise become a permanent session lie.")
+
+route = block_after("private var notificationRoute: NotificationRoute")
+if route is None:
+    bad.append("ConfirmJobCard's notification route is gone.")
+else:
+    if "canonicalPhoneState" not in route or "session.ownerPhone" in route:
+        bad.append("ConfirmJobCard still infers a delivery promise from the cached\n"
+                   "      ownerPhone string instead of canonical phone state.")
+    for state in (".unknown", ".none", ".invalid", ".valid"):
+        if state not in route:
+            bad.append("ConfirmJobCard does not handle canonical phone state %s."
+                       % state)
 
 # 7. THE SECOND COPY MUST NOT COME BACK. The same fact used to be said again,
 #    ungated, in Theme.accent, inside the stuck-queue block.
@@ -306,18 +293,16 @@ if "no number for you" in view:
                "      with no guard at all, and it says the same thing\n"
                "      `unreachableNotice` already says a screen further up.")
 
-# 8. AND THE CAP MAY NOT BE THE THING THAT SWALLOWS IT. "Done" is drawn
-#    newest-CREATED first — `created` is the only timestamp `AgentJob` carries —
-#    and it is capped, so an errand begun this morning and stopped tonight is
-#    the OLDEST terminal row of the batch and a plain `prefix` cuts it. That is
-#    the same silence leg 1 undid, arriving through the display instead of the
-#    filter.
+# 8. AND THE CAP MAY NOT BE THE THING THAT SWALLOWS IT. "Done" is drawn by
+#    terminal update time (with creation time only as a legacy fallback) and is
+#    capped. A plain `prefix` would still swallow a warning-bearing terminal
+#    card once enough ordinary receipts arrived. That is the same silence leg 1
+#    undid, arriving through the display instead of the filter.
 if re.search(r"\bfinished\.prefix\(", view):
-    bad.append("Done is drawn with `finished.prefix(...)` again. That cuts by\n"
-               "      when work BEGAN, on a shelf that is about how it ENDED: a job\n"
-               "      started this morning and stopped tonight sorts last of the\n"
-               "      batch and is dropped, which puts \"it may already have gone\n"
-               "      through\" back out of sight — the filter bug, one step later.")
+    bad.append("Done is drawn with `finished.prefix(...)` again. That counts a\n"
+               "      warning-bearing cancellation like an ordinary receipt and can\n"
+               "      put \"it may already have gone through\" back out of sight —\n"
+               "      the filter bug, one step later.")
 shelf = body_of("finishedShown")
 if shelf is None:
     bad.append("`finishedShown` is gone, so nothing decides which Done cards the\n"
@@ -361,7 +346,11 @@ else:
         bad.append("`finishedShown` cuts the section itself with `.prefix(`. The\n"
                    "      shelf is the policy's to spend: a slice here counts the card\n"
                    "      that must not be swallowed against the cap it is exempt from.")
-if "ForEach(Array(finishedShown.enumerated())" not in view:
+done_consumers = (
+    "ForEach(Array(finishedShown.enumerated())",
+    "DoneDeck(jobs: finishedShown)",
+)
+if not any(consumer in view for consumer in done_consumers):
     bad.append("The Done section no longer draws `finishedShown`. The cap rule is\n"
                "      declared and nothing consults it, which is indistinguishable\n"
                "      from not having written it.")
@@ -428,8 +417,18 @@ if ! grep -q 'enum HomeFeedPolicy' "$out/policy.swift"; then
 fi
 echo "the anchored region is $(wc -l < "$out/policy.swift" | tr -d ' ') lines of the shipping source"
 
+# HomeFeedPolicy's reachability input is the exact production enum declared by
+# OwnerMirror. Lift that type too so these cases compile the shipping four-state
+# model rather than a test-only copy that can drift.
+awk '/^enum OwnerMirror \{/,/^\}/' "$session" > "$out/OwnerMirror.swift"
+if ! grep -q 'enum PhoneState' "$out/OwnerMirror.swift"; then
+    echo "OwnerMirror.PhoneState is missing from AnticipyApp.swift."
+    exit 2
+fi
+
 {
     echo "import Foundation"
+    cat "$out/OwnerMirror.swift"
     cat "$out/policy.swift"
 } > "$out/HomeFeedPolicy.swift"
 

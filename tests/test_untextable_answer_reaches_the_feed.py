@@ -25,7 +25,9 @@ What is on test here is that it lands EXACTLY ONCE across many sweeps, and at
 the cost of EXACTLY ONE model call, because "record nothing on failure" is the
 whole reason the loop existed in the first place.
 """
+import threading
 import types
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -63,8 +65,10 @@ class Twilio:
     def __init__(self, fails=False):
         self.fails = fails
         self.sent = []
+        self.attempts = 0
 
     def text(self, to, message):
+        self.attempts += 1
         if self.fails:
             raise RuntimeError("Twilio 503")
         self.sent.append((to, message))
@@ -122,6 +126,11 @@ def backend(monkeypatch, jobs):
 
 def says(feed):
     return [e for e in feed if e.get("kind") == "anticipy_says"]
+
+
+def notification_states(feed):
+    return [e.get("decision") for e in feed
+            if e.get("kind") == "notification_status"]
 
 
 # The real row, from the real account, on the day this happened.
@@ -210,10 +219,21 @@ def test_a_second_process_does_not_repeat_it(monkeypatch):
     daytime(monkeypatch)
     a, llm, _ = brain(monkeypatch)
     delivered = {"kind": "anticipy_says", "decision": "done",
-                 "goal": FINISHED["goal"], "text": "already on his feed"}
-    monkeypatch.setattr(W.pb, "get", lambda url, **kw: Resp(
-        {"items": [delivered] if "/collections/events/" in url
-         else [stamped(FINISHED)]}))
+                 "goal": FINISHED["goal"], "text": "already on his feed",
+                 "external_event_id": f"job-result:{FINISHED['id']}"}
+    skipped = {"kind": "notification_status", "decision": "sms_skipped",
+               "goal": FINISHED["id"],
+               "external_event_id": f"job-sms:{FINISHED['id']}:sms_skipped"}
+
+    def fake_get(url, **kw):
+        if "/collections/events/" not in url:
+            return Resp({"items": [stamped(FINISHED)]})
+        filt = str((kw.get("params") or {}).get("filter") or "")
+        rows = [row for row in (delivered, skipped)
+                if row["external_event_id"] in filt]
+        return Resp({"items": rows})
+
+    monkeypatch.setattr(W.pb, "get", fake_get)
     posted = []
     monkeypatch.setattr(W.pb, "post", lambda url, **kw: (
         posted.append(url), Resp())[1])
@@ -228,8 +248,8 @@ def test_a_second_process_does_not_repeat_it(monkeypatch):
 # ------------------------------------------------------ nothing else may move
 
 def test_a_reachable_owner_still_gets_the_text_and_one_feed_row(monkeypatch):
-    """The existing behaviour, unchanged: the text is the delivery and the
-    feed row is the record. Exactly one of each, however many sweeps run."""
+    """A reachable owner gets the primary app result and one optional text.
+    Exactly one of each, however many sweeps run."""
     daytime(monkeypatch)
     a, llm, voice = brain(monkeypatch, phone="+15145550101")
     feed = backend(monkeypatch, [stamped(FINISHED)])
@@ -237,15 +257,15 @@ def test_a_reachable_owner_still_gets_the_text_and_one_feed_row(monkeypatch):
     for _ in range(4):
         W.report_finished_jobs(a)
 
-    assert len(voice.sent) == 1, "he is textable; the text is the delivery"
+    assert len(voice.sent) == 1, "he is textable; one optional copy is sent"
     assert len(says(feed)) == 1
     assert llm.calls == 1
 
 
-def test_a_transient_send_failure_still_retries_and_writes_nothing(monkeypatch):
-    """The reason REPORTED was only ever set after a successful send. A Twilio
-    5xx must not be mistaken for an untextable account: no feed row, not
-    marked reported, and the answer goes out when the transport returns."""
+def test_a_failed_text_never_hides_or_repeats_the_in_app_result(monkeypatch):
+    """The app is the primary result channel. A Twilio 5xx is recorded as an
+    attempted/failed optional copy; it cannot erase the app result or trigger
+    an unsafe duplicate attempt every two seconds."""
     daytime(monkeypatch)
     a, llm, voice = brain(monkeypatch, phone="+15145550101", fails=True)
     feed = backend(monkeypatch, [stamped(FINISHED)])
@@ -253,17 +273,209 @@ def test_a_transient_send_failure_still_retries_and_writes_nothing(monkeypatch):
     for _ in range(3):
         W.report_finished_jobs(a)
 
-    assert says(feed) == [], (
-        "a feed row is a record that she spoke — she did not, and writing one "
-        "would make already_delivered swallow the answer for 24 hours")
-    assert FINISHED["id"] not in W.REPORTED, "a 5xx is not a delivery"
-    assert llm.calls == 3
+    assert len(says(feed)) == 1, "Twilio must not gate the app result"
+    assert notification_states(feed) == ["sms_attempted", "sms_failed"]
+    assert voice.attempts == 1, "an uncertain external effect is at-most-once"
+    assert FINISHED["id"] in W.REPORTED
+    assert llm.calls == 1
 
     voice.fails = False
     W.report_finished_jobs(a)
-    assert len(voice.sent) == 1, "the recovered send must deliver"
+    assert voice.sent == [], (
+        "a later sweep must not blindly repeat an SMS whose provider outcome "
+        "could have been lost; the result is already available in the app")
+
+
+def test_a_restart_reads_the_attempt_fence_while_retrying_the_app_feed(monkeypatch):
+    """REPORTED is process memory. If the first app-feed write fails but the
+    pre-SMS fence persists, a fresh worker must retry only the app result and
+    must never repeat the external effect."""
+    daytime(monkeypatch)
+    a, llm, voice = brain(monkeypatch, phone="+15145550101", fails=True)
+    stored_events = []
+    app_write_fails = {"value": True}
+
+    def fake_get(url, **kw):
+        if "/collections/events/" in url:
+            filt = str((kw.get("params") or {}).get("filter") or "")
+            rows = [e for e in stored_events
+                    if e.get("external_event_id")
+                    and str(e["external_event_id"]) in filt]
+            return Resp({"items": rows})
+        return Resp({"items": [stamped(FINISHED)]})
+
+    def fake_post(url, **kw):
+        row = dict(kw.get("json") or {})
+        if row.get("kind") == "anticipy_says" and app_write_fails["value"]:
+            return Resp(ok=False)
+        if "/collections/events/" in url:
+            stored_events.append(row)
+        return Resp()
+
+    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.pb, "post", fake_post)
+    monkeypatch.setattr(W.pb, "patch", lambda *args, **kwargs: Resp())
+
+    W.report_finished_jobs(a)
+    assert voice.attempts == 1
+    assert not says(stored_events)
+    assert notification_states(stored_events) == ["sms_attempted", "sms_failed"]
+    assert FINISHED["id"] not in W.REPORTED, "the missing app result must retry"
+
+    # New process, recovered app store, recovered SMS provider. The old
+    # attempted fence is the only fact preventing a duplicate text.
+    W.REPORTED.clear()
+    app_write_fails["value"] = False
+    voice.fails = False
+    W.report_finished_jobs(a)
+
+    assert len(says(stored_events)) == 1
+    assert voice.attempts == 1
+    assert voice.sent == []
+    assert FINISHED["id"] in W.REPORTED
+    assert llm.calls == 2, "the app retry may re-compose; the SMS may not repeat"
+
+
+def test_app_result_saved_before_restart_still_gets_one_optional_text(monkeypatch):
+    """A crash can land after the app event and before the SMS fence. A new
+    process must reuse that exact sentence, finish the optional text once, and
+    never pay the model to compose a second version."""
+    daytime(monkeypatch)
+    a, llm, voice = brain(monkeypatch, phone="+15145550101")
+    stored_events = [{
+        "kind": "anticipy_says",
+        "decision": "done",
+        "goal": FINISHED["goal"],
+        "text": "the exact sentence already visible in the app",
+        "external_event_id": f"job-result:{FINISHED['id']}",
+    }]
+
+    def fake_get(url, **kw):
+        if "/collections/events/" not in url:
+            return Resp({"items": [stamped(FINISHED)]})
+        filt = str((kw.get("params") or {}).get("filter") or "")
+        return Resp({"items": [row for row in stored_events
+                               if row.get("external_event_id")
+                               and str(row["external_event_id"]) in filt]})
+
+    def fake_post(url, **kw):
+        stored_events.append(dict(kw.get("json") or {}))
+        return Resp()
+
+    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.pb, "post", fake_post)
+    monkeypatch.setattr(W.pb, "patch", lambda *args, **kwargs: Resp())
+
+    W.report_finished_jobs(a)
+    assert llm.calls == 0
+    assert voice.sent == [(
+        "+15145550101", "the exact sentence already visible in the app")]
+    assert notification_states(stored_events) == ["sms_attempted", "sms_sent"]
+
+    W.REPORTED.clear()
+    W.report_finished_jobs(a)
+    assert llm.calls == 0
+    assert len(voice.sent) == 1
+
+
+def test_two_workers_racing_the_attempt_fence_send_exactly_one_text(monkeypatch):
+    """The unique event id is a claim, not merely idempotent bookkeeping.
+
+    Both workers are forced to observe no app result and no SMS fence before
+    either may create. One wins each unique insert; the loser reads the
+    winner's app sentence but never inherits permission to send from the
+    winner's attempt row.
+    """
+    daytime(monkeypatch)
+    job = stamped(FINISHED)
+    stored_events = []
+    sent = []
+    lock = threading.Lock()
+    result_barrier = threading.Barrier(2)
+    attempt_barrier = threading.Barrier(2)
+    exact_reads = {}
+
+    def fake_get(url, **kw):
+        if "/collections/events/" not in url:
+            return Resp({"items": [dict(job)], "totalPages": 1})
+        filt = str((kw.get("params") or {}).get("filter") or "")
+        durable_id = next((value for value in (
+            f"job-result:{job['id']}",
+            f"job-sms:{job['id']}:sms_attempted",
+            f"job-sms:{job['id']}:sms_sent",
+        ) if value in filt), "")
+        with lock:
+            snapshot = [dict(row) for row in stored_events
+                        if durable_id and row.get("external_event_id") == durable_id]
+            exact_reads[durable_id] = exact_reads.get(durable_id, 0) + 1
+            read_number = exact_reads[durable_id]
+        if durable_id == f"job-result:{job['id']}" and read_number <= 2:
+            result_barrier.wait(timeout=5)
+        if durable_id == f"job-sms:{job['id']}:sms_attempted" and read_number <= 2:
+            attempt_barrier.wait(timeout=5)
+        return Resp({"items": snapshot})
+
+    def fake_post(url, **kw):
+        row = dict(kw.get("json") or {})
+        durable_id = row.get("external_event_id")
+        with lock:
+            if durable_id and any(
+                    existing.get("external_event_id") == durable_id
+                    for existing in stored_events):
+                return Resp(ok=False)
+            stored_events.append(row)
+        return Resp()
+
+    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.pb, "post", fake_post)
+    monkeypatch.setattr(W.pb, "patch", lambda *args, **kwargs: Resp())
+    monkeypatch.setattr(W, "picture_for_done_text", lambda *args: [])
+
+    def participant(draft):
+        return types.SimpleNamespace(
+            owner_id="own1", owner_ref="", backend_url="http://pb",
+            _voice=lambda _context: draft,
+            can_notify_owner=lambda: True,
+            notify_owner=lambda message: (sent.append(message), {"ok": True})[1],
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(W.report_finished_jobs, participant("draft one")),
+                   pool.submit(W.report_finished_jobs, participant("draft two"))]
+        for future in futures:
+            future.result(timeout=10)
+
+    app_rows = [row for row in stored_events
+                if row.get("external_event_id") == f"job-result:{job['id']}"]
+    attempts = [row for row in stored_events
+                if row.get("external_event_id") ==
+                f"job-sms:{job['id']}:sms_attempted"]
+    assert len(app_rows) == 1
+    assert len(attempts) == 1
+    assert sent == [app_rows[0]["text"]], (
+        "only the attempt-claim winner may text, using the sentence that won "
+        "the app-result race")
+
+
+def test_an_unverified_cached_number_is_paused_and_the_app_result_still_lands(
+        monkeypatch):
+    """A profile read can fail after the number was removed elsewhere. The old
+    cached route must not receive another task result while canonical state is
+    unknown; availability falls back to the app."""
+    daytime(monkeypatch)
+    a, llm, voice = brain(monkeypatch, phone="+15145550101")
+    monkeypatch.setattr(W, "fetch_owner_phone", lambda owner_ref="": None)
+
+    assert W.refresh_owner_phone(a) is False
+    assert a.owner_phone == ""
+
+    feed = backend(monkeypatch, [stamped(FINISHED)])
+    W.report_finished_jobs(a)
+
+    assert voice.attempts == 0
     assert len(says(feed)) == 1
-    assert FINISHED["id"] in W.REPORTED, "delivered once, never twice"
+    assert notification_states(feed) == ["sms_skipped"]
+    assert llm.calls == 1
 
 
 def test_a_stuck_question_is_deliberately_not_pushed_to_the_feed(monkeypatch):

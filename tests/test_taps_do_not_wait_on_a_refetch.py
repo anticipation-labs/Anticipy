@@ -64,10 +64,13 @@ def test_a_confirmed_status_is_held_only_until_the_server_agrees():
     """Holding it forever would pin a stale card; not holding it at all lets a
     pre-write row snap the card back to "waiting for your OK" for one poll."""
     src = _read("app/ios/Anticipy/AnticipyApp.swift")
-    assert "for job in fetched where confirmedStatus[job.id] == job.status" in src, \
-        "nothing retires the held status"
+    assert "guard let held = confirmedStatus[job.id]" in src, \
+        "the fetched job is never reconciled with its held accepted status"
+    assert "ActionWritePolicy.reconcile(" in src, \
+        "the overlay no longer distinguishes stale, advanced, and unknown rows"
     assert "confirmedStatus.removeValue(forKey: job.id)" in src
-    assert "job.withStatus(held)" in src, "the held status is not applied to the feed"
+    assert "job.withStatus(held.expected)" in src, \
+        "the held status is not applied to the one verified-stale feed row"
 
 
 def test_every_status_changing_write_declares_what_it_expects():

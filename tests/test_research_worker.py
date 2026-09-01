@@ -201,10 +201,14 @@ DONE = {"id": "r1", "goal": "research: opening hours of the aquarium",
         "claimed_by": "worker-research", "owner": "own1"}
 
 
-def test_research_results_reach_the_desk_AND_his_phone(monkeypatch):
-    """Rule change 2026-08-05 (Omar): 'it should text you the results.'
-    Desk-only delivery made finished quiet work indistinguishable from her
-    being dead — he watched the Paris research complete and saw nothing."""
+def test_research_results_reach_the_desk_without_an_unsolicited_text(monkeypatch):
+    """Research requested in the app/speech context finishes on the desk.
+
+    A result being visible only in the old raw feed felt like silence; the
+    consumer Home now gives it a first-class result card. That does not grant
+    a background lookup permission to buzz the phone. Jobs explicitly created
+    from SMS still fall through and answer in that thread below.
+    """
     patches, posts, notified = [], [], []
     wire(monkeypatch, DONE, patches, posts)
 
@@ -216,10 +220,11 @@ def test_research_results_reach_the_desk_AND_his_phone(monkeypatch):
 
     monkeypatch.setattr(W, "datetime", FakeDT)
     W.report_finished_jobs(make_anticipy(notified))
-    assert len(notified) == 1                   # the answer reaches his hand
+    assert notified == []                       # no unsolicited SMS side effect
     assert posts, "no conversation entry was written"
     assert posts[0]["kind"] == "anticipy_says"
     assert posts[0]["decision"] == "done"
+    assert posts[0]["external_event_id"] == "job-result:r1"
     assert "Sources:" in posts[0]["text"]       # the feed card IS the answer
     assert "r1" in W.REPORTED                   # and it is never re-delivered
 

@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "conversation_cases": [
+    {
+      "id": "team_sync_correction",
+      "category": "correction",
+      "context": [
+        "We agreed to move the team sync to Monday at 10 in the boardroom."
+      ],
+      "utterance": "Actually, Tuesday at 10, not Monday. Keep the boardroom.",
+      "cheap_verdict": {
+        "decision": "act",
+        "goal": "Move the team sync to Tuesday at 10 in the boardroom, replacing Monday",
+        "reason": "the owner corrected an existing plan",
+        "owes": "owner",
+        "addressee": "person",
+        "missing": [],
+        "touches": "world"
+      },
+      "strong_verdict": {
+        "decision": "act",
+        "goal": "Move the team sync to Tuesday at 10 in the boardroom, replacing Monday",
+        "reason": "the owner corrected an existing plan",
+        "owes": "owner",
+        "addressee": "person",
+        "missing": [],
+        "touches": "world"
+      },
+      "expected": {
+        "decision": "act",
+        "goal": "Move the team sync to Tuesday at 10 in the boardroom, replacing Monday"
+      }
+    },
+    {
+      "id": "dinner_exclusions_survive",
+      "category": "exclusions",
+      "context": [
+        "Let's arrange dinner downtown tomorrow for the three of us."
+      ],
+      "utterance": "Anywhere downtown except Earls, and indoors, not the patio.",
+      "cheap_verdict": {
+        "decision": "act",
+        "goal": "Arrange dinner downtown tomorrow for three people, excluding Earls and patio seating",
+        "reason": "the owner added constraints to the dinner plan",
+        "owes": "owner",
+        "addressee": "person",
+        "missing": [
+          "reservation time"
+        ],
+        "touches": "world"
+      },
+      "strong_verdict": {
+        "decision": "ask",
+        "goal": "Arrange dinner downtown tomorrow for three people, excluding Earls and patio seating",
+        "reason": "the constraints are clear but the reservation time is missing",
+        "owes": "owner",
+        "addressee": "person",
+        "missing": [
+          "reservation time"
+        ],
+        "touches": "world"
+      },
+      "expected": {
+        "decision": "ask",
+        "goal": "Arrange dinner downtown tomorrow for three people, excluding Earls and patio seating",
+        "missing": [
+          "reservation time"
+        ]
+      }
+    },
+    {
+      "id": "team_sync_discussion_is_not_an_instruction",
+      "category": "discussion_vs_instruction",
+      "context": [
+        "The team has been comparing Monday and Tuesday for the sync."
+      ],
+      "utterance": "I'm only explaining the options we discussed; nobody has decided to move it.",
+      "cheap_verdict": {
+        "decision": "ignore",
+        "goal": null,
+        "reason": "discussion of possibilities with no settled instruction",
+        "owes": "nobody",
+        "addressee": "person",
+        "missing": [],
+        "touches": null
+      },
+      "strong_verdict": null,
+      "expected": {
+        "decision": "ignore",
+        "goal": null
+      }
+    },
+    {
+      "id": "quantum_topic_invented_by_cheap_triage",
+      "category": "hallucinated_topic",
+      "context": [
+        "The owner is testing a long listening session and talking about the team sync."
+      ],
+      "utterance": "I am checking whether this catches the meeting details cleanly.",
+      "cheap_verdict": {
+        "decision": "ignore",
+        "goal": "Research quantum computing for the team",
+        "reason": "quiet lookup",
+        "owes": "nobody",
+        "addressee": "self",
+        "missing": [],
+        "touches": "read"
+      },
+      "strong_verdict": {
+        "decision": "ignore",
+        "goal": null,
+        "reason": "the proposed quantum topic does not appear in the owner's words",
+        "owes": "nobody",
+        "addressee": "self",
+        "missing": [],
+        "touches": null
+      },
+      "expected": {
+        "decision": "ignore",
+        "goal": null
+      }
+    }
+  ],
+  "delivery_cases": [
+    {
+      "id": "missing_phone_uses_in_app_only",
+      "phone": "",
+      "transport_fails": false,
+      "expected_sms_count": 0,
+      "expected_sms_attempts": 0,
+      "expected_feed_count": 1,
+      "expected_notification_states": ["sms_skipped"]
+    },
+    {
+      "id": "verified_phone_uses_text_and_in_app_receipt",
+      "phone": "+16045550101",
+      "transport_fails": false,
+      "expected_sms_count": 1,
+      "expected_sms_attempts": 1,
+      "expected_feed_count": 1,
+      "expected_notification_states": ["sms_attempted", "sms_sent"]
+    },
+    {
+      "id": "text_transport_failure_still_uses_in_app",
+      "phone": "+16045550101",
+      "transport_fails": true,
+      "expected_sms_count": 0,
+      "expected_sms_attempts": 1,
+      "expected_feed_count": 1,
+      "expected_notification_states": ["sms_attempted", "sms_failed"]
+    }
+  ],
+  "browser_cases": [
+    {
+      "id": "browser_offline_never_completes",
+      "goal": "Book dinner downtown tomorrow for three people at 7 PM",
+      "map_error": "net::ERR_INTERNET_DISCONNECTED"
+    }
+  ],
+  "workflow_cases": [
+    {
+      "id": "no_receipt_never_completes",
+      "goal": "Book dinner downtown tomorrow for three people at 7 PM"
+    }
+  ]
+}

@@ -92,8 +92,9 @@ vm.createContext(isolated);
 const handler = vm.runInContext('(' + handlerSource + ')', isolated);
 
 const profiles = (scenario.owner_refs || []).map((ref) => ({
-  getString: () => ref,
+  getString: (key) => key === 'owner_ref' ? ref : String((scenario.body || {}).From || ''),
 }));
+const owners = (scenario.account_owner_refs || []).map((ref) => ({ id: ref }));
 
 const e = {
   request: {
@@ -117,8 +118,33 @@ const e = {
   string: (status, text) => ({ status: status, text: text }),
   response: { header: () => ({ set: () => {} }) },
   app: {
-    findRecordsByFilter: (collection) => {
-      if (collection === 'owner_profile') return profiles;
+    findRecordsByFilter: (collection, filter, sort, limit, offset, bindings) => {
+      const page = (rows) => rows.slice(offset || 0,
+        (offset || 0) + (limit || rows.length));
+      if (collection === 'owners') {
+        if (scenario.fail_owner_page_offset === (offset || 0)) {
+          throw new Error('injected owner page failure');
+        }
+        return page(owners);
+      }
+      if (collection === 'owner_profile' && String(filter).includes('phone')) {
+        if (scenario.fail_profile_page_offset === (offset || 0)) {
+          throw new Error('injected profile page failure');
+        }
+        return page(profiles);
+      }
+      if (collection === 'owner_profile' && String(filter).includes('owner_ref')) {
+        if ((scenario.fail_canonical_refs || []).includes(bindings.ref)) {
+          throw new Error('injected canonical profile failure');
+        }
+        const canonical = scenario.canonical_profile_phones || {};
+        if (Object.prototype.hasOwnProperty.call(canonical, bindings.ref)) {
+          return [{ getString: (key) => key === 'phone' ? canonical[bindings.ref] : bindings.ref }];
+        }
+        return (scenario.profile_owner_refs || []).includes(bindings.ref)
+          ? [{ getString: (key) => key === 'owner_ref' ? bindings.ref : '' }]
+          : [];
+      }
       return [];
     },
     findFirstRecordByFilter: () => {
@@ -148,6 +174,10 @@ def twilio_signature(url: str, params: dict, token: str = AUTH_TOKEN) -> str:
 
 def post(body=None, *, env=None, headers=None, host="backend.example.com",
          path="/sms/inbound", raw_query="", owner_refs=("own1",), duplicate=False,
+         account_owner_refs=(), profile_owner_refs=(),
+         canonical_profile_phones=None,
+         fail_canonical_refs=(), fail_profile_page_offset=None,
+         fail_owner_page_offset=None,
          sign_for=None, token=AUTH_TOKEN):
     """Run the real hook against one request and return status/logs/saved rows."""
     body = dict(body if body is not None else {
@@ -161,6 +191,9 @@ def post(body=None, *, env=None, headers=None, host="backend.example.com",
     hdrs.update(headers or {})
     if sign_for is not None:
         hdrs["X-Twilio-Signature"] = twilio_signature(sign_for, body, token)
+    canonical = (dict(canonical_profile_phones)
+                 if canonical_profile_phones is not None
+                 else {ref: body.get("From", "") for ref in owner_refs if ref})
     scenario = {
         "env": {"TWILIO_AUTH_TOKEN": AUTH_TOKEN,
                 "TWILIO_ACCOUNT_SID": ACCOUNT,
@@ -168,6 +201,12 @@ def post(body=None, *, env=None, headers=None, host="backend.example.com",
                 **(env or {})},
         "headers": hdrs, "body": body, "host": host, "path": path,
         "rawQuery": raw_query, "owner_refs": list(owner_refs),
+        "account_owner_refs": list(account_owner_refs),
+        "profile_owner_refs": list(profile_owner_refs),
+        "canonical_profile_phones": canonical,
+        "fail_canonical_refs": list(fail_canonical_refs),
+        "fail_profile_page_offset": fail_profile_page_offset,
+        "fail_owner_page_offset": fail_owner_page_offset,
         "duplicate": duplicate,
     }
     proc = subprocess.run(
@@ -284,12 +323,104 @@ def test_a_text_from_an_unknown_number_is_dropped_but_never_silently():
     assert "DROPPED" in joined and "no account owns" in joined, joined
 
 
+def test_the_signup_number_routes_only_until_a_profile_exists():
+    signed = "https://backend.example.com/sms/inbound"
+    seeded = post(sign_for=signed, owner_refs=(),
+                  account_owner_refs=("own1",), profile_owner_refs=())
+    assert len(seeded["saved"]) == 1
+    assert seeded["saved"][0]["owner_ref"] == "own1"
+
+    cleared = post(sign_for=signed, owner_refs=(),
+                   account_owner_refs=("own1",),
+                   profile_owner_refs=("own1",))
+    assert cleared["saved"] == [], (
+        "an existing profile with an empty/different phone must suppress the "
+        "stale owners.phone fallback")
+    assert "no account owns" in " ".join(cleared["logs"])
+
+
+def test_stale_and_orphan_profiles_cannot_reaffiliate_a_removed_number():
+    signed = "https://backend.example.com/sms/inbound"
+    stale_rows = ("", "", "", "", "own1", "own1")
+
+    cleared = post(
+        sign_for=signed,
+        owner_refs=stale_rows,
+        canonical_profile_phones={"own1": ""},
+    )
+    assert cleared["saved"] == []
+
+    changed = post(
+        sign_for=signed,
+        owner_refs=stale_rows,
+        canonical_profile_phones={"own1": "+16045559999"},
+    )
+    assert changed["saved"] == []
+
+    current = post(
+        sign_for=signed,
+        owner_refs=stale_rows,
+        canonical_profile_phones={"own1": "+16045550111"},
+    )
+    assert len(current["saved"]) == 1
+    assert current["saved"][0]["owner_ref"] == "own1"
+
+
 def test_an_ambiguous_number_is_dropped_and_named():
     out = post(sign_for="https://backend.example.com/sms/inbound",
                owner_refs=("own1", "own2"))
     assert out["status"] == 200
     assert not out["saved"]
     assert "ambiguous" in " ".join(out["logs"])
+
+
+def test_profile_owner_plus_profileless_signup_seed_is_ambiguous():
+    """Phone sharing is schema-valid. A canonical profile match must not hide
+    a second account that still legitimately uses the same sign-up seed before
+    it has created its first profile."""
+    out = post(
+        sign_for="https://backend.example.com/sms/inbound",
+        owner_refs=("profile-owner",),
+        account_owner_refs=("seed-owner",),
+        profile_owner_refs=(),
+        canonical_profile_phones={"profile-owner": "+16045550111"},
+    )
+    assert out["status"] == 200
+    assert out["saved"] == []
+    assert "2 accounts" in " ".join(out["logs"])
+    assert "ambiguous" in " ".join(out["logs"])
+
+
+def test_one_failed_canonical_read_never_collapses_ambiguity_to_one_owner():
+    out = post(
+        sign_for="https://backend.example.com/sms/inbound",
+        owner_refs=("own1", "own2"),
+        canonical_profile_phones={
+            "own1": "+16045550111", "own2": "+16045550111"},
+        fail_canonical_refs=("own1",),
+    )
+    assert out["status"] == 500
+    assert out["saved"] == []
+    assert "partial data" in " ".join(out["logs"])
+
+
+@pytest.mark.parametrize("failed_page", ["profile", "owner"])
+def test_a_failed_later_routing_page_fails_closed(monkeypatch, failed_page):
+    refs = tuple(f"owner-{index:03d}" for index in range(201))
+    kwargs = {
+        "sign_for": "https://backend.example.com/sms/inbound",
+        "owner_refs": refs if failed_page == "profile" else (),
+        "account_owner_refs": refs if failed_page == "owner" else (),
+        "canonical_profile_phones": {
+            ref: "+16045550111" for ref in refs
+        } if failed_page == "profile" else {},
+        "fail_profile_page_offset": 200 if failed_page == "profile" else None,
+        "fail_owner_page_offset": 200 if failed_page == "owner" else None,
+    }
+    out = post(**kwargs)
+    assert out["status"] == 500
+    assert out["saved"] == []
+    assert "could not be fully verified" in " ".join(out["logs"])
 
 
 def test_a_retry_is_one_command_and_says_it_recognised_the_retry():

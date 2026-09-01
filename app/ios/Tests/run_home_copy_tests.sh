@@ -88,7 +88,8 @@ elsewhere = view.replace(anchored, "")
 
 # 1. THE BROWSER ASK READS THE QUEUE IT IS STANDING OVER.
 #
-#    The count can never be zero — `browserOffer` requires `!handling.isEmpty`
+#    The count can never be zero — `browserOffer` requires
+#    `!browserHandling.isEmpty`
 #    and the card renders inside the same condition — so there is no defensive
 #    branch to write. What there IS to get wrong is spelling the number instead
 #    of counting it: "three" was the number in this fix's own proposal, and a
@@ -98,10 +99,11 @@ if card is None:
     bad.append("`browserOfferCard` is gone; this suite is measuring nothing\n"
                "      about the browser ask.")
     card = ""
-if "handling.count" not in card:
-    bad.append("The browser card no longer reads `handling.count`. The queue it\n"
+if "browserHandling.count" not in card:
+    bad.append("The browser card no longer reads `browserHandling.count`. The browser-only queue it\n"
                "      is standing over is the only thing that makes this an answer\n"
-               "      rather than a chore, and a typed number is wrong the first\n"
+               "      rather than a chore. Counting calendar or research work would\n"
+               "      falsely claim Chrome is blocking work it never executes; a typed number is wrong the first\n"
                "      day somebody has a different one.")
 for fn in ("browserHeadline", "browserBody", "browserButton"):
     if "HomeCopy.%s(" % fn not in card:

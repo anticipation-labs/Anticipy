@@ -20,6 +20,18 @@ extension AgentJob {
         return first.uppercased() + s.dropFirst()
     }
 
+    /// Which execution surface owns the stored lane. This reads a typed lane
+    /// value; it never infers an action from the goal's prose. Calendar work
+    /// runs in the phone's contained EventKit hand and must not be presented as
+    /// Chrome work merely because it is not a research row.
+    var executionSurfaceLabel: String {
+        switch CalendarHandPolicy.normalizedLane(lane) {
+        case "research": return "Hand 2 · Research service"
+        case CalendarHandPolicy.lane: return "This iPhone · Calendar"
+        default: return "Hand 1 · Browser"
+        }
+    }
+
     /// The exact owner-authored words bound into this plan's approval. The
     /// concise goal is model-written; this is shown whenever the model left
     /// anything out, so “Send it” never approves invisible context.
@@ -297,37 +309,30 @@ enum HomeFeedPolicy {
     /// unreachable. An account with no number gets asked nothing, ever, so it
     /// never accumulates the stuck work that was the condition for being told.
     ///
-    /// THE ACCOUNT ANSWERS THIS, NOT THE MIRROR — and the first version of this
-    /// guard let the mirror answer, which is the whole defect back again.
+    /// THE ACCOUNT ANSWERS THIS, NOT THE MIRROR. `PhoneState` is unknown until a
+    /// canonical owner read succeeds, then distinguishes an absent number from
+    /// a malformed one and from one that passed the same E.164 rule used when
+    /// saving. Home speaks only for the explicit `.none` answer.
+    static func sayUnreachable(phoneState: OwnerMirror.PhoneState) -> Bool {
+        phoneState == .none
+    }
+
+    /// Whether a completed brain event deserves its own recap card. A worker
+    /// emits `job-result:<job id>` after completing an ordinary job; when that
+    /// exact terminal job is already in the visible Done deck, rendering both
+    /// records makes one outcome look like two pieces of work.
     ///
-    /// `ownerPhone` is a device-local `@AppStorage` mirror. It is EMPTY IN
-    /// EXACTLY THE SAME WAY whether the account has no number or this launch
-    /// simply has not asked yet, and "has not asked yet" is not a rare state:
-    /// `resumeSignedInAccount` re-reads the owner AFTER `await refresh()`, so
-    /// `connection == .ready` — the thing this used to be gated on — is already
-    /// true while the number is still unread; and both owner reads in that file
-    /// are `try?`, so a read that fails leaves the mirror empty for the whole
-    /// session. Gating on "the feed loaded" therefore proves nothing about the
-    /// question actually being asked, and Home is the highest-traffic surface
-    /// in the app: it does not get to tell somebody with a number on file to go
-    /// and add one.
-    ///
-    /// So `accountSaysNoNumber` is the ACCOUNT RECORD's own answer, and it is
-    /// an optional because there are three states and not two. `nil` is "nobody
-    /// has managed to ask", and Home says nothing at all in that state.
-    /// `backend.fetchOwner` was built to hand back exactly this distinction —
-    /// its own comment: "'' means the account has no number … a thrown error
-    /// means nothing has been learned and nothing should change."
-    ///
-    /// BOTH must agree. The mirror is checked as well, so a phone holding a
-    /// number the account has since dropped stays quiet rather than calling
-    /// itself unreachable while showing the number in Settings.
-    ///
-    /// Whitespace counts as no number. A blank field cannot be texted, and
-    /// which of the two blanks it is is not a question worth asking.
-    static func sayUnreachable(ownerPhone: String, accountSaysNoNumber: Bool?) -> Bool {
-        guard accountSaysNoNumber == true else { return false }
-        return ownerPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    /// Only the exact namespace is interpreted. Older events without an id,
+    /// unrelated external ids, and job results whose terminal card is not on
+    /// the current shelf all remain visible.
+    static func showsDoneEvent(externalEventID: String?,
+                               visibleTerminalJobIDs: Set<String>) -> Bool {
+        let prefix = "job-result:"
+        guard let externalEventID,
+              externalEventID.hasPrefix(prefix) else { return true }
+        let jobID = String(externalEventID.dropFirst(prefix.count))
+        guard !jobID.isEmpty else { return true }
+        return !visibleTerminalJobIDs.contains(jobID)
     }
 }
 
@@ -367,7 +372,7 @@ enum HomeCopy {
     /// Whose Chrome, and how many things are standing in it.
     ///
     /// `waiting` cannot be zero: the card renders only under
-    /// `!handling.isEmpty`, which is also `browserOffer`'s own condition.
+    /// `!browserHandling.isEmpty`, which is also `browserOffer`'s own condition.
     static func browserHeadline(waiting: Int) -> String {
         waiting == 1 ? "This one needs your Chrome" : "These need your Chrome"
     }
@@ -555,17 +560,9 @@ struct HomeView: View {
     @EnvironmentObject var session: AnticipySession
     @Environment(\.scenePhase) private var scenePhase
     @State private var typedLine = ""
-    /// Does the ACCOUNT have a number on file? `nil` until the server has
-    /// answered — see `HomeFeedPolicy.sayUnreachable` for why that third state
-    /// is the whole point and `session.ownerPhone` cannot supply it.
-    ///
-    /// Home asks for itself because nothing it can read says whether the owner
-    /// record was ever successfully read this session: `ownerPhone` is written
-    /// by two best-effort `try?` reads in `AnticipyApp.swift`, one of which
-    /// runs AFTER the refresh that flips `connection` to `.ready`, and neither
-    /// leaves a mark behind on failure. The sentence is made here, so the
-    /// evidence for it is gathered here.
-    @State private var accountSaysNoNumber: Bool?
+    /// Reachability is owned by the session's canonical account read. A cached
+    /// phone string cannot distinguish not-yet-read, absent, malformed, and
+    /// valid, and must not make notification promises on its own.
     /// The sentence the typewriter is committed to, captured ONCE. See
     /// `briefingView` — the poll runs every 3 seconds and used to wipe and
     /// re-type her whole briefing, with a haptic, every time a job count moved.
@@ -730,7 +727,8 @@ struct HomeView: View {
     /// a dropped connection would tell someone who paired months ago to go and
     /// pair.
     private var browserOffer: Bool {
-        verified && !session.agentPaired && !browserOfferDeferred && !handling.isEmpty
+        verified && !session.agentPaired && !browserOfferDeferred
+            && !browserHandling.isEmpty
     }
 
     /// The browser ask, asked here instead of in first run.
@@ -751,7 +749,7 @@ struct HomeView: View {
         // branch on it — the headline's grammar, the body's payoff and the
         // button's label — and they are one question, so they ask it once and
         // in one place (`HomeCopy`).
-        let waiting = handling.count
+        let waiting = browserHandling.count
         return VStack(alignment: .leading, spacing: Theme.Space.snug) {
             Text(HomeCopy.browserHeadline(waiting: waiting))
                 .font(Theme.display(24))
@@ -914,11 +912,26 @@ struct HomeView: View {
     /// Finished quiet work — anticipy_says events the brain marked done.
     /// Newest first, capped so the desk never becomes a landfill.
     private var foundForYou: [BrainEvent] {
+        let visibleTerminalJobIDs = Set(finishedShown.map(\.id))
         let done = session.anticipySays.filter { ev in
             ev.kind == "anticipy_says" && ev.decision == "done"
                 && (ev.text?.isEmpty == false)
+                && HomeFeedPolicy.showsDoneEvent(
+                    externalEventID: ev.external_event_id,
+                    visibleTerminalJobIDs: visibleTerminalJobIDs)
         }
         return Array(done.prefix(5))
+    }
+
+    /// The briefing's newest conversational line. Job-result events already
+    /// represented by a visible Done card are filtered by the same policy as
+    /// Found for You, so the top briefing cannot become a second copy.
+    private var freshAnticipyLine: String? {
+        guard let event = session.freshAnticipyEvent,
+              HomeFeedPolicy.showsDoneEvent(
+                externalEventID: event.external_event_id,
+                visibleTerminalJobIDs: Set(finishedShown.map(\.id))) else { return nil }
+        return event.text
     }
     /// Questions she asked that have NO task behind them, and that he has not
     /// answered yet.
@@ -967,6 +980,15 @@ struct HomeView: View {
     private var handling: [AgentJob] {
         session.jobs.filter { HomeFeedPolicy.placement(status: $0.status, lane: $0.lane) == .handling }
     }
+    /// Only these rows actually depend on Chrome. Research and the contained
+    /// calendar executor are also handling rows, but telling either of them to
+    /// open Chrome would be a false recovery path.
+    private var browserHandling: [AgentJob] {
+        handling.filter {
+            let lane = CalendarHandPolicy.normalizedLane($0.lane)
+            return lane != "research" && lane != CalendarHandPolicy.lane
+        }
+    }
     /// Terminal work: done, failed, AND called off.
     ///
     /// This read `done || failed` and nothing else, so every cancellation fell
@@ -977,7 +999,9 @@ struct HomeView: View {
     /// nothing. One question, one answer, in `HomeFeedPolicy` — three closures
     /// naming statuses by hand is how a status came to match none of them.
     private var finished: [AgentJob] {
-        session.jobs.filter { HomeFeedPolicy.placement(status: $0.status, lane: $0.lane) == .done }
+        session.jobs
+            .filter { HomeFeedPolicy.placement(status: $0.status, lane: $0.lane) == .done }
+            .sorted { ($0.updated ?? $0.created) > ($1.updated ?? $1.created) }
     }
     /// How much of Done is a shelf. Eight is what this section has always
     /// drawn; naming it is the only change to the number.
@@ -985,12 +1009,10 @@ struct HomeView: View {
     /// Done as it is actually drawn — the shelf, plus every card the shelf is
     /// not allowed to swallow.
     ///
-    /// `finished` is newest-CREATED first, because that is the only timestamp
-    /// the row carries, and a plain `prefix` therefore cuts by when work BEGAN
-    /// on a shelf that is about how it ENDED. An errand started this morning
-    /// and stopped tonight is the oldest row of the nine and gets cut, which
-    /// puts "it may already have gone through" back out of sight — see
-    /// `HomeFeedPolicy.settled` for the whole argument.
+    /// `finished` is newest-UPDATED first. PocketBase's update timestamp moves
+    /// when a job settles, so the shelf now follows when work ended; legacy
+    /// rows fall back to their creation time. The policy below still preserves
+    /// every unsettled terminal result even beyond the ordinary shelf.
     ///
     /// The order is untouched: everything past the shelf is older than
     /// everything on it, so what survives lands exactly where newest-first
@@ -1008,22 +1030,32 @@ struct HomeView: View {
         return keep.map { rows[$0] }
     }
 
-    /// What she heard, as conversations rather than as a wall of lines.
-    ///
-    /// The window is the same newest-30 lines the feed has always shown; only
-    /// the grouping is new, and it groups on the one field that exists —
-    /// `events.segment`. A line the segmenter never stamped is a conversation
-    /// of one, so with no segments at all this renders the identical list of
-    /// rows it renders today. Newest conversation first, the way "Heard" has
-    /// always been chronological.
-    private var heardGroups: [HeardGroup] {
-        Array(HeardGroup.build(Array(session.transcript.suffix(30))).reversed())
+    /// A recap may use only meaning the brain explicitly stamped. The person's
+    /// raw words stay in Settings; Home gets at most three goal titles from
+    /// conversations that were actually classified as asking or acting.
+    private var recentConversationInsights: [HomeConversationInsight] {
+        var seen = Set<String>()
+        var rows: [HomeConversationInsight] = []
+        for group in HeardGroup.build(session.transcript).reversed()
+            where group.weight >= .acting {
+            guard let title = group.latestGoalTitle else { continue }
+            let key = title.lowercased()
+            guard seen.insert(key).inserted else { continue }
+            rows.append(HomeConversationInsight(
+                id: group.id,
+                title: title,
+                state: "Recent conversation"))
+            if rows.count == 3 { break }
+        }
+        return rows
     }
 
     /// Nothing to show at all. WHY there's nothing is a separate question, and
     /// the answer decides which of four very different screens you get.
     private var feedIsEmpty: Bool {
-        needsOK.isEmpty && handling.isEmpty && finished.isEmpty && session.transcript.isEmpty
+        needsOK.isEmpty && openQuestions.isEmpty && handling.isEmpty
+            && finished.isEmpty && foundForYou.isEmpty
+            && recentConversationInsights.isEmpty
     }
 
     /// A read actually succeeded. Everything the app claims about your day
@@ -1090,6 +1122,16 @@ struct HomeView: View {
                             }
                         }
                         listenCard.padding(.top, feedIsEmpty ? Theme.Space.tight : Theme.Space.roomy)
+                        if verified && !recentConversationInsights.isEmpty {
+                            sectionHeader("Insights")
+                                .padding(.top, Theme.Space.section)
+                                .padding(.bottom, Theme.Space.tight)
+                            HomeInsightsCard(
+                                items: recentConversationInsights,
+                                needsYou: needsOK.count + openQuestions.count,
+                                working: handling.count,
+                                done: finished.count)
+                        }
                         // AN UNREACHABLE CUSTOMER NEVER FINDS OUT THEY ARE
                         // UNREACHABLE. Those were this file's own capitals,
                         // written above a sentence nested inside
@@ -1102,8 +1144,8 @@ struct HomeView: View {
                         // carries the parked-queue consequence in its own
                         // words, and that one asked the device-local mirror
                         // with no guard on it at all.
-                        if HomeFeedPolicy.sayUnreachable(ownerPhone: session.ownerPhone,
-                                                         accountSaysNoNumber: accountSaysNoNumber) {
+                        if HomeFeedPolicy.sayUnreachable(
+                            phoneState: session.canonicalOwnerPhoneState) {
                             unreachableNotice.padding(.top, Theme.Space.tight)
                         }
                         if feedIsEmpty {
@@ -1121,7 +1163,9 @@ struct HomeView: View {
                                     .padding(.bottom, Theme.Space.tight)
                                 VStack(spacing: Theme.Space.snug) {
                                     ForEach(Array(needsOK.enumerated()), id: \.element.id) { i, job in
-                                        ConfirmJobCard(job: job)
+                                        ConfirmJobCard(
+                                            job: job,
+                                            canonicalPhoneState: session.canonicalOwnerPhoneState)
                                             .transition(.asymmetric(
                                                 insertion: .move(edge: .top).combined(with: .opacity),
                                                 removal: .opacity.combined(with: .scale(scale: 0.96))))
@@ -1143,10 +1187,10 @@ struct HomeView: View {
                                 }
                             }
                             if !handling.isEmpty {
-                                // Honest about WHY nothing is moving: with Chrome
-                                // shut there are no hands, and saying "Handling"
-                                // over a stalled queue is a small daily lie.
-                                sectionHeader(session.agentOnline ? "Handling" : "Waiting for your browser")
+                                // A handling section can contain three different
+                                // hands at once. Each card names its own hand;
+                                // the shared heading therefore stays neutral.
+                                sectionHeader("In progress")
                                     .padding(.top, Theme.Space.section)
                                     .padding(.bottom, Theme.Space.tight)
                                 // Unpaired used to be one grey sentence
@@ -1157,16 +1201,18 @@ struct HomeView: View {
                                 // once. The sentence stays for the two cases
                                 // the card does not cover: paired but shut,
                                 // and anyone who already said "later".
-                                if browserOffer {
-                                    browserOfferCard
-                                        .padding(.bottom, Theme.Space.base)
-                                } else if !session.agentOnline {
-                                    Text(session.agentPaired
-                                         ? "Open Chrome and these pick up on their own."
-                                         : "Link Chrome in Settings and these pick up on their own.")
-                                        .font(.system(size: 15))
-                                        .foregroundStyle(Theme.text2)
-                                        .padding(.bottom, Theme.Space.tight)
+                                if !browserHandling.isEmpty {
+                                    if browserOffer {
+                                        browserOfferCard
+                                            .padding(.bottom, Theme.Space.base)
+                                    } else if !session.agentOnline {
+                                        Text(session.agentPaired
+                                             ? "Open Chrome and your browser work picks up on its own."
+                                             : "Link Chrome in Settings and your browser work picks up on its own.")
+                                            .font(.system(size: 15))
+                                            .foregroundStyle(Theme.text2)
+                                            .padding(.bottom, Theme.Space.tight)
+                                    }
                                 }
                                 // He has had to ASK whether his extension was
                                 // current — twice — and once a whole retest
@@ -1221,21 +1267,11 @@ struct HomeView: View {
                                     }
                                 }
                             }
-                            heardSection
                             if !finished.isEmpty {
                                 sectionHeader("Done")
                                     .padding(.top, Theme.Space.section)
                                     .padding(.bottom, Theme.Space.tight)
-                                VStack(spacing: 0) {
-                                    ForEach(Array(finishedShown.enumerated()), id: \.element.id) { i, job in
-                                        if i > 0 { Rectangle().fill(Theme.edge).frame(height: 0.5) }
-                                        DoneCard(job: job)
-                                            .transition(.asymmetric(
-                                                insertion: .move(edge: .top).combined(with: .opacity),
-                                                removal: .opacity))
-                                            .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)), value: session.jobs)
-                                    }
-                                }
+                                DoneDeck(jobs: finishedShown)
                             }
                         }
                         // Diagnostics belong at the foot, not as the opening
@@ -1309,13 +1345,13 @@ struct HomeView: View {
                 Haptics.warmUp()
                 session.resumeListeningIfWanted()
             }
-            // ASK THE ACCOUNT WHETHER THERE IS A NUMBER ON IT, once, and only
-            // ever on a phone whose mirror is already empty — so an account
-            // that has one pays nothing here at all. Keyed on `verified`
-            // because there is no point asking before a read of this server has
-            // worked, and because that flip is what re-arms it after a launch
-            // that started offline.
-            .task(id: verified) { await askWhetherWeCanReachThem() }
+            // Ask after this server has answered at least one authenticated
+            // read, and re-arm at an account boundary. The session owns the
+            // explicit unknown/none/invalid/valid result and ignores any reply
+            // that comes back after the account changed.
+            .task(id: "\(verified)|\(session.accountID)") {
+                await refreshCanonicalOwnerForReachability()
+            }
             // WHEN THE PHONE LAST HEARD ANYTHING, asked on the three moments
             // that can change that answer and on no others: the view appearing,
             // `suspended` flipping, and the app coming back to the foreground.
@@ -1330,6 +1366,10 @@ struct HomeView: View {
                 if phase == .active {
                     Haptics.warmUp()
                     session.resumeListeningIfWanted()
+                    // Profile reachability is not part of the three-second
+                    // feed poll. A foreground transition is the bounded retry
+                    // point after a launch or sign-in that began offline.
+                    Task { await refreshCanonicalOwnerForReachability() }
                     // A granted source whose facts never made it out (offline,
                     // a dead connection) is retried here rather than lost.
                     Task { await session.flushPendingContext() }
@@ -1634,27 +1674,16 @@ struct HomeView: View {
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             }
-            // The current session's spoken lines stay visible right here —
-            // words move DOWN into this list when you pause, they are never
-            // deleted. ✓ means Anticipy's brain has them.
-            if session.listener.isListening && !session.sessionLines.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(session.sessionLines.suffix(4)) { line in
-                        SessionLineRow(line: line)
-                    }
-                }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous).fill(Theme.surface.opacity(0.6)))
-            }
-            // Your own voice becoming text is the demo — it renders big,
-            // above the settled record, never as fine print below it.
-            if !session.listener.partial.isEmpty {
-                Text(session.listener.partial)
-                    .font(.system(size: 20))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.text.opacity(0.55))
+            // Capture stays visible; the person's words do not. Showing every
+            // partial and final line made Home a scrolling speech console and
+            // forced the owner to watch recognition mistakes in real time.
+            // The complete record remains available under Privacy & Data.
+            if session.listener.capturing {
+                Label("Listening quietly. I'll bring forward only what matters.",
+                      systemImage: "waveform")
+                    .font(.caption)
+                    .foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
             }
             HStack(spacing: 8) {
                 TextField("Or tell Anticipy something…", text: $typedLine)
@@ -1700,39 +1729,32 @@ struct HomeView: View {
     /// accent-coloured second copy that used to sit inside the stuck-queue
     /// block is not still there saying the same thing louder.
     private var unreachableNotice: some View {
-        Text("I don't have a number for you. A text is the only way I can reach you "
-             + "when something needs your word, so anything I prepare will just sit "
-             + "here until you open the app. Add it in Settings.")
+        Text("I don't have a number for you, so there's no SMS backstop. "
+             + "Local alerts can reach you while Anticipy is running or listening "
+             + "in the background if notifications are allowed. Otherwise, open "
+             + "the app to see what needs you. Add a number in Settings if you want text updates.")
             .font(.system(size: 15))
             .foregroundStyle(Theme.text2)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The one read behind that sentence.
-    ///
-    /// `fetchOwner` THROWS when it could not ask and returns `""` only as a
-    /// fact — its own comment says the caller's decision turns on exactly that
-    /// difference, and this is the caller whose decision turns on it. So a
-    /// failure leaves `accountSaysNoNumber` at `nil` and Home stays quiet,
-    /// which is the honest outcome of not knowing.
-    ///
-    /// COST, since this is a second read of a record `resumeSignedInAccount`
-    /// also reads: it is behind `session.ownerPhone.isEmpty`, the same
-    /// condition that file already calls "one read per launch" for an account
-    /// with genuinely no number. A phone holding a number never gets here.
-    /// Once answered it is not asked again for the life of this view: adding a
-    /// number in Settings fills the mirror, and the mirror is the other half of
-    /// the guard.
-    private func askWhetherWeCanReachThem() async {
-        guard verified,
-              accountSaysNoNumber == nil,
-              !session.accountID.isEmpty,
-              session.ownerPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let owner = try? await session.backend.fetchOwner(id: session.accountID)
-        else { return }
-        accountSaysNoNumber = owner.phone
-            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    /// The one canonical read behind both the standing Home notice and every
+    /// approval card's delivery promise. A failed read leaves the state unknown;
+    /// only a successful server answer can move it to none/invalid/valid.
+    private func refreshCanonicalOwnerForReachability() async {
+        guard verified, !session.accountID.isEmpty else { return }
+        let account = session.accountID
+        for attempt in 0..<3 {
+            guard !Task.isCancelled, session.accountID == account else { return }
+            if await session.refreshCanonicalOwner() { return }
+            // A known value remains the last successful canonical answer. Only
+            // unknown needs the short retry; foregrounding will refresh known
+            // values once without turning this into another poll.
+            guard session.canonicalOwnerPhoneState == .unknown,
+                  attempt < 2 else { return }
+            try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 500_000_000)
+        }
     }
 
     /// How long the microphone has been gone, read off the journal — never on
@@ -1848,7 +1870,7 @@ struct HomeView: View {
                 }
             }
             briefingView
-            if let says = session.freshAnticipySays {
+            if let says = freshAnticipyLine {
                 Rectangle()
                     .fill(Theme.accent.opacity(0.14))
                     .frame(height: 1)
@@ -1967,35 +1989,6 @@ struct HomeView: View {
             ? "I can't hear anything until the microphone is back on."
             : "I'm not listening yet, tap Listen with phone, or wake your pendant, "
               + "and I'll start picking things up."
-    }
-
-    /// What she heard — one card per conversation, newest first.
-    ///
-    /// The groups are built ONCE here rather than per row: `heardGroups` is a
-    /// computed property, and the separator rule below has to look at the
-    /// previous sibling.
-    @ViewBuilder private var heardSection: some View {
-        let groups = heardGroups
-        if !groups.isEmpty {
-            sectionHeader("Heard")
-                .padding(.top, Theme.Space.section)
-                .padding(.bottom, Theme.Space.tight)
-            VStack(spacing: 0) {
-                ForEach(Array(groups.enumerated()), id: \.element.id) { i, group in
-                    // A hairline belongs between two rows on the ink. It does
-                    // not belong beside a card, which has its own edge already.
-                    if i > 0, !group.isCarded, !groups[i - 1].isCarded {
-                        Rectangle().fill(Theme.edge).frame(height: 0.5)
-                    }
-                    ConversationCard(group: group)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .top).combined(with: .opacity),
-                            removal: .opacity))
-                        .animation(Theme.spring.delay(min(Double(i) * 0.05, 0.25)),
-                                   value: session.transcript)
-                }
-            }
-        }
     }
 
     /// Chronology sections — a tracked uppercase micro-label beside the
@@ -2267,13 +2260,168 @@ struct HomeView: View {
     }
 }
 
+// MARK: - Recaps and result deck
+
+private struct HomeConversationInsight: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let state: String
+}
+
+/// A bounded recap, grounded only in decisions and jobs already on the phone.
+/// It borrows the one-idea-at-a-time clarity of a story card without turning
+/// Home into an autoplaying slideshow or inventing a personality from one day.
+private struct HomeInsightsCard: View {
+    let items: [HomeConversationInsight]
+    let needsYou: Int
+    let working: Int
+    let done: Int
+
+    private var headline: String {
+        if needsYou > 0 {
+            return needsYou == 1
+                ? "One thing from your conversations still needs your word."
+                : "\(needsYou) things from your conversations still need your word."
+        }
+        if working > 0 {
+            return working == 1
+                ? "One thing you mentioned is moving now."
+                : "\(working) things you mentioned are moving now."
+        }
+        if done > 0 {
+            return done == 1
+                ? "One result is ready for you."
+                : "\(done) results are ready for you."
+        }
+        return "Here is what Anticipy picked up."
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.snug) {
+            Text(headline)
+                .font(Theme.display(23))
+                .tracking(-0.2)
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(items) { item in
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
+                    Text(item.title)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(Theme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: Theme.Space.tight)
+                    Text(item.state)
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
+                        .multilineTextAlignment(.trailing)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .anticipyCard()
+    }
+}
+
+/// One result at a time, selected by stable job id so a three-second poll
+/// cannot move somebody to a different card while they are reading it.
+private struct DoneDeck: View {
+    let jobs: [AgentJob]
+    @State private var selectedID: String?
+
+    private var index: Int {
+        guard let selectedID,
+              let found = jobs.firstIndex(where: { $0.id == selectedID })
+        else { return 0 }
+        return found
+    }
+
+    private var selected: AgentJob? {
+        guard !jobs.isEmpty else { return nil }
+        return jobs[min(index, jobs.count - 1)]
+    }
+
+    var body: some View {
+        VStack(spacing: Theme.Space.tight) {
+            if let job = selected {
+                DoneCard(job: job)
+                    .id(job.id)
+                    .anticipyCard()
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)))
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 20)
+                            .onEnded { value in
+                                let horizontal = abs(value.translation.width)
+                                let vertical = abs(value.translation.height)
+                                guard horizontal > 44, horizontal > vertical * 1.2 else { return }
+                                move(by: value.translation.width < 0 ? 1 : -1)
+                            })
+            }
+            if jobs.count > 1 {
+                HStack(spacing: Theme.Space.tight) {
+                    Button("Previous") { move(by: -1) }
+                        .buttonStyle(.ghost)
+                        .disabled(index == 0)
+                    Spacer()
+                    Text("\(index + 1) of \(jobs.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Theme.muted)
+                        .accessibilityLabel("Result \(index + 1) of \(jobs.count)")
+                    Spacer()
+                    Button("Next") { move(by: 1) }
+                        .buttonStyle(.ghost)
+                        .disabled(index >= jobs.count - 1)
+                }
+            }
+        }
+        .onAppear { repairSelection() }
+        .onChange(of: jobs.map(\.id)) { _ in repairSelection() }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Done results")
+        .accessibilityValue("Result \(index + 1) of \(jobs.count)")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: move(by: 1)
+            case .decrement: move(by: -1)
+            @unknown default: break
+            }
+        }
+    }
+
+    private func repairSelection() {
+        guard !jobs.isEmpty else { selectedID = nil; return }
+        if selectedID == nil || !jobs.contains(where: { $0.id == selectedID }) {
+            selectedID = jobs[0].id
+        }
+    }
+
+    private func move(by amount: Int) {
+        guard !jobs.isEmpty else { return }
+        let destination = min(max(0, index + amount), jobs.count - 1)
+        guard destination != index else { return }
+        Haptics.tap()
+        withAnimation(Theme.spring) { selectedID = jobs[destination].id }
+    }
+}
+
 // MARK: - Cards
 
 /// A job the agent prepared and is holding for your explicit go-ahead.
 struct ConfirmJobCard: View {
     let job: AgentJob
+    /// This comes only from the canonical account read (or a confirmed save),
+    /// never from the device-local phone mirror.
+    let canonicalPhoneState: OwnerMirror.PhoneState
     @EnvironmentObject var session: AnticipySession
     @State private var answer = ""
+
+    init(job: AgentJob,
+         canonicalPhoneState: OwnerMirror.PhoneState = .unknown) {
+        self.job = job
+        self.canonicalPhoneState = canonicalPhoneState
+    }
 
     private var stuck: Bool {
         job.status == "needs_user" || job.workflow_state == "draft"
@@ -2281,6 +2429,18 @@ struct ConfirmJobCard: View {
     private var uncertain: Bool { job.effect_uncertain == true }
     private var sending: Bool { session.inFlight.contains(job.id) }
     private var failed: Bool { session.failedWrites.contains(job.id) }
+    private var unverified: Bool { session.unverifiedWrites.contains(job.id) }
+    private enum NotificationRoute {
+        case textAndApp, appOnly, checking, phoneNeedsAttention
+    }
+    private var notificationRoute: NotificationRoute {
+        switch canonicalPhoneState {
+        case .valid: return .textAndApp
+        case .none: return .appOnly
+        case .invalid: return .phoneNeedsAttention
+        case .unknown: return .checking
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2326,17 +2486,54 @@ struct ConfirmJobCard: View {
             // this row that reads as a UI glitch, and the natural next move
             // is to tap Send again — which is how one email goes twice.
             if failed {
-                Label("That didn't go through, I couldn't reach Anticipy. Nothing was sent.", systemImage: "exclamationmark.triangle")
+                Label("I checked the job after the request failed. It did not change, so it is safe to try again.", systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if unverified {
+                Label("I couldn't verify whether that went through. I won't send it again until the job itself gives us an answer.", systemImage: "questionmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Label(notificationLabel, systemImage: "bell")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.text2)
+                switch notificationRoute {
+                case .appOnly:
+                    Text("This account has no phone number. Add one in Settings → Profile if you want text updates.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                case .checking:
+                    Text("I haven't finished checking this account's text-message setup. The result will still appear in the app.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                case .phoneNeedsAttention:
+                    Text("The saved number cannot receive a text as written. Fix it in Settings → Profile; the result will still appear in the app.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                case .textAndApp:
+                    Text("The result is saved in the app first. I'll also try your saved number; carrier delivery can still fail.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             HStack(spacing: 10) {
                 Button {
                     // No haptic here: confirm() buzzes only after the server
                     // has actually accepted it. This one used to buzz success
                     // before the request had even left the phone.
-                    Task { await session.confirm(job, ownerAnswer: answer) }
+                    if unverified {
+                        Task { await session.reconcileWrite(job) }
+                    } else {
+                        Task { await session.confirm(job, ownerAnswer: answer) }
+                    }
                 } label: {
                     Group {
                         if sending {
@@ -2345,14 +2542,15 @@ struct ConfirmJobCard: View {
                                 Text("Sending…")
                             }
                         } else {
-                            Text(uncertain ? "I checked, try again"
-                                 : (failed ? "Try again" : (stuck ? "Send answer" : "Approve")))
+                            Text(unverified ? "Check outcome"
+                                 : (uncertain ? "I checked, try again"
+                                    : (failed ? "Try again" : (stuck ? "Send answer" : "Approve"))))
                         }
                     }
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glass)
-                .disabled(sending || (stuck && !uncertain
+                .disabled(sending || (stuck && !uncertain && !unverified
                            && answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 Button {
                     Task { await session.decline(job) }
@@ -2373,7 +2571,7 @@ struct ConfirmJobCard: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.ghost)
-                .disabled(sending)
+                .disabled(sending || unverified)
             }
             // No opacity on the row: each control dims itself when it is
             // disabled, so a send in flight no longer greys out the sentence
@@ -2381,6 +2579,15 @@ struct ConfirmJobCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
+    }
+
+    private var notificationLabel: String {
+        switch notificationRoute {
+        case .textAndApp: return "Updates: In app · I'll also try text"
+        case .appOnly: return "Updates: In app"
+        case .checking: return "Updates: In app · checking text setup"
+        case .phoneNeedsAttention: return "Updates: In app"
+        }
     }
 }
 
@@ -2402,6 +2609,7 @@ struct AskCard: View {
 
     private var sending: Bool { session.inFlight.contains(event.id) }
     private var failed: Bool { session.failedWrites.contains(event.id) }
+    private var unverified: Bool { session.unverifiedWrites.contains(event.id) }
     private var empty: Bool {
         answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -2427,8 +2635,15 @@ struct AskCard: View {
             // while the card stayed put reads as a UI glitch, and the natural
             // next move is to send again.
             if failed {
-                Label("That didn't go through, I couldn't reach Anticipy. She hasn't heard it.",
+                Label("That answer is not on Anticipy, so it is safe to try again.",
                       systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if unverified {
+                Label("I couldn't verify whether she received that answer. Tap Check outcome; it looks for this exact answer without sending it again.",
+                      systemImage: "questionmark.circle")
                     .font(.caption)
                     .foregroundStyle(Theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2436,22 +2651,30 @@ struct AskCard: View {
             Button {
                 // No haptic here. `answer` buzzes only once the server has
                 // taken it, which is the same rule every other write follows.
-                Task { await session.answer(event, text: answer) }
+                Task {
+                    if unverified {
+                        await session.reconcileAnswer(event)
+                    } else {
+                        await session.answer(event, text: answer)
+                    }
+                }
             } label: {
                 Group {
                     if sending {
                         HStack(spacing: 8) {
                             BreathingDot(size: 6)
-                            Text("Sending…")
+                            Text(unverified ? "Checking…" : "Sending…")
                         }
                     } else {
-                        Text(failed ? "Try again" : "Send")
+                        Text(unverified ? "Check outcome" : (failed ? "Try again" : "Send"))
                     }
                 }
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glass)
-            .disabled(sending || empty)
+            // Check needs no answer text, which is what makes an unknown write
+            // recoverable after a process restart.
+            .disabled(sending || (!unverified && empty))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .anticipyCard()
@@ -2506,7 +2729,8 @@ struct SessionLineRow: View {
 struct HandlingCard: View {
     let job: AgentJob
     @EnvironmentObject private var session: AnticipySession
-    @State private var stopping = false
+    private var stopping: Bool { session.inFlight.contains(job.id) }
+    private var stopUnverified: Bool { session.unverifiedWrites.contains(job.id) }
 
     /// What it is doing RIGHT NOW, in his words.
     ///
@@ -2529,6 +2753,47 @@ struct HandlingCard: View {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private var normalizedLane: String {
+        CalendarHandPolicy.normalizedLane(job.lane)
+    }
+    private var usesResearchHand: Bool { normalizedLane == "research" }
+    private var usesCalendarHand: Bool { normalizedLane == CalendarHandPolicy.lane }
+
+    private var stageTitle: String {
+        if usesResearchHand {
+            return job.status == "running" ? "Research is working" : "Research is queued"
+        }
+        if usesCalendarHand {
+            return job.status == "running"
+                ? "Updating your calendar"
+                : "Queued on this iPhone"
+        }
+        if job.status == "running" { return "Working in Chrome" }
+        return session.agentOnline ? "Sent to your browser agent" : "Waiting for your browser agent"
+    }
+
+    private var stageDetail: String? {
+        if let doingNow { return doingNow }
+        if usesResearchHand {
+            return job.status == "running"
+                ? "The research service accepted this task."
+                : "It will start when the research service reaches it."
+        }
+        if usesCalendarHand {
+            return job.status == "running"
+                ? "This iPhone accepted the calendar change."
+                : "This iPhone will pick up the calendar change from its queue."
+        }
+        if job.status == "running" { return "Chrome accepted this task." }
+        if session.agentOnline { return "Chrome is connected and this task is in its queue." }
+        if session.agentPaired, let seconds = session.agentLastSeenSeconds {
+            return "Chrome is linked but offline. Last seen \(PlainDuration.words(seconds)) ago."
+        }
+        return session.agentPaired
+            ? "Chrome is linked but offline. Open it and this picks up on its own."
+            : "Link Chrome in Settings before this can start."
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if job.status == "running" {
@@ -2539,21 +2804,25 @@ struct HandlingCard: View {
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(job.status == "running" ? "I'm handling it" : "Queued for your browser")
+                Text(job.executionSurfaceLabel.uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.muted)
+                Text(stageTitle)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.accent)
                 Text(job.humanGoal)
                     .font(.system(size: 17))
                     .lineSpacing(3)
                     .foregroundStyle(Theme.text)
-                if let doingNow {
-                    Text(doingNow)
+                if let stageDetail {
+                    Text(stageDetail)
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.text2)
                         .lineLimit(2)
                         .transition(.opacity)
-                        .animation(Theme.spring, value: doingNow)
-                        .accessibilityLabel("Currently \(doingNow)")
+                        .animation(Theme.spring, value: stageDetail)
+                        .accessibilityLabel(stageDetail)
                 }
             }
             Spacer()
@@ -2565,15 +2834,26 @@ struct HandlingCard: View {
             // system; the browser loop re-reads liveness immediately before
             // every irreversible action, so this lands before a submit.
             if job.status == "running" || job.status == "queued" {
-                Button {
-                    stopping = true
-                    Task { _ = await session.stopRunning(job) }
-                } label: {
-                    Text(stopping ? "Stopping…" : "Stop")
+                VStack(alignment: .trailing, spacing: 4) {
+                    Button {
+                        if stopUnverified {
+                            Task { await session.reconcileWrite(job) }
+                        } else {
+                            Task { _ = await session.stopRunning(job) }
+                        }
+                    } label: {
+                        Text(stopping ? "Checking…" : (stopUnverified ? "Check stop" : "Stop"))
+                    }
+                    .buttonStyle(.ghost)
+                    .disabled(stopping)
+                    .accessibilityLabel(stopping ? "Checking stop outcome"
+                                        : (stopUnverified ? "Check stop outcome" : "Stop this task"))
+                    if stopUnverified {
+                        Text("Outcome unverified")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.muted)
+                    }
                 }
-                .buttonStyle(.ghost)
-                .disabled(stopping)
-                .accessibilityLabel(stopping ? "Stopping" : "Stop this task")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2645,6 +2925,7 @@ struct DoneCard: View {
     @EnvironmentObject var session: AnticipySession
     @State private var expanded = false
     @State private var showRaw = false
+    @AppStorage(AppPreferences.developerModeKey) private var developerMode = false
 
     private var succeeded: Bool { job.status == "done" }
     /// Stopped before it finished — from "Don't do it" on the card above, from
@@ -2672,6 +2953,10 @@ struct DoneCard: View {
                 .foregroundStyle(succeeded ? Theme.accent : Theme.muted)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
+                Text(job.executionSurfaceLabel.uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.muted)
                 if succeeded {
                     // docs ex 77: the receipt leads. This used to lead with the
                     // goal in callout weight and put the confirmation number
@@ -2850,7 +3135,7 @@ struct DoneCard: View {
                     }
                     // The raw string is a JavaScript exception. It stays
                     // available and stops being the headline.
-                    if let r = job.result, !r.isEmpty {
+                    if developerMode, let r = job.result, !r.isEmpty {
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) { showRaw.toggle() }
                         } label: {
@@ -3033,7 +3318,7 @@ struct TranscriptRow: View {
                 if line.goal?.isEmpty == false {
                     HStack(spacing: 5) {
                         Image(systemName: "magnifyingglass").accessibilityHidden(true)
-                        Text("Looking into it. I'll text you what I find")
+                        Text("Looking into it. I'll bring the result back here.")
                     }
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Theme.accent.opacity(0.85))

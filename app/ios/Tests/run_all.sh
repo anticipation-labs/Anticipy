@@ -43,6 +43,14 @@ sh "$HERE/run_first_run_route_tests.sh"
 # five device-local answers to "who are you" go with the account that left.
 # Placed beside it, and early, for the reachability reason above.
 sh "$HERE/run_owner_mirror_tests.sh"
+# The same handoff boundary while a poll is in flight. A delayed account-A
+# response must not repopulate account B's jobs, event feed, notifications, or
+# browser-agent state after sign-out/sign-in yields the main actor.
+sh "$HERE/run_refresh_account_race_tests.sh"
+# A question-card answer has no job status to reconcile against. Its own
+# account/question idempotency id and exact event lookup are what make response
+# loss and process restart safe instead of leaving a disabled card forever.
+sh "$HERE/run_app_reply_write_tests.sh"
 # The third question about the same phone, one screen further in: not whose
 # tour this is, nor whose answers are still on the handset, but whether what
 # first run SAYS about them is true when it says it. The track counted the
@@ -70,6 +78,14 @@ sh "$HERE/run_home_feed_tests.sh"
 # for the rest of the day), and this suite compiles the real wording out of
 # ContentView.swift and asks it.
 sh "$HERE/run_home_copy_tests.sh"
+# The consumer/developer information boundary on the same Home screen: raw
+# partials and finalized lines stay off the feed; the one-card Done deck keeps
+# a stable job id across polls and remains swipe/button/VoiceOver operable; and
+# the Settings migration still reaches paged history, authenticated developer
+# speech, personalization, enrolment, onboarding replay and every deletion
+# boundary. This is a source contract because duplicating these SwiftUI routes
+# in XCTest would prove the duplicate rather than the shipping view graph.
+sh "$HERE/run_consumer_experience_contract_tests.sh"
 # The phone as a HAND, for one verb. Placed beside the receipt because it is the
 # same argument from the other end: that one asks what the server proved before
 # the card says "done", this one asks what has to be true before the phone

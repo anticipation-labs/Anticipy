@@ -167,10 +167,61 @@ def test_the_same_answer_is_still_never_delivered_twice(monkeypatch):
            "result": "18 and clear", "status": "done", "lane": "",
            "params": "{}", "owner": "own1",
            "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}
-    paged_jobs(monkeypatch, [job], events=YESTERDAY)
+    delivered = {
+        "kind": "anticipy_says", "decision": "done",
+        "goal": job["goal"], "text": job["result"],
+        "external_event_id": "job-result:j1",
+    }
+    attempted = {
+        "kind": "notification_status", "decision": "sms_attempted",
+        "goal": "j1", "external_event_id": "job-sms:j1:sms_attempted",
+    }
+    paged_jobs(monkeypatch, [job], events=[delivered, attempted])
     W.report_finished_jobs(anticipy(notified))
     assert notified == []
     assert "j1" in W.REPORTED
+
+
+def test_two_jobs_with_identical_goals_each_deliver_once(monkeypatch):
+    """Human wording is not an idempotency key. Two separately created jobs
+    can legitimately ask the same thing and both outcomes must survive."""
+    daytime(monkeypatch)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    jobs = [
+        {"id": "same-a", "goal": "send the team sync note",
+         "result": "first note sent", "status": "done", "lane": "",
+         "params": "{}", "owner": "own1", "updated": now},
+        {"id": "same-b", "goal": "send the team sync note",
+         "result": "second note sent", "status": "done", "lane": "",
+         "params": "{}", "owner": "own1", "updated": now},
+    ]
+    events = []
+    notified = []
+
+    def fake_get(url, **kw):
+        if "/collections/events/" in url:
+            filt = str((kw.get("params") or {}).get("filter") or "")
+            return Resp({"items": [row for row in events
+                                   if row.get("external_event_id")
+                                   and str(row["external_event_id"]) in filt]})
+        return Resp({"items": [dict(row) for row in jobs], "totalPages": 1})
+
+    def fake_post(url, **kw):
+        events.append(dict(kw.get("json") or {}))
+        return Resp()
+
+    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.pb, "post", fake_post)
+
+    W.report_finished_jobs(anticipy(notified))
+    assert notified == ["first note sent", "second note sent"]
+    assert [row.get("external_event_id") for row in events
+            if row.get("kind") == "anticipy_says"] == [
+                "job-result:same-a", "job-result:same-b"]
+
+    W.REPORTED.clear()
+    W.report_finished_jobs(anticipy(notified))
+    assert notified == ["first note sent", "second note sent"]
 
 
 # ------------------------------------------- 3. + 4. the stranded research job
@@ -316,6 +367,8 @@ def test_a_write_outage_cannot_turn_one_question_into_a_text_storm(monkeypatch):
 
 
 def test_a_write_outage_cannot_repeat_a_finished_answer(monkeypatch):
+    """With no durable store, do not create an un-fenceable SMS effect. The
+    terminal job remains visible in Done and delivery resumes once writes do."""
     daytime(monkeypatch)
     notified = []
     job = {"id": "j1", "goal": "book the table", "result": "Booked for 7:30.",
@@ -324,10 +377,77 @@ def test_a_write_outage_cannot_repeat_a_finished_answer(monkeypatch):
     blind_backend(monkeypatch, [job])
     for _ in range(8):
         W.report_finished_jobs(anticipy(notified))
-    assert len(notified) == 1
+    assert notified == []
+    assert "j1" not in W.REPORTED
+
+    blind_backend(monkeypatch, [job], writes_fail=False)
+    W.report_finished_jobs(anticipy(notified))
+    assert notified == ["Booked for 7:30."]
+    assert "j1" in W.REPORTED
+
+
+@pytest.mark.parametrize("job", [
+    {"id": "ambient-1", "goal": "look up the team sync venue",
+     "result": "The venue closes at ten.", "status": "done", "lane": "",
+     "params": json.dumps({"lane": "ambient"}), "owner": "own1"},
+    {"id": "research-1", "goal": "research the team sync venue",
+     "result": "The venue closes at ten.", "status": "done",
+     "lane": "research", "params": "{}", "owner": "own1"},
+])
+def test_app_only_lanes_retry_the_feed_without_ever_texting(monkeypatch, job):
+    """Ambient and non-SMS research are quiet by contract. A feed outage
+    keeps the exact result retryable; it never turns the retry into a text or
+    marks a result delivered before storage accepts it."""
+    daytime(monkeypatch)
+    job = dict(job, updated=datetime.now(timezone.utc)
+               .strftime("%Y-%m-%d %H:%M:%S"))
+    feed = []
+    writes_fail = {"value": True}
+    notified = []
+
+    def fake_get(url, **kw):
+        if "/collections/events/" in url:
+            filt = str((kw.get("params") or {}).get("filter") or "")
+            return Resp({"items": [row for row in feed
+                                   if row.get("external_event_id")
+                                   and str(row["external_event_id"]) in filt]})
+        return Resp({"items": [dict(job)], "totalPages": 1})
+
+    def fake_post(url, **kw):
+        if writes_fail["value"]:
+            return Resp(ok=False)
+        feed.append(dict(kw.get("json") or {}))
+        return Resp()
+
+    monkeypatch.setattr(W.pb, "get", fake_get)
+    monkeypatch.setattr(W.pb, "post", fake_post)
+
+    for _ in range(3):
+        W.report_finished_jobs(anticipy(notified))
+    assert notified == []
+    assert job["id"] not in W.REPORTED
+    assert feed == []
+
+    writes_fail["value"] = False
+    W.report_finished_jobs(anticipy(notified))
+    assert notified == []
+    assert job["id"] in W.REPORTED
+    assert [row.get("external_event_id") for row in feed] == [
+        f"job-result:{job['id']}"]
+
+    W.REPORTED.clear()
+    W.report_finished_jobs(anticipy(notified))
+    assert len(feed) == 1
+    assert notified == []
 
 
 def test_a_write_outage_cannot_repeat_a_stall_notice(monkeypatch):
+    """The app notice is primary: a failed feed write permits no SMS effect.
+
+    Once storage recovers the notice lands first and the optional copy may go
+    out once.  This is stronger than the old send-first suppression, which
+    still left the app silent and could not prove delivery across a restart.
+    """
     daytime(monkeypatch)
     notified = []
     job = {"id": "j1", "goal": "book the table", "status": "queued",
@@ -336,6 +456,10 @@ def test_a_write_outage_cannot_repeat_a_stall_notice(monkeypatch):
     monkeypatch.setattr(W, "browser_reachable", lambda *a, **k: False)
     for _ in range(8):
         W.report_stalled_work(anticipy(notified))
+    assert notified == []
+
+    blind_backend(monkeypatch, [job], writes_fail=False)
+    W.report_stalled_work(anticipy(notified))
     assert len(notified) == 1
 
 

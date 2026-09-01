@@ -1,15 +1,18 @@
 import SwiftUI
 
 struct SettingsAdvancedView: View {
+    @EnvironmentObject private var session: AnticipySession
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppPreferences.hapticsKey) private var haptics = true
     @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
     @AppStorage(AppPreferences.typedResponsesKey) private var typedResponses = true
     @AppStorage(ListenEnginePolicy.legacyFlagKey) private var compatibilityRecognizer = false
+    @AppStorage(AppPreferences.developerModeKey) private var developerMode = false
     #if DEBUG
     @AppStorage("backendURL") private var backendURL = "https://backend-production-61e0a.up.railway.app"
     #endif
     @State private var showListeningActivity = false
+    @State private var showDeveloperDiagnostics = false
 
     var body: some View {
         SheetChrome(title: "Advanced", leading: .back) {
@@ -49,10 +52,25 @@ struct SettingsAdvancedView: View {
             }
             #endif
 
+            if developerMode {
+                SectionHeader("Developer mode")
+                GroupedCard {
+                    DisclosureRow("Developer diagnostics",
+                                  subtitle: "Inspect this build, its server, browser hand, queue, and loaded jobs.",
+                                  systemImage: "wrench.and.screwdriver") {
+                        Haptics.engage()
+                        showDeveloperDiagnostics = true
+                    }
+                }
+            }
+
             FootnoteText("These controls change live app behaviour and are saved on this iPhone.")
         }
         .navigationDestination(isPresented: $showListeningActivity) {
             ListeningDiagnosticsView()
+        }
+        .navigationDestination(isPresented: $showDeveloperDiagnostics) {
+            DeveloperDiagnosticsView(session: session)
         }
     }
 }

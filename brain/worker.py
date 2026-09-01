@@ -220,17 +220,32 @@ def run_nightly_consolidation(memory, now: float | None = None) -> None:
 
 
 def fetch_owner_phone(owner_ref: str = "") -> str | None:
-    """The owner's number as THEY entered it in the app. Falls back to the
-    env var so an existing deployment keeps working, but the app is now the
-    source of truth — nobody should have to hand-edit a server variable to
-    make their own assistant able to text them."""
+    """Return the canonical SMS route, preserving empty vs unknown.
+
+    A string, including "", is a successful server answer. None means the
+    answer could not be read and must not overwrite the worker's cached state.
+    Once an owner_profile row exists it is authoritative even when its phone
+    is empty; falling through to the immutable sign-up owners.phone would
+    silently re-affiliate a number the person explicitly removed.
+    """
+    ref = _active_owner_ref(owner_ref)
+    if not ref:
+        return None
     try:
-        profile = _latest_profile(owner_ref)
-        phone = (profile.get("phone") or "").strip() if profile else ""
-        if phone:
-            return phone
-    except Exception:
-        pass
+        r = pb.get(
+            f"{PB}/api/collections/owner_profile/records",
+            params={"filter": _scoped_filter("", ref),
+                    "sort": "-updated", "perPage": 1},
+            timeout=10,
+        )
+        if not getattr(r, "ok", False):
+            return None
+        items = (r.json() or {}).get("items", [])
+        if items:
+            return str(items[0].get("phone") or "").strip()
+    except Exception as exc:
+        print(f"owner phone profile read failed: {exc}")
+        return None
     # The profile is not the only place a number lives: signup writes it onto
     # the ACCOUNT. His own profile row carried an empty phone while three
     # legacy rows (owner_ref "") held the real number, so once supervised
@@ -240,19 +255,90 @@ def fetch_owner_phone(owner_ref: str = "") -> str | None:
     #
     # This fallback is ACCOUNT-BOUND: it reads the phone belonging to THIS
     # owner_ref only, so it cannot resurrect the cross-account leak.
-    if not owner_ref:
-        return None
     try:
-        r = pb.get(f"{PB}/api/collections/owners/records/{owner_ref}", timeout=10)
+        r = pb.get(f"{PB}/api/collections/owners/records/{ref}", timeout=10)
         if getattr(r, "ok", False):
-            phone = ((r.json() or {}).get("phone") or "").strip()
+            phone = str((r.json() or {}).get("phone") or "").strip()
             if phone:
                 print("owner phone read from the account record "
-                      "(their profile row carries none)")
-                return phone
-    except Exception:
-        pass
+                      "(no profile row exists yet)")
+            return phone
+    except Exception as exc:
+        print(f"owner phone account read failed: {exc}")
     return None
+
+
+def refresh_owner_phone(anticipy) -> bool:
+    """Refresh the outbound SMS route and fail closed while it is unknown.
+
+    A cached number is not current authority after the canonical read fails: it
+    may be the exact number the owner removed on another device. Clear it until
+    a successful read returns either the current number or an explicit empty.
+    The app result remains available throughout; only optional SMS is paused.
+    """
+    entered = fetch_owner_phone(getattr(anticipy, "owner_ref", ""))
+    if entered is None:
+        if getattr(anticipy, "owner_phone", ""):
+            anticipy.owner_phone = ""
+            print("owner phone could not be verified — optional SMS paused")
+        return False
+    if entered != getattr(anticipy, "owner_phone", ""):
+        anticipy.owner_phone = entered
+        if entered:
+            print("owner phone updated from the app")
+        else:
+            print("owner phone cleared by the app")
+    return True
+
+
+def canonical_phone_allows_effect(anticipy, destination: str = "") -> bool:
+    """Authorize one external phone effect from current canonical state.
+
+    ``destination`` is optional for ``notify_owner``, which always reads the
+    freshly populated ``owner_phone`` itself. Conversation replies carry the
+    inbound sender explicitly, so that lane must additionally prove the address
+    still equals the canonical route. Unknown, empty, and mismatch all fail
+    closed. The caller remains free to persist the same words in the app.
+    """
+    if not refresh_owner_phone(anticipy):
+        print("owner notification paused — canonical phone is unknown")
+        return False
+    current = str(getattr(anticipy, "owner_phone", "") or "").strip()
+    if not current:
+        print("owner notification skipped — canonical phone is empty")
+        return False
+    if destination and not same_phone(destination, current):
+        print("owner notification skipped — destination is no longer the "
+              "canonical phone")
+        return False
+    return True
+
+
+def install_canonical_notification_guard(anticipy) -> None:
+    """Re-authorize the phone route at the last boundary before an effect.
+
+    The once-a-minute profile refresh is useful cache maintenance, but it is
+    not authorization to keep texting a number for the rest of that minute.
+    A person can remove their phone on another device between that refresh and
+    any of the worker's many notification paths (results, questions, digests,
+    clock prompts, and calls made inside ``Anticipy`` itself).  Wrap the one
+    common effect boundary so every such path reads the canonical profile
+    again immediately before touching the external transport.  Unknown reads
+    and an explicit empty phone both fail closed; in-app writes are unaffected.
+    """
+    original = getattr(anticipy, "notify_owner", None)
+    if not callable(original):
+        return
+    if getattr(original, "_canonical_phone_guard", False):
+        return
+
+    def notify_with_fresh_route(message, *args, **kwargs):
+        if not canonical_phone_allows_effect(anticipy):
+            return None
+        return original(message, *args, **kwargs)
+
+    notify_with_fresh_route._canonical_phone_guard = True
+    anticipy.notify_owner = notify_with_fresh_route
 
 
 def fetch_owner_timezone(owner_ref: str = "") -> str | None:
@@ -913,7 +999,7 @@ def ensure_inbound_webhook() -> None:
 
 def post_event(kind: str, text: str, decision: str = "", goal: str = "",
                owner_ref: str = "", owner_id: str = "",
-               source: str = "") -> None:
+               source: str = "", external_event_id: str = "") -> None:
     ref = _active_owner_ref(owner_ref)
     legacy = str(owner_id or ACTIVE_OWNER_ID or "").strip()
     body = {
@@ -942,6 +1028,9 @@ def post_event(kind: str, text: str, decision: str = "", goal: str = "",
     provenance = str(source or "").strip()
     if provenance:
         body["source"] = provenance
+    durable_id = str(external_event_id or "").strip()
+    if durable_id:
+        body["external_event_id"] = durable_id
     response = pb.post(f"{PB}/api/collections/events/records", json=body, timeout=10)
     response.raise_for_status()
 
@@ -967,8 +1056,11 @@ AGENT_FRESH_SECONDS = 90  # the extension heartbeats far more often than this
 
 # What actually LEFT the building, remembered locally for a short while.
 #
-# Every durable dedupe guard she has reads back the anticipy_says event, and
-# every notification site sends the text FIRST and writes that event second.
+# Most durable dedupe guards read back the anticipy_says event, and the older
+# notification sites send the text FIRST and write that event second. Finished
+# job delivery is deliberately the exception: its app result is primary and is
+# persisted before the optional SMS attempt, whose outcome is recorded in a
+# separate notification_status event.
 # post_event ends in raise_for_status(), so a PocketBase write outage — a
 # restart, or the nightly backup holding the write lock while reads keep
 # succeeding — means the text went out and nothing recorded it. Two seconds
@@ -1273,36 +1365,66 @@ def report_stalled_work(anticipy) -> None:
             # worth his attention — it was never something he asked her for.
             if ambient_job(job):
                 continue
-            # Deduped on the KIND of message, not on wording — her phrasing is
-            # generated fresh and comparing it to itself has failed twice now.
-            if already_raised(goal, decision="stalled"):
-                continue
-            # ...and the same again when the durable record of it could not be
-            # written. already_raised reads the event post_event writes AFTER
-            # the text has gone out, so a write outage made every pass believe
-            # nothing had been said and re-sent the notice every two seconds.
+            # The app notice is the delivery.  It is keyed to this exact job
+            # and observed status; fuzzy goal matching made two separate
+            # errands with the same words silence each other.  It is persisted
+            # before any optional phone effect, so no phone/Twilio outage can
+            # recreate the reported Go -> no browser -> indefinite silence.
             local_key = f'stalled:{job["id"]}:{job.get("status")}'
-            if sent_moments_ago(local_key):
+            try:
+                existing_notice = delivered_stall_notice(job)
+            except Exception as exc:
+                print(f"stall notice for {job['id']} could not be verified: "
+                      f"{exc}")
                 continue
-            midway = job.get("status") == "running"
-            said = anticipy._voice({
-                "situation": ("this stopped partway because their browser "
-                              "closed — say so plainly, no alarm, and that you "
-                              "will pick it up when it is open again" if midway
-                              else "you are ready to do this but their browser "
-                              "is not open, so nothing can run — tell them "
-                              "plainly, no alarm, and that it will go as soon "
-                              "as it is"),
-                "task": goal,
-            }) or (f"{goal} stopped partway — your Chrome closed. I'll pick it "
-                   f"up when it's open." if midway else
-                   f"I'm ready to finish {goal} — I just need your Chrome open.")
-            if not anticipy.notify_owner(said):
-                print(f"stall notice for {job['id']}: send failed, not recording it")
+            if existing_notice:
+                said = str(existing_notice.get("text") or "").strip()
+            else:
+                # A successful app write whose fake/read replica has not yet
+                # caught up must not become a second SMS in the same process.
+                if sent_moments_ago(local_key):
+                    continue
+                midway = job.get("status") == "running"
+                said = anticipy._voice({
+                    "situation": (
+                        "this stopped partway because their browser closed — "
+                        "say so plainly, no alarm, and that you will pick it "
+                        "up when it is open again" if midway else
+                        "you are ready to do this but their browser is not "
+                        "open, so nothing can run — tell them plainly, no "
+                        "alarm, and that it will go as soon as it is"),
+                    "task": goal,
+                }) or (
+                    f"{goal} stopped partway — your Chrome closed. I'll pick "
+                    f"it up when it's open." if midway else
+                    f"I'm ready to finish {goal} — I just need your Chrome open.")
+                saved_notice = persist_stall_notice(job, said)
+                if not saved_notice:
+                    # No external side effect without the primary app result.
+                    # A later sweep remains free to retry the feed write.
+                    continue
+                said = str(saved_notice.get("text") or "").strip() or said
+                mark_sent(local_key)
+
+            if not can_reach_owner_fresh(anticipy):
+                record_stall_notification_status(job, "sms_skipped")
+                print(f"stalled (no browser): {job['id']} — visible in the "
+                      "app; no verified SMS route")
                 continue
-            mark_sent(local_key)
-            post_event("anticipy_says", said, decision="stalled", goal=goal)
-            print(f"stalled (no browser): {job['id']} — told him")
+            attempt_claim = claim_stall_notification_attempt(job)
+            if attempt_claim is not True:
+                print(f"stalled (no browser): {job['id']} — visible in the "
+                      "app; optional text was not repeated")
+                continue
+            # The installed effect guard resolves canonical state once more
+            # inside this call, immediately before the transport is touched.
+            told = anticipy.notify_owner(said)
+            skipped = isinstance(told, dict) and bool(told.get("skipped"))
+            sms_state = "sms_sent" if told and not skipped else (
+                "sms_skipped" if skipped else "sms_failed")
+            record_stall_notification_status(job, sms_state)
+            print(f"stalled (no browser): {job['id']} — visible in the app; "
+                  f"text {sms_state.removeprefix('sms_')}")
     except Exception as e:
         print(f"stalled-work report failed: {e}")
 
@@ -1848,47 +1970,225 @@ def _finished_jobs(filt: str) -> list[dict]:
     return rows
 
 
-def already_delivered(goal: str, within_hours: float = 24.0,
-                      owner_ref: str = "") -> bool:
-    """Has the answer to THIS job already gone out?
+def job_result_event_id(job_id: str) -> str:
+    """The durable identity of one job's in-app result."""
+    value = str(job_id or "").strip()
+    return f"job-result:{value}" if value else ""
 
-    This used to be already_raised(goal, decision="done"), whose overlap is
-    measured over the SHORTER of the two goals — so a short goal contained in
-    a longer one scores 1.0 and any question that resembles one she answered
-    yesterday is destroyed rather than deferred. "weather in Montreal this
-    Sunday" scores 0.67 against Monday's "look up weather in Montreal": no
-    text, no feed event, nothing — the exact three-silent-weather-questions
-    failure report_finished_jobs was written to end, rebuilt out of fuzzy
-    similarity.
 
-    Fuzzy matching earns its keep for outreach, where the model rephrases an
-    open loop's goal every time it raises it. It earns nothing here: a job's
-    goal is read verbatim off the row, so it is byte-identical every time the
-    same job is re-read, and re-reading the same job is the only repeat this
-    guard exists to stop.
+def job_sms_event_id(job_id: str, state: str) -> str:
+    """The durable identity of one job's SMS lifecycle state."""
+    value = str(job_id or "").strip()
+    status = str(state or "").strip()
+    return f"job-sms:{value}:{status}" if value and status else ""
+
+
+def job_stall_event_id(job_id: str, status: str) -> str:
+    """The durable identity of one exact job/status browser-stall notice."""
+    value = str(job_id or "").strip()
+    state = str(status or "").strip().lower()
+    return f"job-stalled:{value}:{state}" if value and state else ""
+
+
+def job_stall_sms_event_id(job_id: str, status: str, state: str) -> str:
+    """The durable identity of the optional SMS copy of a stall notice."""
+    value = str(job_id or "").strip()
+    job_state = str(status or "").strip().lower()
+    sms_state = str(state or "").strip()
+    if not value or not job_state or not sms_state:
+        return ""
+    return f"job-stalled-sms:{value}:{job_state}:{sms_state}"
+
+
+def _event_matches_owner(event: dict, owner_ref: str = "",
+                         owner_id: str = "") -> bool:
+    """Validate account scope even when a fake or proxy ignores our filter."""
+    ref = _active_owner_ref(owner_ref)
+    if ref and str(event.get("owner_ref") or "").strip() != ref:
+        return False
+    legacy = str(owner_id or ACTIVE_OWNER_ID or "").strip()
+    event_legacy = str(event.get("owner") or "").strip()
+    return not (legacy and event_legacy and event_legacy != legacy)
+
+
+def _event_by_external_id(external_event_id: str, owner_ref: str = "",
+                          owner_id: str = "", kind: str = "",
+                          decision: str = "") -> dict | None:
+    """Read one idempotency row, raising when absence cannot be proven."""
+    durable_id = str(external_event_id or "").strip()
+    if not durable_id:
+        return None
+    filt = f'external_event_id="{_escaped(durable_id)}"'
+    r = pb.get(
+        f"{PB}/api/collections/events/records",
+        params={"filter": _scoped_filter(filt, owner_ref),
+                "perPage": 10, "sort": "-created"},
+        timeout=10,
+    )
+    if not getattr(r, "ok", False):
+        raise RuntimeError(
+            f"event lookup for {durable_id} returned "
+            f"HTTP {getattr(r, 'status_code', '?')}")
+    for event in (r.json() or {}).get("items", []):
+        if str(event.get("external_event_id") or "") != durable_id:
+            continue
+        if kind and str(event.get("kind") or "") != kind:
+            continue
+        if decision and str(event.get("decision") or "") != decision:
+            continue
+        if not _event_matches_owner(event, owner_ref, owner_id):
+            continue
+        return event
+    return None
+
+
+def delivered_stall_notice(job: dict) -> dict | None:
+    """Return the in-app notice for this exact job and observed status."""
+    return _event_by_external_id(
+        job_stall_event_id(job.get("id"), job.get("status")),
+        str(job.get("owner_ref") or ""), str(job.get("owner") or ""),
+        kind="anticipy_says", decision="stalled")
+
+
+def persist_stall_notice(job: dict, text: str) -> dict | None:
+    """Idempotently put a browser-stall notice in the app before any SMS.
+
+    The exact job id and the status that was observed are both part of the
+    durable identity.  Two errands with the same natural-language goal cannot
+    silence each other, and a queued notice cannot hide a later running stall.
     """
-    goal = (goal or "").strip()
-    if not goal:
-        return False
+    durable_id = job_stall_event_id(job.get("id"), job.get("status"))
+    if not durable_id:
+        return None
+    event = {
+        "kind": "anticipy_says",
+        "decision": "stalled",
+        "goal": str(job.get("goal") or "").strip(),
+        "text": text,
+        "external_event_id": durable_id,
+    }
+    owner_ref = str(job.get("owner_ref") or "")
+    owner_id = str(job.get("owner") or "")
     try:
-        since = (datetime.now(timezone.utc)
-                 - timedelta(hours=within_hours)).strftime("%Y-%m-%d %H:%M:%S")
-        filt = (f'kind="anticipy_says" && decision="done"'
-                f' && created>="{since}"')
-        r = pb.get(f"{PB}/api/collections/events/records",
-                   params={"filter": _scoped_filter(filt, owner_ref),
-                           "perPage": 200, "sort": "-created"}, timeout=10)
-        if not getattr(r, "ok", False):
-            return False
-        return any((ev.get("goal") or "").strip() == goal
-                   for ev in r.json().get("items", []))
-    except Exception as e:
-        print(f"already_delivered check failed: {e}")
-        return False
+        post_event(
+            "anticipy_says", text, decision="stalled", goal=event["goal"],
+            owner_ref=owner_ref, owner_id=owner_id,
+            external_event_id=durable_id,
+        )
+        return event
+    except Exception as exc:
+        try:
+            existing = _event_by_external_id(
+                durable_id, owner_ref, owner_id,
+                kind="anticipy_says", decision="stalled")
+        except Exception:
+            existing = None
+        if existing:
+            return existing
+        print(f"stall notice for {job.get('id', '?')} could not be added "
+              f"to the app feed: {exc}")
+        return None
+
+
+def delivered_job_result(job: dict) -> dict | None:
+    """Return the result row for this exact job, never merely the same goal.
+
+    New rows are keyed by PocketBase's globally unique job id. A narrow
+    timestamp-bounded fallback recognizes rows written by the immediately
+    preceding release, which did not yet store that id. The fallback is never
+    used without a job timestamp and never accepts an older answer, so a later
+    job with identical wording is not silenced by yesterday's work.
+
+    Read failures raise. Treating an unverified read as "not delivered" can
+    duplicate both the feed row and the optional external SMS effect.
+    """
+    job_id = str(job.get("id") or "").strip()
+    owner_ref = str(job.get("owner_ref") or "")
+    owner_id = str(job.get("owner") or "")
+    exact = _event_by_external_id(
+        job_result_event_id(job_id), owner_ref, owner_id,
+        kind="anticipy_says", decision="done")
+    if exact:
+        return exact
+
+    goal = str(job.get("goal") or "").strip()
+    updated = str(job.get("updated") or "").strip()
+    updated_at = _ts(updated)
+    if not goal or updated_at is None:
+        return None
+    filt = (f'kind="anticipy_says" && decision="done"'
+            f' && goal="{_escaped(goal)}" && created>="{_escaped(updated)}"')
+    r = pb.get(
+        f"{PB}/api/collections/events/records",
+        params={"filter": _scoped_filter(filt, owner_ref),
+                "perPage": 200, "sort": "-created"}, timeout=10)
+    if not getattr(r, "ok", False):
+        raise RuntimeError(
+            f"legacy result lookup for {job_id} returned "
+            f"HTTP {getattr(r, 'status_code', '?')}")
+    for event in (r.json() or {}).get("items", []):
+        if str(event.get("external_event_id") or "").strip():
+            continue
+        if str(event.get("kind") or "") != "anticipy_says":
+            continue
+        if str(event.get("decision") or "") != "done":
+            continue
+        if str(event.get("goal") or "").strip() != goal:
+            continue
+        if not _event_matches_owner(event, owner_ref, owner_id):
+            continue
+        created_at = _ts(event.get("created"))
+        if created_at is not None and created_at >= updated_at:
+            return event
+    return None
+
+
+def persist_job_result(job: dict, text: str) -> dict | None:
+    """Idempotently make one exact job result available in the app.
+
+    The returned row/text is authoritative. Two workers may compose different
+    sentences before racing the unique id; the loser must use the winner's
+    stored sentence for any optional SMS, never its private losing draft.
+    """
+    job_id = str(job.get("id") or "").strip()
+    durable_id = job_result_event_id(job_id)
+    if not durable_id:
+        return None
+    event = {
+        "kind": "anticipy_says",
+        "decision": "done",
+        "goal": str(job.get("goal") or "").strip(),
+        "text": text,
+        "external_event_id": durable_id,
+    }
+    try:
+        post_event(
+            "anticipy_says", text, decision="done",
+            goal=event["goal"],
+            owner_ref=str(job.get("owner_ref") or ""),
+            owner_id=str(job.get("owner") or ""),
+            external_event_id=durable_id,
+        )
+        return event
+    except Exception as exc:
+        # A concurrent worker may have won the unique-index race. Only the
+        # exact row turns that conflict into success; every other failure is a
+        # real failed app delivery and must remain retryable.
+        try:
+            existing = _event_by_external_id(
+                durable_id, str(job.get("owner_ref") or ""),
+                str(job.get("owner") or ""), kind="anticipy_says",
+                decision="done")
+        except Exception:
+            existing = None
+        if existing:
+            return existing
+        print(f"result for {job_id} could not be added to the app feed: {exc}")
+        return None
 
 
 def can_reach_owner(anticipy) -> bool:
-    """Is there anyone at the other end, before we pay to compose a sentence?
+    """Can this account also receive the optional SMS copy?
 
     THE COMPOSE IS THE EXPENSIVE PART. Live, 2026-08-22, on a real account
     with no phone number on it: a finished job reached the notify path, a
@@ -1898,16 +2198,242 @@ def can_reach_owner(anticipy) -> bool:
     retry, and two seconds later the whole thing happened again — for hours,
     one paid model call per sweep, for a message that could never leave.
 
-    Retrying is right; paying for the sentence before knowing anyone can
-    receive it is not. The rule for WHO is reachable is deliberately not
-    copied here — it lives once, beside the send it guards, in
+    The in-app result is now the primary delivery and never depends on this
+    answer. The rule for whether SMS is configured is deliberately not copied
+    here — it lives once, beside the send it guards, in
     Anticipy.can_notify_owner. A core (or a test double) without that method
-    cannot answer cheaply, so this answers yes and the caller behaves exactly
-    as it did before: the wasted call is the old bug, a wrong silence would
-    be a worse new one.
+    cannot answer cheaply, so this answers yes and the caller preserves its
+    historical optional-text behaviour.
     """
     reachable = getattr(anticipy, "can_notify_owner", None)
     return bool(reachable()) if callable(reachable) else True
+
+
+def can_reach_owner_fresh(anticipy) -> bool:
+    """Check the route freshly when the production effect guard is present.
+
+    Besides stopping the send itself, result/stall reporters need this earlier
+    answer so they do not claim an at-most-once SMS fence for a number that was
+    already removed.  Lightweight unit doubles are intentionally left on the
+    historical ``can_reach_owner`` seam; production installs the guard in
+    ``main`` before any duty runs.
+    """
+    guarded = bool(getattr(getattr(anticipy, "notify_owner", None),
+                           "_canonical_phone_guard", False))
+    if guarded:
+        if not refresh_owner_phone(anticipy):
+            return False
+        if not str(getattr(anticipy, "owner_phone", "") or "").strip():
+            return False
+    return can_reach_owner(anticipy)
+
+
+def record_notification_status(job: dict, state: str) -> bool:
+    """Durably record an SMS outcome separately from the in-app result.
+
+    `anticipy_says` means the answer is available in the app. It must never be
+    withheld because Twilio failed, and it must never be overloaded to claim a
+    text arrived. The exclusive pre-send fence is claimed separately below;
+    this helper records the resulting sent/failed/skipped observation.
+    """
+    job_id = str(job.get("id") or "").strip()
+    allowed = {"sms_sent", "sms_failed", "sms_skipped"}
+    if not job_id or state not in allowed:
+        return False
+    owner_ref = str(job.get("owner_ref") or "")
+    owner_id = str(job.get("owner") or "")
+    durable_id = job_sms_event_id(job_id, state)
+    try:
+        if _event_by_external_id(
+                durable_id, owner_ref, owner_id,
+                kind="notification_status", decision=state):
+            return True
+        post_event(
+            "notification_status",
+            f"job={job_id}; channel=sms; state={state}",
+            decision=state,
+            # This event is operational metadata, not another rendering of the
+            # human goal. The exact job id makes the attempted fence readable
+            # without fuzzy matching two errands that happen to share words.
+            goal=job_id,
+            owner_ref=owner_ref,
+            owner_id=owner_id,
+            external_event_id=durable_id,
+        )
+        return True
+    except Exception as exc:
+        # Treat a unique-index race as success only after reading back this
+        # exact job/state row. A generic conflict must never be mistaken for a
+        # durable at-most-once fence.
+        try:
+            if _event_by_external_id(
+                    durable_id, owner_ref, owner_id,
+                    kind="notification_status", decision=state):
+                return True
+        except Exception:
+            pass
+        print(f"notification status for {job_id} could not be recorded "
+              f"({state}): {exc}")
+        return False
+
+
+def notification_was_attempted(job: dict) -> bool | None:
+    """Whether this job may already have produced an external SMS effect.
+
+    True is a durable at-most-once fence. False means the scoped query
+    completed and found none. None means the worker could not prove either
+    answer; callers must fail closed and skip SMS, because a provider may have
+    accepted the earlier request just before the process or connection died.
+    """
+    job_id = str(job.get("id") or "").strip()
+    if not job_id:
+        return None
+    try:
+        owner_ref = str(job.get("owner_ref") or "")
+        owner_id = str(job.get("owner") or "")
+        return bool(_event_by_external_id(
+            job_sms_event_id(job_id, "sms_attempted"), owner_ref, owner_id,
+            kind="notification_status", decision="sms_attempted"))
+    except Exception as exc:
+        print(f"notification attempt for {job_id} could not be checked: {exc}")
+        return None
+
+
+def claim_notification_attempt(job: dict) -> bool | None:
+    """Exclusively claim the right to make this job's one SMS attempt.
+
+    True belongs only to the process whose CREATE received an unambiguous 2xx.
+    False means another process already owns (or may own) the fence. None means
+    the store could not prove enough to claim anything and a later sweep may
+    retry the check. A unique-index loser must never read back the winner's row
+    and then send too — that check/create race produced duplicate texts under
+    concurrent workers.
+    """
+    job_id = str(job.get("id") or "").strip()
+    if not job_id:
+        return None
+    owner_ref = str(job.get("owner_ref") or "")
+    owner_id = str(job.get("owner") or "")
+    durable_id = job_sms_event_id(job_id, "sms_attempted")
+    try:
+        existing = _event_by_external_id(
+            durable_id, owner_ref, owner_id,
+            kind="notification_status", decision="sms_attempted")
+    except Exception as exc:
+        print(f"notification attempt for {job_id} could not be claimed: {exc}")
+        return None
+    if existing:
+        return False
+
+    try:
+        post_event(
+            "notification_status",
+            f"job={job_id}; channel=sms; state=sms_attempted",
+            decision="sms_attempted", goal=job_id,
+            owner_ref=owner_ref, owner_id=owner_id,
+            external_event_id=durable_id,
+        )
+        return True
+    except Exception as exc:
+        # A conflict means another worker won. A response loss may also mean
+        # the row committed. In both cases this worker deliberately does not
+        # send. Reading it back distinguishes "handled elsewhere" from a
+        # retryable refusal, but never grants the loser the claim.
+        try:
+            existing = _event_by_external_id(
+                durable_id, owner_ref, owner_id,
+                kind="notification_status", decision="sms_attempted")
+        except Exception:
+            existing = None
+        if existing:
+            print(f"notification attempt for {job_id} was claimed elsewhere")
+            return False
+        print(f"notification attempt for {job_id} could not be claimed: {exc}")
+        return None
+
+
+def record_stall_notification_status(job: dict, state: str) -> bool:
+    """Record the optional SMS outcome for one exact stalled job/status."""
+    job_id = str(job.get("id") or "").strip()
+    job_status = str(job.get("status") or "").strip().lower()
+    if not job_id or not job_status or state not in {
+            "sms_sent", "sms_failed", "sms_skipped"}:
+        return False
+    owner_ref = str(job.get("owner_ref") or "")
+    owner_id = str(job.get("owner") or "")
+    durable_id = job_stall_sms_event_id(job_id, job_status, state)
+    try:
+        if _event_by_external_id(
+                durable_id, owner_ref, owner_id,
+                kind="notification_status", decision=state):
+            return True
+        post_event(
+            "notification_status",
+            f"job={job_id}; job_status={job_status}; channel=sms; state={state}; purpose=stalled",
+            decision=state, goal=job_id,
+            owner_ref=owner_ref, owner_id=owner_id,
+            external_event_id=durable_id,
+        )
+        return True
+    except Exception as exc:
+        try:
+            existing = _event_by_external_id(
+                durable_id, owner_ref, owner_id,
+                kind="notification_status", decision=state)
+        except Exception:
+            existing = None
+        if existing:
+            return True
+        print(f"stall SMS status for {job_id}/{job_status} could not be "
+              f"recorded ({state}): {exc}")
+        return False
+
+
+def claim_stall_notification_attempt(job: dict) -> bool | None:
+    """Exclusively claim one best-effort SMS copy of a stall notice."""
+    job_id = str(job.get("id") or "").strip()
+    job_status = str(job.get("status") or "").strip().lower()
+    if not job_id or not job_status:
+        return None
+    owner_ref = str(job.get("owner_ref") or "")
+    owner_id = str(job.get("owner") or "")
+    durable_id = job_stall_sms_event_id(
+        job_id, job_status, "sms_attempted")
+    try:
+        existing = _event_by_external_id(
+            durable_id, owner_ref, owner_id,
+            kind="notification_status", decision="sms_attempted")
+    except Exception as exc:
+        print(f"stall SMS attempt for {job_id}/{job_status} could not be "
+              f"claimed: {exc}")
+        return None
+    if existing:
+        return False
+    try:
+        post_event(
+            "notification_status",
+            f"job={job_id}; job_status={job_status}; channel=sms; state=sms_attempted; purpose=stalled",
+            decision="sms_attempted", goal=job_id,
+            owner_ref=owner_ref, owner_id=owner_id,
+            external_event_id=durable_id,
+        )
+        return True
+    except Exception as exc:
+        # Only the process whose CREATE unambiguously succeeded may send.
+        # A conflict or lost response can mean another worker owns the fence.
+        try:
+            existing = _event_by_external_id(
+                durable_id, owner_ref, owner_id,
+                kind="notification_status", decision="sms_attempted")
+        except Exception:
+            existing = None
+        if existing:
+            print(f"stall SMS attempt for {job_id}/{job_status} was claimed "
+                  "elsewhere")
+            return False
+        print(f"stall SMS attempt for {job_id}/{job_status} could not be "
+              f"claimed: {exc}")
+        return None
 
 
 def report_finished_jobs(anticipy) -> None:
@@ -1942,68 +2468,19 @@ def report_finished_jobs(anticipy) -> None:
             # result goes into the feed for whenever he looks, and a failure
             # of work he never asked for is not news at all.
             if ambient_job(job):
-                # Nothing overheard can go out during quiet hours, so leave
-                # the whole finding untouched and look again after they end.
-                # Checked BEFORE already_delivered on purpose: that call is a
-                # round trip, and re-asking it about every held job on every
-                # two-second sweep would run all night for an answer that
-                # cannot change until 08:00.
-                hour = datetime.now(CLOCK_TZ).hour
-                if result and not failed and (CLOCK_QUIET_START <= hour
-                                              or hour < CLOCK_QUIET_END):
-                    continue
-                if result and not failed and not already_delivered(goal):
-                    # EARN THE INTERRUPTION. The finding lands in the feed
-                    # either way; this only decides whether it is also worth
-                    # a buzz in his pocket. "Randomly messaging me after the
-                    # fact ... 90% of the time it's bad" — the 90% is empty
-                    # answers, findings that arrive long after the moment
-                    # passed, and a chatty day with no ceiling.
-                    age = job_age_seconds(job)
-                    worth, why = worth_interrupting_him(
-                        goal, result, age, uninvited_sent_today(
-                            job.get("owner_ref") or ""))
-                    if not worth:
-                        print(f"fyi to the feed only ({why}): {goal[:50]}")
-                        deliver_to_feed_only = True
-                    else:
-                        deliver_to_feed_only = False
-                    # A held FYI is not a delivered one. Recording the feed
-                    # event and marking the job reported are what make this
-                    # finding "already raised" forever, so both must wait
-                    # until the text has actually gone out — otherwise every
-                    # overheard lookup that finished between 22:00 and 08:00
-                    # was silently destroyed instead of held.
-                    if not deliver_to_feed_only and not deliver_fyi(
-                            anticipy, goal, result, overheard=True):
-                        continue
-                    # Rule change 2026-08-05, Omar's call: quiet work is no
-                    # longer INVISIBLE work. He watched her research Paris
-                    # flights and dinner spots, saw only "Noted — nothing
-                    # needed", and reasonably concluded she was dead. A
-                    # finished overheard lookup now sends ONE light FYI text
-                    # in her own words and lands in the feed. Failures stay
-                    # silent — a dead end on work he never asked for is not
-                    # news. Text first, then the durable feed record (the
-                    # record is what dedupes, so it must land second).
-                    #
-                    # Marked reported BEFORE that write, though: post_event
-                    # ends in raise_for_status, and letting it unwind with the
-                    # FYI already sent meant the next two-second pass sent the
-                    # same FYI again, for as long as PocketBase refused
-                    # writes.
+                if failed or not result:
                     REPORTED.add(job["id"])
-                    post_event("anticipy_says", result, decision="done", goal=goal)
-                REPORTED.add(job["id"])
-                print(f"ambient job {job['id']} finished — fyi'd and on the feed")
-                continue
-            # Durable: has she already delivered THIS result? Keyed on the job's
-            # own goal, exactly, and on being a result — so her earlier "want me
-            # to?" about the same task does not silence the answer, and neither
-            # does yesterday's answer to a DIFFERENT question that happens to
-            # share most of its words.
-            if already_delivered(goal):
-                REPORTED.add(job["id"])
+                    print(f"ambient job {job['id']} ended without a finding")
+                    continue
+                try:
+                    existing_result = delivered_job_result(job)
+                except Exception as exc:
+                    print(f"ambient result for {job['id']} could not be "
+                          f"verified: {exc}")
+                    continue
+                if existing_result or persist_job_result(job, result):
+                    REPORTED.add(job["id"])
+                    print(f"ambient job {job['id']} finished — on the feed")
                 continue
             # DESK delivery for the research lane (roadmap §3 lane 2): the
             # answer is written on the job and lands in the feed as a
@@ -2018,30 +2495,24 @@ def report_finished_jobs(anticipy) -> None:
             if (job.get("lane") or "") == "research" and channel != "sms":
                 said = result or (f"Couldn't get there on {goal}." if failed
                                   else f"That's done: {goal}.")
-                # He asked for this one out loud, so the answer goes to his
-                # hand, not just the feed (same 2026-08-05 rule change).
-                if result and not failed:
-                    # Return value deliberately not gating: for this lane the
-                    # FEED write below is the delivery ("never an SMS"), and the
-                    # text is an extra. deliver_fyi logs its own failure, so a
-                    # text that did not go out is visible without holding a job
-                    # open for an answer that has already landed on his desk.
-                    deliver_fyi(anticipy, goal, result, overheard=False)
-                # Reported first, then the feed write. A refused post_event
-                # raises, and with the text already in his hand that unwound
-                # before anything remembered it — so the same answer went out
-                # again two seconds later, and again, until writes recovered.
-                REPORTED.add(job["id"])
-                post_event("anticipy_says", said, decision="done", goal=goal)
-                print(f"desk: research {job['status']} {job['id']} — {goal[:60]}")
+                try:
+                    existing_result = delivered_job_result(job)
+                except Exception as exc:
+                    print(f"research result for {job['id']} could not be "
+                          f"verified: {exc}")
+                    continue
+                if existing_result or persist_job_result(job, said):
+                    REPORTED.add(job["id"])
+                    print(f"desk: research {job['status']} {job['id']} — "
+                          f"{goal[:60]}")
                 continue
-            # CANNOT REACH IS NOT FAILED TO SEND, and this is the line where
-            # the difference costs money. A transient failure — Twilio 5xx, a
-            # dropped connection — must retry, which is why REPORTED is only
-            # set after a send succeeds. But an account with no number will
-            # not grow one between two sweeps, so that same retry recomposed
-            # this same answer with a fresh model call every two seconds for
-            # hours on 2026-08-22.
+            # NO SMS ROUTE IS NOT A LOST ANSWER, and this is the line where the
+            # distinction matters. The app is the primary delivery surface;
+            # SMS is a best-effort second copy. Retrying a transport call after
+            # a timeout can duplicate a text whose provider accepted it before
+            # the response was lost, so a finished result is composed once,
+            # saved in the app, and its one SMS attempt is recorded separately.
+            # An account with no number does not attempt that optional effect.
             #
             # THE CHANNEL WAS THE PROBLEM, NEVER THE ANSWER. Stopping the
             # burn by dropping the result on the floor threw away real work:
@@ -2058,70 +2529,105 @@ def report_finished_jobs(anticipy) -> None:
             # it as said, because this time it was. That is the difference
             # from the loop: the loop paid for a sentence aimed at a channel
             # that did not exist.
-            untextable = not can_reach_owner(anticipy)
             # A finished task with nothing written on it is still finished, and
             # he asked for it. Staying quiet here would mean his table gets
             # booked and he never learns it — the success case of the exact
             # task he is waiting on, lost. The browser fills `result` from the
             # model's own done-claim, and a model that finishes without
             # articulating one leaves it empty.
-            said = anticipy._voice({
-                "situation": ("you tried to do this for them and it did not work "
-                              "— say so plainly and briefly" if failed else
-                              "you finished what they asked and are giving them "
-                              "the answer" if result else
-                              "it is done, but nothing was written down about how "
-                              "it went — tell them it is done and do NOT invent "
-                              "any details you were not given"),
-                "task": goal,
-                "what_you_found": result or "(nothing recorded)",
-            }) or (f"Couldn't get there on {goal}." if failed
-                   else result or f"That's done: {goal}.")
-            if untextable:
-                # REPORTED first, then the durable write — the same order as
-                # every other delivery in this function, for the same reason:
-                # post_event ends in raise_for_status, and unwinding after the
-                # answer has been delivered is what put the identical message
-                # out again two seconds later, forever.
-                REPORTED.add(job["id"])
-                post_event("anticipy_says", said, decision="done", goal=goal)
-                print(f"result for {job['id']} has nowhere to go by text — no "
-                      f"phone on this account — so it went to the feed "
-                      f"instead of to a text: {said[:80]}")
+            try:
+                existing_result = delivered_job_result(job)
+            except Exception as exc:
+                print(f"result for {job['id']} could not be verified: {exc}")
                 continue
-            # DONE = EVIDENCE. This is the one text in the product that may
-            # carry a picture, and it is resolved HERE — in the moment of
-            # sending, never earlier — because opening a share window puts a
-            # photograph of a page the owner was logged into on an anonymous
-            # https URL for fifteen minutes. A window opened before anybody
-            # needs it is exposure bought for nothing.
-            #
-            # NOTHING BELOW CHOOSES A PICTURE and nothing below can fail the
-            # text: picture_for_done_text returns [] for a receipt naming no
-            # evidence, for a receipt naming more than one (a floor, not a
-            # tie-break — see brain/evidence.py), for an owner who has not
-            # said yes, and for every failure of the share door. It never
-            # raises. The words go out either way.
-            #
-            # PASSED ONLY WHEN THERE IS ONE, for the reason every other hop in
-            # this chain gives: notify_owner has a dozen callers and a dozen
-            # doubles in tests/ and proof/ that predate the picture, and a
-            # keyword they have never seen is a TypeError swallowed by
-            # notify_owner's own except — which reads as "he was not told" and
-            # silences the confirmation entirely. That regression was real: it
-            # took out every SMS-lane answer for one run of this file.
+            app_result_saved = bool(existing_result)
+            if existing_result:
+                # A restart between the app write and the SMS fence must use
+                # the sentence already shown in the app, not pay the model to
+                # rephrase it and send a mismatched second version.
+                said = str(existing_result.get("text") or "").strip()
+                said = said or result or (
+                    f"Couldn't get there on {goal}." if failed
+                    else f"That's done: {goal}.")
+            else:
+                said = anticipy._voice({
+                    "situation": (
+                        "you tried to do this for them and it did not work — "
+                        "say so plainly and briefly" if failed else
+                        "you finished what they asked and are giving them the "
+                        "answer" if result else
+                        "it is done, but nothing was written down about how it "
+                        "went — tell them it is done and do NOT invent any "
+                        "details you were not given"),
+                    "task": goal,
+                    "what_you_found": result or "(nothing recorded)",
+                }) or (f"Couldn't get there on {goal}." if failed
+                       else result or f"That's done: {goal}.")
+                saved_result = persist_job_result(job, said)
+                app_result_saved = bool(saved_result)
+                if saved_result:
+                    said = str(saved_result.get("text") or "").strip() or said
+            # THE APP IS A DELIVERY CHANNEL, NOT A RECEIPT FOR TWILIO. Persist
+            # the result there first and mark this job reported regardless of
+            # what the optional text transport does next. This fixes the live
+            # failure where a completed errand vanished from both channels
+            # merely because the SMS attempt returned false.
+            # Refresh before claiming the at-most-once external-effect fence.
+            # The guard refreshes once more at the actual send boundary; this
+            # earlier check prevents a just-removed cached number from burning
+            # the claim even though no provider request is allowed to leave.
+            untextable = not can_reach_owner_fresh(anticipy)
+            if untextable:
+                status_saved = record_notification_status(job, "sms_skipped")
+                if app_result_saved and status_saved:
+                    REPORTED.add(job["id"])
+                if app_result_saved:
+                    print(f"result for {job['id']} has nowhere to go by text — "
+                          f"no phone on this account — so it went to the feed "
+                          f"instead: {said[:80]}")
+                else:
+                    print(f"result for {job['id']} could not reach the app and "
+                          "this account has no text number; it remains retryable")
+                continue
+            # Claim the durable fence on every pass. REPORTED is RAM, and a
+            # check followed by an ordinary idempotent write is not a claim:
+            # two workers can both check false, race the unique index, then
+            # both read the winner's row and send. Only the process whose
+            # CREATE received an unambiguous success may touch Twilio.
+            attempt_claim = claim_notification_attempt(job)
+            if attempt_claim is False:
+                if app_result_saved:
+                    REPORTED.add(job["id"])
+                print(f"result for {job['id']} "
+                      f"{'is in the app' if app_result_saved else 'is still pending in the app'}; "
+                      "the text attempt belongs to this or another worker, so "
+                      "it was not repeated")
+                continue
+            if attempt_claim is None:
+                print(f"result for {job['id']} "
+                      f"{'is in the app' if app_result_saved else 'is still pending in the app'}; "
+                      "the text attempt could not be claimed, so no text was sent "
+                      "and the check remains retryable")
+                continue
+            # DONE = EVIDENCE. Resolve a picture only after proving there will
+            # be a new send. Opening it earlier exposes a logged-in page on an
+            # anonymous fifteen-minute share URL even when the durable fence
+            # says the SMS already happened.
             photo = picture_for_done_text(job, owner_wants_evidence_photos)
             told = (anticipy.notify_owner(said, media=photo) if photo
                     else anticipy.notify_owner(said))
-            if not told:
-                print(f"result for {job['id']}: send failed, not recording it as said")
-                continue
-            # Same order for the same reason: the text has landed, so nothing
-            # a failing feed write does may let this pass send it twice.
-            REPORTED.add(job["id"])
-            post_event("anticipy_says", said,
-                       decision="done", goal=goal)
-            print(f"reported {job['status']} job {job['id']}: {said[:80]}")
+            skipped = isinstance(told, dict) and bool(told.get("skipped"))
+            sms_state = "sms_sent" if told and not skipped else (
+                "sms_skipped" if skipped else "sms_failed")
+            record_notification_status(job, sms_state)
+            if app_result_saved:
+                REPORTED.add(job["id"])
+            if told and not skipped:
+                print(f"reported {job['status']} job {job['id']} in app; "
+                      f"text accepted: {said[:80]}")
+            else:
+                print(f"result for {job['id']} is in the app; "
+                      f"text {sms_state.removeprefix('sms_')}")
     except Exception as e:
         print(f"result report failed: {e}")
 
@@ -3645,7 +4151,7 @@ def ask_about_stuck_jobs(anticipy, convo) -> None:
             # question of a parked one waits for a channel that can carry a
             # reply. Duplicating a card in order to lie to a dedup guard is
             # not delivery.
-            if not can_reach_owner(anticipy):
+            if not can_reach_owner_fresh(anticipy):
                 nowhere_key = f"unreachable:{local_key}"
                 if not sent_moments_ago(nowhere_key):
                     mark_sent(nowhere_key)
@@ -3751,8 +4257,17 @@ def main() -> None:
     voice = VoiceArm() if live_sms else None
     if voice:
         anticipy.voice = voice
-    convo = Conversation(anticipy, transport=TwilioTransport(voice) if voice else MockTransport())
+    transport = (TwilioTransport(
+        voice,
+        before_send=lambda destination: canonical_phone_allows_effect(
+            anticipy, destination),
+    ) if voice else MockTransport())
+    convo = Conversation(anticipy, transport=transport)
     anticipy.conversation = convo
+    # This is deliberately installed after every transport is attached and
+    # before the first worker duty can speak.  It also covers notify_owner()
+    # calls made from inside Anticipy, not only the calls visible in this file.
+    install_canonical_notification_guard(anticipy)
     # Observation only in step 1; a failure here must never touch hearing.
     #
     # OFF means explicitly off, and nothing else does. This read used to be
@@ -3822,10 +4337,7 @@ def main() -> None:
             # without a redeploy.
             if time.time() - last_profile > 60:
                 last_profile = time.time()
-                entered = fetch_owner_phone(anticipy.owner_ref)
-                if entered and entered != anticipy.owner_phone:
-                    anticipy.owner_phone = entered
-                    print(f"owner phone updated from the app: …{entered[-4:]}")
+                refresh_owner_phone(anticipy)
                 # Same beat for the zone: somebody travels, or onboards after
                 # the worker started, and every prompt should follow them
                 # without a redeploy.

@@ -40,6 +40,8 @@ struct SettingsProfileView: View {
     @State private var phoneField = ""
     @State private var phoneAttempt: FieldCaption.Attempt = .untried
     @State private var savingPhone = false
+    @State private var removingPhone = false
+    @State private var numberRemoved = false
 
     /// Has anything actually changed? The header button is inert otherwise.
     ///
@@ -60,7 +62,18 @@ struct SettingsProfileView: View {
     }
 
     private var canSave: Bool {
-        (detailsChanged || phoneSaveable) && !savingDetails && !savingPhone
+        (detailsChanged || phoneSaveable)
+            && !savingDetails && !savingPhone && !removingPhone
+    }
+
+    private var hasSavedNumber: Bool {
+        switch session.canonicalOwnerPhoneState {
+        case .valid, .invalid: return true
+        case .none: return false
+        case .unknown:
+            return !session.ownerPhone
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     var body: some View {
@@ -115,17 +128,30 @@ struct SettingsProfileView: View {
                         : "This number receives text approvals and results; they also stay in the app.",
                     saved: "Phone number saved."))
 
-            // NO DESTRUCTIVE ROW HERE, deliberately, and this is the one place
-            // this screen departs from the design it copies.
-            //
-            // Screen 4 ends with "Delete account", so the obvious move was to
-            // end this one with "Forget me on this phone". It stays in the root
-            // instead, because forgetting is not only a profile edit: the
-            // existing action ALSO stops listening and clears the unsent queue,
-            // and both of those live on the root with the state they need.
-            // Moving the row here would have moved the label and left half the
-            // behaviour behind — a destructive control that does less than it
-            // used to, which is worse than one in the wrong place.
+            if numberRemoved {
+                Label("Number removed. Updates will stay in the app.",
+                      systemImage: "checkmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if hasSavedNumber {
+                GroupedCard {
+                    DestructiveRow(
+                        removingPhone ? "Removing number…" : "Remove number",
+                        systemImage: "phone.down") {
+                            removeNumber()
+                        }
+                        .disabled(removingPhone || savingPhone)
+                }
+                FootnoteText("Use in-app updates only. You can add a number again here anytime.")
+            }
+
+            // Account and handset lifecycle controls live together in
+            // Privacy & Data, not inside an editable profile card. That screen
+            // owns the full forget flow: stop listening, clear this account's
+            // pending speech and local identity, and verify browser unpairing.
         }
         // The prefill, verbatim from fix 7. Somebody who has never saved a
         // number met an empty field, typed the number they have typed their
@@ -145,7 +171,12 @@ struct SettingsProfileView: View {
         .onChange(of: lastName) { _ in detailsAttempt = .untried }
         .onChange(of: email) { _ in detailsAttempt = .untried }
         .onChange(of: birthday) { _ in detailsAttempt = .untried }
-        .onChange(of: phoneField) { _ in phoneAttempt = .untried }
+        .onChange(of: phoneField) { value in
+            phoneAttempt = .untried
+            if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                numberRemoved = false
+            }
+        }
     }
 
     /// One button, two saves, and each keeps its own verdict.
@@ -187,6 +218,24 @@ struct SettingsProfileView: View {
             guard phoneField == sent else { return }
             phoneAttempt = ok ? .saved : .failed
             if ok { Haptics.success() }
+        }
+    }
+
+    private func removeNumber() {
+        guard !removingPhone, !savingPhone else { return }
+        Haptics.engage()
+        removingPhone = true
+        Task {
+            let ok = await session.removeOwnerPhone()
+            removingPhone = false
+            if ok {
+                phoneField = ""
+                phoneAttempt = .untried
+                numberRemoved = true
+                Haptics.success()
+            } else {
+                phoneAttempt = .failed
+            }
         }
     }
 }

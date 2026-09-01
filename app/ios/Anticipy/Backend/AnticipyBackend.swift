@@ -1,5 +1,30 @@
 import Foundation
 
+/// Resolve a field shared by the account and its editable profile. `nil`
+/// means no profile row exists; `""` means one exists and explicitly holds an
+/// empty value. Using `isEmpty` here would resurrect signup-era contact data.
+enum OwnerProfileCanonical {
+    static func value(profileValue: String?, accountValue: String) -> String {
+        profileValue ?? accountValue
+    }
+}
+
+/// Pure pagination/verdict seams for browser unaffiliation. Twenty-one rows
+/// must mean two pages, and one refused PATCH must make the whole operation a
+/// failure even if every other browser was released.
+enum AgentUnpairPolicy {
+    static func pages(totalPages: Int) -> [Int] {
+        guard totalPages > 0 else { return [] }
+        return Array(1...totalPages)
+    }
+
+    static func succeeded(patchResults: [Bool], remainingRows: Int) -> Bool {
+        !patchResults.isEmpty
+            ? patchResults.allSatisfy { $0 } && remainingRows == 0
+            : remainingRows == 0
+    }
+}
+
 /// A browser-agent job as stored in the backend. The Chrome extension claims
 /// queued jobs, runs them, and reports status/result back here.
 struct AgentJob: Identifiable, Decodable, Equatable {
@@ -9,6 +34,10 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     let status: String // queued | running | awaiting_confirm | done | failed | cancelled
     let result: String?
     let created: String
+    /// PocketBase's last-write timestamp. A terminal shelf is about when work
+    /// ended, not when it was first requested, so Home uses this when ordering
+    /// completed cards and falls back to `created` for legacy rows.
+    let updated: String?
     let workflow_id: String?
     let workflow_version: Int?
     let workflow_state: String?
@@ -45,7 +74,8 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     let receipt: String?
 
     init(id: String, goal: String, params: String, status: String,
-         result: String?, created: String, workflow_id: String? = nil,
+         result: String?, created: String, updated: String? = nil,
+         workflow_id: String? = nil,
          workflow_version: Int? = nil, workflow_state: String? = nil,
          consequence: String? = nil, approval: String? = nil,
          scope_digest: String? = nil, effect_key: String? = nil,
@@ -53,7 +83,8 @@ struct AgentJob: Identifiable, Decodable, Equatable {
          reconciliation: String? = nil, lane: String? = nil,
          receipt: String? = nil) {
         self.id = id; self.goal = goal; self.params = params; self.status = status
-        self.result = result; self.created = created; self.workflow_id = workflow_id
+        self.result = result; self.created = created; self.updated = updated
+        self.workflow_id = workflow_id
         self.workflow_version = workflow_version; self.workflow_state = workflow_state
         self.consequence = consequence; self.approval = approval
         self.scope_digest = scope_digest; self.effect_key = effect_key
@@ -74,7 +105,8 @@ struct AgentJob: Identifiable, Decodable, Equatable {
     /// let any view invent a state instead.
     func withStatus(_ status: String) -> AgentJob {
         AgentJob(id: id, goal: goal, params: params, status: status,
-                 result: result, created: created, workflow_id: workflow_id,
+                 result: result, created: created, updated: updated,
+                 workflow_id: workflow_id,
                  workflow_version: workflow_version, workflow_state: workflow_state,
                  consequence: consequence, approval: approval,
                  scope_digest: scope_digest, effect_key: effect_key,
@@ -119,6 +151,21 @@ struct BrainEvent: Decodable, Identifiable, Equatable {
     /// that produced both. Optional, and empty on the thousands of rows written
     /// before anything wrote it: absent means "no verdict", never "typed".
     let source: String?
+    /// Stable link back to the outside record that caused this event. Worker
+    /// job receipts use `job-result:<job id>` so Home can avoid presenting the
+    /// same completed work once as a Done card and again as a recap.
+    let external_event_id: String?
+}
+
+/// One PocketBase page of events, including the server's own pagination
+/// boundary. History reads this instead of guessing that a short page was the
+/// end or pretending the Home poll window is an archive.
+struct BrainEventPage: Decodable, Equatable {
+    let page: Int
+    let perPage: Int
+    let totalItems: Int
+    let totalPages: Int
+    let items: [BrainEvent]
 }
 
 /// Thin client for the Anticipy PocketBase backend (pairing, events, jobs).
@@ -244,19 +291,35 @@ final class AnticipyBackend {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
             throw BackendError(status: -1)
         }
-        let saved = try await savedPhone(ownerRef: id)
+        let profile = try await savedProfile(ownerRef: id)
+        let accountEmail = (root["email"] as? String) ?? ""
+        let accountPhone = (root["phone"] as? String) ?? ""
+        // Profile EXISTENCE is authoritative. In particular, an existing row
+        // with phone "" means the number was removed; falling back by value
+        // would resurrect the immutable signup-era owners.phone. The account
+        // record seeds only accounts that have no profile row at all.
         return Owner(id: (root["id"] as? String) ?? id,
-                     email: (root["email"] as? String) ?? "",
-                     phone: saved.isEmpty ? ((root["phone"] as? String) ?? "") : saved)
+                     email: OwnerProfileCanonical.value(
+                        profileValue: profile.map(\.email), accountValue: accountEmail),
+                     phone: OwnerProfileCanonical.value(
+                        profileValue: profile.map(\.phone), accountValue: accountPhone),
+                     firstName: profile?.firstName ?? "",
+                     lastName: profile?.lastName ?? "",
+                     birthday: profile?.birthday ?? "")
     }
 
-    /// The number Settings last saved for this account, or "" when there is no
-    /// profile row or the row has no number. A missing row is a 200 carrying an
-    /// empty `items`, so the ONLY exit that reports an absence is the server
-    /// saying so; every other way out throws. That is what keeps `fetchOwner`
-    /// unable to report a number's absence when what actually happened was a
-    /// dead network.
-    private func savedPhone(ownerRef: String) async throws -> String {
+    private struct StoredOwnerProfile {
+        let phone: String
+        let firstName: String
+        let lastName: String
+        let email: String
+        let birthday: String
+    }
+
+    /// The complete profile Settings last saved for this account. A missing row
+    /// is a successful 200 with empty `items`; malformed or refused reads throw
+    /// so the caller cannot erase good device mirrors because a proxy answered.
+    private func savedProfile(ownerRef: String) async throws -> StoredOwnerProfile? {
         let listURL = baseURL.appendingPathComponent("api/collections/owner_profile/records")
         var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
         let filter = "owner_ref=\"\(ownerRef)\""
@@ -275,7 +338,13 @@ final class AnticipyBackend {
         // have handed back the number sign-up wrote and called it current.
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let items = root["items"] as? [[String: Any]] else { throw BackendError(status: -1) }
-        return (items.first?["phone"] as? String) ?? ""
+        guard let item = items.first else { return nil }
+        return StoredOwnerProfile(
+            phone: (item["phone"] as? String) ?? "",
+            firstName: (item["first_name"] as? String) ?? "",
+            lastName: (item["last_name"] as? String) ?? "",
+            email: (item["email"] as? String) ?? "",
+            birthday: (item["birthday"] as? String) ?? "")
     }
 
     /// What the server holds about the person, as opposed to what this handset
@@ -287,6 +356,9 @@ final class AnticipyBackend {
         /// Empty is an answer here, never a failure — `fetchOwner` throws for
         /// that.
         let phone: String
+        let firstName: String
+        let lastName: String
+        let birthday: String
     }
 
     /// Store the owner's number where the brain reads it. Updates the
@@ -295,36 +367,60 @@ final class AnticipyBackend {
         await upsertOwner(ownerID: ownerID, fields: ["phone": phone])
     }
 
+    /// Atomically unaffiliate the signed-in person's number everywhere it can
+    /// route: the immutable account seed and every owner_profile row. The hook
+    /// performs and verifies that transaction; the session then rereads the
+    /// canonical owner before presenting `.none`.
+    func removeOwnerPhone() async -> Bool {
+        guard !accountID.isEmpty else { return false }
+        var request = writeRequest(
+            baseURL.appendingPathComponent("me/phone/remove"), method: "POST")
+        request.httpBody = Data("{}".utf8)
+        guard let data = try? await send(request),
+              let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (result["ok"] as? Bool) == true,
+              ((result["phone"] as? String) ?? "x").isEmpty,
+              let cleared = result["clearedProfiles"] as? Int,
+              cleared >= 0 else { return false }
+        return true
+    }
+
     /// Name and email too: every booking and signup form asks for the same
     /// four things, and without them a run reaches the form and stops.
+    ///
+    /// The server owns profile identity and performs the read/merge/write in a
+    /// single transaction. A client-side list followed by POST/PATCH lets the
+    /// independent phone and details saves both observe "no row" and race to
+    /// create partial profiles. It also lets a device choose `owner_ref` or the
+    /// legacy `owner_id`. This route derives ownership from the session token,
+    /// preserves omitted fields, and treats an explicit empty string as clear.
     func upsertOwner(ownerID: String, fields: [String: String]) async -> Bool {
-        let listURL = baseURL.appendingPathComponent("api/collections/owner_profile/records")
-        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
-        let filter = accountID.isEmpty
-            ? "owner_id=\"\(ownerID)\""
-            : "owner_ref=\"\(accountID)\""
-        let encodedFilter = filter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
-        comps.percentEncodedQuery = "filter=\(encodedFilter)&perPage=1"
-        var existingID: String?
-        if let url = comps.url,
-           let data = try? await readData(from: url),
-           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let items = root["items"] as? [[String: Any]] {
-            existingID = items.first?["id"] as? String
+        guard !accountID.isEmpty else { return false }
+        let editable = Set([
+            "phone", "name", "first_name", "last_name", "email", "birthday",
+            "facts", "timezone",
+        ])
+        guard fields.keys.allSatisfy(editable.contains) else { return false }
+
+        var request = writeRequest(
+            baseURL.appendingPathComponent("me/profile/upsert"), method: "POST")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: fields)
+        guard request.httpBody != nil,
+              let data = try? await send(request),
+              let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (result["ok"] as? Bool) == true,
+              let profile = result["profile"] as? [String: Any],
+              let profileID = profile["id"] as? String,
+              !profileID.isEmpty,
+              (profile["owner_ref"] as? String) == accountID else { return false }
+
+        // A 2xx is not enough: the endpoint promises to echo the complete
+        // canonical row, so verify that every value this request supplied made
+        // it into that row. This also keeps a malformed proxy response from
+        // painting "Saved" in Settings.
+        return fields.allSatisfy { key, value in
+            (profile[key] as? String) == value
         }
-        var body: [String: Any] = ["owner_id": ownerID]
-        if !accountID.isEmpty { body["owner_ref"] = accountID }
-        for (k, v) in fields where !v.isEmpty { body[k] = v }
-        var req: URLRequest
-        if let id = existingID {
-            req = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
-        } else {
-            req = writeRequest(listURL, method: "POST")
-        }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        guard let (_, resp) = try? await URLSession.shared.data(for: req),
-              let http = resp as? HTTPURLResponse else { return false }
-        return (200..<300).contains(http.statusCode)
     }
 
     /// An error that carries the server's own sentence, so the screen can show
@@ -514,28 +610,77 @@ final class AnticipyBackend {
     /// contradictory at once. Unpairing here is what makes disagreement
     /// impossible: the extension falls back to showing a pair code, which is
     /// the state a person can actually act on.
-    func unpairAgent(owner: String) async {
-        guard !owner.isEmpty else { return }
+    @discardableResult
+    func unpairAgent(owner: String) async -> Bool {
+        guard !owner.isEmpty else { return true }
         let listURL = baseURL.appendingPathComponent("api/collections/agents/records")
         let rawFilter = accountID.isEmpty
             ? "owner=\"\(owner)\""
             : "owner_ref=\"\(accountID)\""
         let filter = rawFilter.addingPercentEncoding(
             withAllowedCharacters: .urlQueryAllowed)!
-        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
-        comps.percentEncodedQuery = "filter=\(filter)&perPage=20"
-        guard let url = comps.url,
-              let data = try? await readData(from: url),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let items = root["items"] as? [[String: Any]] else { return }
-        for item in items {
-            guard let id = item["id"] as? String else { continue }
+        // Snapshot every page BEFORE mutating any row. Paging a filtered list
+        // while clearing the field in that filter shifts later rows toward page
+        // one and can skip them. perPage=20 keeps the 21-row regression honest.
+        var ids: [String] = []
+        var page = 1
+        var totalPages = 1
+        repeat {
+            var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+            comps.percentEncodedQuery = "filter=\(filter)&perPage=20&page=\(page)"
+            guard let url = comps.url,
+                  let data = try? await readData(from: url),
+                  let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let items = root["items"] as? [[String: Any]],
+                  let pages = root["totalPages"] as? Int,
+                  pages >= 0 else { return false }
+            totalPages = pages
+            for item in items {
+                guard let id = item["id"] as? String, !id.isEmpty else { return false }
+                ids.append(id)
+            }
+            page += 1
+        } while AgentUnpairPolicy.pages(totalPages: totalPages).contains(page)
+        guard Set(ids).count == ids.count else { return false }
+
+        var patchResults: [Bool] = []
+        for id in ids {
             var patch = writeRequest(listURL.appendingPathComponent(id), method: "PATCH")
             var body: [String: Any] = ["owner": "", "paired": false]
             if !accountID.isEmpty { body["owner_ref"] = "" }
-            patch.httpBody = try? JSONSerialization.data(withJSONObject: body)
-            _ = try? await send(patch)
+            guard let payload = try? JSONSerialization.data(withJSONObject: body) else {
+                return false
+            }
+            patch.httpBody = payload
+            // The successful PATCH response is the saved record. Reading the
+            // row back after clearing owner_ref can correctly become forbidden
+            // to the account that just released it, so a second GET would turn
+            // a verified unpair into a false failure.
+            let patched: Bool
+            if let savedData = try? await send(patch),
+               let saved = try? JSONSerialization.jsonObject(with: savedData) as? [String: Any] {
+                patched = (saved["paired"] as? Bool) == false
+                    && ((saved["owner"] as? String) ?? "").isEmpty
+                    && (accountID.isEmpty
+                        || ((saved["owner_ref"] as? String) ?? "").isEmpty)
+            } else {
+                patched = false
+            }
+            patchResults.append(patched)
+            guard patched else { return false }
         }
+
+        // Verify the filtered set itself is empty. Individual PATCH responses
+        // prove only the rows we saw; this final read catches a missed page or a
+        // row that appeared during unaffiliation.
+        var verify = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        verify.percentEncodedQuery = "filter=\(filter)&perPage=1&page=1"
+        guard let verifyURL = verify.url,
+              let data = try? await readData(from: verifyURL),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let remaining = root["totalItems"] as? Int else { return false }
+        return AgentUnpairPolicy.succeeded(
+            patchResults: patchResults, remainingRows: remaining)
     }
 
     /// The agent paired to this owner (if any), with its latest heartbeat.
@@ -567,7 +712,8 @@ final class AnticipyBackend {
                    goal: String? = nil, speaker: String? = nil,
                    explicit: Bool = false, source: String? = nil,
                    capture: CaptureEnvelope? = nil,
-                   parentLine: String? = nil) async throws -> String {
+                   parentLine: String? = nil,
+                   externalEventID: String? = nil) async throws -> String {
         var body: [String: Any] = [
             "device_id": deviceID, "kind": kind, "text": text,
             "decision": decision ?? "", "goal": goal ?? "",
@@ -638,6 +784,12 @@ final class AnticipyBackend {
         // Omitted rather than sent empty when unknown, so an old row and a
         // genuinely unattributable one read the same downstream.
         if let source, !source.isEmpty { body["source"] = source }
+        // Stable client identity for writes whose HTTP response can be lost.
+        // The events collection has a unique index on non-empty values, so a
+        // retry of the same logical app reply cannot create a second turn.
+        if let externalEventID, !externalEventID.isEmpty {
+            body["external_event_id"] = externalEventID
+        }
         // How much a seeded fact matters. Only the day-zero paths set it; a
         // transcript has no business claiming an importance, and a missing
         // value reads as 4 on the worker side.
@@ -727,6 +879,86 @@ final class AnticipyBackend {
         return try JSONDecoder().decode(Page.self, from: data).items
     }
 
+    /// Exact read-after-write for an idempotent app reply. Both the server
+    /// filter and the decoded result are account checked: a proxy that ignores
+    /// one query clause cannot turn another owner's matching durable id into a
+    /// false success on this phone.
+    func hasEvent(kind: String, externalEventID: String) async throws -> Bool {
+        guard !accountID.isEmpty, !kind.isEmpty,
+              !externalEventID.isEmpty else { throw BackendError(status: 400) }
+        func escaped(_ value: String) -> String {
+            value.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+        }
+        let filter = "owner_ref=\"\(escaped(accountID))\""
+            + " && external_event_id=\"\(escaped(externalEventID))\""
+            + " && kind=\"\(escaped(kind))\""
+        let listURL = baseURL.appendingPathComponent("api/collections/events/records")
+        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        comps.queryItems = [
+            URLQueryItem(name: "filter", value: filter),
+            URLQueryItem(name: "perPage", value: "2"),
+            URLQueryItem(name: "page", value: "1"),
+        ]
+        let data = try await readData(from: comps.url!)
+        struct Identity: Decodable {
+            let kind: String
+            let owner_ref: String?
+            let external_event_id: String?
+        }
+        struct Page: Decodable { let items: [Identity] }
+        let rows = try JSONDecoder().decode(Page.self, from: data).items
+        guard rows.allSatisfy({
+            $0.kind == kind && $0.owner_ref == accountID
+                && $0.external_event_id == externalEventID
+        }) else { throw BackendError(status: 502) }
+        return !rows.isEmpty
+    }
+
+    /// A real page of the event archive with the server's page and total-page
+    /// answers intact. `fetchEvents` remains the small live poll; screens that
+    /// promise history use this and explicitly advance until `totalPages`.
+    func fetchEventPage(page: Int, perPage: Int = 100,
+                        matching extra: String? = nil,
+                        oldestFirst: Bool = false) async throws -> BrainEventPage {
+        let listURL = baseURL.appendingPathComponent("api/collections/events/records")
+        var comps = URLComponents(url: listURL, resolvingAgainstBaseURL: false)!
+        var items = [
+            URLQueryItem(name: "page", value: String(max(1, page))),
+            URLQueryItem(name: "perPage", value: String(min(max(1, perPage), 500))),
+            URLQueryItem(name: "sort", value: oldestFirst ? "created" : "-created"),
+        ]
+        var clauses: [String] = []
+        if !accountID.isEmpty { clauses.append("owner_ref=\"\(accountID)\"") }
+        if let extra, !extra.isEmpty { clauses.append("(\(extra))") }
+        if !clauses.isEmpty {
+            items.append(URLQueryItem(name: "filter",
+                                      value: clauses.joined(separator: " && ")))
+        }
+        comps.queryItems = items
+        let data = try await readData(from: comps.url!)
+        return try JSONDecoder().decode(BrainEventPage.self, from: data)
+    }
+
+    /// Transcript-only archive page. Keeping the filter here means History
+    /// does not page through replies, status narration, and other event kinds
+    /// merely to discard them on the phone.
+    func fetchTranscriptPage(page: Int, perPage: Int = 100,
+                             createdAtOrBefore snapshot: String? = nil) async throws -> BrainEventPage {
+        var clauses = ["kind=\"transcript\""]
+        if let snapshot, !snapshot.isEmpty {
+            // The value came from PocketBase's own `created` field. Escape it
+            // anyway so the archive boundary remains data inside the filter,
+            // never syntax, if that wire format changes later.
+            let safe = snapshot
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            clauses.append("created<=\"\(safe)\"")
+        }
+        return try await fetchEventPage(page: page, perPage: perPage,
+                                        matching: clauses.joined(separator: " && "))
+    }
+
     /// Latest jobs for THIS owner, newest first — powers the proactive feed.
     ///
     /// The owner filter is not cosmetic: unscoped, the second person to install
@@ -746,6 +978,17 @@ final class AnticipyBackend {
         let data = try await readData(from: comps.url!)
         struct Page: Decodable { let items: [AgentJob] }
         return try JSONDecoder().decode(Page.self, from: data).items
+    }
+
+    /// Canonical read-after-uncertain-write for one action card. A collection
+    /// refresh is not enough here: it is capped and can omit the exact row whose
+    /// PATCH response was lost.
+    func fetchJob(id: String) async throws -> AgentJob {
+        let url = baseURL
+            .appendingPathComponent("api/collections/jobs/records")
+            .appendingPathComponent(id)
+        let data = try await readData(from: url)
+        return try JSONDecoder().decode(AgentJob.self, from: data)
     }
 
     /// Release a held job (in-app "Send it") or cancel it ("Not now").

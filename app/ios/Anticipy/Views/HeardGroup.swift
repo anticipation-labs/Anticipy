@@ -114,6 +114,18 @@ struct HeardGroup: Identifiable, Equatable {
         return nil
     }
 
+    /// The newest brain-stamped understanding. Conversation cards keep the
+    /// opening goal as their stable title, but a recap must respect later
+    /// corrections ("not Vancouver — Burnaby") instead of resurfacing the
+    /// first, superseded interpretation.
+    var latestGoalTitle: String? {
+        for line in lines.reversed() {
+            let g = (line.goal ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !g.isEmpty { return Humanize.goal(g) }
+        }
+        return nil
+    }
+
     /// Rung 2 — she stamped no goal anywhere, so the card shows the words
     /// themselves, verbatim. She does not get to invent a summary she never
     /// made. Nil when every line in the group has empty text.

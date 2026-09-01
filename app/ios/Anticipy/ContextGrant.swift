@@ -250,6 +250,16 @@ struct ContextGrants {
         defaults.set(false, forKey: source.declinedKey)
     }
 
+    /// Remove the previous account's local consent decisions. iOS may retain
+    /// its operating-system permission, but Anticipy must ask the next account
+    /// through its own explanation before reading anything for them.
+    func resetAll() {
+        for source in ContextSource.allCases {
+            defaults.removeObject(forKey: source.storageKey)
+            defaults.removeObject(forKey: source.declinedKey)
+        }
+    }
+
     /// May she ASK about this source right now?
     ///
     /// Not "may she read" — that is `granted`. She may ask when she has neither

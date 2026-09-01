@@ -179,25 +179,92 @@ enum OwnerMirrorContract {
         guard let signOut = SourceScan.body(ofFunc: "signOut()", in: source) else {
             return found + ["signOut() is gone, or is no longer declared where this can read it."]
         }
-        if !signOut.contains("OwnerMirror.clear") {
+        let sharedClear = SourceScan.body(ofFunc: "clearSignedInSurface()", in: source)
+        let signOutClearsMirrors = signOut.contains("OwnerMirror.clear")
+            || (signOut.contains("clearSignedInSurface()")
+                && sharedClear?.contains("OwnerMirror.clear") == true)
+        if !signOutClearsMirrors {
             found.append("signOut() does not clear the owner mirrors. The next person to open this phone sees the last person's email under \"Welcome back.\", their first name in the tour, and their number ticked as confirmed.")
+        }
+
+        guard let refresh = SourceScan.body(ofFunc: "refreshCanonicalOwner()", in: source) else {
+            return found + ["refreshCanonicalOwner() is gone. Sign-in and launch need one shared canonical read or their five-field replacement rules can drift."]
+        }
+        if !refresh.contains("fetchOwner") || !refresh.contains("applyCanonicalOwner") {
+            found.append("refreshCanonicalOwner() no longer reads and applies the server owner/profile as one operation.")
+        }
+
+        // Swift's external label is followed by an internal parameter name in
+        // a declaration (`with canonical:`), not by a colon as it is at the
+        // call site (`with:`). Match the declaration prefix and let the body
+        // scanner find its brace, so renaming that internal parameter cannot
+        // turn a valid implementation red.
+        guard let replace = SourceScan.body(
+            ofFunc: "replaceOwnerMirror(with ", in: source
+        ) else {
+            return found + ["replaceOwnerMirror(with:) is gone, so the source gate cannot prove canonical empty values replace all five device mirrors."]
+        }
+        for field in ["Phone", "FirstName", "LastName", "Email", "Birthday"]
+        where !replace.contains("owner\(field) = replacement.") {
+            found.append("replaceOwnerMirror(with:) does not unconditionally replace owner\(field); an empty canonical value can leave stale data behind.")
+        }
+
+        guard let apply = SourceScan.body(ofFunc: "applyCanonicalOwner(", in: source) else {
+            return found + ["applyCanonicalOwner is gone."]
+        }
+        for field in ["phone", "firstName", "lastName", "email", "birthday"]
+        where !apply.contains("owner.\(field)") {
+            found.append("applyCanonicalOwner does not carry canonical owner.\(field) into the replacement snapshot.")
         }
 
         guard let signIn = SourceScan.body(ofFunc: "signIn(email:", in: source) else {
             return found + ["signIn() is gone, or is no longer declared where this can read it."]
         }
-        if !signIn.contains("fetchOwner") {
-            found.append("signIn() no longer reads the owner back from the server. ownerPhone is device-local and written only by saveOwnerPhone and signUp, so after a reinstall the phone holds no number while the account holds a real one.")
+        if !signIn.contains("refreshCanonicalOwner") {
+            found.append("signIn() no longer rehydrates the complete canonical owner/profile after authentication.")
         }
-        if !signIn.contains("ownerPhone = owner.phone") {
-            found.append("signIn() reads the owner but does not write the number through, so the read changes nothing.")
+        if !signIn.contains("prepareLocalPersonStateForSignIn") {
+            found.append("signIn() does not pass through the interactive local-person boundary, so an empty legacy stamp can adopt stale device-only data.")
         }
 
         guard let resume = SourceScan.body(ofFunc: "resumeSignedInAccount()", in: source) else {
             return found + ["resumeSignedInAccount() is gone, or is no longer declared where this can read it."]
         }
-        if !resume.contains("fetchOwner") {
-            found.append("resumeSignedInAccount() never asks for the number again. signIn's read is then the only one there is, and it happens on the worst network moment in the app, so a read that failed there leaves the phone believing this account has no number until the next sign-out and sign-in.")
+        if !resume.contains("refreshCanonicalOwner") {
+            found.append("resumeSignedInAccount() does not refresh the complete canonical owner/profile on authenticated launch.")
+        }
+        if !resume.contains("adoptLocalPersonStateOnAuthenticatedLaunch") {
+            found.append("resumeSignedInAccount() no longer uses the one-time authenticated-launch adoption path for a missing local-person stamp.")
+        }
+
+        guard let launch = SourceScan.body(
+            ofFunc: "adoptLocalPersonStateOnAuthenticatedLaunch(for account:", in: source),
+              let arrival = SourceScan.body(
+                ofFunc: "prepareLocalPersonStateForSignIn(for account:", in: source)
+        else { return found + ["The launch/sign-in local-person ownership paths are no longer separately inspectable."] }
+        if !launch.contains("localPersonAccountID.isEmpty")
+            || !launch.contains("localPersonAccountID = account")
+            || !launch.contains("return") {
+            found.append("An already-authenticated legacy launch no longer adopts an empty local-person stamp without purging its own state.")
+        }
+        let flatArrival = arrival.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .joined(separator: " ")
+        if !flatArrival.contains("if localPersonAccountID != account {")
+            || !arrival.contains("purgeLocalPersonState")
+            || !arrival.contains("clearSignedInSurface") {
+            found.append("Interactive sign-in no longer purges an empty or different local-person stamp before adoption.")
+        }
+        if let expiry = SourceScan.body(ofFunc: "expireSession()", in: source),
+           expiry.contains("localPersonAccountID") {
+            found.append("Token expiry clears the local-person stamp, so same-account re-authentication can no longer preserve device-only state.")
+        }
+        guard let remove = SourceScan.body(ofFunc: "removeOwnerPhone()", in: source)
+        else { return found + ["removeOwnerPhone() is gone; the E.164 save path cannot represent an intentional empty phone."] }
+        if !remove.contains("backend.removeOwnerPhone")
+            || !remove.contains("refreshCanonicalOwner")
+            || !remove.contains("canonicalOwnerPhoneState == .none") {
+            found.append("removeOwnerPhone() does not call the atomic unaffiliation endpoint, reread canonical state, and verify `.none` before reporting success.")
         }
 
         return found
@@ -215,17 +282,17 @@ enum OwnerMirrorContract {
         if !signature.contains("async throws") {
             found.append("fetchOwner no longer throws. A read that failed and an account with no number then arrive as the same answer, and the caller wipes a good number every time the train goes into a tunnel.")
         }
-        if !fetch.contains("savedPhone") {
-            found.append("fetchOwner no longer consults the profile row. owners.phone is what sign-up wrote and nothing updates again; the number Settings saved lives in owner_profile, which is also the row an inbound text is routed through.")
+        if !fetch.contains("savedProfile") {
+            found.append("fetchOwner no longer consults the complete profile row. Settings' name, contact details, and birthday would disappear after sign-out.")
         }
-        guard let saved = SourceScan.body(ofFunc: "savedPhone(ownerRef:", in: source) else {
-            return found + ["savedPhone is gone."]
+        guard let saved = SourceScan.body(ofFunc: "savedProfile(ownerRef:", in: source) else {
+            return found + ["savedProfile is gone."]
         }
         if !saved.contains("owner_profile") {
-            found.append("savedPhone no longer reads owner_profile, so it cannot be reading the number a text would actually reach.")
+            found.append("savedProfile no longer reads owner_profile.")
         }
         if saved.contains("try? await") {
-            found.append("savedPhone swallows its read failure. A refused or unreachable profile read then reads as \"this account has no saved number\", and the caller clears one that exists.")
+            found.append("savedProfile swallows its read failure. A refused profile read can then erase valid local mirrors.")
         }
         // Flattened, so a guard written across four lines reads the same as one
         // written across one. The rule is about the EXIT, not the formatting.
@@ -233,9 +300,59 @@ enum OwnerMirrorContract {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .joined(separator: " ")
         if flat.contains("else { return \"\" }") {
-            found.append("savedPhone answers \"\" from a guard it could not get past. An unparseable 200 — a proxy's error page, a captive portal — then reads as \"Settings never saved a number\", and fetchOwner hands back the one sign-up wrote and calls it current.")
+            found.append("savedProfile reports an empty answer from a guard it could not get past; malformed data must throw rather than erase mirrors.")
+        }
+        for key in ["phone", "first_name", "last_name", "email", "birthday"]
+        where !saved.contains("[\"\(key)\"]") {
+            found.append("savedProfile does not decode \(key), so that canonical field cannot survive re-authentication.")
+        }
+        if fetch.contains("profilePhone.isEmpty")
+            || fetch.contains("profile?.phone.isEmpty") {
+            found.append("fetchOwner falls back by phone value. An existing profile's explicit empty would resurrect owners.phone.")
+        }
+        guard let upsert = SourceScan.body(ofFunc: "upsertOwner(ownerID:", in: source)
+        else { return found + ["upsertOwner is gone."] }
+        if !upsert.contains("me/profile/upsert") || !upsert.contains("method: \"POST\"") {
+            found.append("upsertOwner bypasses the authenticated atomic profile endpoint, so independent first saves can still create or reject partial rows.")
+        }
+        if upsert.contains("api/collections/owner_profile/records") {
+            found.append("upsertOwner still performs the racy client-side owner_profile list/write flow.")
+        }
+        if upsert.contains("body[\"owner_id\"]")
+            || upsert.contains("body[\"owner_ref\"]")
+            || upsert.contains("[\"owner_id\": ownerID]") {
+            found.append("upsertOwner lets the device choose profile ownership instead of deriving it from the authenticated account.")
+        }
+        if upsert.contains("where !v.isEmpty") {
+            found.append("upsertOwner drops explicit empty values, so the remove-number action can report success without clearing the server field.")
+        }
+        for evidence in ["send(request)", "result[\"ok\"]", "result[\"profile\"]",
+                         "profile[\"owner_ref\"]", "fields.allSatisfy"]
+        where !upsert.contains(evidence) {
+            found.append("upsertOwner does not verify \(evidence) in the canonical endpoint response.")
+        }
+        guard let removePhone = SourceScan.body(ofFunc: "removeOwnerPhone()", in: source)
+        else { return found + ["The backend client has no atomic remove-owner-phone endpoint."] }
+        for evidence in ["me/phone/remove", "result[\"ok\"]", "result[\"phone\"]",
+                         "result[\"clearedProfiles\"]"]
+        where !removePhone.contains(evidence) {
+            found.append("Backend removeOwnerPhone does not verify \(evidence) from the atomic endpoint response.")
         }
 
+        return found
+    }
+
+    static func problems(inSettingsProfile source: String) -> [String] {
+        var found: [String] = []
+        if !source.contains("Remove number") || !source.contains("Use in-app updates only") {
+            found.append("Profile has no explicit consumer-facing route to remove SMS and use in-app updates only.")
+        }
+        guard let remove = SourceScan.body(ofFunc: "removeNumber()", in: source) else {
+            return found + ["SettingsProfileView.removeNumber() is gone."]
+        }
+        if !remove.contains("session.removeOwnerPhone()") || !remove.contains("phoneField = \"\"") {
+            found.append("The remove-number control does not call the verified session action and clear the visible field after success.")
+        }
         return found
     }
 }
@@ -251,14 +368,125 @@ func check(_ name: String, _ ok: Bool, _ why: @autoclosure () -> String = "") {
     FileHandle.standardError.write(Data(("FAIL: " + name + (tail.isEmpty ? "" : " — " + tail) + "\n").utf8))
 }
 
+// ---- the production replacement policy, exercised as account lifecycles ---
+
+let canonicalA = OwnerMirror.Values(
+    phone: "+16045550101", firstName: "Alpha", lastName: "Able",
+    email: "alpha@example.com", birthday: "1990-01-02")
+let restoredA = OwnerMirror.Values.empty.replacing(with: canonicalA)
+check("A sign-out then A sign-in restores every canonical profile field",
+      restoredA == canonicalA)
+
+let canonicalB = OwnerMirror.Values(
+    phone: "", firstName: "Bravo", lastName: "",
+    email: "bravo@example.com", birthday: "")
+let switchedToB = canonicalA.replacing(with: canonicalB)
+check("A to B replaces the whole profile rather than merging non-empty fields",
+      switchedToB == canonicalB)
+check("B's explicit empty values erase A's phone, last name, and birthday",
+      switchedToB.phone.isEmpty && switchedToB.lastName.isEmpty
+        && switchedToB.birthday.isEmpty)
+
+let removedPhone = OwnerProfileCanonical.value(
+    profileValue: "", accountValue: canonicalA.phone)
+check("an existing profile's explicit empty phone beats a stale signup number",
+      removedPhone.isEmpty)
+check("the signup phone seeds only an absent profile row",
+      OwnerProfileCanonical.value(profileValue: nil, accountValue: canonicalA.phone)
+        == canonicalA.phone)
+check("an explicit empty canonical phone is the none state",
+      OwnerMirror.phoneState(forCanonicalPhone: removedPhone, isValid: false) == .none)
+check("a non-empty malformed canonical phone is invalid, not absent",
+      OwnerMirror.phoneState(forCanonicalPhone: "not-a-number", isValid: false) == .invalid)
+check("a validated canonical phone is valid",
+      OwnerMirror.phoneState(forCanonicalPhone: canonicalA.phone, isValid: true) == .valid)
+
+check("21 browser rows at perPage 20 require both server pages",
+      AgentUnpairPolicy.pages(totalPages: 2) == [1, 2])
+check("all 21 verified PATCHes plus zero remaining rows succeeds",
+      AgentUnpairPolicy.succeeded(
+        patchResults: Array(repeating: true, count: 21), remainingRows: 0))
+var onePatchFailed = Array(repeating: true, count: 21)
+onePatchFailed[20] = false
+check("one failed PATCH makes 21-row unaffiliation fail",
+      !AgentUnpairPolicy.succeeded(
+        patchResults: onePatchFailed, remainingRows: 0))
+check("a remaining browser row defeats otherwise successful PATCHes",
+      !AgentUnpairPolicy.succeeded(
+        patchResults: Array(repeating: true, count: 21), remainingRows: 1))
+
+let speechAcrossDevice: [String?] = [nil, "prior-account", "current-account"]
+check("device Forget removes nil, prior-account, and current-account queued speech",
+      PendingSpeechRetention.afterDeviceForget(speechAcrossDevice).isEmpty)
+
+let partialDeleteBody = #"{"ok":false,"message":"Some rows remain.","deleted":{"events":4,"jobs":1},"failed":["owner_profile"]}"#
+let partialDelete = AccountDeletionPolicy.outcome(status: 500, body: partialDeleteBody)
+check("a partial 500 is not reported as complete", !partialDelete.ok)
+check("a partial 500 surfaces the server message",
+      partialDelete.message.contains("Some rows remain."))
+check("a partial 500 names records already removed",
+      partialDelete.message.contains("events (4)")
+        && partialDelete.message.contains("jobs (1)"))
+check("a partial 500 names the table still needing deletion",
+      partialDelete.message.contains("owner_profile"))
+let scheduledDeleteBody = #"{"ok":true,"deleted":{"events":4},"account_deleted":true,"memory_purge":"scheduled"}"#
+let scheduledDelete = AccountDeletionPolicy.outcome(status: 200, body: scheduledDeleteBody)
+check("a scheduled private-memory purge can close the deleted account",
+      scheduledDelete.ok)
+check("a scheduled purge is named as pending rather than already gone",
+      scheduledDelete.message.contains("purge is scheduled")
+        && !scheduledDelete.message.contains("private memory are gone")
+        && !scheduledDelete.message.contains("Already removed"))
+let purgedDeleteBody = #"{"ok":true,"account_deleted":true,"memory_purge":"purged"}"#
+let purgedDelete = AccountDeletionPolicy.outcome(status: 200, body: purgedDeleteBody)
+check("a verified completed private-memory purge may be called gone",
+      purgedDelete.ok && purgedDelete.message.contains("private memory are gone"))
+let unprovenDelete = AccountDeletionPolicy.outcome(
+    status: 200, body: #"{"ok":true,"account_deleted":true}"#)
+check("a 200 without memory-purge proof is not called complete",
+      !unprovenDelete.ok && !unprovenDelete.message.contains("gone"))
+check("a lost response makes no no-deletion claim",
+      AccountDeletionPolicy.unverified.message.contains("couldn't verify how far"))
+check("a lost response tells the owner to re-authenticate and recheck",
+      AccountDeletionPolicy.unverified.message.contains("Sign in again")
+        && AccountDeletionPolicy.unverified.message.contains("check what's left"))
+
+check("a response-lost approval already claimed by the worker is accepted, not retried",
+      ActionWritePolicy.reconcile(
+        originalStatus: "awaiting_confirm",
+        expectedStatus: "queued",
+        observedStatus: "running") == .accepted)
+check("a response-lost approval whose exact row is unchanged becomes safe to retry",
+      ActionWritePolicy.reconcile(
+        originalStatus: "awaiting_confirm",
+        expectedStatus: "queued",
+        observedStatus: "awaiting_confirm") == .safeToRetry)
+check("an unchanged needs_user row is not mistaken for post-approval progress",
+      ActionWritePolicy.reconcile(
+        originalStatus: "needs_user",
+        expectedStatus: "queued",
+        observedStatus: "needs_user") == .safeToRetry)
+check("a response-lost approval with no canonical read remains unverified",
+      ActionWritePolicy.reconcile(
+        originalStatus: "awaiting_confirm",
+        expectedStatus: "queued",
+        observedStatus: nil) == .unverified)
+check("a server 422 is a verified refusal",
+      ActionWritePolicy.isVerifiedRefusal(status: 422))
+check("a server timeout is not called a verified refusal",
+      !ActionWritePolicy.isVerifiedRefusal(status: 408))
+
 // ---- the scanner can find things ----------------------------------------
 
 let goodSession = """
 enum OwnerMirror {
     static let phone = "ownerPhone"
+    static let firstName = "ownerFirstName"
+    static let lastName = "ownerLastName"
     static let email = "ownerEmail"
+    static let birthday = "ownerBirthday"
 
-    static let keys = [phone, email]
+    static let keys = [phone, firstName, lastName, email, birthday]
 
     static func clear(in defaults: UserDefaults = .standard) {
         for key in keys { defaults.removeObject(forKey: key) }
@@ -268,12 +496,38 @@ enum OwnerMirror {
 final class AnticipySession {
     @AppStorage("ownerID") var ownerID = ""
     @AppStorage(OwnerMirror.phone) var ownerPhone = ""
+    @AppStorage(OwnerMirror.firstName) var ownerFirstName = ""
+    @AppStorage(OwnerMirror.lastName) var ownerLastName = ""
     @AppStorage(OwnerMirror.email) var ownerEmail = ""
+    @AppStorage(OwnerMirror.birthday) var ownerBirthday = ""
+
+    private func replaceOwnerMirror(with canonical: OwnerMirror.Values) {
+        let replacement = currentOwnerMirror.replacing(with: canonical)
+        ownerPhone = replacement.phone
+        ownerFirstName = replacement.firstName
+        ownerLastName = replacement.lastName
+        ownerEmail = replacement.email
+        ownerBirthday = replacement.birthday
+    }
+
+    private func applyCanonicalOwner(_ owner: Owner) {
+        replaceOwnerMirror(with: .init(phone: owner.phone,
+                                       firstName: owner.firstName,
+                                       lastName: owner.lastName,
+                                       email: owner.email,
+                                       birthday: owner.birthday))
+    }
+
+    func refreshCanonicalOwner() async -> Bool {
+        if let owner = try? await backend.fetchOwner(id: accountID) {
+            applyCanonicalOwner(owner)
+        }
+        return true
+    }
 
     func signIn(email: String, password: String) async -> String? {
-        if let owner = try? await backend.fetchOwner(id: id) {
-            ownerPhone = owner.phone
-        }
+        prepareLocalPersonStateForSignIn(for: id)
+        await refreshCanonicalOwner()
         return nil
     }
 
@@ -283,15 +537,49 @@ final class AnticipySession {
     }
 
     func resumeSignedInAccount() async {
-        if ownerPhone.isEmpty, let owner = try? await backend.fetchOwner(id: accountID) {
-            ownerPhone = owner.phone
+        adoptLocalPersonStateOnAuthenticatedLaunch(for: accountID)
+        await refreshCanonicalOwner()
+    }
+
+    func removeOwnerPhone() async -> Bool {
+        guard await backend.removeOwnerPhone(),
+              await refreshCanonicalOwner() else { return false }
+        return canonicalOwnerPhoneState == .none
+    }
+
+    private func clearSignedInSurface() {
+        OwnerMirror.clear()
+    }
+
+    private func purgeLocalPersonState() {
+        forgetEverything()
+    }
+
+    private func adoptLocalPersonStateOnAuthenticatedLaunch(for account: String) {
+        if localPersonAccountID.isEmpty {
+            localPersonAccountID = account
+            return
         }
+        if localPersonAccountID != account { purgeLocalPersonState() }
+        localPersonAccountID = account
+    }
+
+    private func prepareLocalPersonStateForSignIn(for account: String) {
+        if localPersonAccountID != account {
+            clearSignedInSurface()
+            purgeLocalPersonState()
+        }
+        localPersonAccountID = account
+    }
+
+    private func expireSession() {
+        clearSignedInSurface()
     }
 }
 """
 
 check("the scanner sees the declarations it is meant to read",
-      SourceScan.appStorageDeclarations(in: goodSession).count == 3,
+      SourceScan.appStorageDeclarations(in: goodSession).count == 6,
       "found \(SourceScan.appStorageDeclarations(in: goodSession))")
 check("the scanner reads a method body",
       SourceScan.body(ofFunc: "signOut()", in: goodSession)?.contains("OwnerMirror.clear") == true)
@@ -299,7 +587,8 @@ check("a method that is not there reads as nil, not as empty",
       SourceScan.body(ofFunc: "vanished()", in: goodSession) == nil)
 check("the scanner reads the key list",
       SourceScan.arrayLiteral(named: "keys", in:
-        SourceScan.body(ofEnum: "OwnerMirror", in: goodSession) ?? "") == ["phone", "email"])
+        SourceScan.body(ofEnum: "OwnerMirror", in: goodSession) ?? "")
+        == ["phone", "firstName", "lastName", "email", "birthday"])
 check("a source that keeps the contract has nothing to say",
       OwnerMirrorContract.problems(inSession: goodSession).isEmpty,
       "\(OwnerMirrorContract.problems(inSession: goodSession))")
@@ -318,8 +607,8 @@ check("a sixth owner field stored outside OwnerMirror is caught",
 
 // A key added to the type but not to the list it is cleared from.
 let unlisted = goodSession.replacingOccurrences(
-    of: "    static let keys = [phone, email]",
-    with: "    static let keys = [phone]")
+    of: "    static let keys = [phone, firstName, lastName, email, birthday]",
+    with: "    static let keys = [phone, firstName, lastName, email]")
 check("a key missing from OwnerMirror.keys is caught",
       OwnerMirrorContract.problems(inSession: unlisted)
         .contains { $0.contains("not in `keys`") })
@@ -338,37 +627,76 @@ check("a clear that stops walking the list is caught",
       OwnerMirrorContract.problems(inSession: handRolled)
         .contains { $0.contains("walks `keys`") })
 
-// The read dropped, or read and thrown away.
-let noRead = goodSession.replacingOccurrences(of: "backend.fetchOwner(id: id)", with: "nothing()")
-check("a signIn that no longer reads the owner back is caught",
+// The canonical read dropped, or one field is no longer replaced.
+let noRead = goodSession.replacingOccurrences(
+    of: "backend.fetchOwner(id: accountID)", with: "nothing()")
+check("a refresh that no longer reads the owner back is caught",
       OwnerMirrorContract.problems(inSession: noRead)
-        .contains { $0.contains("reinstall") })
-let readIgnored = goodSession.replacingOccurrences(of: "            ownerPhone = owner.phone\n", with: "")
-check("a read whose answer is never written through is caught",
+        .contains { $0.contains("reads and applies") })
+let readIgnored = goodSession.replacingOccurrences(
+    of: "        ownerBirthday = replacement.birthday\n", with: "")
+check("a canonical empty birthday that is never written through is caught",
       OwnerMirrorContract.problems(inSession: readIgnored)
-        .contains { $0.contains("changes nothing") })
+        .contains { $0.contains("ownerBirthday") })
 
-// One read, taken on the flakiest connection in the app, and never taken
-// again: the shape this had before the re-ask on resume.
+// One read after sign-in, and never again on an authenticated launch.
 let askedOnce = goodSession.replacingOccurrences(
-    of: "        if ownerPhone.isEmpty, let owner = try? await backend.fetchOwner(id: accountID) {\n            ownerPhone = owner.phone\n        }\n",
-    with: "")
-check("a resume that never asks for the number again is caught",
+    of: "        adoptLocalPersonStateOnAuthenticatedLaunch(for: accountID)\n        await refreshCanonicalOwner()\n",
+    with: "        adoptLocalPersonStateOnAuthenticatedLaunch(for: accountID)\n")
+check("a resume that never asks for the profile again is caught",
       OwnerMirrorContract.problems(inSession: askedOnce)
-        .contains { $0.contains("worst network moment") })
+        .contains { $0.contains("authenticated launch") })
+
+let emptyStampAdoptedAtSignIn = goodSession.replacingOccurrences(
+    of: "        if localPersonAccountID != account {\n            clearSignedInSurface()",
+    with: "        if !localPersonAccountID.isEmpty && localPersonAccountID != account {\n            clearSignedInSurface()")
+check("interactive sign-in treating an empty stamp as safe is caught",
+      OwnerMirrorContract.problems(inSession: emptyStampAdoptedAtSignIn)
+        .contains { $0.contains("empty or different") })
 
 // ---- the same, for the backend half -------------------------------------
 
 let goodBackend = """
 final class AnticipyBackend {
     func fetchOwner(id: String) async throws -> Owner {
-        let saved = try await savedPhone(ownerRef: id)
-        return Owner(id: id, email: "", phone: saved)
+        let profile = try await savedProfile(ownerRef: id)
+        return Owner(id: id,
+                     email: OwnerProfileCanonical.value(profileValue: profile?.email, accountValue: ""),
+                     phone: OwnerProfileCanonical.value(profileValue: profile?.phone, accountValue: ""),
+                     firstName: profile?.firstName ?? "",
+                     lastName: profile?.lastName ?? "",
+                     birthday: profile?.birthday ?? "")
     }
 
-    private func savedPhone(ownerRef: String) async throws -> String {
+    private func savedProfile(ownerRef: String) async throws -> StoredOwnerProfile? {
         let listURL = baseURL.appendingPathComponent("api/collections/owner_profile/records")
-        return ""
+        let item = ["phone": "", "first_name": "", "last_name": "",
+                    "email": "", "birthday": ""]
+        return StoredOwnerProfile(phone: item["phone"] ?? "",
+                                  firstName: item["first_name"] ?? "",
+                                  lastName: item["last_name"] ?? "",
+                                  email: item["email"] ?? "",
+                                  birthday: item["birthday"] ?? "")
+    }
+
+    func upsertOwner(ownerID: String, fields: [String: String]) async -> Bool {
+        var request = writeRequest(
+            baseURL.appendingPathComponent("me/profile/upsert"), method: "POST")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: fields)
+        let data = try! await send(request)
+        let result = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let profile = result["profile"] as! [String: Any]
+        return result["ok"] as? Bool == true
+            && profile["owner_ref"] as? String == accountID
+            && fields.allSatisfy { profile[$0.key] as? String == $0.value }
+    }
+
+    func removeOwnerPhone() async -> Bool {
+        let path = "me/phone/remove"
+        let result: [String: Any] = ["ok": true, "phone": "", "clearedProfiles": 1]
+        return result["ok"] as? Bool == true
+            && (result["phone"] as? String) == ""
+            && result["clearedProfiles"] as? Int == 1
     }
 }
 """
@@ -382,29 +710,42 @@ check("a fetchOwner that stops throwing is caught",
         .contains { $0.contains("tunnel") })
 check("a fetchOwner that reads only the account record is caught",
       OwnerMirrorContract.problems(inBackend: goodBackend.replacingOccurrences(
-        of: "        let saved = try await savedPhone(ownerRef: id)\n", with: ""))
-        .contains { $0.contains("owner_profile") })
+        of: "        let profile = try await savedProfile(ownerRef: id)\n", with: ""))
+        .contains { $0.contains("complete profile row") })
 check("a profile read that swallows its failure is caught",
       OwnerMirrorContract.problems(inBackend: goodBackend.replacingOccurrences(
-        of: "        return \"\"\n    }\n}",
-        with: "        _ = try? await readData(from: listURL)\n        return \"\"\n    }\n}"))
+        of: "        let item = [\"phone\": \"\", \"first_name\": \"\", \"last_name\": \"\",\n",
+        with: "        _ = try? await readData(from: listURL)\n        let item = [\"phone\": \"\", \"first_name\": \"\", \"last_name\": \"\",\n"))
         .contains { $0.contains("swallows") })
-// The same swallow one layer down: the read succeeded, the body was a login
-// page, and the guard calls that "no number on file". Written across lines,
-// because that is how a guard is actually written.
-check("a profile read that reports an absence it could not have learned is caught",
+check("an upsert that drops explicit empty fields is caught",
       OwnerMirrorContract.problems(inBackend: goodBackend.replacingOccurrences(
-        of: "        return \"\"\n    }\n}",
-        with: "        guard let items = root[\"items\"] as? [[String: Any]]\n        else {\n            return \"\"\n        }\n        return \"\"\n    }\n}"))
-        .contains { $0.contains("captive portal") })
+        of: "request.httpBody = try? JSONSerialization.data(withJSONObject: fields)",
+        with: "request.httpBody = try? JSONSerialization.data(withJSONObject: fields.filter { !$0.value.isEmpty })\n        for (k, v) in fields where !v.isEmpty { _ = (k, v) }"))
+        .contains { $0.contains("explicit empty") })
+check("a client-side owner_profile list/write path is caught",
+      OwnerMirrorContract.problems(inBackend: goodBackend.replacingOccurrences(
+        of: "baseURL.appendingPathComponent(\"me/profile/upsert\")",
+        with: "baseURL.appendingPathComponent(\"api/collections/owner_profile/records\")"))
+        .contains { $0.contains("racy client-side") })
+check("a client-selected owner ref is caught",
+      OwnerMirrorContract.problems(inBackend: goodBackend.replacingOccurrences(
+        of: "request.httpBody = try? JSONSerialization.data(withJSONObject: fields)",
+        with: "var body = fields\n        body[\"owner_ref\"] = accountID\n        request.httpBody = try? JSONSerialization.data(withJSONObject: body)"))
+        .contains { $0.contains("device choose profile ownership") })
+check("an upsert that trusts a 2xx without its canonical profile is caught",
+      OwnerMirrorContract.problems(inBackend: goodBackend.replacingOccurrences(
+        of: "let profile = result[\"profile\"] as! [String: Any]",
+        with: "let profile: [String: Any] = [:]"))
+        .contains { $0.contains("result[\"profile\"]") })
 
 // ---- and now the real files ---------------------------------------------
 
 let args = CommandLine.arguments
-guard args.count >= 3,
+guard args.count >= 4,
       let sessionSource = try? String(contentsOfFile: args[1], encoding: .utf8),
-      let backendSource = try? String(contentsOfFile: args[2], encoding: .utf8) else {
-    FileHandle.standardError.write(Data("usage: ownermirrortests <AnticipyApp.swift> <AnticipyBackend.swift>\n".utf8))
+      let backendSource = try? String(contentsOfFile: args[2], encoding: .utf8),
+      let settingsSource = try? String(contentsOfFile: args[3], encoding: .utf8) else {
+    FileHandle.standardError.write(Data("usage: ownermirrortests <AnticipyApp.swift> <AnticipyBackend.swift> <SettingsProfileView.swift>\n".utf8))
     exit(2)
 }
 
@@ -416,9 +757,13 @@ for problem in OwnerMirrorContract.problems(inBackend: backendSource) {
     failures += 1
     FileHandle.standardError.write(Data(("FAIL (AnticipyBackend.swift): " + problem + "\n").utf8))
 }
+for problem in OwnerMirrorContract.problems(inSettingsProfile: settingsSource) {
+    failures += 1
+    FileHandle.standardError.write(Data(("FAIL (SettingsProfileView.swift): " + problem + "\n").utf8))
+}
 
 if failures > 0 {
     FileHandle.standardError.write(Data("\(failures) owner-mirror check(s) failed\n".utf8))
     exit(1)
 }
-print("owner mirrors: one list, cleared on sign-out, read back on sign-in")
+print("owner mirrors: full canonical replacement, isolated account lifecycle, explicit phone removal")

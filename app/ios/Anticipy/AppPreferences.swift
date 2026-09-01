@@ -13,6 +13,14 @@ enum AppPreferences {
     static let notificationsKey = "preferences.notifications"
     static let notificationSoundKey = "preferences.notificationSound"
     static let quietScheduleKey = "preferences.quietSchedule"
+    /// Hidden behind an authenticated seven-tap gesture in About. This is a
+    /// local presentation preference only: it grants no server capability and
+    /// never weakens an action or privacy gate.
+    static let developerModeKey = "preferences.developerMode"
+    /// One-shot outcome shown at the auth door after a local forget navigates
+    /// Settings away. Kept outside the signed-in surface so a browser-unpair
+    /// failure cannot disappear in the same frame as sign-out.
+    static let postSignOutNoticeKey = "account.postSignOutNotice"
 
     static func bool(forKey key: String, default defaultValue: Bool) -> Bool {
         let defaults = UserDefaults.standard

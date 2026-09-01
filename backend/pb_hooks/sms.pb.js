@@ -162,20 +162,79 @@ routerAdd("POST", "/sms/inbound", (e) => {
   // event. Shared/recycled/ambiguous numbers fail closed; an SMS must never
   // choose which person's browser to control.
   const ownerRefs = {};
+  let routingUnknown = false;
   try {
-    const profiles = e.app.findRecordsByFilter(
-      "owner_profile", "phone = {:phone}", "-updated", 3, 0, { phone: from });
-    for (const profile of profiles) {
-      const ref = profile.getString("owner_ref");
-      if (ref) ownerRefs[ref] = true;
+    const candidates = {};
+    const pageSize = 200;
+    let offset = 0;
+    while (true) {
+      const profiles = e.app.findRecordsByFilter(
+        "owner_profile", "phone = {:phone}", "-updated", pageSize, offset,
+        { phone: from });
+      for (const profile of profiles) {
+        const ref = profile.getString("owner_ref");
+        if (ref) candidates[ref] = true;
+      }
+      if (profiles.length < pageSize) break;
+      offset += profiles.length;
     }
-  } catch (_) {}
-  if (Object.keys(ownerRefs).length === 0) {
-    try {
+    // A phone match on an OLD duplicate profile is not current authority.
+    // Resolve every candidate back through that account's newest profile and
+    // accept it only if the canonical row still carries this number. This also
+    // keeps stale/orphan rows from consuming a three-row window and pushing the
+    // real owner out of the lookup entirely.
+    for (const ref of Object.keys(candidates)) {
+      try {
+        const current = e.app.findRecordsByFilter(
+          "owner_profile", "owner_ref = {:ref}", "-updated", 1, 0,
+          { ref: ref });
+        if (current.length > 0 &&
+            String(current[0].getString("phone") || "").trim() === from) {
+          ownerRefs[ref] = true;
+        }
+      } catch (_) {
+        // Unknown is not "not this owner". Discarding one failed candidate
+        // can collapse a shared number from two accounts to one and route an
+        // SMS/browser command across accounts.
+        routingUnknown = true;
+      }
+    }
+  } catch (_) {
+    routingUnknown = true;
+  }
+  // Always union eligible account seeds with canonical profile candidates.
+  // Phone sharing is allowed at the schema layer. If account A's canonical
+  // profile carries this number while account B has only the same sign-up
+  // seed and no profile yet, considering B only when profiles found nobody
+  // silently routes B's inbound command to A. The correct answer is
+  // ambiguity, so both storage shapes are considered on every request.
+  try {
+    const pageSize = 200;
+    let offset = 0;
+    while (true) {
       const owners = e.app.findRecordsByFilter(
-        "owners", "phone = {:phone}", "-updated", 3, 0, { phone: from });
-      for (const owner of owners) ownerRefs[owner.id] = true;
-    } catch (_) {}
+        "owners", "phone = {:phone}", "-updated", pageSize, offset,
+        { phone: from });
+      for (const owner of owners) {
+        // owners.phone is only the sign-up seed. If this account has ANY
+        // owner_profile row, that row is canonical even when its phone is
+        // empty or different; admitting this candidate would re-affiliate a
+        // number the person explicitly removed. A profile-read failure also
+        // fails closed for this candidate rather than guessing.
+        try {
+          const current = e.app.findRecordsByFilter(
+            "owner_profile", "owner_ref = {:ref}", "-updated", 1, 0,
+            { ref: owner.id });
+          if (current.length === 0) ownerRefs[owner.id] = true;
+        } catch (_) {
+          routingUnknown = true;
+        }
+      }
+      if (owners.length < pageSize) break;
+      offset += owners.length;
+    }
+  } catch (_) {
+    routingUnknown = true;
   }
   const matches = Object.keys(ownerRefs);
 
@@ -199,13 +258,19 @@ routerAdd("POST", "/sms/inbound", (e) => {
     console.log("sms/inbound 200 but dropped: empty From or Body; MessageSid=" + messageSid);
   } else if (duplicate) {
     console.log("sms/inbound 200, already handled: MessageSid=" + messageSid);
+  } else if (routingUnknown) {
+    // Make Twilio retry. A partial candidate set is never safe enough to pick
+    // an account, even when the surviving set contains exactly one row.
+    console.log("sms/inbound 500: phone ownership could not be fully verified — " +
+      "refusing to choose an account from partial data.");
+    return e.string(500, "temporary routing failure");
   } else if (matches.length === 0) {
-    console.log("sms/inbound 200 but DROPPED: no account owns " + from.slice(0, 6) +
-      "… — the sender's number is on no owner_profile or owners row, so every " +
+    console.log("sms/inbound 200 but DROPPED: no account owns the sender route — " +
+      "the sender's number is on no owner_profile or owners row, so every " +
       "text from it vanishes. Set the phone on that account.");
   } else if (matches.length > 1) {
-    console.log("sms/inbound 200 but DROPPED: " + matches.length + " accounts claim " +
-      from.slice(0, 6) + "… — ambiguous, refusing to pick whose browser to drive.");
+    console.log("sms/inbound 200 but DROPPED: " + matches.length +
+      " accounts claim the sender route — ambiguous, refusing to pick whose browser to drive.");
   } else {
     try {
       const collection = e.app.findCollectionByNameOrId("events");

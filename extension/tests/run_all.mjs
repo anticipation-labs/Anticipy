@@ -39,6 +39,7 @@ const suites = [
   "test_side_trip.mjs",
   "test_supervised_read.mjs",
   "test_background_recovery.mjs",
+  "test_offline_completion_honesty.mjs",
   "test_guard_superuser_dashboard.mjs",
   "test_claim_legacy_binding.mjs",
   "test_backup_volume_footprint.mjs",

@@ -157,10 +157,12 @@ def test_a_missing_phone_is_a_failure_not_a_dev_rig():
 
 def test_the_phone_falls_back_to_the_account_but_never_across_accounts():
     src = (ROOT / "brain/worker.py").read_text()
-    body = src.split("def fetch_owner_phone", 1)[1][:1600]
-    assert "collections/owners/records/{owner_ref}" in body, (
+    body = src.split("def fetch_owner_phone", 1)[1][:3000]
+    assert "collections/owners/records/{ref}" in body, (
         "the account record is the second place a number lives")
-    assert "if not owner_ref:" in body, (
+    assert "if not ref:" in body, (
         "with no account there is nobody to fall back to — never a shared var")
+    assert "if items:" in body and 'return str(items[0].get("phone")' in body, (
+        "an existing profile, including an explicit empty, is authoritative")
     assert "ANTICIPY_OWNER_PHONE" not in body, (
         "the founder's env var must never come back as a fallback")
