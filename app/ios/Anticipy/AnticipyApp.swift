@@ -242,7 +242,7 @@ final class AnticipySession: ObservableObject {
     /// tests/test_extension_version_pin.py now reads extension/manifest.json,
     /// this literal, and the mirror in Tests/StaleExtensionTests.swift, and
     /// goes red when any of the three disagree. Bump all three together.
-    static let expectedExtensionVersion = "0.11.0"
+    static let expectedExtensionVersion = "0.11.1"
 
     /// The extension reports itself as "Chrome/128.0.0.0 ext/0.8.2" in the
     /// agent record's browser field. Returns what Chrome is running when it
