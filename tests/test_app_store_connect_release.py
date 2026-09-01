@@ -28,6 +28,27 @@ def test_next_build_uses_apple_not_the_stale_repo_number():
     assert asc.next_build_number(["112"], source=114) == 115
 
 
+def _build(version: str, state: str):
+    return {"attributes": {"version": version, "processingState": state}}
+
+
+def test_upload_is_not_green_until_apple_marks_the_exact_build_valid():
+    assert asc.processing_verdict([], "117")[0] == "waiting"
+    assert asc.processing_verdict(
+        [_build("116", "VALID"), _build("117", "PROCESSING")],
+        "117")[0] == "waiting"
+    assert asc.processing_verdict(
+        [_build("117", "VALID")], "117") == (
+            "ready", "build 117 is VALID")
+
+
+def test_apple_processing_rejection_and_unknown_states_fail_closed():
+    assert asc.processing_verdict(
+        [_build("117", "INVALID")], "117")[0] == "failed"
+    assert asc.processing_verdict(
+        [_build("117", "SOMETHING_NEW")], "117")[0] == "failed"
+
+
 def test_an_empty_certificate_pool_deletes_nothing():
     assert asc.select_certificates_to_revoke([]) == []
 

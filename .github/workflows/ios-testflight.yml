@@ -54,6 +54,7 @@ jobs:
           next=$(python3 scripts/app_store_connect.py next-build \
             --bundle ai.anticipy.app --marketing 1.1.0 --source "$source")
           echo "Source build $source; App Store Connect requires $next"
+          echo "ANTICIPY_UPLOAD_BUILD=$next" >> "$GITHUB_ENV"
           xcrun agvtool new-version -all "$next"
       - name: Archive (cloud signing — Apple holds the key)
         working-directory: app/ios
@@ -90,3 +91,9 @@ jobs:
             echo "::error::Apple refused the upload — see the validation error above"
             exit 1
           }
+      - name: Wait for Apple's TestFlight processing verdict
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc/AuthKey.p8
+        run: |
+          python3 app/ios/scripts/app_store_connect.py wait-build \
+            --bundle ai.anticipy.app --build "$ANTICIPY_UPLOAD_BUILD"

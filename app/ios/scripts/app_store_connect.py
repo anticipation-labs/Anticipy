@@ -31,6 +31,8 @@ from typing import Any
 API = "https://api.appstoreconnect.apple.com"
 REVOCATION_SETTLE_SECONDS = 20
 CI_CERTIFICATE_NAME = "Created via API"
+BUILD_PROCESSING_POLL_SECONDS = 20
+BUILD_PROCESSING_TIMEOUT_SECONDS = 20 * 60
 
 
 def _b64url(data: bytes) -> bytes:
@@ -173,6 +175,65 @@ def live_next_build(client: Client, bundle_id: str,
         source)
 
 
+def processing_verdict(builds: list[dict[str, Any]],
+                       version: str) -> tuple[str, str]:
+    """Return a fail-closed verdict for one uploaded build number.
+
+    ``altool`` proves only that Apple received the bytes. App Store Connect
+    then processes those bytes asynchronously and can still reject them. A
+    green release needs Apple's later ``VALID`` state, not the upload command's
+    earlier exit code.
+    """
+    exact = [item for item in builds
+             if str((item.get("attributes") or {}).get("version", ""))
+             == str(version)]
+    if not exact:
+        return "waiting", f"build {version} is not visible yet"
+
+    states = {(item.get("attributes") or {}).get("processingState", "")
+              for item in exact}
+    if "VALID" in states:
+        return "ready", f"build {version} is VALID"
+    rejected = sorted(state for state in states
+                      if state in {"FAILED", "INVALID"})
+    if rejected:
+        return "failed", (f"build {version} was rejected during processing: "
+                          + ", ".join(rejected))
+    if states <= {"PROCESSING", ""}:
+        return "waiting", f"build {version} is still processing"
+    return "failed", (f"build {version} returned an unknown processing state: "
+                      + ", ".join(sorted(states)))
+
+
+def wait_for_valid_build(client: Client, bundle_id: str, version: str,
+                         timeout_seconds: int = BUILD_PROCESSING_TIMEOUT_SECONDS,
+                         poll_seconds: int = BUILD_PROCESSING_POLL_SECONDS) -> None:
+    apps = client.request("GET", "/v1/apps", {
+        "filter[bundleId]": bundle_id, "limit": 1})["data"]
+    if len(apps) != 1:
+        raise RuntimeError(
+            f"expected one app for {bundle_id}, found {len(apps)}")
+
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        builds = client.request("GET", "/v1/builds", {
+            "filter[app]": apps[0]["id"],
+            "filter[version]": version,
+            "limit": 10,
+        })["data"]
+        verdict, message = processing_verdict(builds, version)
+        print(message, flush=True)
+        if verdict == "ready":
+            return
+        if verdict == "failed":
+            raise RuntimeError(message)
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"build {version} did not become VALID within "
+                f"{timeout_seconds} seconds")
+        time.sleep(poll_seconds)
+
+
 def free_signing_slot(client: Client, dry_run: bool) -> None:
     certificates = client.request(
         "GET", "/v1/certificates", {"limit": 200})["data"]
@@ -200,6 +261,11 @@ def main() -> int:
     number.add_argument("--bundle", required=True)
     number.add_argument("--marketing", required=True)
     number.add_argument("--source", required=True, type=int)
+    wait = sub.add_parser("wait-build")
+    wait.add_argument("--bundle", required=True)
+    wait.add_argument("--build", required=True)
+    wait.add_argument("--timeout", type=int,
+                      default=BUILD_PROCESSING_TIMEOUT_SECONDS)
     slot = sub.add_parser("free-signing-slot")
     slot.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -208,6 +274,8 @@ def main() -> int:
     if args.command == "next-build":
         print(live_next_build(
             client, args.bundle, args.marketing, args.source))
+    elif args.command == "wait-build":
+        wait_for_valid_build(client, args.bundle, args.build, args.timeout)
     else:
         free_signing_slot(client, args.dry_run)
     return 0
