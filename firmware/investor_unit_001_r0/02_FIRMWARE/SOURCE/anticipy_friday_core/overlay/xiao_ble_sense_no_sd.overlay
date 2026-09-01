@@ -1,0 +1,54 @@
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/*
+ * Anticipy XIAO nRF52840 Sense pin map without an external microSD carrier.
+ *
+ *   D0 / P0.02  haptic transistor gate
+ *   D7 / P1.12  active-low push button with the nRF pull-up enabled
+ *
+ * This overlay deliberately does not enable an SPI controller or SD slot.
+ * The onboard QSPI device remains defined by the upstream XIAO board DTS and
+ * is used only when the matching QSPI backend Kconfig option is selected.
+ */
+
+/ {
+    aliases {
+        anticipy-button = &anticipy_button;
+        anticipy-haptic = &anticipy_haptic;
+    };
+
+    buttons {
+        compatible = "gpio-keys";
+
+        anticipy_button: button_d7 {
+            gpios = <&gpio1 12 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "Anticipy Button D7";
+        };
+    };
+
+    anticipy_outputs {
+        compatible = "gpio-leds";
+
+        anticipy_haptic: haptic_d0 {
+            gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
+            label = "Anticipy Haptic D0";
+        };
+    };
+};
+
+&uart0 {
+    status = "disabled";
+};
+
+/* The candidate does not use the IMU; keep both buses off to save power. */
+&i2c0 {
+    status = "disabled";
+};
+
+&i2c1 {
+    status = "disabled";
+};
+
+&temp {
+    status = "disabled";
+};

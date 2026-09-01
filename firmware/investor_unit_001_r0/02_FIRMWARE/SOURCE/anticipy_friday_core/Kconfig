@@ -1,0 +1,86 @@
+source "Kconfig.zephyr"
+
+menu "Omi Features Configuration"
+
+config OMI_CODEC_OPUS
+    bool "Opus Audio Codec"
+    help
+        "Enable the Opus audio codec support."
+    default n
+
+config OMI_ENABLE_OFFLINE_STORAGE
+	bool "Offline audio storage"
+    help
+        Enable persistent audio buffering while the phone cannot accept the
+        live BLE stream. Select exactly one backend below.
+	default n
+
+choice OMI_OFFLINE_STORAGE_BACKEND
+	prompt "Offline storage backend"
+	depends on OMI_ENABLE_OFFLINE_STORAGE
+	default OMI_OFFLINE_STORAGE_SD
+
+config OMI_OFFLINE_STORAGE_SD
+	bool "SPI microSD card"
+	select DISK_ACCESS
+	select FILE_SYSTEM
+	select FAT_FILESYSTEM_ELM
+	select FS_FATFS_MOUNT_MKFS
+	select FS_FATFS_EXFAT
+	help
+	  Store the backlog on the external SPI microSD carrier.
+
+config OMI_OFFLINE_STORAGE_QSPI
+	bool "Encrypted onboard-QSPI journal"
+	select FLASH
+	select PM_DEVICE
+	select CRC
+	select SETTINGS
+	select ENTROPY_GENERATOR
+	select MBEDTLS
+	select MBEDTLS_CIPHER_AES_ENABLED
+	select MBEDTLS_CIPHER_CCM_ENABLED
+	help
+	  Store a short, power-cut-recoverable encrypted circular backlog in the
+	  XIAO nRF52840 Sense onboard P25Q16H flash. This is not a substitute for
+	  the multi-hour capacity of a microSD card.
+
+endchoice
+
+config OMI_ENABLE_ACCELEROMETER
+    bool "Accelerometer Support"
+    help
+        "Enable the accelerometer support."
+    default n
+
+config OMI_ENABLE_BUTTON
+    bool "Button support"
+    help
+        "Enable the software button support."
+    default n
+
+config OMI_ENABLE_SPEAKER
+    bool "Enable the speaker"
+    help
+        "Enable the speaker support."
+    default n
+
+config OMI_ENABLE_BATTERY
+    bool "Enable the battery"
+    help
+        "Enable the battery support."
+    default n
+
+config OMI_ENABLE_USB
+    bool "Enable the usb"
+    help
+        "Enable the USB power check support."
+    default n
+
+config OMI_ENABLE_HAPTIC
+    bool "Enable the haptic"
+    help
+        "Enable the haptic support."
+    default n
+
+endmenu
