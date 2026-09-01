@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import CoreImage
+import Foundation
 
 /// Anticipy brand system, pulled from anticipy.ai, in TWO themes.
 ///
@@ -676,30 +677,36 @@ struct TypewriterText: View {
 /// A listening app shows a waveform, never a spinner. Three accent capsules
 /// moving on the 0.8s harmonic — half the app's 1.6s breath.
 struct WaveBars: View {
-    @State private var up = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
 
     var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0 ..< 3, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1.5)
-                    // Theme.accent, not Theme.fill: champagne measures 2.23:1
-                    // on white, so a 3pt champagne bar on a white page is a bar
-                    // nobody can see. On black it resolves to champagne.
-                    .fill(Theme.accent)
-                    .frame(width: 3, height: 10)
-                    .scaleEffect(y: (up && !reduceMotion && ambientMotion) ? 1.0 : 0.4)
-                    .animation(
-                        (reduceMotion || !ambientMotion) ? .default
-                            : .easeInOut(duration: 0.8)
-                                .repeatForever(autoreverses: true)
-                                .delay([0, 0.13, 0.27][i]),
-                        value: up
-                    )
+        // There is deliberately NO animation transaction in this component.
+        // Build 113's repeatForever modifier wrapped each whole bar; when
+        // Home's ScrollView settled into its final layout, the transaction
+        // interpolated that position too. Three delayed bars then wandered
+        // independently across the page (IMG_4340–42). A timeline redraws a
+        // scale computed from time, and position never becomes animatable.
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0,
+                                paused: reduceMotion || !ambientMotion)) { tick in
+            HStack(spacing: 3) {
+                ForEach(0 ..< 3, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 1.5)
+                        // Theme.accent, not Theme.fill: champagne measures 2.23:1
+                        // on white, so a 3pt champagne bar on a white page is a bar
+                        // nobody can see. On black it resolves to champagne.
+                        .fill(Theme.accent)
+                        .frame(width: 3, height: 10)
+                        .scaleEffect(
+                            y: (reduceMotion || !ambientMotion)
+                                ? 0.4
+                                : 0.4 + 0.6 * AmbientMotionPhase.unit(
+                                    at: tick.date,
+                                    period: 1.6,
+                                    delay: [0, 0.13, 0.27][i]))
+                }
             }
         }
-        .onAppear { up = true }
         .accessibilityHidden(true)
     }
 }
@@ -709,7 +716,6 @@ struct WaveBars: View {
 struct BreathingDot: View {
     var size: CGFloat = 10
     var active: Bool = true
-    @State private var up = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(AppPreferences.ambientMotionKey) private var ambientMotion = true
 
@@ -718,21 +724,35 @@ struct BreathingDot: View {
     private var animates: Bool { active && !reduceMotion && ambientMotion }
 
     var body: some View {
-        Circle()
-            .fill(Theme.accent)
-            .frame(width: size, height: size)
-            // 1.16 is a breath; 1.25 was a pulse. 1.6s is the app's one
-            // ambient harmonic — everything that loops forever runs on it or
-            // a clean multiple of it.
-            .scaleEffect(animates && up ? 1.16 : 1.0)
-            .opacity(active ? (animates && up ? 1.0 : 0.7) : 0.5)
-            .animation(
-                animates ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .default,
-                value: up
-            )
-            .onAppear { if animates { up = true } }
-            // Decoration: it says nothing a label elsewhere doesn't already say.
-            .accessibilityHidden(true)
+        // Like WaveBars, this is time-driven rather than transaction-driven.
+        // Only these two numbers change; the circle's layout position is a
+        // constant and cannot float away from the label that owns it.
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0,
+                                paused: !animates)) { tick in
+            let phase = animates
+                ? AmbientMotionPhase.unit(at: tick.date, period: 3.2)
+                : 0
+            Circle()
+                .fill(Theme.accent)
+                .frame(width: size, height: size)
+                // 1.16 is a breath; 1.25 was a pulse. 1.6s out and
+                // 1.6s back keeps the app's ambient harmonic.
+                .scaleEffect(1.0 + 0.16 * phase)
+                .opacity(active ? 0.7 + 0.3 * phase : 0.5)
+        }
+        // Decoration: it says nothing a label elsewhere doesn't already say.
+        .accessibilityHidden(true)
+    }
+}
+
+/// A presentation value, not animation state. No SwiftUI transaction is
+/// created, so a parent layout update cannot inherit a forever animation.
+private enum AmbientMotionPhase {
+    static func unit(at date: Date, period: Double, delay: Double = 0) -> CGFloat {
+        let elapsed = date.timeIntervalSinceReferenceDate - delay
+        let radians = (elapsed.truncatingRemainder(dividingBy: period) / period)
+            * 2 * Double.pi
+        return CGFloat((sin(radians) + 1) / 2)
     }
 }
 
