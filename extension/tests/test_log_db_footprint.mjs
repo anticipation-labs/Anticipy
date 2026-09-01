@@ -8,9 +8,11 @@
 // that it had — see brain/worker.py:2199, which describes this exact failure a
 // year before it happened, and 1700000038_log_db_footprint.js for the cost.
 //
-// Same shape as test_backup_volume_footprint.mjs and the same reasoning: run
-// the migrations rather than read them, in filename order, so a later one
-// raising the ceiling back to unbounded fails HERE and not on the volume.
+// On 2026-08-31 it had grown to 2.77GB again despite the two-day retention
+// migration. PocketBase's documented meaning of maxDays=0 is DISABLED, not
+// unlimited; the older version of this gate had that meaning backwards. Run
+// the migrations in filename order so request logging being re-enabled fails
+// here rather than on the production volume.
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -24,14 +26,15 @@ const check = (name, ok) => {
   if (!ok) failures++;
 };
 
-// PocketBase's own default: 0 means keep forever, which is how this happened.
-const settings = { logs: { maxDays: 0, minLevel: 0, logIP: true, logAuthId: false } };
+// PocketBase's current default is seven days. Zero explicitly disables the
+// request ledger; it is the safe terminal state for this traffic volume.
+const settings = { logs: { maxDays: 7, minLevel: 0, logIP: true, logAuthId: false } };
 
 const files = readdirSync(dir).filter((f) => f.endsWith(".js")).sort();
 const touching = files.filter((f) =>
   readFileSync(join(dir, f), "utf8").indexOf("settings.logs") >= 0);
 
-check("at least one migration bounds the request log", touching.length >= 1);
+check("at least one migration configures the request log", touching.length >= 1);
 
 const applied = [];
 for (const file of touching) {
@@ -47,18 +50,8 @@ for (const file of touching) {
 }
 console.log(`applied in order: ${applied.join(", ")}`);
 
-// 0 is PocketBase's "keep forever". That is the condition that took the product
-// down, so it is the one value that must never survive the migration chain.
-check("the request log has a retention ceiling at all", settings.logs.maxDays > 0);
-
-// The ceiling has to be low enough to matter on a 5GB volume that already
-// carries data.db and up to two backup archives.
-check("retention is short enough to bound the volume", settings.logs.maxDays <= 7);
-
-// But not so short that an incident is undiagnosable the morning after: the
-// request log is the only record of what the agent and the phone actually
-// asked for, and it is what named the culprit in the fill above.
-check("yesterday is still readable", settings.logs.maxDays >= 2);
+check("PocketBase's request ledger is disabled", settings.logs.maxDays === 0);
+check("the disabled state survives every later migration", applied.at(-1) === "1700000051_disable_request_logs.js");
 
 if (failures) { console.error(`test_log_db_footprint: ${failures} failed`); process.exit(1); }
 console.log("test_log_db_footprint: all passed");
