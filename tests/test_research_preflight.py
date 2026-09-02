@@ -62,11 +62,15 @@ def held_row(goal="dispute the hydro bill", extra_params=None):
             "owner": "own1"}
 
 
-def wire(monkeypatch, row, patches, key="test-key"):
+def wire(monkeypatch, row, patches, key="test-key", tavily_key=None):
     if key is None:
         monkeypatch.delenv("BRAVE_API_KEY", raising=False)
     else:
         monkeypatch.setenv("BRAVE_API_KEY", key)
+    if tavily_key is None:
+        monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("TAVILY_API_KEY", tavily_key)
     state = dict(row)
 
     def fake_get(url, **kw):
@@ -136,7 +140,7 @@ def test_a_row_is_handed_back_even_when_the_pages_did_not_say_how(monkeypatch):
     assert "handback" not in gate
 
 
-def test_a_row_is_handed_back_when_there_is_no_brave_key(monkeypatch):
+def test_a_row_is_handed_back_when_there_is_no_search_provider_key(monkeypatch):
     """The existing keyless fallback is the precedent: a job queued for an
     executor that does not exist would sit forever."""
     patches = []
@@ -145,6 +149,22 @@ def test_a_row_is_handed_back_when_there_is_no_brave_key(monkeypatch):
                              learner=lambda *a, **k: pytest.fail("no key, no read"))
     assert patches[0]["lane"] == ""
     assert json.loads(patches[0]["params"])["_research_gate"]["researched"] is False
+
+
+def test_tavily_alone_can_supply_preflight_research(monkeypatch):
+    patches, calls = [], []
+    wire(monkeypatch, held_row(), patches, key=None, tavily_key="tvly-test")
+
+    def fake_learn(*args, **kwargs):
+        calls.append((args, kwargs))
+        return learned()
+
+    monkeypatch.setattr(W.research, "learn_procedure", fake_learn)
+    W.run_preflight_research(anticipy())
+    assert calls
+    assert calls[0][1]["api_key"] is None
+    assert calls[0][1]["tavily_api_key"] == "tvly-test"
+    assert json.loads(patches[0]["params"])["_research_gate"]["researched"] is True
 
 
 def test_a_row_is_handed_back_when_the_read_itself_raises(monkeypatch):

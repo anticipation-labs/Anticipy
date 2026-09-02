@@ -20,11 +20,10 @@ func check(_ name: String, _ got: AnswerRoutePolicy.Route,
 }
 
 func route(_ status: String, workflowState: String? = nil,
-           answer: String, uncertain: Bool = false,
-           ending: String? = nil) -> AnswerRoutePolicy.Route {
+           answer: String, uncertain: Bool = false) -> AnswerRoutePolicy.Route {
     AnswerRoutePolicy.route(status: status, workflowState: workflowState,
                             effectUncertain: uncertain,
-                            answer: answer, endsTheErrand: ending)
+                            answer: answer)
 }
 
 @main
@@ -81,25 +80,16 @@ func runAnswerRoutes() {
           route("needs_user", answer: "it didn't happen", uncertain: true),
           .approval)
 
-    // ---- an answer that ends the errand ends it locally --------------------
-    // "skip it, I don't need the batteries anymore" used to requeue the run, which
-    // then Bing-searched those words and hit a CAPTCHA (live, 2026-08-14). It must
-    // never become an instruction, and never go to a model to be interpreted.
-    check("an answer that calls it off ends the errand",
-          route("needs_user", answer: "skip it, I don't need the batteries anymore",
-                ending: "You called it off: skip it, I don't need the batteries anymore"),
-          .endTheErrand("You called it off: skip it, I don't need the batteries anymore"))
+    // Meaning is owned by the one brain, including refusals and facts about
+    // work the owner handled themselves. The phone must never cancel locally
+    // from phrase lists and hide the sentence from Conversation.on_reply.
+    check("a typed refusal reaches the brain",
+          route("needs_user", answer: "forget it"),
+          .toTheBrain("forget it"))
 
-    check("ending the errand wins over sending it to the brain",
-          route("needs_user", answer: "i already booked it",
-                ending: "You handled it yourself: i already booked it"),
-          .endTheErrand("You handled it yourself: i already booked it"))
-
-    // ...but only for a task that is actually waiting on him. A ready plan is not
-    // ended by the same words; that is the "Not now" button's job.
-    check("the ending rule does not fire on an approval card",
-          route("awaiting_confirm", answer: "forget it", ending: "You called it off: forget it"),
-          .approval)
+    check("a fact about work already handled reaches the brain",
+          route("needs_user", answer: "i already booked it"),
+          .toTheBrain("i already booked it"))
 
     // ---- nothing typed is nothing sent -------------------------------------
     // The view disables Send, but a guard that lives only in the view is one

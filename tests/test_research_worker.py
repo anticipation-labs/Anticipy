@@ -41,12 +41,17 @@ def make_anticipy(notified, owner_ref=""):
         notify_owner=lambda msg, channel="sms": (notified.append(msg), {"ok": 1})[1])
 
 
-def wire(monkeypatch, job, patches, posts, key="test-key", stamp_survives=True):
+def wire(monkeypatch, job, patches, posts, key="test-key", stamp_survives=True,
+         tavily_key=None):
     """Point brain.pb at an in-memory job row; record every write."""
     if key is None:
         monkeypatch.delenv("BRAVE_API_KEY", raising=False)
     else:
         monkeypatch.setenv("BRAVE_API_KEY", key)
+    if tavily_key is None:
+        monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("TAVILY_API_KEY", tavily_key)
     state = dict(job)
 
     def fake_get(url, **kw):
@@ -132,6 +137,24 @@ def test_no_key_hands_the_job_to_the_browser_lane(monkeypatch):
                         runner=lambda *a, **k: ran.append(1) or {"ok": True, "result": "x"})
     assert not ran                       # graceful fallback, not a crash
     assert patches == [{"lane": ""}]     # the extension will pick it up
+
+
+def test_tavily_only_keeps_research_on_the_server(monkeypatch):
+    patches, posts, ran = [], [], []
+    wire(monkeypatch, QUEUED, patches, posts, key=None,
+         tavily_key="tvly-test")
+
+    def fake_run(goal, params, **kw):
+        ran.append(kw)
+        return {"ok": True,
+                "result": "Answer [1].\n\nSources:\n[1] https://example.test"}
+
+    monkeypatch.setattr(W.research, "run_research", fake_run)
+    W.run_research_jobs(make_anticipy([]))
+    assert ran and ran[0]["api_key"] is None
+    assert ran[0]["tavily_api_key"] == "tvly-test"
+    assert patches[0]["status"] == "running"
+    assert patches[1]["status"] == "done"
 
 
 def test_a_failed_run_is_written_as_failed(monkeypatch):

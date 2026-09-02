@@ -103,6 +103,44 @@ def test_search_quota_failure_names_the_provider_status_without_leaking_request(
     assert "SECRET" not in out["result"]
 
 
+def test_a_quota_failure_falls_through_to_the_second_configured_provider(monkeypatch):
+    class QuotaError(RuntimeError):
+        response = types.SimpleNamespace(status_code=402)
+
+    def quota_search(_self, _query, count=5):
+        raise QuotaError("private query and key must never reach the result")
+
+    seen = {}
+
+    def fake_post(url, **kw):
+        seen.update(url=url, headers=kw.get("headers"), body=kw.get("json"))
+
+        class R:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"results": [{
+                    "title": "Aquarium hours",
+                    "url": "https://example.test/hours",
+                    "content": "Open daily from 9:30 to 5:30.",
+                }]}
+        return R()
+
+    monkeypatch.setattr(research.requests, "post", fake_post)
+    monkeypatch.setattr(research.BraveClient, "search", quota_search)
+    out = research.run_research(
+        "research: aquarium hours", {}, api_key="brave-SECRET",
+        tavily_api_key="tvly-SECRET", fetcher=lambda _url: "Open daily.")
+    assert out["ok"]
+    assert "https://example.test/hours" in out["result"]
+    assert seen["url"] == research.TAVILY_URL
+    assert seen["headers"]["Authorization"] == "Bearer tvly-SECRET"
+    assert seen["body"]["query"] == "aquarium hours"
+    assert "SECRET" not in out["result"]
+    assert "SECRET" not in repr(research.TavilyClient("tvly-SECRET"))
+
+
 def test_no_results_is_a_failed_job():
     out = research.run_research("research: anything", {},
                                 brave=FakeBrave(results=[]))

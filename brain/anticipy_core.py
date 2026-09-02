@@ -4597,21 +4597,15 @@ class Anticipy:
         over again about work that was already classified — and prose is
         exactly what the effect channel exists to stop deciding this.
 
-        TAPE: (HARNESS-LAWS.md Law 2) audit item #21. The prose fallback
-        below is for rows minted before the `consequence` column existed. It
-        expires when no pending row can predate that column, and then the
-        `return` beneath is DELETED.
-
-        THE LEG THAT RETIRES IT: `overnight/tape_gate.py`. This comment used
-        to say it was "covered by the same leg that tracks _READ_ONLY_RE's
-        removal" — which is this audit's OWN item #21, the failure of a marker
-        that points at a neighbour instead of at the check. A declaration has
-        to name the thing that goes red, or nothing tracks it.
+        Production now has zero nonterminal rows without this field. A future
+        absent/corrupt value fails closed as consequential; it is never
+        re-derived from task prose, because doing that would recreate a second
+        effect classifier at read time.
         """
         stored = str(job.get("consequence") or "").strip()
         if stored:
             return stored == "consequential"
-        return is_consequential(job.get("goal") or "")
+        return True
 
     def _active_job_for_commitment(self, commitment_id) -> Optional[dict]:
         """Return the one live workflow keeping this exact memory promise.

@@ -1735,6 +1735,7 @@ def run_preflight_research(anticipy, learner=None) -> None:
         if not getattr(r, "ok", False):
             return
         api_key = os.environ.get("BRAVE_API_KEY")
+        tavily_api_key = os.environ.get("TAVILY_API_KEY")
         for job in r.json().get("items", []):
             if not held_for_research(job):
                 continue
@@ -1749,10 +1750,15 @@ def run_preflight_research(anticipy, learner=None) -> None:
             # characters on the way out.
             goal = str(job.get("goal") or "").strip()
             learned = None
-            if api_key and goal:
+            if (api_key or tavily_api_key) and goal:
                 try:
-                    learned = (learner or research.learn_procedure)(
-                        goal, llm=anticipy.llm, api_key=api_key)
+                    if learner is not None:
+                        learned = learner(goal, llm=anticipy.llm,
+                                          api_key=api_key)
+                    else:
+                        learned = research.learn_procedure(
+                            goal, llm=anticipy.llm, api_key=api_key,
+                            tavily_api_key=tavily_api_key)
                 except Exception as e:
                     # The read failing is a blank answer, not a stuck errand.
                     print(f"preflight: the read failed for {job['id']} "
@@ -1829,6 +1835,7 @@ def run_research_jobs(anticipy, runner=None) -> None:
         # Read per pass, not at import: no new global state, and a key added
         # or removed on a redeploy takes effect without a code path changing.
         api_key = os.environ.get("BRAVE_API_KEY")
+        tavily_api_key = os.environ.get("TAVILY_API_KEY")
         for job in jobs:
             # A HELD BROWSER ERRAND IS NOT A QUESTION TO ANSWER.
             #
@@ -1841,7 +1848,7 @@ def run_research_jobs(anticipy, runner=None) -> None:
             # second layer, so one of the two failing does not reopen the hole.
             if held_for_research(job):
                 continue
-            if not api_key:
+            if not api_key and not tavily_api_key:
                 # Graceful fallback: no key means no research arm, and a job
                 # queued for an executor that does not exist would sit
                 # forever. Hand it to the browser lane — slower and noisier,
@@ -1849,8 +1856,8 @@ def run_research_jobs(anticipy, runner=None) -> None:
                 # catches rows queued before the key went away.
                 pb.patch(f"{base}/api/collections/jobs/records/{job['id']}",
                          json={"lane": ""}, timeout=10)
-                print(f"research: no BRAVE_API_KEY — {job['id']} handed to "
-                      "the browser lane")
+                print(f"research: no search-provider key — {job['id']} handed "
+                      "to the browser lane")
                 continue
             try:
                 params = json.loads(job.get("params") or "{}") or {}
@@ -1888,8 +1895,16 @@ def run_research_jobs(anticipy, runner=None) -> None:
                     or fresh.get("status") != "running" \
                     or (lease_token and fresh.get("lease_token") != lease_token):
                 continue
-            out = (runner or research.run_research)(
-                job.get("goal", ""), params, llm=anticipy.llm, api_key=api_key)
+            if runner is not None:
+                # Keep the injected executor seam deliberately small: tests
+                # and local proofs implement the original contract and should
+                # not need to impersonate every production provider.
+                out = runner(job.get("goal", ""), params,
+                             llm=anticipy.llm, api_key=api_key)
+            else:
+                out = research.run_research(
+                    job.get("goal", ""), params, llm=anticipy.llm,
+                    api_key=api_key, tavily_api_key=tavily_api_key)
             ok = bool(out.get("ok"))
             result = (out.get("result") or "")[:6000]
             finish_body = {"status": "done" if ok else "failed",
@@ -4268,6 +4283,13 @@ def main() -> None:
     # before the first worker duty can speak.  It also covers notify_owner()
     # calls made from inside Anticipy, not only the calls visible in this file.
     install_canonical_notification_guard(anticipy)
+    # Resolve the account-bound route before describing it. Supervised
+    # children intentionally start with an empty owner_phone so they can never
+    # inherit another account's environment value; the old warning ran during
+    # that deliberately empty interval and cried about a broken phone on every
+    # healthy startup, seconds before printing "owner phone updated from the
+    # app". Noise at startup was hiding real SMS failures.
+    owner_phone_verified = refresh_owner_phone(anticipy)
     # Observation only in step 1; a failure here must never touch hearing.
     #
     # OFF means explicitly off, and nothing else does. This read used to be
@@ -4305,9 +4327,12 @@ def main() -> None:
         # would sit queued forever with nothing reporting a problem.
         print("WARNING: ANTICIPY_OWNER_ID is unset — queued jobs will carry no "
               "owner and NO browser agent will ever claim them.")
-    if not same_phone(anticipy.owner_phone, anticipy.owner_phone):
-        print("WARNING: ANTICIPY_OWNER_PHONE is not a usable phone number — "
-              "every inbound text will be ignored as non-owner.")
+    if not owner_phone_verified:
+        print("WARNING: the canonical owner phone could not be verified — "
+              "optional SMS is paused until the account can be read.")
+    elif not same_phone(anticipy.owner_phone, anticipy.owner_phone):
+        print("WARNING: the account has no usable phone number — optional SMS "
+              "is disabled and inbound texts cannot authorize work.")
     if mem_db == ":memory:":
         # AMNESIA HAS TO ANNOUNCE ITSELF.
         #
@@ -4329,7 +4354,10 @@ def main() -> None:
               "does that for every worker it spawns).")
 
     last_clock = 0.0
-    last_profile = 0.0
+    # The canonical phone and profile were just read above. Do not immediately
+    # repeat the network read on the first loop turn; the minute beat below
+    # remains the authority for changes after startup.
+    last_profile = time.time()
     last_webhook = 0.0
     while True:
         try:

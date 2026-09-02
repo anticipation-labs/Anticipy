@@ -131,7 +131,12 @@ struct TranscriptFlushPolicyTests {
             /// record of what it sent died and the held audio was replayed.
             let newTask: Bool
         }
-        struct Row { let text: String; let at: Double; let dropped: Bool }
+        struct Row {
+            let text: String
+            let appearedAt: Double
+            let at: Double
+            let dropped: Bool
+        }
 
         func drive(_ script: [Partial]) -> [Row] {
             let origin = Date()
@@ -154,7 +159,8 @@ struct TranscriptFlushPolicyTests {
                                            wordsAppearedAt: date(appearedAt)) {
                     dropped = true
                 }
-                rows.append(Row(text: line, at: now, dropped: dropped))
+                rows.append(Row(text: line, appearedAt: appearedAt,
+                                at: now, dropped: dropped))
                 if !dropped { lastDelivered = line }
             }
             func flushTail(at now: Double) {
@@ -184,6 +190,11 @@ struct TranscriptFlushPolicyTests {
                 if let b = u.banked?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !b.isEmpty {
                     deliver(b, appearedAt: pendingSince ?? p.at, at: p.at)
+                    // The old decode window left with the banked row. The
+                    // replacement tail starts on this callback, exactly as
+                    // PhoneListener does; otherwise two distinct rows publish
+                    // the same capture start and a live burst looks collapsed.
+                    pendingSince = nil
                 }
                 // After the banked line, exactly as PhoneListener does it.
                 if u.didReset { lineageBrokeAt = p.at }
@@ -206,6 +217,23 @@ struct TranscriptFlushPolicyTests {
             }
             if let t = timer { flushTail(at: t) }
             return rows
+        }
+
+        // A replaced decode window can hand over an old sentence and leave a
+        // new tail in the same callback. They are two rows, but they are not
+        // two claims on the old window's start instant. This is the exact
+        // build-113 production shape that failed turn_envelope_gate leg 5:
+        // three rows arrived together with one identical capture start.
+        do {
+            let rows = drive([
+                Partial(at: 0, text: "the old decode window still has its words",
+                        newTask: false),
+                Partial(at: 0.4, text: "replacement tail", newTask: false),
+            ]).filter { !$0.dropped }
+            check("a banked window and its replacement tail have distinct starts",
+                  rows.count == 2
+                  && rows[0].appearedAt == 0
+                  && rows[1].appearedAt == 0.4)
         }
 
         /// One phrase turned into partial callbacks, `k` words at a time, each

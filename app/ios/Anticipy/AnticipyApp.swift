@@ -2472,187 +2472,6 @@ final class AnticipySession: ObservableObject {
         return fields
     }
 
-    /// Does this answer END the errand? Three phrase lists on the phone say so.
-    /// Returns the result line to store, or nil to proceed normally.
-    ///
-    /// THIS IS NOT A DESIGN. It is registered tape, and the paragraphs below
-    /// are the argument for why it is still here rather than deleted — read
-    /// them before you extend it, because the answer is "do not".
-    ///
-    /// WHAT IT DOES WRONG. `whole`, `declines` and `handled` decide what the
-    /// owner's words MEAN with no model anywhere near them, and on a hit this
-    /// writes the job cancelled and files the owner's own sentence as the
-    /// evidence they called it off — while the brain never sees the line at
-    /// all. That is Law 1's canonical shape (audit item #55, severity H) and
-    /// it fires on exactly the step a manual voice test has to exercise. The
-    /// `handled` list is the worst of the three: "I already booked it" is not
-    /// a cancellation, it is a FACT about the world, and the brain has a place
-    /// for it (`Conversation._remember_about_owner`). This eats it instead.
-    ///
-    /// THE FIX IS TO DELETE THE WHOLE FUNCTION. Nothing else calls it: the one
-    /// consumer is `AnswerRoutePolicy.route`, where its only job is to
-    /// short-circuit `.toTheBrain`. Delete it, drop `endsTheErrand` from the
-    /// policy and `.endTheErrand` from `Route`, and every typed answer becomes
-    /// one `app_reply` event — which is the path the product already claims to
-    /// have (brief ex 120, and the comment in `confirm()` below).
-    ///
-    /// WHY THAT WAS NOT DONE HERE. Deleting it could not be shown SAFE from
-    /// inside app/ios/, and a cancellation that silently never happens is a
-    /// job running against the owner's wishes — worse than this violation.
-    /// What was traced, 2026-08-25:
-    ///   * The brain CAN cancel a stuck job. `Conversation._open_work` unions
-    ///     `_blocked()` (status needs_user) into the cancel pool for exactly
-    ///     this case; its docstring names the 2026-08-02 failure where both
-    ///     tasks were blocked and neither could be called off by text.
-    ///   * The round trip is fine. `pushEvent(app_reply)` -> the worker loop
-    ///     (`POLL_SECONDS = 2`) -> `handle_inbound` -> `on_reply` -> `_cancel`,
-    ///     then this app's own 3s refresh. Seconds, not minutes.
-    ///   * BUT the brain's fallback cannot reach this card. When its model is
-    ///     unreachable or returns malformed JSON, `_classify` decides on a
-    ///     regex whose `has_pending` reads `_pending()` — status
-    ///     awaiting_confirm ONLY. A stuck card is needs_user. So with no
-    ///     awaiting_confirm job in flight, "forget it" comes back as
-    ///     intent=chat with "Nothing's queued up on my end right now" and the
-    ///     errand keeps running, having told the owner it was never there.
-    ///     That regression is in brain/conversation.py, not in this file.
-    ///   * Offline buys this rule NOTHING, so there is no offline argument for
-    ///     keeping it. Both routes are network writes through `write(job:)`:
-    ///     ending it is a `setJobFields`, sending it is a `pushEvent`, and
-    ///     neither is queued. The disk-backed `unsent` buffer is `heard()`'s
-    ///     alone and only ever posts kind `transcript`. Offline, both designs
-    ///     fail identically and the card says so.
-    ///   * A genuine stop is still one tap away either way: "Not now" is on
-    ///     this same card, runs `decline()`, and is deterministic, local and
-    ///     model-free. This rule duplicates a button in prose.
-    /// WHAT WOULD SETTLE IT: a brain-side test showing `on_reply` cancels a
-    /// needs_user job from an `app_reply` with the model DOWN, plus one live
-    /// run of it. Neither is possible today — Law 3, the ears have been dead
-    /// since build 75, and brain/ is another owner's file.
-    ///
-    /// KNOWN COST WHILE IT STANDS, measured here and pinned in
-    /// Tests/EndTheErrandTests.swift as `costs(...)`: the clause splitter
-    /// re-opens the substring hole the comments below claim to have closed,
-    /// one level up. Any ONE clause that leads with a stop ends the errand,
-    /// whatever the other clauses say — so "already sent, the code is 4821"
-    /// throws away the code the parked run is waiting on, and "cancel it, and
-    /// book the 8pm instead" cancels without booking. It cannot be repaired by
-    /// more rules: telling explanation ("never mind, I'll call them myself")
-    /// from instruction is a meaning question, which is the whole point.
-    ///
-    // ANCHOR: end-of-errand decision. Everything down to the END marker is
-    // compiled and exercised on its own by Tests/run_end_errand_tests.sh, so
-    // it must stay pure Foundation and self-contained.
-    //
-    // WHY THE DECLARATION IS THE LAST THING ABOVE `static func`, AND WHY
-    // WHATEVER YOU WANT TO ADD GOES ABOVE THIS PARAGRAPH RATHER THAN BELOW
-    // IT: overnight/tape_gate.py does not look for the marker NEAR the rule.
-    // It looks for it inside a 400-character window ENDING at `static func`
-    // (`_window_span(before=400)`). The marker used to sit above this ANCHOR
-    // block with 40 characters to spare, and ONE ordinary comment line
-    // inserted between the two pushed it out: leg 1 then reported this rule
-    // as tape nobody had declared, exit 2, while the file was unchanged in
-    // every way a reader would notice, and the declaration was still right
-    // there. Measured 2026-08-25 — gap 360 of a 400 budget.
-    // Tests/run_end_errand_tests.sh now imports that window and that regex
-    // FROM the gate and checks the gate's own predicate AND this adjacency,
-    // so the two books can no longer say different things about this rule.
-    //
-    // Retired by the leg in overnight/tape_gate.py, which is RED while the
-    // text below is in the tree and goes green only when it is DELETED.
-    // TAPE: (Law 2, audit item #55) phrase lists on the phone decide MEANING.
-    static func answerThatEndsTheErrand(_ answer: String) -> String? {
-        let normalized = answer.lowercased()
-            .replacingOccurrences(of: "’", with: "'")
-            .trimmingCharacters(in: .punctuationCharacters.union(.whitespaces))
-        guard !normalized.isEmpty else { return nil }
-        let whole: Set<String> = [
-            "no", "nope", "stop", "cancel", "skip", "skip it", "never mind",
-            "nevermind", "forget it", "drop it", "leave it", "don't bother",
-            "dont bother", "call it off", "not anymore",
-        ]
-        let declines = [
-            "never mind", "nevermind", "forget it", "don't bother",
-            "dont bother", "no longer need", "don't need", "dont need",
-            "do not need", "not needed", "drop it", "skip it", "skip this",
-            "call it off", "don't do it", "dont do it", "cancel it",
-            "cancel that", "cancel this", "stop it", "leave it",
-        ]
-        let handled = [
-            "handled it", "i handled", "did it myself", "took care of it",
-            "already did", "already done", "already handled", "already booked",
-            "already sent", "already ordered", "done it myself",
-            "did that myself", "sorted it", "i did it already",
-        ]
-        // A DECLINE IS THE WHOLE ANSWER, NOT A PHRASE BURIED IN ONE.
-        // Substring matching anywhere in the text killed errands the owner
-        // still wanted: "leave it with the concierge" (leave it), "drop it off
-        // at reception after 5" (drop it), "stop it from auto-renewing"
-        // (stop it), and — worst — "it's not already booked yet, go ahead",
-        // where a NEGATED phrase filed the owner's go-ahead as proof they had
-        // done it themselves. Capping the answer at eight words didn't fix any
-        // of those: they are all short. Length was never the condition.
-        //
-        // The condition is position. A stop leads its clause, and nothing but
-        // filler follows it — "ok, forget it", "already sent it, thanks". The
-        // moment real content follows ("with the concierge", "off at
-        // reception", "from auto-renewing"), the sentence is an instruction,
-        // not a stop, and it belongs to the brain. Anchoring at the front is
-        // also what makes the negation case safe for free: "not already
-        // booked" does not start with "already booked".
-        let clauses = normalized
-            .split(whereSeparator: { ",;:!?\n\u{2014}\u{2013}".contains($0) })
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        // A CONDITION IS NOT A STOP. "if they're full, skip it" leads a clause
-        // with a decline and means the opposite of one: it hands back a
-        // judgment call, which is the brain's job and not a lookup table's.
-        let spokenWords = Set(normalized
-            .split(whereSeparator: { !$0.isLetter && $0 != "'" })
-            .map(String.init))
-        guard spokenWords.isDisjoint(with: ["if", "unless", "otherwise", "whether"])
-        else { return nil }
-        // What a person puts in FRONT of the real answer, and what can trail it
-        // without changing it. Deliberately short lists of pure filler: every
-        // word that carries meaning has to fall outside them, because a word
-        // that carries meaning is exactly the signal that this is not a stop.
-        let openers: Set<String> = [
-            "ok", "okay", "oh", "well", "so", "and", "but", "then", "actually",
-            "just", "please", "sorry", "yeah", "yea", "yep", "yes", "sure",
-            "no", "nah", "i", "we", "it", "it's", "its", "that", "that's",
-            "thats", "hey", "um", "uh",
-        ]
-        let trailers: Set<String> = [
-            "it", "that", "this", "them", "already", "myself", "please",
-            "thanks", "thank", "you", "now", "for", "anymore", "any", "more",
-            "though", "anyway", "too", "sorry", "then", "ok", "okay",
-        ]
-        func leads(_ clause: String, _ phrases: [String]) -> Bool {
-            var words = clause.split(separator: " ").map(String.init)
-            while !words.isEmpty {
-                let rest = words.joined(separator: " ")
-                for phrase in phrases
-                where rest == phrase || rest.hasPrefix(phrase + " ") {
-                    let tail = rest.dropFirst(phrase.count)
-                        .split(separator: " ").map(String.init)
-                    if tail.allSatisfy(trailers.contains) { return true }
-                }
-                // Only filler may be stepped over. The first word that means
-                // something ends the search, so "don't cancel it" can never
-                // reach the "cancel it" sitting one word inside it.
-                guard openers.contains(words[0]) else { return false }
-                words.removeFirst()
-            }
-            return false
-        }
-        if clauses.contains(where: { leads($0, handled) }) {
-            return "You handled it yourself: \u{201C}\(answer)\u{201D}. I did nothing further."
-        }
-        if whole.contains(normalized) || clauses.contains(where: { leads($0, declines) }) {
-            return "You called it off: \u{201C}\(answer)\u{201D}. I did nothing further."
-        }
-        return nil
-    }
-    // END ANCHOR: end-of-errand decision
 
     private func cancellationFields(for job: AgentJob,
                                     trigger: String = "unspecified") throws -> [String: Any]? {
@@ -2688,16 +2507,7 @@ final class AnticipySession: ObservableObject {
 
     @discardableResult
     func confirm(_ job: AgentJob, ownerAnswer: String? = nil) async -> Bool {
-        // "Type what I need — or say you handled it." Both halves now go
-        // somewhere honest, and they are different places (AnswerRoutePolicy):
-        //
-        // An answer that ENDS the errand ends it here, deterministically, on the
-        // same cancellation path as "Not now" — because EVERY non-empty answer
-        // used to requeue the run, so "skip it, I don't need the batteries
-        // anymore" relaunched it, Bing-searched those exact words and hit a
-        // CAPTCHA (found live, 2026-08-14).
-        //
-        // A real ANSWER goes to the brain instead of onto the job. Writing it
+        // Every typed answer goes to the brain instead of onto the job. Writing it
         // here would be a second path to a decision the text lane already owns
         // (brief ex 120): it skips whether the answer covers what the task said
         // it needed, skips keeping what he said about himself, and skips
@@ -2708,20 +2518,10 @@ final class AnticipySession: ObservableObject {
             status: job.status,
             workflowState: job.workflow_state,
             effectUncertain: job.effect_uncertain == true,
-            answer: trimmed,
-            endsTheErrand: Self.answerThatEndsTheErrand(trimmed)) {
+            answer: trimmed) {
 
         case .nothingToSend:
             return false
-
-        case .endTheErrand(let ending):
-            return await write(job, expected: "cancelled") {
-                var fields = try self.cancellationFields(
-                    for: job, trigger: "their answer read as ending it")
-                    ?? ["status": "cancelled"]
-                fields["result"] = ending
-                try await self.backend.setJobFields(id: job.id, fields: fields)
-            }
 
         case .toTheBrain(let answer):
             // ONE inbound turn, the same one a text produces. The worker reads

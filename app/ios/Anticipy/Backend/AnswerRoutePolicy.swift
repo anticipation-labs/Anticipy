@@ -38,11 +38,6 @@ enum AnswerRoutePolicy {
         /// a consent record of nothing.
         case nothingToSend
 
-        /// "skip it", "I already booked it" — the errand is over. Deterministic
-        /// and local, on the same cancellation path as "Not now", with his words
-        /// kept as the result. Never sent to a model to interpret.
-        case endTheErrand(String)
-
         /// A real answer to a real question. Goes to the brain as one inbound
         /// turn, which resolves the stuck task the same way a text does.
         case toTheBrain(String)
@@ -54,14 +49,10 @@ enum AnswerRoutePolicy {
     }
 
     /// - Parameters:
-    ///   - endsTheErrand: the result of the ending-answer rule, passed in rather
-    ///     than recomputed. That rule lives in AnticipyApp.swift and has its own
-    ///     runner; a second copy here would be a second answer to "is this over".
     static func route(status: String,
                       workflowState: String? = nil,
                       effectUncertain: Bool,
-                      answer: String,
-                      endsTheErrand: String?) -> Route {
+                      answer: String) -> Route {
         let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Only a task stopped for information takes an answer. `effect_uncertain`
@@ -71,7 +62,6 @@ enum AnswerRoutePolicy {
         let needsDetails = status == "needs_user" || workflowState == "draft"
         guard needsDetails, !effectUncertain else { return .approval }
 
-        if let ending = endsTheErrand { return .endTheErrand(ending) }
         if trimmed.isEmpty { return .nothingToSend }
         return .toTheBrain(trimmed)
     }

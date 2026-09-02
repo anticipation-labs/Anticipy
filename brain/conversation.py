@@ -1369,7 +1369,11 @@ Reply ONLY with compact JSON: {"verdict": "go"|"detail"|"no"}
                          r"|stress|sweat)\b|\bdon'?t know\b|\bno idea\b",
                          " ", low)
         if short and re.search(r"\b(no|nope|don'?t|forget it|cancel|stop|scrap it)\b", refusal):
-            if not has_pending:
+            # A refusal must also reach work parked for information. That pool
+            # already exists as _open_work() and is the pool _cancel() uses;
+            # consulting only awaiting_confirm here made "forget it" claim
+            # nothing was queued while a needs_user errand kept running.
+            if not self._open_work():
                 return {"intent": "chat", "pending_id": None,
                         "reply": "Nothing's queued up on my end right now — what did you mean?"}
             return {"intent": "decline", "pending_id": None, "reply": "Okay, scrapped."}

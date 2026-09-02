@@ -3,14 +3,15 @@
 Read-only goals never touch the owner's browser. The 2026-08-02 tab flood
 happened because ALL work — even "look up opening hours" — ran through the
 paired Chrome extension on his machine. Research belongs here, in the
-worker: Brave Search for candidate pages, a plain fetch for the top few,
+worker: a server-side search provider for candidate pages, a plain fetch for the top few,
 and the LLM to summarize with citations. The extension keeps only the jobs
 that genuinely need HIS logged-in browser (bookings, forms, purchases),
 always behind the confirmation gate.
 
-No key, no drama: without BRAVE_API_KEY the caller routes the job to the
-browser lane instead — this module never crashes the worker over a missing
-secret, and never logs one either.
+No key, no drama: without BRAVE_API_KEY or TAVILY_API_KEY the caller routes
+the job to the browser lane instead. When one configured provider is out of
+quota, the other is tried before a read-only job is failed. This module never
+crashes the worker over a missing secret, and never logs one either.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ from urllib.parse import unquote, urljoin, urlsplit
 import requests
 
 BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
+TAVILY_URL = "https://api.tavily.com/search"
 
 # Descriptions alone answer many questions; reading more than a few pages is
 # latency without new evidence.
@@ -125,6 +127,42 @@ class BraveClient:
 
     def __repr__(self):  # the key must never ride into a log line via repr
         return "BraveClient(key=…)"
+
+
+class TavilyClient:
+    """Tavily search behind the same small interface as Brave.
+
+    Keeping provider response shapes at this boundary means the reader and
+    citation pipeline below cannot learn which vendor answered, and a quota
+    incident cannot strand the research lane merely because a second key was
+    already configured but never wired.
+    """
+
+    def __init__(self, api_key: str):
+        self._key = api_key
+
+    def search(self, query: str, count: int = TOP_RESULTS) -> list[dict]:
+        r = requests.post(
+            TAVILY_URL,
+            headers={"Authorization": f"Bearer {self._key}",
+                     "Content-Type": "application/json"},
+            json={"query": query, "max_results": count,
+                  "search_depth": "basic", "include_answer": False},
+            timeout=15,
+        )
+        r.raise_for_status()
+        out = []
+        for item in (r.json().get("results") or [])[:count]:
+            url = str(item.get("url") or "").strip()
+            if not url:
+                continue
+            out.append({"title": str(item.get("title") or "").strip(),
+                        "url": url,
+                        "description": str(item.get("content") or "").strip()})
+        return out
+
+    def __repr__(self):
+        return "TavilyClient(key=…)"
 
 
 def _search_failure_label(error: Exception) -> str:
@@ -293,7 +331,8 @@ def _summarize(query: str, sources: list[dict], llm=None) -> str:
 def run_research(goal: str, params: Optional[dict] = None, llm=None,
                  brave: Optional[BraveClient] = None,
                  fetcher: Callable[[str], str] = fetch_page,
-                 api_key: Optional[str] = None) -> dict:
+                 api_key: Optional[str] = None,
+                 tavily_api_key: Optional[str] = None) -> dict:
     """One research job, end to end: search -> read -> summarize with
     citations. Returns {"ok": bool, "result": str} and never raises — a
     crashed pass would leave the job stuck at `running` forever."""
@@ -316,19 +355,37 @@ def run_research(goal: str, params: Optional[dict] = None, llm=None,
     # what the owner asked, and the word list is left doing the one thing it can
     # legitimately do.
     asked = (goal or "").strip() or query
-    client = brave or (BraveClient(api_key) if api_key else None)
-    if client is None:
+    # An injected client remains a one-provider test seam. Production builds a
+    # priority-ordered chain: Brave first (the established behavior), Tavily
+    # second. The second provider is not a second meaning system; both return
+    # candidate pages through the same structural interface.
+    clients = ([brave] if brave is not None else
+               ([BraveClient(api_key)] if api_key else [])
+               + ([TavilyClient(tavily_api_key)] if tavily_api_key else []))
+    if not clients:
         return {"ok": False, "result": "No search backend is configured."}
-    try:
-        results = client.search(query)
-    except Exception as e:
-        # Status is operationally useful (production's 402 means quota, not a
-        # broken query) and contains no owner text or secret.  Exception text
-        # can quote the request, so it still never enters logs or the result.
-        failure = _search_failure_label(e)
-        print(f"research: search provider failed ({failure})")
+    results = []
+    failures = []
+    for client in clients:
+        try:
+            results = client.search(query)
+        except Exception as e:
+            # Status is operationally useful (production's 402 means quota,
+            # not a broken query) and contains no owner text or secret.
+            # Exception text can quote the request, so it still never enters
+            # logs or the result.
+            failure = _search_failure_label(e)
+            failures.append(failure)
+            print(f"research: search provider failed ({failure}) — trying "
+                  "the next configured provider")
+            continue
+        if results:
+            break
+    if not results and len(failures) == len(clients):
+        joined = ", ".join(failures)
+        noun = "provider" if len(failures) == 1 else "providers"
         return {"ok": False,
-                "result": f"Search provider unavailable ({failure})."}
+                "result": f"Search {noun} unavailable ({joined})."}
     if not results:
         return {"ok": False, "result": f"Found nothing for: {query}"}
     # THE SAME FENCE THE PROCEDURE LANE HAS. `learn_procedure` filters its
@@ -1231,7 +1288,8 @@ def _parse_json_object(raw):
 def learn_procedure(question, brave: Optional[BraveClient] = None,
                     fetcher: Callable[[str], str] = fetch_page, llm=None,
                     max_pages: int = MAX_PROCEDURE_PAGES,
-                    api_key: Optional[str] = None):
+                    api_key: Optional[str] = None,
+                    tavily_api_key: Optional[str] = None):
     """Go and read how this is done, then come back with the procedure.
 
     Returns None when nothing was learned, and None is a real answer: the
@@ -1252,16 +1310,25 @@ def learn_procedure(question, brave: Optional[BraveClient] = None,
     # procedure is ACTED ON, so there is no fallback here at all.
     if llm is None or not getattr(llm, "live", False):
         return None
-    client = brave or (BraveClient(api_key) if api_key else None)
-    if client is None:
+    clients = ([brave] if brave is not None else
+               ([BraveClient(api_key)] if api_key else [])
+               + ([TavilyClient(tavily_api_key)] if tavily_api_key else []))
+    if not clients:
         return None
-    try:
-        results = client.search(q)
-    except Exception as e:
-        print(f"research: procedure search provider failed "
-              f"({_search_failure_label(e)})")
+    results = []
+    for client in clients:
+        try:
+            results = client.search(q)
+        except Exception as e:
+            print(f"research: procedure search provider failed "
+                  f"({_search_failure_label(e)}) — trying the next configured "
+                  "provider")
+            continue
+        if results:
+            break
+    if not results:
         return None
-    # Brave hands back a description per result. It is deliberately NOT used as
+    # Search providers hand back a description per result. It is deliberately NOT used as
     # a source here: a procedure distilled from search snippets is exactly the
     # confident-wrong-procedure this whole path exists to avoid.
     sources = rank_sources([r.get("url") for r in (results or [])])[:max_pages]

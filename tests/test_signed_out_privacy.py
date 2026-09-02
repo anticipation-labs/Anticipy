@@ -107,41 +107,11 @@ def test_the_queue_is_never_flushed_into_someone_elses_account():
 
 # ------------------------- venting is not an instruction
 
-def test_a_decline_must_be_the_message_not_a_word_inside_one():
-    """Live 2026-08-16: the browser asked which Earls location, he never saw
-    it (she could not text), he said out loud how sick of it he was — and the
-    job came back cancelled. He had pressed nothing he remembered pressing.
-
-    The matcher substring-searched for "no", "leave it", "stop it" ANYWHERE
-    in the text, so a mouthful of frustration about the assistant could kill
-    work he still wanted. Ending an errand is a decision and needs the
-    brevity of one; anything longer belongs to the brain, which reads meaning
-    rather than characters.
-    """
-    body = APP.split("static func answerThatEndsTheErrand", 1)[1].split("\n    }", 1)[0]
-    # This asserted "wordCount <= 8" — the shape of the FIRST fix, not the
-    # requirement. Length turned out to be the wrong condition entirely: the
-    # sentences that actually killed live errands are all SHORT ("leave it
-    # with the concierge", "drop it off at reception", "stop it from
-    # auto-renewing"), so a word cap let every one of them through while
-    # rejecting harmless long ones.
-    #
-    # The condition is POSITION: a stop leads its clause and nothing but
-    # filler follows it. Verified behaviourally against all of the above
-    # before this assertion was changed — the matcher now gets every one of
-    # them right, which the word cap never did.
-    assert "clause" in body.lower() or "hasPrefix" in body, (
-        "a stop must be anchored at the front of a clause, not found "
-        "anywhere inside a sentence")
-    assert "wordCount" not in body, (
-        "length was never the condition — short instructions like 'leave it "
-        "with the concierge' are exactly what a word cap lets through")
-    # the short forms still work — those are real refusals
-    for phrase in ('"never mind"', '"forget it"', '"skip it"'):
-        assert phrase in body
-    # and a negated phrase must not read as proof he did it himself
-    assert "not already" in body or "negat" in body.lower(), (
-        "\"it's not already booked yet, go ahead\" must not file as handled")
+def test_the_phone_never_interprets_an_answer_as_cancellation():
+    """Meaning belongs to Conversation.on_reply, not an iPhone phrase list."""
+    assert "answerThatEndsTheErrand" not in APP
+    assert 'trigger: "their answer read as ending it"' not in APP
+    assert 'pushEvent(kind: "app_reply"' in APP
 
 
 def test_every_cancellation_names_what_triggered_it():
@@ -150,4 +120,5 @@ def test_every_cancellation_names_what_triggered_it():
     from an answer misread as a refusal."""
     assert 'cancelled by owner (\\(trigger))' in APP
     assert 'trigger: "tapped Not now"' in APP
-    assert 'trigger: "their answer read as ending it"' in APP
+    assert 'trigger: "tapped Stop on the phone"' in APP
+    assert 'trigger: "their answer read as ending it"' not in APP

@@ -1246,6 +1246,16 @@ final class PhoneListener: NSObject, ObservableObject {
             // now, which continues nothing.
             deliver(banked, reason: nil,
                     wordsAppearedAt: pendingSince ?? Date())
+            // The banked line consumed the old decode window. Any words the
+            // replacement window still carries first became pending on THIS
+            // callback, not when the now-banked window began. Keeping the old
+            // mark made the banked line and every replacement tail share one
+            // capture_started_at; three rows from build 113 arrived in 0.8s
+            // with the identical start 05:00:14.974Z. Downstream that is
+            // indistinguishable from an offline queue re-stamping a burst and
+            // it destroys the ordering signal the capture envelope exists to
+            // preserve.
+            pendingSince = nil
         }
         // AFTER the banked line, never before it. Banked words are
         // words the cursor is handing over BECAUSE the window died

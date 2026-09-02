@@ -338,3 +338,14 @@ def test_no_worries_is_not_a_cancellation(monkeypatch):
     # A real refusal still is one.
     assert c._classify("+15550001", "no")["intent"] == "decline"
     assert c._classify("+15550001", "forget it")["intent"] == "decline"
+
+
+def test_offline_refusal_reaches_a_job_parked_for_information(monkeypatch):
+    jobs = _pb(monkeypatch, [{"id": "dinner", "goal": "Book dinner at Earls",
+                              "status": "needs_user", "params": "{}"}])
+    c = _bare()
+    assert c._classify("+15550001", "forget it")["intent"] == "decline"
+    monkeypatch.setattr(c, "say", lambda *_a, **_k: None)
+    out = c.on_reply("+15550001", "forget it")
+    assert out["acted"] == "cancelled:dinner"
+    assert jobs[0]["status"] == "cancelled"
