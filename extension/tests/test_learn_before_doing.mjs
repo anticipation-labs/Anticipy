@@ -373,7 +373,7 @@ const check = (name, ok) => {
   check("the planner's guessed host was never opened as the working page",
     !opened.some((u) => /^https:\/\/www\.anker\.com\/$/.test(u)));
   check("research went via a search, then the pages it chose",
-    opened.some((u) => u.includes("bing.com/search")));
+    harness.searches.some((s) => /claim an Anker warranty/i.test(s.text)));
 
   // And the second identical errand must not pay again.
   const before = seen.length;

@@ -27,7 +27,8 @@ globalThis.chrome = globalThis.chrome || {
   runtime: {}, debugger: {}, tabGroups: {}, notifications: {}, alarms: {},
 };
 
-const { planRun, planBlock, pageFingerprint, isAuthored } = await import(join(ext, "agent_loop.js"));
+const { planRun, planBlock, pageFingerprint, isAuthored, isSearchTarget } =
+  await import(join(ext, "agent_loop.js"));
 
 let pass = 0, fail = 0;
 const realFetch = globalThis.fetch;
@@ -100,6 +101,14 @@ p = await planRun("k", "m", "goal", null, "");
 check(p && Array.isArray(p.mustFind) && Array.isArray(p.steps),
       "wrong-typed fields degrade to empty lists rather than throwing");
 
+globalThis.fetch = reply(JSON.stringify({
+  start_url: null, search_query: "The Keg downtown Vancouver reservations",
+  why: "destination discovery", steps: [], unfamiliar: false,
+}));
+p = await planRun("k", "m", "book dinner", null, "");
+check(p && isSearchTarget(p.startUrl),
+      "a planner search stays provider-neutral instead of inventing a URL");
+
 // ------------------------------------------------------- the injected text
 
 check(planBlock(null) === "", "no plan injects NOTHING into the step prompt");
@@ -109,11 +118,12 @@ check(block.includes("mail.google.com"), "the plan reaches the step prompt");
 check(/guidance, not orders|real page always wins/i.test(block),
       "the plan is framed as guidance the page can override, never as orders");
 
-// --------------------------------------------- the old default still exists
+// ----------------------------------------- provider-neutral fallback exists
 
 const src = readFileSync(join(ext, "agent_loop.js"), "utf8");
-check(/startUrl = "https:\/\/www\.bing\.com\/"/.test(src),
-      "the pre-planner default is still there as the fallback");
+check(/searchTarget\(sanitizedResearchTerms\(goal\)\)/.test(src)
+      && !/startUrl\s*=\s*"https:\/\/www\.bing\.com/.test(src),
+      "the pre-planner fallback uses the browser's provider, not a baked-in one");
 check(/const openAt = \(plan && plan\.startUrl\) \|\| startUrl;/.test(src),
       "a null plan falls back to exactly that default");
 check(/planning && !opts\.startUrl/.test(src),

@@ -127,6 +127,17 @@ class BraveClient:
         return "BraveClient(key=…)"
 
 
+def _search_failure_label(error: Exception) -> str:
+    """A useful provider failure that never includes the query or credential."""
+    response = getattr(error, "response", None)
+    status = getattr(response, "status_code", None)
+    try:
+        code = int(status)
+    except (TypeError, ValueError):
+        code = 0
+    return f"HTTP {code}" if code else type(error).__name__
+
+
 # ---------------------------------------------------------------------------
 # WHERE THE FETCH LANDS, NOT WHERE THE STRING SAID IT WOULD GO
 #
@@ -311,10 +322,13 @@ def run_research(goal: str, params: Optional[dict] = None, llm=None,
     try:
         results = client.search(query)
     except Exception as e:
-        # Log the class only: exception text can quote the request, and
-        # nothing from this call belongs in a log beyond "it failed".
-        print(f"research: search failed ({type(e).__name__})")
-        return {"ok": False, "result": f"Search failed for: {query}"}
+        # Status is operationally useful (production's 402 means quota, not a
+        # broken query) and contains no owner text or secret.  Exception text
+        # can quote the request, so it still never enters logs or the result.
+        failure = _search_failure_label(e)
+        print(f"research: search provider failed ({failure})")
+        return {"ok": False,
+                "result": f"Search provider unavailable ({failure})."}
     if not results:
         return {"ok": False, "result": f"Found nothing for: {query}"}
     # THE SAME FENCE THE PROCEDURE LANE HAS. `learn_procedure` filters its
@@ -1244,7 +1258,8 @@ def learn_procedure(question, brave: Optional[BraveClient] = None,
     try:
         results = client.search(q)
     except Exception as e:
-        print(f"research: procedure search failed ({type(e).__name__})")
+        print(f"research: procedure search provider failed "
+              f"({_search_failure_label(e)})")
         return None
     # Brave hands back a description per result. It is deliberately NOT used as
     # a source here: a procedure distilled from search snippets is exactly the

@@ -31,7 +31,9 @@ const GOAL = "find kid-friendly dinner delivery options for this afternoon";
 
 // The wall, the search page it should retreat to, and the source that answers.
 const WALL = "https://fastbite.example.com/browse";
-const SEARCH = "https://www.bing.com/search";
+// chrome_mock's stand-in for whichever provider the browser is configured to
+// use. The agent never knows or chooses the real provider URL.
+const SEARCH = "https://search.test/";
 const OPEN = "https://eater.example.com/vancouver/kid-friendly-delivery";
 
 function pageFor(url) {

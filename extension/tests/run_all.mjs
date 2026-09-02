@@ -23,6 +23,7 @@ const suites = [
   "test_verification_fail_closed.mjs",
   "test_exact_fact_verification.mjs",
   "test_research_query_hygiene.mjs",
+  "test_search_provider.mjs",
   "test_workflow_state.mjs",
   "test_poll_deadlock.mjs",
   "test_attach_diagnosis.mjs",

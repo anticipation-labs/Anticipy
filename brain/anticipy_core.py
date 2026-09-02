@@ -3655,6 +3655,40 @@ class Anticipy:
             str((params or {}).get("source") or ""))
         explicit_correction = bool(_EXPLICIT_CORRECTION_RE.search(
             str((params or {}).get("source") or "")))
+
+        # ONE PROMISE, ONE LIVE WORKFLOW — keyed on identity, never wording.
+        #
+        # The clock sees the same open memory row every time it wakes, but it
+        # asks a model to phrase the proposed work.  In production one dinner
+        # commitment became "book dinner", "confirm dinner plans" and
+        # "confirm dinner details".  The prose dedupe below quite reasonably
+        # treated those as different strings, so all three became live jobs and
+        # every short reply was ambiguous.  `commitment_id` is the durable fact
+        # that they keep the same promise; it already rides on the row so the
+        # completion sweep can close that exact promise after a restart.
+        #
+        # A caller that explicitly says this is a NEW task still gets a new
+        # workflow.  Otherwise, an active workflow for the same commitment is
+        # the workflow.  Direct corrections may refine a still-held card; a
+        # clock paraphrase never rewrites it, because the clock learned no new
+        # owner-authored fact.
+        commitment_job = None
+        if not declared_new_task:
+            commitment_job = self._active_job_for_commitment(
+                (params or {}).get("commitment_id"))
+        if commitment_job:
+            job_id = str(commitment_job.get("id") or "")
+            source = str((params or {}).get("source") or "")
+            if (job_id and source != "clock initiative"
+                    and str(commitment_job.get("status") or "") == "awaiting_confirm"
+                    and (explicit_correction or not self._covered_by(
+                        goal, commitment_job.get("goal") or ""))):
+                self._merge_into(job_id, commitment_job, goal, params)
+            if str(commitment_job.get("status") or "") == "running":
+                self._running_dup = job_id
+            print(f"commitment already has active job {job_id}; "
+                  f"absorbing {goal!r} by commitment id")
+            return job_id
         if not declared_new_task and self._RETRACT_RE.match(goal or ""):
             retracted = self._retract_pending(goal)
             # An overheard "scratch that" ends here either way. If she held
@@ -4217,6 +4251,16 @@ class Anticipy:
         self._capture_source = ""
         if not self.llm:
             return None
+        # Do not create app work behind an outreach that cannot possibly
+        # arrive.  This is the same transport fact notify_owner uses, asked
+        # before a model call or a queue write.  A transient send failure later
+        # still leaves one retryable workflow, but an account with no reachable
+        # phone no longer accumulates invisible clock-created cards every
+        # thirty minutes.
+        if not self.can_notify_owner():
+            print("clock: owner has no reachable notification transport — "
+                  "not composing or queueing proactive work")
+            return None
         loops = self.memory.open_loops()
         if not loops:
             return None
@@ -4510,6 +4554,44 @@ class Anticipy:
         if stored:
             return stored == "consequential"
         return is_consequential(job.get("goal") or "")
+
+    def _active_job_for_commitment(self, commitment_id) -> Optional[dict]:
+        """Return the one live workflow keeping this exact memory promise.
+
+        This is deliberately a structural lookup over the id stored in
+        ``params``.  It does not compare task words, venues, people, times, or
+        examples, so it applies equally to every kind of work the model can
+        propose.  Completed/cancelled rows are excluded: they are historical
+        evidence, not a workflow that can absorb new work.
+        """
+        try:
+            wanted = int(commitment_id)
+        except (TypeError, ValueError):
+            return None
+        if wanted <= 0:
+            return None
+        try:
+            filt = ('(status="awaiting_confirm" || status="queued" || '
+                    'status="running" || status="needs_user")')
+            owner_filter = self._owner_filter()
+            if owner_filter:
+                filt = f"{filt} && {owner_filter}"
+            r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
+                       params={"filter": filt, "perPage": 50,
+                               "sort": "-created"}, timeout=10)
+            if not getattr(r, "ok", False):
+                return None
+            for job in (r.json() or {}).get("items", []):
+                try:
+                    stored = json.loads(job.get("params") or "{}")
+                    if int(stored.get("commitment_id") or 0) == wanted:
+                        return job
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    continue
+        except Exception as e:
+            print(f"commitment workflow lookup failed for {wanted}: "
+                  f"{type(e).__name__}: {e}")
+        return None
 
     def _same_pending(self, goal: str, touches: str | None = None) -> Optional[str]:
         """Is this same thing already waiting on the owner? Compared on

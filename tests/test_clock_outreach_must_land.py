@@ -67,3 +67,16 @@ def test_a_rig_with_no_transport_is_not_a_failed_send():
     a = _brain()
     a.notify_owner = lambda message, channel="sms": {"skipped": "no transport"}
     assert a.clock_tick(now=2000) is not None
+
+
+def test_no_reachable_phone_means_no_hidden_clock_card(monkeypatch):
+    """A configured SMS lane with no destination cannot silently fill the app
+    with work that was supposed to be introduced by a text."""
+    a = _brain()
+    a.conversation = object()       # a real transport exists
+    a.owner_phone = ""              # but there is nowhere to send
+    monkeypatch.setattr(
+        a, "_queue_job",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("unreachable outreach must not queue work")))
+    assert a.clock_tick(now=2000) is None

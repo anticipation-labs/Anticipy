@@ -90,6 +90,24 @@ def test_the_same_thing_said_twice_is_still_one_job(monkeypatch):
     assert len(fake.jobs) == 1, [j["goal"] for j in fake.jobs]
 
 
+def test_one_commitment_cannot_spawn_differently_worded_live_jobs(monkeypatch):
+    """The production reservation incident: a clock paraphrase is not a new
+    workflow merely because it shares almost no words with its earlier one."""
+    a, fake = _anticipy(monkeypatch)
+    promise = 90
+    first = a._queue_job(
+        "book dinner at The Keg tomorrow at 7 PM",
+        {"source": "clock initiative", "commitment_id": promise}, hold=True)
+    second = a._queue_job(
+        "confirm the team's arrangements",
+        {"source": "clock initiative", "commitment_id": promise}, hold=True)
+
+    assert first == second
+    assert len(fake.jobs) == 1, [j["goal"] for j in fake.jobs]
+    assert fake.jobs[0]["goal"] == "book dinner at The Keg tomorrow at 7 PM", \
+        "a model's later clock paraphrase must not bleach the real workflow"
+
+
 def test_a_plan_filled_in_over_several_turns_is_one_card(monkeypatch):
     a, fake = _anticipy(monkeypatch)
     vague = "book dinner reservation tomorrow"

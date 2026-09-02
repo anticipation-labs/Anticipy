@@ -21,7 +21,7 @@ import {
 // imported module alone can leave Chrome running a cached worker graph for an
 // unpacked extension; changing this entry file forces a fresh registration,
 // and the same marker is written into every job trace as runtime proof.
-const ENGINE_BUILD = "0.11.1";
+const ENGINE_BUILD = "0.11.2";
 
 const BACKEND_LLM = "backend-proxy";
 // Job traffic authenticates as THIS ONE AGENT and nothing more. An earlier
@@ -203,6 +203,36 @@ export async function ensureRegistered() {
     return await registrationInFlight;
   } finally {
     registrationInFlight = null;
+  }
+}
+
+// A credential the server has positively rejected cannot refresh itself: the
+// refresh request carries the same rejected pair.  After repeated, explicit
+// `agent credential is not recognized` replies, retire the local identity and
+// mint a fresh unpaired one.  Clearing the owner link is essential — carrying
+// an old ownerRef beside a new unpaired credential would make the popup claim
+// it is linked while every scoped read is forbidden.
+//
+// This is intentionally exported for the offline recovery harness.  It is
+// called only after three matching server verdicts, never for a generic 403,
+// a timeout, or an infrastructure failure.
+export async function recoverRejectedAgentCredential() {
+  await chrome.storage.local.remove([
+    "recordId", "pairCode", "agentId", "agentToken",
+    "agentCredentialInstalled", "owner", "ownerRef", "paired",
+    "openrouterKey", "agentModel", "visionModel", "serviceToken",
+    "ownerProfile", "keyFetchedAt",
+  ]);
+  return ensureRegistered();
+}
+
+async function explicitlyUnrecognizedCredential(response) {
+  if (!response || response.status !== 403) return false;
+  try {
+    const body = await response.clone().json();
+    return String(body?.error || "") === "agent credential is not recognized";
+  } catch (_) {
+    return false;
   }
 }
 
@@ -458,6 +488,7 @@ async function explainNoPlan(job) {
 // A refused read is not "no work". One is a blip; several in a row is a queue
 // nobody is reading, with a heartbeat still telling the phone all is well.
 let pollFailures = 0;
+let credentialRefusals = 0;
 
 // Exported for the offline test harness: every refusal below has to be
 // provable, and poll() is not something a test can steer.
@@ -507,6 +538,21 @@ export async function claimJob() {
     await ensureLLMKey(true);
     r = await poll();
     if (!r.ok) {
+      if (await explicitlyUnrecognizedCredential(r)) {
+        credentialRefusals += 1;
+      } else {
+        credentialRefusals = 0;
+      }
+      if (credentialRefusals >= 3) {
+        console.warn("Anticipy: the server rejected this retired browser identity three times — replacing it with a fresh pairing code");
+        credentialRefusals = 0;
+        const replacement = await recoverRejectedAgentCredential();
+        await noteBlocked("needs_user", "This browser needs to be linked again",
+          replacement
+            ? "Its old private browser credential was retired by Anticipy. Open Setup, then enter the new pairing code in the iPhone app."
+            : "Its old private browser credential was retired and a replacement could not be created. Open the extension Setup page and press New code.");
+        return null;
+      }
       console.warn("Anticipy: still refused after refresh -", r.status,
                    "- reload this extension from the setup page if it persists");
       // This one never heals on its own: the credential this browser holds is
@@ -517,6 +563,7 @@ export async function claimJob() {
       return null;
     }
   }
+  credentialRefusals = 0;
   if (!r.ok) {
     pollFailures += 1;
     if (pollFailures >= 3) {

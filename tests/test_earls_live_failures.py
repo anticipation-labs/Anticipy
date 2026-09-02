@@ -139,7 +139,7 @@ console.log(JSON.stringify(facts));
 # ------------------------------------------------------------- failure 4
 
 def test_last_resort_research_is_sanitized():
-    assert "encodeURIComponent(sanitizedResearchTerms(goal))" in LOOP
+    assert "searchTarget(sanitizedResearchTerms(goal))" in LOOP
     assert "encodeURIComponent(goal)" not in LOOP
 
 

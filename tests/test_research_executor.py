@@ -85,6 +85,24 @@ def test_search_failure_is_a_failed_job_not_a_crash():
     assert out["result"]
 
 
+def test_search_quota_failure_names_the_provider_status_without_leaking_request():
+    class QuotaError(RuntimeError):
+        response = types.SimpleNamespace(status_code=402)
+
+    class QuotaBrave:
+        def search(self, query, count=5):
+            raise QuotaError(f"quota for private query {query!r}; key=SECRET")
+
+    out = research.run_research(
+        "research: private reservation detail", {}, brave=QuotaBrave())
+    assert out == {
+        "ok": False,
+        "result": "Search provider unavailable (HTTP 402).",
+    }
+    assert "private reservation detail" not in out["result"]
+    assert "SECRET" not in out["result"]
+
+
 def test_no_results_is_a_failed_job():
     out = research.run_research("research: anything", {},
                                 brave=FakeBrave(results=[]))

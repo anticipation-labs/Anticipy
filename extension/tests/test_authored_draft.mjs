@@ -160,6 +160,16 @@ for (const [said, composed] of INVERSIONS) {
     (await isAuthored("Zone B", "file the permit", "file the permit", {
       offered: "[2] <combobox> Parking zone (Zone A, Zone B, Zone C)", judge: opt.judge })) === false);
   check("...and it never reaches the model", opt.calls.length === 0);
+  // The production reservation failure: the browser was filling a search
+  // control, but the authorship model saw only the query text and parked the
+  // run as though those words were about to be sent to a person.
+  const search = saying("COMPOSED");
+  check("a native search field is navigation, never an authored message",
+    (await isAuthored("The Keg reservations", "book dinner", "book dinner", {
+      controlKind: "search", searchLike: true, judge: search.judge,
+    })) === false);
+  check("...and the authorship model is not asked to reinterpret the control",
+    search.calls.length === 0);
   // But the page's PROSE is not an excuse: a ready-written body copied off a
   // page and sent as him is still something he never saw.
   const body = saying("COMPOSED");
@@ -212,6 +222,9 @@ for (const [said, composed] of INVERSIONS) {
     /authoredVerdicts\.has\(key\)/.test(src));
   check("both paths hand the stop what the SITE says about the control",
     (src.match(/siteSaysAbout\(state\.elements, state\.fields, decision\.index\)/g) || []).length === 2);
+  check("the mapper records native search structure for the safety gate",
+    /searchLike:\s*isSearchControl\(el\)/.test(
+      readFileSync(new URL("../page_map.js", import.meta.url), "utf8")));
 }
 
 if (failures) { console.error(`test_authored_draft: ${failures} failed`); process.exit(1); }

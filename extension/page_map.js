@@ -49,6 +49,22 @@
     return text.length > 80 ? text.slice(0, 80) + "..." : text;
   }
 
+  // Is this field mechanically a search/navigation control rather than a
+  // place where words are sent to another person?  The browser and the page
+  // already declare that through input type, ARIA role, and form structure.
+  // Recording the declaration here keeps the authorship safety gate from
+  // asking a language model to rediscover it from a label — the exact failure
+  // that parked a reservation after treating "The Keg reservations" as a
+  // message written in the owner's name.
+  function isSearchControl(el) {
+    const type = String(el?.getAttribute?.("type") || "").toLowerCase();
+    const role = String(el?.getAttribute?.("role") || "").toLowerCase();
+    const formRole = String(el?.form?.getAttribute?.("role") || "").toLowerCase();
+    return type === "search" || role === "searchbox" || formRole === "search"
+      || !!el?.closest?.('[role="search"],[role="searchbox"]')
+      || !!el?.form?.querySelector?.('input[type="search"],[role="searchbox"]');
+  }
+
   function visible(el) {
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return false;
@@ -300,6 +316,7 @@
           name: String(el.name || el.id || "").slice(0, 100),
           label: label(el).slice(0, 160),
           type,
+          searchLike: isSearchControl(el),
           required: !!el.required,
           readOnly: !!el.readOnly,
           value: typeof value === "boolean" ? value : String(value || "").slice(0, 1000),

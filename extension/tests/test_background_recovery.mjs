@@ -39,7 +39,8 @@ globalThis.chrome.storage.session = {
 const endBrowserSession = () => { for (const k of Object.keys(sessionData)) delete sessionData[k]; };
 
 globalThis.fetch = async () => ({ ok: false, status: 0, json: async () => ({}), text: async () => "" });
-const { ensureRegistered, resumableTabId, reconcileCurrentJob, withJobWrite } =
+const { ensureRegistered, recoverRejectedAgentCredential, resumableTabId,
+  reconcileCurrentJob, withJobWrite } =
   await import("../background.js");
 await new Promise((r) => setTimeout(r, 10));
 
@@ -75,6 +76,37 @@ await new Promise((r) => setTimeout(r, 10));
   assert.equal(harness.storageData.pairCode, "654321",
     "without a pair code the only recovery button stays hidden and the owner is stuck");
   console.log("PASS 1: an already-registered id recovers with a fresh identity and a real pair code");
+}
+
+// ---- 1b. A server-retired credential becomes an honest unpaired install ---
+{
+  Object.assign(harness.storageData, {
+    agentId: "retired-agent-id", agentToken: "x".repeat(64),
+    recordId: "retired-record", agentCredentialInstalled: true,
+    owner: "legacy-owner", ownerRef: "owner-ref", paired: true,
+    openrouterKey: "backend-proxy", ownerProfile: { first_name: "Omar" },
+  });
+  globalThis.fetch = async (url, opts = {}) => {
+    if (!String(url).endsWith("/agent/register")) {
+      return { ok: false, status: 0, json: async () => ({}), text: async () => "" };
+    }
+    const id = JSON.parse(opts.body).agent_id;
+    assert.notEqual(id, "retired-agent-id");
+    return {
+      ok: true, status: 200, text: async () => "",
+      json: async () => ({ id: "replacement-record", agent_token: "z".repeat(64), pair_code: "246810" }),
+    };
+  };
+
+  const replacement = await recoverRejectedAgentCredential();
+  assert.ok(replacement);
+  assert.equal(harness.storageData.recordId, "replacement-record");
+  assert.equal(harness.storageData.pairCode, "246810");
+  assert.equal(harness.storageData.ownerRef, undefined,
+    "a fresh unpaired credential must not inherit the retired identity's owner scope");
+  assert.equal(harness.storageData.paired, undefined);
+  assert.equal(harness.storageData.ownerProfile, undefined);
+  console.log("PASS 1b: a retired credential recovers as an honestly unpaired install");
 }
 
 // ---- 2. A parked tab id is only ours inside the session that parked it ----

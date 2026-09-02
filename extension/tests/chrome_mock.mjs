@@ -23,11 +23,13 @@ export function installChrome() {
   const installedListeners = [];
   const alarmListeners = [];
   const alarms = new Map();
+  const searches = [];
   let windowFocused = true;
   let currentWindowExists = true;
 
   const harness = {
     tabs, storageData, notifications, cleared, badge, focusGrants, activationLog, alarms,
+    searches,
     onCdp: null,          // (tabId, method, params) => result | undefined
     mapPage: null,        // (tabId) => {url, title, elements, text}
     onInject: null,       // (src, target) => result | undefined  (executeScript)
@@ -191,6 +193,13 @@ export function installChrome() {
       },
       clear: async (name) => alarms.delete(name),
       onAlarm: { addListener: (fn) => alarmListeners.push(fn) },
+    },
+    search: {
+      query: async ({ text, tabId }) => {
+        const t = requireTab(Number(tabId));
+        searches.push({ text: String(text || ""), tabId: Number(tabId) });
+        t.url = `https://search.test/?q=${encodeURIComponent(String(text || ""))}`;
+      },
     },
   };
   return harness;

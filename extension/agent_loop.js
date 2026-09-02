@@ -75,6 +75,7 @@ Reply with EXACTLY one JSON object, nothing else:
 {"action":"type","index":N,"text":"...","enter":false} - click element N and type text char-by-char. Use enter:false for ordinary form fields and autocomplete. Use enter:true ONLY when Enter is deliberately meant to run a search or submit the field.
 {"action":"select","index":N,"option":"..."} - set a native dropdown (<combobox> with an options list) to the option whose text or value matches, or set a date/time field (option "YYYY-MM-DD" for dates, "HH:MM" for times). Clicking can NEVER open a native dropdown — its menu lives outside the page. Always use select for them.
 {"action":"navigate","url":"https://..."} - go to a URL
+{"action":"search","query":"..."} - search using the owner's configured browser search provider
 {"action":"scroll","dy":600} - scroll down (negative = up)
 {"action":"wait"} - page still loading
 {"action":"done","result":"..."} - task complete, summarize outcome. If the goal requests multiple records/options, make result a JSON array with exactly one object per record and include every requested field in each object.
@@ -103,7 +104,7 @@ DATES: in an ordinary text field, copy the owner's relative wording exactly (for
 FORM VALUES: answer each field's LABEL with the shortest COMPLETE exact value from WHAT THEY AGREED TO. Copy free-text descriptions verbatim, including small words; never paraphrase, reorder, summarize, or fuse a portal/service name with the actual field value. Never shorten a person's, clinic's, provider's, venue's, workspace's, or other named value: "West Coast Dental" cannot become "Coast Dental". A field gets the value itself, not the surrounding sentence. An ID/reference/code field gets only its code, never the service or location after it. When separate name/contact and phone fields exist, the name field gets only the name and the phone field gets the task's phone—not a saved profile phone. When the owner contrasts X with not-Y, a Resolution/Choice field gets X. Re-read CURRENT FORM VALUES before the final button and correct every drift first.
 REJECTED COMPLETION: when HISTORY says a done claim was rejected, that payload is not complete. Do not repeat it. Take a different reversible action that directly gathers the named missing evidence—open the missing URL or detail, expand the result, choose the outbound option to reveal the return, scroll, or research another official source. Output done again only after the page/evidence changed and the rejected field is actually present.
 SOURCE URLS: when the goal asks for direct URLs, every returned record must contain its own full https:// URL copied from a live page you actually opened. The browser's address is evidence, but it is not automatically copied into your answer; include it explicitly in each record.
-Never repeat an action that already failed twice (check HISTORY). If a site's own search box ignores your typing, navigate to https://www.bing.com and research the answer from search results instead.`;
+Never repeat an action that already failed twice (check HISTORY). If a site's own search box ignores your typing, use the search action and open a relevant result instead.`;
 
 /// A picture of the page, for the moments a text list cannot express what a
 /// person sees — a calendar grid, a seat map, a slider. This is the capability
@@ -2278,7 +2279,58 @@ async function parkPointerAfterNavigation(tabId) {
   } catch (_) { /* navigation still works when pointer parking is unavailable */ }
 }
 
+// SEARCH IS A BROWSER CAPABILITY, NOT A BING URL.
+//
+// A provider URL embedded in the agent became a product policy by accident:
+// every uncertain task opened Bing, every fallback returned to Bing, and two
+// abandoned Bing tabs looked like two different agents fighting.  Chrome
+// already exposes the owner's configured search provider without revealing
+// which provider it is.  The internal target lets the ordinary fallback queue
+// carry a search without turning it into a public URL or teaching the model a
+// vendor.
+const SEARCH_TARGET_PREFIX = "anticipy-search:";
+export function searchTarget(query) {
+  const safe = sanitizedResearchTerms(query);
+  return safe ? `${SEARCH_TARGET_PREFIX}${encodeURIComponent(safe)}` : "";
+}
+
+export function isSearchTarget(value) {
+  return String(value || "").startsWith(SEARCH_TARGET_PREFIX);
+}
+
+function searchQueryFromTarget(value) {
+  if (!isSearchTarget(value)) return "";
+  try {
+    return decodeURIComponent(String(value).slice(SEARCH_TARGET_PREFIX.length));
+  } catch (_) {
+    return "";
+  }
+}
+
+async function searchWorkingTab(tabId, query) {
+  const safe = sanitizedResearchTerms(query);
+  if (!safe) throw new Error("search query is empty after privacy filtering");
+  if (chrome.search && typeof chrome.search.query === "function") {
+    await chrome.search.query({
+      text: safe, disposition: "CURRENT_TAB", tabId: Number(tabId),
+    });
+    await parkPointerAfterNavigation(tabId);
+    return chrome.tabs.get(Number(tabId));
+  }
+  // Compatibility for Chromium builds without chrome.search.  This is a
+  // fallback, not the configured route, and deliberately not the provider
+  // that was previously welded into every decision path.
+  const updated = await chrome.tabs.update(Number(tabId), {
+    url: `https://duckduckgo.com/?q=${encodeURIComponent(safe)}`,
+  });
+  await parkPointerAfterNavigation(tabId);
+  return updated;
+}
+
 async function navigateWorkingTab(tabId, url) {
+  if (isSearchTarget(url)) {
+    return searchWorkingTab(tabId, searchQueryFromTarget(url));
+  }
   const updated = await chrome.tabs.update(tabId, { url });
   await parkPointerAfterNavigation(tabId);
   return updated;
@@ -2652,8 +2704,13 @@ then come back with real steps.
 Set "unfamiliar" false for anything you can already name the site and the flow
 for. Researching a restaurant booking is a waste of the owner's money.
 
+When you can name the destination, set start_url to its http(s) URL and
+search_query to null. When discovery is genuinely needed, set start_url to
+null and give only the short public search_query.
+
 Reply ONLY with compact JSON:
 {"start_url":"https://…",
+ "search_query":"<short provider-neutral query, or null when start_url is known>",
  "why":"<8 words: why that site>",
  "must_find":["<fact needed before acting, and where it lives>"],
  "steps":["<short ordered steps, 2-6 of them>"],
@@ -2700,16 +2757,18 @@ export async function planRun(apiKey, model, goal, ownerProfile, scope, memory =
     const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
     if (s < 0 || e <= s) return null;
     const plan = JSON.parse(raw.slice(s, e + 1));
-    // A start_url we cannot open is worse than no plan: validate it here so a
-    // malformed one falls back instead of opening a broken tab.
+    // A direct URL wins.  When the planner genuinely cannot name one, keep the
+    // query provider-neutral and let Chrome use the owner's configured search
+    // engine; the planner must not hard-wire a vendor into every errand.
     let url = null;
     try {
       const u = new URL(String(plan.start_url || ""));
       if (u.protocol === "https:" || u.protocol === "http:") url = u.toString();
     } catch (e) { /* unusable */ }
-    if (!url) return null;
+    const query = sanitizedResearchTerms(plan.search_query || "");
+    if (!url && !query) return null;
     return {
-      startUrl: url,
+      startUrl: url || searchTarget(query),
       why: String(plan.why || "").slice(0, 120),
       mustFind: Array.isArray(plan.must_find) ? plan.must_find.slice(0, 6).map(String) : [],
       steps: Array.isArray(plan.steps) ? plan.steps.slice(0, 8).map(String) : [],
@@ -2890,7 +2949,10 @@ export function protectedInput(meta = {}) {
 export async function isAuthored(text, goal, scope, opts = {}) {
   const value = String(text || "").trim();
   if (!value) return false;
-  const { profile = null, facts = "", offered = "", controlKind = "", judge = null } = opts || {};
+  const {
+    profile = null, facts = "", offered = "", controlKind = "",
+    searchLike = false, judge = null,
+  } = opts || {};
   // A CHECKBOX HAS NO WORDS, AND A <select> HAS ONLY THE SITE'S.
   //
   // The control's own declared kind, read off the page the site built — the
@@ -2902,6 +2964,14 @@ export async function isAuthored(text, goal, scope, opts = {}) {
   // Measured: test_form_retry_after_rejection went 8 red on exactly that.
   if (["checkbox", "radio", "select-one", "select-multiple"]
       .includes(String(controlKind || "").toLowerCase())) return false;
+  // Search is navigation, not speech.  This verdict comes from the live
+  // control's native/ARIA/form structure recorded by page_map.js — never from
+  // the query's words, a restaurant name, a site selector, or an exemplar.
+  // An <input type=search> and a field inside role=search cannot send a note in
+  // the owner's name, so they never belong behind the authored-message stop.
+  if (searchLike || String(controlKind || "").toLowerCase() === "search") {
+    return false;
+  }
   // His own words, his stored profile, his stated facts. NOT `memory`, for the
   // same reason unsupportedScopeFields excludes it: a recollection of something
   // said near a microphone is not something he gave.
@@ -3304,6 +3374,8 @@ export function humanStep(decision, state) {
   switch (String(d.action || "").toLowerCase()) {
     case "navigate": case "goto": case "open":
       return site ? `Opening ${site}` : "Opening a page";
+    case "search":
+      return "Searching the web";
     case "type": case "fill": case "set":
       // The LABEL of the field, never the value typed into it.
       return label ? `Filling in ${label.toLowerCase()}${at}` : `Filling in the form${at}`;
@@ -3656,6 +3728,11 @@ export const RUN_WALL_CEILING_MS = worstCaseRunMs(DEFAULT_MAX_STEPS, RUN_BUDGET_
 // Runs one autonomous browser goal inside a background tab in the Anticipy
 // tab group. Returns {status, result}.
 export async function createBackgroundTab(url) {
+  if (isSearchTarget(url)) {
+    const tab = await createBackgroundTab("about:blank");
+    await searchWorkingTab(tab.id, searchQueryFromTarget(url));
+    return chrome.tabs.get(tab.id);
+  }
   try {
     return await chrome.tabs.create({ url, active: false });
   } catch (error) {
@@ -3700,14 +3777,15 @@ function learnDeps(apiKey, model) {
   };
   return {
     // The search engine is a means, not a destination, and NOT ONE OF THEM IS
-    // RELIABLE. Watched live 2026-08-19: Bing answered "how to dispute a charge
-    // on a BC Hydro bill" with a correct AI summary and zero organic links —
-    // 102 anchors, every one relative or a fragment. So a single engine is a
-    // single point of failure for the whole feature. Two engines, then the
+    // RELIABLE. Watched live 2026-08-19: one provider answered a utility query
+    // with a correct AI summary and zero organic links — 102 anchors, every
+    // one relative or a fragment. So a single engine is a single point of
+    // failure for the whole feature. The owner's configured provider first,
+    // then an independent HTML fallback, then the
     // results page's own text, and only then give up.
     search: async (question) => {
       const engines = [
-        `https://www.bing.com/search?q=${encodeURIComponent(question)}`,
+        searchTarget(question),
         `https://duckduckgo.com/html/?q=${encodeURIComponent(question)}`,
       ];
       let lastText = "";
@@ -4104,9 +4182,12 @@ async function recordCleanRun(shape, goal, trace) {
 }
 
 export async function runAgentGoal(goal, opts) {
-  // Default to a scriptable search page: about:blank can't be script-injected,
-  // so mapPage would fail every step and the run would die without acting.
-  const { apiKey, model = "anthropic/claude-sonnet-4.6", maxSteps = DEFAULT_MAX_STEPS, budgetMs = RUN_BUDGET_MS, startUrl = "https://www.bing.com/", stillLive = null, visionModel = "anthropic/claude-sonnet-4.6", authorized = false, readOnly = false, scope = "", ownerProfile = null, planning = true, facts = "", memory = "", onTrace = null, onBeforeExternalEffect = null, resumeTabId = null, initialEvidenceJournal = [], offerRef = "" } = opts;
+  // No caller URL means a provider-neutral browser search.  createBackgroundTab
+  // turns this internal target into Chrome's configured provider before the
+  // first page map, so about:blank is never handed to the agent.
+  const { apiKey, model = "anthropic/claude-sonnet-4.6", maxSteps = DEFAULT_MAX_STEPS, budgetMs = RUN_BUDGET_MS, startUrl: suppliedStartUrl = "", stillLive = null, visionModel = "anthropic/claude-sonnet-4.6", authorized = false, readOnly = false, scope = "", ownerProfile = null, planning = true, facts = "", memory = "", onTrace = null, onBeforeExternalEffect = null, resumeTabId = null, initialEvidenceJournal = [], offerRef = "" } = opts;
+  const startUrl = suppliedStartUrl
+    || searchTarget(sanitizedResearchTerms(goal));
   // `let`, not `const`: a code fetched from the owner's own inbox with his
   // permission is appended here mid-run, which is what lets the model see it
   // and what lets unquotedCode allow the typing it had just refused.
@@ -4521,7 +4602,7 @@ export async function runAgentGoal(goal, opts) {
   // spoken sentences, names, phones and emails (live 2026-08-15: the whole
   // overheard conversation went into a Bing URL). Last-resort research must
   // never ship what belongs in forms.
-  const genericResearchUrl = `https://www.bing.com/search?q=${encodeURIComponent(sanitizedResearchTerms(goal))}`;
+  const genericResearchUrl = searchTarget(sanitizedResearchTerms(goal));
   const fallbackQueue = [...new Set((plan?.fallbacks || [])
     .filter((url) => typeof url === "string" && /^https?:\/\//i.test(url))
     .concat(genericResearchUrl))]
@@ -4545,6 +4626,7 @@ export async function runAgentGoal(goal, opts) {
   const placeAllowed = new Set();
   function navigationRefusal(url) {
     const target = String(url || "");
+    if (isSearchTarget(target)) return "";
     if (!/^https?:\/\//i.test(target)) return "it is not an http(s) address";
     const banked = blockedDomain(target);
     if (banked) return `${banked} is a protected financial site`;
@@ -4568,7 +4650,7 @@ export async function runAgentGoal(goal, opts) {
   // caps how often the run STOPS, never how often it asks.
   const authoredVerdicts = new Map();
   async function composedByTheAgent(text, control = {}) {
-    const key = `${control.controlKind || ""}\u0000${control.offered || ""}\u0000${String(text || "")}`;
+    const key = `${control.controlKind || ""}\u0000${control.searchLike ? "search" : ""}\u0000${control.offered || ""}\u0000${String(text || "")}`;
     if (!authoredVerdicts.has(key)) {
       authoredVerdicts.set(key, await isAuthored(String(text || ""), goal, scope, {
         profile: ownerProfile, facts: factsText, ...control,
@@ -4584,6 +4666,7 @@ export async function runAgentGoal(goal, opts) {
       .find((f) => Number(f?.index) === Number(index));
     return {
       controlKind: String(field?.type || ""),
+      searchLike: !!field?.searchLike,
       offered: String(mapped || "").split("\n")
         .find((line) => line.startsWith(`[${Number(index)}]`)) || "",
     };
@@ -4718,9 +4801,7 @@ export async function runAgentGoal(goal, opts) {
       ? `"${namedEntity}" ${focus || safeGoal}`
       : `${focus} ${safeGoal}`).trim();
     if (!query) return false;
-    const next = directMissing
-      ? cited
-      : `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
+    const next = directMissing ? cited : searchTarget(query);
     // When evidence aged out of the bounded notebook, revisiting that exact
     // cited page is useful even though its URL appeared earlier in the run.
     if (!directMissing && visitedUrls.has(next)) return false;
@@ -5105,8 +5186,8 @@ export async function runAgentGoal(goal, opts) {
             + `It is UNUSABLE for the rest of this run - do not go back to it. `
             + `Answer from a different source.`);
           // Back to a search for the goal, which is where a person would go.
-          await navigateWorkingTab(tab.id,
-            `https://www.bing.com/search?q=${encodeURIComponent(sanitizedResearchTerms(goal))}`);
+          await navigateWorkingTab(
+            tab.id, searchTarget(sanitizedResearchTerms(goal)));
           stuckStreak = 0;
           continue;
         }
@@ -5303,7 +5384,7 @@ export async function runAgentGoal(goal, opts) {
       if (decision.action !== "done" && !["wait", "scroll"].includes(decision.action)) {
         const stateAction = `${stallPrint}|${JSON.stringify({
           action: decision.action, index: decision.index, text: decision.text,
-          option: decision.option, url: decision.url,
+          option: decision.option, url: decision.url, query: decision.query,
         })}`;
         const repeated = (stateActionCounts.get(stateAction) || 0) + 1;
         stateActionCounts.set(stateAction, repeated);
@@ -5480,6 +5561,16 @@ export async function runAgentGoal(goal, opts) {
             && !(await meantForTheOwner(apiKey, model, reason, goal))
             && await advanceFallback(`the page reported: ${reason.slice(0, 120)}`)) continue;
         return (handBack = true) && { status: "needs_user", result: reason, tabId: tab.id };
+      }
+      if (decision.action === "search") {
+        const target = searchTarget(decision.query || "");
+        if (!target) {
+          history.push(`step ${step}: BLOCKED EMPTY/PRIVATE SEARCH — supply only the short public terms needed to find the destination`);
+          continue;
+        }
+        visitedUrls.add(target);
+        await navigateWorkingTab(tab.id, target);
+        continue;
       }
       if (decision.action === "navigate") {
         if (repeatedResearchHref(decision.url, visitedUrls,

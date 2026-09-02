@@ -15,7 +15,7 @@ var failures = 0
 // is its second copy, so tests/test_extension_version_pin.py holds all three
 // numbers -- extension/manifest.json, AnticipyApp.swift, this file -- to the
 // same value and goes red the moment one of them lags.
-let expected = "0.11.1"
+let expected = "0.11.2"
 func staleExtension(_ browser: String?) -> String? {
     guard let browser, let range = browser.range(of: "ext/") else { return nil }
     let running = String(browser[range.upperBound...]).prefix(while: { $0.isNumber || $0 == "." })
