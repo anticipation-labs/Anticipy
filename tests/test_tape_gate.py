@@ -588,14 +588,14 @@ def test_leg4_row_regex_cannot_wander_into_another_table(tmp_path):
 # --------------------------------------------------------------------------
 def test_leg5_passes_when_the_ledger_names_the_entry(tmp_path):
     root = _tree(tmp_path)
-    detail = tg.leg_5_ledger_agrees(root, [_entry()])
+    detail = tg.leg_5_ledger_agrees(root, [_entry()], closed=[])
     assert "ledger names every one" in detail
 
 
 def test_leg5_goes_red_when_the_ledger_never_heard_of_it(tmp_path):
     root = _tree(tmp_path, ledger=LEDGER.replace("`[tape:foo]`", "`[tape:bar]`"))
     with pytest.raises(tg.LegFailed) as e:
-        tg.leg_5_ledger_agrees(root, [_entry()])
+        tg.leg_5_ledger_agrees(root, [_entry()], closed=[])
     assert "never mentions" in str(e.value)
 
 
@@ -608,14 +608,14 @@ def test_leg5_goes_red_when_the_ledger_carries_a_bullet_with_no_entry(tmp_path):
                                        "- `[tape:ghost]` something nobody "
                                        "registered.\n\n## The map"))
     with pytest.raises(tg.LegFailed) as e:
-        tg.leg_5_ledger_agrees(root, [_entry()])
+        tg.leg_5_ledger_agrees(root, [_entry()], closed=[])
     assert "[tape:ghost]" in str(e.value)
 
 
 def test_leg5_goes_red_when_the_ledger_section_is_deleted(tmp_path):
     root = _tree(tmp_path, ledger="# THE HARNESS LAWS\n\n## The map\n")
     with pytest.raises(tg.LegFailed) as e:
-        tg.leg_5_ledger_agrees(root, [_entry()])
+        tg.leg_5_ledger_agrees(root, [_entry()], closed=[])
     assert "no \"Known standing tape\" section" in str(e.value)
 
 
@@ -623,7 +623,7 @@ def test_leg5_goes_red_when_the_ledger_names_no_leg(tmp_path):
     root = _tree(tmp_path,
                  ledger=LEDGER.replace("Tracked by overnight/tape_gate.py.", ""))
     with pytest.raises(tg.LegFailed) as e:
-        tg.leg_5_ledger_agrees(root, [_entry()])
+        tg.leg_5_ledger_agrees(root, [_entry()], closed=[])
     assert "does not name" in str(e.value)
 
 

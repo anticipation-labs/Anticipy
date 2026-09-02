@@ -677,25 +677,6 @@ KNOWN_TAPE = [
         ledger_needle="[tape:shard_too_thin]",
     ),
     Tape(
-        tid="_pending_class prose fallback",
-        rel=CORE,
-        # The tape is the FALLBACK BRANCH, not the function: _pending_class()
-        # survives the fix, the re-derivation from prose does not. `find` is
-        # therefore the branch, scoped to the def that holds it.
-        find="return is_consequential(job.get(",
-        home="_pending_class",
-        what="rows minted before the `consequence` column existed get their "
-             "consequence re-derived from goal PROSE, which is the exact "
-             "question the effect channel exists to stop asking",
-        real_fix="expires when no pending row can predate the column. That is "
-                 "a date, not a rewrite — but it needs a leg, and the leg it "
-                 "named (tejas_gate leg 4) tests neither this nor "
-                 "_READ_ONLY_RE's removal.",
-        marker_home="_pending_class",
-        audit_item=21,
-        ledger_needle="[tape:pending_class]",
-    ),
-    Tape(
         tid="_THIRD_PERSON_RE degraded drop",
         rel=ASKING,
         find="_THIRD_PERSON_RE = re.compile(",
@@ -728,24 +709,6 @@ KNOWN_TAPE = [
     # Python `def`, not Swift `static func`; the whole-file scope is right
     # here anyway — this text appears exactly once in the tree, and the fix is
     # its deletion, not its relocation.
-    Tape(
-        tid="answerThatEndsTheErrand",
-        rel=IOS_APP,
-        find="static func answerThatEndsTheErrand(",
-        what="three phrase lists ON THE PHONE decide that the owner's typed "
-             "answer MEANS \"call this errand off\" — the job is written "
-             "cancelled, the owner's own sentence is filed as the evidence "
-             "they cancelled it, and the brain never sees the line",
-        real_fix="delete the function, drop `endsTheErrand` from "
-                 "AnswerRoutePolicy.route and `.endTheErrand` from its Route, "
-                 "so every typed answer becomes one `app_reply` event and "
-                 "on_reply decides. BLOCKED ON brain/: _classify's offline "
-                 "fallback reads _pending() (awaiting_confirm) only, so with "
-                 "the model down a \"forget it\" typed at a needs_user card "
-                 "returns intent=chat and the errand keeps running. Fix that "
-                 "fallback to see _open_work(), then delete this.",
-        ledger_needle="[tape:answer_ends_errand]",
-    ),
     # Also not one of the audited five, for the same reason and with the same
     # `audit_item=None`: the 2026-08-24 census is a dated measurement of the
     # five UNDECLARED pieces and it cannot grow. Leg 3 will therefore never
@@ -817,7 +780,57 @@ KNOWN_TAPE = [
 #       proves="leg_2_shard_guard",
 #       note="one line: what does the job now",
 #   ),
-CLOSED_TAPE: list[ClosedTape] = []
+CLOSED_TAPE: list[ClosedTape] = [
+    ClosedTape(
+        Tape(
+            tid="_pending_class prose fallback",
+            rel=CORE,
+            # The tape is the FALLBACK BRANCH, not the function: _pending_class()
+            # survives the fix, the re-derivation from prose does not. `find` is
+            # therefore the branch, scoped to the def that holds it.
+            find="return is_consequential(job.get(",
+            home="_pending_class",
+            what="rows minted before the `consequence` column existed get their "
+                 "consequence re-derived from goal PROSE, which is the exact "
+                 "question the effect channel exists to stop asking",
+            real_fix="expires when no pending row can predate the column. That is "
+                     "a date, not a rewrite — but it needs a leg, and the leg it "
+                     "named (tejas_gate leg 4) tests neither this nor "
+                     "_READ_ONLY_RE's removal.",
+            marker_home="_pending_class",
+            audit_item=21,
+            ledger_needle="[tape:pending_class]",
+        ),
+        closed_by="4eb753f4",
+        replaced_by="tests/test_pending_class.py",
+        proves="test_missing_pending_consequence_fails_closed_without_reading_the_goal",
+        note="Missing effect metadata now fails closed; goal wording has no authority.",
+    ),
+    ClosedTape(
+        Tape(
+            tid="answerThatEndsTheErrand",
+            rel=IOS_APP,
+            find="static func answerThatEndsTheErrand(",
+            what="three phrase lists ON THE PHONE decide that the owner's typed "
+                 "answer MEANS \"call this errand off\" — the job is written "
+                 "cancelled, the owner's own sentence is filed as the evidence "
+                 "they cancelled it, and the brain never sees the line",
+            real_fix="delete the function, drop `endsTheErrand` from "
+                     "AnswerRoutePolicy.route and `.endTheErrand` from its Route, "
+                     "so every typed answer becomes one `app_reply` event and "
+                     "on_reply decides. BLOCKED ON brain/: _classify's offline "
+                     "fallback reads _pending() (awaiting_confirm) only, so with "
+                     "the model down a \"forget it\" typed at a needs_user card "
+                     "returns intent=chat and the errand keeps running. Fix that "
+                     "fallback to see _open_work(), then delete this.",
+            ledger_needle="[tape:answer_ends_errand]",
+        ),
+        closed_by="4eb753f4",
+        replaced_by="tests/test_signed_out_privacy.py",
+        proves="test_the_phone_never_interprets_an_answer_as_cancellation",
+        note="The phone transports answers; Conversation.on_reply owns their meaning.",
+    ),
+]
 
 # A commit id, checked for SHAPE only. See the header: verifying it resolves
 # would be red in one worktree and green in the other.

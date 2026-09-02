@@ -145,31 +145,10 @@ diff.
   segment-granularity triage ships and shards stop being decision units.
   NOTE: tejas_gate.py leg 2 is a REGRESSION pin on this guard (red if it is
   removed early), not an expiry. The expiry is tape_gate.py leg 2.
-- `[tape:pending_class]` the prose fallback in `_pending_class()`
-  (brain/anticipy_core.py) — rows minted before the `consequence` column
-  existed get their consequence re-derived from goal prose. → Expires when no
-  pending row can predate the column.
 - `[tape:third_person_drop]` the DEGRADED-path third-person drop in
   asking.question_line (live composer absent → third-person items are dropped
   rather than texted to the owner about himself). → Expires when the composer
   owns person-flipping explicitly. The live path passes them through untouched.
-- `[tape:answer_ends_errand]` `AnticipySession.answerThatEndsTheErrand`
-  (app/ios/Anticipy/AnticipyApp.swift) — three phrase lists ON THE PHONE
-  (`whole`, `declines`, `handled`) decide that a typed answer MEANS "call this
-  errand off": the job is written `cancelled`, the owner's own sentence is
-  filed as the evidence they cancelled it, and the brain never sees the line.
-  Law-1 audit item #55, severity H. The only consumer is
-  `AnswerRoutePolicy.route`, where its only job is to short-circuit
-  `.toTheBrain`. → Deleted the day every typed answer becomes one `app_reply`
-  and `on_reply` decides. **BLOCKED ON brain/, not on app/ios/**: `_classify`'s
-  offline fallback (brain/conversation.py) reads `_pending()` —
-  `awaiting_confirm` only — so with the model unreachable a "forget it" typed
-  at a `needs_user` card returns intent=chat and "Nothing's queued up on my end
-  right now" while the errand keeps running. Deleting the phone rule before
-  that fallback can see `_open_work()` trades a Law-1 violation for a
-  cancellation that silently does not happen, which is worse. First entry in
-  this ledger that is not one of the audited five and not in brain/; see the
-  comment on its registry entry for why it carries no `audit_item`.
 - `[tape:anaphoric_link]` `_ANAPHORIC` and the band-3 prefilter in
   `decide_link` (brain/segmenter.py) — an opener word list
   (`so|anyway|okay|right|back to|where were we|and|but|it|that|they|he|she…`),
@@ -201,6 +180,19 @@ Not tape, but adjacent, and still not to be extended:
   sift in front of the model, never as the decision. The 2026-08-24 audit
   disputes this line: it found several of them returning a final Decision with
   no model call, which makes them the decision, not a sift.
+
+## Retired tape
+
+- `[tape:pending_class]` closed by `4eb753f4` — `_pending_class()` now trusts
+  the persisted consequence and fails closed when it is absent; goal prose can
+  no longer reclassify an already-minted job. The replacement proof is
+  `tests/test_pending_class.py`.
+- `[tape:answer_ends_errand]` closed by `4eb753f4` — the iPhone-side phrase
+  classifier was deleted. Every non-empty typed answer now becomes one
+  `app_reply`, and the brain's offline classifier sees `needs_user` work through
+  `_open_work()` so a genuine refusal still cancels without hiding the owner's
+  sentence. The replacement proofs are `tests/test_signed_out_privacy.py` and
+  `app/ios/Tests/AnswerRoutePolicyTests.swift`.
 
 ## The map
 
