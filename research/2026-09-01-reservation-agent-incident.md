@@ -110,6 +110,21 @@ to this incident path therefore has to break a red gate rather than quietly ship
 - Worker deploy `dbbb4652-7dd0-42e8-9a6e-c84eaf48b6d7`: SUCCESS. Its startup
   log reports brain fingerprint `816549dbf2b5`, equal to the final tree, and
   the live-brain behavioral gate passes.
+- Commitment-identity backend deploy `0829e150-da74-4ce7-84d2-b48a1e75f65b`:
+  SUCCESS. Health and authenticated jobs reads return 200 and live rows expose
+  `commitment_key`. A production probe measured first create 200, concurrent
+  duplicate 400, terminal release 200 with an empty key, and retry 200; both
+  probe rows were deleted. An earlier attempt
+  `35095ce3-fd2f-4a87-874a-b66a3e3d94a4` was correctly withheld from the
+  worker after its raw log revealed PocketBase rejected the first index shape.
+- Commitment-identity worker deploy `697ff321-6e03-4f1b-ac7c-ee48f7e10b8e`:
+  SUCCESS. The startup fingerprint `0e40c03f9fe7` exactly equals the release
+  tree's brain fingerprint, and `overnight/is_the_brain_live.py --hours 2`
+  passes against production.
+- Independent CI: GitHub Actions run `33589980000` passed the complete 2,434
+  Python tests and all 70 browser suites on a clean Ubuntu runner. Product code
+  is commit `84acbdcc`; commits `c94cb19d` and `24d36c54` only declare the two
+  test-runner dependencies uncovered while making that new gate self-contained.
 - Live release gates: `overnight/is_it_live.py`,
   `overnight/is_the_brain_live.py`, and all nine machine-checkable
   `overnight/stranger_gate.py` prerequisites pass.
