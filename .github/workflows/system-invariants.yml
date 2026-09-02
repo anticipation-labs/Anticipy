@@ -32,7 +32,7 @@ jobs:
         with:
           node-version: '24'
       - name: Install runtime test dependencies
-        run: python -m pip install pytest requests httpx tzdata boto3 playwright
+        run: python -m pip install pytest requests httpx tzdata boto3 playwright numpy
       - name: Prove brain and storage invariants
         run: pytest -q
       - name: Prove browser invariants
