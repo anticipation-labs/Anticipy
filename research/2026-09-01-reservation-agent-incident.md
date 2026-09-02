@@ -86,8 +86,26 @@ decides the meaning of the owner's request.
 - Extension package: built as 0.11.2 and copied to all three backend download names.
 - Loaded Chrome folder: source synchronized to the existing unpacked install at
   `/Users/omarebrahim/Documents/Anticipy Browser Agent`.
-- Live deploy and live gate: pending at the time this record was created. Law 3
-  requires the production download and worker behavior to be checked after deploy.
+- Git release: commit `3014699e` is pushed to `origin/jose_anticipy_system`.
+- Backend deploy `d5d6b635-2953-4782-a35d-232724d4a37b`: SUCCESS. Production
+  health is HTTP 200; the served 0.11.2 ZIP is 277,549 bytes and its SHA-256
+  equals the committed artifact.
+- Worker deploy `dbbb4652-7dd0-42e8-9a6e-c84eaf48b6d7`: SUCCESS. Its startup
+  log reports brain fingerprint `816549dbf2b5`, equal to the final tree, and
+  the live-brain behavioral gate passes.
+- Live release gates: `overnight/is_it_live.py`,
+  `overnight/is_the_brain_live.py`, and all nine machine-checkable
+  `overnight/stranger_gate.py` prerequisites pass.
+- Production cleanup recheck: zero active workflows remain for the incident
+  owner after the worker restart.
+- TestFlight: GitHub Actions run `33580491900` uploaded build 121, received
+  Apple's literal `UPLOAD SUCCEEDED` response, and waited until App Store
+  Connect reported the build `VALID`.
+- Local unpacked Chrome activation: the exact 0.11.2 source is synchronized to
+  the one enabled Anticipy folder, but the already-running agent heartbeat still
+  reports 0.11.1 until Chrome's protected Extensions page Reload button is
+  pressed. Both available UI automation channels refused that protected page,
+  so this one local click is recorded as pending rather than claimed.
 
 ## Known conditions outside this incident
 
