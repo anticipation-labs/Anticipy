@@ -18,9 +18,9 @@ left `pendingSince` alive; the replacement tail inherited the old window's
 start.
 
 `4eb753f4` clears that boundary after the banked delivery and adds the exact
-replacement-window shape to `TranscriptFlushPolicyTests`. Build 121 contains
-the repair. The old production rows remain historical evidence; the live
-turn-envelope scoreboard can only prove the repair after build 121 records a
+replacement-window shape to `TranscriptFlushPolicyTests`. Source build 121,
+uploaded to TestFlight as build 122, contains the repair. The old production rows remain historical evidence; the live
+turn-envelope scoreboard can only prove the repair after build 122 records a
 new replacement-window burst on a phone.
 
 ### A typed answer could be cancelled on the phone and hidden from the brain
@@ -103,6 +103,13 @@ zero with no compiler output.
   24 hours.
 - Production Railway backend and worker were both running successfully before
   this release.
+- Production worker deployment `bc49e0be-ab60-4471-97f5-f911449c4212` is
+  `SUCCESS` with a running instance and fingerprint `929134cc02da`, matching
+  this tree. A live invalid-Brave probe fell through to Tavily and returned a
+  cited result.
+- GitHub TestFlight run `33592824991` completed successfully. It archived
+  source build 121 as build 122, reported `UPLOAD SUCCEEDED`, and waited until
+  App Store Connect reported build 122 `VALID`.
 - After a fresh fetch, `origin/jose_anticipy_system` contained no unseen Jose
   commits. This branch is the repository's configured TestFlight release branch.
 
@@ -138,7 +145,7 @@ that manual activation step.
 ### Evidence that requires a real person/device
 
 - A cold-stranger onboarding run has not yet supplied the final human proof.
-- Historical build-113 timestamp rows cannot be rewritten into build-121 proof;
+- Historical build-113 timestamp rows cannot be rewritten into build-122 proof;
   a new spoken replacement-window burst is required after TestFlight install.
 - Phone audio behavior alongside real YouTube playback still requires a handset
   session; simulator and compiler gates cannot prove iOS route arbitration.
@@ -148,4 +155,6 @@ that manual activation step.
 - Product repair: `4eb753f4`
 - Tape retirement: `f6d697bf`
 - Warning-clean build 121: `bf02aaee`
+- Valid TestFlight build: `122` (GitHub run `33592824991`)
+- Railway worker deployment: `bc49e0be-ab60-4471-97f5-f911449c4212`
 - Release branch: `jose_anticipy_system`
