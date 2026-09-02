@@ -15,6 +15,7 @@ job queue, outside any model.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -1404,6 +1405,30 @@ class Anticipy:
         if self.owner_ref:
             return f'owner_ref="{self.owner_ref}"'
         return f'owner="{self.owner_id}"' if self.owner_id else ""
+
+    @staticmethod
+    def _commitment_key_for(owner_ref, commitment_id) -> str:
+        """Storage identity for one owner's durable promise.
+
+        The key accepts no goal, source text, task type, venue, person, or
+        model output. Its only inputs are tenant identity and the integer id of
+        the memory node representing the promise. Hashing keeps those internal
+        ids out of an ordinary jobs-table column; it is not fuzzy matching and
+        cannot change when a model changes its words.
+        """
+        owner = str(owner_ref or "").strip()
+        try:
+            wanted = int(commitment_id)
+        except (TypeError, ValueError):
+            return ""
+        if not owner or wanted <= 0:
+            return ""
+        payload = f"anticipy:commitment:v1:{owner}:{wanted}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _commitment_key(self, commitment_id) -> str:
+        return self._commitment_key_for(
+            self.owner_ref or self.owner_id, commitment_id)
 
     def _now_line(self) -> str:
         return now_line(getattr(self.llm, "owner_zone", None))
@@ -4160,6 +4185,15 @@ class Anticipy:
             body = {"goal": goal, "params": json.dumps(params),
                     "device_id": "anticipy", "owner": self.owner_id,
                     "lane": lane, **workflow_fields}
+            commitment_key = self._commitment_key(
+                params.get("commitment_id"))
+            if commitment_key:
+                # The read-before-create check makes the common path cheap and
+                # friendly. This field is the race barrier: PocketBase has a
+                # partial unique index over ACTIVE rows, so two workers that
+                # both saw an empty queue still cannot mint two workflows for
+                # the same promise.
+                body["commitment_key"] = commitment_key
             question = _missing_fact_question(
                 workflow.missing, fallback=params.get("missing") or "")
             if question:
@@ -4193,15 +4227,39 @@ class Anticipy:
                 status = getattr(response, "status_code", None)
                 print(f"queue write refused {status} for "
                       f"{goal!r}: {str(response.text)[:400]}")
-                # A 400 on create is, in production, the workflow_id unique
-                # index saying THIS PLAN ALREADY HAS A ROW — the re-mentions
-                # law says a plan already running absorbs its re-mention, so
-                # absorb: find the row wearing this plan's identity and amend
-                # it in place, returning ITS id, exactly as a fresh create
-                # would have. Falling back to None here would read as "already
-                # waiting on him" and silently drop the plan's new content.
+                # A 400 on create may be either durable identity barrier:
+                # workflow_id says this exact plan already has a row;
+                # commitment_key says another process already created the one
+                # active workflow for this promise. Resolve both by identity,
+                # never by comparing the two goal strings.
                 if status == 400:
                     try:
+                        commitment_key = body.get("commitment_key") or ""
+                        if commitment_key:
+                            active = ('(status="awaiting_confirm" || '
+                                      'status="queued" || status="running" || '
+                                      'status="needs_user")')
+                            found = pb.get(
+                                f"{self.backend_url}/api/collections/jobs/records",
+                                params={"filter":
+                                        f'commitment_key="{commitment_key}" && {active}',
+                                        "perPage": 2},
+                                timeout=10,
+                            )
+                            rows = (found.json() or {}).get("items") or []
+                            if len(rows) == 1:
+                                existing = rows[0]
+                                existing_id = str(existing.get("id") or "")
+                                source = str(params.get("source") or "")
+                                if (existing_id and source != "clock initiative"
+                                        and str(existing.get("status") or "")
+                                        == "awaiting_confirm"):
+                                    self._merge_into(
+                                        existing_id, existing, goal, params)
+                                print("queue race absorbed by active commitment "
+                                      f"{commitment_key[:12]}… into job "
+                                      f"{existing_id}")
+                                return existing_id
                         wid = workflow_fields.get("workflow_id") or ""
                         if wid:
                             found = pb.get(
@@ -4576,6 +4634,21 @@ class Anticipy:
             owner_filter = self._owner_filter()
             if owner_filter:
                 filt = f"{filt} && {owner_filter}"
+            # Prefer the indexed, storage-enforced identity. The fallback
+            # below reads params for rows created before the migration and is
+            # retained only so a rolling deploy never briefly forks work.
+            commitment_key = self._commitment_key(wanted)
+            if commitment_key:
+                keyed = pb.get(
+                    f"{self.backend_url}/api/collections/jobs/records",
+                    params={"filter":
+                            f'{filt} && commitment_key="{commitment_key}"',
+                            "perPage": 1, "sort": "-created"},
+                    timeout=10)
+                if getattr(keyed, "ok", False):
+                    rows = (keyed.json() or {}).get("items", [])
+                    if rows:
+                        return rows[0]
             r = pb.get(f"{self.backend_url}/api/collections/jobs/records",
                        params={"filter": filt, "perPage": 50,
                                "sort": "-created"}, timeout=10)

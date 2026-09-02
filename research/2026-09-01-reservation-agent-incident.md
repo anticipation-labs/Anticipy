@@ -59,6 +59,12 @@ The production tool chain in this path is:
 - **One promise, one live workflow.** A live job is now keyed to the exact durable
   `commitment_id`, not to word overlap. A later clock paraphrase is absorbed by the
   same workflow for every type of task.
+- **The database owns the invariant.** The initial repair checked for an active
+  commitment before creating. A follow-up audit found the remaining concurrency
+  gap: two workers could both read "none" before either wrote. Jobs now carry a
+  tenant-scoped `commitment_key`, and a partial SQLite unique index refuses a
+  second active row even under that race. Terminal history does not occupy the
+  key, so an intentional retry remains possible.
 - **Outreach must be reachable.** The clock does not compose or queue proactive work
   when an actual SMS transport exists but the owner account has no reachable phone.
 - **Search is structural navigation.** Native/ARIA/form search controls are marked by
@@ -77,9 +83,15 @@ These changes obey the Harness Laws: durable IDs and declared control/effect
 structure make the decisions; no regex, vocabulary list, restaurant path, or example
 decides the meaning of the owner's request.
 
+The release branch now also runs `.github/workflows/system-invariants.yml` for
+every brain, backend, browser, test, or gate change. It executes the complete
+Python and extension suites, including a storage-level race reproduction and
+the existing provider/domain hard-coding guards. A future wording-based repair
+to this incident path therefore has to break a red gate rather than quietly ship.
+
 ## Verification record
 
-- Backend/Python suite: 2,429 passed after the final implementation. A first rerun
+- Backend/Python suite: 2,434 passed after the final implementation. A first rerun
   failed because the host disk had 116 MB free and pytest could not create temporary
   files; deleting generated pytest/Xcode temp caches restored the test environment.
 - Extension suite: all 70 suites passed against the final source.
