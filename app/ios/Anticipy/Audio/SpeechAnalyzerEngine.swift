@@ -117,7 +117,8 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
             // is the format the whole app speaks — 16 kHz mono — which the
             // module's own compatibility check can still reconfigure for.
             let fallback = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)
-            let format = (try? await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])) ?? fallback
+            let format = await SpeechAnalyzer.bestAvailableAudioFormat(
+                compatibleWith: [transcriber]) ?? fallback
             guard let format else {
                 await MainActor.run { self.onError?() }
                 return
@@ -148,7 +149,8 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
             do {
                 try await analyzer.start(inputSequence: stream)
             } catch {
-                await MainActor.run { self?.onError?() }
+                let callback = self?.onError
+                await MainActor.run { callback?() }
             }
         }
         Task { [weak self] in
@@ -157,14 +159,16 @@ final class SpeechAnalyzerRequestEngine: NSObject, ListenRequestEngine {
                     let text = String(result.text.characters)
                     guard !text.isEmpty else { continue }
                     let isFinal = result.isFinal
-                    await MainActor.run { self?.onResult?(text, isFinal) }
+                    let callback = self?.onResult
+                    await MainActor.run { callback?(text, isFinal) }
                 }
             } catch is CancellationError {
             } catch {
                 // The session finished under us (resource limits, a finished
                 // analyzer). The listener's error path is swap-with-flush —
                 // the same recovery the legacy recognizer gets.
-                await MainActor.run { self?.onError?() }
+                let callback = self?.onError
+                await MainActor.run { callback?() }
             }
         }
     }

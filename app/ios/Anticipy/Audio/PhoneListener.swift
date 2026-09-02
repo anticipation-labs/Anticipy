@@ -438,7 +438,7 @@ final class PhoneListener: NSObject, ObservableObject {
         // check it on a handset with something playing before believing this.
         try? session.setCategory(.playAndRecord, mode: .measurement,
                                  options: [.mixWithOthers, .defaultToSpeaker,
-                                           .allowBluetooth])
+                                           .allowBluetoothHFP])
         // iOS MUTES the Taptic Engine for the whole app while a .record session
         // is active, so the buzz can't bleed into the mic. She starts listening
         // milliseconds after launch (keepListening is a standing state), so

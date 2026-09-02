@@ -539,7 +539,10 @@ settings:
     # 120: replacement speech windows receive fresh capture starts instead of
     # collapsing several transcript rows onto one old instant, and every typed
     # answer reaches the brain instead of a phone-side keyword classifier.
-    CURRENT_PROJECT_VERSION: "120"
+    # 121: the Release build is warning-clean for its audio changes: the audio
+    # route uses the current Bluetooth HFP option and analyzer callbacks no
+    # longer carry mutable weak captures across concurrency boundaries.
+    CURRENT_PROJECT_VERSION: "121"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -591,7 +594,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "120"
+        CURRENT_PROJECT_VERSION: "121"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
