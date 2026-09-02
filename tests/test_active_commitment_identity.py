@@ -42,19 +42,25 @@ def test_commitment_identity_cannot_consult_language_or_similarity():
     })
 
 
-def test_database_has_an_active_only_unique_barrier():
+def test_database_has_a_supported_unique_barrier_and_terminal_release_hook():
     src = (ROOT / "backend/pb_migrations/1700000055_active_commitment_identity.js") \
         .read_text()
     assert "CREATE UNIQUE INDEX `idx_jobs_active_commitment`" in src
     assert "ON `jobs` (`commitment_key`)" in src
-    for status in ("awaiting_confirm", "queued", "running", "needs_user"):
-        assert status in src
-    # History must not occupy the key forever: terminal states are absent from
-    # the partial-index predicate, so a deliberate retry can be a new plan.
+    # PocketBase accepts this partial predicate; status IN() is rejected by
+    # its collection index validator even though bare SQLite accepts it.
     predicate = src.split("CREATE UNIQUE INDEX", 1)[1].split("\n    ]", 1)[0]
+    assert "commitment_key` != ''" in predicate
+    assert " IN " not in predicate
+    hook = (ROOT / "backend/pb_hooks/job_commitment_identity.pb.js").read_text()
+    assert 'onRecordCreate(releaseTerminalCommitment, "jobs")' in hook
+    assert 'onRecordUpdate(releaseTerminalCommitment, "jobs")' in hook
     assert "done" not in predicate
     assert "failed" not in predicate
     assert "cancelled" not in predicate
+    for status in ("done", "failed", "cancelled"):
+        assert f'status === "{status}"' in hook
+    assert 'e.record.set("commitment_key", "")' in hook
 
 
 def test_storage_rejects_two_live_rows_but_allows_history_then_retry():
@@ -62,19 +68,21 @@ def test_storage_rejects_two_live_rows_but_allows_history_then_retry():
     db.execute("CREATE TABLE jobs (commitment_key TEXT, status TEXT)")
     db.execute(
         "CREATE UNIQUE INDEX idx_jobs_active_commitment "
-        "ON jobs(commitment_key) WHERE commitment_key != '' "
-        "AND status IN ('awaiting_confirm','queued','running','needs_user')")
+        "ON jobs(commitment_key) WHERE commitment_key != ''")
     db.execute("INSERT INTO jobs VALUES ('same-promise', 'queued')")
     try:
         db.execute("INSERT INTO jobs VALUES ('same-promise', 'needs_user')")
         raise AssertionError("storage admitted two active workflows")
     except sqlite3.IntegrityError:
         pass
-    db.execute("UPDATE jobs SET status='done'")
+    # The PocketBase model hook clears the auxiliary identity in the same
+    # write that makes the row terminal.
+    db.execute("UPDATE jobs SET status='done', commitment_key='' ")
     db.execute("INSERT INTO jobs VALUES ('same-promise', 'queued')")
+    assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 2
     assert db.execute(
         "SELECT COUNT(*) FROM jobs WHERE commitment_key='same-promise'"
-    ).fetchone()[0] == 2
+    ).fetchone()[0] == 1
 
 
 def test_a_create_race_absorbs_by_commitment_key_not_words(monkeypatch):

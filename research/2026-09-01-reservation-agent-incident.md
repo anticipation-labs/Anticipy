@@ -63,8 +63,9 @@ The production tool chain in this path is:
   commitment before creating. A follow-up audit found the remaining concurrency
   gap: two workers could both read "none" before either wrote. Jobs now carry a
   tenant-scoped `commitment_key`, and a partial SQLite unique index refuses a
-  second active row even under that race. Terminal history does not occupy the
-  key, so an intentional retry remains possible.
+  second active row even under that race. A database model hook clears this
+  auxiliary key in the same write that makes a row terminal, so history stays
+  available and an intentional retry remains possible.
 - **Outreach must be reachable.** The clock does not compose or queue proactive work
   when an actual SMS transport exists but the owner account has no reachable phone.
 - **Search is structural navigation.** Native/ARIA/form search controls are marked by
@@ -95,6 +96,10 @@ to this incident path therefore has to break a red gate rather than quietly ship
   failed because the host disk had 116 MB free and pytest could not create temporary
   files; deleting generated pytest/Xcode temp caches restored the test environment.
 - Extension suite: all 70 suites passed against the final source.
+- PocketBase 0.30.4 integration: all migrations applied to a fresh real
+  database; the first active job returned 200, a concurrent duplicate returned
+  400, a terminal transition returned 200 and cleared `commitment_key`, and a
+  deliberate retry returned 200.
 - Extension package: built as 0.11.2 and copied to all three backend download names.
 - Loaded Chrome folder: source synchronized to the existing unpacked install at
   `/Users/omarebrahim/Documents/Anticipy Browser Agent`.
