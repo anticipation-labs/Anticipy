@@ -61,6 +61,22 @@ breaking. Contract of /internal/me/password, derived from production:
 Also absent: `POST /internal/fellows/pay`, same untracked file, and it moves
 money.
 
+## The fellowship surface — 17 routes, 404 until today
+
+anticipyfellowship.com is a SEPARATE Vercel site that calls `/fellows/*` on this
+same backend. All 17 were 404 on the Worker, so a fellow could not sign up,
+apply, verify, submit or consent once traffic moves. Ported from recovered
+source (migration/recovered/fellowship*.pb.js) via a workflow, assembled into
+src/routes/fellows.ts. Every UNAUTHENTICATED contract verified identical to
+production, field-for-field (17/17, order-independent). The authenticated /
+email / oembed / minor-consent / payout halves ship UNPROVEN and must be diffed
+with a real fellow session before anticipyfellowship.com is repointed. See
+research/2026-09-04-fellowship-surface-ported.md.
+
+`POST /internal/fellows/pay` is NOT ported — it moves money and its source is in
+the untracked fellowship_host.pb.js (no git blob; Railway container only). The
+fellowship admin screen renders but its Pay button 404s.
+
 ## The product surface — five collections were 404 until today
 
 Every earlier diff compared HQ. Nobody had diffed what the pendant, the iPhone
