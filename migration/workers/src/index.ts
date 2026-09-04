@@ -22,6 +22,14 @@ import { hqHealth, hqLogin, hqGate, hqGone, hqPage, hqCors, HQ_DEAD_ROUTES, type
 import { hqSession, hqSessionEnd, hqMe, hqClerkExchange, hqState } from "./routes/hq_data.ts";
 import { hqPeopleCreate, hqPeopleUpdate } from "./routes/hq_people.ts";
 import { hqTodoCreate, hqTodoUpdate, hqTodoDelete } from "./routes/hq_todos.ts";
+import {
+  hqEventCreate, hqEventDelete, hqTrackUpsert, hqTrackDelete,
+  hqExpenseCreate, hqExpenseDelete, hqNoteUpsert, hqNoteDelete,
+} from "./routes/hq_boards.ts";
+import {
+  hqPasswordUpsert, hqPasswordReveal, hqPasswordDelete, hqPeopleCode,
+  hqNotifsRead, hqSettings,
+} from "./routes/hq_vault.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -160,6 +168,20 @@ export default {
       if (path === "/internal/todos" && method === "POST") return hqTodoCreate(request, hq);
       if (path === "/internal/todos" && method === "PATCH") return hqTodoUpdate(request, hq);
       if (path === "/internal/todos/delete" && method === "POST") return hqTodoDelete(request, hq);
+      if (path === "/internal/events" && method === "POST") return hqEventCreate(request, hq);
+      if (path === "/internal/events/delete" && method === "POST") return hqEventDelete(request, hq);
+      if (path === "/internal/tracks" && method === "POST") return hqTrackUpsert(request, hq);
+      if (path === "/internal/tracks/delete" && method === "POST") return hqTrackDelete(request, hq);
+      if (path === "/internal/expenses" && method === "POST") return hqExpenseCreate(request, hq);
+      if (path === "/internal/expenses/delete" && method === "POST") return hqExpenseDelete(request, hq);
+      if (path === "/internal/notes" && method === "POST") return hqNoteUpsert(request, hq);
+      if (path === "/internal/notes/delete" && method === "POST") return hqNoteDelete(request, hq);
+      if (path === "/internal/passwords" && method === "POST") return hqPasswordUpsert(request, hq);
+      if (path === "/internal/passwords/reveal" && method === "POST") return hqPasswordReveal(request, hq);
+      if (path === "/internal/passwords/delete" && method === "POST") return hqPasswordDelete(request, hq);
+      if (path === "/internal/people/code" && method === "POST") return hqPeopleCode(request, hq);
+      if (path === "/internal/notifs/read" && method === "POST") return hqNotifsRead(request, hq);
+      if (path === "/internal/settings" && method === "POST") return hqSettings(request, hq);
 
       // Also ungated: the caller is proving who they are WITH the Clerk token,
       // so requiring the shared key first would defeat the point of the route.

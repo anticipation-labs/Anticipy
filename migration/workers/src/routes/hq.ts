@@ -31,6 +31,7 @@ export interface HqEnv {
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_PHONE_NUMBER?: string;
   TWILIO_FROM?: string;
+  ANTICIPY_VAULT_KEY?: string;
   RESEND_API_KEY?: string;
   TWILIO_AUTH_TOKEN?: string;
 }
