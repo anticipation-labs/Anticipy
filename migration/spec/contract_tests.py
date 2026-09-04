@@ -3641,3 +3641,205 @@ class TestHQLoginTakesTheKeyInTheBody:
         """No key at all -> 401, never 200. The empty string must not match."""
         resp = call("POST", "/internal/login", json_body={})
         assert resp.status == 401, "an empty login body was accepted: %d" % resp.status
+
+
+# ===========================================================================
+# THE PRODUCT SURFACE — what the pendant, iPhone and extension call
+#
+# Every leg above this point exercised HQ or the four collections the skeleton
+# happened to define. These pin the surface the CLIENTS use, which drifted
+# unnoticed for weeks: five collections a shipped client calls were 404 on the
+# Worker, owners leaked email+phone to a service token, and new-user signup was
+# refused outright. All fixed 2026-09-04; these keep them fixed.
+# ===========================================================================
+
+# Collections production answers 200 for with a service token. Verified on both
+# origins 2026-09-04. schema.ts's COLLECTIONS must stay a superset of these, or
+# a client route 404s.
+EXPOSED_COLLECTIONS = [
+    "owners", "agents", "jobs", "events",
+    "evidence", "owner_profile", "pendants", "purges", "segments",
+]
+# The five that were 404 until the schema generator was written. A regression
+# here is the extension's receipt upload, iOS pairing, or privacy deletion going
+# dark, so they get their own named assertion.
+RESTORED_COLLECTIONS = ["evidence", "owner_profile", "pendants", "purges", "segments"]
+
+
+@pytest.mark.needs_service_token
+class TestCollectionSurface:
+
+    def _svc(self):
+        if not SERVICE_TOKEN:
+            pytest.skip("set ANTICIPY_SERVICE_TOKEN")
+        return {"X-Anticipy-Token": SERVICE_TOKEN}
+
+    @pytest.mark.parametrize("coll", EXPOSED_COLLECTIONS)
+    def test_every_exposed_collection_is_served(self, coll):
+        """The generic records API must answer these — 200, or the known 400
+        that production's own `agents` collection returns. A 404 means the
+        collection is absent from schema.ts and a client that reads it is
+        broken."""
+        resp = call("GET", "/api/collections/%s/records" % coll,
+                    headers=self._svc(), query={"perPage": "1"})
+        assert resp.status != 404, (
+            "collection %r is 404 — absent from schema.ts. A shipped client "
+            "reads it; a missing collection is a dark feature, not a refusal. "
+            "Run `npm run gen:schema`." % coll)
+        assert resp.status in (200, 400), (
+            "collection %r answered %d, expected 200 or 400" % (coll, resp.status))
+
+    @pytest.mark.parametrize("coll", RESTORED_COLLECTIONS)
+    def test_the_restored_collections_serve_200(self, coll):
+        """These five were 404 until 2026-09-04 and are what the extension, iOS
+        and brain actually depend on. They must be a clean 200."""
+        resp = call("GET", "/api/collections/%s/records" % coll,
+                    headers=self._svc(), query={"perPage": "1"})
+        assert resp.status == 200, (
+            "%r must serve 200 for the service token; got %d. See "
+            "research/2026-09-04-the-product-surface-nobody-diffed.md"
+            % (coll, resp.status))
+
+    def test_owners_does_not_leak_to_a_service_token(self):
+        """PocketBase's listRule `id = @request.auth.id`. A service token is not
+        an auth record, so it matches no owner and the list is EMPTY. The Worker
+        once answered this with all 31 rows including email and phone; the guard
+        let it through and only the rule stopped it. totalItems must be 0."""
+        resp = call("GET", "/api/collections/owners/records",
+                    headers=self._svc(), query={"perPage": "5"})
+        assert resp.status == 200, "owners list refused the service token: %d" % resp.status
+        body = resp.json or {}
+        assert body.get("totalItems") == 0, (
+            "owners leaked %s rows to a service token — the listRule is not being "
+            "applied. See research/2026-09-04-the-product-surface-nobody-diffed.md"
+            % body.get("totalItems"))
+        assert body.get("items") == [], "owners returned rows to a service token"
+
+    def test_an_unknown_collection_is_refused_not_served(self):
+        resp = call("GET", "/api/collections/zzz_not_a_collection/records",
+                    headers=self._svc(), query={"perPage": "1"})
+        assert resp.status in (403, 404), (
+            "an unknown collection was served %d" % resp.status)
+
+
+@pytest.mark.anonymous
+class TestOwnerSignupContract:
+    """New-user signup — POST /api/collections/owners/records. It was BOTH
+    broken (passwordConfirm rejected as unknown_field, so the iPhone could not
+    create an account) AND wide open (an empty body wrote a passwordless row
+    from anywhere). Every message and the validation ORDER were read off
+    production; these are safe because each input is refused BEFORE any write.
+    See research/2026-09-04-signup-was-dead-on-the-worker.md."""
+
+    def _create(self, body):
+        return call("POST", "/api/collections/owners/records", json_body=body)
+
+    def test_a_blank_body_reports_only_the_password_fields(self):
+        """The non-obvious order: a blank body names password and
+        passwordConfirm and says NOTHING about the missing email. The iPhone
+        shows one field at a time, so the field named first is the one the
+        person is sent to fix."""
+        resp = self._create({})
+        assert resp.status == 400, "a blank signup was accepted: %d" % resp.status
+        data = (resp.json or {}).get("data", {})
+        assert set(data.keys()) == {"password", "passwordConfirm"}, (
+            "blank-body signup named %r, expected exactly password + "
+            "passwordConfirm — a blank owner must never be writable, and the "
+            "email error must not appear yet" % sorted(data))
+        assert data["password"]["code"] == "validation_required"
+
+    def test_password_without_email_then_asks_for_email(self):
+        resp = self._create({"password": "abcdefgh1234", "passwordConfirm": "abcdefgh1234"})
+        assert resp.status == 400
+        data = (resp.json or {}).get("data", {})
+        assert list(data.keys()) == ["email"], "expected only email once passwords are present"
+
+    def test_a_short_password_is_refused(self):
+        resp = self._create({"email": "x@example.invalid", "password": "abc", "passwordConfirm": "abc"})
+        assert resp.status == 400
+        data = (resp.json or {}).get("data", {})
+        assert data.get("password", {}).get("code") == "validation_min_text_constraint"
+
+    def test_a_confirm_mismatch_is_refused(self):
+        resp = self._create({"email": "x@example.invalid", "password": "abcdefgh1234", "passwordConfirm": "zzzzzzzz9999"})
+        assert resp.status == 400
+        data = (resp.json or {}).get("data", {})
+        assert data.get("passwordConfirm", {}).get("code") == "validation_values_mismatch"
+
+    def test_the_envelope_matches_pocketbase(self):
+        resp = self._create({})
+        body = resp.json or {}
+        assert body.get("message") == "Failed to create record."
+        assert body.get("status") == 400
+
+
+@pytest.mark.anonymous
+class TestFellowshipUnauthenticated:
+    """The public fellowship API, ported 2026-09-04 from recovered source and
+    verified 17/17 identical to production at the unauthenticated boundary.
+    anticipyfellowship.com (a separate site) calls these on this backend, so a
+    regression is a fellow who cannot sign up. Every probe hits validation
+    BEFORE any write, email, or side effect. See
+    research/2026-09-04-fellowship-surface-ported.md.
+
+    The AUTHENTICATED halves (email send, oembed, minor consent, payouts) are
+    UNPROVEN and are not tested here — they need a real fellow session and must
+    be diffed against production before anticipyfellowship.com is repointed."""
+
+    def test_health_reports_its_booleans(self):
+        resp = call("GET", "/fellows/health")
+        assert resp.status == 200
+        body = resp.json or {}
+        for k in ("ok", "can_email", "can_review", "ip_resolves"):
+            assert isinstance(body.get(k), bool), "%s must be a boolean" % k
+
+    def test_code_refuses_a_bad_email_before_anything(self):
+        resp = call("POST", "/fellows/code", json_body={"email": "not-an-email"})
+        assert resp.status == 200 and (resp.json or {}).get("ok") is False
+        assert "doesn't look right" in (resp.json or {}).get("message", "")
+
+    def test_code_gates_on_age_and_saves_nothing_under_13(self):
+        """COPPA: under-13 is refused with stop:true and NOTHING is stored —
+        not the email, not the birth month. Storing it is the regulated act."""
+        resp = call("POST", "/fellows/code", json_body={
+            "email": "a@b.co", "birth_month": 6, "birth_year": 2020, "country": "us"})
+        body = resp.json or {}
+        assert body.get("ok") is False and body.get("stop") is True
+        assert "have to be 13" in body.get("message", "")
+
+    def test_code_gates_on_geography(self):
+        resp = call("POST", "/fellows/code", json_body={
+            "email": "a@b.co", "birth_month": 6, "birth_year": 1990, "country": "fr"})
+        body = resp.json or {}
+        assert body.get("ok") is False and body.get("stop") is True
+        assert "US and Canada" in body.get("message", "")
+
+    def test_start_reports_the_field_it_rejected(self):
+        resp = call("POST", "/fellows/start", json_body={"email": "not-an-email"})
+        body = resp.json or {}
+        assert body.get("ok") is False and body.get("field") == "email"
+
+    @pytest.mark.parametrize("path", [
+        "/fellows/me", "/fellows/apply", "/fellows/progress",
+        "/fellows/profile", "/fellows/submissions"])
+    def test_sessioned_routes_demand_a_session(self, path):
+        """No fellow session -> 401 {reauth:true}, never a 200 or a leak."""
+        method = "GET" if path == "/fellows/me" else "POST"
+        resp = call(method, path, json_body=None if method == "GET" else {})
+        assert resp.status == 401, "%s answered %d without a session" % (path, resp.status)
+        assert (resp.json or {}).get("reauth") is True
+
+    def test_guardian_get_is_public_and_post_needs_a_token(self):
+        assert call("GET", "/fellows/guardian").status == 200
+        resp = call("POST", "/fellows/guardian", json_body={})
+        assert resp.status == 200 and (resp.json or {}).get("ok") is False
+
+    @pytest.mark.parametrize("path", [
+        "/internal/fellows/remove",
+        "/internal/fellows/submissions/remove",
+        "/internal/fellows/submissions/release"])
+    def test_the_admin_actions_refuse_without_the_key(self, path):
+        """These move money and remove people. Without X-Internal-Key: 401."""
+        resp = call("POST", path, json_body={})
+        assert resp.status == 401, "%s ran without a key: %d" % (path, resp.status)
+        assert "wrong key" in detail_of(resp)
