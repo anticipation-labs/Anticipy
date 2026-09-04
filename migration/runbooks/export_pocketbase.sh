@@ -300,7 +300,27 @@ export_collection() {
     warn "$cname: could not read totalItems (HTTP $LAST_CODE)"
   fi
 
-  local n=0 last="" mode="cursor" pageno=1 got
+  # SORT IS NOT ALWAYS ALLOWED, AND NEITHER IS COUNTING.
+  #
+  # `agents` on production refuses BOTH: any request carrying sort= answers 403,
+  # and any request that computes totalItems answers 403, while skipTotal=1 with
+  # no sort returns rows normally -- 472 of them. Before this probe the export
+  # died on that collection and took the whole run with it.
+  #
+  # Cursor paging needs a stable order, so where sort is refused we fall back to
+  # page-number paging with no sort. That is weaker against concurrent writes;
+  # the alternative is exporting none of a 472-row collection.
+  local sort_ok=1
+  if ! api_get "$TMP/sortprobe.json" "$base" \
+       --data-urlencode "page=1" --data-urlencode "perPage=1" \
+       --data-urlencode "skipTotal=1" --data-urlencode "sort=id"; then
+    warn "$cname: sort= refused (HTTP $LAST_CODE); paging unsorted"
+    sort_ok=0
+    mode_start="nosort"
+  fi
+
+  local n=0 last="" mode="${mode_start:-cursor}" pageno=1 got
+  unset mode_start
   while :; do
     if [ "$mode" = "cursor" ]; then
       if [ -z "$last" ]; then
@@ -315,6 +335,11 @@ export_collection() {
           --data-urlencode "filter=id > \"$last\"" \
         || { warn "$cname: cursor paging rejected (HTTP $LAST_CODE); restarting with offset paging"; mode="offset"; pageno=1; n=0; last=""; : > "$nd"; continue; }
       fi
+    elif [ "$mode" = "nosort" ]; then
+      api_get "$TMP/page.json" "$base" \
+        --data-urlencode "page=$pageno" --data-urlencode "perPage=$PER_PAGE" \
+        --data-urlencode "skipTotal=1" \
+      || die "$cname: unsorted page $pageno failed (HTTP $LAST_CODE)"
     else
       api_get "$TMP/page.json" "$base" \
         --data-urlencode "page=$pageno" --data-urlencode "perPage=$PER_PAGE" \
