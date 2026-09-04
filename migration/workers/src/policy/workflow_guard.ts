@@ -55,6 +55,9 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 /** workflow_guard.pb.js:217 */
 const ENTRY_STATUSES = ["awaiting_confirm", "queued"];
 
+// workflow_guard.pb.js:310 -- a tap, and nothing else, is a gesture.
+const GESTURE_KINDS = ["tap"];
+
 const reject = (why: string) => json(409, { error: "workflow violation", detail: why });
 
 export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> => {
@@ -208,8 +211,59 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
     }
   }
 
+  // ======================================================================
+  // THE APPROVAL GATE -- workflow_guard.pb.js:530-550, CONTRACT.md §1.12.
+  //
+  // READ THIS BEFORE YOU TOUCH `NO_APPROVAL_NEEDED`. IT IS ONE EDIT AWAY AND
+  // IT READS AS COMPLIANCE:
+  //
+  //     const NO_APPROVAL_NEEDED = ["read_only", "reversible_local"];  // NO
+  //
+  // That turns off database-level approval for a whole lane and puts NOTHING
+  // in its place. read_only's exemption is EARNED by a backstop the other
+  // lanes do not have: the extension's runSupervisedReadJob fails any job
+  // whose consequence is not read_only, and nothing in that lane acts on the
+  // world. Anything else added to this list inherits the exemption and none
+  // of the backstop.
+  //
+  // APPROVAL IS THE DEFAULT AND EXEMPTION IS THE EXCEPTION: an absent approval
+  // parses "" and throws, which is a refusal, not a pass.
+  const NO_APPROVAL_NEEDED = ["read_only"];
+  if (!NO_APPROVAL_NEEDED.includes(consequence)) {
+    let approval: Record<string, unknown>;
+    try {
+      approval = JSON.parse(String(rowValue("approval", "") ?? "")) as Record<string, unknown>;
+    } catch {
+      return reject("consequential work needs parseable approval");
+    }
+    const scope = String(rowValue("scope_digest", "") ?? "");
+    const words = String(approval.owner_words ?? "").trim();
+    const g = approval.gesture;
+    const gesture = (g && typeof g === "object" && !Array.isArray(g))
+      ? g as Record<string, unknown> : null;
+
+    // A GESTURE IS ADMITTED AS A GESTURE, and it must be THIS owner's, on THIS
+    // plan version, over THIS scope. Accepting any actor a caller could name --
+    // another account, a service identity -- would let a plan approve itself
+    // and buy exactly what a tap buys.
+    const tapped = !!(gesture
+      && GESTURE_KINDS.includes(String(gesture.kind ?? ""))
+      && String(gesture.actor ?? "").trim() === String(rowValue("owner_ref", "") ?? "")
+      && String(gesture.plan_id ?? "") === workflow
+      && Number(gesture.plan_version) === nextVersion
+      && String(gesture.scope_digest ?? "") === scope);
+
+    if (approval.plan_id !== workflow
+        || Number(approval.plan_version) !== nextVersion
+        || !scope
+        || approval.scope_digest !== scope
+        || (!words && !tapped)) {
+      return reject("approval is not bound to this exact plan version");
+    }
+  }
+
   // ==========================================================================
-  // NOT YET PORTED, AND THE PORT IS NOT DONE UNTIL THEY ARE.
+  // SHELF 2 IS STILL NOT PORTED, AND THE PORT IS NOT DONE UNTIL IT IS.
   //
   // workflow_guard.pb.js:286-673 is SHELF 2 — the earned-not-spelled
   // reversibility ladder — plus the approval gate (:450 in CONTRACT.md §1.12),

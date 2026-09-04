@@ -126,7 +126,30 @@ export default {
       return authRefresh(env, request.headers.get("Authorization") ?? "");
     }
 
-    // --- realtime: dropped, and it says so. --------------------------------
+    // --- realtime: dropped, and it says so -- but only to a caller who got
+    // past the guard. The contract (§2.2) is that a non-GET on /api/realtime is
+    // GUARDED, and guard.pb.js treats it as part of the data API for exactly
+    // that reason: opening the SSE channel is harmless on its own (EventSource
+    // cannot send headers), the POST that ATTACHES subscriptions is not.
+    // Answering 410 first would tell an unauthenticated stranger what this
+    // backend does and does not serve, which is disclosure, not an answer.
+    if (path === "/api/realtime" && method !== "GET") {
+      // guard.pb.js:33-35 counts this as part of the data API and refuses it
+      // with the same "forbidden" as any collection. Same shape here: a
+      // stranger gets the refusal, not a description of the backend.
+      const want = (env as { ANTICIPY_SERVICE_TOKEN?: string }).ANTICIPY_SERVICE_TOKEN || "";
+      const got = request.headers.get("X-Anticipy-Token") || "";
+      let ok = want.length > 0 && got.length === want.length;
+      if (ok) {
+        let d = 0;
+        for (let i = 0; i < got.length; i++) d |= got.charCodeAt(i) ^ want.charCodeAt(i);
+        ok = d === 0;
+      }
+      if (!ok) {
+        return new Response(JSON.stringify({ error: "forbidden" }),
+          { status: 403, headers: { "content-type": "application/json" } });
+      }
+    }
     if (path === "/api/realtime") {
       return refuse(410, "realtime is not served by this backend",
         "no shipped client subscribes; the extension polls on a 30s alarm "

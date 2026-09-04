@@ -47,6 +47,9 @@ export const COLLECTIONS: Readonly<Record<string, CollectionDef>> = {
       consequence: T, approval: T, receipt: T,
       lease_token: T, lease_until: D, effect_uncertain: B,
       watching_until: D,
+      // Present on the LIVE collection and missing here: schema.ts was
+      // written from the repo's migrations, which production has moved past.
+      commitment_key: T, device_id: T, reconciliation: T, source_event_ids: T,
     },
     boolColumns: ["effect_uncertain"],
     createdColumn: "created", updatedColumn: "updated",
@@ -58,6 +61,9 @@ export const COLLECTIONS: Readonly<Record<string, CollectionDef>> = {
       id: T, created: D, updated: D,
       agent_id: T, agent_token: T, pair_code: T,
       owner: T, owner_ref: R, paired: B, browser: T, last_seen: D,
+      // Present on the LIVE collection and missing here: schema.ts was
+      // written from the repo's migrations, which production has moved past.
+      llm_calls: N, llm_hour: T, solve_calls: N, solve_hour: T,
     },
     boolColumns: ["paired"],
     createdColumn: "created", updatedColumn: "updated",
@@ -71,6 +77,9 @@ export const COLLECTIONS: Readonly<Record<string, CollectionDef>> = {
       speaker: T, addressee: T, importance: N, intent: T,
       source: T, spoken_at: T, capture_started_at: T, capture_ended_at: T,
       memory_purged: B,
+      // Present on the LIVE collection and missing here: schema.ts was
+      // written from the repo's migrations, which production has moved past.
+      backfill: B, boot_id: T, decision: T, device_id: T, explicit: B, external_event_id: T, gap_before_ms: N, needs_confirmation: B, parent_line: T, segment: T, seq: N,
     },
     boolColumns: ["memory_purged"],
     createdColumn: "created", updatedColumn: "updated",
