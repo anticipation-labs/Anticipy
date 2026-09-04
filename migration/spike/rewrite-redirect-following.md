@@ -117,7 +117,16 @@ Railway directly bypasses the gate entirely and answers the question:
   * 9 destinations are GET-reachable (200/401). **None answers 3xx.**
   * 24 answer 404 to a GET. That is not a missing route -- PocketBase registers
     routes per method, so a GET against a POST-only route is a 404 by
-    construction. Their redirect shape is genuinely **UNVERIFIED**; verifying
+    construction. Control, against a route known live because POST returns 200:
+
+        GET /auth/reset/request      -> 404   (live, POST-only)
+        GET /definitely/not/a/route  -> 404   (genuinely absent)
+        GET /internal/state          -> 401   (live and GET-routed)
+
+    A 404 to GET therefore carries no information either way, which is also why
+    the four missing hook routes in research/2026-09-04-production-is-not-this-
+    repo.md were tested with POST and not GET. Their redirect shape is genuinely
+    **UNVERIFIED**; verifying
     them needs `ANTICIPY_INTERNAL_KEY` and a POST, and POSTing to live routes
     like `/internal/fellows/pay` is not a probe anyone should run.
 
