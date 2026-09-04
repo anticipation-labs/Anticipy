@@ -362,7 +362,7 @@ extension ListenEvent {
     enum Kind: CaseIterable {
         case sessionStarted, sessionStopped, recognizerSwapped
         case flushed, posted, sessionFacts, buffersDropped, batteryRead
-        case airtimeLost
+        case airtimeLost, speechDropped
     }
 
     var kind: Kind {
@@ -376,6 +376,7 @@ extension ListenEvent {
         case .buffersDropped: return .buffersDropped
         case .batteryRead: return .batteryRead
         case .airtimeLost: return .airtimeLost
+        case .speechDropped: return .speechDropped
         }
     }
 
@@ -450,6 +451,12 @@ extension ListenEvent {
             return [.airtimeLost(milliseconds: 10),
                     .airtimeLost(milliseconds: 143_720),
                     .airtimeLost(milliseconds: 1)]
+        // One line lost is the smallest thing worth recording and the
+        // boundary `parse` refuses below; the large sample is a queue that
+        // overflowed badly rather than by one.
+        case .speechDropped:
+            return [.speechDropped(count: 1),
+                    .speechDropped(count: 417)]
         }
     }
 

@@ -82,6 +82,7 @@ awk '/^enum OwnerProfileCanonical \{/,/^\}/' "$backend" > "$out/profile_canonica
 awk '/^enum AgentUnpairPolicy \{/,/^\}/' "$backend" > "$out/agent_unpair.swift"
 if ! grep -q 'struct Values' "$out/owner_mirror.swift" \
    || ! grep -q 'afterDeviceForget' "$out/pending_retention.swift" \
+   || ! grep -q 'static func bounded' "$out/pending_retention.swift" \
    || ! grep -q 'static func outcome' "$out/account_deletion.swift" \
    || ! grep -q 'static func reconcile' "$out/action_write.swift" \
    || ! grep -q 'static func value' "$out/profile_canonical.swift" \

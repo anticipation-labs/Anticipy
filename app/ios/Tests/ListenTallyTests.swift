@@ -498,6 +498,26 @@ struct ListenTallyTests {
         check("a day the radio lost nothing reads as zero lost, not as unmeasured",
               c.airtimeLostMilliseconds == 0 && c.airtimeGaps == 0)
 
+        // ------------------------------------------------------ speech dropped
+        // The terminal loss, and the one number on this card that is a bug
+        // report at any value but zero. A failed post is still queued and will
+        // be retried; these words are gone. They must not be folded together.
+        let overflowed: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(10), .posted(ok: false, detail: .shelved(again: true, failure: .system(domain: .url, code: -1009)))),
+            (at(20), .speechDropped(count: 12)),
+            (at(30), .speechDropped(count: 5)),
+        ]
+        let ov = ListenTally.of(overflowed, now: at(30))
+        check("lines dropped for good are counted apart from posts that will be retried",
+              ov.linesDropped == 17 && ov.postsFailed == 1)
+
+        // Zero is the normal reading, and it has to be reachable: a day that
+        // never overflowed must not read the same as a build that could not
+        // report overflow at all.
+        check("a day that dropped nothing reads as zero dropped",
+              c.linesDropped == 0)
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {

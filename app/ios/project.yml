@@ -542,7 +542,13 @@ settings:
     # 121: the Release build is warning-clean for its audio changes: the audio
     # route uses the current Bluetooth HFP option and analyzer callbacks no
     # longer carry mutable weak captures across concurrency boundaries.
-    CURRENT_PROJECT_VERSION: "121"
+    # 122: capture loss stops being silent. Airtime the pendant's radio lost
+    # was already measured by OpusFrameAssembler and thrown away when the
+    # process ended; it is now a journal event a day folds into two numbers.
+    # The unsent queue, which had no bound at all, is bounded at 2000 lines
+    # keeping the newest, and what falls off is recorded rather than dropped
+    # quietly.
+    CURRENT_PROJECT_VERSION: "122"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -594,7 +600,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "121"
+        CURRENT_PROJECT_VERSION: "122"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements

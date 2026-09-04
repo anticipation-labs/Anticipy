@@ -122,6 +122,18 @@ enum ListenEvent: Equatable {
     /// microphone and nothing came back" — hiding the stops that were real
     /// behind holes that were not.
     case airtimeLost(milliseconds: Int)
+    /// LINES THE PHONE GAVE UP ON, because the unsent queue was full.
+    ///
+    /// Distinct from `posted(ok: false, …)`, which is a line that FAILED to
+    /// send and is still queued for another try. This is the terminal one: the
+    /// words were heard, were never delivered, and are now gone. Nothing will
+    /// retry them, because there is no longer anything to retry.
+    ///
+    /// It exists because the alternative to writing this number down is a
+    /// bounded queue that discards in silence, which is a smaller copy of the
+    /// bug bounding it was meant to fix. The count, never the words — same rule
+    /// as every case above.
+    case speechDropped(count: Int)
 
     enum StopCause: String, Equatable {
         case owner, interruption, routeChange, authorizationLost, unrecoveredFailure
@@ -465,6 +477,14 @@ final class ListenJournal {
             guard let ms = body.split(separator: " ").dropFirst().first
                     .flatMap({ Int($0) }), ms >= 0 else { return nil }
             return (when, .airtimeLost(milliseconds: ms))
+        case "speechDropped":
+            // Refused below one for the same reason `airtimeLost` refuses a
+            // negative: this event only ever means "words were lost", and a
+            // zero or negative would subtract from the day's total and make a
+            // real loss read as smaller than it was.
+            guard let n = body.split(separator: " ").dropFirst().first
+                    .flatMap({ Int($0) }), n > 0 else { return nil }
+            return (when, .speechDropped(count: n))
         case "sessionFacts":
             // Read back through the same type that wrote it, so the writer and
             // the reader cannot drift: `ListenSessionFacts` owns both halves,
@@ -589,6 +609,8 @@ final class ListenJournal {
             return "batteryRead  \(percent) percent, on power: \(onPower ? "yes" : "no")"
         case .airtimeLost(let milliseconds):
             return "airtimeLost  \(milliseconds) ms never arrived from the pendant"
+        case .speechDropped(let count):
+            return "speechDropped  \(count) unsent lines dropped, the queue was full"
         case .posted(let ok, let detail):
             return "posted  \(ok ? "accepted" : "failed"), \(detail.text)"
         }

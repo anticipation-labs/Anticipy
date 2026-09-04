@@ -250,6 +250,44 @@ enum OwnerMirror {
 /// three-account regression fixture execute this same implementation.
 enum PendingSpeechRetention {
     static func afterDeviceForget<Element>(_ rows: [Element]) -> [Element] { [] }
+
+    /// The most unsent lines the phone will hold before it starts losing them.
+    ///
+    /// There was no bound at all until this existed. The queue is one JSON
+    /// array serialised into a single `UserDefaults` string, so an outage long
+    /// enough — a weekend abroad, a backend down overnight — grew a plist value
+    /// without limit, and every append re-encoded the whole array. Neither end
+    /// of that has a failure mode anyone would notice until it was already bad.
+    ///
+    /// 2000 lines is about a hundred kilobytes of transcript, which comfortably
+    /// covers the longest outage anyone has actually had, and is still small
+    /// enough that the re-encode stays cheap. It is a bound on a BUFFER, not a
+    /// judgement about speech: nothing here reads the words.
+    static let queueLimit = 2000
+
+    /// Bound the queue, keeping the NEWEST rows, and report what fell off.
+    ///
+    /// THE OLDEST GO, and the direction is the whole decision. The newest line
+    /// is the one still worth acting on; the oldest is already past the six
+    /// hours after which the brain will remember a line but never act on it, so
+    /// dropping from that end costs memory rather than action. Dropping the
+    /// newest instead would throw away the owner's most recent thought to
+    /// preserve stale ones, which is the same trade backwards.
+    ///
+    /// THE COUNT IS RETURNED RATHER THAN SWALLOWED, and that is the half that
+    /// matters. A bounded queue that quietly discards is a smaller version of
+    /// the bug it fixes — this product's own principle is that silent data loss
+    /// is a product bug, and `overnight/are_the_ears_live.py` exists because
+    /// thirty hours of it went unnoticed. The caller is obliged to write the
+    /// number down.
+    static func bounded<Element>(
+        _ rows: [Element],
+        limit: Int = queueLimit
+    ) -> (kept: [Element], dropped: Int) {
+        guard limit > 0 else { return ([], rows.count) }
+        guard rows.count > limit else { return (rows, 0) }
+        return (Array(rows.suffix(limit)), rows.count - limit)
+    }
 }
 
 /// Translate `/me/delete` evidence into copy without claiming an incremental
@@ -637,9 +675,18 @@ final class AnticipySession: ObservableObject {
                                     account: nil) }
         }
         set {
-            unsentStore = (try? JSONEncoder().encode(newValue))
+            // BOUNDED HERE, in the setter, rather than at the two call sites
+            // that grow the queue. `heard` appends on a failed push and
+            // `flushUnsent` prepends what it could not deliver; a bound applied
+            // at one of them and not the other is the same as no bound, and
+            // nothing would have failed to compile to say so.
+            let (kept, dropped) = PendingSpeechRetention.bounded(newValue)
+            if dropped > 0 {
+                ListenJournal.shared.record(.speechDropped(count: dropped))
+            }
+            unsentStore = (try? JSONEncoder().encode(kept))
                 .flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            pendingCount = pendingLinesOwnedByCurrentAccount(in: newValue).count
+            pendingCount = pendingLinesOwnedByCurrentAccount(in: kept).count
         }
     }
 

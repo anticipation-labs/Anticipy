@@ -141,6 +141,14 @@ struct ListenTally: Equatable {
     /// single sum reads identically for both.
     var airtimeGaps = 0
 
+    /// LINES HEARD AND THEN LOST, because the unsent queue filled up and the
+    /// oldest had to go. The most expensive number on this card: unlike a
+    /// failed post, which is still queued and will be retried, these are gone.
+    /// Zero is the normal reading and any other value is a bug report — either
+    /// the outage was longer than the queue was built for, or delivery has been
+    /// broken for long enough that the bound started biting.
+    var linesDropped = 0
+
     /// `now` is the moment the record is being READ, and it is the difference
     /// between an instrument and a decoration.
     ///
@@ -318,6 +326,13 @@ struct ListenTally: Equatable {
             case .airtimeLost(let milliseconds):
                 tally.airtimeLostMilliseconds += milliseconds
                 tally.airtimeGaps += 1
+
+            // Also not evidence that anybody spoke, and for a sharper reason
+            // than the gap above: these words WERE heard. What they are
+            // evidence of is that hearing them stopped mattering, because the
+            // phone could not deliver them and eventually gave up.
+            case .speechDropped(let count):
+                tally.linesDropped += count
             }
         }
 
@@ -392,6 +407,7 @@ struct ListenTally: Equatable {
         // a flush and not a stop, so it belongs beside them rather than
         // anywhere that would reorder hearing or session boundaries.
         case .airtimeLost(let milliseconds): return "3c\(milliseconds)"
+        case .speechDropped(let count): return "3d\(count)"
         case .posted(let ok, let detail): return "4\(ok) \(detail.text)"
         case .sessionStopped(let cause): return "5\(cause.rawValue)"
         }

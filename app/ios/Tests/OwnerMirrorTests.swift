@@ -419,6 +419,38 @@ let speechAcrossDevice: [String?] = [nil, "prior-account", "current-account"]
 check("device Forget removes nil, prior-account, and current-account queued speech",
       PendingSpeechRetention.afterDeviceForget(speechAcrossDevice).isEmpty)
 
+// The unsent queue had NO bound at all until this existed: one JSON array in
+// one UserDefaults string, re-encoded whole on every append, growing for as
+// long as an outage lasted. These pin the two halves that make bounding it
+// safe rather than merely smaller.
+let underLimit = Array(0..<10)
+let under = PendingSpeechRetention.bounded(underLimit, limit: 100)
+check("a queue inside the limit is returned untouched and reports no loss",
+      under.kept == underLimit && under.dropped == 0)
+
+// THE DIRECTION. The newest line is the one still worth acting on; the oldest
+// is already past the six hours after which the brain may remember a line but
+// never act on it. Keeping the tail is what makes the loss cost memory rather
+// than action, and reversing it would be silently worse.
+let over = PendingSpeechRetention.bounded(Array(0..<10), limit: 4)
+check("an overflowing queue keeps the NEWEST rows, not the oldest",
+      over.kept == [6, 7, 8, 9])
+check("and it reports exactly how many rows it lost",
+      over.dropped == 6)
+
+// A queue at exactly the limit is not an overflow. Off by one here would
+// report a drop on every append once the queue reached its bound, and the
+// journal would fill with losses that never happened.
+let exact = PendingSpeechRetention.bounded(Array(0..<4), limit: 4)
+check("a queue exactly at the limit drops nothing",
+      exact.kept.count == 4 && exact.dropped == 0)
+
+// A nonsense limit must not silently keep everything. Failing closed here
+// means the count is still honest about what was thrown away.
+let none = PendingSpeechRetention.bounded(Array(0..<3), limit: 0)
+check("a zero limit keeps nothing and still reports the loss",
+      none.kept.isEmpty && none.dropped == 3)
+
 let partialDeleteBody = #"{"ok":false,"message":"Some rows remain.","deleted":{"events":4,"jobs":1},"failed":["owner_profile"]}"#
 let partialDelete = AccountDeletionPolicy.outcome(status: 500, body: partialDeleteBody)
 check("a partial 500 is not reported as complete", !partialDelete.ok)

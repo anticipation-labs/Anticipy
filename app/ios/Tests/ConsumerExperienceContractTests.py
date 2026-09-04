@@ -433,9 +433,28 @@ unsent_property = body(
     r"\bprivate\s+var\s+unsent\s*:\s*\[BufferedLine\]\s*\{",
     "AnticipySession.unsent",
 )
+# The queue is BOUNDED before it is stored, so the rows that exist after a
+# write are `kept`, not `newValue` — those differ by exactly the rows that
+# just overflowed. Counting `newValue` would report speech the phone had
+# already thrown away as still pending, which is the failure this trio is
+# aimed at from the other side. The three requires below are deliberately
+# tighter than the single one they replaced: it is not enough that the count
+# goes through the ownership helper, it must go through it over THE SAME
+# VALUE THAT WAS PERSISTED, and the overflow must reach the journal. Counting
+# one array and storing another would satisfy any one of these alone.
 require("Pending count ownership", unsent_property,
-        r"pendingCount\s*=\s*pendingLinesOwnedByCurrentAccount\s*\(\s*in\s*:\s*newValue\s*\)\s*\.\s*count",
+        r"pendingCount\s*=\s*pendingLinesOwnedByCurrentAccount\s*\(\s*in\s*:\s*kept\s*\)\s*\.\s*count",
         "queue writes count every account's rows instead of the signed-in account's rows.")
+require("Pending count ownership", unsent_property,
+        r"encode\s*\(\s*kept\s*\)",
+        "the queue stores a different array than the one it counted.")
+require("Pending queue is bounded", unsent_property,
+        r"PendingSpeechRetention\s*\.\s*bounded\s*\(\s*newValue\s*\)",
+        "the unsent queue is written without a bound; a long outage grows it without limit.")
+require("Pending queue is bounded", unsent_property,
+        r"if\s+dropped\s*>\s*0\s*\{[\s\S]*?ListenJournal\s*\.\s*shared\s*\.\s*record\s*\("
+        r"\s*\.\s*speechDropped\s*\(\s*count\s*:\s*dropped\s*\)",
+        "the queue discards heard speech without recording that it did.")
 owned_lines = body(
     session_source,
     r"\bprivate\s+func\s+pendingLinesOwnedByCurrentAccount\s*\("
