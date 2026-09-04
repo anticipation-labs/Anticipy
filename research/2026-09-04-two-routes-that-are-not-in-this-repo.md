@@ -151,3 +151,66 @@ owner's call to make deliberately rather than a thing to pull in passing.
 If it does contain pb_hooks, it is the source for all four routes and step 3
 becomes ordinary work. If it does not, the only other holder is the Railway
 image itself.
+
+---
+
+## UPDATE 2: the backup does NOT hold the hooks, and neither does git
+
+Downloaded `@auto_pb_backup_acme_20260904090000.zip` (61 MB) with the owner's
+explicit approval, to settle whether PocketBase backups carry `pb_hooks/`.
+
+**They do not.** The archive holds seven entries and every one is a database:
+
+    data.db, data.db-wal, data.db-shm
+    auxiliary.db, auxiliary.db-wal, auxiliary.db-shm
+    types.d.ts
+
+Zero matches for `pb_hooks` or `*.pb.js`. A PocketBase backup is pb_data, not
+the code. The copy was deleted as soon as the question was answered — it is 61
+MB of customer records and there was no reason to keep it.
+
+### The source-archive lead, followed and closed
+
+The same backup bucket holds a `cutover/2026-09-02/source/` folder. Its three
+`.tar.json` manifests are 0 bytes. `local-checkouts-*.tar` (118 MB) turned out
+to be working-tree SNAPSHOTS, not checkouts — each is HEAD.txt, remotes.txt,
+status.txt, a tracked-working-tree.patch and an untracked-files.tar.gz. No
+`pb_hooks` in any of them.
+
+`anticipy-live` looked like the answer and was not:
+
+    HEAD      2c524ad9972790ea1e96c90089348b57ac5f4fd8
+    branch    harness/tejas-fixes
+    remote    https://github.com/omize10/Anticipy.git
+    patch     0 bytes (clean tree)
+
+That commit's `backend/pb_hooks/` has 15 files and `internal_hq.pb.js` is not
+among them — the branch predates HQ entirely. So it is not the deployed source.
+
+### Settled: the routes are in NO commit of EITHER repository
+
+The live checkout pointed at `omize10/Anticipy` while this clone points at
+`anticipation-labs/Anticipy`, which looked like the explanation. It is not:
+
+    identical ref sets            YES (36 heads each, same SHAs)
+    omize10 objects missing here  0
+
+They are mirrors. And `git log --all -S` for `internal/people/faces`,
+`internal/me/password` and `internal/fellows"` returns only next.config.mjS
+rewrite commits and my own — never a hook file, on any branch, at any commit.
+
+**So the four routes have never existed in either repository. They exist only
+in the running Railway image.**
+
+### What is left
+
+One lead remains and it was not followed: `endangered-git-20260903T0133Z.tar`,
+14.7 GB in the same bucket. A ranged read of its index was blocked by the same
+permission gate, correctly — it is a different and much larger artifact than
+the one approved.
+
+Otherwise the holder is the Railway container itself, and recovering the four
+routes means reading `pb_hooks/` off it — one `railway run cat`, or a shell on
+the service. Until then step 3 stays blocked: `/r/{code}` is a money path and
+`/internal/me/password` is a password path, and neither should be rebuilt from
+the outside.
