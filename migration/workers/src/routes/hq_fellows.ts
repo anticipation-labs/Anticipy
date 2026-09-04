@@ -9,7 +9,20 @@
  * and 404 here. Repointing the website without them would have 404'd whatever
  * page draws the team's avatars and the whole Fellowship dashboard.
  *
- * SO PRODUCTION IS THE SPEC, not a source file. Everything below was derived by
+ * SOURCE RECOVERED 2026-09-04. fellowship.pb.js was pulled out of the
+ * `endangered-git` archive as git blob 0eb1af32 — see
+ * research/2026-09-04-recovering-the-deployed-source.md — so /internal/fellows
+ * below is now a PORT, not a reconstruction, and three fields the
+ * reconstruction had wrong are corrected against it.
+ *
+ * /internal/people/faces is still reverse-engineered: it lives in
+ * fellowship_host.pb.js, which was UNTRACKED at the snapshot and therefore has
+ * no blob to recover.
+ *
+ * The original reconstruction note follows, because how the shape was derived
+ * still matters for the half that is still derived:
+ *
+ * PRODUCTION WAS THE SPEC, not a source file. Everything below was derived by
  * reading production's live responses and finding the query that reproduces
  * them, and each claim is marked with whether it is VERIFIED against production
  * or merely reasonable:
@@ -89,7 +102,10 @@ export async function hqFellows(req: Request, env: HqEnv): Promise<Response> {
     .map((f) => ({
       id: f.id, name: str(f.name), email: str(f.email), country: str(f.country),
       age_band: str(f.age_band),
-      parental_consent: boolDefaultFalse(f.parental_consent),
+      // getString in the source, NOT a boolean. Reverse-engineering made this
+      // a bool because the name reads like one; the recovered source says
+      // otherwise and the source wins.
+      parental_consent: str(f.parental_consent),
       payout_identity_verified: boolDefaultFalse(f.payout_identity_verified),
       instagram: str(f.instagram), tiktok: str(f.tiktok),
       fellowship: str(f.fellowship), status: str(f.status),
@@ -102,7 +118,7 @@ export async function hqFellows(req: Request, env: HqEnv): Promise<Response> {
   const submissions = (await all(env,
     "SELECT id,fellow,platform,kind,url,url_key,submitted_url,author_handle,author_claimed,"
     + "title,thumbnail_url,verify_state,oembed_status,status,removed_by,note,flags,created "
-    + "FROM fellow_submissions ORDER BY created DESC LIMIT 500"))
+    + "FROM fellow_submissions ORDER BY created DESC LIMIT 200"))
     .map((s) => ({
       id: s.id, fellow: str(s.fellow), platform: str(s.platform), kind: str(s.kind),
       url: str(s.url), url_key: str(s.url_key), submitted_url: str(s.submitted_url),
@@ -114,20 +130,19 @@ export async function hqFellows(req: Request, env: HqEnv): Promise<Response> {
       note: str(s.note), flags: str(s.flags), created: str(s.created),
     }));
 
-  // UNVERIFIED PROJECTION: fellow_conversions is empty on both sides, so no
-  // field list here can be checked against production. Kept to the operational
-  // columns and deliberately WITHOUT the payout-plumbing ones (payout_key,
-  // payout_attempts, payout_ref, entered_by) — when this list is finally
-  // checkable, err toward the narrower projection rather than the wider.
+  // NO LONGER A GUESS. fellow_conversions is empty on both sides so this could
+  // not be checked against a live response, and the first version of it was
+  // reverse-engineered: it carried `source` and `paid_at` and omitted
+  // `hold_until`, all three wrong. The recovered fellowship.pb.js settles it.
   const conversions = (await all(env,
-    "SELECT id,fellow,code,order_ref,amount_usd,commission_usd,status,flags,source,"
-    + "created,paid_at FROM fellow_conversions ORDER BY created DESC LIMIT 500"))
+    "SELECT id,fellow,code,order_ref,amount_usd,commission_usd,status,flags,"
+    + "hold_until,created FROM fellow_conversions ORDER BY created DESC LIMIT 300"))
     .map((c) => ({
       id: c.id, fellow: str(c.fellow), code: str(c.code), order_ref: str(c.order_ref),
       amount_usd: Number(c.amount_usd) || 0,
       commission_usd: Number(c.commission_usd) || 0,
-      status: str(c.status), flags: str(c.flags), source: str(c.source),
-      created: str(c.created), paid_at: str(c.paid_at),
+      status: str(c.status), flags: str(c.flags),
+      hold_until: str(c.hold_until), created: str(c.created),
     }));
 
   return json(200, { fellows, submissions, conversions }, cors);

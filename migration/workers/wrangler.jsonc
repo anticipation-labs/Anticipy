@@ -190,6 +190,11 @@
   // `vars` below holds only things that are NOT secret.
   // --------------------------------------------------------------------------
   "vars": {
-    "ANTICIPY_ENV": "staging"
+    "ANTICIPY_ENV": "staging",
+    // Railway redirects /r/{code} to www.anticipy.ai; the default in
+    // fellowship.pb.js is the APEX. Leaving this unset sent every referral to
+    // a different host than production does -- verified by diffing the two
+    // Location headers. Not a secret, so it lives here where it is visible.
+    "ANTICIPY_SITE_URL": "https://www.anticipy.ai"
   }
 }

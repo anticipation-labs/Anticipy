@@ -36,6 +36,7 @@ import {
 } from "./routes/hq_threads.ts";
 import { hqAssistant } from "./routes/hq_assistant.ts";
 import { hqPeopleFaces, hqFellows } from "./routes/hq_fellows.ts";
+import { referralHop, type FellowEnv } from "./routes/fellowship.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -134,6 +135,14 @@ export default {
     }
     if (path === "/transcription/token" && method === "POST") {
       return transcriptionToken(request, env as unknown as SmsEnv);
+    }
+
+    // --- the referral hop. fellowship.pb.js, recovered. ------------------
+    // Above HQ because it is not HQ and carries no key: a fellow's link is
+    // public by definition.
+    if (path.startsWith("/r/") && method === "GET") {
+      return referralHop(request, env as unknown as FellowEnv,
+                         path.slice("/r/".length));
     }
 
     // --- HQ's front door. CONTRACT.md §7. --------------------------------
