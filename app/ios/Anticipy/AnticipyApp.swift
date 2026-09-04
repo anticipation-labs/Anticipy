@@ -618,7 +618,14 @@ final class AnticipySession: ObservableObject {
     /// Words spoken with no network used to live in a plain in-memory array.
     /// If iOS reclaimed the app before it reconnected, they were gone — from a
     /// product whose whole promise is remembering. Now they survive a relaunch.
-    private struct BufferedLine: Codable {
+    /// `Equatable` so a delivered row can be removed from the persisted queue
+    /// BY VALUE. An index cannot serve: `unsent` is written by four other
+    /// places (a live push failing, sign-out filtering an account out of the
+    /// middle, device-forget clearing it, and the bound trimming the front),
+    /// and this class is `@MainActor`, so every `await` inside the flush is a
+    /// point where any of them can run. A position captured before a network
+    /// round trip is a position that may not mean the same row afterwards.
+    private struct BufferedLine: Codable, Equatable {
         let text: String
         let explicit: Bool
         let speaker: String?
@@ -942,13 +949,27 @@ final class AnticipySession: ObservableObject {
         return .system(domain: .init(name: ns.domain), code: ns.code)
     }
 
-    /// Re-push anything the network ate, oldest first. Whatever still fails
-    /// goes straight back to disk rather than evaporating.
+    /// Re-push anything the network ate, oldest first. A row leaves the disk
+    /// only once the server has confirmed it.
+    ///
+    /// THE QUEUE IS NOT CLEARED UP FRONT, and that is the whole of this
+    /// function's correctness. It used to open with `unsent = []`, which is a
+    /// synchronous write of an empty array into `@AppStorage` — the durable
+    /// queue was emptied BEFORE a single row had been posted, and the loop then
+    /// awaited a network round trip per row with the only surviving copy in a
+    /// local. iOS suspending or killing a backgrounded app anywhere in that
+    /// loop is not an edge case; docs/BRIEF.html names it the largest source of
+    /// user-visible capture gaps there is. Every unposted row died there, with
+    /// no counter and no journal line — silent capture loss, which this
+    /// product's own principle calls a product bug.
+    ///
+    /// So the flush now iterates a SNAPSHOT for its ordering and its parent
+    /// chain, and mutates the persisted queue only by removing rows the server
+    /// has acknowledged. A crash mid-flush loses exactly the rows that were
+    /// already delivered — which is to say, nothing.
     private func flushUnsent() async {
         guard backendReachable, !unsent.isEmpty, !accountID.isEmpty else { return }
         let queue = unsent
-        unsent = []
-        var retained: [BufferedLine] = []
         // The parent of a queued cut is the row posted immediately before it
         // IN THIS FLUSH, and nothing else. `lastTranscriptEventID` cannot
         // serve: it may hold a line posted live AFTER these words were spoken,
@@ -967,7 +988,10 @@ final class AnticipySession: ObservableObject {
             // because another account happened to reconnect first.
             guard line.account == accountID else {
                 previousInThisFlush = ""
-                retained.append(line)
+                // Skipped, NOT stalled, and left exactly where it is. A sealed
+                // row is never deliverable by this account and never will be,
+                // so treating it as a blocking head would mean one foreign line
+                // silently stops delivery for every line behind it, forever.
                 continue
             }
             let parent = line.continuesPrevious == true ? previousInThisFlush : ""
@@ -984,16 +1008,36 @@ final class AnticipySession: ObservableObject {
                 // An unreadable id is a broken link, not a guessable one.
                 previousInThisFlush = id
                 ListenJournal.shared.record(.posted(ok: true, detail: .sentFromQueue))
+                // CONFIRMED, so now it may leave the disk — and not one
+                // instant earlier.
+                dropDeliveredLine(line)
             }
             catch {
                 ListenJournal.shared.record(
                     .posted(ok: false,
                             detail: .shelved(again: true, failure: Self.postFailureShape(error))))
                 previousInThisFlush = ""
-                retained.append(line)
+                // Nothing to do. The row was never removed, so it is still on
+                // disk in its original position and the next flush will try it
+                // again. The old code had to carry it in `retained` and put it
+                // back at the end, which is the step a crash used to skip.
             }
         }
-        if !retained.isEmpty { unsent = retained + unsent }
+    }
+
+    /// Remove ONE delivered row from the persisted queue, by value, against
+    /// whatever the queue holds right now.
+    ///
+    /// Re-read rather than closed over: the flush awaits between rows, and on
+    /// this actor that is where a new line can be appended, an account can be
+    /// signed out from under it, or the bound can trim the front. `firstIndex`
+    /// removes a single occurrence, so two identical lines legitimately queued
+    /// twice are retired one confirmed post at a time rather than both at once.
+    private func dropDeliveredLine(_ line: BufferedLine) {
+        var current = unsent
+        guard let index = current.firstIndex(of: line) else { return }
+        current.remove(at: index)
+        unsent = current
     }
 
     /// Anticipy's latest spoken line, only while it's actually fresh — a

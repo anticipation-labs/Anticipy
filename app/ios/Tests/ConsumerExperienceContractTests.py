@@ -520,12 +520,37 @@ foreign = body(
     r"\bguard\s+line\s*\.\s*account\s*==\s*accountID\s+else\s*\{",
     "AnticipySession.flushUnsent foreign-account branch",
 )
+# The flush used to take the whole queue, write an EMPTY array straight to
+# @AppStorage, and only put the survivors back at the very end — with an
+# awaited network round trip per row in between. iOS killing a backgrounded
+# app mid-loop is the ordinary case, not an edge one, and every unposted row
+# died there with no counter and no journal line. Rows now leave the disk one
+# at a time, after the server has confirmed them, so these pin the property
+# rather than the old bookkeeping: sealed and failed rows survive because they
+# are NEVER REMOVED, not because they are collected and restored.
+forbid("Pending flush durability", flush_unsent,
+       r"unsent\s*=\s*\[\s*\]",
+       "the flush empties the durable queue before a single row is confirmed; "
+       "a suspend mid-flush loses every unposted line.")
 require("Pending flush ownership", foreign,
-        r"retained\s*\.\s*append\s*\(\s*line\s*\)",
-        "another account reconnecting drops this account's sealed row.")
-require("Pending flush ownership", flush_unsent,
-        r"unsent\s*=\s*retained\s*\+\s*unsent",
-        "foreign and failed rows are collected but not restored to the persisted queue.")
+        r"continue",
+        "a foreign row is not skipped, so one sealed line blocks every line behind it.")
+forbid("Pending flush ownership", foreign,
+       r"dropDeliveredLine|unsent\s*=",
+       "another account reconnecting drops this account's sealed row.")
+require("Pending flush durability", flush_unsent,
+        r"ListenJournal\s*\.\s*shared\s*\.\s*record\s*\(\s*\.\s*posted\s*\(\s*ok\s*:\s*true[\s\S]*?"
+        r"dropDeliveredLine\s*\(\s*line\s*\)",
+        "a row is removed from the queue somewhere other than after its confirmed post.")
+drop_delivered = body(
+    session_source,
+    r"\bprivate\s+func\s+dropDeliveredLine\s*\(\s*_\s+line\s*:\s*BufferedLine\s*\)\s*\{",
+    "AnticipySession.dropDeliveredLine",
+)
+require("Pending flush durability", drop_delivered,
+        r"var\s+current\s*=\s*unsent[\s\S]*?firstIndex\s*\(\s*of\s*:\s*line\s*\)",
+        "the delivered row is located by a stale position instead of by value against "
+        "the queue as it stands after the await.")
 
 history = struct(SOURCE["privacy"], "ListeningHistoryView")
 for state in ("events", "page", "totalPages", "totalItems", "loading"):

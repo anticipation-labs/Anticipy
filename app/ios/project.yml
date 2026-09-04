@@ -548,7 +548,11 @@ settings:
     # The unsent queue, which had no bound at all, is bounded at 2000 lines
     # keeping the newest, and what falls off is recorded rather than dropped
     # quietly.
-    CURRENT_PROJECT_VERSION: "122"
+    # 123: a queued line leaves the phone's disk only after the server has
+    # confirmed it. The flush used to empty the durable queue before posting
+    # anything, so iOS suspending a backgrounded app mid-flush lost every
+    # unposted line with no counter and no journal entry.
+    CURRENT_PROJECT_VERSION: "123"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -600,7 +604,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "122"
+        CURRENT_PROJECT_VERSION: "123"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
