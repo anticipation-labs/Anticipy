@@ -1,0 +1,60 @@
+/workspaces/Anticipy/engine/app/memory.py:380:        # a stub supabase client whose update_rows is a no-op.
+/workspaces/Anticipy/engine/app/memory.py:481:        logger.info("delete not implemented for SupabaseMemoryBackend")
+/workspaces/Anticipy/engine/app/reflector.py:105:    why the next step will work.
+/workspaces/Anticipy/engine/app/end_state_verifier.py:43:# (engine/app/bridge.py, a Playwright handle, a mock for tests, etc.).
+/workspaces/Anticipy/engine/app/end_state_verifier.py:51:    these methods, a thin wrapper over Playwright's ``Page``, or a mock.
+/workspaces/Anticipy/engine/app/config.py:49:# Fail-closed in production: refuse to boot with the dev placeholder secret.
+/workspaces/Anticipy/engine/app/proactive_routes.py:25:  inject a stub engine without touching real LLMs or browsers.
+/workspaces/Anticipy/engine/app/proactive_routes.py:138:    """Factory. Tests monkeypatch this to inject a stub session."""
+/workspaces/Anticipy/engine/app/agent.py:602:    hardcoded paths. (Cop-out #7: codespace-only deployment.)
+/workspaces/Anticipy/engine/app/proactive/urgency.py:16:This is the ONLY hardcoded part: the score-to-channel mapping is a property
+/workspaces/Anticipy/engine/app/proactive/engine.py:417:            "mocking, or attacking language directed at a NAMED PERSON?\n\n"
+/workspaces/Anticipy/engine/app/proactive/engine.py:424:            "  - Insults or mocking adjectives aimed at a person: 'incompetent', "
+/workspaces/Anticipy/engine/app/proactive/eval/__init__.py:2:Adversarial eval for the proactive engine — no hardcoded test cases.
+/workspaces/Anticipy/engine/app/bridge.py:5:(L0..L6) but its `Executor` defaulted to `_LoggingExecutor` — a test stub
+/workspaces/Anticipy/engine/app/bridge.py:30:Cop-out #8 (no fake verification by reading the agent's final message):
+/workspaces/Anticipy/engine/app/llm_judge.py:3:ZERO hardcoded phrase lists. Given a task and the agent's reply, asks
+/workspaces/Anticipy/engine/app/proactive/donna.py:124:mocking/sneering tone aimed at a person rather than their work product. If you see this pattern \
+/workspaces/Anticipy/engine/app/proactive/donna.py:151:mocking tone, contempt for the person rather than critique of their work. If you see ANY of \
+/workspaces/Anticipy/engine/app/proactive/decider.py:17:calibrated by the eval harness. Not hardcoded intent detection — calibration
+/workspaces/Anticipy/engine/app/proactive/README.md:133:- end-to-end engine wiring with all five LLMs mocked
+/workspaces/Anticipy/extension/content.js:317:    //  hints. Hardcoded placeholder substrings are a violation of the project
+/workspaces/Anticipy/extension/content.js:408: * 4. placeholder
+/workspaces/Anticipy/extension/content.js:438:  // 4. placeholder match (useful when only label/text is known)
+/workspaces/Anticipy/extension/content.js:442:      const ph = (el.getAttribute("placeholder") || "").toLowerCase();
+/workspaces/Anticipy/extension/content.js:610:  // canvas editors expose a fake contenteditable that swallows our writes
+/workspaces/Anticipy/extension/content.js:840:      placeholder: el.getAttribute("placeholder") || "",
+/workspaces/Anticipy/extension/agent.js:323:    // No hardcoded provider names beyond the keys we read from apiConfig
+/workspaces/Anticipy/extension/agent.js:449:      // facing sentence. NO hardcoded pattern-match rules — see the
+/workspaces/Anticipy/extension/agent.js:814:          console.warn(`[Anticipy Agent] bad selector (len=${sel.length} fake=${jqueryFake} alts=${tooManyAlts}) — overriding`);
+/workspaces/Anticipy/extension/popup.html:68:    .field input::placeholder { color: #3A3A3A; }
+/workspaces/Anticipy/extension/popup.html:233:      <input type="password" id="accessCode" placeholder="Paste your access code" autocomplete="off">
+/workspaces/Anticipy/extension_v2/README.md:119:## Manual smoke test against a mock server
+/workspaces/Anticipy/extension_v2/README.md:122:# 1. Run a stub WebSocket server (any of these works):
+/workspaces/Anticipy/extension_v2/popup.html:18:        <input id="code-input" type="text" placeholder="Enter your code" autocomplete="off" />
+/workspaces/Anticipy/extension_v2/popup.html:20:        <input id="server-input" type="text" placeholder="wss://anticipy.ai/ws/agent" autocomplete="off" />
+/workspaces/Anticipy/extension_v2/popup.html:28:        <textarea id="task-input" rows="3" placeholder="e.g. find a flight from JFK to SFO Friday morning"></textarea>
+/workspaces/Anticipy/extension_v2/background.js:343:// Export for test harness (Jest with jsdom + chrome mocks).
+/workspaces/Anticipy/extension_v2/background.js:353:    setWs: (mock) => { ws = mock; },
+/workspaces/Anticipy/extension_v3/README.md:119:## Manual smoke test against a mock server
+/workspaces/Anticipy/extension_v3/README.md:122:# 1. Run a stub WebSocket server (any of these works):
+/workspaces/Anticipy/extension_v3/popup.html:18:        <input id="code-input" type="text" placeholder="Enter your code" autocomplete="off" />
+/workspaces/Anticipy/extension_v3/popup.html:20:        <input id="server-input" type="text" placeholder="wss://anticipy.ai/ws/agent" autocomplete="off" />
+/workspaces/Anticipy/extension_v3/popup.html:28:        <textarea id="task-input" rows="3" placeholder="e.g. find a flight from JFK to SFO Friday morning"></textarea>
+/workspaces/Anticipy/extension_v3/background.js:399:// Export for test harness (Jest with jsdom + chrome mocks).
+/workspaces/Anticipy/extension_v3/background.js:409:    setWs: (mock) => { ws = mock; },
+/workspaces/Anticipy/extension_v4/popup.html:28:        <textarea id="task-input" rows="3" placeholder="e.g. find a flight from JFK to SFO Friday morning"></textarea>
+/workspaces/Anticipy/extension_v4/background.js:357:    setPort: (mock) => { port = mock; portConnected = !!mock; },
+/workspaces/Anticipy/src/app/crm/contacts/page.tsx:66:              placeholder="Search."
+/workspaces/Anticipy/src/app/crm/decisions/page.tsx:39:              placeholder="Search decisions."
+/workspaces/Anticipy/src/app/crm/settings/page.tsx:277:                placeholder="Full name"
+/workspaces/Anticipy/src/app/crm/settings/page.tsx:285:                placeholder="optional"
+/workspaces/Anticipy/src/app/crm/settings/page.tsx:294:                placeholder="optional"
+/workspaces/Anticipy/src/app/crm/feed/page.tsx:31:            placeholder="Search summary."
+/workspaces/Anticipy/src/app/crm/manufacturing/file/[id]/page.tsx:212:                placeholder="Add a comment."
+/workspaces/Anticipy/src/app/crm/manufacturing/page.tsx:56:              placeholder="Search files."
+/workspaces/Anticipy/src/app/crm/manufacturing/page.tsx:75:              placeholder="aurora-flex-cables"
+/workspaces/Anticipy/src/app/crm/todos/TodosView.tsx:714:              placeholder="Add a comment. Markdown ok."
+/workspaces/Anticipy/src/app/demo/page.tsx:48:              placeholder="Enter passcode"
+/workspaces/Anticipy/src/app/api/cron/daily-digest/route.ts:128:    lines.push("TODOS");
+/workspaces/Anticipy/src/app/api/engine/twilio/sms-reply/route.ts:56:  // hardcoded action types or per-user logic.
