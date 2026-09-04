@@ -4,7 +4,7 @@
 never been reconciled against what the running PocketBase actually answers, and
 the first run against production shows why that step is not optional:
 
-    41 failed, 76 passed, 70 skipped   (against LIVE PocketBase)
+    187 tests: 42 failed, 75 passed, 70 skipped   (against LIVE PocketBase)
 
 A test that fails against the thing it describes cannot judge a port. Until this
 run is green, a Worker failure and a spec error are indistinguishable, and the
