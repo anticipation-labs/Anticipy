@@ -9,3 +9,4 @@ public/
 
 # a local install lands here when the API worker is built on its own
 node_modules/
+.dev.vars

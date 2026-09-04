@@ -17,6 +17,9 @@
   // ==========================================================================
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "anticipy-api",
+  // Consolidated here by decision 2026-09-04. The DMG bucket that ship.sh
+  // writes still lives on account 5b63e25e and has to be copied across.
+  "account_id": "114587b715e702461766369b01d42fc7",
   "main": "src/index.ts",
 
   "compatibility_date": "2026-09-03",
@@ -52,8 +55,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "anticipy-backend",
-      "database_id": "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+      "database_name": "anticipy-backend-staging",
+      "database_id": "757fb0cd-1971-4daf-99b0-7183fe89bb10"
     }
   ],
 
