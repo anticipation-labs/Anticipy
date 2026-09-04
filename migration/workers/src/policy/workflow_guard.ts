@@ -87,6 +87,8 @@ const S2 = {
   noTell: "shelf2.no_announce_obligation",
   tellLeaves: "shelf2.announce_leaves_the_owner",
   unordered: "shelf2.unordered_lineage",
+  unreadable: "shelf2.lineage_unreadable",
+  superseded: "shelf2.superseded_by_later_act",
 } as const;
 
 const plainObject = (v: unknown): v is Record<string, unknown> =>
@@ -161,6 +163,104 @@ function shelf2Refusal(
   return "";
 }
 
+
+/** Statuses that mean the act has already touched the world. */
+const HAS_RUN = ["running", "needs_user", "done", "failed"];
+const SHELF2_CONSEQUENCE = "reversible_local";
+
+interface LineageAct { id: string; at: number; status: string; }
+
+/**
+ * Every Shelf 2 act sharing this lineage, read from SIBLING rows.
+ *
+ * A compensation is NOT an act: a row carrying `undo_of` is undoing one, so it
+ * holds no lineage position of its own and must not occupy one.
+ *
+ * UNREADABLE IS A REFUSAL, NOT AN EMPTY LIST. A lineage that cannot be parsed,
+ * or whose rows disagree about ordering, is exactly the state in which running
+ * anything might undo somebody's later work -- so it fails closed. Returning
+ * `[]` on a failed read would have made every ordering leg silently pass.
+ */
+async function readLineage(
+  db: D1Database, key: string,
+): Promise<{ why: string; acts: LineageAct[] }> {
+  if (!key) return { why: S2.unordered, acts: [] };
+  let rows: Record<string, unknown>[];
+  try {
+    const res = await db.prepare(
+      `SELECT params, status FROM "jobs"
+        WHERE "lineage_key" = ?1 AND "consequence" = ?2
+        ORDER BY "created" DESC LIMIT 500`)
+      .bind(key, SHELF2_CONSEQUENCE).all<Record<string, unknown>>();
+    rows = res.results ?? [];
+  } catch {
+    return { why: S2.unreadable, acts: [] };
+  }
+  const acts: LineageAct[] = [];
+  const positions: number[] = [];
+  for (const row of rows) {
+    let plan: unknown;
+    try {
+      const parsed = JSON.parse(String(row.params ?? "{}")) as Record<string, unknown>;
+      plan = parsed?._workflow;
+    } catch { return { why: S2.unreadable, acts: [] }; }
+    if (!plainObject(plan)) return { why: S2.unreadable, acts: [] };
+    if (plainObject(plan.undo_of)) continue;          // a compensation is not an act
+    const at = Number(plan.lineage_seq);
+    if (!(at >= 1)) return { why: S2.unreadable, acts: [] };
+    // Two acts claiming one position is a FORK, and neither may proceed.
+    if (positions.includes(at)) return { why: S2.unordered, acts: [] };
+    positions.push(at);
+    acts.push({ id: String(plan.plan_id ?? ""), at, status: String(row.status ?? "") });
+  }
+  return { why: "", acts };
+}
+
+/** One act per lineage position, and this one must be the newest. */
+async function seqRefusal(
+  db: D1Database, embedded: Record<string, unknown>, key: string, workflow: string,
+): Promise<string> {
+  const at = Number(embedded.lineage_seq);
+  if (!(at >= 1)) return "";                    // shelf2Refusal owns that refusal
+  const read = await readLineage(db, key);
+  if (read.why) return read.why;
+  for (const a of read.acts) {
+    if (a.id === workflow) continue;
+    if (a.at >= at) return S2.unordered;
+  }
+  return "";
+}
+
+/**
+ * A compensation must name a real act at the position it claims, and must not
+ * run once a LATER act has already run -- undoing something underneath work
+ * that has already happened on top of it is how a tidy-up becomes damage.
+ */
+async function orderRefusal(
+  db: D1Database, embedded: Record<string, unknown>,
+  rowValue: (n: string, f: unknown) => unknown,
+): Promise<string> {
+  const undoOf = embedded.undo_of;
+  if (!plainObject(undoOf)) return "";
+  const seq = Number(undoOf.act_seq);
+  const target = String(undoOf.plan_id ?? "");
+  const key = String(rowValue("lineage_key", "") ?? "");
+  if (!target || !key || !(seq >= 1)) return S2.unordered;
+  const read = await readLineage(db, key);
+  if (read.why) return read.why;
+  let located = false;
+  for (const a of read.acts) {
+    if (a.id !== target) continue;
+    if (a.at !== seq) return S2.unordered;
+    located = true;
+  }
+  if (!located) return S2.unordered;
+  for (const a of read.acts) {
+    if (a.at > seq && HAS_RUN.includes(a.status)) return S2.superseded;
+  }
+  return "";
+}
+
 const GESTURE_KINDS = ["tap"];
 
 const reject = (why: string) => json(409, { error: "workflow violation", detail: why });
@@ -191,6 +291,12 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
   const oldState = String(old?.workflow_state ?? "");
   const nextState = String(body.workflow_state ?? oldState ?? "");
   const consequence = String(body.consequence ?? old?.consequence ?? "");
+  // workflow_guard.pb.js:37 -- the incoming value wins, else the row's. In D1 a
+  // bool is INTEGER 0/1, so the row side needs Number(), not a truthiness test
+  // on the string "0".
+  const uncertain = body.effect_uncertain != null
+    ? !!body.effect_uncertain
+    : Number(old?.effect_uncertain ?? 0) === 1;
   const agentCaller = !!ctx.request.headers.get("X-Anticipy-Agent-ID");
 
   const rowValue = (name: string, fallback: unknown) =>
@@ -377,45 +483,59 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
       shelf2Earned = true;
     }
   }
+  // ORDERING, read from sibling rows. Only on the way IN to the queue: once a
+  // row is running the lineage question has already been settled for it.
+  if (nextStatus === "queued") {
+    const db = (ctx as unknown as { db: D1Database }).db;
+    const key = String(rowValue("lineage_key", "") ?? "");
+    if (consequence === SHELF2 && !plainObject(embedded.undo_of)) {
+      const clash = await seqRefusal(db, embedded, key, workflow);
+      if (clash) return reject(clash);
+    }
+    const outOfOrder = await orderRefusal(db, embedded, rowValue);
+    if (outOfOrder) return reject(outOfOrder);
+  }
+
   if (live && !shelf2Earned && !NO_APPROVAL_NEEDED.includes(consequence)) {
     const why = approvalRefusal();
     if (why) return reject(why);
   }
 
+  // AN UNCERTAIN EFFECT MAY NOT SIMPLY BE RETRIED. effect_uncertain means we do
+  // not know whether the world changed, so re-queueing without proof is how one
+  // booking becomes two. The proof must be about THIS effect, must conclude the
+  // effect was NOT applied, must carry the owner's own words, and must cite
+  // evidence -- a bare `verified: true` buys nothing.
+  if (nextStatus === "queued" && old && Number(old.effect_uncertain ?? 0) === 1) {
+    let reconciliation: Record<string, unknown>;
+    try {
+      reconciliation = JSON.parse(String(body.reconciliation ?? "")) as Record<string, unknown>;
+    } catch { return reject("uncertain effect needs reconciliation before retry"); }
+    const effect = String(body.effect_key ?? old.effect_key ?? "");
+    if (uncertain
+        || !reconciliation.verified
+        || reconciliation.effect_key !== effect
+        || reconciliation.conclusion !== "not_applied"
+        || !reconciliation.owner_words
+        || !Array.isArray(reconciliation.evidence)
+        || reconciliation.evidence.length === 0) {
+      return reject("uncertain effect was not proven safe to retry");
+    }
+  }
+
   // ==========================================================================
-  // WHAT IS STILL NOT PORTED, AND THE PORT IS NOT DONE UNTIL IT IS.
+  // SHELF 2 IS NOW COMPLETE: the admission ladder (shelf2Refusal), the two
+  // ordering legs that read SIBLING rows (seqRefusal, orderRefusal), and
+  // reconciliation after an uncertain effect.
   //
-  // shelf2Refusal above is the admission ladder and it is complete. Three legs
-  // around it are not, and all three need to read SIBLING rows rather than this
-  // one, which is why they are separate work rather than more of the same:
+  // ONE THING IS STILL MISSING, and it is not ordering: CONTRACT.md §1.15,
+  // "done needs verified evidence for this exact effect". A transition to
+  // `done` should have to carry a receipt whose evidence names the effect that
+  // was actually produced -- otherwise an executor can mark work finished it
+  // never did. That leg needs the receipt shape and the evidence collection,
+  // which is separate work from the lineage.
   //
-  //   seqRefusal   (:439-455) one act per lineage position -- two acts claiming
-  //                the same seq is a fork, and the later one must not run.
-  //   orderRefusal (:509)     shelf2.superseded_by_later_act: an act whose
-  //                lineage position is behind one that HAS ALREADY RUN is
-  //                stale, and running it would undo somebody else's later work.
-  //   reconciliation (§1.13)  a retry after an uncertain effect must prove the
-  //                effect was reconciled, or it may act twice.
-  //
-  // Also absent: "done needs verified evidence for this exact effect" (§1.15).
-  //
-  // They are omitted rather than sketched: a half-transcribed safety ladder is
-  // worse than an absent one because it looks finished. Until they land, this
-  // Worker MUST NOT serve `jobs` in production. ARCHITECTURE.md §12, Phase 4.
-  //
-  // workflow_guard.pb.js:286-673 is SHELF 2 — the earned-not-spelled
-  // reversibility ladder — plus the approval gate (:450 in CONTRACT.md §1.12),
-  // reconciliation after an uncertain effect (§1.13), and "done needs verified
-  // evidence for this exact effect" (§1.15). That is 36 named refusal codes
-  // (the S2.* table at :315-335) and ~200 further lines.
-  //
-  // They are omitted from this SKELETON deliberately rather than sketched:
-  // a half-transcribed safety ladder is worse than an absent one, because it
-  // looks finished. CONTRACT.md §1.11 and §1.16 are the specification, and
-  // migration/spec/contract_tests.py is the acceptance test.
-  //
-  // UNTIL THEY ARE PORTED, THIS WORKER MUST NOT SERVE THE `jobs` COLLECTION
-  // IN PRODUCTION. ARCHITECTURE.md §12, Phase 4 gates on exactly that.
+  // Until it lands, a `done` write is accepted on the row's own say-so.
   // ==========================================================================
   return null;
 };
