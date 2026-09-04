@@ -133,5 +133,10 @@ without erroring. See research/2026-09-04-the-sweep-was-a-silent-noop.md.
 ## Credentials to rotate before this is public
 
 The Cerebras key, access code 77c04c26, everything pasted into this session's
-.env.local, the PocketBase superuser password, and the dev
-ANTICIPY_INTERNAL_KEY now on the Worker.
+.env.local, the PocketBase superuser password, and ANTICIPY_VAULT_KEY.
+
+ANTICIPY_INTERNAL_KEY BELONGS ON THIS LIST TOO, and rotating it is not free:
+`cal_url` is `sha256(teamKey + personId)`, so changing the key silently
+invalidates every calendar feed anyone has subscribed to. Rotate it during a
+window where the team can re-subscribe, tell them first, and change it on BOTH
+origins at once — not as a quiet cleanup.
