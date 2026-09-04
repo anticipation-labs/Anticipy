@@ -3522,3 +3522,82 @@ class TestInternalStateProjections:
                 "channels.%s is %r, not a boolean -- these are derived from "
                 "env PRESENCE so that a credential cannot leak through them"
                 % (name, value))
+
+
+# ---------------------------------------------------------------------------
+# CROSS-ORIGIN TOKEN COMPATIBILITY — the one property nothing else here tests
+#
+# Every other auth test in this file mints a token and verifies it ON THE SAME
+# ORIGIN. Both backends are self-consistent, so both pass, and the suite was
+# green for weeks while the property that actually decides whether a cutover is
+# invisible to users went unmeasured:
+#
+#     A TOKEN MINTED BY POCKETBASE MUST VERIFY ON THE WORKER.
+#
+# Both sign HS256 with a per-record key -- PocketBase with
+# collections.owners.authToken.secret + owners.tokenKey, the Worker with
+# ANTICIPY_AUTH_SECRET + tokenKey. tokenKey migrated. The secret is a SETTING,
+# not a column, so it did not, and ANTICIPY_AUTH_SECRET is currently unset on
+# the Worker -- making the key the string "undefined" + tokenKey.
+#
+# If this leg is red, cutover signs out every iPhone and every extension at
+# once. It goes green when the secret matches, which is exactly the gate.
+#
+# Needs BOTH origins and an owner credential, so it skips unless
+# ANTICIPY_CROSS_ORIGIN (the OTHER backend's base URL) and an account are set.
+# ---------------------------------------------------------------------------
+
+CROSS_ORIGIN = (os.environ.get("ANTICIPY_CROSS_ORIGIN") or "").rstrip("/")
+
+
+@pytest.mark.needs_account
+class TestCrossOriginTokenCompatibility:
+
+    def _mint_here(self, email, password):
+        resp = call("POST", "/api/collections/owners/auth-with-password",
+                    json_body={"identity": email, "password": password})
+        if resp.status != 200:
+            pytest.skip("could not mint a token on BASE_URL: %d" % resp.status)
+        token = (resp.json or {}).get("token") or ""
+        if not token:
+            pytest.skip("auth-with-password returned no token")
+        return token
+
+    def test_a_token_minted_here_verifies_on_the_other_backend(self):
+        """The cutover property. Mint on BASE_URL, present it to
+        ANTICIPY_CROSS_ORIGIN. A 401 here means every signed-in user is signed
+        out the moment traffic moves, including a shipped iOS build whose 401
+        handling nobody has exercised."""
+        if not CROSS_ORIGIN:
+            pytest.skip("set ANTICIPY_CROSS_ORIGIN to the other backend's base URL")
+        email = os.environ.get("ANTICIPY_TEST_EMAIL") or ""
+        password = os.environ.get("ANTICIPY_TEST_PASSWORD") or ""
+        if not (email and password):
+            pytest.skip("set ANTICIPY_TEST_EMAIL and ANTICIPY_TEST_PASSWORD")
+
+        token = self._mint_here(email, password)
+        resp = call("POST", "/api/collections/owners/auth-refresh",
+                    headers={"Authorization": token}, base=CROSS_ORIGIN)
+        assert resp.status == 200, (
+            "a token minted on %s was REJECTED by %s (%d). The two backends do "
+            "not share a record-token secret, so cutting over signs out every "
+            "user at once. Set ANTICIPY_AUTH_SECRET on the Worker to "
+            "collections.owners.authToken.secret from PocketBase. See "
+            "research/2026-09-04-the-auth-secret-nobody-set.md"
+            % (BASE_URL, CROSS_ORIGIN, resp.status))
+
+    def test_a_forged_token_is_refused_by_both(self):
+        """The other half, and it must stay red-proof: if the two ever agree by
+        accepting ANYTHING, that is worse than disagreeing. An unsigned token
+        with valid-looking claims must be refused on both."""
+        forged = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+                  "eyJpZCI6IngiLCJ0eXBlIjoiYXV0aCIsImNvbGxlY3Rpb25OYW1lIjoib3duZXJzIiwiZXhwIjo5OTk5OTk5OTk5fQ."
+                  "not-a-real-signature")
+        here = call("POST", "/api/collections/owners/auth-refresh",
+                    headers={"Authorization": forged})
+        assert here.status == 401, "BASE_URL accepted a forged token: %d" % here.status
+        if CROSS_ORIGIN:
+            there = call("POST", "/api/collections/owners/auth-refresh",
+                         headers={"Authorization": forged}, base=CROSS_ORIGIN)
+            assert there.status == 401, (
+                "%s accepted a forged token: %d" % (CROSS_ORIGIN, there.status))
