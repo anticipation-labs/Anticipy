@@ -12,6 +12,36 @@ What to watch for in code:
 
 ---
 
+---
+
+## The website is no longer in this repo (2026-09-04)
+
+`src/`, `public/`, `supabase/`, `tests/`, `docs/` and the Next.js config moved to
+**anticipation-labs/Aniticpy_Website**, which is what Vercel now deploys to
+www.anticipy.ai. This repo keeps the Action Engine (`engine/`), the Mac desktop
+app (`desktop/`), the executor, the installer and the run artifacts.
+
+What that means for the scripts here:
+
+- `scripts/website_repo.sh` resolves the website checkout. Source it and call
+  `website_repo`; override with `WEBSITE_REPO=/path/to/Aniticpy_Website`.
+- `scripts/ship.sh` still builds and uploads the DMG from here, but writes
+  `state/builds/manifest.json` into the WEBSITE repo, pushes there, and polls
+  for that repo's commit -- because `src/lib/release-meta.ts` imports the
+  manifest and Vercel builds from there now.
+- `scripts/v7/package_extension_v6.sh` still builds the extension from
+  `extension_v4/`, `native_host/`, `engine/` and `installer/` (all still here)
+  but reads and writes the zip in the website repo's `public/`.
+- Scripts that only READ `state/builds/manifest.json` behind an `[ -f ]` guard
+  (`scripts/v6/check_done.sh`, `scripts/v7/check_done.sh`, `tools/ralph_v7.sh`)
+  now find nothing and skip that check. They do not fail; they just stop
+  verifying deploy parity. Point them at the website repo when that matters.
+
+The architecture sections below still describe the website because it is still
+part of the product. It is just built and deployed from the other repo.
+
+---
+
 ## Overview
 Anticipy is an AI wearable product website (Next.js 14) with an integrated **Action Engine** — a browser-based AI agent that receives plain English instructions and completes real tasks on real websites autonomously.
 

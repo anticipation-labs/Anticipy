@@ -64,12 +64,16 @@ check_public_dmg() {
     record_pass "public DMG hash deferred until deploy parity is green"
     return
   fi
-  if [ ! -f state/builds/manifest.json ]; then
-    record_fail "state/builds/manifest.json missing"
+  # The manifest moved to the website repo on 2026-09-04. Look there; only call
+  # it missing if the website checkout has no manifest either.
+  . "$(git rev-parse --show-toplevel)/scripts/website_repo.sh"
+  MANIFEST="$(website_repo --optional)/state/builds/manifest.json"
+  if [ ! -f "$MANIFEST" ]; then
+    record_fail "state/builds/manifest.json missing (looked in the website repo; set WEBSITE_REPO)"
     return
   fi
   local expected live_sha
-  expected=$(jq -r '.latest_sha256 // empty' state/builds/manifest.json)
+  expected=$(jq -r '.latest_sha256 // empty' "$MANIFEST")
   if [ -z "$expected" ]; then
     record_fail "manifest latest_sha256 empty"
     return

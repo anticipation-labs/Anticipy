@@ -4,8 +4,15 @@ set -euo pipefail
 REPO="${REPO:-$(git rev-parse --show-toplevel)}"
 cd "$REPO"
 
-BASE_ZIP="public/anticipy-extension-v6.zip"
-ALIAS_ZIP="public/anticipy-extension.zip"
+# public/ moved to the website repo in the 2026-09-04 split. The extension is
+# still BUILT here (from extension_v4/, native_host/, engine/ and installer/,
+# none of which moved) but the zip it produces is SERVED from there, so both
+# paths point at the website checkout.
+. "$REPO/scripts/website_repo.sh"
+WEBSITE="$(website_repo)" || exit 1
+
+BASE_ZIP="$WEBSITE/public/anticipy-extension-v6.zip"
+ALIAS_ZIP="$WEBSITE/public/anticipy-extension.zip"
 
 if [ ! -f "$BASE_ZIP" ]; then
   echo "[package-extension-v6] missing $BASE_ZIP" >&2
