@@ -342,7 +342,37 @@ def leg_5_name_guard() -> str:
         raise LegFailed("the guard flags clean text — every composition would "
                         "fall back to templates, which silently deletes her "
                         "voice")
-    voice_tail = core.split("def _voice", 1)[-1][:1500]
+    # THE FUNCTION BODY, not a fixed window of characters after its name.
+    #
+    # This read `core.split("def _voice", 1)[-1][:1500]`, and 1500 characters
+    # is a proxy for "inside _voice" that stops being one the moment somebody
+    # writes a long comment. It went red on 2026-09-04 for exactly that: a
+    # truncation guard was added to _voice with the reasoning written above it,
+    # and the explanation pushed the still-present `invented_names` call past
+    # the window. The guard was intact; the instrument could not see it.
+    #
+    # Cutting at the next top-level `def` is both looser where it was wrong
+    # (a comment cannot hide the call) and TIGHTER where it mattered (the old
+    # window could run past the end of _voice and be satisfied by a call in
+    # whatever function came next).
+    voice_tail = core.split("def _voice", 1)[-1]
+    next_def = re.search(r"\n    (?:async )?def ", voice_tail)
+    if next_def:
+        voice_tail = voice_tail[:next_def.start()]
+    # CONSULTED, not merely MENTIONED. `"invented_names" in body` was satisfied
+    # by the word appearing anywhere — including in the comment explaining the
+    # guard and in the print() that reports it. Verified by mutation on
+    # 2026-09-04: rewriting the guard's condition to `if False:` left both of
+    # those strings in place and this leg stayed GREEN over a mouth that no
+    # longer checked anything. The predicate now requires the call to sit in a
+    # CONDITION whose branch RETURNS, which is the only shape that can actually
+    # stop a composition reaching the owner.
+    guard = re.search(
+        r"if\s+[^\n]*\binvented_names\s*\([^\n]*:\s*\n((?:\s*(?:#[^\n]*)?\n|\s{16,}[^\n]*\n)*)",
+        voice_tail)
+    if not guard or "return None" not in guard.group(1):
+        raise LegFailed("_voice() mentions invented_names but does not RETURN on "
+                        "it — the mouth is unguarded however the word appears")
     if "invented_names" not in voice_tail:
         raise LegFailed("invented_names exists but _voice() never consults it — "
                         "the mouth is still unguarded")
