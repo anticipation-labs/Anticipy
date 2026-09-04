@@ -74,5 +74,23 @@
     "repository": "https://github.com/BasedHardware/omi.git",
     "source_path": "Friend/firmware/firmware_v1.0",
     "source_tree_git_oid": "7f896978ef937ae39f2e1cad00f5d95a4ff8152b"
+  },
+  "unverified_source_changes_2026_09_04": {
+    "why": "Three capture defects fixed in source. NONE compiled: no cross-toolchain on the authoring machine, no firmware CI. Tracked by overnight/firmware_gate.py, which reports UNPROVEN until a build and a flash exist.",
+    "changes": [
+      "transport.c/main.c: routine backpressure (-ENOSPC from either ring, -EAGAIN/-ENOMEM from notify) drops ONE frame instead of calling transport_audio_fault, which switched the microphone off for the remainder of the connection with no recovery short of a fresh CCC write the phone never sends.",
+      "transport.c: a dropped frame steps the fragment sequence, so the phone's OpusFrameAssembler still sees the hole. Without that the drop would be invisible and the loss silent.",
+      "transport_safety.{c,h}: the fatal-vs-backpressure classification moved into the pure half so a host compiler can walk it.",
+      "config.h: CODEC_PACKAGE_SAMPLES and CODEC_OUTPUT_MAX_BYTES parenthesised; the second was 'A * 2' and would have returned four times the intended answer under any division.",
+      "config.h/codec.c/transport.c: BUILD_ASSERTs on the capture geometry (one DMA block is a whole number of Opus frames; both rings hold whole records)."
+    ],
+    "verified_how": "firmware/source/tests/run_firmware_tests.sh \u2014 clang, host, reads the real config.h rather than a transcription. Mutation-checked: reclassifying -EACCES, un-parenthesising the macro, and breaking the 1600/160 ratio each turn it red.",
+    "NOT_verified": [
+      "compiles for the target",
+      "links",
+      "flashes",
+      "runs on a board",
+      "streams audio"
+    ]
   }
 }

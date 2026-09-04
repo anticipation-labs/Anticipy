@@ -3,6 +3,7 @@
 #ifndef ANTICIPY_TRANSPORT_SAFETY_H
 #define ANTICIPY_TRANSPORT_SAFETY_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -21,6 +22,17 @@ int transport_fragment_plan(
     uint32_t frame_size,
     const struct transport_fragment_state *current,
     size_t *payload_bytes);
+/*
+ * IS THIS THE LINK BEING BUSY, OR THE STREAM BEING OVER?
+ *
+ * Lives here, in the pure half, because it is the decision that used to be
+ * made wrong: every send failure was treated as fatal, and fatal means the
+ * microphone off for the rest of the connection. Pure and header-declared so
+ * tests/transport_safety_test.c can walk the whole classification on a host
+ * compiler, with no Zephyr, no radio and no board.
+ */
+bool transport_error_is_backpressure(int error);
+
 int transport_fragment_commit(
     const struct transport_fragment_state *current,
     size_t payload_bytes,

@@ -348,6 +348,16 @@ static uint8_t tx_queue[
     (CODEC_OUTPUT_MAX_BYTES + TX_RECORD_HEADER_BYTES)];
 static struct ring_buf tx_ring_buf;
 static struct k_spinlock tx_ring_lock;
+
+/*
+ * The TX ring is sized as a whole number of records, and a record is a frame
+ * plus its header. If that ever stops dividing evenly the ring silently
+ * carries a partial trailing record, which is the shape of bug that shows up
+ * as one corrupt frame per wrap and nowhere in a log.
+ */
+BUILD_ASSERT(
+    sizeof(tx_queue) % (CODEC_OUTPUT_MAX_BYTES + TX_RECORD_HEADER_BYTES) == 0,
+    "TX ring must hold a whole number of frame records");
 K_SEM_DEFINE(tx_data_ready, 0, 1);
 
 static void reset_audio_queues(void)
@@ -978,6 +988,49 @@ static void reset_local_tx_state(
     memset(state->frame, 0, sizeof(state->frame));
 }
 
+/*
+ * FRAMES THE RADIO COULD NOT TAKE. Not an error count — a loss count. It is
+ * the pendant-side twin of the gap the phone measures from the packet index,
+ * and it exists because until now this firmware had no way to lose one frame:
+ * it could only keep every frame or stop the microphone.
+ */
+static atomic_t audio_frames_dropped;
+
+
+/*
+ * Throw away the frame in flight and step the sequence past it.
+ *
+ * THE SEQUENCE MUST MOVE. It is the only loss-detection mechanism the link
+ * has: the phone's OpusFrameAssembler derives lost airtime purely from the
+ * jump in this counter, and transport_fragment_commit advances it only on a
+ * successful notify. Dropping a frame while leaving the counter still would
+ * therefore hand the phone a perfectly continuous stream and hide the loss —
+ * the exact silent-loss shape the drop is being introduced to make visible.
+ *
+ * One step per dropped frame. At the negotiated MTU a frame is a single
+ * notification, so one step is exactly right; under a small MTU a frame spans
+ * several fragments and this UNDER-reports the gap rather than over-reporting
+ * it. That direction is chosen: a gap the phone shows as slightly short is a
+ * smaller lie than one it shows as long, and the alternative needs the
+ * fragment plan's payload size, which is not knowable here without recomputing
+ * it against an MTU that may already have changed.
+ */
+static void discard_pending_frame(struct audio_tx_state *state)
+{
+    state->pending = false;
+    state->frame_size = 0u;
+    state->fragment.offset = 0u;
+    state->fragment.fragment_index = 0u;
+    state->fragment.sequence++;
+    memset(state->frame, 0, sizeof(state->frame));
+    atomic_inc(&audio_frames_dropped);
+}
+
+uint32_t transport_audio_frames_dropped(void)
+{
+    return (uint32_t)atomic_get(&audio_frames_dropped);
+}
+
 static int send_next_fragment(
     struct bt_conn *conn,
     struct audio_tx_state *state)
@@ -1077,9 +1130,16 @@ static void pusher(void *unused1, void *unused2, void *unused3)
             if (err != 0) {
                 /*
                  * send_next_fragment commits offset/sequence only after a
-                 * successful notification. A fatal or exhausted retry stops
-                 * capture and zeroes both queues.
+                 * successful notification, so a failed frame is still whole
+                 * and still in `state`. Backpressure discards exactly that
+                 * frame and keeps capturing; only a genuinely fatal error
+                 * stops capture and zeroes both queues.
                  */
+                if (transport_error_is_backpressure(err)) {
+                    LOG_WRN("Audio frame dropped, link busy: %d", err);
+                    discard_pending_frame(&state);
+                    continue;
+                }
                 transport_audio_fault(err);
                 break;
             }

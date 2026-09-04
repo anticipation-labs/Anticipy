@@ -29,7 +29,18 @@ completing the task.
 
 Scoreboards (run them, believe them): `python3 overnight/tejas_gate.py`,
 `overnight/done_gate.py`, `overnight/tape_gate.py`, `overnight/stranger_gate.py`,
-`overnight/are_the_ears_live.py`.
+`overnight/are_the_ears_live.py`, `overnight/firmware_gate.py`.
+
+`firmware_gate.py` is UNPROVEN (exit 2) on purpose, and that is a third state,
+not a soft fail. The pendant's capture path was fixed in source on 2026-09-04 —
+routine backpressure used to switch the microphone off for the rest of the
+connection — and NONE of it has been compiled: there is no west, no
+arm-none-eabi-gcc, no Zephyr and no firmware CI on this machine, and the source
+receipt still reads artifact_built=false. Host-compiled checks over the pure
+halves pass (`firmware/source/tests/run_firmware_tests.sh`), which is a
+precondition and not an answer. Do not read those passing as the firmware
+working, and do not turn this leg green with anything short of a build, a flash,
+and a pendant that streams.
 
 `are_the_ears_live.py` exists because the ears went deaf for 30 hours and
 nothing noticed. `is_the_brain_live.py` exits 0 on exactly that shape — every

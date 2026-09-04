@@ -28,6 +28,20 @@ K_SEM_DEFINE(codec_data_ready, 0, 1);
 
 static int16_t codec_input_samples[CODEC_PACKAGE_SAMPLES];
 static uint8_t codec_output_bytes[CODEC_OUTPUT_MAX_BYTES];
+
+/*
+ * The PCM ring must hold a whole number of encoder inputs, and one DMA block
+ * must be a whole number of them too. The second is the load-bearing one: it
+ * is what makes a mic-block boundary and an Opus frame boundary re-align every
+ * block instead of drifting, and nothing else in the firmware enforces it.
+ */
+BUILD_ASSERT(
+    sizeof(codec_ring_buffer_data) % sizeof(codec_input_samples) == 0,
+    "PCM ring must hold a whole number of encoder input frames");
+BUILD_ASSERT(
+    MIC_BUFFER_SAMPLES % CODEC_PACKAGE_SAMPLES == 0,
+    "one DMA block must be a whole number of Opus frames, or frame "
+    "boundaries drift against block boundaries on every block");
 K_THREAD_STACK_DEFINE(codec_stack, 32000);
 static struct k_thread codec_thread;
 static int execute_codec(void);

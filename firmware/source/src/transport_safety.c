@@ -5,6 +5,23 @@
 #include <errno.h>
 #include <limits.h>
 
+bool transport_error_is_backpressure(int error)
+{
+    /*
+     * -ENOSPC is a ring that filled because the radio is behind; both rings
+     * drain on their own. -EAGAIN and -ENOMEM are the controller refusing a
+     * buffer, which is what backpressure looks like on this stack. None of
+     * the three says the stream has stopped being valid.
+     *
+     * Everything else stays fatal on purpose: -EACCES is consent revoked,
+     * -ECANCELED is capture already stopped, -EMSGSIZE is an MTU too small to
+     * carry a frame at all, and an encoder or PDM failure really has
+     * invalidated the stream. Success is not backpressure either — a caller
+     * that asks about 0 has already lost track of what it is doing.
+     */
+    return error == -ENOSPC || error == -EAGAIN || error == -ENOMEM;
+}
+
 int transport_fragment_plan(
     uint16_t att_mtu,
     uint32_t frame_size,

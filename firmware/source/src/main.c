@@ -18,6 +18,21 @@
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
+/*
+ * A FULL RING IS THE RADIO BEING BEHIND, NOT THE STREAM BEING OVER.
+ *
+ * Both handlers below used to hand every non-zero result to
+ * transport_audio_fault, and that call switches the microphone off for the
+ * remainder of the connection — recoverable only by a fresh CCC write, which
+ * the phone does not send while a link is up. So a TX ring that filled for
+ * 320ms, or a PCM ring that filled for a second, ended capture for the whole
+ * session. Both rings drain on their own; neither says the stream is invalid.
+ *
+ * Dropping the block instead loses a tenth of a second of audio and keeps the
+ * microphone alive, which is the trade Omi makes in the same place. There is
+ * deliberately no counter here: the transport owns the loss count, because a
+ * number kept in two places is a number that disagrees with itself.
+ */
 static void codec_handler(uint8_t *data, size_t len)
 {
     if (!transport_audio_is_active()) {
@@ -25,6 +40,10 @@ static void codec_handler(uint8_t *data, size_t len)
     }
 
     int err = broadcast_audio_packets(data, len);
+    if (err == -ENOSPC) {
+        LOG_WRN("TX ring full, dropping one audio frame");
+        return;
+    }
     if (err != 0 && err != -ECANCELED) {
         LOG_ERR("Failed to queue audio packet: %d", err);
         transport_audio_fault(err);
@@ -38,6 +57,10 @@ static void handle_mic_samples(int16_t *buffer)
     }
 
     int err = codec_receive_pcm(buffer, MIC_BUFFER_SAMPLES);
+    if (err == -ENOSPC) {
+        LOG_WRN("PCM ring full, dropping one microphone block");
+        return;
+    }
     if (err != 0 && err != -ECANCELED) {
         LOG_ERR("Failed to queue PCM data: %d", err);
         transport_audio_fault(err);
