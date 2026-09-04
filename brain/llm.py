@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -140,6 +142,77 @@ def now_line(tz_name: Optional[str] = None) -> str:
         + " Never write a weekday next to a relative day unless it matches"
           " these; if you name a day, name the date with it."
     )
+
+
+# ---------------------------------------------------- transient-failure retry
+# A 429 USED TO MAKE HER IGNORE A SPOKEN LINE.
+#
+# Both providers were called with `raise_for_status()` and no retry of any
+# kind. On the decision path that exception reaches triage's handler, which
+# tries once more and then files the line as "ignore" — so a rate-limit blip
+# lasting one second silently discarded an errand the owner had spoken aloud.
+# Nothing recorded that it happened; the line simply read as chatter.
+#
+# WHAT IS AND IS NOT RETRIED, because "retry on error" is how a wallet empties.
+# Only transport-level transients: 429 (slow down), 5xx (their fault), and a
+# timeout or connection failure. Deliberately NOT retried are the codes that
+# mean the request itself is wrong or the account cannot pay — 400, 401, 403,
+# 404 and especially 402. overnight/MORNING.md records the night this system
+# went silent because OpenRouter credits hit 160/160 and every model returned
+# 402; retrying that would have spent the same nothing three times as fast and
+# made the logs harder to read, not the outcome better.
+#
+# This is a TRANSPORT decision, not a meaning one: it keys on an HTTP status
+# and an exception type, never on anything the model said. Bounded at two
+# retries so the worst case adds about two seconds to a call that already
+# carries a 60-second timeout, and jittered so a fleet of workers that all
+# stalled on the same provider blip do not return in lockstep.
+_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+_RETRY_ATTEMPTS = 3          # the first try plus two retries
+_RETRY_BASE_SECONDS = 0.5
+
+
+def _sleep_before_retry(attempt: int) -> None:
+    delay = _RETRY_BASE_SECONDS * (2 ** attempt)
+    time.sleep(delay * (0.75 + random.random() * 0.5))
+
+
+def _post_json(url: str, headers: dict, payload: dict) -> dict:
+    """POST, retrying only what is worth retrying, and say when it happened."""
+    last: Exception | None = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            with httpx.Client(timeout=60) as c:
+                r = c.post(url, headers=headers, json=payload)
+            # A POSITIVE retryable status, or nothing happens. `getattr` rather
+            # than attribute access because absence is not a verdict here
+            # either: a response object that cannot say what its status was is
+            # not evidence that the provider asked us to slow down, and
+            # treating "I don't know" as "retry" is how a retry policy starts
+            # hammering an endpoint it has never successfully read.
+            status = getattr(r, "status_code", None)
+            if status in _RETRY_STATUS and attempt + 1 < _RETRY_ATTEMPTS:
+                print(f"llm: provider returned {status}, "
+                      f"retry {attempt + 1}/{_RETRY_ATTEMPTS - 1}")
+                _sleep_before_retry(attempt)
+                continue
+            r.raise_for_status()
+            return r.json()
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            last = exc
+            if attempt + 1 >= _RETRY_ATTEMPTS:
+                break
+            print(f"llm: {type(exc).__name__}, "
+                  f"retry {attempt + 1}/{_RETRY_ATTEMPTS - 1}")
+            _sleep_before_retry(attempt)
+    # Only reachable when every attempt raised a transport error: the status
+    # path cannot arrive here, because the final attempt stops short-circuiting
+    # and lets raise_for_status carry the provider's own error upward. An
+    # earlier draft had a re-issue block here for that case and it was dead
+    # code claiming to handle something — which is worse than no code, because
+    # a reader trusts it.
+    assert last is not None
+    raise last
 
 
 @dataclass
@@ -345,10 +418,7 @@ class LLM:
             "Content-Type": "application/json",
         }
         url = GEMINI_URL.format(model=model)
-        with httpx.Client(timeout=60) as c:
-            r = c.post(url, headers=headers, json=payload)
-            r.raise_for_status()
-            data = r.json()
+        data = _post_json(url, headers, payload)
         candidate = (data.get("candidates") or [{}])[0]
         parts = ((candidate.get("content") or {}).get("parts") or [])
         text = "".join(str(part.get("text") or "") for part in parts if isinstance(part, dict))
@@ -411,10 +481,7 @@ class LLM:
                 {"role": "user", "content": user},
             ],
         }
-        with httpx.Client(timeout=60) as c:
-            r = c.post(OPENROUTER_URL, headers=headers, json=payload)
-            r.raise_for_status()
-            data = r.json()
+        data = _post_json(OPENROUTER_URL, headers, payload)
         _record(model, system, user, data.get("usage") or {}, "openrouter")
         choice = data["choices"][0]
         # OpenAI-compatible providers spell the same thing "length".
