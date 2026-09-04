@@ -3323,13 +3323,50 @@ def _worker_index_source():
 ALL_HQ_ROUTES = set(HQ_GATED_ROUTES) | {(m, p) for (m, p, _s, _n) in HQ_EXCEPTIONS}
 
 
+def _wired_hq_routes(source):
+    """Every (METHOD, path) pair index.ts actually handles.
+
+    METHOD MATTERS, and an earlier version of this ignored it. Keying on the
+    path alone meant PATCH /internal/comments kept the path in the "wired" set
+    after POST /internal/comments was deleted -- the leg passed while a real
+    route was missing, which is precisely the failure it exists to prevent.
+    Negative-tested by deleting one method of a two-method path.
+
+    Three dispatch forms are recognised, because index.ts uses three:
+      path === "X" && method === "M"   the ordinary case
+      HQ_DEAD_ROUTES.includes(path)    the retired 410s, ANY method, and the
+                                       array lives in hq.ts, not here
+      path.startsWith("/internal/cal/") a prefix route
+    """
+    wired = set()
+    for path, method in re.findall(
+            r'path === "(/internal/[^"]+)" && method === "(\w+)"', source):
+        wired.add((method, path))
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    hq_ts = os.path.join(here, "..", "workers", "src", "routes", "hq.ts")
+    if os.path.exists(hq_ts):
+        with open(hq_ts, "r", encoding="utf-8") as handle:
+            dead = re.search(r'HQ_DEAD_ROUTES[^=]*=\s*\[(.*?)\]', handle.read(), re.S)
+        if dead:
+            # Answered before any method dispatch, so every method counts.
+            for path in re.findall(r'"(/internal/[^"]+)"', dead.group(1)):
+                for method in ("GET", "POST", "PATCH", "PUT", "DELETE"):
+                    wired.add((method, path))
+
+    if 'path.startsWith("/internal/cal/")' in source:
+        wired.add(("GET", "/internal/cal/{token}"))
+    return wired
+
+
 @pytest.mark.offline
 class TestHQPortProgressIsHonest:
 
     def test_the_not_yet_ported_marker_matches_reality(self):
         source = _worker_index_source()
-        wired = set(re.findall(r'path === "(/internal/[^"]+)"', source))
-        unported = sorted(p for (_m, p) in ALL_HQ_ROUTES if p not in wired)
+        wired = _wired_hq_routes(source)
+        unported = sorted("%s %s" % (m, p) for (m, p) in ALL_HQ_ROUTES
+                          if (m, p) not in wired)
         marker = "hq data routes not yet ported"
 
         if unported:

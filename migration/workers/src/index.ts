@@ -34,6 +34,7 @@ import {
   hqCommentCreate, hqCommentUpdate, hqCommentDelete,
   hqReminderCreate, hqReminderDelete, hqCalendar,
 } from "./routes/hq_threads.ts";
+import { hqAssistant } from "./routes/hq_assistant.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -191,6 +192,7 @@ export default {
       if (path === "/internal/comments/delete" && method === "POST") return hqCommentDelete(request, hq);
       if (path === "/internal/reminders" && method === "POST") return hqReminderCreate(request, hq);
       if (path === "/internal/reminders/delete" && method === "POST") return hqReminderDelete(request, hq);
+      if (path === "/internal/assistant" && method === "POST") return hqAssistant(request, hq);
       if (path.startsWith("/internal/cal/") && method === "GET") {
         return hqCalendar(request, hq, path.slice("/internal/cal/".length));
       }
@@ -204,8 +206,11 @@ export default {
       // Everything else behind the session gate.
       const refused = hqGate(request, hq);
       if (refused) return refused;
-      return new Response(JSON.stringify({ error: "hq data routes not yet ported" }),
-        { status: 503, headers: { "content-type": "application/json", ...hqCors(request, hq) } });
+      // Every HQ route is wired above. Anything reaching here is a path that
+      // internal_hq.pb.js never had, and 404 is the honest answer -- the old
+      // "not yet ported" 503 would now be a lie in the other direction.
+      return new Response(JSON.stringify({ error: "not found" }),
+        { status: 404, headers: { "content-type": "application/json", ...hqCors(request, hq) } });
     }
 
     // --- the auth endpoints. guard.pb.js:367-370 keeps these open. ---------

@@ -22,6 +22,19 @@
   "account_id": "114587b715e702461766369b01d42fc7",
   "main": "src/index.ts",
 
+  // DECLARED EXPLICITLY, and it is not cosmetic.
+  //
+  // With this absent, four consecutive `wrangler deploy` runs reported success
+  // and promoted a version to 100% while anticipy-api.omar-114.workers.dev
+  // kept serving an OLDER build -- health said channels:false with the secrets
+  // demonstrably bound, and /internal/assistant answered with a catch-all that
+  // no longer exists in the source. `wrangler dev --remote` on the same commit
+  // was correct, which is what proved the code was fine and the ROUTE was not.
+  //
+  // This is the same shape as the deploy rule in CLAUDE.md: the tool reports
+  // success while the thing users reach does not change. Verify a deploy by
+  // asking the live URL what it is, never by reading the exit code.
+  "workers_dev": true,
   "compatibility_date": "2026-09-03",
 
   // REQUIRED, not optional: bcryptjs reaches for node built-ins.
@@ -137,8 +150,24 @@
   // NOT harmless for the sweep, which sends reminders. Confirm the Railway
   // container's TZ before cutover.
   // --------------------------------------------------------------------------
+  // THE SWEEP TRIGGER IS DELIBERATELY OFF UNTIL CUTOVER.
+  //
+  // "*/5 * * * *" is the HQ sweep and it is now fully implemented — it really
+  // does send. Production's PocketBase sweep is ALSO still running every five
+  // minutes against its own database. Enabling both means the team gets every
+  // reminder, nudge and digest TWICE, from two systems, with nothing on either
+  // side saying why.
+  //
+  // Leaving it enabled but starving it of TWILIO_*/RESEND_API_KEY is not the
+  // safe middle: the passes stamp their claim BEFORE they send, so a sweep
+  // that cannot send still consumes remind_sent_at and followup_sent_at. Those
+  // reminders would then never fire after cutover, silently. (Observed: one
+  // manual run consumed 9 follow-up claims.)
+  //
+  // AT CUTOVER: add "*/5 * * * *" back HERE and remove PocketBase's in the
+  // same change. Exactly one sweep may own a database.
   "triggers": {
-    "crons": ["*/5 * * * *", "17 4 * * *"]
+    "crons": ["17 4 * * *"]
   },
 
   // --------------------------------------------------------------------------
