@@ -18,6 +18,7 @@
  */
 import { resetRequest, resetConfirm, type ResetEnv } from "./routes/password_reset.ts";
 import { accountDelete } from "./routes/account_delete.ts";
+import { hqHealth, hqLogin, hqGate, hqGone, hqPage, hqCors, HQ_DEAD_ROUTES, type HqEnv } from "./routes/hq.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -116,6 +117,31 @@ export default {
     }
     if (path === "/transcription/token" && method === "POST") {
       return transcriptionToken(request, env as unknown as SmsEnv);
+    }
+
+    // --- HQ's front door. CONTRACT.md §7. --------------------------------
+    // Its own auth stack: X-Internal-Key, X-HQ-Session, 8-char login codes,
+    // and a Clerk exchange. None of it is PocketBase auth.
+    if (path.startsWith("/internal/") || path === "/fellows/hq") {
+      const hq = env as unknown as HqEnv;
+
+      // The preflight answers 204 and NOTHING else, before any auth.
+      if (method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: hqCors(request, hq) });
+      }
+      // 410 FIRST, before any key is read -- so a retired route can never
+      // answer 401 or 503 and invite a retry.
+      if (HQ_DEAD_ROUTES.includes(path)) return hqGone(request, hq);
+
+      if (path === "/internal/health" && method === "GET") return hqHealth(request, hq);
+      if (path === "/internal/login" && method === "POST") return hqLogin(request, hq);
+      if (path === "/fellows/hq" && method === "GET") return hqPage(request, hq);
+
+      // Everything else behind the session gate.
+      const refused = hqGate(request, hq);
+      if (refused) return refused;
+      return new Response(JSON.stringify({ error: "hq data routes not yet ported" }),
+        { status: 503, headers: { "content-type": "application/json", ...hqCors(request, hq) } });
     }
 
     // --- the auth endpoints. guard.pb.js:367-370 keeps these open. ---------
