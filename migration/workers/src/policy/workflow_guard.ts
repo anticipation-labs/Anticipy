@@ -523,19 +523,55 @@ export const workflowGuard: Policy = async (ctx: Ctx): Promise<Response | null> 
     }
   }
 
+  // THE LEASE IS THE CLAIM. A status string is not one.
+  //
+  // `running` without an actor and a lease is an executor asserting it holds
+  // work it never claimed; a lease already in the past is one that another
+  // executor is free to take, so honouring it would let two run at once.
+  if (nextStatus === "running") {
+    const lease = String(rowValue("lease_token", "") ?? "");
+    const actor = String(rowValue("claimed_by", "") ?? "");
+    const until = String(rowValue("lease_until", "") ?? "");
+    if (!lease || !actor || !until) return reject("running work needs an actor and lease");
+    if (Date.parse(String(until).replace(" ", "T")) <= Date.now()) {
+      return reject("running lease must expire in the future");
+    }
+  } else if (!old || oldStatus === "running") {
+    // Coming to rest RELEASES the lease. A parked or finished row still
+    // carrying one is a row another executor cannot pick up.
+    const lease = String(body.lease_token != null
+      ? body.lease_token : (old?.lease_token ?? "")) || "";
+    if (lease) return reject("non-running work may not retain an execution lease");
+  }
+
+  // CONTRACT.md §1.15 -- DONE IS A CLAIM ABOUT THE WORLD, AND IT NEEDS PROOF.
+  //
+  // Without this an executor can mark work finished it never did, and "done =
+  // evidence" becomes "done = said so". The receipt must be verified, must name
+  // THIS effect_key -- proof of some other effect is not proof of this one --
+  // and must cite at least one piece of evidence.
+  if (nextStatus === "done") {
+    let receipt: Record<string, unknown>;
+    try {
+      receipt = JSON.parse(String(rowValue("receipt", "") ?? "")) as Record<string, unknown>;
+    } catch { return reject("done needs a parseable receipt"); }
+    const effect = String(rowValue("effect_key", "") ?? "");
+    if (!receipt.verified
+        || receipt.effect_key !== effect
+        || !Array.isArray(receipt.evidence)
+        || receipt.evidence.length === 0) {
+      return reject("done needs verified evidence for this exact effect");
+    }
+  }
+
   // ==========================================================================
-  // SHELF 2 IS NOW COMPLETE: the admission ladder (shelf2Refusal), the two
-  // ordering legs that read SIBLING rows (seqRefusal, orderRefusal), and
-  // reconciliation after an uncertain effect.
+  // SHELF 2 AND THE WORKFLOW LAW ARE NOW COMPLETE against CONTRACT.md §1.1-1.16:
+  // the state table, the create leg, the lease protocol, the approval gate,
+  // Shelf 2's admission ladder, the two sibling-row ordering legs,
+  // reconciliation after an uncertain effect, and done-needs-evidence.
   //
-  // ONE THING IS STILL MISSING, and it is not ordering: CONTRACT.md §1.15,
-  // "done needs verified evidence for this exact effect". A transition to
-  // `done` should have to carry a receipt whose evidence names the effect that
-  // was actually produced -- otherwise an executor can mark work finished it
-  // never did. That leg needs the receipt shape and the evidence collection,
-  // which is separate work from the lineage.
-  //
-  // Until it lands, a `done` write is accepted on the row's own say-so.
+  // The acceptance test is migration/spec/contract_tests.py, run against BOTH
+  // backends and diffed -- not this comment.
   // ==========================================================================
   return null;
 };
