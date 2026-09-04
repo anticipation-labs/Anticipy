@@ -457,6 +457,47 @@ struct ListenTallyTests {
         check("a battery reading is not evidence that anybody spoke",
               q.longestSilenceSeconds == 3_600 && q.wordsFlushed == 0)
 
+        // ------------------------------------------------------- airtime lost
+        // The sum AND the count, because they answer different questions. One
+        // long dropout and a hundred stutters can total the same milliseconds
+        // and mean opposite things about the radio.
+        let lossy: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(10), .airtimeLost(milliseconds: 1_500)),
+            (at(20), .airtimeLost(milliseconds: 340)),
+            (at(30), .airtimeLost(milliseconds: 10)),
+        ]
+        let loss = ListenTally.of(lossy, now: at(30))
+        check("airtime lost is summed, and the holes are counted separately",
+              loss.airtimeLostMilliseconds == 1_850 && loss.airtimeGaps == 3)
+
+        // THE INVARIANT THIS CASE EXISTS FOR. A gap is the record of a stretch
+        // in which nothing was heard because nothing arrived — the opposite of
+        // hearing. If it reset the silence clock, a radio dropping packets
+        // continuously would hold `longestSilenceSeconds` down by reporting its
+        // own failures, and the one instrument that can see a dead link would
+        // be reassured by the very evidence of it. Same shape as the battery
+        // check above, and a worse failure if it ever inverts.
+        let allGaps: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(1_800), .airtimeLost(milliseconds: 900)),
+            (at(3_600), .airtimeLost(milliseconds: 900)),
+        ]
+        let d = ListenTally.of(allGaps, now: at(3_600))
+        check("a gap is not evidence that anybody spoke",
+              d.longestSilenceSeconds == 3_600 && d.wordsFlushed == 0
+                  && d.airtimeGaps == 2)
+
+        // A day with a working radio must read zero, not "unknown" — the whole
+        // point is that a quiet room and a failing link stop looking alike.
+        let clean: [(Date, ListenEvent)] = [
+            (at(0), .sessionStarted),
+            (at(10), .flushed(reason: .gap, words: 6)),
+        ]
+        let c = ListenTally.of(clean, now: at(10))
+        check("a day the radio lost nothing reads as zero lost, not as unmeasured",
+              c.airtimeLostMilliseconds == 0 && c.airtimeGaps == 0)
+
         // ------------------------------------------------------------------ result
         print("")
         if failures.isEmpty {

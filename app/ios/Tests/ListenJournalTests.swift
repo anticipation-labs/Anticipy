@@ -362,6 +362,7 @@ extension ListenEvent {
     enum Kind: CaseIterable {
         case sessionStarted, sessionStopped, recognizerSwapped
         case flushed, posted, sessionFacts, buffersDropped, batteryRead
+        case airtimeLost
     }
 
     var kind: Kind {
@@ -374,6 +375,7 @@ extension ListenEvent {
         case .sessionFacts: return .sessionFacts
         case .buffersDropped: return .buffersDropped
         case .batteryRead: return .batteryRead
+        case .airtimeLost: return .airtimeLost
         }
     }
 
@@ -439,6 +441,15 @@ extension ListenEvent {
             return [.batteryRead(percent: 47, onPower: false),
                     .batteryRead(percent: 100, onPower: true),
                     .batteryRead(percent: 0, onPower: false)]
+        // One packet (10 ms), a long dropout, and the smallest value the
+        // writer can produce. `recordPendantGap` floors at 1, so 1 is the
+        // real boundary of this case and belongs in the round trip; the
+        // six-figure sample is there because a gap is a whole number of
+        // packets and nothing clamps how many of them can go missing.
+        case .airtimeLost:
+            return [.airtimeLost(milliseconds: 10),
+                    .airtimeLost(milliseconds: 143_720),
+                    .airtimeLost(milliseconds: 1)]
         }
     }
 

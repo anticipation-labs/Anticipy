@@ -1773,13 +1773,28 @@ final class AnticipySession: ObservableObject {
     /// The hole, made visible. A gap line never goes through the transcript
     /// push path — the brain must never be asked to triage dead air — and it
     /// is formatted by GapMarker so the wording is one decision, tested,
-    /// not three strings typed in three places. The ListenJournal is NOT
-    /// written here: its event enum is gate-pinned, and a gap is not a
-    /// session stop — journaling a hole as a stopped session is how a
-    /// journal starts hiding the stops that were real. Journaling gaps
-    /// properly is one new case + one describe line, declared as follow-up.
+    /// not three strings typed in three places.
+    ///
+    /// The journal IS written here now, and the follow-up this comment used to
+    /// declare is what closed it: `ListenEvent.airtimeLost` rather than a
+    /// reused `sessionStopped`, because journaling a hole as a stopped session
+    /// is how a journal starts hiding the stops that were real. That is one
+    /// case, one describe line, one parse case and one tally fold — and it is
+    /// the difference between a loss the owner can read tomorrow and a loss
+    /// that died with the process. The feed marker is per-session UI; the
+    /// journal is the durable half, and `ListenTally` folds a day of these into
+    /// the two numbers that separate a failing radio from a quiet room.
+    ///
+    /// ROUNDED, NOT TRUNCATED, and floored at one. The assembler's gap is a
+    /// whole number of 10 ms packets, so this conversion is normally exact; the
+    /// floor exists so that a gap small enough to round to zero is still
+    /// recorded as a gap. `airtimeGaps` is a count of holes, and a hole
+    /// reported as zero milliseconds is still a hole — dropping it entirely
+    /// would let a continuously-stuttering link report nothing at all.
     private func recordPendantGap(_ seconds: TimeInterval) {
         let marker = GapMarker.text(seconds)
+        let milliseconds = max(1, Int((seconds * 1000).rounded()))
+        ListenJournal.shared.record(.airtimeLost(milliseconds: milliseconds))
         DispatchQueue.main.async { [weak self] in
             self?.sessionLines.append(SessionLine(text: marker))
         }

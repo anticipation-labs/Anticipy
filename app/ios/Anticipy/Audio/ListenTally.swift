@@ -126,6 +126,21 @@ struct ListenTally: Equatable {
     /// microphone that heard nothing at all, from outside.
     var postsFailed = 0
 
+    /// AIRTIME THE PENDANT'S RADIO LOST, summed over the day, in milliseconds.
+    ///
+    /// The one number that separates "the room was quiet" from "the link was
+    /// dropping packets and the transcript has holes in it". Both produce a
+    /// short transcript; only one of them is a defect, and until this existed
+    /// the assembler measured the difference and then threw it away when the
+    /// process ended.
+    var airtimeLostMilliseconds = 0
+    /// HOW MANY SEPARATE HOLES made up that total, which the total alone
+    /// cannot say. Thirty seconds lost in one dropout is a radio that went out
+    /// of range; the same thirty seconds spread over three hundred stutters is
+    /// a link failing continuously in place. They want different fixes, and a
+    /// single sum reads identically for both.
+    var airtimeGaps = 0
+
     /// `now` is the moment the record is being READ, and it is the difference
     /// between an instrument and a decoration.
     ///
@@ -293,6 +308,16 @@ struct ListenTally: Equatable {
 
             case .posted(let ok, _):
                 if ok { tally.postsAccepted += 1 } else { tally.postsFailed += 1 }
+
+            // DELIBERATELY DOES NOT TOUCH `lastHeardAt`. A gap is the opposite
+            // of hearing: it is the record of a stretch in which nothing was
+            // heard because nothing arrived. Counting it as evidence of
+            // activity would let a failing radio hold `longestSilenceSeconds`
+            // down by reporting its own failures — the instrument reassuring
+            // itself with the very thing it exists to catch.
+            case .airtimeLost(let milliseconds):
+                tally.airtimeLostMilliseconds += milliseconds
+                tally.airtimeGaps += 1
             }
         }
 
@@ -361,6 +386,12 @@ struct ListenTally: Equatable {
         // at one instant from colliding.
         case .sessionFacts(let facts): return "3a\(facts.sentence)"
         case .buffersDropped(let count): return "3b\(count)"
+        // The same "3" slot as the two observational cases above, for the same
+        // reason they share it: a day recorded by an older build sorts against
+        // a newer one the same way. A gap is an observation about the link, not
+        // a flush and not a stop, so it belongs beside them rather than
+        // anywhere that would reorder hearing or session boundaries.
+        case .airtimeLost(let milliseconds): return "3c\(milliseconds)"
         case .posted(let ok, let detail): return "4\(ok) \(detail.text)"
         case .sessionStopped(let cause): return "5\(cause.rawValue)"
         }
