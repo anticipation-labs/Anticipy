@@ -24,6 +24,9 @@ export interface HqEnv {
   ASSETS: Fetcher;
   ANTICIPY_INTERNAL_KEY?: string;
   ANTICIPY_HQ_ORIGIN?: string;
+  ANTICIPY_HQ_LOGIN_CEILING?: string;
+  ANTICIPY_PUBLIC_HOST?: string;
+  CLERK_HQ_JWT_KEY?: string;
   RESEND_API_KEY?: string;
   TWILIO_AUTH_TOKEN?: string;
 }
@@ -86,7 +89,9 @@ export function hqLogin(req: Request, env: HqEnv): Response {
     return json(503, { error: "internal HQ is not configured" }, cors);
   }
   if (!keyOk(env, req)) return json(401, { error: "wrong key" }, cors);
-  return json(503, { error: "hq login not yet ported" }, cors);
+  // The gate screen validating a key before it stores it. Nothing more: the
+  // key IS the credential, so a correct one has nothing left to prove.
+  return json(200, { ok: true }, cors);
 }
 
 /** §7.3 -- the session gate in front of every data route. */

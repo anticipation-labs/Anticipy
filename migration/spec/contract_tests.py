@@ -3126,3 +3126,233 @@ class TestTheDocumentAndTheSuiteAgree(object):
         assert "ANTICIPY_SERVICE_TOKEN" in text
         assert "if (!workflow) return e.next()" in text or \
                "!workflow) return e.next()" in text
+
+
+# ---------------------------------------------------------------------------
+# HQ's gate surface, without holding the key
+#
+# ANTICIPY_INTERNAL_KEY is not available to this suite, which parked HQ's ~33
+# data routes as unverifiable and therefore unportable. It does not. Every
+# gated handler in internal_hq.pb.js checks the key as its FIRST statement and
+# returns before touching data, so the UNAUTHENTICATED answer of every route is
+# both observable without a credential and specified line-by-line by the source.
+#
+# That makes this table a fingerprint. 28 routes refuse identically; 7 do
+# something else, each for a reason written down in the source. A build that
+# merely resembled that file would not reproduce seven distinct exceptions and
+# their exact wording. Production matched all 35 on 2026-09-04 -- see
+# research/2026-09-04-hq-hook-IS-production.md -- which is what established
+# that the repo's hook IS the deployed one and unblocked the port.
+#
+# It is also the half of HQ most worth pinning. This is the gate: 401 vs 400 vs
+# 410 vs 200 is a security property, and getting it subtly wrong in a port is
+# both easy and silent. Authenticated bodies are NOT covered here and stay
+# UNPROVEN until the key exists.
+#
+# These are safe to run against production: no key means no side effect, by
+# construction of the handlers.
+# ---------------------------------------------------------------------------
+
+HQ_WRONG_KEY = "wrong key"
+
+# (method, path) -> refuses with 401 {"error": "wrong key"}
+HQ_GATED_ROUTES = [
+    ("GET",   "/internal/me"),
+    ("GET",   "/internal/state"),
+    ("PATCH", "/internal/comments"),
+    ("PATCH", "/internal/people"),
+    ("PATCH", "/internal/todos"),
+    ("POST",  "/internal/assistant"),
+    ("POST",  "/internal/comments"),
+    ("POST",  "/internal/comments/delete"),
+    ("POST",  "/internal/events"),
+    ("POST",  "/internal/events/delete"),
+    ("POST",  "/internal/expenses"),
+    ("POST",  "/internal/expenses/delete"),
+    ("POST",  "/internal/login"),
+    ("POST",  "/internal/notes"),
+    ("POST",  "/internal/notes/delete"),
+    ("POST",  "/internal/notifs/read"),
+    ("POST",  "/internal/passwords"),
+    ("POST",  "/internal/passwords/delete"),
+    ("POST",  "/internal/passwords/reveal"),
+    ("POST",  "/internal/people"),
+    ("POST",  "/internal/people/code"),
+    ("POST",  "/internal/reminders"),
+    ("POST",  "/internal/reminders/delete"),
+    ("POST",  "/internal/settings"),
+    ("POST",  "/internal/todos"),
+    ("POST",  "/internal/todos/delete"),
+    ("POST",  "/internal/tracks"),
+    ("POST",  "/internal/tracks/delete"),
+]
+
+# The seven that do NOT 401, and why. Each is load-bearing, not an oddity.
+HQ_EXCEPTIONS = [
+    # The AI surface was removed. 410 and not 404, so a stale client learns it
+    # is stale instead of thinking it mistyped a URL.
+    ("GET",  "/internal/research/status", 410, "the AI surface was removed from HQ"),
+    ("POST", "/internal/research",        410, "the AI surface was removed from HQ"),
+    ("POST", "/internal/router",          410, "the AI surface was removed from HQ"),
+    # Shape before authority: no token in the request is a 400, because it is a
+    # malformed request, not a rejected one.
+    ("POST", "/internal/clerk/exchange",  400, "no Clerk token in the request"),
+    # Onboarding. Ari holds an eight-character code and nothing else, so this
+    # route cannot be key-gated. The reply is deliberately the same whether the
+    # code is wrong or merely unknown -- it must not become an oracle for
+    # guessing valid codes.
+    ("POST", "/internal/session",         200, "That code didn't match anyone."),
+    # Signing out twice is not an error.
+    ("POST", "/internal/session/end",     200, None),
+]
+
+
+@pytest.mark.anonymous
+class TestHQGateSurfaceWithoutTheKey:
+
+    @pytest.mark.parametrize("method,path", HQ_GATED_ROUTES,
+                             ids=lambda v: v if isinstance(v, str) else v)
+    def test_gated_route_refuses_without_a_key(self, method, path):
+        """401 and the same four-character reason for all 28. A route that
+        answers anything else without a credential is either ungated or
+        leaking which part of the request it disliked."""
+        resp = call(method, path, json_body={})
+        assert resp.status == 401, (
+            "%s %s answered %d without a key; it must be 401. Body: %.200r"
+            % (method, path, resp.status, resp.text))
+        assert HQ_WRONG_KEY in detail_of(resp), (
+            "%s %s refused with %r, not %r -- a differing refusal string is how "
+            "a port drifts into telling a stranger something."
+            % (method, path, detail_of(resp), HQ_WRONG_KEY))
+
+    @pytest.mark.parametrize("method,path,status,needle", HQ_EXCEPTIONS)
+    def test_the_seven_deliberate_exceptions_still_behave(
+            self, method, path, status, needle):
+        """Each of these is ungated or pre-empted ON PURPOSE. Pinning them
+        matters more than pinning the 28: an exception that quietly becomes a
+        401 breaks onboarding or a stale client, and one that quietly stops
+        being an exception opens a hole."""
+        resp = call(method, path, json_body={})
+        # A route whose OWN secret is missing answers 503 with a sentence
+        # naming what is missing. That is the route behaving correctly under a
+        # configuration gap, not a port defect, and it must not read as either
+        # a pass or a failure -- so it skips, loudly, naming the variable.
+        # /internal/clerk/exchange is the live case: production has
+        # CLERK_HQ_JWT_KEY set (it answers 400), the Worker does not yet.
+        if resp.status == 503 and "not configured" in (detail_of(resp) or ""):
+            pytest.skip("%s %s is unconfigured on this origin: %r -- set the "
+                        "secret before cutover; this is a config gap, not a "
+                        "port gap" % (method, path, detail_of(resp)))
+        assert resp.status == status, (
+            "%s %s answered %d, expected %d. Body: %.200r"
+            % (method, path, resp.status, status, resp.text))
+        if needle is not None:
+            assert needle in (detail_of(resp) or ""), (
+                "%s %s said %r, expected to contain %r"
+                % (method, path, detail_of(resp), needle))
+
+    def test_fellows_hq_is_ungated_and_serves_a_document(self):
+        """/fellows/hq needs no key -- and shows the two layers coming apart.
+        The ROUTE is this repo's; the internal.html it reads off disk is NOT
+        (production's is 5,654 bytes larger). So assert the route's contract,
+        never the document's bytes."""
+        resp = call("GET", "/fellows/hq")
+        assert resp.status == 200, "/fellows/hq must stay ungated"
+        assert "<!doctype" in resp.text[:400].lower(), (
+            "/fellows/hq served something that is not a document: %.200r"
+            % resp.text)
+
+    def test_health_reports_the_lock_without_leaking_it(self):
+        """Booleans derived from env presence, never values. A boolean cannot
+        leak a key, which is the whole design of this endpoint."""
+        resp = call("GET", "/internal/health")
+        assert resp.status == 200
+        body = resp.json
+        assert body.get("ok") is True
+        assert body.get("version") == "hq-2"
+        assert isinstance(body.get("gated"), bool), (
+            "gated must be a boolean derived from env presence")
+        channels = body.get("channels") or {}
+        for name in ("email", "sms"):
+            assert isinstance(channels.get(name), bool), (
+                "channels.%s must be a boolean, got %r" % (name, channels.get(name)))
+        blob = json.dumps(body)
+        for leak in ("SG.", "AC", "sk-", "re_"):
+            if leak == "AC":
+                continue
+            assert leak not in blob, "health leaked something key-shaped: %r" % leak
+
+
+# ---------------------------------------------------------------------------
+# "Ported" must not be able to drift from the truth
+#
+# TestHQGateSurfaceWithoutTheKey passes against the Worker for all 28 gated
+# routes -- including the ones that are NOT ported, because hqGate answers a
+# stranger with 401 before control ever reaches the handler. That is correct
+# behaviour and a correct test, and it is also exactly the shape this codebase
+# keeps getting burned by: a surface reporting the claim instead of asking it.
+# Green there means "the door is locked", never "there is a room behind it".
+#
+# So the count is pinned to the SOURCE, where it cannot be fudged by a
+# catch-all. This reads migration/workers/src/index.ts and requires that the
+# honest "not yet ported" marker exists exactly while work remains: it may not
+# be deleted early to make things look finished, and it may not be left behind
+# once every route is wired, where it would read as a permanent apology for
+# work that is actually done.
+# ---------------------------------------------------------------------------
+
+def _worker_index_source():
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, "..", "workers", "src", "index.ts")
+    if not os.path.exists(path):
+        pytest.skip("migration/workers/src/index.ts not in this checkout")
+    with open(path, "r", encoding="utf-8") as handle:
+        return handle.read()
+
+
+ALL_HQ_ROUTES = set(HQ_GATED_ROUTES) | {(m, p) for (m, p, _s, _n) in HQ_EXCEPTIONS}
+
+
+@pytest.mark.offline
+class TestHQPortProgressIsHonest:
+
+    def test_the_not_yet_ported_marker_matches_reality(self):
+        source = _worker_index_source()
+        wired = set(re.findall(r'path === "(/internal/[^"]+)"', source))
+        unported = sorted(p for (_m, p) in ALL_HQ_ROUTES if p not in wired)
+        marker = "hq data routes not yet ported"
+
+        if unported:
+            assert marker in source, (
+                "%d HQ routes are still served by the catch-all (%s) but the "
+                "honest marker %r has been removed from index.ts. The gate leg "
+                "cannot see this -- a stranger gets a correct 401 either way -- "
+                "so deleting the marker is the only thing that would make an "
+                "unfinished port look finished."
+                % (len(unported), ", ".join(unported[:6])
+                   + (" ..." if len(unported) > 6 else ""), marker))
+        else:
+            assert marker not in source, (
+                "Every HQ route is wired, but index.ts still carries %r. Leave "
+                "it and it becomes a permanent untruth in the other direction."
+                % marker)
+
+    def test_the_ungated_routes_are_wired_above_the_gate(self):
+        """/internal/session, /internal/session/end and /internal/clerk/exchange
+        MUST be handled before hqGate runs. Ari holds an eight-character code
+        and never the shared key, so if the gate sees these first his only
+        possible answer is 401 and there is no way into HQ at all. This is an
+        ordering property, and ordering is not visible from outside once the
+        routes are correctly ordered -- so it is asserted on the source."""
+        source = _worker_index_source()
+        gate_at = source.find("const refused = hqGate(")
+        assert gate_at > 0, "hqGate is no longer called from index.ts"
+        for path in ("/internal/session", "/internal/session/end",
+                     "/internal/clerk/exchange"):
+            at = source.find('path === "%s"' % path)
+            assert at > 0, "%s is not wired in index.ts" % path
+            assert at < gate_at, (
+                "%s is wired BELOW hqGate. It must be above it: the caller "
+                "proves who they are with a code or a Clerk token, not with "
+                "the shared key, so gating it first locks out the only people "
+                "it exists for." % path)

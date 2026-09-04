@@ -19,6 +19,7 @@
 import { resetRequest, resetConfirm, type ResetEnv } from "./routes/password_reset.ts";
 import { accountDelete } from "./routes/account_delete.ts";
 import { hqHealth, hqLogin, hqGate, hqGone, hqPage, hqCors, HQ_DEAD_ROUTES, type HqEnv } from "./routes/hq.ts";
+import { hqSession, hqSessionEnd, hqMe, hqClerkExchange } from "./routes/hq_data.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -136,6 +137,27 @@ export default {
       if (path === "/internal/health" && method === "GET") return hqHealth(request, hq);
       if (path === "/internal/login" && method === "POST") return hqLogin(request, hq);
       if (path === "/fellows/hq" && method === "GET") return hqPage(request, hq);
+
+      // UNGATED ON PURPOSE, and they must sit ABOVE hqGate.
+      //
+      // Ari holds an eight-character code and nothing else -- he never has the
+      // shared key -- so the route that trades that code for a session cannot
+      // itself be key-gated, or his first screen is a 401 and there is no way
+      // in. Signing out likewise: a stale token must always be discardable.
+      // Both still 503 when the key is unset, so a half-configured deploy
+      // does not leave one door open in an area every other door has shut.
+      if (path === "/internal/session" && method === "POST") return hqSession(request, hq);
+      if (path === "/internal/session/end" && method === "POST") return hqSessionEnd(request, hq);
+
+      // Dual auth: X-HQ-Session OR the key. resolveActor() owns the choice, so
+      // it cannot be made differently in two places.
+      if (path === "/internal/me" && method === "GET") return hqMe(request, hq);
+
+      // Also ungated: the caller is proving who they are WITH the Clerk token,
+      // so requiring the shared key first would defeat the point of the route.
+      if (path === "/internal/clerk/exchange" && method === "POST") {
+        return hqClerkExchange(request, hq);
+      }
 
       // Everything else behind the session gate.
       const refused = hqGate(request, hq);

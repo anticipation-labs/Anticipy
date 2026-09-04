@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types test/filter-dsl.test.ts",
+    "test": "node --experimental-strip-types test/filter-dsl.test.ts && node --experimental-strip-types test/hq-booleans.test.ts",
     "typecheck": "tsc --noEmit",
     "stage:assets": "rm -rf public && mkdir -p public && cp -R ../../backend/pb_public/. public/",
     "dev": "wrangler dev --config wrangler.jsonc",
