@@ -37,6 +37,14 @@ import {
 import { hqAssistant } from "./routes/hq_assistant.ts";
 import { hqPeopleFaces, hqFellows } from "./routes/hq_fellows.ts";
 import { referralHop, type FellowEnv } from "./routes/fellowship.ts";
+import {
+  fellowsHealth, fellowsCode, fellowsVerify, fellowsStart, fellowsConfirm,
+  fellowsMe, fellowsApply, fellowsProgress, fellowsProfile, fellowsSubmissions,
+  fellowsSubmissionsRemove, fellowsGuardianLink, fellowsGuardianGet,
+  fellowsGuardianPost, internalFellowsRemove, internalFellowsSubmissionsRemove,
+  internalFellowsSubmissionsRelease,
+} from "./routes/fellows.ts";
+import type { FellowsEnv } from "./routes/fellows_base.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -145,6 +153,32 @@ export default {
                          path.slice("/r/".length));
     }
 
+    // --- the public fellowship API. fellowship.pb.js, recovered. ---------
+    // A separate SITE (anticipyfellowship.com) calls these on this same
+    // backend, so they must answer here once traffic moves. No HQ key: a
+    // fellow signing up holds nothing; each handler owns its own auth (email
+    // code, session hash, guardian token). /fellows/hq is NOT here — that is
+    // HQ. Every unauthenticated contract was diffed against production; the
+    // authenticated/email/oembed/payout halves ship UNPROVEN. See fellows.ts.
+    if (path.startsWith("/fellows/") && path !== "/fellows/hq") {
+      const f = env as unknown as FellowsEnv;
+      if (path === "/fellows/health" && method === "GET") return fellowsHealth(request, f);
+      if (path === "/fellows/code" && method === "POST") return fellowsCode(request, f);
+      if (path === "/fellows/verify" && method === "POST") return fellowsVerify(request, f);
+      if (path === "/fellows/start" && method === "POST") return fellowsStart(request, f);
+      if (path === "/fellows/confirm" && method === "GET") return fellowsConfirm(request, f);
+      if (path === "/fellows/me" && method === "GET") return fellowsMe(request, f);
+      if (path === "/fellows/apply" && method === "POST") return fellowsApply(request, f);
+      if (path === "/fellows/progress" && method === "POST") return fellowsProgress(request, f);
+      if (path === "/fellows/profile" && method === "POST") return fellowsProfile(request, f);
+      if (path === "/fellows/submissions" && method === "POST") return fellowsSubmissions(request, f);
+      if (path === "/fellows/submissions/remove" && method === "POST") return fellowsSubmissionsRemove(request, f);
+      if (path === "/fellows/guardian/link" && method === "POST") return fellowsGuardianLink(request, f);
+      if (path === "/fellows/guardian" && method === "GET") return fellowsGuardianGet(request, f);
+      if (path === "/fellows/guardian" && method === "POST") return fellowsGuardianPost(request, f);
+      // An unknown /fellows/* path falls through to the generic 404 below.
+    }
+
     // --- HQ's front door. CONTRACT.md §7. --------------------------------
     // Its own auth stack: X-Internal-Key, X-HQ-Session, 8-char login codes,
     // and a Clerk exchange. None of it is PocketBase auth.
@@ -187,6 +221,21 @@ export default {
       // Gated, and it checks the key itself so it can sit up here beside its
       // sibling instead of being separated by the shared gate.
       if (path === "/internal/fellows" && method === "GET") return hqFellows(request, hq);
+      // The fellowship admin actions. Each self-gates on X-Internal-Key
+      // (fellowship.pb.js:2069+), so they sit here beside the read route rather
+      // than behind hqGate's dual-auth. THESE MOVE MONEY AND REMOVE PEOPLE —
+      // ported from recovered source and UNPROVEN on the authenticated path;
+      // /internal/fellows/pay is in the untracked fellowship_host.pb.js and is
+      // NOT here at all.
+      if (path === "/internal/fellows/remove" && method === "POST") {
+        return internalFellowsRemove(request, env as unknown as FellowsEnv);
+      }
+      if (path === "/internal/fellows/submissions/remove" && method === "POST") {
+        return internalFellowsSubmissionsRemove(request, env as unknown as FellowsEnv);
+      }
+      if (path === "/internal/fellows/submissions/release" && method === "POST") {
+        return internalFellowsSubmissionsRelease(request, env as unknown as FellowsEnv);
+      }
       if (path === "/internal/state" && method === "GET") return hqState(request, hq);
       if (path === "/internal/people" && method === "POST") return hqPeopleCreate(request, hq);
       if (path === "/internal/people" && method === "PATCH") return hqPeopleUpdate(request, hq);
