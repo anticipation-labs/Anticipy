@@ -291,7 +291,29 @@ def create_table_sql(coll: Dict[str, Any], extra_columns: List[str],
                      % quote_ident(cname))
     if not have_id:
         lines.insert(0, '  "id" TEXT PRIMARY KEY NOT NULL')
-    return "CREATE TABLE IF NOT EXISTS %s (\n%s\n);" % (quote_ident(name), ",\n".join(lines))
+
+    # THE COMMA GOES BEFORE THE COMMENT, NOT AFTER IT.
+    #
+    # Joining these lines with ",\n" put the separator at the END of the line,
+    # which for a line carrying a trailing `-- ...` comment means the comma
+    # lands INSIDE the comment and SQLite never sees a separator at all:
+    #
+    #   "password" TEXT   -- NEVER POPULATED: ... this field,
+    #   "tokenKey" TEXT   -- NEVER POPULATED: ... this field,
+    #
+    # The table then silently comes out WITHOUT tokenKey, and the CREATE UNIQUE
+    # INDEX on it fails with "no such column: tokenKey". Only the two auth
+    # collections carry those comments, so this bit exactly the two tables whose
+    # loss matters most.
+    body = []
+    for idx, line in enumerate(lines):
+        sep = "," if idx < len(lines) - 1 else ""
+        marker = line.find("   -- ")
+        if marker >= 0 and sep:
+            body.append(line[:marker] + sep + line[marker:])
+        else:
+            body.append(line + sep)
+    return "CREATE TABLE IF NOT EXISTS %s (\n%s\n);" % (quote_ident(name), "\n".join(body))
 
 
 _INDEX_HEAD = re.compile(r"(?i)^\s*CREATE\s+(UNIQUE\s+)?INDEX\s+(IF\s+NOT\s+EXISTS\s+)?")
@@ -509,6 +531,38 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+
+def vault_ciphertext_is_portable(rows, key):
+    """Can these bytes be opened by anything other than PocketBase?
+
+    The interlock below was written on the assumption that they cannot -- that
+    $security.encrypt emits a Go-specific framing that dies with the instance.
+    MEASURED 2026-09-04 against the live vault row: it is plain AES-256-GCM with
+    a 12-byte nonce prepended and the key's ASCII bytes used directly as the
+    AES-256 key. That is WebCrypto's native shape, so a Worker can read it and
+    the re-wrap is not needed.
+
+    This does not TRUST that measurement, it repeats it: every ciphertext is
+    actually decrypted here, and only an all-pass lets the import proceed. A
+    genuinely unreadable vault still stops it.
+    """
+    if not key:
+        return False, "ANTICIPY_VAULT_KEY is not set"
+    try:
+        import base64
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    except ImportError:
+        return False, "python 'cryptography' not installed; cannot verify"
+    aes = AESGCM(key.encode())
+    for rid, ct in rows:
+        try:
+            raw = base64.b64decode(ct)
+            aes.decrypt(raw[:12], raw[12:], None)
+        except Exception as exc:
+            return False, "row %s did not decrypt (%s)" % (rid, type(exc).__name__)
+    return True, "all %d row(s) decrypt under AES-256-GCM" % len(rows)
+
+
 def main(argv: List[str]) -> int:
     args = parse_args(argv)
     export_root = Path(args.export_dir).expanduser().resolve()
@@ -567,7 +621,21 @@ def main(argv: List[str]) -> int:
                 if str(row.get(VAULT_CIPHERTEXT_FIELD) or "").strip():
                     encrypted_ids.append(str(row.get("id")))
         if encrypted_ids:
-            if rewrap is None:
+            # Before declaring the vault un-portable, TEST it. See the helper.
+            pairs = []
+            if nd.is_file():
+                for row in read_ndjson(nd):
+                    ct = str(row.get(VAULT_CIPHERTEXT_FIELD) or "").strip()
+                    if ct:
+                        pairs.append((str(row.get("id")), ct))
+            portable, why = vault_ciphertext_is_portable(
+                pairs, os.environ.get("ANTICIPY_VAULT_KEY", ""))
+            if portable and rewrap is None:
+                info("vault verified portable: %s" % why)
+                info("  standard AES-256-GCM, 12-byte prepended nonce -- a Worker")
+                info("  reads this with WebCrypto. No re-wrap needed; carry the key.")
+                encrypted_ids = []
+            if encrypted_ids and rewrap is None:
                 sys.stderr.write(
                     "\n"
                     "  ############################################################\n"
@@ -585,7 +653,7 @@ def main(argv: List[str]) -> int:
                 if not args.allow_unreadable_vault:
                     return 3
                 warn("--allow-unreadable-vault given: importing ciphertext nothing can open")
-            else:
+            elif rewrap is not None:
                 rewrap_by_id = dict((str(i["id"]), str(i[VAULT_REWRAPPED_FIELD]))
                                     for i in rewrap.get("items", []))
                 missing = [i for i in encrypted_ids if i not in rewrap_by_id]

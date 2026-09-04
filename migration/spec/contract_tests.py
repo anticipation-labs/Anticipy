@@ -198,7 +198,17 @@ def call(method, path, headers=None, json_body=None, form=None, raw=None,
         url += "?" + urllib.parse.urlencode(query)
 
     data = None
-    hdrs = {"Accept": "application/json"}
+    # A REAL USER-AGENT, because the default one is BANNED.
+    #
+    # urllib sends "Python-urllib/3.x", and Cloudflare's bot protection answers
+    # it with 403 Error 1010 "browser_signature_banned" before the request ever
+    # reaches the Worker. That is indistinguishable from a genuine 403 by status
+    # alone, so a whole run against a *.workers.dev origin came back as 37
+    # failures and 66 "the guard appears to be OFF" skips -- none of which were
+    # about the Worker at all. curl was unaffected, which is exactly why the
+    # discrepancy took a while to see.
+    hdrs = {"Accept": "application/json",
+            "User-Agent": "anticipy-contract-suite/1.0 (+migration/spec)"}
     if json_body is not None:
         data = json.dumps(json_body).encode("utf-8")
         hdrs["Content-Type"] = "application/json"

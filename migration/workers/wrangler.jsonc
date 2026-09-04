@@ -55,8 +55,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "anticipy-backend-staging",
-      "database_id": "757fb0cd-1971-4daf-99b0-7183fe89bb10"
+      "database_name": "anticipy-backend",
+      "database_id": "f341f23d-ec52-4b2f-9a2d-13117ebee86e"
     }
   ],
 
