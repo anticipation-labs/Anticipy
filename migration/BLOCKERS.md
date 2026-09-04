@@ -1,5 +1,12 @@
 # What is actually blocking this migration
 
+> **STALE AS OF 2026-09-04 — do not plan off the table below without reading
+> this first.** Re-measured on the same account a day later: **Workers Paid has
+> landed and R2 is enabled.** `wrangler containers list` → "No containers
+> found" (not "Unauthorized"), and `wrangler r2 bucket list` returns three
+> buckets. Two of the four rows below are resolved. The remaining brain-side
+> blockers, re-measured, are in `BRAIN-ON-CONTAINERS.md` §1.
+
 Measured 2026-09-03 against Cloudflare account `114587b715e702461766369b01d42fc7`
 (`omar@anticipy.ai`), wrangler 4.129.0 authenticated by OAuth.
 

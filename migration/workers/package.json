@@ -11,7 +11,8 @@
     "d1:schema": "wrangler d1 execute anticipy-backend --file=../d1/schema.sql",
     "contract:worker": "BASE_URL=$WORKER_URL python3 -m pytest ../spec/contract_tests.py -v -m 'not destructive' --junitxml=/tmp/worker.xml",
     "contract:pocketbase": "BASE_URL=$PB_URL python3 -m pytest ../spec/contract_tests.py -v -m 'not destructive' --junitxml=/tmp/pocketbase.xml",
-    "contract:diff": "diff <(grep -oE 'name=\"[^\"]+\"' /tmp/pocketbase.xml) <(grep -oE 'name=\"[^\"]+\"' /tmp/worker.xml)"
+    "contract:diff": "diff <(grep -oE 'name=\"[^\"]+\"' /tmp/pocketbase.xml) <(grep -oE 'name=\"[^\"]+\"' /tmp/worker.xml)",
+    "gen:schema": "python3 scripts/gen_schema.py"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3"

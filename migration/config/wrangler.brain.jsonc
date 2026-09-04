@@ -10,11 +10,20 @@
   // because brain/Dockerfile:4 is `COPY brain /srv/brain` — a Dockerfile-local
   // context would have nothing to copy.
   //
-  // REQUIRES WORKERS PAID. `wrangler containers list` on this account answers
-  // "Unauthorized: You do not have access to Cloudflare Containers. Deploying
-  // containers requires the Workers Paid plan." — see migration/BLOCKERS.md.
-  // Nothing in this file is deployable until that is resolved. It is written
-  // out in full anyway so the upgrade is the only remaining step.
+  // WORKERS PAID HAS LANDED — this header used to say the account could not
+  // use Containers at all. Re-measured 2026-09-04: `wrangler containers list`
+  // answers "No containers found", and R2 is enabled (3 buckets). Both of
+  // migration/BLOCKERS.md's headline blockers are gone; that file is stale.
+  //
+  // What still stops a deploy, in the order wrangler hits it
+  // (migration/BRAIN-ON-CONTAINERS.md is the runbook):
+  //   1. `main` below does not exist — ../workers/brain/src/index.ts was never
+  //      written. `wrangler deploy --dry-run` fails here, before Docker.
+  //   2. brain/container_entry.py does not exist. Without it a container boots
+  //      on an empty /data and every owner's memory.db is silently lost.
+  //   3. No Docker-compatible CLI on the dev machine, so no image can be
+  //      built. Build it in CI, not on a laptop.
+  //   4. R2 bucket anticipy-owner-state does not exist yet.
   // ==========================================================================
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "anticipy-brain",
@@ -135,7 +144,13 @@
     {
       "binding": "DB",
       "database_name": "anticipy-backend",
-      "database_id": "REPLACE_WITH_PRODUCTION_D1_ID"
+      // Verified 2026-09-04 via `wrangler d1 list` on account
+      // 114587b715e702461766369b01d42fc7. NOT yet authoritative: nothing
+      // serves from Cloudflare (migration/CUTOVER-STATE.md), so this database
+      // is a verified copy that nobody writes to. Pointing the brain here
+      // before the backend cutover makes it go quiet with every dashboard
+      // green — see BRAIN-ON-CONTAINERS.md §9.
+      "database_id": "f341f23d-ec52-4b2f-9a2d-13117ebee86e"
     }
   ],
 

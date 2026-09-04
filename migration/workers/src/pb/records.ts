@@ -27,6 +27,7 @@ import {
   json, notFound, badRequest, newRecordId, pbNow, rowToRecord, type ListResponse,
 } from "./wire.ts";
 import type { Principal } from "../policy/chain.ts";
+import bcrypt from "bcryptjs";
 
 export interface Env {
   DB: D1Database;
@@ -58,6 +59,49 @@ export interface RecordsRequest {
 
 export function resolveCollection(name: string): CollectionDef | null {
   return COLLECTIONS[name] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// COLLECTION ACCESS RULES — PocketBase's listRule/viewRule, which the guard is
+// NOT a substitute for.
+//
+// Read off production 2026-09-04 with a superuser session:
+//
+//     owners   listRule = "id = @request.auth.id"   viewRule = same
+//     every other exposed collection      ""        (public; the guard is the
+//                                                    only gate, by design)
+//
+// `owners` is the one collection carrying a rule, and it is the one holding
+// email and phone. Without it the Worker answered a SERVICE TOKEN with all 31
+// owner records including both fields, while production answered the identical
+// request with totalItems 0 — the rule matched nothing, because a service token
+// is not an auth record. The guard let it through on BOTH; only the rule
+// stopped it on one.
+//
+// That is why this lives here and not in the guard: the guard decides whether a
+// request may RUN, the rule decides which ROWS it may see, and a port that
+// implements one and not the other looks correct on every status code.
+//
+// The service token still reads owners the way brain/ actually does, through
+// GET /worker/owners, which projects exactly {id, legacy_uuid} and nothing else.
+// ---------------------------------------------------------------------------
+
+type RowRule =
+  | { kind: "all" }
+  | { kind: "none" }
+  | { kind: "own"; column: string; value: string };
+
+function rowRule(def: CollectionDef, principal: Principal): RowRule {
+  if (def.name !== "owners") return { kind: "all" };
+  // PocketBase evaluates rules for everyone EXCEPT a superuser, who bypasses.
+  if (principal.kind === "superuser") return { kind: "all" };
+  if (principal.kind === "account") {
+    return { kind: "own", column: "id", value: principal.ownerId };
+  }
+  // service, agent, anonymous: @request.auth.id is empty, so `id = ""` matches
+  // nothing. Production returns an empty PAGE rather than a 403, and so does
+  // this — the difference is visible to callers and worth preserving.
+  return { kind: "none" };
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +150,17 @@ export async function list(env: Env, req: RecordsRequest): Promise<Response> {
     });
   }
 
+  // The collection's own listRule, applied on top of whatever the guard scoped.
+  const rule = rowRule(def, req.principal);
+  if (rule.kind === "none") {
+    return json(200, { page, perPage, totalItems: 0, totalPages: 0, items: [] });
+  }
+  if (rule.kind === "own") {
+    where = where ? `(${where}) AND ${quoteIdent(rule.column)} = ?${params.length + 1}`
+                  : `${quoteIdent(rule.column)} = ?${params.length + 1}`;
+    params = [...params, rule.value];
+  }
+
   const table = quoteIdent(def.name);
   const clause = where ? ` WHERE ${where}` : "";
 
@@ -137,6 +192,11 @@ export async function list(env: Env, req: RecordsRequest): Promise<Response> {
 
 export async function view(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
+  // viewRule is the same expression as listRule on owners, so the same gate.
+  const vrule = rowRule(def, req.principal);
+  if (vrule.kind === "none") return notFound();
+  if (vrule.kind === "own" && String(req.recordId) !== vrule.value) return notFound();
+
   const row = await fetchOne(env, def, req.recordId as string, req.forcedScope ?? null);
   if (!row) return notFound();
   return json(200, rowToRecord(def.name, row, def.boolColumns));
@@ -146,9 +206,128 @@ export async function view(env: Env, req: RecordsRequest): Promise<Response> {
 // CREATE
 // ---------------------------------------------------------------------------
 
+/**
+ * PocketBase's field validation for an AUTH collection, which the generic
+ * record writer has no idea about.
+ *
+ * Without this the Worker accepted `POST /api/collections/owners/records` with
+ * an EMPTY BODY and wrote a row with a null email and no password at all —
+ * unauthenticated, from anywhere. 24 such rows accumulated in D1 during one
+ * afternoon of testing while production refused every equivalent request with
+ * `validation_required`. An account that has no password can never be signed
+ * into and can never be deleted by its owner; it is landfill with a row id.
+ *
+ * It was also broken in the other direction: `passwordConfirm` is not a COLUMN,
+ * so the generic writer rejected it as `unknown_field` — meaning the iPhone's
+ * real signup call (AnticipyBackend.swift:444, which sends email + password +
+ * passwordConfirm + legacy_uuid) could not create an account on the Worker AT
+ * ALL. New-user signup was simply dead.
+ *
+ * Every message below was read off production, not invented:
+ *
+ *   {} .................. password, passwordConfirm  validation_required
+ *                                                    "Cannot be blank."
+ *   no email ............ email                      validation_required
+ *   password "abc" ...... password  validation_min_text_constraint
+ *                                   "Must be at least 8 character(s)."
+ *   confirm mismatch .... passwordConfirm  validation_values_mismatch
+ *                                          "Values don't match."
+ *   envelope ............ {"data":…,"message":"Failed to create record.","status":400}
+ *
+ * The iPhone reads `data.email`, `data.phone` and `data.legacy_uuid` to tell a
+ * taken address from a taken number from a taken device
+ * (AnticipyBackend.swift:459-462), so uniqueness has to report under those
+ * exact field names or the app shows the wrong message.
+ */
+const MIN_PASSWORD = 8;
+
+function failedToCreate(data: Record<string, unknown>): Response {
+  return json(400, { data, message: "Failed to create record.", status: 400 });
+}
+
+const REQUIRED = { code: "validation_required", message: "Cannot be blank." };
+const NOT_UNIQUE = { code: "validation_not_unique", message: "Value must be unique." };
+
+async function createOwner(env: Env, req: RecordsRequest): Promise<Response> {
+  const def = req.collection;
+  const body = req.body ?? {};
+  const str = (k: string) => String(body[k] ?? "").trim();
+
+  const email = str("email").toLowerCase();
+  const password = String(body.password ?? "");
+  const confirm = String(body.passwordConfirm ?? "");
+
+  // VALIDATION ORDER IS PART OF THE CONTRACT, and it is not the obvious one.
+  // Production on a blank body reports ONLY password and passwordConfirm — no
+  // email error at all — and reports the email error only once the password
+  // fields are filled in. Measured on both, side by side:
+  //
+  //   {}                                  -> password, passwordConfirm
+  //   {password, passwordConfirm}         -> email
+  //
+  // Collecting all three at once looked tidier and was wrong: the iPhone shows
+  // one message at a time, so the field it names first is the field the person
+  // is told to fix, and a signup that says "email required" while the real
+  // first problem is the password sends them to the wrong box.
+  const pwErrs: Record<string, unknown> = {};
+  if (!password) pwErrs.password = REQUIRED;
+  if (!confirm) pwErrs.passwordConfirm = REQUIRED;
+  if (Object.keys(pwErrs).length) return failedToCreate(pwErrs);
+  if (!email) return failedToCreate({ email: REQUIRED });
+
+  if (password.length < MIN_PASSWORD) {
+    return failedToCreate({ password: {
+      code: "validation_min_text_constraint",
+      message: `Must be at least ${MIN_PASSWORD} character(s).`,
+    } });
+  }
+  if (password !== confirm) {
+    return failedToCreate({ passwordConfirm: {
+      code: "validation_values_mismatch", message: "Values don't match.",
+    } });
+  }
+
+  // Uniqueness, under the field names the iPhone branches on.
+  const phone = str("phone");
+  const legacy = str("legacy_uuid");
+  const dupes: Record<string, unknown> = {};
+  const taken = async (col: string, val: string) => {
+    if (!val) return false;
+    const row = await env.DB.prepare(
+      `SELECT id FROM "owners" WHERE lower(${quoteIdent(col)}) = ?1 LIMIT 1`,
+    ).bind(val.toLowerCase()).first();
+    return !!row;
+  };
+  if (await taken("email", email)) dupes.email = NOT_UNIQUE;
+  if (phone && await taken("phone", phone)) dupes.phone = NOT_UNIQUE;
+  if (legacy && await taken("legacy_uuid", legacy)) dupes.legacy_uuid = NOT_UNIQUE;
+  if (Object.keys(dupes).length) return failedToCreate(dupes);
+
+  // $2a$ at cost 10 — Go's bcrypt.DefaultCost, so a digest written here is one
+  // PocketBase would also accept if traffic ever moves back. src/pb/auth.ts.
+  const digest = await bcrypt.hash(password, 10);
+  const tokenKey = newRecordId() + newRecordId();   // 30 chars, per-record salt
+
+  const id = typeof body.id === "string" && body.id ? body.id : newRecordId();
+  const now = pbNow();
+  await env.DB.prepare(
+    `INSERT INTO "owners" (id, created, updated, email, emailVisibility, verified,
+       password, tokenKey, phone, legacy_uuid)
+     VALUES (?1,?2,?3,?4,0,0,?5,?6,?7,?8)`,
+  ).bind(id, now, now, email, digest, tokenKey, phone, legacy).run();
+
+  const row = await fetchOne(env, def, id, null);
+  // rowToRecord already drops password and tokenKey (pb/wire.ts) — the same
+  // projection PocketBase applies. Asserted by the contract suite.
+  return json(200, rowToRecord(def.name, row ?? {}, def.boolColumns));
+}
+
 export async function create(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
   const body = req.body ?? {};
+
+  // owners is an AUTH collection and does not go through the generic writer.
+  if (def.name === "owners") return createOwner(env, req);
 
   const cols: string[] = [];
   const vals: unknown[] = [];
