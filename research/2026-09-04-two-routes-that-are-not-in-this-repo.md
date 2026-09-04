@@ -1,4 +1,4 @@
-# Two live routes exist in no hook file here, and one of them is open
+# Four live routes exist in no hook file here, and one of them is open
 
 2026-09-04. Found by the cutover pre-flight, which is the only reason they were
 found at all.
@@ -91,3 +91,63 @@ both is a product decision with a page behind it that might break.
 side — put the route behind the same key check `/internal/fellows` already uses
 — and worth doing deliberately, together, once someone confirms what draws
 those avatars and whether that caller holds a key.
+
+
+---
+
+## UPDATE, same day: it is FOUR routes, not two, and the other two are worse
+
+Chasing step 3 further turned up two more, by two different routes of inquiry.
+
+### /internal/me/password — found by diffing the two HQ apps
+
+Production's `internal.html` is 141,898 bytes; this repo's is 136,244. Listing
+the endpoints each one calls settles which is which: production's is a strict
+SUPERSET — everything the repo's app calls, plus `/internal/people/faces` and
+`/internal/me/password`. Nothing is only-in-repo. So the repo's HQ app is
+simply older, and production's is the real one.
+
+    POST /internal/me/password   RAILWAY 400 "pick yourself first"
+                                 WORKER  404
+    in backend/pb_hooks/         absent
+
+It changes a password. That is not a thing to reconstruct from a black box, and
+it is not ported.
+
+### /r/{code} — the referral hop, and it is money
+
+Also absent from every hook file. Railway 302s with the attribution; the Worker
+404s. This matters more than it looks because `FELLOWSHIP_ORIGIN` is not only
+read by the 33 rewrites — `src/app/r/[code]/route.ts` and its `/c/` twin read
+it too. Flipping that one variable would therefore point the referral handlers
+at a Worker that does not implement `/r/`, and every fellow link would die.
+
+That is the SAME money bug fixed in aniticipy-web@63dc14d, reintroduced from
+the opposite direction, by the change that was supposed to complete the
+migration.
+
+What can be established from outside: it normalises the code, 302s to
+`www.anticipy.ai/?ref=<code>&utm_source=fellow&utm_medium=referral&utm_campaign=<code>`
+ALWAYS — even for a code that does not exist — and records a click only for
+codes that do. Proof of the last part: production's `fellow_clicks` holds 27
+rows, all against real six-character codes, and ZERO were added today despite
+many probes of `/r/TESTCODE` and `/r/omar`. What cannot be established from
+outside: the ip_hash construction, whether clicks dedupe, and how
+`fellows.clicks_total` is kept in step.
+
+Guessing at an attribution path is how attribution silently stops being right,
+so it is not ported either.
+
+## Where the real source is
+
+`backend/pb_hooks/` is not what production runs. The deployed image has at
+least four routes the tree has never had. The most likely place to recover them
+is a PocketBase backup — `GET /api/backups` lists a daily
+`@auto_pb_backup_acme_*.zip` of ~64 MB — which may carry `pb_hooks/` alongside
+`pb_data/`. Downloading it was blocked here by a permission gate, correctly:
+it is 64 MB of production database including customer records, and that is the
+owner's call to make deliberately rather than a thing to pull in passing.
+
+If it does contain pb_hooks, it is the source for all four routes and step 3
+becomes ordinary work. If it does not, the only other holder is the Railway
+image itself.
