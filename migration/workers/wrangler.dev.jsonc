@@ -1,0 +1,153 @@
+{
+  // ==========================================================================
+  // migration/workers/wrangler.jsonc — the API Worker.
+  //
+  // This is a SECOND Worker, separate from the website's. The repo root already
+  // holds `wrangler.jsonc` for `anticipy-site` (OpenNext, .open-next/worker.js),
+  // and the two must stay separate for three reasons:
+  //   1. The site is redeployed on every marketing copy change. The backend is
+  //      the safety system. They must not share a deploy blast radius.
+  //   2. The site does not need D1, R2 or a Durable Object binding, and a
+  //      binding it does not need is an escalation path it does not need.
+  //   3. Bundle ceiling. The site measured 2.63 MB gzipped against the free
+  //      plan's 3 MB (migration/spike/website-verification.md); adding bcryptjs
+  //      and this router to that bundle spends headroom that is already at 88%.
+  //
+  // Deploy:  wrangler deploy --config migration/workers/wrangler.jsonc
+  // ==========================================================================
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "anticipy-api",
+  "main": "src/index.ts",
+
+  "compatibility_date": "2026-09-03",
+
+  // REQUIRED, not optional: bcryptjs reaches for node built-ins.
+  // migration/spike/bcrypt-on-workerd.md ran with exactly this flag set and
+  // verified both $2a$ and $2b$ digests against the production cost factor.
+  "compatibility_flags": ["nodejs_compat"],
+
+  // --------------------------------------------------------------------------
+  // CPU. THE LOGIN PATH DOES NOT FIT THE DEFAULT-BY-ACCIDENT.
+  //
+  // bcrypt at cost factor 10 measured ~50 ms of CPU per verify on workerd
+  // (spike/bcrypt-on-workerd.md). The FREE plan caps CPU at 10 ms per request,
+  // so on free every login fails with an exceeded-CPU error — not slowly, every
+  // time. Workers Paid is a precondition, and this is stated in
+  // migration/BLOCKERS.md as one of the four things one upgrade unblocks.
+  //
+  // 200 ms is chosen to hold one bcrypt verify plus the dummy-hash compare on
+  // the no-such-account path, with room. Raising it does not cost money on its
+  // own — Workers Paid bills CPU actually used — but a low ceiling turns a slow
+  // request into an error, which is the failure mode worth avoiding.
+  // --------------------------------------------------------------------------
+  "limits": { "cpu_ms": 200 },
+
+  "observability": { "enabled": true },
+
+  // --------------------------------------------------------------------------
+  // D1
+  // Schema: migration/d1/schema.sql (26 tables, 46 indexes, 5 partial-unique).
+  // Applied and verified on `anticipy-backend-staging` (migration/BLOCKERS.md).
+  // --------------------------------------------------------------------------
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "anticipy-backend-staging",
+      "database_id": "757fb0cd-1971-4daf-99b0-7183fe89bb10"
+    }
+  ],
+
+  // --------------------------------------------------------------------------
+  // R2 — evidence photos ONLY.
+  //
+  // NOT a public bucket and NOT given a custom domain. evidence.pb.js:56-147
+  // exists so the bytes are reachable only through a gate that checks the share
+  // window and spends a 5-fetch ceiling; a public R2 URL is that gate deleted.
+  // Twilio fetches these by MediaUrl from its own infrastructure, so the URL
+  // handed out must be this Worker's /api/files/... and never the bucket's.
+  //
+  // The backups bucket `anticipy-pocketbase-backups-production` is NOT bound
+  // here. It is written by PocketBase's own scheduled backup
+  // (1700000053_off_volume_backups.js) and nothing in this Worker should be
+  // able to touch it. See migration/BLOCKERS.md — R2 is not enabled on this
+  // account, so those backups are going somewhere else or failing, and that is
+  // an open question before anything is decommissioned.
+  // --------------------------------------------------------------------------
+
+  // --------------------------------------------------------------------------
+  // Durable Object — the pair-code guess ceiling.
+  // Replaces e.app.store() (guard.pb.js:116-195), which a Worker has no
+  // equivalent of: a module-level Map is per-isolate, and KV is eventually
+  // consistent, so both let a distributed guesser mint fresh counters.
+  // src/do/PairCodeCounter.ts explains it at length.
+  // --------------------------------------------------------------------------
+  "durable_objects": {
+    "bindings": [
+      { "name": "PAIR_CODE_COUNTER", "class_name": "PairCodeCounter" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      // SQLite-backed DO classes. UNVERIFIED whether `new_sqlite_classes` is
+      // required vs `new_classes` for this account/compat date — check
+      // `wrangler deploy --dry-run` output before the first real deploy; the
+      // wrong one is a deploy-time error, not a runtime surprise.
+      "new_sqlite_classes": ["PairCodeCounter"]
+    }
+  ],
+
+  // --------------------------------------------------------------------------
+  // Static assets — pb_public/, verbatim.
+  // Populate migration/workers/public/ from backend/pb_public/ at build time
+  // (`npm run stage:assets`, ARCHITECTURE.md §10) rather than committing a
+  // second copy of 1.3 MB of zips.
+  //
+  // run_worker_first is FALSE for these paths: they need no auth and no
+  // counting, so serving them from the edge without invoking the Worker is
+  // both cheaper and one fewer place to get authorization wrong.
+  // --------------------------------------------------------------------------
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+
+  // --------------------------------------------------------------------------
+  // Cron Triggers — internal_hq.pb.js:2139 and :2642, unchanged strings.
+  // src/cron.ts dispatches on event.cron, so the literal text here IS the
+  // routing key. Changing it here without changing the switch silently stops
+  // a job.
+  //
+  // THESE ARE UTC. PocketBase's cron ran in the container's timezone; "17 4"
+  // may not be the same 04:17. Harmless for the prune (60-day cutoff),
+  // NOT harmless for the sweep, which sends reminders. Confirm the Railway
+  // container's TZ before cutover.
+  // --------------------------------------------------------------------------
+  "triggers": {
+    "crons": ["*/5 * * * *", "17 4 * * *"]
+  },
+
+  // --------------------------------------------------------------------------
+  // SECRETS — names and locations only. Set with `wrangler secret put <NAME>`,
+  // never in this file, and see migration/runbooks/SECRETS.md.
+  //
+  //   ANTICIPY_SERVICE_TOKEN   the god credential. guard.pb.js rung 0.
+  //   ANTICIPY_AUTH_SECRET     server half of the owners JWT signature,
+  //                            mixed with each record's own tokenKey.
+  //   ANTICIPY_INTERNAL_KEY    every keyed HQ route (internal_hq.pb.js:48).
+  //   ANTICIPY_VAULT_KEY_GCM   the RE-WRAPPED vault key.
+  //                            migration/runbooks/reencrypt_vault.md — this
+  //                            one is generated during cutover and the old
+  //                            ANTICIPY_VAULT_KEY is deliberately NOT carried.
+  //   GOOGLE_API_KEY           /agent/llm, direct Gemini.
+  //   OPENROUTER_API_KEY       /agent/llm, fallback.
+  //   TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER
+  //                            the sweep's SMS and /sms/inbound's HMAC.
+  //
+  // `vars` below holds only things that are NOT secret.
+  // --------------------------------------------------------------------------
+  "vars": {
+    "ANTICIPY_ENV": "staging"
+  }
+}

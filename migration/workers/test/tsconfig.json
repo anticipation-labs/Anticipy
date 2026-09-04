@@ -1,0 +1,13 @@
+{
+  // Tests run under `node --experimental-strip-types`, but they import the
+  // Worker sources, so they need BOTH type sets: Node for the test harness
+  // (node:assert), workerd for the types those sources are written against.
+  //
+  // The Worker sources are still checked against workerd's globals ALONE by
+  // ../tsconfig.json -- that is the config that would catch a Node built-in
+  // leaking into src/, and this one must not be allowed to mask it.
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "types": ["node", "@cloudflare/workers-types"] },
+  "include": ["**/*.ts", "../*.ts", "../src/**/*.ts"],
+  "exclude": []
+}

@@ -1,0 +1,11 @@
+# Staged from backend/pb_public/ by `npm run stage:assets`. NEVER committed:
+# it is 1.3 MB of zips that already live one directory over, and the repo's own
+# rule (CLAUDE.md, "Terminal & git operational rules" #4) is that a large
+# generated directory is gitignored BEFORE it is created.
+public/
+
+# wrangler's build scratch
+.wrangler/
+
+# a local install lands here when the API worker is built on its own
+node_modules/

@@ -1,0 +1,249 @@
+{
+  // ==========================================================================
+  // anticipy-brain — brain/ on Cloudflare Containers.
+  //
+  // Deploy from the REPO ROOT so the relative paths below resolve:
+  //     npx wrangler deploy --config migration/config/wrangler.brain.jsonc
+  //
+  // Every path in this file is relative to THIS FILE (migration/config/), which
+  // is how wrangler resolves them. `image_build_context` is the repo root
+  // because brain/Dockerfile:4 is `COPY brain /srv/brain` — a Dockerfile-local
+  // context would have nothing to copy.
+  //
+  // REQUIRES WORKERS PAID. `wrangler containers list` on this account answers
+  // "Unauthorized: You do not have access to Cloudflare Containers. Deploying
+  // containers requires the Workers Paid plan." — see migration/BLOCKERS.md.
+  // Nothing in this file is deployable until that is resolved. It is written
+  // out in full anyway so the upgrade is the only remaining step.
+  // ==========================================================================
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "anticipy-brain",
+  "main": "../workers/brain/src/index.ts",
+
+  // Matched to the site Worker (repo-root wrangler.jsonc) on purpose: two
+  // Workers on two compatibility dates is a class of bug nobody finds twice.
+  "compatibility_date": "2026-09-03",
+  // nodejs_compat: @cloudflare/containers itself does not need it, but the
+  // supervisor DO formats ISO timestamps and hashes owner refs, and every
+  // other Worker in this migration carries it. Keep them identical.
+  "compatibility_flags": ["nodejs_compat"],
+
+  // No public route. Nothing outside Cloudflare may reach the brain: it is
+  // driven by its own cron trigger and by the site Worker over a service
+  // binding. `workers_dev: false` closes the *.workers.dev door that would
+  // otherwise expose ensure/shutdown RPC surface to the internet.
+  "workers_dev": false,
+
+  "observability": { "enabled": true },
+
+  // --------------------------------------------------------------------------
+  // The reconcile beat. Replaces the `while not stopping:` loop in
+  // brain/supervisor.py:322-372, whose cadence is
+  // ANTICIPY_OWNER_DISCOVERY_SECONDS (supervisor.py:30, default 15s).
+  //
+  // 15s is not expressible in cron. One minute is the floor, and it is
+  // acceptable: discovery only decides WHICH owners have a worker, and a new
+  // signup waiting up to 60s for their brain to boot is invisible next to the
+  // container cold start. The 2-second job poll (brain/worker.py:44) is
+  // UNCHANGED — it happens inside the running container, not here.
+  // --------------------------------------------------------------------------
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+
+  "durable_objects": {
+    "bindings": [
+      {
+        // One instance per owner_ref, addressed by getByName(owner_ref).
+        // This DO IS the per-owner isolation boundary that
+        // brain/supervisor.py:125-129 gets from one OS process per account.
+        "name": "OWNER_BRAIN",
+        "class_name": "OwnerBrain"
+      },
+      {
+        // Singleton. Discovery + reconcile + purge drain.
+        "name": "BRAIN_SUPERVISOR",
+        "class_name": "BrainSupervisor"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      // SQLite-backed storage. OwnerBrain needs it because @cloudflare/containers
+      // keeps its schedule table in DO SQL (container_schedules); BrainSupervisor
+      // needs it to remember which owner refs it has seen between ticks.
+      "new_sqlite_classes": ["OwnerBrain", "BrainSupervisor"]
+    }
+  ],
+
+  // --------------------------------------------------------------------------
+  // THE CONTAINER
+  // --------------------------------------------------------------------------
+  "containers": [
+    {
+      "name": "anticipy-brain-owner",
+      "class_name": "OwnerBrain",
+      "image": "../../brain/Dockerfile",
+      "image_build_context": "../..",
+
+      // Ceiling on concurrently running owner containers. Deliberately equal to
+      // ANTICIPY_MAX_OWNER_WORKERS (brain/supervisor.py:31, default 100) so the
+      // platform ceiling and the application ceiling cannot disagree. When they
+      // disagree the platform wins SILENTLY, and reconcile_children's
+      // "AT CAPACITY" line (supervisor.py:297-301) — the only thing that says an
+      // owner is getting nothing — never prints.
+      "max_instances": 100,
+
+      // basic = 1/4 vCPU, 1 GiB memory, 4 GB disk (wrangler config-schema.json,
+      // ContainerApp.instance_type). Sized from what the worker actually does:
+      // it is a poll loop that calls models over HTTP (brain/llm.py:327,387 use
+      // httpx with a 60s timeout) and reads one SQLite file. It is I/O bound.
+      // 4 GB disk is far more than one owner's memory.db, and the disk is
+      // EPHEMERAL — see BRAIN.md §4. Raise to standard-1 only on measured CPU
+      // saturation, never on a hunch: this is the line item that is billed.
+      "instance_type": "basic",
+
+      // Owners are in one place and their timezone default is America/Vancouver
+      // (brain/llm.py:47, brain/worker.py:56). Pinning placement to western
+      // North America keeps the container next to the D1 primary and cuts a
+      // trans-continental hop off every one of the 2-second polls.
+      // REMOVE THIS the day there is an owner outside North America.
+      "constraints": {
+        "regions": ["WNAM"]
+      },
+
+      // A rollout must not kill a brain mid-conversation. 25% at a time, and
+      // one hour of grace for an instance that is actively serving before it is
+      // shut down. The container's SIGTERM handler flushes memory.db to R2
+      // (brain/container_entry.py, BRAIN.md §4.3) — the grace period is what
+      // gives that flush somewhere to happen.
+      "rollout_step_percentage": 25,
+      "rollout_active_grace_period": 3600
+    }
+  ],
+
+  // --------------------------------------------------------------------------
+  // D1 — the backend that replaces PocketBase.
+  // Read DIRECTLY by BrainSupervisor for discovery and the purge queue, which
+  // is why brain/supervisor.py:54-58's HTTP call to GET /worker/owners
+  // (backend/pb_hooks/worker_owners.pb.js:9) disappears entirely rather than
+  // being ported. See BRAIN.md §3.3.
+  // --------------------------------------------------------------------------
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "anticipy-backend",
+      "database_id": "REPLACE_WITH_PRODUCTION_D1_ID"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      // The durable home of every owner's mind. Replaces the Railway volume at
+      // ANTICIPY_STATE_ROOT (brain/supervisor.py:32, default /data/owners).
+      // Keys: owners/<owner_ref>/memory.db and owners/<owner_ref>/clock_state.json
+      "binding": "OWNER_STATE",
+      "bucket_name": "anticipy-owner-state"
+    },
+    {
+      // Where brain/state_backup.py:171 already uploads its verified zips,
+      // under the prefix from ANTICIPY_STATE_BACKUP_PREFIX (state_backup.py:162,
+      // default "worker/"). Bound here so the supervisor can list generations
+      // when somebody needs a restore; the container writes to it with boto3,
+      // not through this binding.
+      // NOTE: the bucket NAME is not in the repo — it comes from
+      // ANTICIPY_BACKUP_S3_BUCKET (backend/pb_migrations/1700000053_off_volume_backups.js:27).
+      // migration/BLOCKERS.md records the observed production value as
+      // anticipy-pocketbase-backups-production AND records that R2 is not
+      // enabled on this account. Confirm before trusting it.
+      "binding": "STATE_ARCHIVE",
+      "bucket_name": "anticipy-pocketbase-backups-production"
+    }
+  ],
+
+  // --------------------------------------------------------------------------
+  // Service binding to the site Worker, which is what now answers the
+  // PocketBase-shaped API that brain/pb.py talks to. This is optional: the
+  // container can equally reach https://www.anticipy.ai over the public
+  // internet. Using the binding keeps ANTICIPY_SERVICE_TOKEN off the public
+  // internet entirely — see BRAIN.md §7.2 for the outbound-interception code
+  // that makes a container's plain `requests.get()` land here.
+  // --------------------------------------------------------------------------
+  "services": [
+    {
+      "binding": "BACKEND",
+      "service": "anticipy-site"
+    }
+  ],
+
+  // --------------------------------------------------------------------------
+  // NON-SECRET configuration. Everything here is passed into the container's
+  // process environment by OwnerBrain.start({ envVars }) — see BRAIN.md §5.
+  // Secrets are NOT here; they go in with `wrangler secret put`, listed in
+  // BRAIN.md §5.2.
+  // --------------------------------------------------------------------------
+  "vars": {
+    // brain/worker.py:43, brain/supervisor.py:29, brain/evidence.py:75,
+    // brain/voice_arm.py:325. The PocketBase-shaped API on the site Worker.
+    "ANTICIPY_PB": "https://www.anticipy.ai",
+
+    // brain/supervisor.py:32-33. Inside the container these are ordinary
+    // ephemeral paths; R2 is the durable copy. BRAIN.md §4.
+    "ANTICIPY_STATE_ROOT": "/data/owners",
+    "ANTICIPY_STATE_VOLUME_ROOT": "/data",
+
+    // R2 key prefix for the per-owner live state. Read by brain/container_entry.py.
+    "ANTICIPY_STATE_R2_PREFIX": "owners",
+
+    // How often the container snapshots memory.db back to R2. This number IS
+    // the crash-loss window; 60s is the recommendation and the reasoning is in
+    // BRAIN.md §4.4. Not the same knob as ANTICIPY_STATE_BACKUP_SECONDS.
+    "ANTICIPY_STATE_SNAPSHOT_SECONDS": "60",
+
+    // brain/supervisor.py:34, default 86400. The verified-zip archive cadence
+    // in brain/state_backup.py:153. Kept daily; it is the restore-from-history
+    // path, not the durability path.
+    "ANTICIPY_STATE_BACKUP_SECONDS": "86400",
+    // brain/state_backup.py:162
+    "ANTICIPY_STATE_BACKUP_PREFIX": "worker/",
+    // brain/state_backup.py:164
+    "ANTICIPY_STATE_BACKUP_KEEP": "14",
+    // brain/state_backup.py:40. "1" makes a missing S3 configuration a hard
+    // failure instead of a silent no-op. On Cloudflare the configuration is
+    // never optional, so it is on.
+    "ANTICIPY_BACKUP_REQUIRED": "1",
+    // brain/state_backup.py:51
+    "ANTICIPY_BACKUP_S3_REGION": "auto",
+
+    // brain/supervisor.py:31. Must equal containers[0].max_instances above.
+    "ANTICIPY_MAX_OWNER_WORKERS": "100",
+    // brain/supervisor.py:30. Kept for the container's own bookkeeping; the
+    // real reconcile cadence is the cron trigger above.
+    "ANTICIPY_OWNER_DISCOVERY_SECONDS": "15",
+
+    // brain/llm.py:47, brain/worker.py:56 — the FALLBACK zone only. The real
+    // zone comes from the owner's profile at brain/worker.py:4372-4378.
+    "ANTICIPY_TZ": "America/Vancouver",
+    // brain/llm.py:24
+    "ANTICIPY_MODEL": "deepseek/deepseek-v3.2",
+    // brain/llm.py:220
+    "ANTICIPY_GEMINI_MODEL": "gemini-2.5-flash",
+    // brain/worker.py:4305. "1" = on; anything else that is not "0" is also on.
+    "ANTICIPY_SEGMENTS": "1",
+
+    // brain/supervisor.py:109. Every container is one supervised child.
+    // This is what stops a worker inheriting another account's phone number
+    // (brain/worker.py:4264-4265) — do not remove it.
+    "ANTICIPY_SUPERVISED": "1",
+    // brain/worker.py:4416-4417. The Twilio inbound-webhook watchdog is the
+    // SUPERVISOR's job, never a child's (brain/supervisor.py:110-114). On
+    // Cloudflare it belongs to the cron trigger; no owner container may claim
+    // it, or N owners fight over one Twilio number.
+    "ANTICIPY_WEBHOOK_MANAGER": "0",
+    // brain/worker.py:901. Pin it: with N containers and one number, a
+    // watchdog that derives the URL from its own host is a coin flip.
+    "ANTICIPY_TWILIO_WEBHOOK_URL": "https://www.anticipy.ai/sms/inbound"
+  }
+}

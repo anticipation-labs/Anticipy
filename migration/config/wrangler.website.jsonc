@@ -1,0 +1,278 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // anticipy-web — the Next.js site (src/) on Cloudflare Workers via OpenNext.
+  //
+  // Deploy from the REPO ROOT, not from this directory:
+  //     npx opennextjs-cloudflare build
+  //     npx wrangler deploy -c migration/config/wrangler.website.jsonc
+  //
+  // `main` and `assets.directory` are resolved relative to THIS FILE, so they
+  // climb two levels back to the repo root where `.open-next/` is written.
+  //
+  // NAME. `anticipy-web` matches the service topology in
+  // migration/runbooks/SECRETS.md:68, which is what every
+  // `wrangler secret put --name anticipy-web` line in SECRETS.md:255-283
+  // assumes. The repo-root wrangler.jsonc:3 still says "anticipy-site";
+  // deploying both files would create TWO Workers. Delete the root file, or
+  // reconcile it, before the first deploy. See runbooks/WEBSITE.md §0.
+  // ───────────────────────────────────────────────────────────────────────────
+  "name": "anticipy-web",
+  "main": "../../.open-next/worker.js",
+
+  // Pinned, not floating. A compatibility_date is a behaviour contract; moving
+  // it is a deploy that can change runtime semantics, so it moves deliberately.
+  "compatibility_date": "2026-09-03",
+
+  // nodejs_compat is REQUIRED and load-bearing, not defensive:
+  //   - 20 API routes declare runtime="nodejs" (WEBSITE.md §2)
+  //   - 8 of them import node "crypto" directly, and 11 src/lib modules do too
+  //   - src/lib/crm/password.ts:7 needs scrypt; src/lib/google-calendar.ts:24
+  //     and src/lib/crm/google.ts:64 need createCipheriv("aes-256-cbc")
+  // All of the above were run against real workerd under this exact flag and
+  // pass — see WEBSITE.md §2 for the measured table.
+  //
+  // global_fetch_strictly_public makes a fetch() from inside this Worker to a
+  // hostname THIS WORKER serves go out to the public edge instead of looping
+  // straight back into this same isolate. @opennextjs/cloudflare's own template
+  // ships it (node_modules/@opennextjs/cloudflare/templates/wrangler.jsonc:5).
+  //
+  // Be honest about what it does and does not buy here. Today NOTHING needs it:
+  // all 37 rewrites in next.config.mjs point at hostnames this Worker does not
+  // serve (2 PostHog + 35 Railway), and OpenNext's local-image path uses
+  // env.ASSETS.fetch rather than global fetch. It is here as a guard for the
+  // step AFTER this one -- when FELLOWSHIP_ORIGIN is repointed at an
+  // anticipy.ai hostname (WEBSITE.md §1) and a mistake in the route pattern
+  // would otherwise be an infinite loop instead of a 404.
+  //
+  // IT IS A DELTA FROM WHAT WAS VERIFIED. migration/spike/website-verification.md
+  // measured 60/60 pages and 84/84 API routes with nodejs_compat ALONE
+  // (see wrangler.jsonc:8 at the repo root). Re-run that conformance pass with
+  // this flag on before cutover, or drop the flag until you have. WEBSITE.md §14.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  // ── Static assets ─────────────────────────────────────────────────────────
+  // 147 files as built (find .open-next/assets -type f). `wrangler deploy`
+  // reports "226 files" because its counter includes the 79 subdirectories.
+  // Largest single file is videos/flatlay-done.mp4 at 5.7 MB, comfortably under
+  // the per-file asset ceiling.
+  //
+  // This was 163 files / 69 MB until commit 1065593b moved the 23 MB
+  // public/images/originals_backup/ out of the served tree. WEBSITE.md §9 keeps
+  // the method for proving an asset directory is unreferenced.
+  //
+  // The ASSETS binding is NOT optional. OpenNext's image handler reads it
+  // directly at node_modules/@opennextjs/cloudflare/dist/cli/templates/images.js:23-30
+  // and returns 404 for every local image if it is undefined.
+  "assets": {
+    "directory": "../../.open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  // ── Image optimization ────────────────────────────────────────────────────
+  // sharp never runs here. OpenNext serves /_next/image itself
+  // (.open-next/worker.js:38-41 -> images.js:14). With this binding present it
+  // resizes through Cloudflare Images (images.js:125-148). WITHOUT it, the
+  // handler logs "env.IMAGES binding is not defined" and streams the ORIGINAL
+  // bytes through (images.js:126-132) — correct pixels, no resizing, and a
+  // 1.7 MB PNG shipped where a 200 KB one was asked for.
+  //
+  // Requires Cloudflare Images to be enabled on the account. If it is not, the
+  // site still renders; it just serves originals. See WEBSITE.md §4.
+  "images": {
+    "binding": "IMAGES"
+  },
+
+  // ── Cron ──────────────────────────────────────────────────────────────────
+  // Replaces the single entry in vercel.json:2-7 ("/api/cron/daily-digest" at
+  // "0 14 * * *"). The schedule string is carried over unchanged; Cloudflare
+  // cron is UTC, and so was Vercel's, so the digest keeps firing at the same
+  // wall-clock instant.
+  //
+  // A Cron Trigger invokes scheduled(), NOT fetch() — OpenNext's generated
+  // worker (.open-next/worker.js:16) exports only fetch, so the trigger alone
+  // does nothing. WEBSITE.md §6 has the wrapper that turns the tick into the
+  // GET the route already expects, plus the CRON_SECRET header it authorizes on
+  // (src/app/api/cron/daily-digest/route.ts:22-39).
+  "triggers": {
+    "crons": ["0 14 * * *"]
+  },
+
+  // ── Runtime limits ────────────────────────────────────────────────────────
+  // Workers has no equivalent of Next's `maxDuration`; the ten routes that
+  // declare it (src/app/api/app/run/route.ts:4 is the largest at 300) are
+  // bounded by CPU time instead, and CPU excludes time spent awaiting fetch.
+  //
+  // 60000 is chosen against two measured numbers, both on real workerd:
+  //   bcrypt verify   ~50 ms  (migration/spike/bcrypt-on-workerd.md:31)
+  //   scrypt N=16384   25 ms  (WEBSITE.md §2, measured this pass)
+  // Neither fits the free plan's 10 ms ceiling, which is why BLOCKERS.md:15
+  // lists login as plan-blocked. 60000 leaves room for the LLM-fanout routes
+  // without letting a runaway loop bill for minutes.
+  "limits": {
+    "cpu_ms": 60000
+  },
+
+  // ── Routes ────────────────────────────────────────────────────────────────
+  // Custom domains, not zone routes: a custom_domain entry makes Cloudflare
+  // create and manage the DNS record and the certificate for that hostname,
+  // which is what we want for an apex we are cutting over. Add these ONLY when
+  // you are ready to take traffic — WEBSITE.md §10 is the ordered cutover.
+  //
+  // Commented out on purpose so that `wrangler deploy` before cutover day
+  // publishes to workers.dev and touches no DNS.
+  //
+  // "routes": [
+  //   { "pattern": "anticipy.ai",     "custom_domain": true },
+  //   { "pattern": "www.anticipy.ai", "custom_domain": true }
+  // ],
+
+  // workers.dev stays on so there is always a non-DNS way to reach and verify
+  // the deployed Worker, including after cutover when you need to compare.
+  "workers_dev": true,
+
+  // ── Rate limiting ─────────────────────────────────────────────────────────
+  // NOT WIRED YET, AND THAT IS A REAL GAP. src/lib/rate-limit.ts:10 keeps its
+  // buckets in a module-level Map. On Vercel that was already weak; on Workers
+  // it is close to meaningless, because each isolate has its own Map and there
+  // are many. 25 routes call it, including /api/internal-gate (10/min),
+  // /api/admin/login (5/10min) and /api/analytics/login (5/10min) — the three
+  // brute-force gates. WEBSITE.md §11 has the KV-backed replacement.
+  //
+  // Uncomment after: wrangler kv namespace create RATE_LIMIT
+  // and paste the returned id.
+  //
+  // "kv_namespaces": [
+  //   { "binding": "RATE_LIMIT", "id": "<from `wrangler kv namespace create RATE_LIMIT`>" }
+  // ],
+
+  // ── Plaintext config ──────────────────────────────────────────────────────
+  // THIS FILE IS TRACKED IN A PUBLIC REPOSITORY. Everything under "vars" is
+  // published. If leaking a value costs money or data it belongs in
+  // `wrangler secret put --name anticipy-web`, never here. The classification
+  // is SECRETS.md §0; the 29 secrets for this service are SECRETS.md §2a and
+  // the commands are SECRETS.md:255-283.
+  //
+  // These reach the code as ordinary process.env.* at runtime: OpenNext copies
+  // the Worker `env` into process.env at
+  // node_modules/@opennextjs/cloudflare/dist/cli/templates/init.js:92-95.
+  // Verified: NEXT_PUBLIC_SITE_URL survives into the server bundle as a live
+  // `process.env` read (.next/server/app/api/twilio/voice-relay/route.js), so
+  // setting it here does work server-side — but the BROWSER copy is inlined at
+  // build time, so it must ALSO be set in the build environment. WEBSITE.md §13.
+  "vars": {
+    // Account identifier, not a credential. src/lib/notification-adapter.ts:86
+    "CLOUDFLARE_ACCOUNT_ID": "",
+
+    // Public by OAuth design. src/lib/google-calendar.ts:4, src/lib/crm/google.ts:8
+    "GOOGLE_OAUTH_CLIENT_ID": "",
+
+    // Identifiers and a public phone number.
+    "TWILIO_MESSAGING_SERVICE_SID": "",   // src/lib/notification-adapter.ts:136
+    "TWILIO_PHONE_NUMBER": "",
+    "TWILIO_STATUS_CALLBACK_URL": "",     // src/lib/notification-adapter.ts:150
+
+    // Notification routing knobs, all non-secret.
+    "ANTICIPY_NOTIFY_EMAIL_PROVIDER": "auto",   // notification-adapter.ts:83
+    "ANTICIPY_NOTIFY_FROM_EMAIL": "",           // notification-adapter.ts:100
+    "ANTICIPY_NOTIFY_FROM_NAME": "Anticipy",    // notification-adapter.ts:106
+    "ANTICIPY_NOTIFY_FROM_ALLOWLIST": "",       // notification-adapter.ts:114
+
+    // Where operational mail lands.
+    "ADMIN_EMAIL": "",                    // src/app/api/engine/analyze/route.ts:889
+    "OWNER_EMAIL": "",                    // src/lib/email.ts:31
+    "CRM_EMAIL_FROM": "",                 // src/lib/crm/email.ts:9
+
+    // Stripe PRODUCT/PRICE ids. Public identifiers, not credentials — they are
+    // already hardcoded as defaults at src/lib/stripe.ts:35 and :38. Setting
+    // them here is how you point a staging deploy at a test price.
+    "STRIPE_PREORDER_PRICE_ID": "",
+    "STRIPE_PREORDER_PRODUCT_ID": "",
+
+    // The engine base URL. A hostname, not a credential.
+    // src/app/api/app/run/route.ts:18 prefers ENGINE_URL and falls back to
+    // NEXT_PUBLIC_ENGINE_URL; src/app/demo/page.tsx:19 reads the public one in
+    // the browser, so that one must ALSO be set at build time.
+    "ENGINE_URL": "",
+    "NEXT_PUBLIC_ENGINE_URL": "",
+
+    // Canonical origin. VERCEL_URL disappears with Vercel, and 6 call sites
+    // fall back to "http://localhost:3000" without this — including the Google
+    // OAuth redirect_uri (src/lib/google-calendar.ts:13-17,
+    // src/lib/crm/google.ts:24-25) and the Twilio voice callback origin
+    // (src/app/api/twilio/voice-relay/route.ts:237). MUST be set.
+    "NEXT_PUBLIC_SITE_URL": "https://www.anticipy.ai",
+
+    "NODE_ENV": "production"
+  },
+
+  // ── Observability ─────────────────────────────────────────────────────────
+  // redact_query_string matters here specifically: /r/:code, /c/:code and the
+  // confirm-token links carry identifying values in the query string, and
+  // src/app/api/geo/route.ts exists precisely because this site tries not to
+  // over-collect. Head sampling at 1.0 while the port is new; lower it once the
+  // shape of production traffic is known.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true
+  },
+
+  // ── Staging ───────────────────────────────────────────────────────────────
+  // `wrangler deploy -c migration/config/wrangler.website.jsonc --env staging`
+  //
+  // vars, assets and images are NOT inherited by a named environment — wrangler
+  // requires each to be restated. That is why this block looks redundant; it is
+  // not. Secrets are per-environment too: the Worker is literally named
+  // "anticipy-web-staging", so
+  //     wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name anticipy-web-staging
+  // is a separate act from the production one. Point staging at test
+  // credentials, never production ones.
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "assets": {
+        "directory": "../../.open-next/assets",
+        "binding": "ASSETS"
+      },
+      "images": {
+        "binding": "IMAGES"
+      },
+      "limits": {
+        "cpu_ms": 60000
+      },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "redact_query_string": true
+      },
+      // No "triggers" here on purpose: a staging cron would send the daily
+      // digest to real recipients out of src/lib/crm/email.ts.
+      "vars": {
+        "CLOUDFLARE_ACCOUNT_ID": "",
+        "GOOGLE_OAUTH_CLIENT_ID": "",
+        "TWILIO_MESSAGING_SERVICE_SID": "",
+        "TWILIO_PHONE_NUMBER": "",
+        "TWILIO_STATUS_CALLBACK_URL": "",
+        "ANTICIPY_NOTIFY_EMAIL_PROVIDER": "auto",
+        "ANTICIPY_NOTIFY_FROM_EMAIL": "",
+        "ANTICIPY_NOTIFY_FROM_NAME": "Anticipy (staging)",
+        "ANTICIPY_NOTIFY_FROM_ALLOWLIST": "",
+        "ADMIN_EMAIL": "",
+        "OWNER_EMAIL": "",
+        "CRM_EMAIL_FROM": "",
+        "STRIPE_PREORDER_PRICE_ID": "",
+        "STRIPE_PREORDER_PRODUCT_ID": "",
+        "ENGINE_URL": "",
+        "NEXT_PUBLIC_ENGINE_URL": "",
+        "NEXT_PUBLIC_SITE_URL": "",
+        // Keeps a staging deploy from placing real calls or sending real SMS.
+        // The comparison is `=== "true"` at src/lib/notification-adapter.ts:94 --
+        // "1" is NOT truthy here and would send for real.
+        "TWILIO_MOCK": "true",
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}

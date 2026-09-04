@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    // Erasable-syntax-only, so `node --experimental-strip-types` can run the
+    // sources and the test suite with no build step. No parameter properties,
+    // no enums, no namespaces.
+    "verbatimModuleSyntax": true
+  },
+  // Tests are NOT here: test/tsconfig.json extends this one and adds node
+  // types. Keeping them out is what lets this config catch a Node built-in
+  // leaking into src/.
+  "include": ["src/**/*.ts", "filter-dsl.ts"]
+}
