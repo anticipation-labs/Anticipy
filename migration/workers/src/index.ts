@@ -20,6 +20,8 @@ import { resetRequest, resetConfirm, type ResetEnv } from "./routes/password_res
 import { accountDelete } from "./routes/account_delete.ts";
 import { hqHealth, hqLogin, hqGate, hqGone, hqPage, hqCors, HQ_DEAD_ROUTES, type HqEnv } from "./routes/hq.ts";
 import { hqSession, hqSessionEnd, hqMe, hqClerkExchange, hqState } from "./routes/hq_data.ts";
+import { hqPeopleCreate, hqPeopleUpdate } from "./routes/hq_people.ts";
+import { hqTodoCreate, hqTodoUpdate, hqTodoDelete } from "./routes/hq_todos.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -153,6 +155,11 @@ export default {
       // it cannot be made differently in two places.
       if (path === "/internal/me" && method === "GET") return hqMe(request, hq);
       if (path === "/internal/state" && method === "GET") return hqState(request, hq);
+      if (path === "/internal/people" && method === "POST") return hqPeopleCreate(request, hq);
+      if (path === "/internal/people" && method === "PATCH") return hqPeopleUpdate(request, hq);
+      if (path === "/internal/todos" && method === "POST") return hqTodoCreate(request, hq);
+      if (path === "/internal/todos" && method === "PATCH") return hqTodoUpdate(request, hq);
+      if (path === "/internal/todos/delete" && method === "POST") return hqTodoDelete(request, hq);
 
       // Also ungated: the caller is proving who they are WITH the Clerk token,
       // so requiring the shared key first would defeat the point of the route.
