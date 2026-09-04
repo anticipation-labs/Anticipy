@@ -6,53 +6,45 @@ planned. The previous revision of this file said "D1 EMPTY" and "all 38
 
 ## Deployed and live
 
-    https://anticipy-api.omar-114.workers.dev        the backend Worker
+    https://anticipy-api-b.omar-114.workers.dev      the backend Worker  <- USE THIS
+    https://anticipy-api.omar-114.workers.dev        WEDGED: serves an 18:39
+      build and will not update. Everything below is deployed to BOTH; only
+      -b actually serves it. See
+      research/2026-09-04-the-workers-dev-url-is-wedged.md before cutover.
       D1        anticipy-backend        36 collections, 2,451 rows, 0 mismatches
       R2        anticipy-evidence
       DO        PairCodeCounter         the pair-code brute-force counter
       Assets    pb_public
       Cron      */5 * * * *  and  17 4 * * *
-      Secrets   ANTICIPY_INTERNAL_KEY (PRODUCTION's — set 2026-09-04)
-                ANTICIPY_VAULT_KEY (production's)
+      Secrets   ANTICIPY_INTERNAL_KEY (PRODUCTION's), ANTICIPY_VAULT_KEY,
+                ANTICIPY_SERVICE_TOKEN, OPENROUTER_API_KEY, RESEND_API_KEY,
+                TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER/FROM
+      Crons     "17 4 * * *" ONLY. The sweep is off until cutover — see below.
 
     Website (separate repo, anticipation-labs/aniticipy-web)
       main        -> Vercel, live at www.anticipy.ai
       cloudflare  -> builds and runs on workerd
 
-## HQ: 29 of 30 live routes ported
+## HQ: every live route ported
 
-internal_hq.pb.js is 4,276 lines with its own auth stack, a Clerk JWT
-exchange, an encrypted vault and an ICS feed. It was parked as unportable
-because production is not built from this repo and no HQ key was available to
-check a port. Both halves of that turned out to be too pessimistic —
-`research/2026-09-04-hq-hook-IS-production.md` establishes that this hook file
-IS what production runs (35/35 unauthenticated routes conform, error strings
-verbatim), which made it the right source to port from.
+internal_hq.pb.js is 4,276 lines with its own auth stack, a Clerk JWT exchange,
+an encrypted vault and an ICS feed. All 30 live routes are wired, plus the
+three retired AI routes that still answer 410, plus the six-pass sweep cron.
 
-    WIRED   session, session/end, me, state, login, clerk/exchange
-            people (POST/PATCH), people/code
-            todos (POST/PATCH/delete)
-            events, tracks, expenses, notes (+ their deletes)
-            passwords (upsert/reveal/delete)
-            comments (POST/PATCH/delete)
-            reminders (POST/delete)
-            notifs/read, settings, cal/{token}.ics
-            the three retired AI routes, still 410
+`/internal/assistant` was last because it was the only route whose behaviour
+could not be checked without a vendor credential. With OPENROUTER_API_KEY it
+now can be, and is: asked what is on the board it answers off live D1 rather
+than telling the person to go and look — which was the whole point of giving it
+the board in the first place.
 
-    NOT     /internal/assistant
-
-`/internal/assistant` is last ON PURPOSE and not by accident: it is the only
-HQ route whose behaviour cannot be checked without a vendor credential
-(OPENROUTER_API_KEY, which is not on this machine). Roughly half of it is
-context-building that could be tested against D1, and the other half is model
-tool-calling that could not be tested at all. Shipping 550 lines whose
-principal path has never run is the thing CLAUDE.md law 6 exists to stop, so
-it waits for the key rather than being written blind.
+TestHQPortProgressIsHonest keys on (METHOD, path) and reads all three dispatch
+forms index.ts uses, so "ported" cannot drift from the source. It found two
+bugs in ITSELF while the port finished, both fixed rather than loosened.
 
 ## Conformance, measured today — with production's key
 
-    Whole suite, LIVE production      147 passed,  0 failed
-    Whole suite, Worker               146 passed,  0 failed
+    Whole suite, LIVE production                147 passed,  0 failed
+    Whole suite, LIVE anticipy-api-b            146 passed,  0 failed
 
     236 tests on both. Per-test diff:
 
@@ -112,9 +104,11 @@ without erroring. See research/2026-09-04-the-sweep-was-a-silent-noop.md.
 
 ## Order of the remaining work
 
-1. /internal/assistant, once OPENROUTER_API_KEY exists.
-2. Set on the Worker: CLERK_HQ_JWT_KEY, RESEND_API_KEY, TWILIO_*, and
-   production's ANTICIPY_INTERNAL_KEY.
+1. UNWEDGE OR ABANDON anticipy-api. Either fix the route in the Cloudflare
+   dashboard or accept anticipy-api-b as the name and point the cutover there.
+   Nothing outside this repo depends on the old hostname yet.
+2. Set CLERK_HQ_JWT_KEY — the last missing secret, and the only remaining
+   difference from production in the whole suite.
 3. Repoint the 34 /internal/* rewrites. The redirect-following bug they shared
    with /r/ and /c/ is FIXED for the referral links
    (aniticipy-web@63dc14d) and does not apply to these: none of the
@@ -125,15 +119,18 @@ without erroring. See research/2026-09-04-the-sweep-was-a-silent-noop.md.
 
 ## Access still needed
 
-  OPENROUTER_API_KEY                    /internal/assistant
-  CLERK_HQ_JWT_KEY                      Clerk sign-in to HQ
+  CLERK_HQ_JWT_KEY                      Clerk sign-in to HQ. The ONLY
+                                        credential still missing.
   Cloudflare account 5b63e25e           holds anticipy-downloads (the Mac DMG);
                                         this login cannot see it
 
 ## Credentials to rotate before this is public
 
-The Cerebras key, access code 77c04c26, everything pasted into this session's
-.env.local, the PocketBase superuser password, and ANTICIPY_VAULT_KEY.
+EVERYTHING in .env.local — all 38 values arrived by chat and the file's own
+header says to treat those as burned. That includes OPENROUTER_API_KEY, the
+Twilio auth token, SUPABASE_SERVICE_ROLE_KEY, the R2 secret, Resend, Cerebras,
+Groq, Mistral, Kimi, Deepgram, Capsolver and Brave — plus access code 77c04c26,
+the PocketBase superuser password, and ANTICIPY_VAULT_KEY.
 
 ANTICIPY_INTERNAL_KEY BELONGS ON THIS LIST TOO, and rotating it is not free:
 `cal_url` is `sha256(teamKey + personId)`, so changing the key silently
