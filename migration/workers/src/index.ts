@@ -19,7 +19,7 @@
 import { resetRequest, resetConfirm, type ResetEnv } from "./routes/password_reset.ts";
 import { accountDelete } from "./routes/account_delete.ts";
 import { hqHealth, hqLogin, hqGate, hqGone, hqPage, hqCors, HQ_DEAD_ROUTES, type HqEnv } from "./routes/hq.ts";
-import { hqSession, hqSessionEnd, hqMe, hqClerkExchange, hqState } from "./routes/hq_data.ts";
+import { hqSession, hqSessionEnd, hqMe, hqClerkExchange, hqState, hqMePassword } from "./routes/hq_data.ts";
 import { hqPeopleCreate, hqPeopleUpdate } from "./routes/hq_people.ts";
 import { hqTodoCreate, hqTodoUpdate, hqTodoDelete } from "./routes/hq_todos.ts";
 import {
@@ -211,6 +211,7 @@ export default {
       // Dual auth: X-HQ-Session OR the key. resolveActor() owns the choice, so
       // it cannot be made differently in two places.
       if (path === "/internal/me" && method === "GET") return hqMe(request, hq);
+      if (path === "/internal/me/password" && method === "POST") return hqMePassword(request, hq);
 
       // UNGATED, matching production exactly: /internal/people/faces answers
       // 200 with names and ids to a caller holding no key at all. Reproduced

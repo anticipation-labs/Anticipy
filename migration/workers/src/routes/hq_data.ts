@@ -254,9 +254,13 @@ export async function hqSession(req: Request, env: HqEnv): Promise<Response> {
   // typed by hand; without this, O-for-0 would be indistinguishable from a
   // revoked code and the identical-message rule above would become a trap
   // instead of a defence.
+  // THE WELCOME SCREEN'S LANE: press who you are, type your password. The team
+  // key is accepted in the same field as break-glass. Same ceiling, same single
+  // failure sentence as the code lane. deployed internal_hq.pb.js:2839.
+  const pwLane = !!(body.person_id && ("password" in body));
   const raw = String(body.code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "")
     .replace(/I/g, "1").replace(/L/g, "1").replace(/O/g, "0").replace(/U/g, "V");
-  if (raw.length !== 8) return no();
+  if (!pwLane && raw.length !== 8) return no();
 
   // GLOBAL HOURLY CEILING, COUNTED ON THE ATTEMPT, BEFORE THE COMPARISON.
   // Global rather than per-IP because an attacker rotates addresses and a
@@ -294,13 +298,48 @@ export async function hqSession(req: Request, env: HqEnv): Promise<Response> {
   // Look up BY HASH and compare timing-safely anyway. Storing only sha256
   // means a nightly backup is not a pile of live credentials, and there is
   // deliberately no route in this file that reads a code back out.
-  const codeHash = await sha256Hex(raw);
-  const person = await env.DB.prepare(
-    "SELECT * FROM internal_people WHERE code_hash = ?1 LIMIT 1",
-  ).bind(codeHash).first<Person>();
-  if (!person) return no();
-  if (!timingEqual(codeHash, String(person.code_hash ?? ""))) return no();
-  if (!boolDefaultFalse(person.active)) return no();
+  let person: Person | null = null;
+  if (pwLane) {
+    // PASSWORD LANE. deployed internal_hq.pb.js:2876-2897. The team key works
+    // here too (break-glass), and a person with no password yet self-heals: they
+    // sign in with their FIRST NAME and the hash appears on first use, which is
+    // what makes adding someone to the team a one-step act. THE HASH IS
+    // sha256(password.toLowerCase()) — no salt, lowercased first. Read off the
+    // container; not guessed.
+    person = await env.DB.prepare("SELECT * FROM internal_people WHERE id = ?1 LIMIT 1")
+      .bind(String(body.person_id ?? "")).first<Person>();
+    if (!person || !boolDefaultFalse(person.active)) return no();
+    const given = String(body.password ?? "");
+    const norm = given.trim().toLowerCase();
+    if (!norm) return no();
+    const key = env.ANTICIPY_INTERNAL_KEY || "";
+    const isKey = timingEqual(given.trim(), key);
+    let isPw = false;
+    const stored = String(person.pw_hash ?? "");
+    if (stored) {
+      isPw = timingEqual(await sha256Hex(norm), stored);
+    } else {
+      const first = (String(person.name ?? "").trim().split(/\s+/)[0] || "").toLowerCase();
+      isPw = !!first && norm === first;
+      if (isPw) {
+        try {
+          await env.DB.prepare(
+            "UPDATE internal_people SET pw_hash = ?1, pw_set_at = ?2, updated = ?3 WHERE id = ?4",
+          ).bind(await sha256Hex(first), isoNow(), pbNow(), String(person.id)).run();
+        } catch { /* the sign-in still stands; the hash is a convenience */ }
+      }
+    }
+    if (!isKey && !isPw) return no();
+  } else {
+    const codeHash = await sha256Hex(raw);
+    person = await env.DB.prepare(
+      "SELECT * FROM internal_people WHERE code_hash = ?1 LIMIT 1",
+    ).bind(codeHash).first<Person>();
+    if (!person) return no();
+    if (!timingEqual(codeHash, String(person.code_hash ?? ""))) return no();
+    if (!boolDefaultFalse(person.active)) return no();
+  }
+  if (!person) return no();   // both lanes set it or returned; keeps the types honest
 
   const token = randomHex(64);
   // isoNow(), not pbNow(): these columns are T-format. See isoNow's comment.
@@ -822,4 +861,44 @@ export async function hqState(req: Request, env: HqEnv): Promise<Response> {
   out.meters = meters;
 
   return json(200, out, cors);
+}
+
+// ---------------------------------------------------------------------------
+// POST /internal/me/password — change your own password from Settings.
+//
+// Ported from the DEPLOYED source (internal_hq.pb.js:2748, read off the Railway
+// container 2026-09-04) — it is in no git commit. THE HASH IS
+// sha256(password.toLowerCase()): no salt, lowercased first. That scheme was
+// invisible from outside (every failure returns the same sentence), so it was
+// deliberately not guessed until the source was in hand.
+//
+// Other sessions stay signed in: a password is how you get IN, and changing it
+// should not throw your own phone out — so nothing here touches internal_sessions.
+// ---------------------------------------------------------------------------
+export async function hqMePassword(req: Request, env: HqEnv): Promise<Response> {
+  const cors = hqCors(req, env);
+  let body: Record<string, unknown> = {};
+  try { body = (await req.json()) as Record<string, unknown>; } catch { /* {} */ }
+
+  // Session-or-key, resolveActor's dual auth — the session door the source
+  // opens inline. A session overrides whatever actor_id the body claimed.
+  const resolved = await resolveActor(req, env, { actorId: String(body.actor_id ?? "") });
+  if (!resolved.ok) return resolved.response;
+  const actor = resolved.person;
+  if (!actor || !boolDefaultFalse(actor.active)) {
+    return json(400, { error: "pick yourself first" }, cors);
+  }
+
+  const pw = String(body.password ?? "").trim();
+  if (pw.length < 3) return json(400, { error: "three characters at least" }, cors);
+  if (pw.length > 72) return json(400, { error: "that's a novel, not a password" }, cors);
+
+  await env.DB.prepare(
+    "UPDATE internal_people SET pw_hash = ?1, pw_set_at = ?2, updated = ?3 WHERE id = ?4",
+  ).bind(await sha256Hex(pw.toLowerCase()), isoNow(), pbNow(), String(actor.id)).run();
+
+  await logActivity(env, actor, "person.password",
+    String(actor.name ?? "") + " changed their password", "changed their password",
+    String(actor.id));
+  return json(200, { ok: true }, cors);
 }

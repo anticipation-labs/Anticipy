@@ -58,21 +58,30 @@ async function all(env: HqEnv, sql: string, ...b: unknown[]): Promise<Row[]> {
 }
 
 /**
- * GET /internal/people/faces — UNGATED, exactly as production has it.
+ * GET /internal/people/faces — UNGATED (returns to any caller), 503 if the
+ * server has no key configured.
  *
- * Verified: with no X-Internal-Key at all, Railway answers 200 with six names
- * and six internal ids. That is a disclosure — small, but real — and it is
- * reproduced here rather than quietly tightened, because a migration is the
- * wrong moment to change who can read something. FLAGGED for the owner in
- * research/2026-09-04-two-routes-that-are-not-in-this-repo.md; closing it is a
- * decision to make deliberately, on both systems.
+ * NOW PORTED FROM THE REAL SOURCE (deployed internal_hq.pb.js:2730, read off
+ * the Railway container 2026-09-04), which corrected two guesses the
+ * reverse-engineered version got wrong: the order is `created` ASC (not name),
+ * the limit is 30 (not 200), and the name is the FIRST NAME ONLY —
+ * `name.trim().split(/\s+/)[0]` — the welcome screen shows first names on its
+ * face-picker. It is still ungated by design (it never compares the request's
+ * key, only checks the server has one); reproduced rather than tightened, as
+ * research/2026-09-04-two-routes-that-are-not-in-this-repo.md flags.
  */
 export async function hqPeopleFaces(req: Request, env: HqEnv): Promise<Response> {
   const cors = hqCors(req, env);
+  if (!(env.ANTICIPY_INTERNAL_KEY || "")) {
+    return json(503, { error: "internal HQ is not configured" }, cors);
+  }
   const rows = await all(env,
-    "SELECT id, name FROM internal_people WHERE active = 1 ORDER BY name ASC LIMIT 200");
+    "SELECT id, name FROM internal_people WHERE active = 1 ORDER BY created ASC LIMIT 30");
   return json(200, {
-    people: rows.map((p) => ({ id: p.id, name: str(p.name) })),
+    people: rows.map((p) => ({
+      id: p.id,
+      name: str(p.name).trim().split(/\s+/)[0] || "",
+    })),
   }, cors);
 }
 
