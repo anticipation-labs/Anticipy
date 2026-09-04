@@ -35,6 +35,7 @@ import {
   hqReminderCreate, hqReminderDelete, hqCalendar,
 } from "./routes/hq_threads.ts";
 import { hqAssistant } from "./routes/hq_assistant.ts";
+import { hqPeopleFaces, hqFellows } from "./routes/hq_fellows.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -167,6 +168,16 @@ export default {
       // Dual auth: X-HQ-Session OR the key. resolveActor() owns the choice, so
       // it cannot be made differently in two places.
       if (path === "/internal/me" && method === "GET") return hqMe(request, hq);
+
+      // UNGATED, matching production exactly: /internal/people/faces answers
+      // 200 with names and ids to a caller holding no key at all. Reproduced
+      // rather than tightened -- see hq_fellows.ts.
+      if (path === "/internal/people/faces" && method === "GET") {
+        return hqPeopleFaces(request, hq);
+      }
+      // Gated, and it checks the key itself so it can sit up here beside its
+      // sibling instead of being separated by the shared gate.
+      if (path === "/internal/fellows" && method === "GET") return hqFellows(request, hq);
       if (path === "/internal/state" && method === "GET") return hqState(request, hq);
       if (path === "/internal/people" && method === "POST") return hqPeopleCreate(request, hq);
       if (path === "/internal/people" && method === "PATCH") return hqPeopleUpdate(request, hq);
