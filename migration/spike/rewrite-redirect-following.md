@@ -72,3 +72,55 @@ Cloudflare silently resurrected the retired programme's handler -- one that
 queries `anticipy_ugc_creators`, a table `next.config.mjs:38-41` records was
 NEVER CREATED in Supabase. Removed, so both platforms now agree the rewrite
 owns `/c/`.
+
+---
+
+## RESOLVED 2026-09-04 — fixed, and the mechanism proven rather than argued
+
+`aniticipy-web@63dc14d` on branch `cloudflare`.
+
+Both paths stopped being rewrites. They are route handlers now:
+`src/app/r/[code]/route.ts` and `src/app/c/[code]/route.ts`, each forwarding
+the hop with `redirect: "manual"` and returning the upstream status, `Location`
+and `Set-Cookie` verbatim. The two rewrites are deleted from `next.config.mjs`.
+
+Doing it in application code rather than hunting for an OpenNext proxy option
+is deliberate: the behaviour then stops depending on which proxy is underneath,
+so it cannot regress on an OpenNext upgrade or a move back to Vercel.
+
+### The mechanism, isolated on workerd
+
+A throwaway Worker, same upstream URL, only the option differs:
+
+    fetch(url)                        -> 200, location: null
+    fetch(url, {redirect: "manual"})  -> 302, location: ...?ref=testcode&utm_...
+
+That is the whole bug in two lines. The 200 is why nothing ever alerted.
+
+### The fix, verified on both runtimes
+
+    node    (next start)   GET /r/TESTCODE -> 302 ...?ref=testcode&utm_...
+    workerd (wrangler dev) GET /r/TESTCODE -> 302 ...?ref=testcode&utm_...
+    workerd                GET /c/TESTCODE -> 302 ...?ref=testcode&utm_...
+
+An unrecognised code still 307s to the homepage instead of dead-ending, because
+these links are printed in bios and burned into video captions where a typo
+cannot be corrected afterwards.
+
+### The other 33 rewrites: mostly cleared, honestly
+
+The doc above said the `/internal/*` rewrites could not be tested because they
+401 behind the middleware gate. That was the wrong control. The gate is a
+VERCEL-side middleware; redirect shape is a property of the UPSTREAM. Probing
+Railway directly bypasses the gate entirely and answers the question:
+
+  * 9 destinations are GET-reachable (200/401). **None answers 3xx.**
+  * 24 answer 404 to a GET. That is not a missing route -- PocketBase registers
+    routes per method, so a GET against a POST-only route is a 404 by
+    construction. Their redirect shape is genuinely **UNVERIFIED**; verifying
+    them needs `ANTICIPY_INTERNAL_KEY` and a POST, and POSTing to live routes
+    like `/internal/fellows/pay` is not a probe anyone should run.
+
+So the bug was confined to `/r/` and `/c/`, which are fixed. The 24 POST-only
+routes stay on the cutover checklist -- and the cutover repoints them at the
+Worker, where this property is owned by our code rather than inherited.
