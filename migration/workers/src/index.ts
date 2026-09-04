@@ -19,7 +19,7 @@
 import { resetRequest, resetConfirm, type ResetEnv } from "./routes/password_reset.ts";
 import { accountDelete } from "./routes/account_delete.ts";
 import { hqHealth, hqLogin, hqGate, hqGone, hqPage, hqCors, HQ_DEAD_ROUTES, type HqEnv } from "./routes/hq.ts";
-import { hqSession, hqSessionEnd, hqMe, hqClerkExchange } from "./routes/hq_data.ts";
+import { hqSession, hqSessionEnd, hqMe, hqClerkExchange, hqState } from "./routes/hq_data.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -152,6 +152,7 @@ export default {
       // Dual auth: X-HQ-Session OR the key. resolveActor() owns the choice, so
       // it cannot be made differently in two places.
       if (path === "/internal/me" && method === "GET") return hqMe(request, hq);
+      if (path === "/internal/state" && method === "GET") return hqState(request, hq);
 
       // Also ungated: the caller is proving who they are WITH the Clerk token,
       // so requiring the shared key first would defeat the point of the route.

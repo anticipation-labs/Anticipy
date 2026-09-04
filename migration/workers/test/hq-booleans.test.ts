@@ -23,7 +23,8 @@
  * That is exactly why it is pinned here instead of being left to a smoke test.
  */
 import assert from "node:assert/strict";
-import { boolDefaultTrue, boolDefaultFalse, parsePbTime, timingEqual } from "../src/routes/hq_data.ts";
+import { boolDefaultTrue, boolDefaultFalse, parsePbTime, timingEqual,
+         isoNow, pbNowFormat } from "../src/routes/hq_data.ts";
 
 let failures = 0;
 function check(what: string, fn: () => void) {
@@ -103,6 +104,37 @@ check("timingEqual matches $security.equal", () => {
 check("timingEqual does not treat a prefix as a match", () => {
   assert.equal(timingEqual("secret", "secretlonger"), false);
   assert.equal(timingEqual("secretlonger", "secret"), false);
+});
+
+// --- the two datetime formats, which must not be interchanged -------------
+//
+// internal_sessions holds `created` as "2026-09-03 18:25:45.103Z" (space, a
+// PocketBase autodate) and `expires` as "2026-10-03T18:25:45.093Z" (T, written
+// by the hook with toISOString()) IN THE SAME ROW. Verified against migrated
+// data. Text comparison is how both are used, and " " sorts below "T", so a
+// value written in the wrong format does not merely look odd -- it sorts into
+// the wrong half of every ORDER BY and drops out of every range filter.
+//
+// A first draft of hq_data.ts wrote `created` with toISOString(). The keep-ten
+// session trim orders by `created DESC`, so every new row would have sorted
+// above all 31 migrated ones and the trim would have deleted genuinely recent
+// sessions while believing it dropped the oldest.
+check("isoNow() carries a T and pbNowFormat() carries a space", () => {
+  const at = new Date("2026-09-04T12:34:56.789Z");
+  assert.equal(isoNow(at), "2026-09-04T12:34:56.789Z");
+  assert.equal(pbNowFormat(at), "2026-09-04 12:34:56.789Z");
+});
+check("the two formats sort against each other the wrong way", () => {
+  const at = new Date("2026-09-04T12:34:56.789Z");
+  // The point of the rule: identical instants, opposite sort order.
+  assert.ok(pbNowFormat(at) < isoNow(at),
+    "space sorts below T, so mixing formats reorders a column by format "
+    + "rather than by time");
+});
+check("both formats still parse to the same instant", () => {
+  const at = new Date("2026-09-04T12:34:56.789Z");
+  assert.equal(parsePbTime(pbNowFormat(at)), at.getTime());
+  assert.equal(parsePbTime(isoNow(at)), at.getTime());
 });
 
 if (failures) {

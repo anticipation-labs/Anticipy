@@ -71,6 +71,35 @@ export function parsePbTime(raw: unknown): number {
   return Date.parse(s);
 }
 
+/**
+ * TWO DATETIME FORMATS LIVE IN THESE TABLES, AND MIXING THEM CORRUPTS FILTERS.
+ *
+ * PocketBase's own autodate columns -- `created`, `updated` -- are written by
+ * the framework as "2026-08-30 17:00:00.470Z", with a SPACE. Every other
+ * datetime here was written by the hook itself with `new Date().toISOString()`,
+ * so it carries a "T": done_at, last_in, code_set_at, expires, remind_at.
+ * Verified against the migrated rows, not assumed.
+ *
+ * That difference is invisible until something compares as text, and then it
+ * is silent and total. /internal/state selects recently-finished tasks with
+ * `done_at >= <14 days ago, toISOString()>`; SQLite compares TEXT
+ * lexicographically and " " (0x20) sorts BELOW "T" (0x54), so a single row
+ * written with a space would drop out of that window permanently while every
+ * neighbour stayed. No error, no log -- the task just stops being listed.
+ *
+ * A first draft of this file used pbNow() for `expires` and `last_in`. So:
+ * pbNow() for created/updated, isoNow() for everything else, matched to what
+ * the column already holds.
+ */
+export function isoNow(at: Date = new Date()): string {
+  return at.toISOString();
+}
+
+/** pbNow re-exported so the format rule above is testable from node. */
+export function pbNowFormat(at: Date = new Date()): string {
+  return pbNow(at);
+}
+
 export function randomHex(n: number): string {
   const bytes = crypto.getRandomValues(new Uint8Array(Math.ceil(n / 2)));
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("").slice(0, n);
@@ -107,11 +136,26 @@ export function personOut(p: Person, extra?: Record<string, unknown>) {
  * must not quietly become an unauthenticated actor_id the caller chose.
  */
 export type Actor =
-  | { ok: true; person: Person; viaSession: boolean }
+  | { ok: true; person: Person | null; viaSession: boolean }
   | { ok: false; response: Response };
 
+/**
+ * `optional: true` is /internal/state's rule and NOT /internal/me's, and the
+ * difference is load-bearing rather than a nicety.
+ *
+ * In shared-key mode `actor_id` is client-asserted identity, visibly so. For
+ * /internal/me that is the entire question being asked, so an absent actor_id
+ * is a 400 "pick yourself first". For /internal/state its ONLY effect is
+ * scoping the caller's own notifications -- the people list is what the "pick
+ * yourself" screen reads to draw its choices, so refusing without an actor_id
+ * would mean the screen that exists to choose an actor cannot load until an
+ * actor has been chosen. HQ would not boot.
+ *
+ * A session never takes this branch: it carries its own identity and a failed
+ * one is 401 {reauth:true}, never a fall-through to whatever the client claims.
+ */
 export async function resolveActor(
-  req: Request, env: HqEnv, opts?: { actorId?: string },
+  req: Request, env: HqEnv, opts?: { actorId?: string; optional?: boolean },
 ): Promise<Actor> {
   const cors = hqCors(req, env);
   const key = env.ANTICIPY_INTERNAL_KEY || "";
@@ -145,15 +189,21 @@ export async function resolveActor(
 
   const who = String(opts?.actorId ?? "");
   if (!who) {
+    if (opts?.optional) return { ok: true, person: null, viaSession: false };
     return { ok: false, response: json(400, { error: "pick yourself first" }, cors) };
   }
   const actor = await env.DB.prepare(
     "SELECT * FROM internal_people WHERE id = ?1 LIMIT 1",
   ).bind(who).first<Person>();
   if (!actor) {
+    // An unknown id is treated as no id in optional mode, matching the source:
+    // findRecordById throws, the catch leaves actor null, and the payload is
+    // simply unscoped rather than refused.
+    if (opts?.optional) return { ok: true, person: null, viaSession: false };
     return { ok: false, response: json(400, { error: "pick yourself first" }, cors) };
   }
   if (!boolDefaultFalse(actor.active)) {
+    if (opts?.optional) return { ok: true, person: null, viaSession: false };
     return { ok: false, response: json(400, { error: "that person is deactivated" }, cors) };
   }
   return { ok: true, person: actor, viaSession: false };
@@ -253,16 +303,23 @@ export async function hqSession(req: Request, env: HqEnv): Promise<Response> {
   if (!boolDefaultFalse(person.active)) return no();
 
   const token = randomHex(64);
-  const nowISO = pbNow();
-  const expires = pbNow(new Date(Date.now() + 30 * 86400000));
+  // isoNow(), not pbNow(): these columns are T-format. See isoNow's comment.
+  const nowISO = isoNow();
+  const expires = isoNow(new Date(Date.now() + 30 * 86400000));
   const xff = String(req.headers.get("X-Forwarded-For") || "");
   const ip = (xff ? xff.split(",")[0].trim()
                   : String(req.headers.get("CF-Connecting-IP") || "")).slice(0, 60);
   try {
     await env.DB.prepare(
+      // `created` is pbNow() (space) and `expires` is isoNow() (T) IN THE SAME
+      // ROW, because that is what the existing rows hold. Writing `created`
+      // in T-format would put it above every migrated row in the
+      // `ORDER BY created DESC` below -- T sorts after space -- so the
+      // keep-ten trim would start deleting genuinely recent sessions while
+      // believing it was dropping the oldest.
       "INSERT INTO internal_sessions (id, created, person, token_hash, expires, ip, ua) "
       + "VALUES (?1,?2,?3,?4,?5,?6,?7)",
-    ).bind(newRecordId(), nowISO, person.id, await sha256Hex(token), expires, ip,
+    ).bind(newRecordId(), pbNow(), person.id, await sha256Hex(token), expires, ip,
            String(req.headers.get("User-Agent") || "").slice(0, 200)).run();
   } catch {
     return no();
@@ -323,7 +380,10 @@ export async function hqMe(req: Request, env: HqEnv): Promise<Response> {
   const url = new URL(req.url);
   const actor = await resolveActor(req, env, { actorId: url.searchParams.get("actor_id") ?? "" });
   if (!actor.ok) return actor.response;
+  // Not optional here, so person is always set; the check keeps the types
+  // honest rather than asserting.
   const p = actor.person;
+  if (!p) return json(400, { error: "pick yourself first" }, cors);
 
   const cfg: Record<string, string> = {
     team_name: "Anticipy", perm_assign: "everyone", perm_delete: "creator",
@@ -471,16 +531,23 @@ export async function hqClerkExchange(req: Request, env: HqEnv): Promise<Respons
   // From here this is /internal/session's mint, identical in shape: same
   // table, same hash-only storage, same 30-day expiry, same keep-ten.
   const token = randomHex(64);
-  const nowISO = pbNow();
-  const expires = pbNow(new Date(Date.now() + 30 * 86400000));
+  // isoNow(), not pbNow(): these columns are T-format. See isoNow's comment.
+  const nowISO = isoNow();
+  const expires = isoNow(new Date(Date.now() + 30 * 86400000));
   const xff = String(req.headers.get("X-Forwarded-For") || "");
   const ip = (xff ? xff.split(",")[0].trim()
                   : String(req.headers.get("CF-Connecting-IP") || "")).slice(0, 60);
   try {
     await env.DB.prepare(
+      // `created` is pbNow() (space) and `expires` is isoNow() (T) IN THE SAME
+      // ROW, because that is what the existing rows hold. Writing `created`
+      // in T-format would put it above every migrated row in the
+      // `ORDER BY created DESC` below -- T sorts after space -- so the
+      // keep-ten trim would start deleting genuinely recent sessions while
+      // believing it was dropping the oldest.
       "INSERT INTO internal_sessions (id, created, person, token_hash, expires, ip, ua) "
       + "VALUES (?1,?2,?3,?4,?5,?6,?7)",
-    ).bind(newRecordId(), nowISO, person.id, await sha256Hex(token), expires, ip,
+    ).bind(newRecordId(), pbNow(), person.id, await sha256Hex(token), expires, ip,
            String(req.headers.get("User-Agent") || "").slice(0, 200)).run();
   } catch {
     return json(500, { error: "could not start a session" }, cors);
@@ -503,4 +570,256 @@ export async function hqClerkExchange(req: Request, env: HqEnv): Promise<Respons
     person: { id: person.id, name: String(person.name ?? ""),
               is_admin: boolDefaultFalse(person.is_admin) },
   }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /internal/state -- everything the page needs, one round trip.
+//
+// EVERY LIST BELOW IS AN EXPLICIT PROJECTION, and that is the security design
+// of this route rather than a style preference. `internal_people` carries
+// code_hash and pw_hash; `internal_passwords` carries secret_enc;
+// `internal_sessions` carries token_hash and ip. A `SELECT *` here would hand
+// all of it to anyone holding the shared key, and the page needs none of it --
+// it needs to know a code EXISTS (`has_code`), never what it is and never what
+// it hashes to. So each list names its columns and a new column has to be
+// added deliberately to appear.
+//
+// Failures are swallowed per-section, as in the source: one unreadable table
+// blanks its own list and the page still boots. A 500 here would take HQ down
+// entirely because of, say, one malformed reminder.
+// ---------------------------------------------------------------------------
+export async function hqState(req: Request, env: HqEnv): Promise<Response> {
+  const cors = hqCors(req, env);
+  const url = new URL(req.url);
+  const actorId = url.searchParams.get("actor_id") ?? "";
+  const resolved = await resolveActor(req, env, { actorId, optional: true });
+  if (!resolved.ok) return resolved.response;
+  const actor = resolved.person;
+
+  const out: Record<string, unknown> = {
+    people: [], tracks: [], todos: [], events: [], activity: [], comments: [],
+    notifs: [], reminders: [], signins: [], expenses: [], passwords: [],
+    notes: [], config: {}, channels: {},
+    me: actor ? actor.id : "", via_session: resolved.viaSession, meters: {},
+  };
+  const all = async <T>(sql: string, ...binds: unknown[]): Promise<T[]> => {
+    try {
+      const r = await env.DB.prepare(sql).bind(...binds).all<T>();
+      return r.results ?? [];
+    } catch { return []; }
+  };
+
+  // ---- people. has_code, never code_hash. ---------------------------------
+  out.people = (await all<Record<string, unknown>>(
+    "SELECT id,name,email,phone,is_admin,active,role,focus,tz,remind_pref,"
+    + "email_on,sms_on,last_in,code_set_at,code_hash FROM internal_people "
+    + "ORDER BY name ASC LIMIT 200")).map((p) => ({
+      id: p.id, name: String(p.name ?? ""), email: String(p.email ?? ""),
+      phone: String(p.phone ?? ""),
+      is_admin: boolDefaultFalse(p.is_admin), active: boolDefaultFalse(p.active),
+      role: String(p.role ?? ""), focus: String(p.focus ?? ""),
+      tz: String(p.tz ?? ""), remind_pref: String(p.remind_pref ?? ""),
+      email_on: boolDefaultTrue(p.email_on), sms_on: boolDefaultTrue(p.sms_on),
+      last_in: String(p.last_in ?? ""), code_set_at: String(p.code_set_at ?? ""),
+      has_code: !!String(p.code_hash ?? ""),
+    }));
+
+  // ---- tracks (the design's Projects, renamed in the UI only) -------------
+  out.tracks = (await all<Record<string, unknown>>(
+    "SELECT id,name,kind,members,active,desc,owner,archived,notes "
+    + "FROM internal_tracks ORDER BY created ASC LIMIT 50")).map((t) => ({
+      id: t.id, name: String(t.name ?? ""), kind: String(t.kind ?? ""),
+      members: String(t.members ?? "") || "[]", active: boolDefaultFalse(t.active),
+      desc: String(t.desc ?? ""), owner: String(t.owner ?? ""),
+      archived: boolDefaultFalse(t.archived), notes: String(t.notes ?? ""),
+    }));
+
+  // ---- todos: open, plus anything finished in the last fourteen days ------
+  //
+  // `done_at >= cut` and NOT `status = 'done' && done_at >= cut`, so a
+  // CANCELLED row is visible for its fourteen days too instead of vanishing
+  // the instant someone drops it.
+  //
+  // The cut is isoNow() because done_at is a T-format column. pbNow() here
+  // would compare a space against a T and quietly return nothing but open
+  // tasks, for ever.
+  //
+  // THE COLUMN THAT IS NOT HERE: there is no `status = 'doing'`. The board
+  // vocabulary lives in a separate `stage` column precisely so this filter,
+  // the cron's reminder filter and the assistant's board dump -- all three of
+  // which key off status = 'open' -- do not have to change. Widening status
+  // would make a task moved to "In progress" silently stop being reminded
+  // about, with nothing red anywhere.
+  const todoCut = isoNow(new Date(Date.now() - 14 * 24 * 3600 * 1000));
+  const todoRows = await all<Record<string, unknown>>(
+    "SELECT * FROM internal_todos WHERE status = 'open' OR done_at >= ?1 "
+    + "ORDER BY created DESC LIMIT 500", todoCut);
+  const todoIds = new Set<string>();
+  out.todos = todoRows.map((t) => {
+    todoIds.add(String(t.id));
+    return {
+      id: t.id, title: String(t.title ?? ""), notes: String(t.notes ?? ""),
+      track: String(t.track ?? ""), assignees: String(t.assignees ?? "") || "[]",
+      due: String(t.due ?? ""), status: String(t.status ?? ""),
+      done_at: String(t.done_at ?? ""), done_by: String(t.done_by ?? ""),
+      created_by: String(t.created_by ?? ""), remind_at: String(t.remind_at ?? ""),
+      remind_channel: String(t.remind_channel ?? ""),
+      remind_sent_at: String(t.remind_sent_at ?? ""),
+      research_job_id: String(t.research_job_id ?? ""),
+      stage: String(t.stage ?? "") || "todo",
+      priority: String(t.priority ?? "") || "normal",
+      position: Number(t.position) || 0,
+      due_time: String(t.due_time ?? ""), repeat_rule: String(t.repeat_rule ?? ""),
+      hold_reason: String(t.hold_reason ?? ""),
+      watchers: String(t.watchers ?? "") || "[]",
+      subtasks: String(t.subtasks ?? "") || "[]",
+      attachments: String(t.attachments ?? "") || "[]",
+      cmt_count: Number(t.cmt_count) || 0,
+      created: String(t.created ?? ""), updated: String(t.updated ?? ""),
+    };
+  });
+
+  // ---- events from yesterday forward (a date column, so a date cut) -------
+  const evCut = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+  out.events = (await all<Record<string, unknown>>(
+    "SELECT id,title,date,notes,countdown,created_by FROM internal_events "
+    + "WHERE date >= ?1 ORDER BY date ASC LIMIT 200", evCut)).map((ev) => ({
+      id: ev.id, title: String(ev.title ?? ""), date: String(ev.date ?? ""),
+      notes: String(ev.notes ?? ""), countdown: boolDefaultFalse(ev.countdown),
+      created_by: String(ev.created_by ?? ""),
+    }));
+
+  // ---- activity ----------------------------------------------------------
+  out.activity = (await all<Record<string, unknown>>(
+    "SELECT actor_name,action,subject,verb,ref,created FROM internal_activity "
+    + "ORDER BY created DESC LIMIT 50")).map((a) => ({
+      actor_name: String(a.actor_name ?? ""), action: String(a.action ?? ""),
+      subject: String(a.subject ?? ""), verb: String(a.verb ?? ""),
+      ref: String(a.ref ?? ""), created: String(a.created ?? ""),
+    }));
+
+  // ---- comments, ONLY for todos already in this payload -------------------
+  // Scoped to todoIds so this cannot become a keyed window onto the comment
+  // history of tasks the caller was never shown.
+  out.comments = (await all<Record<string, unknown>>(
+    "SELECT id,todo,author,author_name,text,parent,edited_at,deleted,created "
+    + "FROM internal_comments ORDER BY created DESC LIMIT 400"))
+    .filter((c) => todoIds.has(String(c.todo ?? "")))
+    .map((c) => ({
+      id: c.id, todo: String(c.todo ?? ""), author: String(c.author ?? ""),
+      author_name: String(c.author_name ?? ""),
+      // A tombstoned comment carries no text. Blanking it on the way OUT as
+      // well as on delete means a stale row can never resurrect a deleted
+      // sentence into somebody's browser.
+      text: boolDefaultFalse(c.deleted) ? "" : String(c.text ?? ""),
+      parent: String(c.parent ?? ""), edited_at: String(c.edited_at ?? ""),
+      deleted: boolDefaultFalse(c.deleted), created: String(c.created ?? ""),
+    }));
+
+  // ---- this person's notifications, and nobody else's ---------------------
+  // No actor means no notifications, never everyone's.
+  out.notifs = !actor ? [] : (await all<Record<string, unknown>>(
+    "SELECT id,kind,text,sub,todo,actor,read,created FROM internal_notifs "
+    + "WHERE person = ?1 ORDER BY created DESC LIMIT 100", actor.id)).map((n) => ({
+      id: n.id, kind: String(n.kind ?? ""), text: String(n.text ?? ""),
+      sub: String(n.sub ?? ""), todo: String(n.todo ?? ""),
+      actor: String(n.actor ?? ""), read: boolDefaultFalse(n.read),
+      created: String(n.created ?? ""),
+    }));
+
+  // ---- armed reminders on the todos above ---------------------------------
+  out.reminders = (await all<Record<string, unknown>>(
+    "SELECT id,todo,person,rule,fire_at,channel,label,sent_at "
+    + "FROM internal_reminders WHERE sent_at = '' ORDER BY fire_at ASC LIMIT 300"))
+    .filter((r) => todoIds.has(String(r.todo ?? "")))
+    .map((r) => ({
+      id: r.id, todo: String(r.todo ?? ""), person: String(r.person ?? ""),
+      rule: String(r.rule ?? ""), fire_at: String(r.fire_at ?? ""),
+      channel: String(r.channel ?? ""), label: String(r.label ?? ""),
+      sent_at: String(r.sent_at ?? ""),
+    }));
+
+  // ---- expenses ------------------------------------------------------------
+  out.expenses = (await all<Record<string, unknown>>(
+    "SELECT id,title,amount,currency,date,track,person,created_by "
+    + "FROM internal_expenses ORDER BY date DESC LIMIT 500")).map((x) => ({
+      id: x.id, title: String(x.title ?? ""), amount: Number(x.amount) || 0,
+      currency: String(x.currency ?? "") || "CAD", date: String(x.date ?? ""),
+      track: String(x.track ?? ""), person: String(x.person ?? ""),
+      created_by: String(x.created_by ?? ""),
+    }));
+
+  // ---- passwords: METADATA ONLY -------------------------------------------
+  // secret_enc never rides in state -- not even encrypted, because nothing on
+  // the page needs it and habits start somewhere. /internal/passwords/reveal
+  // is the one route that decrypts, one row at a time, on purpose.
+  out.passwords = (await all<Record<string, unknown>>(
+    "SELECT id,service,username,url,notes,updated,updated_by "
+    + "FROM internal_passwords ORDER BY service ASC LIMIT 200")).map((w) => ({
+      id: w.id, service: String(w.service ?? ""), username: String(w.username ?? ""),
+      url: String(w.url ?? ""), notes: String(w.notes ?? ""),
+      updated: String(w.updated ?? ""), updated_by: String(w.updated_by ?? ""),
+    }));
+
+  // ---- notes ---------------------------------------------------------------
+  out.notes = (await all<Record<string, unknown>>(
+    "SELECT id,title,body,track,created_by,updated_by,updated FROM internal_notes "
+    + "ORDER BY updated DESC LIMIT 300")).map((n) => ({
+      id: n.id, title: String(n.title ?? ""), body: String(n.body ?? ""),
+      track: String(n.track ?? ""), created_by: String(n.created_by ?? ""),
+      updated_by: String(n.updated_by ?? ""), updated: String(n.updated ?? ""),
+    }));
+
+  // ---- team config ---------------------------------------------------------
+  const cfg: Record<string, string> = {
+    team_name: "Anticipy", perm_assign: "everyone", perm_delete: "creator",
+  };
+  for (const c of await all<{ key: string; value: string }>(
+    "SELECT key,value FROM internal_config ORDER BY key ASC LIMIT 20")) {
+    if (c.key === "team_name" || c.key === "perm_assign" || c.key === "perm_delete") {
+      cfg[c.key] = String(c.value ?? "");
+    }
+  }
+  out.config = cfg;
+
+  // ---- "who's been in lately" -- ADMINS ONLY ------------------------------
+  // Sign-in history is a list of when each teammate was at their desk. That is
+  // an admin's answer to "did the code land", not something every member gets
+  // to read about every other member.
+  if (actor && boolDefaultFalse(actor.is_admin)) {
+    // token_hash and ip are NOT projected. The screen prints a name and a
+    // when; a hash on the wire is a hash somebody can grind offline.
+    out.signins = (await all<Record<string, unknown>>(
+      "SELECT person,created FROM internal_sessions ORDER BY created DESC LIMIT 10"))
+      .map((s) => ({ person: String(s.person ?? ""), created: String(s.created ?? "") }));
+  }
+
+  // ---- delivery channels: env presence, booleans, never the values --------
+  out.channels = {
+    email: !!(env.RESEND_API_KEY || ""),
+    sms: !!((env.TWILIO_ACCOUNT_SID || "") && (env.TWILIO_AUTH_TOKEN || "")
+            && ((env.TWILIO_PHONE_NUMBER || "") || (env.TWILIO_FROM || ""))),
+  };
+
+  // ---- meters --------------------------------------------------------------
+  const meters: Record<string, unknown> = {};
+  const hourNow = new Date().toISOString().slice(0, 13);
+  try {
+    const llm = await env.DB.prepare(
+      "SELECT hour,calls FROM internal_meter WHERE name = 'llm' LIMIT 1",
+    ).first<Record<string, unknown>>();
+    if (llm) {
+      meters.llm_used = String(llm.hour ?? "") === hourNow ? Number(llm.calls) || 0 : 0;
+      meters.llm_ceiling = parseInt(env.ANTICIPY_INTERNAL_LLM_CEILING || "60", 10);
+    }
+  } catch { /* the page copes without a meter */ }
+  try {
+    const res = await env.DB.prepare(
+      "SELECT live_job_id FROM internal_meter WHERE name = 'research' LIMIT 1",
+    ).first<Record<string, unknown>>();
+    if (res) meters.research_job_id = String(res.live_job_id ?? "");
+  } catch { /* ditto */ }
+  out.meters = meters;
+
+  return json(200, out, cors);
 }

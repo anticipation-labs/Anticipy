@@ -292,6 +292,16 @@ def service_token():
     return need(SERVICE_TOKEN, "ANTICIPY_SERVICE_TOKEN")
 
 
+def require_internal_key():
+    """Skip, with the variable named, when no HQ key is available.
+
+    A plain function as well as the fixture below, because the projection
+    tests call it from helper methods rather than taking it as an argument."""
+    if not INTERNAL_KEY:
+        pytest.skip("set ANTICIPY_INTERNAL_KEY to exercise HQ's keyed routes")
+    return INTERNAL_KEY
+
+
 @pytest.fixture(scope="session")
 def internal_key():
     return need(INTERNAL_KEY, "ANTICIPY_INTERNAL_KEY")
@@ -3356,3 +3366,122 @@ class TestHQPortProgressIsHonest:
                 "proves who they are with a code or a Clerk token, not with "
                 "the shared key, so gating it first locks out the only people "
                 "it exists for." % path)
+
+
+# ---------------------------------------------------------------------------
+# /internal/state's projections ARE its security design
+#
+# This is the one route that returns most of HQ at once, and the tables it
+# reads carry: internal_people.code_hash and .pw_hash, internal_passwords
+# .secret_enc, internal_sessions.token_hash and .ip. None of it is needed by
+# the page -- it needs to know a login code EXISTS, never what it hashes to --
+# so every list is an explicit column projection and a `SELECT *` regression
+# would hand all of it to anyone holding the shared key.
+#
+# Needs a key, so it runs against whichever origin the key belongs to. It is
+# NOT a diff against production: it asserts properties that must hold on any
+# correct implementation, which is what makes it meaningful on the Worker
+# before production's key is ever available here.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.needs_internal_key
+class TestInternalStateProjections:
+
+    def _state(self, actor_id=""):
+        require_internal_key()
+        query = {"actor_id": actor_id} if actor_id else None
+        resp = call("GET", "/internal/state",
+                    headers={"X-Internal-Key": INTERNAL_KEY}, query=query)
+        if resp.status == 400 and "pick yourself" in (detail_of(resp) or ""):
+            pytest.skip("needs an actor_id; pass one that exists on this origin")
+        assert resp.status == 200, "state refused: %d %.200r" % (resp.status, resp.text)
+        return resp.json
+
+    def _an_actor(self, admin):
+        """Find a person id off /internal/state itself, so the test carries no
+        hardcoded ids that rot when the team changes."""
+        require_internal_key()
+        resp = call("GET", "/internal/state",
+                    headers={"X-Internal-Key": INTERNAL_KEY})
+        if resp.status != 200:
+            # Without an actor_id some origins refuse; fall back to any id we
+            # can see, and skip if we genuinely cannot get in.
+            pytest.skip("cannot enumerate people without an actor_id here")
+        for person in resp.json.get("people", []):
+            if bool(person.get("is_admin")) == admin and person.get("active"):
+                return person["id"]
+        pytest.skip("no %s person on this origin" % ("admin" if admin else "non-admin"))
+
+    def test_no_secret_column_appears_anywhere_in_the_payload(self):
+        blob = json.dumps(self._state(self._an_actor(True)))
+        for secret in ("code_hash", "pw_hash", "secret_enc", "token_hash", "tokenKey"):
+            assert secret not in blob, (
+                "/internal/state leaked %r. Every list in that route is an "
+                "explicit projection for exactly this reason; a SELECT * "
+                "regression puts hashes of every login code on the wire."
+                % secret)
+
+    def test_people_carry_has_code_and_not_the_hash(self):
+        state = self._state(self._an_actor(True))
+        assert state["people"], "no people came back"
+        for person in state["people"]:
+            assert "has_code" in person, "the page needs to know a code exists"
+            assert "code_hash" not in person
+
+    def test_passwords_are_metadata_only(self):
+        state = self._state(self._an_actor(True))
+        for row in state.get("passwords", []):
+            assert "secret_enc" not in row and "secret" not in row, (
+                "the vault's ciphertext must never ride in state -- "
+                "/internal/passwords/reveal is the one route that decrypts, "
+                "one row at a time, on purpose")
+
+    def test_signin_history_is_admins_only(self):
+        """Sign-in history says when each teammate was at their desk. That is
+        an admin's answer to "did the code land", not something every member
+        gets to read about every other member."""
+        admin = self._state(self._an_actor(True))
+        member = self._state(self._an_actor(False))
+        assert member.get("signins") == [], (
+            "a non-admin was given sign-in history: %r" % member.get("signins"))
+        # And the admin's rows still project only what the screen prints.
+        for row in admin.get("signins", []):
+            assert set(row.keys()) <= {"person", "created"}, (
+                "signins projected more than person+created: %r -- a hash on "
+                "the wire is a hash somebody can grind offline" % sorted(row))
+
+    def test_notifications_are_scoped_to_the_caller(self):
+        actor = self._an_actor(True)
+        state = self._state(actor)
+        assert state["me"] == actor
+        for notif in state.get("notifs", []):
+            # The route filters by person; nothing in the payload should carry
+            # another person's notification.
+            assert "person" not in notif or notif["person"] == actor
+
+    def test_comments_are_scoped_to_the_todos_returned(self):
+        """Otherwise this becomes a keyed window onto the comment history of
+        tasks the caller was never shown."""
+        state = self._state(self._an_actor(True))
+        todo_ids = {t["id"] for t in state.get("todos", [])}
+        for comment in state.get("comments", []):
+            assert comment["todo"] in todo_ids, (
+                "comment %r belongs to todo %r, which is not in this payload"
+                % (comment.get("id"), comment.get("todo")))
+
+    def test_deleted_comments_carry_no_text(self):
+        state = self._state(self._an_actor(True))
+        for comment in state.get("comments", []):
+            if comment.get("deleted"):
+                assert comment.get("text") == "", (
+                    "a tombstoned comment still carried its text; blanking it "
+                    "on the way out is what stops a stale row resurrecting a "
+                    "deleted sentence into somebody's browser")
+
+    def test_channels_are_booleans_and_never_values(self):
+        state = self._state(self._an_actor(True))
+        for name, value in (state.get("channels") or {}).items():
+            assert isinstance(value, bool), (
+                "channels.%s is %r, not a boolean -- these are derived from "
+                "env PRESENCE so that a credential cannot leak through them"
+                % (name, value))

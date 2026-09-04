@@ -27,6 +27,10 @@ export interface HqEnv {
   ANTICIPY_HQ_LOGIN_CEILING?: string;
   ANTICIPY_PUBLIC_HOST?: string;
   CLERK_HQ_JWT_KEY?: string;
+  ANTICIPY_INTERNAL_LLM_CEILING?: string;
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_PHONE_NUMBER?: string;
+  TWILIO_FROM?: string;
   RESEND_API_KEY?: string;
   TWILIO_AUTH_TOKEN?: string;
 }
