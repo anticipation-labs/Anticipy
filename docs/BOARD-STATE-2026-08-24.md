@@ -130,11 +130,26 @@ Part 3 of 5. Three tools in a line: VECTOR (fuzzy finder) → GRAPH (family tree
 precise) → RANK (the librarian: fresh × important × relevant, hands over 5).
 Have: episodes → graph facts with importance AND confidence AND source quote;
 keyword+graph+importance recall; nightly consolidation.
-Missing: supersession ("we broke up" retires "partner is Sarah") · aging
-(situation-facts decay, stable facts don't) · confidence actually READ (stored
-and bumped, but no recall path reads it) · **provenance gates action** (owner
-said it / overheard / imported from a calendar title decides whether it may
-mint an action; imported text may be quoted, never obeyed) · vector channel.
+
+**RE-CHECKED AGAINST THE CODE 2026-09-04. FOUR OF THE FIVE "MISSING" ITEMS ARE
+BUILT.** The list below was accurate when it was written and has not been true
+for a while, which is the hazard the Brief already names: an agent was sent to
+rebuild supersession on 2026-08-25 because it grepped this document's word
+(`superseded_by`) instead of the code's (`retired_ts`) and got zero hits. A
+card that lists finished work as missing spends a session re-deriving it.
+
+| item | state | evidence |
+|---|---|---|
+| supersession | **DONE** | `_supersede`, `retired_ts`/`retired_by` (memory.py:102,190). Rows retired, never deleted, model-judged. 44 tests in `tests/test_memory_supersession.py` |
+| aging | **DONE** | `_HALF_LIFE_DAYS = {"stable": None, "situation": 30.0}` (memory.py:474); situation facts decay, stable ones do not |
+| confidence actually READ | **DONE** | `salience = importance × _confidence_band(confidence)` (memory.py:1541, band at :511), banded so it reorders inside an importance tier and provably cannot reach the tier above |
+| **provenance gates action** | **DONE, and it is the strongest of the four** | `_UNTRUSTED_SOURCES = {"import", "supervised_mail", "supervised_professional", OVERHEARD}` (anticipy_core.py:441). `fill_gaps_from_memory` EXCLUDES rather than fences them (orchestrator.py:1218-1247) because that answer becomes `filled[gap] → params[key] → seed_facts → the browser agent's approved values → a form it submits`. Fails CLOSED: an ImportError there propagates to the caller's except, which asks the owner instead. Membership, not a literal string, so a fifth untrusted source is one line. Tested: `tests/test_imported_facts_are_fenced.py`, `tests/test_supervised_read_is_fenced.py` (86 checks pass with supersession) |
+| vector channel | **NOT BUILT** | one mention in the whole file, and it is the doctrine arguing against it: memory.py:9 "Recall is graph-walk + time, not embedding soup" |
+
+So the only open item is the vector channel, and it is contested rather than
+merely undone: the card asks for it and the module's own header declines it. It
+should be decided on evidence about what recall actually misses, not built
+because a card lists it.
 **Us:** ruled on the moment-35 vs §7 conflict — retirement gates ACTION
 absolutely, SPEECH conditionally (`22649e77`). No code.
 
