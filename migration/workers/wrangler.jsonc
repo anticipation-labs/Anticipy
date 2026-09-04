@@ -116,7 +116,14 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "not_found_handling": "none"
+    "not_found_handling": "none",
+    // PocketBase served /internal.html AT /internal.html. Workers Static Assets
+    // defaults to html_handling "auto-trailing-slash", which 307s /internal.html
+    // to /internal -- and the website rewrites /internal to THIS backend's
+    // /internal.html (next.config.mjs), so the default would bounce HQ between
+    // the two. "none" serves the path asked for, which is what the callers and
+    // the rewrite both expect.
+    "html_handling": "none"
   },
 
   // --------------------------------------------------------------------------

@@ -141,10 +141,41 @@ class Response(object):
             return None
 
     def header(self, name):
-        try:
-            return self.headers.get(name)
-        except Exception:
+        """A response header by name, CASE-INSENSITIVELY.
+
+        HTTP header names are case-insensitive (RFC 9110 5.1) and an origin
+        does not control the case its proxy forwards.  Railway's edge relays
+        `X-Robots-Tag` and the CORS block PocketBase set as `x-robots-tag` /
+        `access-control-allow-origin`, while the headers the edge adds itself
+        keep canonical case.  `call()` used to store `dict(resp.headers)`,
+        which throws away urllib's case-insensitive HTTPMessage and leaves a
+        plain dict keyed on whatever case came off the wire — so
+        `header("X-Robots-Tag")` returned None on a response that carried it.
+        Two TestHQFrontDoor tests failed on that, and a third
+        (test_cors_refuses_an_unlisted_origin) PASSED on it, which is worse:
+        it asserts a header is ABSENT and every lookup was absent.
+
+        `call()` now keeps the HTTPMessage, whose own `.get` is already
+        case-insensitive; the fold below is the belt to that braces, so a
+        future refactor back to a plain dict cannot silently reintroduce a
+        test that can only pass."""
+        h = self.headers
+        if h is None:
             return None
+        try:
+            value = h.get(name)
+            if value is not None:
+                return value
+        except Exception:
+            pass
+        try:
+            wanted = name.lower()
+            for key, value in h.items():
+                if key.lower() == wanted:
+                    return value
+        except Exception:
+            pass
+        return None
 
     def __repr__(self):
         return "<%s %s :: %s>" % (self.status, self.url, self.text[:400])
@@ -184,9 +215,12 @@ def call(method, path, headers=None, json_body=None, form=None, raw=None,
     request = urllib.request.Request(url, data=data, headers=hdrs, method=method)
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as resp:
-            return Response(resp.getcode(), dict(resp.headers), resp.read(), url)
+            # NOT dict(resp.headers): see Response.header.  urllib hands back
+            # an email.message.Message, which is case-insensitive; a dict of it
+            # is not, and Railway forwards origin-set headers lower-cased.
+            return Response(resp.getcode(), resp.headers, resp.read(), url)
     except urllib.error.HTTPError as err:
-        return Response(err.code, dict(err.headers or {}), err.read() or b"", url)
+        return Response(err.code, err.headers, err.read() or b"", url)
     except urllib.error.URLError as err:
         pytest.fail("could not reach %s: %r  (is BASE_URL right, and is the "
                     "service up?)" % (url, err))
@@ -269,6 +303,24 @@ def job_id():
 
 
 @pytest.fixture(scope="session")
+def real_owner_ref(service_token):
+    """A REAL owners id, read live from `/worker/owners`.
+
+    Only for tests that mean to compare a real relation value against the
+    `OWNER_UNDER_TEST` sentinel.  Nothing here ever CREATES an owner: this is
+    production, and the owners in it are people.
+    """
+    if OWNER_REF_ENV:
+        return OWNER_REF_ENV
+    resp = call("GET", "/worker/owners", headers=svc())
+    items = (resp.json or {}).get("items") if isinstance(resp.json, dict) else None
+    if resp.status != 200 or not items:
+        pytest.skip("/worker/owners returned no owner to point at (%s); set "
+                    "ANTICIPY_TEST_OWNER_REF instead" % resp.status)
+    return items[0]["id"]
+
+
+@pytest.fixture(scope="session")
 def agent_headers():
     need(AGENT_ID, "ANTICIPY_TEST_AGENT_ID")
     need(AGENT_TOKEN, "ANTICIPY_TEST_AGENT_TOKEN")
@@ -321,12 +373,95 @@ def hq_configured():
 
 
 # --------------------------------------------------------------------------
+# WHERE THE GUARD SITS RELATIVE TO SCHEMA VALIDATION — read this before you
+# "fix" the 400s, because the obvious fix writes rows into production.
+# --------------------------------------------------------------------------
+#
+# `workflow_guard.pb.js` is a `routerUse` MIDDLEWARE, not a record hook.  It
+# answers BEFORE PocketBase ever validates the record, and it short-circuits
+# with `e.json(409, …)`.  So on `POST /api/collections/jobs/records`:
+#
+#     409 {"error":"workflow violation"}   the guard refused.  Nothing written.
+#     400 validation_missing_rel_records   THE GUARD ADMITTED THE ROW and the
+#                                          schema stopped the INSERT afterwards.
+#     200 / 201                            the guard admitted the row and a
+#                                          real job row now exists.
+#
+# That is proved by the suite's own results and needs no extra request: with
+# the SAME non-existent `owner_ref`, `status="running"` comes back
+# 409 "running work needs an actor and lease" — a sentence that exists only
+# inside workflow_guard.pb.js — while `status="cancelled"` comes back 400 on
+# owner_ref.  Middleware order does not depend on the payload, so the 400 can
+# only mean the guard ran and called `e.next()`.
+#
+# `owner_ref` IS THEREFORE A DELIBERATE WRITE BARRIER, not a broken fixture.
+# The guard only ever string-compares `owner_ref` (non-empty check in §1.8,
+# equality with `params._workflow.owner_ref` in §1.5, equality with
+# `approval.gesture.actor` in §1.12) — it never resolves the relation — so a
+# well-formed but non-existent owners id produces byte-identical guard
+# behaviour to a real one, and `test_the_owner_sentinel_is_inert_to_the_guard`
+# below pins that.  What it buys is the suite's own rule at the top of this
+# file: NOTHING IS CREATED WITHOUT `-m destructive`.  Point this at a real
+# owners id and every leg the deployed guard does NOT enforce silently
+# accumulates junk jobs rows on a real person's account, once per run.
+#
+# MEASURED, not argued.  With the sentinel in place a full
+# `-m "not destructive"` run against the live PocketBase leaves
+# `jobs.totalItems` unchanged (173 -> 173).  Before it, each run minted rows:
+# the "no workflow here" jobs and the queued `device_calendar` errands sitting
+# in the live table were put there by earlier runs of this very file.
+#
+# `research_lane.pb.js` is a `routerUse` middleware in the same position, so
+# everything above applies to its 403s identically.
+#
+# So: assert on `guard_refused()` / `guard_admitted()`, never on a bare status
+# code.  A test that reads "assert 400 == 409" is unreadable; one that reads
+# "PocketBase ADMITTED this row" names the finding.
+
+# A syntactically valid PocketBase record id (15 chars, [a-z0-9]) that is not
+# an owners row and must never become one.  Any test that needs a REAL owner
+# id asks `real_owner_ref` for one and carries @pytest.mark.destructive.
+OWNER_UNDER_TEST = "owner0undertest"
+OWNER_ALPHA = "owner00000alpha"
+OWNER_BETA = "owner000000beta"
+
+
+def guard_refused(resp):
+    """True only when workflow_guard itself answered this request.
+
+    Deliberately NOT `resp.status == 409`: the point of the suite is to tell a
+    refusal apart from an admission on two different backends, and only the
+    guard emits `{"error": "workflow violation"}`.
+    """
+    body = resp.json
+    return (resp.status == 409 and isinstance(body, dict)
+            and body.get("error") == "workflow violation")
+
+
+def guard_admitted(resp):
+    """The complement, and it covers every way an admission can look: 400 from
+    PocketBase's relation check (see the barrier above), or 200/201 from a
+    backend that has no such check.  Both mean the guard said yes."""
+    return not guard_refused(resp)
+
+
+def admitted(section, what, resp):
+    """The failure message for a leg the backend did not enforce."""
+    return ("%s: %s\n"
+            "THE BACKEND ADMITTED THIS ROW — the guard did not refuse it.\n"
+            "(a 400 here is PocketBase's relation check on the owner_ref\n"
+            " sentinel stopping the INSERT *after* the guard already said\n"
+            " yes; on a backend without that check this is a written row.)\n"
+            "Got %r" % (section, what, resp))
+
+
+# --------------------------------------------------------------------------
 # builders — a workflow body that PASSES the redundancy check, so a test
 # reaches the leg it is aiming at instead of dying at §1.5
 # --------------------------------------------------------------------------
 
 def workflow_job(status="queued", state="queued", consequence="consequential",
-                 version=1, owner_ref="owner-under-test", approval=None,
+                 version=1, owner_ref=OWNER_UNDER_TEST, approval=None,
                  receipt=None, extra_row=None, extra_plan=None,
                  lease_token="", attempts=0, tap_actor=None, owner_words=None):
     """Build a jobs POST/PATCH body whose `params._workflow` mirrors the row.
@@ -336,6 +471,11 @@ def workflow_job(status="queued", state="queued", consequence="consequential",
     "job fields disagree with the embedded workflow" instead of the rule it
     meant to pin — which is the single easiest way to write a conformance
     suite that proves nothing.
+
+    `owner_ref` defaults to `OWNER_UNDER_TEST`, a well-formed but deliberately
+    non-existent owners id.  See the barrier comment above this function: it
+    is inert to every guard leg and it is what keeps a leg the backend does
+    NOT enforce from writing a real jobs row on every run.
     """
     plan_id = "wf-" + rand(10)
     lineage = "ln-" + rand(10)
@@ -406,18 +546,224 @@ def svc(extra=None):
 
 
 # ==========================================================================
+# WHERE THE RUNNING SERVER IS NOT THIS TREE
+# ==========================================================================
+# Every constant below is an `xfail` reason, and every one of them was
+# established by curl against the live PocketBase and then read back against
+# the hook file that is supposed to implement the rule.  NONE of them relaxed
+# an assertion: the assertion each marks is byte-identical to what it was
+# before, so the day the image catches up with the repo the test XPASSes and
+# says so.  That is the whole point of the mark — a silently-edited assertion
+# would have made the gap disappear instead.
+#
+# THE MECHANISM IS ALREADY WRITTEN DOWN.  research/2026-08-26-hq-deploy-clobber
+# records that production was restored from "an exact archive of the ACTIVE
+# CONTAINER" with only `internal_hq.pb.js`, six HQ migrations and
+# `internal.html` overlaid — so every OTHER hook in the running image is
+# whatever that archive held, not what this repo holds.  The divergences below
+# are all consistent with exactly that: hooks and legs added to the repo AFTER
+# the archive was taken are simply not in the image.
+#
+# For the port this matters in one specific way: the Worker must implement the
+# CONTRACT (this repo), not the image.  Copying production here would ship the
+# holes.
+#
+# ----------------------------------------------------------------------------
+# TWO OF THESE CONSTANTS CARRY NO `xfail` MARK, AND THAT IS DELIBERATE.
+#
+# `PROD_APPROVAL_GATE_IS_SPELLING` and `PROD_NO_SHELF2_BLOCK` describe the
+# unapproved-execution path itself: on the running image, work whose
+# `consequence` is anything but the exact string "consequential" reaches
+# `queued` having proved no owner approval at all, and is then free to act on
+# the world.  Marking those `xfail` would make `pytest -q` print a green
+# summary line for "owner approval is not enforced in production", and this
+# suite is currently the only place that fact is written down.  So the
+# sixteen tests they cover STAY RED until the image is redeployed, and the
+# constants exist so the reason is one grep away.  If a later pass decides
+# the marks belong on them after all, apply them here — but do not edit an
+# assertion to get there.
+# ----------------------------------------------------------------------------
+
+PROD_NO_CREATE_ENTRY_TABLE = (
+    "PRODUCTION DIVERGENCE / SAFETY GAP: workflow_guard.pb.js:217-220 gives a "
+    "CREATE its own status table (ENTRY_STATUSES = awaiting_confirm, queued). "
+    "The running image has no such table. Proof is the whole parametrize, not "
+    "one case: `running` and `done` are caught downstream by the lease leg "
+    "(:652) and the receipt leg (:665) and answer 409 with THOSE sentences, "
+    "while `failed`, `cancelled` and `needs_user` — which no downstream leg "
+    "matches — sail past the guard entirely and are stopped only by "
+    "PocketBase's own owner_ref relation validation (400). A guard that is "
+    "merely REORDERED would still catch those three. So the leg is absent, "
+    "and a POST may still mint a job in a status that skips Shelf 2's "
+    "admission and the approval gate. Do NOT relax this to `any 409`: two of "
+    "the five happen to be refused by an unrelated leg, and blessing that "
+    "would bless the missing table."
+)
+
+PROD_APPROVAL_GATE_IS_SPELLING = (
+    "PRODUCTION DIVERGENCE / SAFETY GAP (unmarked on purpose — see above): "
+    "workflow_guard.pb.js:531 makes approval the DEFAULT and exemption the "
+    "exception, via `NO_APPROVAL_NEEDED = [\"read_only\"]`. The running image "
+    "still has the polarity that commit afd4380a (2026-08-25) was written to "
+    "reverse: `if (nextStatus == \"queued\" && consequence == "
+    "\"consequential\")` — verbatim at `git show "
+    "e6e93319:backend/pb_hooks/workflow_guard.pb.js` line 167. So owner "
+    "approval is demanded only when that one string is spelled exactly right. "
+    "Driven, not reasoned about: \"consequentia\", \"\", \"reversible\", "
+    "\"constructor\" and \"toString\" are all ADMITTED to `queued` with no "
+    "approval on the row (400 from PocketBase's owner_ref relation check, "
+    "which is downstream of the guard — the guard itself said yes). A typo, a "
+    "truncated write, an older client or any third enum value added later "
+    "therefore reaches `queued` unapproved and free to act on the world, "
+    "which is the exact failure the hook's own header calls out as \"the only "
+    "polarity in the system pointing the wrong way\"."
+)
+
+PROD_NO_SHELF2_BLOCK = (
+    "PRODUCTION DIVERGENCE / SAFETY GAP (unmarked on purpose — see above): "
+    "the entire Shelf 2 admission block — `SHELF2`, `shelf2Refusal`, "
+    "`readLineage`, `seqRefusal`, `orderRefusal`, `SHELF2_ACT_TYPES`, "
+    "`PROVENANCE_TAGS`, `GESTURE_KINDS` and every `shelf2.*` cause — was "
+    "added by 5f66016c (2026-08-25) and is absent from the running image. Ten "
+    "tests prove it: every `reversible_local` probe here is ADMITTED, "
+    "including the one with no act declaration, no undo plan, no "
+    "announcement and no lineage position at all. On the deployed guard "
+    "`reversible_local` is simply not `\"consequential\"`, so it misses the "
+    "approval gate too (see PROD_APPROVAL_GATE_IS_SPELLING) and the lane runs "
+    "with nothing in front of it — which is the failure mode the block's own "
+    "header names: \"that turns off database-level approval for the new lane "
+    "and puts NOTHING in its place.\" Same commit gap also removes the `!old` "
+    "clause on the lease rule (9748acf4), so a row may be CREATED already "
+    "holding an execution lease: the deployed line is `} else if (old && "
+    "oldStatus === \"running\")` at e6e93319:198."
+)
+
+PROD_AGENT_CREDENTIAL_FALLS_THROUGH = (
+    "PRODUCTION DIVERGENCE / SAFETY GAP: guard.pb.js:198-341 makes sending "
+    "X-Anticipy-Agent-ID COMMIT the caller to that identity — it resolves or "
+    "the request ends in 403 'agent credential is not recognized'. The "
+    "running image still has the pre-fix shape: an unresolvable credential "
+    "keeps walking DOWN the ladder into the tokenless pairing bootstrap. "
+    "Proved three ways with a bogus id + 64-char token: (1) GET agents with a "
+    "pair_code filter reaches pairLookup and then PocketBase, not the 403; "
+    "(2) POST /api/collections/agents/records {} reaches PocketBase's own "
+    "field validation; (3) PATCH agents/<id> {owner_ref} answers 'pair from "
+    "the signed-in app' — byte-identical to the same call with NO agent "
+    "headers at all. A FAILED authentication is still being treated exactly "
+    "like NO authentication."
+)
+
+PROD_AGENTS_LIST_IS_BROKEN = (
+    "PRODUCTION DEFECT: GET /api/collections/agents/records answers 400 "
+    "{'data':{},'message':'Something went wrong while processing your "
+    "request.'} for EVERY caller — anonymous, service token, with a filter, "
+    "without one, with fields=id, with skipTotal. `pendants`, which the guard "
+    "treats identically and which carries the same owner/pair_code/owner_ref "
+    "columns, answers 200 with an empty list. The guard is not the refuser "
+    "here: it returns e.next() and PocketBase's own list handler fails (the "
+    "same generic 400 an invalid `sort` produces on pendants), so this is "
+    "collection-level breakage — schema/table drift, a broken index or an "
+    "unevaluable rule on `agents`. CONSEQUENCE: the whole browser pairing "
+    "bootstrap is dead in production. A pair-code HIT and a pair-code MISS "
+    "both end in 400, so the phone cannot tell 'that code didn't match' from "
+    "'Anticipy is down', which is the exact outcome §2.8 exists to prevent."
+)
+
+PROD_NO_RESEARCH_LANE = (
+    "PRODUCTION DIVERGENCE / SAFETY GAP: research_lane.pb.js is not in the "
+    "running image. Every leg is silent, on both of its independent surfaces: "
+    "the leg-1 filter rewrite does not narrow an un-laned queued poll "
+    "(device_calendar rows come straight back), and the create-side shape "
+    "legs do not refuse — a POST carrying {lane:'device_calendar', "
+    "status:'queued', consequence:'consequential'} and NO workflow_id was "
+    "answered 200 and a row WAS created, repeatedly, until the "
+    "OWNER_UNDER_TEST sentinel was put in its body; it now stops at "
+    "PocketBase's relation check, which is an ADMISSION by the same argument "
+    "`admitted()` makes. Those two surfaces cannot both be explained by the "
+    "rewrite's own try/catch, because the shape legs are plain refusals that "
+    "touch no rawQuery. So production has no device-calendar lane guard at "
+    "all: no "
+    "workflow requirement, no consequence allowlist, no calendar-act "
+    "allowlist, and no exclusion of research work from the browser claim poll."
+)
+
+PROD_CORS_WILDCARD_FOR_UNLISTED_ORIGINS = (
+    "PRODUCTION DIVERGENCE / SAFETY GAP: internal_hq.pb.js:4224-4238 SETS an "
+    "explicit Access-Control-Allow-Origin for the two allow-listed origins, "
+    "and never clears the wildcard PocketBase's built-in CORS middleware "
+    "already put there for everyone else. So Origin: https://evil.example.com "
+    "gets 'Access-Control-Allow-Origin: *' from /internal/health, which makes "
+    "the allow-list decorative — it upgrades two origins rather than "
+    "restricting the rest. §4.3 says an explicit origin, NEVER '*'. This test "
+    "passed until the header-casing bug in Response.header was fixed, and it "
+    "passed for the worst possible reason: every header lookup returned None, "
+    "so an assertion that a header is ABSENT could not fail."
+)
+
+
+
+# ==========================================================================
 # §1  workflow_guard.pb.js — the job state machine
 # ==========================================================================
 
 @pytest.mark.needs_service_token
 class TestWorkflowGuard(object):
+    """
+    ######################################################################
+    # PRODUCTION IS NOT RUNNING backend/pb_hooks/workflow_guard.pb.js.
+    #
+    # Every red test in this class is a deployment gap, not a spec error.
+    # The running image predates three commits dated 2026-08-25, all of them
+    # security fixes to this one hook:
+    #
+    #   afd4380a  the approval gate reads `consequence === "consequential"`,
+    #             so ANY other value walks past owner approval entirely
+    #             (`NO_APPROVAL_NEEDED` is the array that replaced it)
+    #   5f66016c  the whole Shelf 2 admission block is absent — a
+    #             `reversible_local` row is admitted unapproved with no act
+    #             declaration, no undo plan, no announcement and no lineage
+    #             position
+    #   9748acf4  `ENTRY_STATUSES` is absent, so a POST may create a row
+    #             directly in a status every other leg only polices as a
+    #             TRANSITION; and the lease rule is still `else if (old &&
+    #             oldStatus === "running")`, so a row may be born holding an
+    #             execution lease
+    #
+    # HOW THAT WAS ESTABLISHED, WITHOUT A SINGLE WRITE:
+    #   * `git show e6e93319:backend/pb_hooks/workflow_guard.pb.js` — the
+    #     2026-08-12 version — matches the live answers line for line:
+    #     `if (nextStatus === "queued" && consequence === "consequential")`
+    #     at :167 and `} else if (old && oldStatus === "running")` at :198.
+    #     No later version of the file can produce both of those answers.
+    #   * every red case here is an ADMISSION (see `guard_admitted`), not a
+    #     differently-worded refusal — except the two cases in the entry
+    #     table that a downstream leg happens to catch, which is why that
+    #     one test still pins its sentence.
+    #
+    # `migration/spec/baseline/README.md` asks exactly this question — "is
+    # the TEST wrong, or is PRODUCTION not running the code in this repo?"
+    # — and names `research/2026-08-26-hq-deploy-clobber.md` as precedent.
+    # The answer here is the second one.  These assertions are CORRECT and
+    # not one of them may be weakened: the `xfail` marks record the gap
+    # loudly and XPASS the day the image catches up, which a quietly-edited
+    # assertion would not.  The Worker must implement THIS REPO, not the
+    # image, or the port ships the holes.
+    ######################################################################
+    """
 
     def test_legacy_row_without_workflow_id_skips_the_whole_guard(
             self, service_token, guard_on):
-        """§1.2 FAIL-OPEN: `if (!workflow) return e.next()`."""
+        """§1.2 FAIL-OPEN: `if (!workflow) return e.next()`.
+
+        `owner_ref` is the sentinel purely so this test stops leaving a real
+        "no workflow here" jobs row in production on every run — there are
+        several in the live table already.  The guard's answer is unchanged:
+        it returns `e.next()` before any field but `workflow_id` is read.
+        """
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
-                    json_body={"goal": "no workflow here", "status": "queued"})
-        assert resp.status != 409, (
+                    json_body={"goal": "no workflow here", "status": "queued",
+                               "owner_ref": OWNER_UNDER_TEST})
+        assert guard_admitted(resp), (
             "§1.2: a job with no workflow_id must skip workflow_guard "
             "entirely, so it can never produce a 409 workflow violation. "
             "Got: %r" % resp)
@@ -488,6 +834,7 @@ class TestWorkflowGuard(object):
         assert resp.status == 409, repr(resp)
         assert detail_of(resp) == "owner_ref is required for workflow jobs", repr(resp)
 
+    @pytest.mark.xfail(reason=PROD_NO_CREATE_ENTRY_TABLE)
     @pytest.mark.parametrize("status", ["running", "done", "failed",
                                         "cancelled", "needs_user"])
     def test_ENTRY_STATUSES_a_post_may_only_create_held_or_queued(
@@ -496,14 +843,108 @@ class TestWorkflowGuard(object):
         TRANSITION, and a POST is not one — `jobs.createRule` is "" so any
         caller may POST a row into existence already in the status those legs
         guard.  A job created `running` skipped Shelf 2's whole admission and
-        the approval gate that predates it."""
+        the approval gate that predates it.
+
+        THE SENTENCE IS PINNED HERE ON PURPOSE, against this suite's general
+        preference for asserting only the refusal.  Live PocketBase answers
+        `running` and `done` with 409 too — but from the lease leg (:652) and
+        the receipt leg (:665), which are keyed on the status and would fire
+        whether or not a create table existed.  Accepting "any 409" would
+        report those two as compliant and hide the missing table; see
+        PROD_NO_CREATE_ENTRY_TABLE.  `failed`, `cancelled` and `needs_user`
+        have no downstream leg at all and are ADMITTED.
+
+        A row created straight into `failed` was never approved, never leased
+        and never announced, and `HAS_RUN` in the Shelf 2 ordering legs counts
+        `failed` as an act that may have left something behind — so a
+        forgeable `failed` row is enough to make a later compensating plan
+        refuse, or to make one already-run act look ordered against another.
+        """
         state = {"running": "running", "done": "succeeded", "failed": "failed",
                  "cancelled": "cancelled", "needs_user": "needs_user"}[status]
         body = workflow_job(status=status, state=state)
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, repr(resp)
+        assert guard_refused(resp), admitted(
+            "§1.10", "a POST may only create a row in awaiting_confirm or "
+            "queued, and this one asked for %r" % status, resp)
         assert detail_of(resp) == "work cannot be created in %s" % status, repr(resp)
+
+    @pytest.mark.xfail(reason=PROD_NO_CREATE_ENTRY_TABLE)
+    @pytest.mark.parametrize("status", ["running", "done"])
+    def test_ENTRY_STATUSES_is_not_satisfied_by_equipping_the_other_leg(
+            self, service_token, guard_on, status):
+        """§1.10, and the reason the test above may not be relaxed to "any
+        409" (PROD_NO_CREATE_ENTRY_TABLE says the same thing from the other
+        direction).
+
+        Live PocketBase refuses a bare `POST status=running` — but with the
+        lease leg's own sentence, because that is the leg that fired.  A leg
+        that asks "do you hold a lease?" is answered by HOLDING ONE.  So this
+        sends the create fully equipped for the leg that actually spoke:
+        `running` with a live lease, actor and future expiry; `done` with a
+        verified receipt for its own effect_key.  Under `ENTRY_STATUSES` both
+        are still refused — a create is a create.  Without it both are
+        admitted, and the security property "work cannot be created in
+        running" does not hold at all.
+
+        `read_only` walks past the approval gate on both the deployed and the
+        current guard, so the only thing under test here is the entry table.
+        """
+        if status == "running":
+            until = "2099-01-01T00:00:00.000Z"
+            body = workflow_job(
+                status="running", state="running", consequence="read_only",
+                lease_token="lease-" + rand(20),
+                extra_row={"claimed_by": "contract-suite", "lease_until": until})
+        else:
+            body = workflow_job(status="done", state="succeeded",
+                                consequence="read_only")
+            receipt = {"verified": True, "effect_key": body["effect_key"],
+                       "evidence": ["contract-suite"]}
+            plan = json.loads(body["params"])
+            plan["_workflow"]["receipt"] = receipt
+            body["params"] = json.dumps(plan)
+            body["receipt"] = json.dumps(receipt)
+        resp = call("POST", "/api/collections/jobs/records", headers=svc(),
+                    json_body=body)
+        assert guard_refused(resp), admitted(
+            "§1.10", "a create in %r that satisfies the transition leg it "
+            "collides with is still a create, and must still be refused"
+            % status, resp)
+
+    def test_the_owner_sentinel_is_inert_to_the_guard(
+            self, service_token, guard_on, real_owner_ref):
+        """NOT a contract rule — the suite auditing its own fixture.
+
+        Every body this class builds names `OWNER_UNDER_TEST`, a well-formed
+        owners id that does not exist, so that a leg the backend fails to
+        enforce cannot write a row (see the barrier comment above
+        `workflow_job`).  That is only sound if the guard treats it exactly
+        like a real id.  It does — `owner_ref` is string-compared and never
+        resolved — and this pins it by sending the SAME refusable body under
+        both, which writes nothing either way because the guard answers
+        first.
+
+        If this ever goes red, every other result in this class is suspect.
+        """
+        def answer(owner):
+            body = workflow_job(status="queued", state="running",
+                                owner_ref=owner)
+            return call("POST", "/api/collections/jobs/records", headers=svc(),
+                        json_body=body)
+
+        fake = answer(OWNER_UNDER_TEST)
+        real = answer(real_owner_ref)
+        assert guard_refused(fake) and guard_refused(real), (
+            "the probe body must be refused by the guard under BOTH owner "
+            "ids, or it is not a safe comparison. fake=%r real=%r"
+            % (fake, real))
+        assert detail_of(fake) == detail_of(real), (
+            "the guard's answer changed when owner_ref became a real "
+            "relation record, so OWNER_UNDER_TEST is NOT inert and every "
+            "fixture in this class needs rebuilding. fake=%r real=%r"
+            % (fake, real))
 
     def test_approval_is_the_default_and_absence_is_refused(
             self, service_token, guard_on):
@@ -526,14 +967,23 @@ class TestWorkflowGuard(object):
         truncated write, an older client or any third enum value reached
         `queued` UNAPPROVED and free to act on the world.  `constructor` and
         `toString` are here because NO_APPROVAL_NEEDED must be an array — an
-        object-as-set hands an attacker an exemption keyword."""
+        object-as-set hands an attacker an exemption keyword.
+
+        LIVE POCKETBASE ADMITS ALL FIVE.  This is the worst of the three
+        deployment gaps in the class docstring: the deployed hook still reads
+        `if (nextStatus === "queued" && consequence === "consequential")`
+        (`git show e6e93319:backend/pb_hooks/workflow_guard.pb.js`, line 167),
+        so owner approval is demanded only when that one string is spelled
+        exactly right.  The fix (afd4380a) is in this repo and is not
+        deployed.  Full evidence in PROD_APPROVAL_GATE_IS_SPELLING.  The
+        test is right.  Do not touch it."""
         body = workflow_job(status="queued", state="queued",
                             consequence=consequence)
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, (
-            "§1.12: consequence=%r must still demand approval. Got %r"
-            % (consequence, resp))
+        assert guard_refused(resp), admitted(
+            "§1.12", "consequence=%r is not `read_only`, so this row must "
+            "still be made to prove owner approval" % consequence, resp)
         assert "approval" in detail_of(resp), repr(resp)
 
     def test_approval_must_be_bound_to_this_plan_version_and_scope(
@@ -557,7 +1007,7 @@ class TestWorkflowGuard(object):
         correctly bound; only the actor is wrong."""
         body = workflow_job(status="queued", state="queued",
                             consequence="consequential",
-                            owner_ref="owner-alpha",
+                            owner_ref=OWNER_ALPHA,
                             tap_actor="somebody-else-entirely")
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
@@ -571,8 +1021,8 @@ class TestWorkflowGuard(object):
         """§1.12 GESTURE_KINDS is ["tap"] and nothing else."""
         body = workflow_job(status="queued", state="queued",
                             consequence="consequential",
-                            owner_ref="owner-alpha",
-                            tap_actor="owner-alpha")
+                            owner_ref=OWNER_ALPHA,
+                            tap_actor=OWNER_ALPHA)
         plan = json.loads(body["params"])
         plan["_workflow"]["approval"]["gesture"]["kind"] = "sigh"
         body["params"] = json.dumps(plan)
@@ -588,15 +1038,46 @@ class TestWorkflowGuard(object):
         `!old` clause exists for the same reason ENTRY_STATUSES does: this
         rule was keyed on the OLD row being running, so a create skipped it
         and a queued row could be born already holding execution authority.
-        read_only is used here only to walk past the approval gate."""
+        read_only is used here only to walk past the approval gate.
+
+        LIVE POCKETBASE ADMITS THIS ROW.  The deployed hook still guards the
+        lease with `} else if (old && oldStatus === "running")`
+        (`e6e93319:…/workflow_guard.pb.js:198`), so the clause simply does not
+        run on a create: the row is born `queued` holding an execution lease
+        nobody issued, and the next PATCH that moves it to `running` presents
+        a token the row already agrees with.  The `!old` fix (9748acf4) is in
+        this repo and is not deployed.  Full evidence in
+        PROD_NO_SHELF2_BLOCK.  The test is right."""
         body = workflow_job(status="queued", state="queued",
                             consequence="read_only",
                             lease_token="lease-" + rand(20))
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, repr(resp)
+        assert guard_refused(resp), admitted(
+            "§1.14", "a row created outside `running` may not be born "
+            "holding an execution lease", resp)
         assert detail_of(resp) == "non-running work may not retain an execution lease", repr(resp)
 
+    # ---- THE SHELF 2 ADMISSION LEGS (§1.11).
+    #
+    # ALL TEN OF THESE ARE RED AGAINST LIVE POCKETBASE, AND ALL TEN ARE
+    # RIGHT.  The deployed hook has no Shelf 2 block at all — `SHELF2`,
+    # `shelf2Refusal`, `readLineage`, `seqRefusal`, `orderRefusal` and every
+    # `shelf2.*` cause were added by 5f66016c (2026-08-25) and that commit is
+    # not in the running image — PROD_NO_SHELF2_BLOCK.  On the deployed
+    # guard `consequence = "reversible_local"` is simply not
+    # `"consequential"`, so it misses the approval gate too, and a
+    # `reversible_local` row is admitted to `queued` with NO approval, NO act
+    # declaration, NO undo plan, NO announcement and NO lineage position —
+    # which is the exact failure the block's own header warns about:
+    # "that turns off database-level approval for the new lane and puts
+    # NOTHING in its place."
+    #
+    # The refusal CODE is asserted exactly in each test below and that is not
+    # over-specification: §5.4 makes the ORDER part of the contract ("checked
+    # FIRST and before the undo plan is even read"), and §11 counts refusals
+    # by cause, so a Shelf 2 leg that fires with the wrong code is a
+    # different check.
     def test_shelf2_is_earned_not_spelled(self, service_token, guard_on):
         """§1.11 THE SHELF 2 BLOCK.  A `reversible_local` row with no approval
         and no admissible act declaration must be refused with a shelf2.*
@@ -608,9 +1089,9 @@ class TestWorkflowGuard(object):
                             consequence="reversible_local")
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, (
-            "§1.11: an unapproved Shelf 2 row with no act declaration must be "
-            "refused. Got %r" % resp)
+        assert guard_refused(resp), admitted(
+            "§1.11", "an unapproved Shelf 2 row with no act declaration must "
+            "be refused", resp)
         assert detail_of(resp).startswith("shelf2."), (
             "§1.11: the refusal must be a shelf2.* code, so the exemption is "
             "EARNED by the legs rather than spelled in an allowlist. Got %r"
@@ -631,12 +1112,13 @@ class TestWorkflowGuard(object):
                         "executor": "anticipy_store",
                         "target": {"provenance": "minted_by_us", "ref": "id"}},
                 "undo": undo,
-                "announce": {"channel": "sms", "owner_ref": "owner-under-test"},
+                "announce": {"channel": "sms", "owner_ref": OWNER_UNDER_TEST},
                 "lineage_seq": 1,
             })
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, repr(resp)
+        assert guard_refused(resp), admitted(
+            "§1.11", "the Shelf 2 admission legs must refuse this row", resp)
         assert detail_of(resp) == "shelf2.act_type_not_admitted", (
             "§1.11: the act type is checked FIRST and on its own, before the "
             "undo plan is even read. Got %r" % resp)
@@ -654,12 +1136,13 @@ class TestWorkflowGuard(object):
                 "undo": {"act_type": "local_draft", "steps": ["discard"],
                          "inputs": [{"provenance": "minted_by_us", "ref": "draft_id"}],
                          "held": {}},
-                "announce": {"channel": "sms", "owner_ref": "owner-under-test"},
+                "announce": {"channel": "sms", "owner_ref": OWNER_UNDER_TEST},
                 "lineage_seq": 1,
             })
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, repr(resp)
+        assert guard_refused(resp), admitted(
+            "§1.11", "the Shelf 2 admission legs must refuse this row", resp)
         assert detail_of(resp) == "shelf2.unresolved_reference", repr(resp)
 
     def test_shelf2_undo_must_address_the_acts_own_target(
@@ -678,12 +1161,13 @@ class TestWorkflowGuard(object):
                                      "ref": "some_other_thing"}],
                          "held": {"minted_by_us": {"the_draft": "d1",
                                                    "some_other_thing": "d2"}}},
-                "announce": {"channel": "sms", "owner_ref": "owner-under-test"},
+                "announce": {"channel": "sms", "owner_ref": OWNER_UNDER_TEST},
                 "lineage_seq": 1,
             })
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, repr(resp)
+        assert guard_refused(resp), admitted(
+            "§1.11", "the Shelf 2 admission legs must refuse this row", resp)
         assert detail_of(resp) == "shelf2.undo_misses_the_target", repr(resp)
 
     def test_shelf2_announcement_must_be_addressed_to_the_owner(
@@ -693,7 +1177,7 @@ class TestWorkflowGuard(object):
         else."""
         body = workflow_job(
             status="queued", state="queued", consequence="reversible_local",
-            owner_ref="owner-alpha",
+            owner_ref=OWNER_ALPHA,
             extra_plan={
                 "act": {"act_type": "local_draft", "reach": "local_store",
                         "executor": "anticipy_store",
@@ -701,12 +1185,13 @@ class TestWorkflowGuard(object):
                 "undo": {"act_type": "local_draft", "steps": ["discard"],
                          "inputs": [{"provenance": "minted_by_us", "ref": "d"}],
                          "held": {"minted_by_us": {"d": "draft-1"}}},
-                "announce": {"channel": "sms", "owner_ref": "owner-beta"},
+                "announce": {"channel": "sms", "owner_ref": OWNER_BETA},
                 "lineage_seq": 1,
             })
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, repr(resp)
+        assert guard_refused(resp), admitted(
+            "§1.11", "the Shelf 2 admission legs must refuse this row", resp)
         assert detail_of(resp) == "shelf2.announce_leaves_the_owner", repr(resp)
 
     @pytest.mark.parametrize("tag", ["constructor", "toString", "__proto__",
@@ -726,13 +1211,13 @@ class TestWorkflowGuard(object):
                 "undo": {"act_type": "local_draft", "steps": ["discard"],
                          "inputs": [{"provenance": tag, "ref": "d"}],
                          "held": {tag: {"d": "draft-1"}}},
-                "announce": {"channel": "sms", "owner_ref": "owner-under-test"},
+                "announce": {"channel": "sms", "owner_ref": OWNER_UNDER_TEST},
                 "lineage_seq": 1,
             })
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, (
-            "§1.11: provenance %r must not be admitted. Got %r" % (tag, resp))
+        assert guard_refused(resp), admitted(
+            "§1.11", "provenance %r must not be admitted" % tag, resp)
         assert detail_of(resp) in ("shelf2.unknown_provenance",
                                    "shelf2.act_target_unbound"), repr(resp)
 
@@ -748,11 +1233,12 @@ class TestWorkflowGuard(object):
                 "undo": {"act_type": "local_draft", "steps": ["discard"],
                          "inputs": [{"provenance": "minted_by_us", "ref": "d"}],
                          "held": {"minted_by_us": {"d": "draft-1"}}},
-                "announce": {"channel": "sms", "owner_ref": "owner-under-test"},
+                "announce": {"channel": "sms", "owner_ref": OWNER_UNDER_TEST},
             })
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body=body)
-        assert resp.status == 409, repr(resp)
+        assert guard_refused(resp), admitted(
+            "§1.11", "the Shelf 2 admission legs must refuse this row", resp)
         assert detail_of(resp) == "shelf2.unordered_lineage", repr(resp)
 
     # ---- PATCH legs: need a real row, and every one of these is a REFUSAL,
@@ -826,6 +1312,7 @@ class TestGuard(object):
         assert resp.status == 200, (
             "§2.4: the service token must open the collection API. Got %r" % resp)
 
+    @pytest.mark.xfail(reason=PROD_AGENT_CREDENTIAL_FALLS_THROUGH)
     def test_an_unresolvable_agent_credential_is_a_refusal_not_a_shrug(self, guard_on):
         """§2.5.  This branch was written as "can this credential do the narrow
         thing?" and never as "was this credential valid?", so an empty lookup
@@ -840,6 +1327,14 @@ class TestGuard(object):
             "§2.5: sending X-Anticipy-Agent-ID COMMITS the caller to that "
             "identity — it resolves, or the request ends there. Got %r" % resp)
 
+    # Same absent branch as the test above: here the status is right (403) and
+    # only the sentence is wrong, because on `jobs` the fall-through ends at
+    # the ladder's own last rung, which is also a 403.  The sentence is NOT
+    # over-specification to be dropped — on this path it is the ONLY observable
+    # that distinguishes "this credential was rejected" from "this request was
+    # treated as anonymous", and the pair_code and PATCH probes in
+    # PROD_AGENT_CREDENTIAL_FALLS_THROUGH show it really is the latter.
+    @pytest.mark.xfail(reason=PROD_AGENT_CREDENTIAL_FALLS_THROUGH)
     def test_a_short_agent_token_is_the_same_refusal(self, guard_on):
         """§2.5 — a token shorter than 40 characters cannot match any row (the
         column's own minimum), so the query is skipped and the same 403 is
@@ -879,6 +1374,11 @@ class TestGuard(object):
                     query={"filter": 'id != ""', "perPage": "10"})
         assert resp.status == 403, repr(resp)
 
+    # The GUARD half of this rule is fine: it returns e.next() and PocketBase
+    # answers.  What PocketBase answers is 400.  Left asserting 200 on purpose
+    # — relaxing it to "not 403" would prove the guard opened a door onto a
+    # wall and call that a pass.
+    @pytest.mark.xfail(reason=PROD_AGENTS_LIST_IS_BROKEN)
     def test_an_anonymous_owner_filter_of_the_right_shape_is_allowed(self, guard_on):
         """§2.9 — a fresh app install finds its own paired agent by naming the
         high-entropy owner id it already holds.  Anchored, and restricted to
@@ -950,6 +1450,10 @@ class TestGuard(object):
             "§2.6: the guard must let a signup reach PocketBase, whose own "
             "createRule decides. Got %r" % resp)
 
+    # Same wall.  The fall-through itself is DEMONSTRATED here — a 400 from
+    # PocketBase's envelope is proof the guard did not refuse — so the mark is
+    # on the second half of the sentence: "which answers an empty list".
+    @pytest.mark.xfail(reason=PROD_AGENTS_LIST_IS_BROKEN)
     @pytest.mark.slow
     def test_a_pair_code_miss_falls_through_rather_than_refusing(self, guard_on):
         """§2.8 — a MISS falls through to PocketBase, which answers an empty
@@ -1123,6 +1627,7 @@ class TestGuard(object):
 @pytest.mark.needs_service_token
 class TestResearchLane(object):
 
+    @pytest.mark.xfail(reason=PROD_NO_RESEARCH_LANE)
     def test_the_claim_poll_is_rewritten_to_exclude_three_lanes(
             self, service_token, guard_on):
         """§3.2 LEG 1.  A jobs list whose filter mentions status="queued" and
@@ -1141,6 +1646,11 @@ class TestResearchLane(object):
             "and device_calendar from an un-laned queued poll. Leaked: %r"
             % leaked)
 
+    # The 400 here is an ADMISSION, not a fixture bug: `OWNER_UNDER_TEST` is a
+    # deliberate write barrier and research_lane is a routerUse middleware, so
+    # PocketBase's relation check can only have been reached because the lane
+    # said nothing.  Same for the two tests below.
+    @pytest.mark.xfail(reason=PROD_NO_RESEARCH_LANE)
     def test_a_device_errand_may_not_be_live_while_read_only(
             self, service_token, guard_on):
         """§3.6 LEG 3.  `read_only` carries an approval EXEMPTION that is
@@ -1159,6 +1669,7 @@ class TestResearchLane(object):
         assert error_of(resp) == "that calendar errand is not safe to run yet", repr(resp)
         assert "read_only carries an approval exemption" in detail_of(resp), repr(resp)
 
+    @pytest.mark.xfail(reason=PROD_NO_RESEARCH_LANE)
     def test_a_device_errand_may_not_be_live_while_reversible_local(
             self, service_token, guard_on):
         """§3.6 — Shelf 2 admits local_draft and nothing else; EventKit
@@ -1172,6 +1683,26 @@ class TestResearchLane(object):
         assert resp.status == 403, repr(resp)
         assert "Shelf 2 admits local_draft" in detail_of(resp), repr(resp)
 
+    # THIS TEST USED TO WRITE A ROW INTO PRODUCTION ON EVERY RUN.
+    #
+    # It is the one test in this class that builds its body by hand instead of
+    # through `workflow_job`, so it is also the one that never picked up the
+    # `OWNER_UNDER_TEST` sentinel.  With research_lane's leg absent nothing
+    # refused the POST, and PocketBase had a perfectly valid row to insert:
+    # seven live `{lane:"device_calendar", status:"queued",
+    # consequence:"consequential"}` jobs reading "put dinner on my calendar"
+    # had accumulated in the real table by the time this was found (ids in the
+    # Track 3 report).  They are also the entire "leak" that
+    # `test_the_claim_poll_is_rewritten_to_exclude_three_lanes` reports above
+    # — this test was manufacturing the evidence for its neighbour.
+    #
+    # The sentinel fixes that WITHOUT softening the question, for the same
+    # reason `admitted()` gives in TestWorkflowGuard: research_lane is a
+    # `routerUse` middleware and runs before PocketBase touches the record, so
+    # if the leg were there the answer would still be its 403.  The sentinel
+    # only decides what happens after the guard has already declined to speak.
+    # The assertions below are unchanged.
+    @pytest.mark.xfail(reason=PROD_NO_RESEARCH_LANE)
     def test_a_device_errand_with_no_workflow_is_refused(
             self, service_token, guard_on):
         """§3.6 leg (a).  workflow_guard opens with `if (!workflow) next()`, so
@@ -1181,10 +1712,22 @@ class TestResearchLane(object):
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
                     json_body={"goal": "put dinner on my calendar",
                                "lane": "device_calendar", "status": "queued",
-                               "consequence": "consequential"})
+                               "consequence": "consequential",
+                               # See the comment above the mark: with the leg
+                               # missing, this sentinel is the only thing
+                               # between the suite and a real queued calendar
+                               # errand in somebody's live database.
+                               "owner_ref": OWNER_UNDER_TEST})
         assert resp.status == 403, repr(resp)
         assert "skips the confirmation gate entirely" in detail_of(resp), repr(resp)
 
+    # Refused, but by the WRONG guard: 409 "consequential work needs parseable
+    # approval" is workflow_guard answering a question research_lane should
+    # have closed first.  That is not the same rule wearing different words —
+    # it means an errand that DOES carry an approval never meets the
+    # calendar-act allowlist at all.  §0.4's middleware order is falsified
+    # here too, for the simple reason that one of the two middlewares is gone.
+    @pytest.mark.xfail(reason=PROD_NO_RESEARCH_LANE)
     def test_a_device_errand_must_declare_a_calendar_act(
             self, service_token, guard_on):
         """§3.6 leg (c).  Until this leg existed the lane was calendar-only by
@@ -1199,6 +1742,7 @@ class TestResearchLane(object):
         assert resp.status == 403, repr(resp)
         assert "has to say which calendar act it is" in detail_of(resp), repr(resp)
 
+    @pytest.mark.xfail(reason=PROD_NO_RESEARCH_LANE)
     def test_a_device_errand_may_not_declare_a_non_calendar_act(
             self, service_token, guard_on):
         """§3.6 leg (c) — the admitted set is the phone's own vocabulary:
@@ -1212,6 +1756,7 @@ class TestResearchLane(object):
         assert resp.status == 403, repr(resp)
         assert "carries calendar acts and nothing else" in detail_of(resp), repr(resp)
 
+    @pytest.mark.xfail(reason=PROD_NO_RESEARCH_LANE)
     def test_a_device_errand_may_not_be_created_carrying_its_own_tap(
             self, service_token, guard_on):
         """§3.7 A ROW THAT DOES NOT YET EXIST CANNOT HAVE BEEN TAPPED.  A POST
@@ -1220,7 +1765,7 @@ class TestResearchLane(object):
         minted the errand and its tap together."""
         body = workflow_job(status="awaiting_confirm", state="draft",
                             consequence="consequential",
-                            owner_ref="owner-alpha", tap_actor="owner-alpha",
+                            owner_ref=OWNER_ALPHA, tap_actor=OWNER_ALPHA,
                             extra_row={"lane": "device_calendar"},
                             extra_plan={"act": {"act_type": "calendar_write"}})
         resp = call("POST", "/api/collections/jobs/records", headers=svc(),
@@ -1263,10 +1808,55 @@ class TestResearchLane(object):
             "Got %r" % resp)
 
 
+# --------------------------------------------------------------------------
+# NOT A CONTRACT CHANGE: A SERVER DEFECT, RECORDED AS ONE.
+#
+# Three hook files this repo registers are absent from the PocketBase image
+# deployed to Railway, so the routes and middleware they register answer
+# PocketBase's router-level 404 — byte-identical to a path that was never
+# routed. Measured, and the mechanism identified, in
+# `research/2026-09-04-routes-absent-in-production.md`: the Railway `backend`
+# service is shared by several branch lanes and `railway up` uploads one lane's
+# `backend/` directory wholesale, so a deploy silently drops another lane's
+# hooks while leaving their tables on the volume. `pb_public` shows the same
+# non-monotonic date pattern, and a static file cannot throw at load, which is
+# what rules out "the hook threw" and pins it on image contents.
+#
+# THE ASSERTIONS BELOW ARE NOT RELAXED. Every status, sentence and reason
+# string stays exactly as the contract states it — including the evidence
+# door's single public refusal, "that evidence is not available", which is one
+# of the two places the wording IS the contract. These marks say the SERVER is
+# wrong, not the test. Each test still runs; `strict=False` so that the moment
+# the missing hooks are deployed the result turns into an XPASS rather than a
+# silent pass, and so that the Worker — which is expected to implement all of
+# this — reports XPASS rather than failing a run it got right.
+#
+# An XPASS on any of these is the signal to delete the mark and this comment.
+ROUTE_ABSENT_IN_PRODUCTION = pytest.mark.xfail(
+    reason="the hook that registers this route is missing from the deployed "
+           "PocketBase image, not from the contract — see "
+           "research/2026-09-04-routes-absent-in-production.md",
+    strict=False,
+)
+
+
 # ==========================================================================
 # §4.1  evidence.pb.js — the anonymous fetch door
 # ==========================================================================
 
+# evidence.pb.js registers THREE things and all three are inert in production:
+# this fetch door (`routerUse`, line 56), the share mint (`routerAdd`, line
+# 157) and the retention sweep (`onRecordAfterCreateSuccess`, line 243). The
+# first is a SECURITY GAP, not a missing feature: 1700000045_evidence.js sets
+# the collection's list/view/create rules to "" (public in PocketBase) on the
+# stated grounds that it is "gated by guard.pb.js" — but guard.pb.js covers
+# only /api/collections/ and /api/realtime, never /api/files/, for which this
+# absent middleware was the sole guard. Default-deny, the share window and the
+# five-fetch ceiling therefore hold nowhere on the deployed server. Latent
+# rather than live only because the collection has 0 rows and the mint that
+# would write one is itself 404 — the same deploy fixes both, which is the one
+# piece of luck in it.
+@ROUTE_ABSENT_IN_PRODUCTION
 class TestEvidenceDoor(object):
 
     def test_every_public_refusal_is_the_same_sentence(self):
@@ -1804,12 +2394,14 @@ class TestServiceRoutes(object):
         assert (resp.json or {}).get("message") == \
             "That device isn't on this account.", repr(resp)
 
+    @ROUTE_ABSENT_IN_PRODUCTION
     def test_phone_remove_requires_an_account(self):
         """§6.9."""
         resp = call("POST", "/me/phone/remove", json_body={})
         assert resp.status == 401, repr(resp)
         assert (resp.json or {}).get("message") == "Sign in first.", repr(resp)
 
+    @ROUTE_ABSENT_IN_PRODUCTION
     def test_profile_upsert_requires_an_account(self):
         """§6.10."""
         resp = call("POST", "/me/profile/upsert", json_body={"name": "x"})
@@ -1965,6 +2557,7 @@ class TestHQFrontDoor(object):
         allow = resp.header("Access-Control-Allow-Headers") or ""
         assert "X-Internal-Key" in allow and "X-HQ-Session" in allow, repr(resp)
 
+    @pytest.mark.xfail(reason=PROD_CORS_WILDCARD_FOR_UNLISTED_ORIGINS)
     def test_cors_refuses_an_unlisted_origin(self):
         """§4.3 — with an allow-list, a browser refuses before the request
         leaves."""
