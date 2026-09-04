@@ -1,5 +1,19 @@
 # The deployed backend is not built from this repo
 
+> **NARROWED 2026-09-04, same day — read
+> `2026-09-04-hq-hook-IS-production.md` with this.**
+>
+> Every measurement below stands. The TITLE over-generalises them. All the
+> evidence here comes from `pb_public/` assets and from four hook files that
+> are missing from the deployed image; none of it came from
+> `internal_hq.pb.js`, which was then probed on all 37 of its routes and
+> conforms 35/35, error strings verbatim. Production's ASSET layer is not this
+> tree and at least four hook FILES are absent -- but the hook files that ARE
+> deployed can be this tree's, and that one demonstrably is. `/fellows/hq`
+> shows the split in one route: the route conforms, the `internal.html` it
+> serves does not.
+
+
 Measured 2026-09-04 against https://backend-production-61e0a.up.railway.app
 while porting the evidence host and static assets to R2.
 
