@@ -18,6 +18,8 @@
  */
 import { resetRequest, resetConfirm, type ResetEnv } from "./routes/password_reset.ts";
 import { accountDelete } from "./routes/account_delete.ts";
+import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
+import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import { COLLECTIONS } from "./pb/schema.ts";
 import { health, notFound, refuse, json } from "./pb/wire.ts";
@@ -87,6 +89,33 @@ export default {
     }
     if (path === "/agent/upgrade-credential" && method === "POST") {
       return agentUpgradeCredential(request, env as unknown as AgentEnv);
+    }
+
+    // The small service routes. /worker/owners returns two fields and nothing
+    // else -- it is authorised by a shared token every worker carries.
+    if (path === "/worker/owners" && method === "GET") {
+      return workerOwners(request, env as unknown as ServiceEnv);
+    }
+    if (path === "/admin/purge-audit" && method === "POST") {
+      return purgeAudit(request, env as unknown as ServiceEnv);
+    }
+    if (path === "/auth/claim" && method === "POST") {
+      return authClaim(request, env as unknown as ServiceEnv);
+    }
+    if (path === "/me/phone/remove" && method === "POST") {
+      return phoneRemove(request, env as unknown as ServiceEnv);
+    }
+    if (path === "/me/profile/upsert" && method === "POST") {
+      return profileUpsert(request, env as unknown as ServiceEnv);
+    }
+
+    // Twilio's inbound webhook. TWILIO_AUTH_TOKEN is the only thing that can
+    // validate X-Twilio-Signature -- there is no API-key equivalent.
+    if (path === "/sms/inbound" && method === "POST") {
+      return smsInbound(request, env as unknown as SmsEnv);
+    }
+    if (path === "/transcription/token" && method === "POST") {
+      return transcriptionToken(request, env as unknown as SmsEnv);
     }
 
     // --- the auth endpoints. guard.pb.js:367-370 keeps these open. ---------
