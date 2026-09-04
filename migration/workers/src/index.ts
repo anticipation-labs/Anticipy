@@ -17,6 +17,8 @@
  *   future client that tries gets an answer instead of a silent nothing.
  */
 import { resetRequest, resetConfirm, type ResetEnv } from "./routes/password_reset.ts";
+import { accountDelete } from "./routes/account_delete.ts";
+import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
 import { COLLECTIONS } from "./pb/schema.ts";
 import { health, notFound, refuse, json } from "./pb/wire.ts";
 import * as records from "./pb/records.ts";
@@ -63,6 +65,28 @@ export default {
     }
     if (path === "/auth/reset/confirm" && method === "POST") {
       return resetConfirm(request, env as unknown as ResetEnv);
+    }
+    // The privacy page's promise. The one irreversible operation here.
+    if (path === "/me/delete" && method === "POST") {
+      return accountDelete(request, env as never);
+    }
+
+    // The extension's lifecycle. /agent/key answers llm_proxy, never a vendor
+    // credential -- the extension is a published zip.
+    if (path === "/agent/register" && method === "POST") {
+      return agentRegister(request, env as unknown as AgentEnv);
+    }
+    if (path === "/agent/key" && method === "GET") {
+      return agentKey(request, env as unknown as AgentEnv);
+    }
+    if (path === "/agent/llm" && method === "POST") {
+      return agentLlm(request, env as unknown as AgentEnv);
+    }
+    if (path.startsWith("/agent/solve-captcha") && method === "POST") {
+      return agentCaptcha(request, env as unknown as AgentEnv);
+    }
+    if (path === "/agent/upgrade-credential" && method === "POST") {
+      return agentUpgradeCredential(request, env as unknown as AgentEnv);
     }
 
     // --- the auth endpoints. guard.pb.js:367-370 keeps these open. ---------
