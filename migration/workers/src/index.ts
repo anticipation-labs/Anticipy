@@ -30,6 +30,10 @@ import {
   hqPasswordUpsert, hqPasswordReveal, hqPasswordDelete, hqPeopleCode,
   hqNotifsRead, hqSettings,
 } from "./routes/hq_vault.ts";
+import {
+  hqCommentCreate, hqCommentUpdate, hqCommentDelete,
+  hqReminderCreate, hqReminderDelete, hqCalendar,
+} from "./routes/hq_threads.ts";
 import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
@@ -182,6 +186,14 @@ export default {
       if (path === "/internal/people/code" && method === "POST") return hqPeopleCode(request, hq);
       if (path === "/internal/notifs/read" && method === "POST") return hqNotifsRead(request, hq);
       if (path === "/internal/settings" && method === "POST") return hqSettings(request, hq);
+      if (path === "/internal/comments" && method === "POST") return hqCommentCreate(request, hq);
+      if (path === "/internal/comments" && method === "PATCH") return hqCommentUpdate(request, hq);
+      if (path === "/internal/comments/delete" && method === "POST") return hqCommentDelete(request, hq);
+      if (path === "/internal/reminders" && method === "POST") return hqReminderCreate(request, hq);
+      if (path === "/internal/reminders/delete" && method === "POST") return hqReminderDelete(request, hq);
+      if (path.startsWith("/internal/cal/") && method === "GET") {
+        return hqCalendar(request, hq, path.slice("/internal/cal/".length));
+      }
 
       // Also ungated: the caller is proving who they are WITH the Clerk token,
       // so requiring the shared key first would defeat the point of the route.
