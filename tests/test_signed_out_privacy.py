@@ -85,8 +85,27 @@ def test_nothing_is_captured_without_an_owner():
 
 
 def test_a_buffered_line_remembers_whose_words_it_is():
-    decl = APP.split("private struct BufferedLine: Codable {", 1)[1].split("}", 1)[0]
-    assert "account" in decl, "a queued line must carry the account that captured it"
+    # Matched by NAME, not by its conformance list. This split on the literal
+    # "private struct BufferedLine: Codable {" and broke the day the struct
+    # gained Equatable — needed so a delivered row can be removed from the
+    # persisted queue by value rather than by an index that a concurrent write
+    # may have invalidated. The property under test is that the row carries the
+    # account that captured it; which protocols it conforms to is not that
+    # property, and a test that fails on an unrelated conformance is a test
+    # that will be silenced rather than read.
+    import re as _re
+    match = _re.search(r"private struct BufferedLine\s*:[^{]*\{", APP)
+    assert match, "BufferedLine is gone or renamed"
+    decl = APP[match.end():].split("}", 1)[0]
+    # THE DECLARATION, not the word. `"account" in decl` passed even after the
+    # field was renamed, because the struct's own doc comment says "account"
+    # several times in prose — so the check was satisfied by the explanation of
+    # the field rather than by the field. Verified by mutation: renaming
+    # `var account` to `var acct` left it green. Matching the declaration makes
+    # the rename red, which is the whole point of the test.
+    import re as _re2
+    assert _re2.search(r"^\s*(?:var|let)\s+account\s*:", decl, _re2.M), (
+        "a queued line must carry the account that captured it")
     # every construction site stamps it
     for frag in ("account: accountID", "account: nil"):
         assert frag in APP

@@ -3067,6 +3067,17 @@ class Anticipy:
             return None
         try:
             res = self.llm.chat(VOICE_SYSTEM, json.dumps(context), temperature=0.7)
+            # A SENTENCE THAT RAN OUT OF ROOM IS NOT A SENTENCE. The provider
+            # says so and this code used to discard the answer: a composition
+            # cut at the token ceiling went to his phone stopping mid-word.
+            # The template below says less and finishes saying it, which is the
+            # same trade the invented-name guard makes immediately after this —
+            # degraded wording over a message that reads as broken. Only a
+            # POSITIVE truncation signal fires this; an unknown finish reason
+            # leaves the composition alone.
+            if getattr(res, "truncated", False):
+                print("voice reply was truncated — template speaks instead")
+                return None
             text = res.text.strip().strip('"')
             # A NAME she never heard is an invention, exactly like the digits
             # the guard below this one already strips. On 2026-08-23 the

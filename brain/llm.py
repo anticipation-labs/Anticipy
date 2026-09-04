@@ -147,6 +147,27 @@ class LLMResult:
     text: str
     used_model: str
     mode: str  # "gemini", "openrouter", or "heuristic"
+    # DID THE MODEL FINISH THE SENTENCE, or did it run out of room?
+    #
+    # Both providers say so and this client threw the answer away: Gemini in
+    # `candidates[0].finishReason`, OpenRouter in `choices[0].finish_reason`.
+    # A reply cut at the token ceiling was returned as if it were complete.
+    #
+    # For a JSON judgment that mostly self-corrects — the parse fails and
+    # triage re-asks. For PROSE it does not: `_voice`, `_clock` and the
+    # briefing compose the words that go to the owner's phone, and a
+    # composition truncated mid-word was sent as-is. That is the failure Omi's
+    # own ranked improvement list calls small to fix and expensive to ship
+    # ("a sentence that stops mid-word as a final answer"), and it costs more
+    # here than there, because the destination is a text message rather than
+    # a chat bubble a person can scroll.
+    #
+    # A POSITIVE SIGNAL ONLY. True means the provider said it stopped early;
+    # absence is NOT a verdict, and an unrecognised or missing reason leaves
+    # this False rather than guessing. Same honesty wall the rest of the brain
+    # uses: a check that fires when it cannot see would discard good answers
+    # the first time a provider renamed a field.
+    truncated: bool = False
 
 
 # ---------------------------------------------------------------- cost ledger
@@ -328,13 +349,19 @@ class LLM:
             r = c.post(url, headers=headers, json=payload)
             r.raise_for_status()
             data = r.json()
-        parts = (((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
+        candidate = (data.get("candidates") or [{}])[0]
+        parts = ((candidate.get("content") or {}).get("parts") or [])
         text = "".join(str(part.get("text") or "") for part in parts if isinstance(part, dict))
         if not text:
             raise ValueError("Gemini returned no text")
         _record(model, system, user,
                 (data.get("usageMetadata") or {}), "gemini")
-        return LLMResult(text=text, used_model=model, mode="gemini")
+        # MAX_TOKENS is the one reason that means "there was more to say".
+        # SAFETY and RECITATION are refusals, not truncations, and are left to
+        # the caller's own emptiness handling rather than relabelled here.
+        return LLMResult(
+            text=text, used_model=model, mode="gemini",
+            truncated=str(candidate.get("finishReason") or "") == "MAX_TOKENS")
 
     # A prompt cache only pays for itself above a provider minimum (Gemini
     # wants roughly a thousand tokens). Below that the multipart shape is pure
@@ -389,8 +416,11 @@ class LLM:
             r.raise_for_status()
             data = r.json()
         _record(model, system, user, data.get("usage") or {}, "openrouter")
-        return LLMResult(text=data["choices"][0]["message"]["content"],
-                         used_model=model, mode="openrouter")
+        choice = data["choices"][0]
+        # OpenAI-compatible providers spell the same thing "length".
+        return LLMResult(text=choice["message"]["content"],
+                         used_model=model, mode="openrouter",
+                         truncated=str(choice.get("finish_reason") or "") == "length")
 
     # ---- deterministic fallback so we can prove the pipeline with no key ----
     def _heuristic(self, system: str, user: str) -> str:
