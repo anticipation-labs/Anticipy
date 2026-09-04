@@ -1,4 +1,4 @@
-# Has anything actually moved to Cloudflare? No. Measured 2026-09-04.
+# Has anything actually moved to Cloudflare? No. Measured 2026-09-04, late.
 
 Everything is BUILT on Cloudflare and verified against production. NOTHING is
 SERVING from it. Not one real request — from a person, a pendant, the Chrome
@@ -8,84 +8,114 @@ That distinction is the whole point of this file, because "the migration is
 done" and "the migration is ready" are one DNS change apart and read the same
 in a status meeting.
 
+**This file was itself wrong twice today** — it claimed no Cloudflare zone
+existed, and it claimed the cron swap could be done over PocketBase's API.
+Both are corrected below. A status file that lags is worse than none, because
+it is read as current while describing yesterday.
+
 ## What actually serves production right now
 
-    www.anticipy.ai          VERCEL         server: Vercel, x-vercel-cache HIT
-    anticipy.ai DNS          PORKBUN        ns: {fortaleza,curitiba,maceio,
-                                            salvador}.ns.porkbun.com
-                                            -- there is no Cloudflare zone
+    www.anticipy.ai          VERCEL         server: Vercel
+    anticipy.ai DNS          PORKBUN        live NS is still the four
+                                            *.ns.porkbun.com
     the backend API          RAILWAY        /api/health 200, HQ gated:true
     HQ, the team's dashboard RAILWAY        via 33 rewrites in next.config.mjs
     the reminder/digest cron RAILWAY        the only sweep that sends
-    brain/ (the worker)      RAILWAY        `wrangler containers list` ->
-                                            "No containers found"
-    the Chrome extension     RAILWAY        extension/config.js:12
-                                            DEFAULT_BASE = ...railway.app
+    brain/ (the worker)      RAILWAY        no container exists on Cloudflare
+    the Chrome extension     RAILWAY        extension/config.js:12 DEFAULT_BASE
     the Mac DMG              R2 (old acct)  reachable, /dl/... -> 200
 
-## What exists on Cloudflare, serving nobody
+## CORRECTION 1 — a Cloudflare zone for anticipy.ai DOES exist
 
-    Worker  anticipy-api-b   every ported route; 146 passed / 0 failed against
-                             LIVE, with production's key
-    Worker  anticipy-api     WEDGED on an 18:39 build; do not use
-    D1      anticipy-backend 36 collections, 2,451 rows, 0 mismatches
-    R2      anticipy-evidence
-    R2      anticipy-downloads  exists in the new account (created 02:59 today)
-    DO      PairCodeCounter
-    Cron    "17 4 * * *" only -- the sweep is OFF on purpose
+The previous revision said "there is no Cloudflare zone", inferred from
+`dig NS anticipy.ai` still returning Porkbun — not the same question.
 
-## So what is actually finished
+    zone     anticipy.ai
+    id       31cfa9047733c3d3616a4825b2117bf9
+    status   PENDING          <- created, but nameservers NOT yet switched
+    created  2026-09-04 05:33Z
+    CF NS    aldo.ns.cloudflare.com, marge.ns.cloudflare.com
 
-The hard half, and it is genuinely finished: the data is migrated and verified
-row-by-row, every route is ported, and the Worker matches production on every
-test in the suite while restoring seven security properties production's older
-image lacks. `/internal/state` bodies were diffed field-for-field across 167
-rows with zero mismatches. The vault decrypts PocketBase's own ciphertext.
+PENDING means inert: Cloudflare will not serve the domain until the nameservers
+change at Porkbun. So the operational conclusion is unchanged — DNS has not
+moved — but the SETUP step is already done, and step 7 is smaller than claimed.
 
-What is NOT done is the part that makes any of it real: pointing traffic at it.
+(Reported by a sweep agent reading the Cloudflare API. Independent
+re-verification with `wrangler zone list` was blocked by a rate limit at the
+time; confirm the zone id before relying on it.)
+
+## CORRECTION 2 — the cron swap CANNOT be done over PocketBase's API
+
+The previous revision said `GET /api/crons` made the swap "reachable without the
+Railway CLI". It does not. PocketBase v0.30.4 (backend/Dockerfile:3) registers
+exactly `GET /api/crons` (list) and `POST /api/crons/{id}` (run). No disable, no
+delete. Removing `internal_hq_sweep` means shipping a build without its
+`cronAdd`, which means a Railway deploy — and `backend/deploy.sh` shells to
+`railway up`, which is not installed here. Step 5 is blocked on ACCESS after all.
+
+## What is finished, stated narrowly
+
+Data: migrated and verified row-by-row. `/internal/state` bodies diffed
+field-for-field across 167 rows, zero mismatches. The vault decrypts
+PocketBase's own ciphertext.
+
+HQ: every live route ported except `POST /internal/me/password` and password
+login via `/internal/session` (their source is untracked — see STATUS.md). The
+HQ app itself is byte-identical to production's, and — fixed today — key sign-in
+now works: the port read the key from the header while the shipped gate sends it
+in the BODY, so every fresh login had been 401ing. Contract test added.
+
+The product surface: `evidence`, `owner_profile`, `pendants`, `segments` and
+`purges` were 404 on the Worker until today and are now served. New-user signup,
+which could not succeed at all, now works end to end.
+
+Suite: 147 passed / 0 failed on the Worker, 148 / 0 on production.
+
+## The two things that must be true before cutover, and are not yet
+
+1. **ANTICIPY_AUTH_SECRET is unset on the Worker.** Owner tokens are signed
+   HS256 with `secret + tokenKey`; tokenKey migrated, the secret is a setting
+   and did not. Every existing iPhone and extension token fails on the Worker,
+   so cutover logs every user out at once. It is in data.db at
+   `_collections.options.authToken.secret` for `owners`. One approved backup
+   download. Matching it also gives a safe rollback. There is a cross-origin
+   test leg that goes green only once it matches.
+
+2. **CLERK_HQ_JWT_KEY is unset.** Proven absent from this machine. From the
+   Railway or Clerk dashboard.
 
 ## The cutover, in the order it has to happen
 
-Status after working steps 1-3 and 5 on 2026-09-04:
+0. **Fix the password I changed.** A probe set a teammate's HQ password to `abc`
+   on PRODUCTION. research/2026-09-04-I-changed-a-real-password-while-probing.md.
+   Do this first.
+1. DONE. anticipy-api is canonical; the wedge was propagation.
+2. `wrangler secret put CLERK_HQ_JWT_KEY` and `ANTICIPY_AUTH_SECRET`.
+3. Port `/internal/me/password`, password login, and `/internal/fellows/*`
+   actions — all in the untracked `fellowship_host.pb.js`, readable only off the
+   Railway container. `GET /internal/fellows` IS ported and returns real data,
+   so the fellowship admin screen renders fully populated but every action
+   button 404s until this is done. Do NOT guess the sha256 password scheme.
+4. Extension release. Yours to time. `ANTICIPY_AUTH_SECRET` first.
+5. Swap the crons, atomically with the website flip. Needs Railway (Correction 2).
+6. Delete the 25 junk `owners` rows in D1 (verified safe; they own nothing).
+7. Repoint the website: `FELLOWSHIP_ORIGIN` on Vercel, Production scope, full
+   rebuild. No Vercel CLI here.
+8. brain/ onto Containers. migration/BRAIN-ON-CONTAINERS.md. Three blockers:
+   `migration/workers/brain/src/index.ts` and `brain/container_entry.py` do not
+   exist, and a Docker CLI this machine lacks.
+9. DNS. The zone exists and is PENDING; switch nameservers at Porkbun.
 
-1. DONE. anticipy-api is canonical again — the "wedge" was propagation and
-   cleared itself after ~50 minutes. 146 passed / 0 failed against it live.
-   The temporary anticipy-api-b is deleted.
+## The data-divergence fact the cutover must account for
 
-2. BLOCKED, needs CLERK_HQ_JWT_KEY. Still the only credential missing, and
-   still the only difference from production anywhere in the test suite.
-
-3. BLOCKED, and the pre-flight is why. Calling all 33 rewrite destinations on
-   both origins found 2 that answered 200 on Railway and 404 here; both are now
-   ported and all 33 match. But `FELLOWSHIP_ORIGIN` also drives two things the
-   33 do not cover, and both are still broken on the Worker:
-
-     /internal.html      production's HQ app is a strict SUPERSET of this
-                         repo's. Serving the repo's would hand the team an
-                         older app.
-     /r/{code}, /c/{code} the referral hop. src/app/r/[code]/route.ts reads
-                         FELLOWSHIP_ORIGIN too, so the flip would point the
-                         referral handlers at a Worker that 404s them. Every
-                         fellow link dies. This is money.
-
-   Plus /internal/me/password, which production's app calls and the Worker
-   does not have. Four routes total exist in the running image and in no hook
-   file in this tree — see
-   research/2026-09-04-two-routes-that-are-not-in-this-repo.md.
-
-   THE FLIP IS ONE VARIABLE AND IT IS NOT READY. Do not set it yet.
-
-4. Extension release. Unchanged, and yours to time.
-
-5. BLOCKED ON 3, not on access. PocketBase turns out to expose GET /api/crons
-   and `internal_hq_sweep` is listed there, so the swap is reachable without
-   the Railway CLI. But it MUST be atomic with step 3: swapping crons while
-   HQ traffic still goes to Railway would leave the team editing one database
-   and being reminded from another.
-
-6. brain/ onto Containers. Not started.
-
-7. DNS, last.
+The Worker and Railway now serve SEPARATE datastores forked from a common copy
+that diverged today: each ran its own daily repeat-laydown, so the same logical
+task exists twice under two different ids, and any write against one origin is
+invisible to the other. This is inherent to running two live systems, not a bug.
+The cutover must therefore either (a) freeze writes on Railway and re-import the
+delta into D1 immediately before the flip, or (b) accept that changes made in
+the gap between "D1 snapshot" and "flip" are lost. There is no third option that
+keeps both live and consistent.
 
 ## The one-line test for "is it live yet"
 

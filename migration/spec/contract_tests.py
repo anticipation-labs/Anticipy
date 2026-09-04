@@ -3601,3 +3601,43 @@ class TestCrossOriginTokenCompatibility:
                          headers={"Authorization": forged}, base=CROSS_ORIGIN)
             assert there.status == 401, (
                 "%s accepted a forged token: %d" % (CROSS_ORIGIN, there.status))
+
+
+# ---------------------------------------------------------------------------
+# HQ LOGIN TAKES THE KEY IN THE BODY, NOT THE HEADER
+#
+# This is the property a port most easily inverts, and did: the Worker read the
+# key from X-Internal-Key while the shipped HQ gate sends it in the JSON body
+# (internal.html:934 -> api("/internal/login",{body:{key}}), because api() only
+# attaches the header once the key is ALREADY stored, which at first login it is
+# not). internal_hq.pb.js:42-50 reads body.key. So a header-keyed login route
+# validates a credential the real client never sends, and every fresh HQ sign-in
+# 401s with "That code didn't match" — HQ unreachable, all tests still green
+# because no test logged in the way the browser does.
+#
+# Needs the key, so it runs against whichever origin owns it. Not a diff against
+# production — it asserts the fixed property, which is what makes it meaningful
+# on the Worker.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.needs_internal_key
+class TestHQLoginTakesTheKeyInTheBody:
+
+    def test_the_correct_key_in_the_body_is_accepted(self):
+        require_internal_key()
+        resp = call("POST", "/internal/login", json_body={"key": INTERNAL_KEY})
+        assert resp.status == 200, (
+            "key-in-body login was refused (%d). The shipped HQ gate sends the "
+            "key ONLY in the body, so a header-only login route locks every user "
+            "out of HQ. Body: %.150r" % (resp.status, resp.text))
+        assert (resp.json or {}).get("ok") is True
+
+    def test_a_wrong_key_in_the_body_is_refused(self):
+        resp = call("POST", "/internal/login", json_body={"key": "definitely-not-the-key"})
+        assert resp.status == 401, "a wrong body key was not refused: %d" % resp.status
+        assert "wrong key" in detail_of(resp)
+
+    def test_an_empty_body_is_refused(self):
+        """No key at all -> 401, never 200. The empty string must not match."""
+        resp = call("POST", "/internal/login", json_body={})
+        assert resp.status == 401, "an empty login body was accepted: %d" % resp.status

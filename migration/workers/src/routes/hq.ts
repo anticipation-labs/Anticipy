@@ -91,14 +91,28 @@ export function hqHealth(req: Request, env: HqEnv): Response {
 }
 
 /** §7.2 -- one sentence for a wrong key, and a different one for none set. */
-export function hqLogin(req: Request, env: HqEnv): Response {
+export async function hqLogin(req: Request, env: HqEnv): Promise<Response> {
   const cors = hqCors(req, env);
-  if (!(env.ANTICIPY_INTERNAL_KEY || "")) {
+  const want = env.ANTICIPY_INTERNAL_KEY || "";
+  if (!want) {
     return json(503, { error: "internal HQ is not configured" }, cors);
   }
-  if (!keyOk(env, req)) return json(401, { error: "wrong key" }, cors);
-  // The gate screen validating a key before it stores it. Nothing more: the
-  // key IS the credential, so a correct one has nothing left to prove.
+  // THE KEY ARRIVES IN THE BODY HERE, NOT THE HEADER, and that is the whole
+  // point of this route. internal_hq.pb.js:42-50 reads `body.key`; so does the
+  // shipped HQ gate (internal.html:934 -> `api("/internal/login",{body:{key}})`),
+  // because api() only attaches X-Internal-Key once S.key is ALREADY stored,
+  // which at first login it is not. The port read the header instead, so every
+  // fresh key sign-in 401'd on the Worker and the gate showed "That code didn't
+  // match." A header-keyed login validates a key the client cannot have sent.
+  let body: Record<string, unknown> = {};
+  try { body = (await req.json()) as Record<string, unknown>; } catch { /* {} */ }
+  const sent = String(body.key ?? "");
+  // $security.equal — length is not secret, the bytes are.
+  let d = sent.length === want.length ? 0 : 1;
+  for (let i = 0; i < sent.length && i < want.length; i++) {
+    d |= sent.charCodeAt(i) ^ want.charCodeAt(i);
+  }
+  if (d !== 0) return json(401, { error: "wrong key" }, cors);
   return json(200, { ok: true }, cors);
 }
 
