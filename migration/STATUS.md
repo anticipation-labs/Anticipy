@@ -12,7 +12,7 @@ planned. The previous revision of this file said "D1 EMPTY" and "all 38
       DO        PairCodeCounter         the pair-code brute-force counter
       Assets    pb_public
       Cron      */5 * * * *  and  17 4 * * *
-      Secrets   ANTICIPY_INTERNAL_KEY (a NEW dev value — see Cutover)
+      Secrets   ANTICIPY_INTERNAL_KEY (PRODUCTION's — set 2026-09-04)
                 ANTICIPY_VAULT_KEY (production's)
 
     Website (separate repo, anticipation-labs/aniticipy-web)
@@ -49,41 +49,64 @@ tool-calling that could not be tested at all. Shipping 550 lines whose
 principal path has never run is the thing CLAUDE.md law 6 exists to stop, so
 it waits for the key rather than being written blind.
 
-## Conformance, measured today
+## Conformance, measured today — with production's key
 
-    HQ gate surface, LIVE production      36 passed,  0 failed
-    HQ gate surface, Worker               35 passed,  1 skipped
-    Whole HQ surface, Worker (with key)   97 passed,  1 skipped,  0 failed
+    Whole suite, LIVE production      147 passed,  0 failed
+    Whole suite, Worker               146 passed,  0 failed
 
-The one skip is CLERK_HQ_JWT_KEY, which production has and the Worker does not.
-It skips naming the variable rather than passing or failing quietly, because a
-configuration gap and a port gap are different things and must not look alike.
+    236 tests on both. Per-test diff:
 
-## What is proven, and what is only ported
+      production passes AND worker passes      146
+      production passes BUT worker fails         0
+      worker passes where production does not    7
+      the only other difference                  1   (CLERK_HQ_JWT_KEY)
 
-PROVEN against live production: every HQ route's UNAUTHENTICATED behaviour.
-That is the whole gate — 401 vs 400 vs 410 vs 200 — which is the part most
-easily got subtly wrong in a port and the part that is a security property.
+The 7 are security properties the Worker RESTORES: production runs a
+pre-2026-08-25 image missing afd4380a (the approval gate failing closed),
+9748acf4 (a row may not be born holding a lease) and 5f66016c (the Shelf 2
+validator), plus a CORS origin check and the agent-credential refusals.
 
-PROVEN against real migrated data on the Worker: every route's authenticated
-behaviour that the contract suite covers, plus the projections in
-/internal/state, plus decryption of the real `secret_enc` row PocketBase wrote.
+The 1 is `/internal/clerk/exchange`, which needs CLERK_HQ_JWT_KEY. Production
+has it; the Worker does not. It SKIPS naming the variable rather than passing
+or failing quietly, because a configuration gap and a port gap must not look
+alike.
 
-NOT PROVEN: that the Worker's authenticated RESPONSE BODIES equal production's,
-field for field. That needs production's ANTICIPY_INTERNAL_KEY, which is not
-available here. Under law 3 the signed-in half is therefore UNPROVEN however
-carefully it was ported, and it is written here rather than in a commit message
-that later reads as a green tick.
+## The bodies were diffed, not just the status codes
 
-## Cutover — the two that will bite
+This file previously said the authenticated response bodies were UNPROVEN
+because they could not be compared without production's key. They can now, and
+they were. `/internal/state` fetched from both origins as the same admin:
 
-1. THE HQ KEY MUST BE PRODUCTION'S, not the dev value now on the Worker.
-   `cal_url` is `sha256(teamKey + personId)`, so every calendar somebody has
-   already subscribed to is derived from the CURRENT key. Deploying with a
-   different key silently kills every existing feed — the URL keeps returning
-   404 and no calendar client reports why.
+    top-level keys                       identical
+    field names across all 12 lists      identical
+    167 rows compared field-for-field    0 mismatches
 
-2. The website's `/internal/*` rewrites still point at Railway. Repoint them
+The only row-count difference was 8 todos plus 1 activity row that production's
+08:00 cron created after the migration snapshot — and the Worker's own repeat
+motor, run once, produced the same 8: 146 vs 146 todos, identical sets of
+(title, track, due, status).
+
+## The HQ sweep cron
+
+Six passes, all ported: the remind_at bell, past-due follow-ups,
+internal_reminders, the notification digest, the research-slot backstop and the
+repeat motor. It was previously a skeleton reading `to` and `text` columns that
+internal_reminders does not have, so it ran every five minutes and did nothing
+without erroring. See research/2026-09-04-the-sweep-was-a-silent-noop.md.
+
+## Cutover
+
+1. THE HQ KEY — DONE, and the hazard it guarded is verified closed rather than
+   merely avoided. `cal_url` is `sha256(teamKey + personId)`; the token the
+   Worker now returns is byte-identical to production's for the same person, so
+   every calendar already subscribed survives. Had a different key shipped,
+   those feeds would have 404'd with no client reporting why.
+
+2. TWO SWEEP CRONS ARE NOW LIVE AT ONCE, against SEPARATE databases, so nothing
+   duplicates today. At cutover exactly one must remain: two sweeps against one
+   database is two nudges and two laydowns.
+
+3. The website's `/internal/*` rewrites still point at Railway. Repoint them
    only after the assistant lands or is accepted as absent, since the page
    calls it.
 
@@ -102,8 +125,6 @@ that later reads as a green tick.
 
 ## Access still needed
 
-  ANTICIPY_INTERNAL_KEY (production's)  the cutover, and the only thing that
-                                        can prove the ported bodies match
   OPENROUTER_API_KEY                    /internal/assistant
   CLERK_HQ_JWT_KEY                      Clerk sign-in to HQ
   Cloudflare account 5b63e25e           holds anticipy-downloads (the Mac DMG);
