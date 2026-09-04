@@ -1,5 +1,27 @@
 # anticipy-api.omar-114.workers.dev serves a build we stopped deploying
 
+> **RESOLVED 2026-09-04 ~19:55 UTC — IT WAS PROPAGATION, NOT A BROKEN ROUTE.**
+>
+> `anticipy-api.omar-114.workers.dev` began serving the new build roughly 50
+> minutes after the first deploy that appeared to fail, with no further action:
+> `channels {email:true, sms:true}`, `/internal/assistant` answering, and the
+> full suite 146 passed / 0 failed. anticipy-api-b has been deleted and
+> anticipy-api is the canonical name again.
+>
+> The title and the diagnosis below were WRONG about the cause. Everything
+> OBSERVED below still happened and is left intact, including the one
+> observation that still has no explanation: with `workers_dev: false` the
+> hostname kept returning 200, which should not be true of a route that is
+> merely slow to update. Fifty minutes is also far outside anything Cloudflare
+> documents.
+>
+> The operational lesson survives the wrong diagnosis and is the reason this
+> file stays: a deploy is not verified by its exit code, and "it did not take
+> effect" and "it has not taken effect YET" look identical for an
+> uncomfortably long time. Wait and re-probe before concluding anything is
+> broken -- and before spending an hour, as I did, proving it.
+
+
 2026-09-04, ~19:00 UTC onwards. UNRESOLVED. Recorded because the next person to
 deploy this Worker will otherwise spend the same hour, and because it is the
 Cloudflare version of the failure CLAUDE.md's deploy rule already names:
