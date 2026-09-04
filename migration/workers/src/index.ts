@@ -16,6 +16,7 @@
  *   A non-GET to it answers 410 with a sentence naming this decision, so a
  *   future client that tries gets an answer instead of a silent nothing.
  */
+import { resetRequest, resetConfirm, type ResetEnv } from "./routes/password_reset.ts";
 import { COLLECTIONS } from "./pb/schema.ts";
 import { health, notFound, refuse, json } from "./pb/wire.ts";
 import * as records from "./pb/records.ts";
@@ -54,6 +55,15 @@ export default {
     const method = request.method;
 
     if (path === "/api/health" && method === "GET") return health();
+
+    // The front door. Outside /api/collections/, so the data-API guard never
+    // sees these -- they defend themselves. See routes/password_reset.ts.
+    if (path === "/auth/reset/request" && method === "POST") {
+      return resetRequest(request, env as unknown as ResetEnv);
+    }
+    if (path === "/auth/reset/confirm" && method === "POST") {
+      return resetConfirm(request, env as unknown as ResetEnv);
+    }
 
     // --- the auth endpoints. guard.pb.js:367-370 keeps these open. ---------
     if (path === "/api/collections/owners/auth-with-password" && method === "POST") {
