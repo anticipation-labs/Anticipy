@@ -2115,6 +2115,89 @@ class TestEvidenceDoor(object):
         assert body.get("ok") is False, repr(resp)
         assert body.get("reason") == "that evidence is gone", repr(resp)
 
+    @pytest.mark.destructive
+    @pytest.mark.needs_service_token
+    def test_a_deposited_photo_comes_back_through_a_share_window(self, service_token):
+        """§4.1 + §6.7 END TO END — the promise in evidence.pb.js:9-17, which
+        needs all four links at once: a multipart deposit the backend actually
+        parses, bytes it actually stores, a share window it can mint, and a
+        file door that serves them to an anonymous fetch exactly as Twilio
+        makes it.
+
+        Until 2026-09-05 the Worker had none of the four and every link failed
+        quietly: the deposit was a 403 the extension logged and swallowed, the
+        mint was a 404 brain/evidence.py turned into "no picture on this text",
+        and the door was dead code (audit F13). Each piece has its own test
+        above; this is the one that fails if they do not join up."""
+        boundary = "----anticipy" + rand(16)
+        # A one-pixel JPEG, so the MIME check has something real to accept.
+        jpeg = base64.b64decode(
+            "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRof"
+            "Hh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAAB"
+            "AAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==")
+        parts = []
+        for name, value in (("owner_ref", OWNER_UNDER_TEST), ("job", "contract" + rand(7)),
+                            ("effect_key", "ek-" + rand(8))):
+            parts.append(("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n"
+                          % (boundary, name, value)).encode())
+        parts.append(("--%s\r\nContent-Disposition: form-data; name=\"image\"; "
+                      "filename=\"receipt.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n"
+                      % boundary).encode() + jpeg + b"\r\n")
+        parts.append(("--%s--\r\n" % boundary).encode())
+
+        created = call("POST", "/api/collections/evidence/records",
+                       headers=svc({"Content-Type":
+                                    "multipart/form-data; boundary=" + boundary}),
+                       raw=b"".join(parts))
+        if created.status == 400 and "owner_ref" in (created.text or ""):
+            pytest.skip("this backend checks the owner_ref relation; the "
+                        "sentinel cannot be deposited for here")
+        assert created.status == 200, (
+            "§4.1: the multipart deposit was refused. A backend that drops a "
+            "multipart body sees an empty one, and the guard then refuses it "
+            "for an owner_ref it never received. Got %r" % created)
+        row = created.json or {}
+        evidence_id = row.get("id")
+        assert row.get("image"), "§4.1: the row names no picture: %r" % created
+
+        try:
+            # DEFAULT DENY: no window has been opened, so nothing is public.
+            path = "/api/files/evidence/%s/%s" % (evidence_id, row["image"])
+            closed = call("GET", path)
+            assert closed.status == 404 and error_of(closed) == "that evidence is not available", (
+                "§4.1: a picture nobody shared was served to an anonymous "
+                "caller. The normal state of an evidence photo is NOT ON THE "
+                "INTERNET. Got %r" % closed)
+
+            # The owner's own door needs no window (service token stands in).
+            mine = call("GET", path, headers=svc())
+            assert mine.status == 200, (
+                "§4.1: the service door did not serve the bytes: %r" % mine)
+
+            minted = call("POST", "/evidence/share", headers=svc(),
+                          json_body={"id": evidence_id})
+            assert minted.status == 200 and (minted.json or {}).get("ok") is True, (
+                "§6.7: the share window could not be minted: %r" % minted)
+            url = (minted.json or {}).get("url") or ""
+            assert url.endswith(path), (
+                "§6.7: the minted URL does not point at the file door: %r" % url)
+            assert url.startswith("https://"), (
+                "§6.7: a MediaUrl Twilio cannot fetch is worse than no picture: %r" % url)
+
+            # Anonymous, the way Twilio fetches it, then the ceiling.
+            base = url[:-len(path)]
+            for i in range(5):
+                got = call("GET", path, base=base)
+                assert got.status == 200, "§4.1: fetch %d of 5 refused: %r" % (i + 1, got)
+            spent = call("GET", path, base=base)
+            assert spent.status == 404, (
+                "§4.1: the five-fetch ceiling did not close the window — "
+                "expiry alone leaves a leaked URL an unlimited download. %r"
+                % spent)
+        finally:
+            call("DELETE", "/api/collections/evidence/records/%s" % evidence_id,
+                 headers=svc())
+
 
 # ==========================================================================
 # §4.2  owner_profile_owner.pb.js

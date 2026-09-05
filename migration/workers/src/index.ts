@@ -49,6 +49,9 @@ import { smsInbound, transcriptionToken, type SmsEnv } from "./routes/sms.ts";
 import { sendblueInbound, type SendblueEnv } from "./routes/sendblue.ts";
 import { workerOwners, purgeAudit, authClaim, phoneRemove, profileUpsert, type ServiceEnv } from "./routes/service.ts";
 import { agentRegister, agentKey, agentLlm, agentCaptcha, agentUpgradeCredential, type AgentEnv } from "./routes/agent.ts";
+import {
+  serveFile, shareEvidence, depositEvidenceImage, discardEvidenceImage, type AssetEnv,
+} from "./assets.ts";
 import { COLLECTIONS } from "./pb/schema.ts";
 import { health, notFound, refuse, json } from "./pb/wire.ts";
 import * as records from "./pb/records.ts";
@@ -343,6 +346,28 @@ export default {
         + "(extension/background.js:1721-1729). See migration/workers/ARCHITECTURE.md §8.");
     }
 
+    // --- the evidence host. evidence.pb.js, chain step 1 (chain.ts:35). ----
+    //
+    // BOTH HALVES WERE MISSING, and they fail in opposite directions. The
+    // fetch door was written (assets.ts:serveFile) and never routed, so
+    // /api/files/* fell through to a generic 404 and serveFile was dead code —
+    // every done-text went out without its receipt. The share mint was not
+    // written at all, so brain/evidence.py:118-131 logged "the share door
+    // answered 404" on every send (audit F13).
+    //
+    // The door goes ABOVE the records regex because that is where the oracle's
+    // routerUse sits: before the data API, not inside it. It carries its own
+    // authorisation (owner, service token, or an open share window) — the
+    // records guard never sees this path and never did.
+    if (path.startsWith("/api/files/") && method === "GET") {
+      const who = await resolvePrincipal(request, env);
+      return serveFile(request, env as unknown as AssetEnv,
+                       who.kind === "account" ? who.ownerId : null);
+    }
+    if (path === "/evidence/share" && method === "POST") {
+      return shareEvidence(request, env as unknown as AssetEnv);
+    }
+
     // --- the generic records API ------------------------------------------
     const m = path.match(/^\/api\/collections\/([A-Za-z0-9_]+)\/records(?:\/([^/]+))?$/);
     if (m) return handleRecords(request, env, url, m[1], m[2] ?? null);
@@ -364,7 +389,7 @@ async function handleRecords(
   request: Request, env: Env, url: URL, collectionName: string, recordId: string | null,
 ): Promise<Response> {
   const method = request.method;
-  const body = await readBody(request);
+  const { body, files } = await readBodyAndFiles(request);
   const principal = await resolvePrincipal(request, env);
 
   const ctx: Ctx & { db: D1Database } = {
@@ -391,6 +416,16 @@ async function handleRecords(
     forcedScope: ctx.forcedScope, extraAst: ctx.extraAst,
   };
 
+  // THE ONE COLLECTION WITH BYTES. 1700000045_evidence.js has the only
+  // `type: "file"` field in all 58 migrations, so this is the whole of file
+  // handling in this backend rather than a general upload path — and that is
+  // deliberate: "an evidence host that accepts arbitrary files is a file host"
+  // (schema.sql:606). AFTER the chain, so the guard has already decided this
+  // credential may deposit for this owner.
+  if (def.name === "evidence" && method === "POST" && !recordId) {
+    return depositEvidence(env, req, files);
+  }
+
   switch (method) {
     case "GET":    return recordId ? records.view(env, req) : records.list(env, req);
     case "POST":   return recordId ? notFound() : records.create(env, req);
@@ -398,6 +433,55 @@ async function handleRecords(
     case "DELETE": return recordId ? records.remove(env, req) : notFound();
     default:       return json(405, { code: 405, message: "Method not allowed.", data: {} });
   }
+}
+
+/**
+ * POST /api/collections/evidence/records, carrying the picture.
+ *
+ * A DEPOSIT WITH NO PICTURE IS REFUSED rather than stored. Measured
+ * 2026-09-05: a multipart create whose body the Worker ignored wrote row
+ * 48mu1cxcrpwjfp2 with owner_ref "", job "" and image "" — a row that can
+ * never be served, never be found by its owner and never be deleted by them
+ * either. The empty create is the shape that produced it.
+ *
+ * Bytes first, then the row that names them; a refused row takes its object
+ * back out. See assets.ts for why that order and not the other.
+ */
+async function depositEvidence(
+  env: Env, req: records.RecordsRequest, files: { field: string; file: File }[],
+): Promise<Response> {
+  const image = files.find((f) => f.field === "image")?.file;
+  if (!image) {
+    // A JSON create with no file at all is the same refusal: the column holds
+    // a filename, so a row without bytes is a promise nothing can keep.
+    return json(400, {
+      data: { image: { code: "validation_required", message: "Cannot be blank." } },
+      message: "Failed to create record.", status: 400,
+    });
+  }
+
+  const stored = await depositEvidenceImage(env as unknown as AssetEnv, image);
+  if (!stored.ok) return stored.response;
+
+  let created: Response;
+  try {
+    created = await records.create(env, {
+      ...req,
+      body: { ...(req.body ?? {}), id: stored.deposit.id, image: stored.deposit.filename },
+    });
+  } catch (err) {
+    // A REFUSAL AND A THROW LEAVE THE SAME ORPHAN. D1's CHECK constraints
+    // (owner_ref and job are both `length > 0`) come back as a thrown error,
+    // not a status, and records.create rethrows anything that is not a known
+    // column or unique collision. Discard first, then let it travel: the bytes
+    // must not outlive the row whichever way the row failed.
+    await discardEvidenceImage(env as unknown as AssetEnv, stored.deposit);
+    throw err;
+  }
+  if (created.status !== 200) {
+    await discardEvidenceImage(env as unknown as AssetEnv, stored.deposit);
+  }
+  return created;
 }
 
 /**
@@ -491,13 +575,51 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** Parse once. PocketBase's e.requestInfo().body is also parse-once. */
-async function readBody(request: Request): Promise<Record<string, unknown> | null> {
-  if (request.method === "GET" || request.method === "HEAD") return null;
+/**
+ * Parse once. PocketBase's e.requestInfo().body is also parse-once.
+ *
+ * MULTIPART IS A BODY TOO, and forgetting that is what silently killed the
+ * receipt photo. PocketBase parses multipart for every route; this returned
+ * null unless the content-type said JSON, so an upload arrived at the guard as
+ * an EMPTY BODY — `String(b.owner_ref ?? "")` read "", the agent rung's
+ * owner comparison failed, and the deposit was 403 (audit F13). The extension
+ * deletes its own Content-Type header for exactly this call
+ * (background.js:1374-1376), so the shape is not exotic: it is the only way to
+ * post bytes.
+ *
+ * The string entries become the body the policy chain reads. The File entries
+ * are handed back separately: they are not columns, and letting one reach the
+ * generic writer would be a 400 unknown_field at best.
+ */
+export interface ParsedBody {
+  body: Record<string, unknown> | null;
+  files: { field: string; file: File }[];
+}
+
+export async function readBodyAndFiles(request: Request): Promise<ParsedBody> {
+  if (request.method === "GET" || request.method === "HEAD") return { body: null, files: [] };
   const ct = request.headers.get("content-type") ?? "";
-  if (!ct.includes("application/json")) return null;
-  try { return await request.json<Record<string, unknown>>(); }
-  catch { return null; }
+  if (ct.includes("application/json")) {
+    try { return { body: await request.json<Record<string, unknown>>(), files: [] }; }
+    catch { return { body: null, files: [] }; }
+  }
+  if (ct.includes("multipart/form-data")) {
+    try {
+      const form = await request.formData();
+      const body: Record<string, unknown> = {};
+      const files: { field: string; file: File }[] = [];
+      for (const [field, value] of form.entries()) {
+        if (typeof value === "string") body[field] = value;
+        else files.push({ field, file: value as File });
+      }
+      return { body, files };
+    } catch { return { body: null, files: [] }; }
+  }
+  return { body: null, files: [] };
+}
+
+async function readBody(request: Request): Promise<Record<string, unknown> | null> {
+  return (await readBodyAndFiles(request)).body;
 }
 
 const STATIC_PREFIXES = [
