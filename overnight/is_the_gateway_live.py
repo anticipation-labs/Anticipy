@@ -449,7 +449,7 @@ def main() -> int:
         where = backend_url()
         code0, status0, detail0, messages = status_verdict(
             fetch_status_rows(where))
-        rows.append((status0, f"0 THE RUNNING BRAIN", detail0))
+        rows.append((status0, "0 THE RUNNING BRAIN", detail0))
         if code0 != 0:
             messages = None
 
