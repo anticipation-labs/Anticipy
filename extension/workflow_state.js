@@ -164,10 +164,23 @@ export function workflowPatch(job, nextState, options = {}) {
 // booking the loop's own comment calls the cardinal sin, and the Brief's
 // moment 49 ("nothing is lost and nothing duplicates") names outright.
 //
-// `intent` is `{ doing, url, sig, digest, at }`. `doing` is humanStep's
-// sentence, which names the FIELD and never the value typed into it — the same
-// rule _execution_journal keeps, because this row is exportable. `sig` and
-// `digest` are hashes. No form value is written here, and none may be added.
+// `intent` is `{ doing, url, sig, digest, at, step, tab, session }`. `doing`
+// is humanStep's sentence, which names the FIELD and never the value typed
+// into it — the same rule _execution_journal keeps, because this row is
+// exportable. `sig` and `digest` are hashes; `step` is the loop's step
+// counter; `tab` is the Chrome tab id and `session` the browser-session stamp
+// that says whether that id still means the same tab (background.js
+// browserSessionId — the resume_tab rule, applied to the surviving tab).
+// No form value is written here, and none may be added.
+//
+// Audit #90, the reconciliation half (2026-09-05): `step` is what lets the
+// `after` half be written (effectIntentAfter below), and `tab` + `session`
+// are what let a recovery find the SURVIVING tab after the worker died —
+// without them the only thing a crash left behind was a sentence.
+//
+// A fresh intent is a fresh question: any `_reconciliation` answered for an
+// earlier intent on this row is dropped here, so a verdict can never be read
+// against a click it was not about.
 //
 // Written into params beside _workflow using the idiom heartbeatPatch uses,
 // which the PocketBase guard already accepts: it compares _workflow's fields,
@@ -179,14 +192,51 @@ export function markEffectUncertainPatch(job, intent = null) {
   }
   if (!intent || typeof intent !== "object") return { effect_uncertain: true };
   const params = parseJobParams(job);
+  const step = Number(intent.step);
+  const tab = Number(intent.tab);
   params._effect_intent = {
     doing: String(intent.doing || "").slice(0, 120),
     url: String(intent.url || "").slice(0, 200),
     sig: intent.sig ? String(intent.sig) : null,
     digest: intent.digest ? String(intent.digest) : null,
     at: intent.at || new Date().toISOString(),
+    step: Number.isFinite(step) ? step : null,
+    tab: Number.isFinite(tab) ? tab : null,
+    session: intent.session ? String(intent.session).slice(0, 80) : "",
   };
+  delete params._reconciliation;
   return { effect_uncertain: true, params: JSON.stringify(params) };
+}
+
+// THE `after` HALF OF THE INTENT: the first page the loop read AFTER the
+// click, written exactly once. Audit #90 correction (B).
+//
+// Derived from the step's own checkpoint — `{ page: {url, title,
+// fingerprint}, step }` handed over by agent_loop's trace call — and NEVER
+// from the evidence journal's tail: the journal is appended only when the
+// fingerprint changes, so after a click that left the page as it was, its
+// tail is the pre-click form, and recording that as "the first page after the
+// click" would hand the reconciliation model the wrong page with a straight
+// face. The `step > intent.step` test is what keeps a checkpoint from the
+// click's own step (whose page is the form BEFORE the click) out.
+//
+// Returns the record to write, or null when nothing is due: no intent, an
+// `after` already written, a legacy intent with no step, or a checkpoint that
+// is not yet past the click. url/title/fingerprint only — no text, no fields.
+export function effectIntentAfter(intent, checkpoint) {
+  if (!intent || typeof intent !== "object" || intent.after) return null;
+  const page = checkpoint && checkpoint.page;
+  const step = Number(checkpoint && checkpoint.step);
+  const clickStep = Number(intent.step);
+  if (!page || typeof page !== "object") return null;
+  if (!Number.isFinite(step) || !Number.isFinite(clickStep) || step <= clickStep) return null;
+  return {
+    url: String(page.url || "").slice(0, 200),
+    title: String(page.title || "").slice(0, 120),
+    fingerprint: String(page.fingerprint || "").slice(0, 200),
+    step,
+    at: new Date().toISOString(),
+  };
 }
 
 // What to tell the owner when an effect may have gone out and nothing can

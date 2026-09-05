@@ -111,9 +111,14 @@ let intent = null;
 const first = await run({ seed: null, capture: (i) => { intent = i; } });
 check("the original run dispatched the booking once", first.effects === 1);
 check("...and handed the callback an intent record", !!intent && typeof intent === "object");
-check("the intent carries exactly doing/url/sig/digest/at",
-  !!intent && JSON.stringify(Object.keys(intent).sort()) === JSON.stringify(["at", "digest", "doing", "sig", "url"]));
+// Seven keys, all structure: the sentence, the page, the two gate keys, the
+// time, and — for the crash recovery (audit #90) — the step and the tab id.
+check("the intent carries exactly doing/url/sig/digest/at/step/tab",
+  !!intent && JSON.stringify(Object.keys(intent).sort())
+    === JSON.stringify(["at", "digest", "doing", "sig", "step", "tab", "url"]));
 check("the intent names the control and the page", !!intent && /Book table/.test(intent.doing) && intent.url === page.url);
+check("the intent says which step clicked and in which tab",
+  !!intent && Number.isInteger(intent.step) && Number.isInteger(intent.tab));
 check("the intent carries the control signature", !!intent && typeof intent.sig === "string" && intent.sig.length > 0);
 // THE PRIVACY RULE, pinned at the loop, not only in workflow_state: this row
 // is exportable, and the name typed into the form must never ride on it.

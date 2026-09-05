@@ -251,7 +251,11 @@ console.log("PASS 6: boot and the refused-control paths both reconcile the mirro
 
 assert.ok(/active\.job = await withJobWrite\(id, \(\) => \{/.test(source),
   "the heartbeat's patch must be built inside the chain, not before it");
-assert.ok(/job = await withJobWrite\(job\.id, \(\) => updateJob\(job\.id,\n\s+\{ trace,/.test(source),
+// Since 2026-09-05 (audit #90) the trace writer lives in rowWriters, beside
+// the intent writer it shares the row with; test_reconcile_after_crash.mjs
+// drives both against a fake row and proves the sharing behaviourally. This
+// pin keeps the spelling honest: the write still goes through the chain.
+assert.ok(/const next = await withJobWrite\(id, \(\) => write\(id,\n\s+\{ trace,/.test(source),
   "the trace/journal write must share the chain, or there is nothing to serialize against");
 console.log("PASS 8: both writers on a live job go through the same chain");
 

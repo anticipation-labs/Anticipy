@@ -3049,7 +3049,7 @@ async function pressEnter(tabId) {
 
 // A single hung CDP/script/LLM call must never wedge the whole worker
 // (poll() awaits the job, so a wedge freezes claiming forever).
-function withTimeout(promise, ms, label) {
+export function withTimeout(promise, ms, label) {
   let timer;
   const deadline = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
@@ -3153,6 +3153,36 @@ async function inFrame(tabId, index, func, extraArgs = []) {
 
 async function mapPage(tabId, _retry = 0) {
   await neutralizeSpawners(tabId);
+  return readFrames(tabId, _retry);
+}
+
+// THE READ A CRASH RECOVERY IS ALLOWED. Audit #90 correction (C).
+//
+// After a worker died between a click and its receipt, background.js reads
+// the SURVIVING tab once to ask whether the click went through. This is the
+// same page map every step uses, minus the one thing mapPage does that is
+// not a read: neutralizeSpawners rewrites the page's window.open and its
+// target=_blank anchors so a run's clicks stay in the working tab. A recovery
+// clicks nothing, so it has no business changing the page.
+//
+// What this path touches, stated so nobody has to trace it: chrome.scripting
+// only — page_map.js is injected and its map returned. No chrome.debugger
+// attach, no click, no keystroke, no navigation, and no fresh GET of the
+// intent's URL (which could release a held slot or re-submit from a query
+// string, and almost never shows the outcome). The NO-mapPage / NO-debugger
+// wall in background.js's supervised-read wiring is a different promise —
+// "I read it once, in the front window, while you watch" over the owner's
+// mailbox — and does not cover this: here the tab is one the run itself
+// opened, and the caller has already checked its host against the intent's
+// before a single byte is read (reconcile.js sameHostAsIntent).
+//
+// Rebuilds the module-level frame table like every map does; it runs only in
+// the poll's sweep or after a run has ended, never beside a live step.
+export async function readPageForRecovery(tabId) {
+  return readFrames(tabId, 0);
+}
+
+async function readFrames(tabId, _retry = 0) {
   let useAllFrames = true;
   try {
     await chrome.scripting.executeScript({
@@ -3266,7 +3296,7 @@ async function mapPage(tabId, _retry = 0) {
     && !main.elements && subs.length === 0;
   if (pendingIframe && _retry < 3) {
     await new Promise((r) => setTimeout(r, 1200));
-    return mapPage(tabId, _retry + 1);
+    return readFrames(tabId, _retry + 1);
   }
   let elements = withSugg(main, 0);
   let text = main.text || "";
@@ -4653,7 +4683,7 @@ function sideTripDeps(apiKey, model) {
  * The tag is one-time and unguessable, so nothing inside a block can close it
  * early and continue outside as instructions.
  */
-function fencedBlock(name, text, fence, limit = 800) {
+export function fencedBlock(name, text, fence, limit = 800) {
   return `<${name} ${fence}>\n${String(text || "").slice(0, limit)}\n</${name} ${fence}>`;
 }
 
@@ -4949,6 +4979,35 @@ async function meantForTheOwner(apiKey, model, reason, goal) {
   } catch (_) {
     return true;
   }
+}
+
+/**
+ * The model that reads whether a submission the loop was about to make went
+ * through, after the worker died before it could see. Audit #90.
+ *
+ * The same shape as meantForTheOwner above: one call on its own, temperature
+ * 0, an 8-token reply, through the /agent/llm proxy via modelFetch and never
+ * a vendor URL. The QUESTION lives in reconcile.js (reconcileUncertainEffect
+ * builds the system and user text and reads the four-state answer); this is
+ * only the transport, injected there the way side_trip.js injects askModel,
+ * so the offline suite drives the same reader with a stub and no network.
+ *
+ * Returns the raw reply text. Every failure — no model, a transport error,
+ * the deadline — THROWS, and the reader maps a throw to NO_VERDICT: "nobody
+ * answered" must stay distinguishable from "no".
+ */
+export function reconcileJudge(apiKey, model = "anthropic/claude-sonnet-4.6") {
+  return async (system, user) => withTimeout((async () => {
+    const r = await modelFetch(apiKey, {
+      model, temperature: 0, max_tokens: 8,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    });
+    if (!r.ok) throw new Error(`reconcile model call failed: ${r.status}`);
+    return (await r.json())?.choices?.[0]?.message?.content || "";
+  })(), LLM_STEP_TIMEOUT_MS, "reconcileJudge");
 }
 
 // Hand a finished, VERIFIED route to the recorder. One place, because there are
@@ -5404,6 +5463,11 @@ export async function runAgentGoal(goal, opts) {
   }
   // The one plain sentence the phone shows while this runs.
   let doingNow = "Getting started";
+  // The page the newest step read, and which step — { step, page: {url,
+  // title, fingerprint} } — spread into every trace checkpoint so the row can
+  // record the first page seen AFTER a click (audit #90). Null until the
+  // first successful map; the spread of null is nothing.
+  let lastMapped = null;
   // Multi-page research needs evidence memory. Keep a bounded journal of live
   // DOM snapshots from this run so verification can check a result assembled
   // across several listings/pages instead of pretending only the final
@@ -5794,6 +5858,16 @@ export async function runAgentGoal(goal, opts) {
       }
 
       mapFailures = 0;
+      // WHAT THIS STEP SAW, for the trace checkpoint (audit #90 correction
+      // B): url, title and fingerprint of the page as read at the top of the
+      // step, with the step number — so the row can say which page came
+      // FIRST after a click. Recorded here, right after the read, so a step
+      // that dies before its checkpoint still leaves it for the final write.
+      // Never text, never fields: this rides an exportable row.
+      lastMapped = {
+        step,
+        page: { url: state.url, title: state.title, fingerprint: pageFingerprint(state) },
+      };
       // THE LANDED PAGE, EVERY STEP — the gate that does not care how the tab
       // got here. A redirect, a click that turned out to be a link, an adopted
       // replacement tab, the planner's own start_url: whatever the route, if
@@ -6207,7 +6281,7 @@ export async function runAgentGoal(goal, opts) {
       // answerable from the job record after the run, not only from a
       // debugger attached at the right moment.
       if (onTrace) {
-        try { await onTrace(history, false, { evidenceJournal, doing: doingNow }); }
+        try { await onTrace(history, false, { evidenceJournal, doing: doingNow, ...lastMapped }); }
         catch (e) { /* audit is best-effort */ }
       }
 
@@ -7086,9 +7160,14 @@ export async function runAgentGoal(goal, opts) {
           // The intent goes to disk with the flag: what is about to be sent
           // and the keys that identify it, never a form value. See
           // markEffectUncertainPatch for why the flag alone was not enough.
+          // `step` and `tab` are for the crash recovery (audit #90): the step
+          // is how the first page AFTER this click is told apart from this
+          // one, and the tab id is how the surviving tab is found. Structure,
+          // not content — the privacy pin on this record stands.
           if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, state, {
             doing: humanStep({ ...decision, label: decision.label || (context && context.label) }, state), url: state.url,
             sig: externalSig, digest: submitted || null, at: new Date().toISOString(),
+            step, tab: tab.id,
           });
         }
         if (c.inFrameOnly) await frameClick(tab.id, decision.index);
@@ -7334,6 +7413,7 @@ export async function runAgentGoal(goal, opts) {
               if (onBeforeExternalEffect) await onBeforeExternalEffect(decision, enterState, {
                 doing: humanStep({ ...decision, action: "enter", label: decision.label || (enterContext && enterContext.label) }, enterState), url: beforeEnter.url,
                 sig: enterSig, digest: submitted || null, at: new Date().toISOString(),
+                step, tab: tab.id,
               });
             }
             await new Promise((r) => setTimeout(r, 200));
@@ -7422,7 +7502,7 @@ export async function runAgentGoal(goal, opts) {
     // The final trace always lands, including the steps since the last
     // throttled write — the end of a run is the part worth auditing.
     if (onTrace && history.length) {
-      try { await onTrace(history, true, { evidenceJournal, doing: doingNow }); }
+      try { await onTrace(history, true, { evidenceJournal, doing: doingNow, ...lastMapped }); }
       catch (e) { /* best-effort */ }
     }
     userCancelledTabs.delete(tab.id);
