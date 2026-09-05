@@ -5384,7 +5384,7 @@ function learnDeps(apiKey, model) {
 // submit, and never receives the working tab's id — the run's position has to
 // survive the trip, which is the entire reason a trip exists instead of just
 // navigating away and hoping.
-function sideTripDeps(apiKey, model) {
+export function sideTripDeps(apiKey, model) {
   return {
     openTab: async (url) => (await createBackgroundTab(url)).id,
     readTab: async (tabId) => {
@@ -5393,20 +5393,49 @@ function sideTripDeps(apiKey, model) {
       return { text: `${state.title || ""}\n${state.text || ""}`, url: state.url };
     },
     clickText: async (tabId, purpose) => {
-      // Only a link/row whose visible text relates to what we came for, and only
-      // via the same trusted-input path the main loop uses. `purpose` is our own
-      // string ("the verification code"), never page text, so this cannot be
-      // steered by the inbox.
+      // WHICH ROW IS THE MESSAGE WE CAME FOR IS A MODEL'S VERDICT (audit #F07).
+      //
+      // Until 2026-09-05 this split `purpose` into its words over three letters
+      // and clicked the FIRST link/row/listitem whose text `.includes()` any one
+      // of them. "the verification code" became ["verification", "code"], and in
+      // a real inbox that clicks whichever message mentions either word first —
+      // last week's "Your verification code" from a different site, a newsletter
+      // about a discount code, a security alert. It opens a stranger's message
+      // in the owner's mailbox, on a side trip taken because the run needed a
+      // one-time code, and then reads it. A word list decided what a row MEANT.
+      //
+      // So the model is shown the clickable rows and asked ONE question, and it
+      // answers in four states: an index, NONE, UNCLEAR, or no answer at all.
+      // Everything except an explicit index returns false and clicks nothing —
+      // a FLOOR, because clicking into a person's mailbox is an action and an
+      // action needs something to license it, not merely the absence of an
+      // objection. The run then falls back to asking the owner for the code,
+      // which is the outcome this whole trip was trying to spare them and is
+      // still enormously better than opening the wrong message.
+      //
+      // The index is CONTAINED after the model answers: it must be one of the
+      // rows we actually offered. The page is untrusted text and the reply is
+      // one number, so a page that tries to steer this can at most name a row
+      // that was already on the list of things a trip may click.
       try {
         const state = await withTimeout(mapPage(tabId), PAGE_READ_TIMEOUT_MS, "trip mapPage");
-        const words = String(purpose || "").toLowerCase().split(/\s+/)
-          .filter((w) => w.length > 3);
-        const line = String(state.elements || "").split("\n").find((row) =>
-          /<(link|button|row|listitem|option)>/i.test(row)
-            && words.some((w) => row.toLowerCase().includes(w)));
-        const idx = line && line.match(/^\[(\d+)\]/);
-        if (!idx) return false;
-        const centre = await elementCenter(tabId, Number(idx[1]));
+        const clickable = String(state.elements || "").split("\n")
+          .filter((row) => /<(link|button|row|listitem|option)>/i.test(row)
+            && /^\[(\d+)\]/.test(row));
+        if (!clickable.length) return false;
+        const offered = new Set(clickable
+          .map((row) => Number(row.match(/^\[(\d+)\]/)[1])));
+        const picked = await rowJudge(apiKey, model)({
+          rows: clickable.join("\n"),
+          purpose: String(purpose || ""),
+        });
+        // Four states, and only the first one clicks.
+        const answer = String(picked || "").trim().toUpperCase();
+        const named = answer.match(/^\[?(\d+)\]?$/);
+        if (!named) return false;                    // NONE, UNCLEAR, or silence
+        const index = Number(named[1]);
+        if (!offered.has(index)) return false;       // a row we never offered
+        const centre = await elementCenter(tabId, index);
         if (!centre) return false;
         await trustedClick(tabId, centre.x, centre.y);
         return true;
@@ -5659,6 +5688,55 @@ export function codeSentJudge(apiKey, model, service) {
  * owner gave ("let the assistant open and read their email inbox", above) and
  * it is the price of not letting a word list choose what gets typed.
  */
+/**
+ * The model that reads WHICH ROW of an inbox list is the message the side trip
+ * came for (audit #F07). It replaces a word-overlap scan of the row text: see
+ * `sideTripDeps.clickText` for the failure that motivated it — opening whatever
+ * message happened to share a word with "the verification code".
+ *
+ * One question, four states, and the caller compares them: an index clicks,
+ * NONE and UNCLEAR and silence click nothing. `purpose` is our own string, never
+ * page text; the rows ARE page text and are fenced and declared untrusted.
+ *
+ * The cap is small because the answer is one token, but modelFetch floors every
+ * reply at MODEL_REPLY_FLOOR — on a thinking model the visible answer comes
+ * after reasoning that counts against max_tokens, and an under-budgeted judge
+ * returns empty, which here reads as "click nothing". That is the safe
+ * direction, but it would make the judge a decoration; the floor is what keeps
+ * it real.
+ */
+export function rowJudge(apiKey, model) {
+  return async ({ rows, purpose }) => withTimeout((async () => {
+    const fence = mintOfferRef() || "block";
+    const r = await modelFetch(apiKey, {
+      model, temperature: 0, max_tokens: 16,
+      messages: [
+        { role: "system", content:
+          "You are looking at the clickable rows of ONE page from a person's "
+          + "mailbox, to open ONE thing: the message that was just sent for the "
+          + "errand described below. The list may hold many messages — older "
+          + "codes from other sites, newsletters, security alerts, receipts — "
+          + "and several of them may mention the same words.\n"
+          + "Answer ONE question: which row, if any, is the message this errand "
+          + "needs opened?\n"
+          + "Reply with exactly one of: the row's number in square brackets, "
+          + "copied from the list, e.g. [12]; NONE if no row on this page is "
+          + "that message; UNCLEAR if two or more rows could be it, or you "
+          + "cannot tell which was sent for this errand.\n"
+          + "Prefer NONE or UNCLEAR over a guess: opening the wrong message in "
+          + "someone's mailbox is worse than opening none.\n"
+          + "No other words, no explanation.\n"
+          + untrustedPageRule("UNCLEAR") },
+        { role: "user", content:
+          `The errand: ${String(purpose || "").slice(0, 200)}\n\n`
+          + fencedBlock("ROWS", rows, fence, CODE_PAGE_LIMIT) },
+      ],
+    });
+    if (!r.ok) return "";
+    return (await r.json())?.choices?.[0]?.message?.content || "";
+  })(), LLM_STEP_TIMEOUT_MS, "rowJudge");
+}
+
 export function codeJudge(apiKey, model) {
   return async ({ pageText, purpose, site }) => withTimeout((async () => {
     const fence = mintOfferRef() || "block";
@@ -6543,15 +6621,42 @@ export async function runAgentGoal(goal, opts) {
   // `taskAllowsLoopback`, so a task that names localhost still authorises it.
   const allowInternal = taskAllowsInternalNetwork(goal, scope, startUrl);
 
-  // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
-  // itself about operating a financial account never even starts — the
-  // domain guard alone let "log into the bank" wander off searching for a
-  // bank before anything could refuse it.
-  if (/\b(bank(ing)?|brokerage|credit\s*card|crypto\s*(exchange|wallet))\b/i.test(goal)
-      && /\b(log\s*in|sign\s*in|password|statements?|transfers?|balance|accounts?)\b/i.test(goal)) {
-    return { status: "needs_user",
-             result: "refused: operating financial accounts is protected — that one's yours to do" };
-  }
+  // THE FINANCIAL-ERRAND PRE-CHECK IS GONE (audit #F36), AND NOTHING REPLACED IT.
+  //
+  // Until 2026-09-05 a goal was refused outright, before any tab opened, when
+  // its WORDING matched both of:
+  //
+  //     /\b(bank(ing)?|brokerage|credit\s*card|crypto\s*(exchange|wallet))\b/i
+  //   AND /\b(log\s*in|sign\s*in|password|statements?|transfers?|balance|accounts?)\b/i
+  //
+  // Measured on ten realistic errands it refused THREE it should have run —
+  // "update the bank account on my payroll portal", "email the accounts team
+  // the credit card receipt for the hotel", "update my credit card on the
+  // Netflix account" — and failed OPEN on "find my Chase balance and tell me",
+  // which names a bank and asks for a balance but contains no word from the
+  // first list. It stopped three errands it was never meant to stop and waved
+  // through the one it was written for.
+  //
+  // WHY NOTHING REPLACED IT, rather than a judge. `BLOCKED_DOMAINS` already
+  // refuses chase.com and sixteen others at EVERY navigation. That guard is
+  // fail-closed, needs no model, and checks what the plan TOUCHES — which is
+  // precisely the seatbelt HARNESS-LAWS law 1 permits, and its own comment
+  // says so. A goal's wording is not what it touches. So this pre-check was a
+  // redundant optimiser sitting in front of a correct guard: its only real
+  // benefit was skipping a wandering search on the two errands in ten it read
+  // correctly, and its cost was refusing three outright.
+  //
+  // A model judge here was built and then removed. It fixed the accuracy but
+  // put one model call at the front of EVERY browser run — latency and money
+  // on every errand — to save a wasted search on two in ten, in front of a
+  // guard that was going to refuse them anyway. The honest trade is to let
+  // "log into the bank" start, search, and be refused when it tries to
+  // navigate. That wastes a run. The old code wasted the owner's errand.
+  //
+  // WHAT THIS COSTS, stated rather than discovered later: a genuine financial
+  // errand now burns a few model steps before `navigationRefusal` stops it,
+  // where it used to be refused instantly. The refusal still happens, with the
+  // same wording, from the guard that was always doing the real work.
 
   // A parked run's tab IS its state: the site's session, the form already
   // filled, the OTP prompt on screen. Resuming in a fresh tab throws all of
