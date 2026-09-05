@@ -92,6 +92,7 @@ const suites = [
   "test_pair_code_throttle.mjs",
   "test_pair_code_collision.mjs",
   "test_hosted_setup_bridge.mjs",
+  "test_spawned_tab_uses_one_gate.mjs",
 ];
 // A suite listed TWICE runs twice and inflates the number in the pass line —
 // and that number is exactly what a person reads to decide whether coverage

@@ -229,10 +229,20 @@ console.log("PASS 8: every spelling of the owner's own machine is recognised");
 // start_url. One stored fact mentioning a local dev server was enough to make
 // the planner answer "http://localhost:3000/admin", which then authorized
 // itself for the whole run.
-assert.ok(/const allowLoopback = taskAllowsLoopback\(goal, scope, startUrl\);/.test(src),
-  "loopback authorization comes from the owner's words and the caller only");
+// 2026-09-05 (F05): `allowLoopback` is GONE, and this pin moved rather than
+// softened. It had one reader left — the tab a click spawns, the fifth
+// navigation door, which `09ec97ad` forgot when it converted the other four —
+// and that door now asks `navigationRefusal` like the rest, so the narrow
+// authorization went with the narrow check. The property this leg exists for
+// is unchanged and is carried by `allowInternal` below: authorization comes
+// from the owner's words and the caller's start URL, never from the planner.
+// What must stay true here is that nothing brings the narrow one back.
+assert.ok(!/const allowLoopback\s*=/.test(src),
+  "the loopback-only authorization is gone, not re-derived beside the wide one");
 assert.ok(!/taskAllowsLoopback\([^)]*openAt/.test(src),
   "model output must never be one of the values that authorizes it");
+assert.ok(/taskAllowsLoopback/.test(src) && /if \(loopbackTarget\(url\)\) return true;/.test(src),
+  "the narrow guard still exists and is still composed by the wide one");
 // 2026-09-05: the guard at this site widened from loopback to the whole
 // internal network (Omi teardown item #04 — 192.168.x, 10.x, 169.254.x and
 // IPv4-mapped IPv6 all walked past loopbackTarget). The PROPERTY is unchanged

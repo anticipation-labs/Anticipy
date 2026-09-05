@@ -6147,7 +6147,11 @@ export async function runAgentGoal(goal, opts) {
   // local service — the planner's start_url, plan fallbacks, the stuck
   // researcher's go_to, a cited URL in a rejected result — is model output
   // and must never be able to widen this.
-  const allowLoopback = taskAllowsLoopback(goal, scope, startUrl);
+  // `allowLoopback` was here beside it until 2026-09-05 (F05). It had one
+  // reader left — the adopted-spawned-tab door — and that door now asks
+  // `navigationRefusal` like the other four, so the narrower authorisation is
+  // gone with the narrower check. `taskAllowsInternalNetwork` still composes
+  // `taskAllowsLoopback`, so a task that names localhost still authorises it.
   const allowInternal = taskAllowsInternalNetwork(goal, scope, startUrl);
 
   // Same hard policy as BLOCKED_DOMAINS, applied to the TASK: a goal that is
@@ -6569,6 +6573,13 @@ export async function runAgentGoal(goal, opts) {
   // stuck researcher's go_to, and a URL quoted out of a rejected result. A
   // stall that produced go_to "http://localhost:8025/" (a mail catcher, an
   // admin UI) landed there, and the loop mapped it and started clicking.
+  //
+  // FIVE DOORS, NOT FOUR (F05, 2026-09-05). When `09ec97ad` widened the
+  // seatbelt from this machine to the whole internal network it converted the
+  // four doors that read this function and left the fifth — the spawned tab a
+  // click adopts — still asking the loopback-only question, which is how the
+  // sentence above could name that path while the path did not use it. It
+  // does now; the record sits at that call site.
   // THE SECOND DOOR. See private_places.js for why this exists and why a
   // domain list is the trigger rather than the answer.
   //
@@ -8675,8 +8686,36 @@ export async function runAgentGoal(goal, opts) {
                 // "Open in Gmail" is a real button on real pages.
                 const privateSpawn = await privatePlaceHandBack(url, tab.id);
                 if (privateSpawn) return privateSpawn;
-                if (loopbackTarget(url) && !allowLoopback) {
-                  history.push(`step ${step}: BLOCKED UNEXPECTED LOCAL TARGET — closed ${url.slice(0, 120)} because this task never authorized a local site`);
+                // WHAT WAS HERE UNTIL 2026-09-05 (F05), and why it is gone:
+                //     if (loopbackTarget(url) && !allowLoopback) {
+                //       history.push(`... BLOCKED UNEXPECTED LOCAL TARGET ...`);
+                //     } else { await navigateWorkingTab(tab.id, url); }
+                // `09ec97ad` widened the SSRF seatbelt from this machine to the
+                // owner's whole network and swapped loopbackTarget for
+                // internalNetworkTarget at four navigation sites — firstUrl, the
+                // fallback/research queue, the landed page, and the model's own
+                // `navigate`. It never touched this one, the fifth, even though
+                // the "ONE GATE, EVERY NAVIGATION" comment above names "an
+                // adopted spawned tab" as a covered path. So a page the agent
+                // was reading could hand it `<a target="_blank"
+                // href="http://192.168.1.1/">` — or 10.0.0.5, or the cloud
+                // metadata service at 169.254.169.254/latest/meta-data/ that
+                // hands out credentials — and the click adopted it: one
+                // authenticated GET from the owner's own browser plus a full
+                // DOM map of the reply, before the landed-page check three
+                // hundred lines up could hand back.
+                //
+                // The gate is `navigationRefusal`, the same one the other four
+                // doors use, so a hole can no longer be opened in one door at a
+                // time. It composes blockedDomain, the internal-network ranges
+                // against this task's own authorisation, and private places —
+                // the two checks above stay because they can ASK (a hand-back,
+                // a consent question) where this can only refuse, and a place
+                // the owner has already agreed to is in `placeAllowed` by the
+                // time this runs, so it does not double-refuse.
+                const spawnRefusal = navigationRefusal(url);
+                if (spawnRefusal) {
+                  history.push(`step ${step}: BLOCKED UNEXPECTED TARGET — closed ${url.slice(0, 120)} because ${spawnRefusal}`);
                 } else {
                   await navigateWorkingTab(tab.id, url);
                   history.push(`step ${step}: link opened a new tab — following ${url.slice(0, 120)} in place`);
