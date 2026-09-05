@@ -116,3 +116,20 @@ STILL ON RAILWAY (not part of the web cutover; unchanged): PocketBase `backend`
 and the brain `worker` service. iPhone traffic moves off Railway only once users
 install the new TestFlight/App Store build. Extension + brain/ + the Stripe/Twilio
 secrets remain as previously documented.
+
+## Brain migration — state DONE, runtime NOT done (2026-09-05, later)
+- ✅ 9 owners' memory in R2, SHA-verified, integrity_check ok (data never on a laptop; uploaded container→R2 via boto3).
+- ✅ anticipy-brain deployed via CI (GitHub runner builds brain/Dockerfile; no local Docker). Container app anticipy-brain-owner created.
+- ✅ 11 brain secrets set (4 R2 by me, 7 pulled from Railway worker env by the owner; GEMINI_API_KEY absent on Railway too).
+- ✅ GitHub secrets CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN set; brain workflows registered on main.
+- 🐞 BUG 1: ANTICIPY_PB was https://www.anticipy.ai (site Worker → 404s /api/collections/*). Fixed to https://api.anticipy.ai (commit 644995fd) but running containers keep the old env until restart.
+- 🐞 BUG 2: OwnerBrain DO does not keep containers warm — instance goes `inactive`; brain not continuously running. Untested-code lifecycle bug (index.ts needs an alarm keep-alive).
+- 🐞 BUG 3: D1 has 33 owner rows, only 5 real; supervisor tries to spawn a container per row (28 junk/probe). Clean D1 owners before running the fleet.
+- DECISION: Railway brain STAYS live (not stopped). Cutting over to the flaky CF brain would break 5 real users. Do NOT stop Railway until bugs 1-3 fixed and one real owner verified running continuously over time.
+- Deployed CF brain is currently inert (cap=1, inactive instance, was pointing at www→404) = no double-outreach; harmless as-is.
+
+### Remaining to finish the brain (in order)
+1. Delete 28 junk owner rows from D1 (keep the 5 real).
+2. Fix OwnerBrain keep-alive (alarm loop) in migration/workers/brain/src/index.ts; redeploy.
+3. Verify 1 real owner: container stays up, polls api.anticipy.ai, processes a job.
+4. Stop Railway worker (`railway down`-style); keep the volume 2 weeks.
