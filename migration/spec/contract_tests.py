@@ -4502,6 +4502,63 @@ class TestHQGateSurfaceWithoutTheKey:
 # work that is actually done.
 # ---------------------------------------------------------------------------
 
+def _repo_file(*parts):
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, "..", "..", *parts)
+    if not os.path.exists(path):
+        pytest.skip("%s is not in this checkout" % os.path.join(*parts))
+    with open(path, "r", encoding="utf-8") as handle:
+        return handle.read()
+
+
+@pytest.mark.offline
+class TestPasswordResetCopyIsTheHooksCopy(object):
+    """§5.1 and §5.2 — WHAT THE OWNER READS, checked against the document and
+    the hook rather than against a sentence typed twice.
+
+    Offline because the two sentences cannot be observed over HTTP: the SMS
+    goes to a real phone, and a 200 from /auth/reset/confirm needs a code only
+    that phone has.  Nothing else in this suite can see them, which is exactly
+    how the Worker came to send its own wording for a month (audit F39).
+
+    The SMS's second sentence is the phishing tell the hook's header (:20-21)
+    put there on purpose; the success line is asserted on by the phone itself
+    (app/ios/Tests/ResetMessageTests.swift)."""
+
+    def test_the_code_sms_is_the_documented_sentence(self):
+        contract = _contract_text()
+        worker = _repo_file("migration", "workers", "src", "routes", "password_reset.ts")
+        tail = ("is your Anticipy code to set a new password. It works for 10 "
+                "minutes. If you didn't ask for this, ignore it and your "
+                "password stays as it is.")
+        assert tail in contract, (
+            "§5.1.7 no longer documents the reset SMS; this test is pinned to "
+            "the wrong sentence")
+        # The Worker builds it across two template literals, so collapse the
+        # whitespace and close the ONE seam a two-part template leaves behind.
+        # Nothing else is removed: no character of the sentence can hide in
+        # "` + `", so this cannot paper over a wording change.
+        collapsed = " ".join(worker.split()).replace("` + `", "")
+        assert " ".join(tail.split()) in collapsed, (
+            "§5.1.7: the Worker's reset SMS is not the documented sentence. "
+            "The warning half is what stops a code arriving with no "
+            "explanation, and password_reset.pb.js:20-21 says so.")
+
+    def test_the_success_line_is_the_documented_sentence(self):
+        contract = _contract_text()
+        worker = _repo_file("migration", "workers", "src", "routes", "password_reset.ts")
+        ios = _repo_file("app", "ios", "Tests", "ResetMessageTests.swift")
+        line = "Done — sign in with your new password."
+        assert line in contract, "§5.2 no longer documents the success line"
+        assert line in worker, (
+            "§5.2: /auth/reset/confirm answers a different sentence than the "
+            "one the document and the phone were written against. Got: %r"
+            % [s for s in worker.splitlines() if "message:" in s and "ok: true" in s])
+        assert line in ios, (
+            "app/ios/Tests/ResetMessageTests.swift no longer asserts on this "
+            "sentence; the three copies must move together")
+
+
 def _worker_index_source():
     here = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(here, "..", "workers", "src", "index.ts")

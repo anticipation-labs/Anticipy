@@ -21,6 +21,31 @@ const SAME =
   "If that account exists and has a phone number, a code is on its way by text.";
 const NOPE = "That code isn't right, or it has expired. Ask for a new one.";
 
+/**
+ * The text, verbatim from password_reset.pb.js:153-155 and CONTRACT.md §5.1.7.
+ *
+ * THE SECOND SENTENCE IS THE POINT, and the hook's own header (:20-21) says
+ * why: "The message names the app and says plainly that it was not requested by
+ * them if it wasn't — the standard phishing tell." A code arriving with no
+ * explanation teaches the owner to act on unexplained codes, which is the
+ * behaviour every account-takeover call relies on.
+ *
+ * WHAT WAS HERE UNTIL 2026-09-05: `Your Anticipy code is ${code}. It expires in
+ * 10 minutes.` — shorter, correct about the code, and missing the warning the
+ * original author put there on purpose (audit F39).
+ */
+const RESET_SMS = (code: string) =>
+  `${code} is your Anticipy code to set a new password. It works for 10 minutes. `
+  + `If you didn't ask for this, ignore it and your password stays as it is.`;
+
+/**
+ * The success line, verbatim from password_reset.pb.js:249 and CONTRACT.md
+ * §5.2. app/ios/Tests/ResetMessageTests.swift:98 asserts on this exact body,
+ * so it is a pin and not copy: "Password updated. You can sign in now." was a
+ * different sentence than the one the phone's own test was written against.
+ */
+const DONE = "Done — sign in with your new password.";
+
 const TTL_SECONDS = 600;        // 10 minutes
 const MIN_GAP_SECONDS = 60;     // between texts to one person
 const MAX_PER_HOUR = 5;
@@ -102,8 +127,7 @@ async function phoneFor(db: D1Database, ownerId: string, ownerPhone: string) {
  * only for addresses that exist is the tell this route must never give.
  */
 async function sendCode(env: ResetEnv, to: string, code: string): Promise<boolean> {
-  const r = await sendText(env, to,
-    `Your Anticipy code is ${code}. It expires in 10 minutes.`, { tag: "password reset" });
+  const r = await sendText(env, to, RESET_SMS(code), { tag: "password reset" });
   return r.ok;
 }
 
@@ -210,5 +234,5 @@ export async function resetConfirm(req: Request, env: ResetEnv): Promise<Respons
     .bind(hash, pbId() + pbId(), pbNow(), owner.id).run();
   await spend(rec.id);
 
-  return json(200, { ok: true, message: "Password updated. You can sign in now." });
+  return json(200, { ok: true, message: DONE });
 }
