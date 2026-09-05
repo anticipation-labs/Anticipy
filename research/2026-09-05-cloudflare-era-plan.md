@@ -26,6 +26,24 @@ So today: the ears still land on Railway, the brain reads D1, and the hands
 cannot think on Cloudflare. That is the state to move from, and the
 screenshot's "forget Railway" is the destination, not yet the map.
 
+## Measured on the Cloudflare dashboard (Claude in Chrome, 2026-09-05 ~12:20Z)
+
+| surface | what the dashboard shows |
+|---|---|
+| Workers & Pages | 5 Workers: `anticipy-api` (api.anticipy.ai + 1 route, 64.5k requests, 6 errors), `anticipy-site` (www.anticipy.ai, 6.3k), `anticipy-brain` (no routes, 337), `anticipy-internal` (www.anticipy.ai/internal + 2), `anticipy-fellowships` (anticipyfellowship.com + 2) |
+| `anticipy-api` deployments | 63 versions, all "Manually deployed / Wrangler / by omar"; active `f909fc2f`, 7 h old, 100% traffic, 2.3 req/s, **0% error rate**, 0.6 ms median CPU |
+| Containers | `anticipy-brain-owner` **Active, 1 live instance** (0.25 vCPU, 1 GiB, 4 GB disk); usage this period 1.2k CPU-s |
+| D1 | `anticipy-backend` **17.01 MB**; also `anticipy-backend-staging` (12 kB), `canopy`, `anticipy-fellowship` |
+| R2 | `anticipy-downloads`, `anticipy-evidence`, `anticipy-owner-state`, `anticipy-pocketbase-backups-production` |
+| DNS zone `anticipy.ai` | **active on Cloudflare** (13 records): `api` → Worker `anticipy-api` (proxied), `www` → Worker `anticipy-site` (proxied), apex A 76.76.21.21 proxied (redirects to www), MX Google, SendGrid CNAMEs, SPF/DKIM/DMARC |
+
+The one number that looked like a question: **one live brain container**.
+Answered from the code and the API: the supervisor (`migration/workers/brain/src/index.ts:176`)
+runs one container per D1 owner whose email is real — it filters `.invalid`,
+`.local` and `@example.` signups, which is most of the 33 rows
+`/worker/owners` returns. One instance is one real owner. The R2 `owners`
+object is not the source of truth for scheduling; D1 is.
+
 ## What today's work reaches, per organ
 
 - **Hands (extension 0.13.0).** All seventeen audit items, the intent journal
