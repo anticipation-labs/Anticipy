@@ -11,7 +11,10 @@
 # WHY THIS EXISTS AS A SCRIPT: standing this up by hand costs an afternoon and
 # every trap below was paid for once already.
 #
-# SAFETY, and this is the important part. It sets NO TWILIO_* VARIABLES, ever.
+# SAFETY, and this is the important part. It sets NO TWILIO_* VARIABLES, ever —
+# and, since 2026-09-05, no SENDBLUE_* either: the texting channel is moving to
+# Sendblue, and a rig brain holding its keys is the same hazard by a new road.
+# ANTICIPY_SMS_MOCK=true muzzles both arms regardless of what the shell holds.
 # brain/worker.py:2222 needs all three before it builds TwilioTransport, so with
 # none of them the worker uses MockTransport and cannot text a real person. That
 # also keeps ensure_inbound_webhook() from running — and on 2026-08-19 a laptop
@@ -253,7 +256,9 @@ start_brain() {
     env -u BRAVE_API_KEY -u GEMINI_API_KEY -u ANTICIPY_SERVICE_TOKEN \
         -u TWILIO_ACCOUNT_SID -u TWILIO_AUTH_TOKEN -u TWILIO_PHONE_NUMBER -u TWILIO_FROM \
         -u TWILIO_API_KEY_SID -u TWILIO_API_KEY_SECRET \
-        TWILIO_MOCK=true \
+        -u SENDBLUE_API_KEY_ID -u SENDBLUE_API_SECRET_KEY -u SENDBLUE_FROM_NUMBER \
+        -u SENDBLUE_STATUS_CALLBACK -u ANTICIPY_SMS_PROVIDER \
+        TWILIO_MOCK=true ANTICIPY_SMS_MOCK=true \
         ANTICIPY_PB="$PB_URL" \
         ANTICIPY_OWNER_REF="$ref" \
         ANTICIPY_OWNER_ID="$LEGACY_UUID" \

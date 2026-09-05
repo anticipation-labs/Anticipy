@@ -144,6 +144,29 @@ own, so every text lands with a person who can read it.
 
 Pass = every row filled with a live artefact id. Anything mocked is a fail.
 
+## The texting channel moves from Twilio to Sendblue (in progress, 2026-09-05)
+
+The owner's decision. Sendblue is an iMessage-first API (falls back to RCS,
+then SMS, from the same number); its dashboard is at "Developer" with
+Overview / Playground / Request Logs / Webhooks / Services, currently in
+Free API Mode (10 contacts). The switch, in the order it has to happen:
+
+| step | where | state |
+|---|---|---|
+| 1. a Sendblue arm in the brain with the Twilio arm's exact contract (`text()` → `{sid,status,delivered}`, `SendFailed` on anything that did not go out, the rig guard that keeps a laptop from texting a real phone), provider selection `ANTICIPY_SMS_PROVIDER`, the Twilio-only startup checks skipped for it, a loopback outbound proof | `brain/sendblue_arm.py`, `brain/worker.py`, `proof/sendblue_outbound_proof.py` | building |
+| 2. `POST /sms/sendblue` on the Worker: `sb-signing-secret` compared in constant time, status callbacks ignored, groups ignored, sender resolved to exactly one owner as the PocketBase hook did, dedupe on `message_handle`, the same `sms_reply` row the brain already polls — and the Twilio inbound route finished with the same code (it had been a 503 stub since the migration) | `migration/workers/src/routes/sendblue.ts`, `src/pb/sender.ts` | building |
+| 3. the brain container is handed the Sendblue names | `migration/workers/brain/src/index.ts` FORWARD_KEYS | done `ad759c3c` |
+| 4. the local rig strips `SENDBLUE_*` as it strips `TWILIO_*` and sets `ANTICIPY_SMS_MOCK=1` | `proof/local_rig.sh` | done (this commit) |
+| 5. deploy the Worker; set on it `SENDBLUE_WEBHOOK_SECRET` (secret) and `SENDBLUE_FROM_NUMBER` (var) | owner runs `wrangler secret put`; Claude deploys | after 2 |
+| 6. set on the brain Worker `SENDBLUE_API_KEY_ID`, `SENDBLUE_API_SECRET_KEY`, `SENDBLUE_FROM_NUMBER`, `ANTICIPY_SMS_PROVIDER=sendblue`; dispatch the brain deploy | owner runs `wrangler secret put --config migration/config/wrangler.brain.jsonc`; Claude dispatches | after 1 |
+| 7. in the Sendblue dashboard: Developer → Webhooks → URL `https://api.anticipy.ai/sms/sendblue` with the same secret; Request Logs on | Claude in Chrome once the domain is allowed; the secret is the owner's to enter | after 5 |
+| 8. prove it live: the owner texts the Sendblue number from their own phone → an `sms_reply` row on D1 within seconds → the brain answers from the Sendblue number; `is_the_brain_live.py` reads the slot | owner + Claude | after 6, 7 |
+| 9. Twilio: leave its secrets in place until 8 holds for a day, then remove them from both Workers | owner | last |
+
+Nothing in the phone app names the sending number (the welcome text
+introduces her from whatever number sends it), so a new number is not a
+client change.
+
 ## What only the owner can do
 
 - rotate the tokens the other session pasted (their note, not mine)

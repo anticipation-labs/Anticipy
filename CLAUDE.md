@@ -30,7 +30,10 @@ completing the task.
 Scoreboards (run them, believe them): `python3 overnight/tejas_gate.py`,
 `overnight/done_gate.py`, `overnight/tape_gate.py`, `overnight/stranger_gate.py`,
 `overnight/are_the_ears_live.py`, `overnight/firmware_gate.py`,
-`overnight/box_verdict_gate.py`, `overnight/login_wall_gate.py`.
+`overnight/box_verdict_gate.py`, `overnight/login_wall_gate.py`, and the one that
+proves the whole chain on production: `proof/e2e_cloudflare.py --owner qeuy6sv1raof9rw`
+(exit 0 = every hop provable without a real phone is proven; it found three
+live defects on 2026-09-05 that every suite had passed).
 
 `box_verdict_gate.py` and `login_wall_gate.py` (both 2026-09-05) are UNPROVEN
 (exit 2) for one reason, and it is not theirs: the live `/agent/llm` proxy
