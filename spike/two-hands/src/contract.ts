@@ -235,7 +235,19 @@ export interface Router {
 export interface TraceSummary {
   run_id: string;
   step_id: string;
-  /** eTLD+1 only. "mail.google.com" is kept as the host; a path is never. */
+  /** AT MOST ONE registrable domain: the one site the step was working in, as
+   *  `principalHost` picks it. Never a path, a query string, a fragment or a
+   *  subdomain — `google.com`, not `mail.google.com`.
+   *
+   *  This doc used to say "eTLD+1 only. 'mail.google.com' is kept as the
+   *  host", which was wrong twice over and is kept here as a warning. The
+   *  example contradicted its own rule — the eTLD+1 of `mail.google.com` IS
+   *  `google.com` — and the array was described as though it held every domain
+   *  the step touched, which is a page fingerprint rather than "which app was
+   *  that". An observer whose contract promises less than it collects is the
+   *  failure a Limited Use disclosure exists to prevent, so this field says
+   *  exactly what it carries. It is an array only so that "nothing identifiable
+   *  here" has a representation (`[]`) that is not null. */
   hosts: string[];
   writes: number;
   reads: number;
