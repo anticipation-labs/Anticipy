@@ -128,6 +128,49 @@ export function uniqueViolationColumn(message: string): string | null {
   return m ? m[2] : null;
 }
 
+// ---------------------------------------------------------------------------
+// THE MODEL HOOK THIS FILE HAS TO CARRY, because D1 has nowhere else to put it.
+//
+// backend/pb_hooks/job_commitment_identity.pb.js is nine lines: on create and
+// on update of a `jobs` row, a terminal status releases `commitment_key`.
+// `idx_jobs_active_commitment` (migration/d1/schema.sql:300-301) is UNIQUE over
+// every row whose key is non-empty, and it is the only thing stopping two
+// processes both reading "no active promise" and both minting one. PocketBase's
+// index validator accepts a nonempty partial predicate but not
+// `status IN (...)`, so the predicate cannot say "while active" — the hook has
+// to empty the key instead.
+//
+// WITHOUT IT the key is held FOREVER by a row that has finished, and the next
+// mint for the same promise collides with a corpse. Measured on live D1
+// (2026-09-05, audit F15): six `done` rows still keyed, all one owner, all
+// minted on Cloudflare that afternoon. brain/anticipy_core.py:1413-1431 derives
+// the key from tenant + memory node alone, so a retry after a FAILED run mints
+// the same key, records.ts turns the collision into 400 validation_not_unique,
+// the brain's handler (:4349-4380) searches only ACTIVE statuses, finds nothing,
+// and returns QUEUE_WRITE_FAILED — hear() then drops the goal. The clock
+// re-tries it every window, silently, forever.
+//
+// D1 HAS NO TRIGGERS in this schema and no model layer, so create() and
+// update() are the boundary every writer crosses. Same reason the auth-collection
+// validation and fillEmpties live here.
+//
+// THE ONE PLACE THIS IS NARROWER THAN THE HOOK, said plainly: PocketBase reads
+// the MERGED record, so it re-clears the key on any save of an already-terminal
+// row. This reads the STATUS IN THE WRITE. That is enough to hold the invariant
+// — a row can only become terminal on a write that names the terminal status,
+// and from that moment its key is empty — and it costs no extra read on the
+// hottest write path in the product. What it does not do is re-clear a key that
+// something PATCHes back onto a row that is already terminal; nothing in the
+// tree does that (`grep -rn commitment_key` finds one writer, at mint time),
+// and if something ever does, the row it makes is exactly what the live-release
+// SELECT in the F15 report looks for.
+const TERMINAL_STATUSES = ["done", "failed", "cancelled"];
+
+export function releasesCommitment(def: CollectionDef, body: Record<string, unknown>): boolean {
+  if (def.name !== "jobs") return false;
+  return TERMINAL_STATUSES.includes(String(body.status ?? ""));
+}
+
 export interface RecordsRequest {
   collection: CollectionDef;
   recordId: string | null;
@@ -414,7 +457,18 @@ async function createOwner(env: Env, req: RecordsRequest): Promise<Response> {
 
 export async function create(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
-  const body = fillEmpties(def, req.body ?? {}, await liveColumns(env, def.name));
+  const live = await liveColumns(env, def.name);
+  const body = fillEmpties(def, req.body ?? {}, live);
+
+  // job_commitment_identity.pb.js, the create half. A row BORN terminal never
+  // holds the key: workflow_guard refuses that entry for workflow rows
+  // (ENTRY_STATUSES), but a legacy row with no workflow_id skips that file
+  // entirely, so the hook's create leg is not redundant. Guarded on the live
+  // column set for the same reason fillEmpties is: the map can be ahead of the
+  // table, and writing a column the table lacks is a 1101 on every create.
+  if (releasesCommitment(def, body) && live.has("commitment_key")) {
+    body.commitment_key = "";
+  }
 
   // owners is an AUTH collection and does not go through the generic writer.
   if (def.name === "owners") return createOwner(env, req);
@@ -477,8 +531,20 @@ export async function create(env: Env, req: RecordsRequest): Promise<Response> {
 
 export async function update(env: Env, req: RecordsRequest): Promise<Response> {
   const def = req.collection;
-  const body = req.body ?? {};
+  let body = req.body ?? {};
   const id = req.recordId as string;
+
+  // job_commitment_identity.pb.js, the update half — AND THE ONE THAT MATTERS,
+  // because a job reaches `done`/`failed`/`cancelled` by being PATCHed there.
+  // The key must join `sets` even though the client never sent it: the caller
+  // marking work finished has no idea this column exists, and PocketBase's
+  // model hook was what emptied it. Skipped when the live table has no such
+  // column, so a database behind the map answers as it did before rather than
+  // failing the write that finishes an errand.
+  if (releasesCommitment(def, body)) {
+    const live = await liveColumns(env, def.name);
+    if (live.has("commitment_key")) body = { ...body, commitment_key: "" };
+  }
 
   const sets: string[] = [];
   const vals: unknown[] = [];

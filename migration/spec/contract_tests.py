@@ -1322,6 +1322,142 @@ class TestWorkflowGuard(object):
             "done needs a parseable receipt",
             "done needs verified evidence for this exact effect"), repr(resp)
 
+    # ----------------------------------------------------------------------
+    # §1.9 — AN EXPLICIT "" IS NOT AN ABSENT FIELD, AND THE ORACLE SAYS SO
+    # WITH `||`.  workflow_guard.pb.js:28, :113, :541 all fall back to the
+    # stored row when the body carries an empty string; the Worker used `??`,
+    # which stops at "" and judges the job against a status, lineage or
+    # approval that is sitting right there in the row it read (audit F42).
+    #
+    # DESTRUCTIVE because the leg needs a STORED row to fall back TO: the
+    # divergence is invisible on a create, where neither backend has an old
+    # row to consult.  The row is created under the OWNER_UNDER_TEST sentinel
+    # and deleted in the same test.  On PocketBase the create is refused by
+    # its relation check (the sentinel is not a real owner), so this skips
+    # there and runs on the backend that can store it.
+    # ----------------------------------------------------------------------
+
+    @pytest.mark.destructive
+    @pytest.mark.needs_service_token
+    def test_a_blank_field_falls_back_to_the_stored_row(
+            self, service_token, guard_on):
+        row = workflow_job(status="queued", state="queued",
+                           consequence="read_only")
+        plan = json.loads(row["params"])["_workflow"]
+        created = call("POST", "/api/collections/jobs/records",
+                       headers=svc(), json_body=row)
+        if created.status != 200 or not (created.json or {}).get("id"):
+            pytest.skip("this backend did not store the probe row (%s); the "
+                        "fallback leg needs an old row to fall back to"
+                        % created.status)
+        job = created.json["id"]
+        try:
+            for field in ("status", "lineage_key"):
+                body = {field: "", "params": row["params"]}
+                if field == "lineage_key":
+                    # rowValue's `!= null` reading of the embedded copy is the
+                    # same on BOTH backends, so a blank in the body forces a
+                    # blank in the mirror or the redundancy check fires first
+                    # and this test would pin the wrong rule.
+                    body["params"] = json.dumps(
+                        {"_workflow": dict(plan, lineage_key="")})
+                resp = call("PATCH", "/api/collections/jobs/records/" + job,
+                            headers=svc(), json_body=body)
+                assert guard_admitted(resp) and resp.status == 200, (
+                    "§1.9: a blank %s must fall back to the stored row, not be "
+                    "read as 'this row has no %s'. Got %r" % (field, field, resp))
+            still = call("GET", "/api/collections/jobs/records/" + job,
+                         headers=svc())
+            assert (still.json or {}).get("status") == "queued", (
+                "§1.9: the blank status must leave the stored status alone. "
+                "Got %r" % still)
+        finally:
+            call("DELETE", "/api/collections/jobs/records/" + job, headers=svc())
+
+
+# ==========================================================================
+# §1.17  job_commitment_identity.pb.js — the model hook, on whichever
+#        backend is answering
+# ==========================================================================
+# `idx_jobs_active_commitment` is UNIQUE over every jobs row whose
+# `commitment_key` is not empty, and it is the only thing stopping two
+# processes both reading "no active promise" and both minting one.  It can
+# only be a partial index on "not empty" -- PocketBase's validator refuses
+# `status IN (...)` -- so SOMETHING has to empty the key when a row goes
+# terminal, or a finished row owns the promise forever and the next mint
+# collides with a corpse (audit F15).
+#
+# On PocketBase that something is a model hook.  On the Worker it is
+# src/pb/records.ts.  This class does not care which: it asks the backend.
+
+class TestTerminalJobsReleaseTheirCommitment(object):
+
+    @pytest.mark.destructive
+    @pytest.mark.needs_service_token
+    def test_a_finished_job_releases_the_promise_for_the_next_mint(
+            self, service_token):
+        key = "contract-" + rand(40)
+        first = call("POST", "/api/collections/jobs/records", headers=svc(),
+                     json_body={"goal": "contract suite commitment probe",
+                                "status": "queued", "device_id": "contract-suite",
+                                "owner_ref": OWNER_UNDER_TEST,
+                                "commitment_key": key})
+        if first.status != 200 or not (first.json or {}).get("id"):
+            pytest.skip("this backend did not store the probe row (%s)"
+                        % first.status)
+        job = first.json["id"]
+        second = None
+        try:
+            assert (first.json or {}).get("commitment_key") == key, (
+                "§1.17: a LIVE row must HOLD the key — that is the lock. %r"
+                % first)
+
+            done = call("PATCH", "/api/collections/jobs/records/" + job,
+                        headers=svc(), json_body={"status": "done"})
+            assert done.status == 200, repr(done)
+            assert (done.json or {}).get("commitment_key") == "", (
+                "§1.17: a terminal row is still holding its commitment_key, so "
+                "the promise can never be minted again — the clock will retry "
+                "it every window and be refused, silently. %r" % done)
+
+            # THE VERDICT COMES FROM THE INDEX: the same promise mints again.
+            second = call("POST", "/api/collections/jobs/records", headers=svc(),
+                          json_body={"goal": "contract suite commitment re-mint",
+                                     "status": "queued", "device_id": "contract-suite",
+                                     "owner_ref": OWNER_UNDER_TEST,
+                                     "commitment_key": key})
+            assert second.status == 200, (
+                "§1.17: re-minting a released promise was refused %r" % second)
+        finally:
+            call("DELETE", "/api/collections/jobs/records/" + job, headers=svc())
+            if second is not None and (second.json or {}).get("id"):
+                call("DELETE", "/api/collections/jobs/records/" + second.json["id"],
+                     headers=svc())
+
+    @pytest.mark.needs_service_token
+    def test_no_terminal_row_on_this_backend_is_holding_a_commitment(
+            self, service_token):
+        """The LIVE leg, and the one that closes F15 under Law 3: read-only,
+        runs against whatever BASE_URL points at, and goes red on the rows the
+        missing hook already left behind.  A repo-green port with six keyed
+        `done` rows still in the table is not a fixed system — the next mint
+        for any of those promises is still refused."""
+        stuck = []
+        for status in ("done", "failed", "cancelled"):
+            resp = call("GET", "/api/collections/jobs/records", headers=svc(),
+                        query={"filter": 'status="%s" && commitment_key!=""' % status,
+                               "perPage": "1", "fields": "id"})
+            if resp.status != 200:
+                pytest.skip("could not list jobs on this backend (%s)" % resp.status)
+            n = (resp.json or {}).get("totalItems") or 0
+            if n:
+                stuck.append("%s: %d" % (status, n))
+        assert not stuck, (
+            "§1.17: terminal jobs are holding commitment keys (%s). Rows written "
+            "before the release shipped need the one-time UPDATE in the F15 "
+            "report; rows written after it mean the port is not live here."
+            % ", ".join(stuck))
+
 
 # ==========================================================================
 # §2  guard.pb.js — the production lock on the data API
@@ -1957,6 +2093,133 @@ class TestEvidenceDoor(object):
         body = resp.json or {}
         assert body.get("ok") is False, repr(resp)
         assert body.get("reason") == "that evidence is gone", repr(resp)
+
+
+# ==========================================================================
+# §4.1b  the evidence host, on a backend that HAS one
+# ==========================================================================
+# DELIBERATELY NOT UNDER @ROUTE_ABSENT_IN_PRODUCTION. That marker is an
+# `xfail(strict=False)` for the deployed PocketBase image, whose evidence hook
+# is missing — and it swallows a real failure as quietly as an expected one.
+# The tests below are about a backend that serves the routes: on the Worker
+# they must go RED when they break, and on a backend that does not have the
+# routes at all they SKIP, naming what answered.  Written for audit F13 and
+# F27, both of which shipped invisibly under exactly this kind of cover.
+
+class TestTheEvidenceHostWorks(object):
+    @pytest.mark.needs_service_token
+    def test_no_owner_is_hoarding_receipt_photos(self, service_token):
+        """evidence.pb.js:244-269 — TWO CEILINGS, and the per-owner one is the
+        privacy half: "nobody's screenshots accumulate indefinitely just
+        because they were the quiet account."  PocketBase enforced it on every
+        write; on Cloudflare nothing did until the daily prune took it over
+        (audit F27).  Read-only, and it goes red on the rows a missing sweep
+        has already left behind — which is the Law-3 half a repo-green port
+        does not have."""
+        total = call("GET", "/api/collections/evidence/records", headers=svc(),
+                     query={"perPage": "1", "fields": "id"})
+        if total.status != 200:
+            pytest.skip("could not list evidence on this backend (%s)" % total.status)
+        n = (total.json or {}).get("totalItems") or 0
+        # KEEP_TOTAL is 60; the sweep is bounded per tick, so allow a day's
+        # worth of arrivals above it rather than pretending the cap is exact.
+        assert n <= 260, (
+            "§6.7: %d evidence rows — the retention sweep is not running here. "
+            "On the volume that filled in 2026-08 this table's bytes were the "
+            "worst filler, and the backup keeps two copies of them." % n)
+    @pytest.mark.destructive
+    @pytest.mark.needs_service_token
+    def test_a_deposited_photo_comes_back_through_a_share_window(self, service_token):
+        """§4.1 + §6.7 END TO END — the promise in evidence.pb.js:9-17, which
+        needs all four links at once: a multipart deposit the backend actually
+        parses, bytes it actually stores, a share window it can mint, and a
+        file door that serves them to an anonymous fetch exactly as Twilio
+        makes it.
+
+        Until 2026-09-05 the Worker had none of the four and every link failed
+        quietly: the deposit was a 403 the extension logged and swallowed, the
+        mint was a 404 brain/evidence.py turned into "no picture on this text",
+        and the door was dead code (audit F13). Each piece has its own test
+        above; this is the one that fails if they do not join up."""
+        # THE PROBE COMES FIRST, before anything is created: on a backend
+        # whose evidence hook is missing the mint is a 404, and this test has
+        # nothing to say about that — research/2026-09-04-routes-absent-in-
+        # production.md already records it, and TestEvidenceDoor above marks
+        # it. Skipping here keeps THIS class strict for the backend that does
+        # serve the routes.
+        probe = call("POST", "/evidence/share", headers=svc(), json_body={"id": rand(15)})
+        if probe.status == 404:
+            pytest.skip("this backend has no evidence host: POST /evidence/share "
+                        "answered 404 (see TestEvidenceDoor)")
+
+        boundary = "----anticipy" + rand(16)
+        # A one-pixel JPEG, so the MIME check has something real to accept.
+        jpeg = base64.b64decode(
+            "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRof"
+            "Hh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAAB"
+            "AAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==")
+        parts = []
+        for name, value in (("owner_ref", OWNER_UNDER_TEST), ("job", "contract" + rand(7)),
+                            ("effect_key", "ek-" + rand(8))):
+            parts.append(("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n"
+                          % (boundary, name, value)).encode())
+        parts.append(("--%s\r\nContent-Disposition: form-data; name=\"image\"; "
+                      "filename=\"receipt.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n"
+                      % boundary).encode() + jpeg + b"\r\n")
+        parts.append(("--%s--\r\n" % boundary).encode())
+
+        created = call("POST", "/api/collections/evidence/records",
+                       headers=svc({"Content-Type":
+                                    "multipart/form-data; boundary=" + boundary}),
+                       raw=b"".join(parts))
+        if created.status == 400 and "owner_ref" in (created.text or ""):
+            pytest.skip("this backend checks the owner_ref relation; the "
+                        "sentinel cannot be deposited for here")
+        assert created.status == 200, (
+            "§4.1: the multipart deposit was refused. A backend that drops a "
+            "multipart body sees an empty one, and the guard then refuses it "
+            "for an owner_ref it never received. Got %r" % created)
+        row = created.json or {}
+        evidence_id = row.get("id")
+        assert row.get("image"), "§4.1: the row names no picture: %r" % created
+
+        try:
+            # DEFAULT DENY: no window has been opened, so nothing is public.
+            path = "/api/files/evidence/%s/%s" % (evidence_id, row["image"])
+            closed = call("GET", path)
+            assert closed.status == 404 and error_of(closed) == "that evidence is not available", (
+                "§4.1: a picture nobody shared was served to an anonymous "
+                "caller. The normal state of an evidence photo is NOT ON THE "
+                "INTERNET. Got %r" % closed)
+
+            # The owner's own door needs no window (service token stands in).
+            mine = call("GET", path, headers=svc())
+            assert mine.status == 200, (
+                "§4.1: the service door did not serve the bytes: %r" % mine)
+
+            minted = call("POST", "/evidence/share", headers=svc(),
+                          json_body={"id": evidence_id})
+            assert minted.status == 200 and (minted.json or {}).get("ok") is True, (
+                "§6.7: the share window could not be minted: %r" % minted)
+            url = (minted.json or {}).get("url") or ""
+            assert url.endswith(path), (
+                "§6.7: the minted URL does not point at the file door: %r" % url)
+            assert url.startswith("https://"), (
+                "§6.7: a MediaUrl Twilio cannot fetch is worse than no picture: %r" % url)
+
+            # Anonymous, the way Twilio fetches it, then the ceiling.
+            base = url[:-len(path)]
+            for i in range(5):
+                got = call("GET", path, base=base)
+                assert got.status == 200, "§4.1: fetch %d of 5 refused: %r" % (i + 1, got)
+            spent = call("GET", path, base=base)
+            assert spent.status == 404, (
+                "§4.1: the five-fetch ceiling did not close the window — "
+                "expiry alone leaves a leaked URL an unlimited download. %r"
+                % spent)
+        finally:
+            call("DELETE", "/api/collections/evidence/records/%s" % evidence_id,
+                 headers=svc())
 
 
 # ==========================================================================
@@ -2984,6 +3247,34 @@ class TestAgentLlmProxy(object):
 
 
 @pytest.mark.offline
+class TestTheAuditLedgerIsCapped(object):
+    """audit_retention.pb.js:3-21 — THE TABLE THAT TOOK PRODUCTION DOWN.
+
+    Uncapped it grew to 3,639 rows of full request/response JSON and filled
+    the 5 GB volume; SQLite could then write NO row at all, and the visible
+    symptom was a password-reset text going out whose code could never be
+    stored.  The hook trimmed on every write.  On Cloudflare llm.ts:311 says
+    "KEEP audit_retention's sweep" and nothing did — the only DELETE sat
+    behind a manual /admin/purge-audit that no cron, workflow or gate ever
+    called (audit F27).
+
+    Read-only, through wrangler's own CLI, so it runs on the local wire rig
+    and skips elsewhere naming the variable.  The table is not on the records
+    API — deliberately, it is certification evidence and not customer data —
+    so there is no HTTP way to ask."""
+
+    @pytest.mark.needs_service_token
+    def test_the_ledger_is_not_growing_without_a_ceiling(self, service_token):
+        rows = local_d1("SELECT count(*) AS n FROM agent_llm_audit")
+        n = int(rows[0]["n"])
+        # KEEP is 300 and the sweep runs daily, so the honest bound is "the cap
+        # plus what one day can add", not the cap itself.
+        assert n <= 1000, (
+            "§6.4: %d audit rows. The retention sweep is not running on this "
+            "backend; at ~120 KB a row this table is what filled the volume "
+            "in 2026-08." % n)
+
+
 class TestAgentLlmLiteralsAgree(object):
     """The three sources that must carry the same bytes, read rather than
     typed: a test that typed the values would pass while the files disagreed."""
@@ -4449,6 +4740,63 @@ class TestHQGateSurfaceWithoutTheKey:
 # once every route is wired, where it would read as a permanent apology for
 # work that is actually done.
 # ---------------------------------------------------------------------------
+
+def _repo_file(*parts):
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, "..", "..", *parts)
+    if not os.path.exists(path):
+        pytest.skip("%s is not in this checkout" % os.path.join(*parts))
+    with open(path, "r", encoding="utf-8") as handle:
+        return handle.read()
+
+
+@pytest.mark.offline
+class TestPasswordResetCopyIsTheHooksCopy(object):
+    """§5.1 and §5.2 — WHAT THE OWNER READS, checked against the document and
+    the hook rather than against a sentence typed twice.
+
+    Offline because the two sentences cannot be observed over HTTP: the SMS
+    goes to a real phone, and a 200 from /auth/reset/confirm needs a code only
+    that phone has.  Nothing else in this suite can see them, which is exactly
+    how the Worker came to send its own wording for a month (audit F39).
+
+    The SMS's second sentence is the phishing tell the hook's header (:20-21)
+    put there on purpose; the success line is asserted on by the phone itself
+    (app/ios/Tests/ResetMessageTests.swift)."""
+
+    def test_the_code_sms_is_the_documented_sentence(self):
+        contract = _contract_text()
+        worker = _repo_file("migration", "workers", "src", "routes", "password_reset.ts")
+        tail = ("is your Anticipy code to set a new password. It works for 10 "
+                "minutes. If you didn't ask for this, ignore it and your "
+                "password stays as it is.")
+        assert tail in contract, (
+            "§5.1.7 no longer documents the reset SMS; this test is pinned to "
+            "the wrong sentence")
+        # The Worker builds it across two template literals, so collapse the
+        # whitespace and close the ONE seam a two-part template leaves behind.
+        # Nothing else is removed: no character of the sentence can hide in
+        # "` + `", so this cannot paper over a wording change.
+        collapsed = " ".join(worker.split()).replace("` + `", "")
+        assert " ".join(tail.split()) in collapsed, (
+            "§5.1.7: the Worker's reset SMS is not the documented sentence. "
+            "The warning half is what stops a code arriving with no "
+            "explanation, and password_reset.pb.js:20-21 says so.")
+
+    def test_the_success_line_is_the_documented_sentence(self):
+        contract = _contract_text()
+        worker = _repo_file("migration", "workers", "src", "routes", "password_reset.ts")
+        ios = _repo_file("app", "ios", "Tests", "ResetMessageTests.swift")
+        line = "Done — sign in with your new password."
+        assert line in contract, "§5.2 no longer documents the success line"
+        assert line in worker, (
+            "§5.2: /auth/reset/confirm answers a different sentence than the "
+            "one the document and the phone were written against. Got: %r"
+            % [s for s in worker.splitlines() if "message:" in s and "ok: true" in s])
+        assert line in ios, (
+            "app/ios/Tests/ResetMessageTests.swift no longer asserts on this "
+            "sentence; the three copies must move together")
+
 
 def _worker_index_source():
     here = os.path.dirname(os.path.abspath(__file__))
