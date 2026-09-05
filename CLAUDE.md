@@ -55,8 +55,20 @@ precondition and not an answer. Do not read those passing as the firmware
 working, and do not turn this leg green with anything short of a build, a flash,
 and a pendant that streams.
 
+`is_memory_durable.py` (2026-09-05, audit F29) is the only leg that reads the
+DURABLE half of an owner's mind: on Cloudflare the container's disk dies with
+the instance, so the mind is the `memory.db` object in R2, and
+`consolidation_gate.py` globs a local directory that does not exist there —
+green over nothing. It compares each served owner's snapshot against that
+owner's own newest DECIDED row, so a quiet owner is UNPROVEN rather than green
+and a served owner with no object at all is RED.
+
 `are_the_ears_live.py` exists because the ears went deaf for 30 hours and
-nothing noticed. `is_the_brain_live.py` exits 0 on exactly that shape — every
+nothing noticed. Since 2026-09-05 it EXCLUDES the e2e probe's own rows
+(`device_id ~ "e2e-"`, audit F11/F19): for 24 hours after any proof run it was
+counting synthetic speech as speech and done_gate leg 1 was printing "and a
+real phone reached the server" while the newest real phone on this backend had
+spoken four days earlier. `is_the_brain_live.py` exits 0 on exactly that shape — every
 rule it has is an over-speaking rule, so it cannot see silence. The new leg uses
 the count of rows the SERVER wrote as its control: a quiet night is quiet on both
 halves, deaf ears are quiet on one. It reports UNPROVEN rather than green when

@@ -61,13 +61,31 @@ DEEP_NIGHT = _at(1)
 MID_MORNING = _at(10)
 
 
-def _rig(monkeypatch, created_ts, saved=None):
-    """Wire the profile lookup, and capture every durable save as the JSON
-    the clock-state file would actually hold — so a state that cannot be
-    written to disk fails here rather than in production."""
-    monkeypatch.setattr(pb, "get", lambda url, params=None, timeout=None, **k:
-                        _Reply({"items": [{"created": _iso(created_ts),
-                                           "first_name": "Omar"}]}))
+def _rig(monkeypatch, created_ts, saved=None, updated_ts=None, spoken=False):
+    """Wire the profile lookup and the "has she ever spoken to them" count,
+    and capture every durable save as the JSON the clock-state file would
+    actually hold — so a state that cannot be written to disk fails here
+    rather than in production.
+
+    `updated_ts` is when the NUMBER was saved (owner_profile.updated), which
+    is what freshness is measured from since audit F17; it defaults to the
+    row's creation so every case written before that fix keeps its meaning.
+    `spoken` is the three-state answer from the events count: True she has
+    spoken to this owner before, False never, None the backend could not be
+    read.
+    """
+    updated_ts = created_ts if updated_ts is None else updated_ts
+
+    def _get(url, params=None, timeout=None, **k):
+        if "/events/records" in url:
+            if spoken is None:
+                return _Reply({}, ok=False)
+            return _Reply({"totalItems": 1 if spoken else 0, "items": []})
+        return _Reply({"items": [{"created": _iso(created_ts),
+                                  "updated": _iso(updated_ts),
+                                  "first_name": "Omar"}]})
+
+    monkeypatch.setattr(pb, "get", _get)
 
     def _save(s):
         if saved is not None:
@@ -88,15 +106,117 @@ def test_a_fresh_onboarding_gets_exactly_one_welcome(monkeypatch):
     assert len(a.sent) == 1
 
 
-def test_an_old_profile_is_stamped_silently_never_texted(monkeypatch):
+def test_an_old_profile_she_has_already_spoken_to_is_stamped_silently(monkeypatch):
+    """The stamp file really was lost: she has anticipy_says rows for this
+    owner, so the hello has been and gone. Restore the stamp, say nothing."""
     now = MID_MORNING
-    _rig(monkeypatch, now - 7 * 24 * 3600)
+    _rig(monkeypatch, now - 7 * 24 * 3600, spoken=True)
     a, state = _Anticipy(), {}
     assert maybe_welcome_new_owner(a, state, now=now) is False
     assert a.sent == []
     # And it is stamped, so the fresh-profile branch can never fire later.
     digits = "6045550123"
     assert digits in state.get("welcomed_phones", [])
+
+
+def test_an_old_profile_she_has_never_spoken_to_still_gets_its_hello(monkeypatch):
+    """Audit F17, the shape that cost two real owners their first words.
+
+    Until 2026-09-05 an old profile was stamped silently on the assumption
+    that the stamp file had been lost. On Cloudflare that assumption is
+    usually false: the brain reaches an owner an hour or a week after they
+    saved their number (an allowlist entry, a raised cap, a fleet moved
+    between backends), finds an old row, stamps it durably, and never says
+    a word. Live R2 on 2026-09-05 held exactly that: two owners stamped
+    welcomed with no welcome row anywhere in production."""
+    now = MID_MORNING
+    _rig(monkeypatch, now - 7 * 24 * 3600, spoken=False)
+    a, state = _Anticipy(), {}
+    assert maybe_welcome_new_owner(a, state, now=now) is True
+    assert len(a.sent) == 1
+    assert "6045550123" in state.get("welcomed_phones", [])
+    # Once, ever: the stamp holds on the next beat.
+    assert maybe_welcome_new_owner(a, state, now=now) is False
+    assert len(a.sent) == 1
+
+
+def test_a_number_saved_long_after_signup_is_still_a_hello(monkeypatch):
+    """Freshness is measured from the phone save, not from signup.
+
+    The profile row is created seconds after signup by the timezone upsert,
+    before the phone step exists, so `created` answered the wrong question:
+    somebody who skips the number at onboarding and adds it in Settings a
+    week later was never fresh and never welcomed."""
+    now = MID_MORNING
+    _rig(monkeypatch, now - 7 * 24 * 3600, updated_ts=now - 60, spoken=False)
+    a, state = _Anticipy(), {}
+    assert maybe_welcome_new_owner(a, state, now=now) is True
+    assert len(a.sent) == 1
+
+
+def test_a_fresh_number_is_decided_without_asking_the_backend(monkeypatch):
+    """WHICH timestamp answers "is this new", pinned on its own.
+
+    Freshness is the profile's `updated` — the moment the number was saved —
+    so a fresh save is decided from the row in hand and costs no extra read.
+    Measuring `created` instead sends the same case down the not-fresh branch,
+    where the backend has to be asked whether she has ever spoken. That is the
+    whole difference between the two timestamps, and it is what this asserts:
+    an ordinary onboarding pays nothing new, and the profile alone decides.
+    """
+    asked = []
+    now = MID_MORNING
+    _rig(monkeypatch, now - 7 * 24 * 3600, updated_ts=now - 60, spoken=False)
+    inner = pb.get
+
+    def _watch(url, *a, **k):
+        if "/events/records" in url:
+            asked.append(url)
+        return inner(url, *a, **k)
+
+    monkeypatch.setattr(pb, "get", _watch)
+    a, state = _Anticipy(), {}
+
+    assert maybe_welcome_new_owner(a, state, now=now) is True
+    assert len(a.sent) == 1
+    assert asked == [], (
+        "a number saved a minute ago is fresh on its own evidence; asking the "
+        "backend means freshness is being read off the wrong timestamp")
+
+
+def test_a_new_number_earns_its_own_hello_even_from_an_old_profile(monkeypatch):
+    """The stamp has always been per NUMBER, once ever. So somebody who has
+    been talking to her for weeks and changes their number gets one line on
+    the new one — which is also how they learn it is connected. Measured from
+    signup this case was silent: the profile was a week old, so it went down
+    the not-fresh branch, found she had spoken before, and stamped the new
+    number without ever using it."""
+    now = MID_MORNING
+    _rig(monkeypatch, now - 7 * 24 * 3600, updated_ts=now - 30, spoken=True)
+    a, state = _Anticipy(phone="+16045559999"), {}
+
+    assert maybe_welcome_new_owner(a, state, now=now) is True
+    assert len(a.sent) == 1
+    assert "6045559999" in state.get("welcomed_phones", [])
+
+
+def test_an_unreadable_backend_neither_stamps_nor_sends(monkeypatch):
+    """The polarity of the new read. The durable stamp is the irreversible
+    half — it survives a redeploy in R2 — so it is never written on evidence
+    that could not be read. Nothing is decided; the 60-second beat asks
+    again."""
+    saved = []
+    _rig(monkeypatch, MID_MORNING - 7 * 24 * 3600, saved, spoken=None)
+    a, state = _Anticipy(), {}
+    assert maybe_welcome_new_owner(a, state, now=MID_MORNING) is False
+    assert a.sent == []
+    assert "6045550123" not in state.get("welcomed_phones", [])
+    assert saved == [], "nothing durable may be written on an unreadable backend"
+    # And when the backend comes back, the hello is still owed.
+    _rig(monkeypatch, MID_MORNING - 7 * 24 * 3600, saved, spoken=False)
+    b = _Anticipy()
+    assert maybe_welcome_new_owner(b, state, now=MID_MORNING) is True
+    assert len(b.sent) == 1
 
 
 def test_no_phone_means_no_welcome(monkeypatch):

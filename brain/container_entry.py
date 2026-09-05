@@ -95,10 +95,48 @@ def _r2_key(name: str) -> str:
 
 
 # ── 1. pull durable state before the child starts ────────────────────────
+def assert_bucket_reachable(s3) -> None:
+    """PROVE THE BUCKET IS THERE before any per-key 404 is read as good news.
+
+    Audit F28, reproduced against R2 on 2026-09-05 with real credentials: a
+    bucket that does not exist for the credentials in hand answers a
+    ClientError with Code "404" and HTTPStatusCode 404 — the SAME shape a
+    missing object answers. boto3's download_file does a HEAD first, and a
+    HEAD carries no body, so `NoSuchBucket` and `NoSuchKey` are indistinguishable
+    by the time _is_not_found() sees them. A rotated ANTICIPY_BACKUP_S3_* key
+    pointing at another account, or one typo in ANTICIPY_STATE_R2_BUCKET,
+    therefore read as "new owner" for every file: the brain booted with empty
+    memory, snapshot_loop swallowed each failed PUT as "will retry next tick",
+    and /health went on answering ok:true with has_s3:true. Nothing anywhere
+    turned red while a real person's mind was gone.
+
+    head_bucket DOES distinguish them, so the bucket's existence is asked
+    once, up front, and ANY failure aborts. There is no such thing as a
+    missing bucket that is safe to continue past: it is always a
+    misconfiguration, never a new owner.
+    """
+    try:
+        s3.head_bucket(Bucket=R2_BUCKET)
+    except Exception as err:  # noqa: BLE001 — every failure is fatal here
+        raise RuntimeError(
+            f"owner-state bucket {R2_BUCKET} is not reachable with these "
+            f"credentials — refusing to boot on an empty dir, because a "
+            f"missing bucket and a missing object answer the same 404 and "
+            f"the next snapshot would overwrite a live memory with nothing. "
+            f"Check ANTICIPY_STATE_R2_BUCKET and the ANTICIPY_BACKUP_S3_* "
+            f"credentials. Underlying error: {err!r}"
+        ) from err
+    _log(f"owner-state bucket {R2_BUCKET} is reachable")
+
+
 def pull_state(s3) -> None:
     """GET each state file from R2 into the owner's dir. Absent (404) = a new
     owner; create the dir 0o700 and continue. ANY OTHER failure aborts the boot
-    loudly — that is the whole safety property of this function."""
+    loudly — that is the whole safety property of this function.
+
+    The per-key 404 may only be trusted AFTER the bucket itself is proven to
+    exist (audit F28); that is what the first line does."""
+    assert_bucket_reachable(s3)
     _owner_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     for name in STATE_NAMES:
         key = _r2_key(name)
@@ -154,6 +192,26 @@ def snapshot_once(s3) -> None:
         s3.upload_file(str(clock), R2_BUCKET, _r2_key("clock_state.json"))
 
 
+def backup_env() -> dict:
+    """The daily archive's environment, with a prefix of this owner's own.
+
+    Audit F43. `backup_state_to_s3` builds one key per run,
+    `<prefix>/state-<UTC stamp to the second>.zip`, and then PRUNES everything
+    past the newest 14 under that prefix. The DO forwards one fleet-wide
+    ANTICIPY_STATE_BACKUP_PREFIX ("worker/") to every container, so N owners
+    shared ONE ring of 14: at 14 containers an owner's archive could be pruned
+    by other owners' uploads the same day it was made, and the stamp being to
+    the second meant two containers whose daily timers fired in the same
+    second silently overwrote each other's key (the upload verifies its own
+    head_object, so the loser passed too). Per-owner prefixes give each owner
+    the 14 days the setting promises and make the collision impossible.
+    """
+    env = dict(os.environ)
+    base = str(env.get("ANTICIPY_STATE_BACKUP_PREFIX") or "worker/").strip("/")
+    env["ANTICIPY_STATE_BACKUP_PREFIX"] = f"{base}/{OWNER_REF}/"
+    return env
+
+
 def snapshot_loop(s3) -> None:
     last_backup = 0.0
     while not _stop.wait(SNAPSHOT_SECONDS):
@@ -169,7 +227,13 @@ def snapshot_loop(s3) -> None:
         if now - last_backup >= BACKUP_SECONDS:
             last_backup = now
             try:
-                key = backup_state_to_s3(STATE_ROOT)
+                # STATE_ROOT.parent, not STATE_ROOT: the archive must be rooted
+                # at `owners/<ref>/…` because that is what the only restore
+                # path in the repo requires (migration/workers/BRAIN.md §3,
+                # brain_state_to_r2.sh, which exits FATAL on an archive with no
+                # owners/ directory). Zipping STATE_ROOT itself produced
+                # `<ref>/memory.db` — an archive nothing could restore.
+                key = backup_state_to_s3(STATE_ROOT.parent, env=backup_env())
                 if key:
                     _log(f"daily verified archive uploaded: {key}")
             except Exception as err:  # noqa: BLE001

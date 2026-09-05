@@ -74,6 +74,10 @@ CONSOLIDATE_RETRY_SECONDS = 30 * 60   # a failing model retries gently, not per 
 # with me" to somebody who onboarded on Tuesday; past this, the hold is
 # stamped and logged instead of sent.
 WELCOME_HOLD_MAX_SECONDS = 24 * 3600
+# How young the PHONE SAVE must be for a hello to be a hello rather than
+# an interruption. Measured from owner_profile.updated, not .created —
+# see maybe_welcome_new_owner (audit F17).
+WELCOME_FRESH_SECONDS = 3600
 
 
 def _in_quiet_hours(now: float) -> bool:
@@ -425,6 +429,29 @@ def owner_wants_evidence_photos(owner_ref: str = "") -> bool:
         return False
 
 
+def _has_spoken_to_owner(owner_ref: str = "") -> bool | None:
+    """Has this owner EVER heard from her? True, False, or None when the
+    backend could not be read — three states, because "no" and "nobody
+    answered" are different facts and the welcome stamp is irreversible.
+
+    Counts rows; never asks for `text`, so it cannot see a word anybody said.
+    One read, and only on the branch that is about to write a durable stamp
+    for an owner who has none — a welcomed number returns before this.
+    """
+    try:
+        r = pb.get(
+            f"{PB}/api/collections/events/records",
+            params={"perPage": 1, "fields": "id",
+                    "filter": _scoped_filter('kind="anticipy_says"', owner_ref)},
+            timeout=10,
+        )
+        if not getattr(r, "ok", False):
+            return None
+        return int((r.json() or {}).get("totalItems", 0)) > 0
+    except Exception:
+        return None
+
+
 def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> bool:
     """Day zero's first proactive touch: the moment a BRAND-NEW owner saves
     their number, she says hello — once, ever, per number.
@@ -449,9 +476,22 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
     try:
         profile = _latest_profile(getattr(anticipy, "owner_ref", ""))
         items = [profile] if profile else []
-        created = (profile.get("created") or "") if profile else ""
-        ts = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() \
-            if created else 0
+        # WHEN THE NUMBER ARRIVED, not when they signed up (audit F17).
+        #
+        # `created` is the age of the PROFILE ROW, and the row is created
+        # seconds after signup by reportTimeZone() on the first signed-in
+        # launch (AnticipyApp.swift:1353 -> :1309) — before the phone step
+        # exists. Measured on live D1: every real profile row is created
+        # 0.5-5 s after its owner row. So `created` answered "how long ago did
+        # they sign up", and the number could be saved an hour later, or in
+        # Settings a week later, and never earn a hello. `updated` moves when
+        # saveOwnerPhone writes the number, which is the moment this function
+        # is actually about. `created` remains the fallback for a row that
+        # somehow carries no updated stamp.
+        stamp = ((profile.get("updated") or profile.get("created") or "")
+                 if profile else "")
+        ts = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() \
+            if stamp else 0
     except Exception:
         return False
     # A hello held during last night's quiet hours is still owed. It lives in
@@ -468,13 +508,39 @@ def maybe_welcome_new_owner(anticipy, state: dict, now: float | None = None) -> 
     held_ts = held.get(digits)
     if not isinstance(held_ts, (int, float)):
         held_ts = None
-    fresh = bool(ts) and now - ts <= 3600
+    fresh = bool(ts) and now - ts <= WELCOME_FRESH_SECONDS
     if not fresh and held_ts is None:
-        # An old profile only means the stamp file was lost — mark it so the
-        # check never runs again, but say nothing.
-        state.setdefault("welcomed_phones", []).append(digits)
-        _save_clock_state(state)
-        return False
+        # WHAT WAS HERE UNTIL 2026-09-05, audit F17: an unconditional silent
+        # stamp — "an old profile only means the stamp file was lost".
+        #
+        # It was a guess, and on Cloudflare it is usually the wrong one. A
+        # brain that starts serving an owner more than an hour after their
+        # phone save (an allowlist entry added days later, a cap raised, a
+        # fleet moved between backends) found an old profile, wrote the
+        # durable stamp, and said nothing — for ever, because the stamp is
+        # snapshotted to R2. Measured on live R2 2026-09-05: owner
+        # 4i2vafx1g01nlia and the probe owner both carry a welcomed_phones
+        # stamp with no welcome row anywhere in D1, and only five
+        # decision="welcome" rows exist in all of production.
+        #
+        # So ask the backend the question the guess was standing in for: has
+        # she EVER spoken to this person? A row count, not a reading of
+        # anybody's words.
+        #
+        #   yes   -> the stamp really was lost; restore it, stay silent.
+        #   no    -> she has never said a word to them; a hello is owed.
+        #   can't -> decide NOTHING. No stamp, no send, try again next beat.
+        #            The durable stamp is the irreversible half, and it must
+        #            never be written on an unreadable backend.
+        spoken = _has_spoken_to_owner(getattr(anticipy, "owner_ref", ""))
+        if spoken is None:
+            return False
+        if spoken:
+            state.setdefault("welcomed_phones", []).append(digits)
+            _save_clock_state(state)
+            return False
+        # Never spoken to: fall through to the quiet-hours guard and the
+        # hello itself, exactly as a fresh onboarding does.
     if held_ts is not None and now - held_ts > WELCOME_HOLD_MAX_SECONDS:
         # The morning this was held for has been and gone — the worker was
         # down through it. Introducing herself days late is its own "WHAT?",
@@ -1062,15 +1128,25 @@ def post_event(kind: str, text: str, decision: str = "", goal: str = "",
                owner_ref: str = "", owner_id: str = "",
                source: str = "", external_event_id: str = "") -> None:
     ref = _active_owner_ref(owner_ref)
-    legacy = str(owner_id or ACTIVE_OWNER_ID or "").strip()
     body = {
         "device_id": "anticipy-brain", "kind": kind, "text": text,
         "decision": decision, "goal": goal or "",
     }
     if ref:
         body["owner_ref"] = ref
-    if legacy:
-        body["owner"] = legacy
+    # WHAT WAS HERE UNTIL 2026-09-05, audit F04: `if legacy: body["owner"] =
+    # legacy`, stamping the pre-account UUID onto every row the brain writes.
+    #
+    # events has no `owner` column and never had one on this backend
+    # (migration/workers/src/pb/schema.ts, and `pragma_table_info('events')`
+    # on live D1 returns nothing for it), so the Worker answered
+    # 400 unknown_field BEFORE the INSERT — measured against production on
+    # 2026-09-05: every brain event since the cutover was rejected at the
+    # door. Nothing she said reached the feed, and because
+    # claim_notification_attempt only wins the SMS fence on a 2xx from here,
+    # no text was ever attempted either. `owner_id` stays in the signature:
+    # the READ side still scopes on the legacy id where a row carries one
+    # (_event_matches_owner), and every caller passes it.
     # WHICH EARS SET THIS OFF, carried onto the row the brain itself writes.
     #
     # An anticipy_says row is the only durable record that she spoke, and it
@@ -2552,9 +2628,9 @@ def reserve_uninvited_text(owner_ref: str, door: str,
                     "goal": "", "external_event_id": slot}
             if ref:
                 body["owner_ref"] = ref
-            legacy = str(ACTIVE_OWNER_ID or "").strip()
-            if legacy:
-                body["owner"] = legacy
+            # No `owner` key: see post_event above (audit F04). events has no
+            # such column, so stamping it made every slot create a 400 and the
+            # uninvited budget unprovable rather than merely spent.
             try:
                 r = pb.post(f"{PB}/api/collections/events/records",
                             json=body, timeout=10)
@@ -4311,6 +4387,34 @@ def report_deafness(anticipy) -> None:
 # call. Counts over the worker's own lines, never over a word anyone said.
 _GATEWAY_TALLY_KEYS = ("primary_ok", "rescued", "skipped", "reissued", "both_dead")
 
+# The same counters, NEVER reset, so the status row can carry a running total
+# for a leg that reads one row instead of a window of log lines. report_gateway
+# still zeroes the per-tick tally; these accumulate what it printed.
+_GATEWAY_TOTALS = dict.fromkeys(_GATEWAY_TALLY_KEYS, 0)
+
+# WHERE THE BOOT LINE LIVES WHEN NOTHING CAN READ THE LOG.  Audit F34.
+#
+# On Railway the banner was a log line and `railway logs` could read it. On
+# Cloudflare the container's stdout goes only to the dashboard: measured
+# 2026-09-05, `wrangler tail anticipy-brain` over 150 s with nine live
+# container instances carried 13 events and NOT ONE line containing "worker
+# up", "sms=" or "gateway tally" — the tail stream holds the DO's own RPC
+# events, not the container's stdout, and `wrangler containers` has no logs
+# command. The Workers Observability telemetry API answers 403 with the
+# wrangler OAuth token on a developer machine. So the one thing Law 3 needs
+# most — which build is running, which transport it holds, which vendor sends
+# its texts — became unreadable from any terminal at the moment production
+# moved.
+#
+# The fix is to write it where every other live leg already reads: one events
+# row per owner, refreshed in place. Not one row per tick — the brain's own
+# rows are the CONTROL half of are_the_ears_live.py, and a row every two
+# seconds would drown that gate's asymmetry test. One row, ever, per owner,
+# PATCHed on a slow beat so its `updated` stamp proves the container is alive
+# now rather than proving it booted once.
+WORKER_STATUS_KIND = "worker_status"
+WORKER_STATUS_REFRESH_SECONDS = 300
+
 
 def gateway_banner(llm) -> str:
     """`primary=<name>:<model> fallback=<name>:<model>|none` for the boot line.
@@ -4345,9 +4449,64 @@ def report_gateway(llm) -> str:
     line = "llm: gateway tally " + " ".join(
         f"{k}={int(tally.get(k) or 0)}" for k in _GATEWAY_TALLY_KEYS)
     for k in _GATEWAY_TALLY_KEYS:
+        # The running total outlives the reset, so the status row can answer
+        # "what has carried her calls since boot" without a log (audit F34).
+        _GATEWAY_TOTALS[k] += int(tally.get(k) or 0)
         tally[k] = 0
     print(line)
     return line
+
+
+def worker_status_line(banner: str) -> str:
+    """The boot banner plus the gateway totals since boot, as one string.
+
+    Deliberately the SAME text the log carries, with the same field names, so
+    overnight/is_the_gateway_live.py runs one set of verdicts over either
+    source: `primary=… fallback=…` for the banner leg, `llm: gateway tally
+    primary_ok=N …` for the behaviour leg.
+    """
+    tally = "llm: gateway tally " + " ".join(
+        f"{k}={int(_GATEWAY_TOTALS.get(k) or 0)}" for k in _GATEWAY_TALLY_KEYS)
+    return f"{banner} · {tally}"
+
+
+def publish_worker_status(banner: str, owner_ref: str = "",
+                          owner_id: str = "") -> bool:
+    """Put the running brain's identity where a terminal can read it.
+
+    ONE row per owner, created once and PATCHed thereafter — addressed by
+    `external_event_id`, the same durable-identity mechanism the job notices
+    use. The row's `updated` stamp is the liveness signal: a leg that finds
+    it stale knows the container is gone or is running a build from before
+    this existed, which is a different fact from "the gateway is broken".
+
+    Best effort, always. A brain that cannot describe itself must still
+    listen: every failure here is logged and swallowed. Returns True when the
+    row was written.
+    """
+    ref = _active_owner_ref(owner_ref)
+    if not ref:
+        return False
+    durable_id = f"worker-status:{ref}"
+    line = worker_status_line(banner)
+    try:
+        existing = _event_by_external_id(durable_id, ref, owner_id,
+                                         kind=WORKER_STATUS_KIND)
+        if existing and existing.get("id"):
+            r = pb.patch(
+                f"{PB}/api/collections/events/records/{existing['id']}",
+                json={"text": line}, timeout=10)
+            if not getattr(r, "ok", False):
+                raise RuntimeError(
+                    f"status refresh returned HTTP {getattr(r, 'status_code', '?')}")
+            return True
+        post_event(WORKER_STATUS_KIND, line, decision="", goal="",
+                   owner_ref=ref, owner_id=owner_id,
+                   external_event_id=durable_id)
+        return True
+    except Exception as exc:  # noqa: BLE001 — never let bookkeeping stop her
+        print(f"worker status row not written (harmless to hearing): {exc}")
+        return False
 
 
 def ask_about_stuck_jobs(anticipy, convo) -> None:
@@ -4680,7 +4839,8 @@ def main() -> None:
     # about a container, not about the code inside it. Twice today that gap
     # mattered. This hashes the source of the two files that decide what she
     # does, so the log proves which build is live instead of implying it.
-    print(f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
+    boot_banner = (
+          f"worker up · llm={'live:' + llm.model if llm.live else 'heuristic'}"
           # "sms=mock" is load-bearing text, not a nicety: proof/local_rig.sh
           # refuses to continue unless the boot banner says it, and kills a
           # laptop worker that could text a real person. Anything else names
@@ -4701,6 +4861,15 @@ def main() -> None:
           f" · budget={DECISION_DEADLINE_SECONDS}s/{DECISION_CALL_CEILING}calls"
           f"/turn{TURN_HEARING_SECONDS}s"
           f" · brain={_brain_fingerprint()}")
+    print(boot_banner)
+    # AND THE SAME LINE WHERE A TERMINAL CAN READ IT (audit F34). On
+    # Cloudflare this print goes only to a dashboard: no gate, no CLI and no
+    # `wrangler tail` can see it, so "which build is live, holding which
+    # wires, sending through which vendor" — the three questions Law 3 asks
+    # after every deploy — had no answer on the platform that now serves
+    # production. One row, refreshed in place on the slow beat below.
+    publish_worker_status(boot_banner, anticipy.owner_ref, anticipy.owner_id)
+    last_status = time.time()
     # Where his texts land, once, per provider. Twilio's is checked every
     # beat below; Sendblue's lives in a dashboard this process cannot read.
     print(inbound_ear_note(sms_provider))
@@ -5080,6 +5249,17 @@ def main() -> None:
             # denominator without which a dead primary and a healthy one
             # look identical in the log.
             report_gateway(llm)
+
+            # And the same two facts where a terminal can read them, at a
+            # cadence that is nothing next to the 2-second poll: one PATCH
+            # every five minutes. It is a PATCH of one row rather than a new
+            # row precisely because the brain's own rows are the control half
+            # of overnight/are_the_ears_live.py — appending here would tell
+            # that gate the machine was busy on a day nobody spoke.
+            if time.time() - last_status > WORKER_STATUS_REFRESH_SECONDS:
+                last_status = time.time()
+                publish_worker_status(boot_banner, anticipy.owner_ref,
+                                      anticipy.owner_id)
 
             # Nightly, while he sleeps: distill the day's episodes into
             # profile facts (roadmap §1). Incremental and idempotent — a
