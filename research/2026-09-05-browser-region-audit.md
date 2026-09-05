@@ -271,24 +271,48 @@ unswept sibling (#67's `timeWindowField`), or a "stays deterministic" half that
 quietly still read wording. Each has a corrected mechanism written down in the
 workflow result; none should be built from the original design.
 
-Ranked by blast radius, which is what should order the work:
+**Corrected 2026-09-05, and the correction is the point.** The ranked list
+below used to name #68, #69, #71, #72, #70, #74, #73 and #77 as the work still
+to do — every one of which the table at the top of this file marks FIXED with a
+commit, and the list had two items numbered "5.", the second repeating #78 and
+#79 four words after saying they were closed. That is the same failure
+`research/2026-09-04-omi-port-coverage.md` was corrected for the same day
+(audit F26): a ledger written to stop re-proposal that asks the next session to
+rebuild shipped work. Nothing is left of the original ranking, so it is
+replaced rather than reordered.
 
-1. **#68 `approvedBoolean`** — whether ticking a checkbox counts as approved.
-2. **#69 date/time approval** — which calendar cells may be clicked; comment at
-   ~:908 records a live near-miss.
-3. **#71 `looksLikeCaptcha`** — abandons the run; comment records a live
-   incident that scrapped a real reservation.
-4. **#72 `page_map` control deletion** — deletes real controls before the model
-   sees them.
-5. **#70 `login_wall`** — parks the errand and texts the owner.
-6. **#74, #73, #77** — medium/low, in that order (#78 and #79 closed, above).
-5. **#78, #79, #73** — medium/low, in that order.
+What is actually open is the PROOF, not the mechanism, and it is one thing for
+all of them: **no judge in this region has been measured over the live
+`/agent/llm` proxy.** `login_wall_gate.py` and `box_verdict_gate.py` are
+UNPROVEN (exit 2) because minting a paired browser credential needs the
+`agents` table repaired (`research/2026-09-05-agents-table-malformed.md`), so
+the golden set that caught the truncation failure reached OpenRouter directly
+and the proxy's own `thinkingLevel: "low"` Google call is unmeasured. Ranked by
+what would cost most if that measurement comes back bad:
+
+1. **The 512-token reply floor over the proxy** — this is the one with
+   evidence: 15/22 of the login-wall golden set came back WRONG on the first
+   live run because the browser model spent a 64-token floor on reasoning
+   before answering, and every truncated reply is a no-verdict. Six other
+   one-token judges are still floored at 64 on that same model and have never
+   been measured (`research/evals/login-wall-2026-09-05/FINDINGS.md`).
+2. **A real errand on a real site** — no live browser run has exercised any of
+   the seventeen fixes end to end.
+3. **The residues the completeness audit found inside "FIXED" rows** — rows
+   #67, #74 and the auditor-reason branches carry named leftovers; they belong
+   to the extension cluster's Law-1 round two, not here.
 
 ## What was NOT verified, said plainly
 
 - No live browser run. Every change is repo-green. The extension has a
   `hostile_checkout.html` fixture and a manual proof for never-foreground; a
   real errand on a real site with these changes has not been run.
+- **The version numbers below are two releases stale.** They describe
+  2026-09-05 04:15Z; since then the extension shipped 0.13.0 and then 0.14.0
+  (`5f4ccec6`), whose default base is api.anticipy.ai, and the Worker serves it
+  byte-identical. The current state of what is served where is
+  `research/2026-09-05-cloudflare-era-plan.md`, which is the file to trust on
+  deployment; this one is the Law-1 ledger for the browser region.
 - **Deployed 2026-09-05 04:15Z (`fd538eaf`)**: `is_it_live.py` now says "served
   0.12.0, source 0.12.0 … identical … all packaged files identical". The
   paragraph below is the state BEFORE that deploy, kept as written. What the
