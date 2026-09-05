@@ -28,8 +28,8 @@ owner's logged-in browser with `<all_urls>` and the debugger, so the bar for
 | 69 | date/time approval regexes | PARTIAL | **FIXED `ee7e4d6a`** | both regexes deleted; native temporal fields deferred to `unsupportedScopeVerdict`, FLOOR, undecided never cleared; 4 mutations |
 | 70 | `login_wall.js` scored classifier | VIOLATION | **FIXED 2026-09-05** | sixteen regexes deleted; one CEILING question; golden set 66/66 live (OpenRouter direct — proxy UNPROVEN) |
 | 71 | `looksLikeCaptcha` phrase list | VIOLATION | **FIXED `b0db7ec7`** | painted provider furniture (structure) → one question, CEILING, made safe by the challenge-frame click seatbelt; the 2026-08-16 badge page asks nothing; 7 mutations |
-| 72 | `page_map.js` control-deletion keywords | VIOLATION | OPEN — design NEEDS-REWORK | read what a list is ATTACHED to |
-| 73 | placeholder-option word list | VIOLATION (L) | OPEN — design NEEDS-REWORK | |
+| 72 | `page_map.js` control-deletion keywords | VIOLATION | **FIXED `53385d77`** | page_map reports every option list with what it is structurally attached to, deletes nothing, calls no model; `suggestionListVerdict` one question, CEILING, re-heads only; 4 mutations |
+| 73 | placeholder-option word list | VIOLATION (L) | **FIXED `1a51d917`** | word list deleted; a first-entry select with a submittable value is one question, FLOOR, blanks only on PLACEHOLDER; the gates read one settled state; 4 mutations |
 | 74 | `explicitRequestedCount`/`reportedRecordCount` | VIOLATION | **FIXED `9d83e056`** | DELETED with `completionCoverageScore`; the auditor is the only judge, taught three sentences; zero extra calls; 5 mutations |
 | 75 | `goalMatchingElements` hoist | VIOLATION (L) | **FIXED `e961e023`** — DELETED | the planner already sees every control |
 | 76 | `taskShape` as the only recall judge | VIOLATION | **FIXED `f8de9303`** | four-state floor, twin of `brain/research.py` |
