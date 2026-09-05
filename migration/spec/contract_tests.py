@@ -1376,6 +1376,90 @@ class TestWorkflowGuard(object):
 
 
 # ==========================================================================
+# §1.17  job_commitment_identity.pb.js — the model hook, on whichever
+#        backend is answering
+# ==========================================================================
+# `idx_jobs_active_commitment` is UNIQUE over every jobs row whose
+# `commitment_key` is not empty, and it is the only thing stopping two
+# processes both reading "no active promise" and both minting one.  It can
+# only be a partial index on "not empty" -- PocketBase's validator refuses
+# `status IN (...)` -- so SOMETHING has to empty the key when a row goes
+# terminal, or a finished row owns the promise forever and the next mint
+# collides with a corpse (audit F15).
+#
+# On PocketBase that something is a model hook.  On the Worker it is
+# src/pb/records.ts.  This class does not care which: it asks the backend.
+
+class TestTerminalJobsReleaseTheirCommitment(object):
+
+    @pytest.mark.destructive
+    @pytest.mark.needs_service_token
+    def test_a_finished_job_releases_the_promise_for_the_next_mint(
+            self, service_token):
+        key = "contract-" + rand(40)
+        first = call("POST", "/api/collections/jobs/records", headers=svc(),
+                     json_body={"goal": "contract suite commitment probe",
+                                "status": "queued", "device_id": "contract-suite",
+                                "owner_ref": OWNER_UNDER_TEST,
+                                "commitment_key": key})
+        if first.status != 200 or not (first.json or {}).get("id"):
+            pytest.skip("this backend did not store the probe row (%s)"
+                        % first.status)
+        job = first.json["id"]
+        second = None
+        try:
+            assert (first.json or {}).get("commitment_key") == key, (
+                "§1.17: a LIVE row must HOLD the key — that is the lock. %r"
+                % first)
+
+            done = call("PATCH", "/api/collections/jobs/records/" + job,
+                        headers=svc(), json_body={"status": "done"})
+            assert done.status == 200, repr(done)
+            assert (done.json or {}).get("commitment_key") == "", (
+                "§1.17: a terminal row is still holding its commitment_key, so "
+                "the promise can never be minted again — the clock will retry "
+                "it every window and be refused, silently. %r" % done)
+
+            # THE VERDICT COMES FROM THE INDEX: the same promise mints again.
+            second = call("POST", "/api/collections/jobs/records", headers=svc(),
+                          json_body={"goal": "contract suite commitment re-mint",
+                                     "status": "queued", "device_id": "contract-suite",
+                                     "owner_ref": OWNER_UNDER_TEST,
+                                     "commitment_key": key})
+            assert second.status == 200, (
+                "§1.17: re-minting a released promise was refused %r" % second)
+        finally:
+            call("DELETE", "/api/collections/jobs/records/" + job, headers=svc())
+            if second is not None and (second.json or {}).get("id"):
+                call("DELETE", "/api/collections/jobs/records/" + second.json["id"],
+                     headers=svc())
+
+    @pytest.mark.needs_service_token
+    def test_no_terminal_row_on_this_backend_is_holding_a_commitment(
+            self, service_token):
+        """The LIVE leg, and the one that closes F15 under Law 3: read-only,
+        runs against whatever BASE_URL points at, and goes red on the rows the
+        missing hook already left behind.  A repo-green port with six keyed
+        `done` rows still in the table is not a fixed system — the next mint
+        for any of those promises is still refused."""
+        stuck = []
+        for status in ("done", "failed", "cancelled"):
+            resp = call("GET", "/api/collections/jobs/records", headers=svc(),
+                        query={"filter": 'status="%s" && commitment_key!=""' % status,
+                               "perPage": "1", "fields": "id"})
+            if resp.status != 200:
+                pytest.skip("could not list jobs on this backend (%s)" % resp.status)
+            n = (resp.json or {}).get("totalItems") or 0
+            if n:
+                stuck.append("%s: %d" % (status, n))
+        assert not stuck, (
+            "§1.17: terminal jobs are holding commitment keys (%s). Rows written "
+            "before the release shipped need the one-time UPDATE in the F15 "
+            "report; rows written after it mean the port is not live here."
+            % ", ".join(stuck))
+
+
+# ==========================================================================
 # §2  guard.pb.js — the production lock on the data API
 # ==========================================================================
 
