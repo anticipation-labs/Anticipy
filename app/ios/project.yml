@@ -568,7 +568,7 @@ settings:
     # (audit F21, 2026-09-05). No 124 exists on App Store Connect; this is
     # the first build off cloudflare-backend, and it uploads as 125 because
     # the workflow now keeps the source number unless Apple holds it (F22).
-    CURRENT_PROJECT_VERSION: "125"
+    CURRENT_PROJECT_VERSION: "126"
     DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
@@ -620,7 +620,7 @@ targets:
         # literal from a Mac one, and two products answering "which build
         # are you holding" with different numbers is the exact disease this
         # gate exists to prevent.
-        CURRENT_PROJECT_VERSION: "125"
+        CURRENT_PROJECT_VERSION: "126"
         DEVELOPMENT_TEAM: "$(DEVELOPMENT_TEAM)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ../macos/AnticipyMac/AnticipyMac.entitlements
