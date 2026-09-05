@@ -51,6 +51,10 @@ sh "$HERE/run_refresh_account_race_tests.sh"
 # account/question idempotency id and exact event lookup are what make response
 # loss and process restart safe instead of leaving a disabled card forever.
 sh "$HERE/run_app_reply_write_tests.sh"
+# After a crash, "did the send happen?" is answered by what the extension
+# found on the surviving page — and the phone cites THAT row on the retry,
+# never the constant it used to write on the owner's behalf (audit #90 E).
+sh "$HERE/run_retry_reconciliation_tests.sh"
 # The third question about the same phone, one screen further in: not whose
 # tour this is, nor whose answers are still on the handset, but whether what
 # first run SAYS about them is true when it says it. The track counted the

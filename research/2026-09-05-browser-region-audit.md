@@ -107,7 +107,18 @@ constant and the constant `reconciliation` dictionary) must cite
 `_reconciliation.verdict === "not_applied"` and its evidence instead of its
 constants, or the guard's retry leg is still satisfied by a string literal —
 that is a control-flow change in Swift, not a constant swap, and was not made
-here. Also not made: the in-run throw path still closes the tab in the loop's
+here. **Made later the same day, on the iOS side**: `RetryReconciliationPolicy`
+(app/ios/Anticipy/Backend/) reads `params._reconciliation` in the four states,
+`approvalFields` writes the conclusion off the row's verdict and cites the
+row's evidence plus the tap as one more line, and refuses the write — on the
+phone, before any request leaves — for applied, unclear, no_verdict, an absent
+row, or a shape it cannot read; the card's caption and button read the same
+row. Proofs: `app/ios/Tests/run_retry_reconciliation_tests.sh` (mutation:
+loosen the floor to anything-but-applied → 4 red) and
+`tests/test_retry_cites_the_reconciliation.py`, which drives the guard's leg
+with the phone's new shape and states plainly that the OLD literal still
+satisfies the guard — the guard reads shape, not provenance, which is why the
+floor lives on the phone. Also not made: the in-run throw path still closes the tab in the loop's
 teardown, so that site can only answer "the page it was on is gone"; the sweep
 (a reclaimed worker, the tab still open) is the path that now reads.
 

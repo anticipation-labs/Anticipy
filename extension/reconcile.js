@@ -40,9 +40,10 @@
 // APPLIED would let ONE 8-token call write what the normal done path only
 // writes after the step model's claim PLUS verifyDone. The Brief asks that
 // the question be ANSWERABLE, not self-acted; the row now answers it with
-// evidence, and the owner's tap stays the retry authority — with the phone
-// still owing the change that cites `_reconciliation` instead of its
-// constants (app/ios/Anticipy/AnticipyApp.swift approvalFields).
+// evidence, and the owner's tap stays the retry authority. The phone's half
+// — reading `_reconciliation` and refusing every verdict but not_applied
+// before a retry leaves the device — is RetryReconciliationPolicy.swift
+// (app/ios/Anticipy/Backend/), cited by approvalFields since 2026-09-05.
 //
 // WHAT STAYS DETERMINISTIC is all seatbelt: which tab may be read (the
 // intent's tab, only while its browser-session stamp still matches — the
