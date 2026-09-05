@@ -20,47 +20,79 @@ no network:
     cd spike/two-hands && node --experimental-strip-types --test test/*.test.ts
 
 **The run below is a measurement with a date on it, not a property of the
-directory. Re-run it before quoting it.** Measured 2026-09-05 14:43 local:
-**471 tests, 469 pass, 2 fail** — and the two reds are named at the bottom of
-this section rather than rounded off, because a count in a results file that
-nobody re-ran is the same defect class as a green leg that proves nothing.
+directory. Re-run it before quoting it.** Measured 2026-09-05 15:52 local:
+**507 tests, 506 pass, 1 fail** — and the one red is named at the bottom of this
+section rather than rounded off, because a count in a results file that nobody
+re-ran is the same defect class as a green leg that proves nothing. Four suites
+were being written to in the same round this was measured in, so a re-run
+minutes later legitimately returns different numbers; the command is the
+authority and this table is a snapshot of it.
 
 | suite | tests | what it settles |
 |---|---:|---|
-| `test/signature.test.ts` | 33 | one step hashes the same way twice, everywhere |
+| `test/signature.test.ts` | 33 | one step hashes the same way twice, everywhere; and the effect-channel floor |
 | `test/provider_fake.test.ts` | 49 | every vendor failure mode is reachable without a vendor |
 | `test/provider_composio.test.ts` | 53 | the adapter's shape, against the docs — **not** against Composio |
-| `test/router.test.ts` | 91 | the five routing rules, including that a score never licenses a hand |
-| `test/ledger.test.ts` | 72 | the ladder climbs on outcomes and falls on failures |
-| `test/observer.test.ts` | 54 | hosts and counts leave the extension; bodies, titles and URLs do not |
+| `test/router.test.ts` | 102 | the five routing rules, including that a score never licenses a hand |
+| `test/ledger.test.ts` | 77 | the ladder climbs on outcomes and falls on failures |
+| `test/observer.test.ts` | 66 | hosts and counts leave the extension; bodies, titles and URLs do not |
 | `test/onboarding.test.ts` | 95 | when to ask, how often, and what the message may promise |
-| `test/integration.test.ts` | 8 | the seven parts are true at the same time, plus three pinned defects |
-| `test/no_production_imports.test.ts` | 7 | the spike fence, both directions, each proved against a violation planted in the tree |
-| `test/run_ten.test.ts` | 9 | the week-1 gate's key-free half: the ten load, and no placeholder survives a fill |
+| `test/integration.test.ts` | 8 | the seven parts are true at the same time, plus the defects still pinned |
+| `test/no_production_imports.test.ts` | 8 | the spike fence, both directions, with legs driven against violations planted in the tree |
+| `test/run_ten.test.ts` | 16 | the week-1 gate's key-free half: the ten load, and no placeholder — any case, padded or not — survives a fill |
 
-The two red legs in that run, both in files the 2026-09-05 instrument pass did
-not own, and both red for the RIGHT reason:
+**The one red leg, and it is red for the RIGHT reason:**
+
+- `observer.test.ts` — "the finished-step lifecycle is wired by shipped code, not
+  only by this file". `summarizeAndForget` is exported and documented as the call
+  a finished step should use, and nothing the spike ships calls it: the one site
+  that knows a browser step is over is `browserOutcome` in `src/index.ts`, and it
+  calls plain `summarize`, so the trace it just read stays in the service worker.
+  The leg closes by WIRING it, never by relaxing the assertion. Nobody owned
+  `src/index.ts` in the 2026-09-05 round, which is exactly why it is still red.
+
+**The two red legs this section used to name are both closed, and neither was
+closed by relaxing an assertion.** They are recorded because the way each one
+went red is the argument for keeping legs like the one above:
 
 - `signature.test.ts` — "verifySignatureHash is called by shipped code, not only
-  by this file". It is exported, documented as the guard against a swapped hash,
-  and called by nothing in `src/` or `tasks/`. The leg is red on purpose and
-  closes by WIRING it in `src/router.ts`, never by relaxing the assertion.
-- `integration.test.ts` — the story's rung-3 write step, at the assertion that
-  PINS FINDING 2 below ("a rung-3 write is supposed to be confirmed and the
-  decision cannot say it"). It reads `requiresConfirmation === undefined` and
-  the router now returns `true` there. A pin going red is a pin working, and the
-  next move is to find out WHY the flag is set — deliberately, for the reason
-  FINDING 2 asks for, or as a side effect of a step tightening to
-  `irreversible` — and then update the pin AND §5 to match. Do not re-assert the
-  old behaviour to get the suite green; that turns a pin into a lock. Whoever
-  owns `src/router.ts` and `test/integration.test.ts` owns this one; the
-  instrument pass of 2026-09-05 did not.
+  by this file" was red because the guard against a swapped `signature_hash` was
+  exported, documented, and called by nothing. It is now wired in `src/router.ts`
+  (~:743): a signature whose hash this process cannot re-derive gets rung 0 and
+  never the API hand, because a hash we cannot reproduce means we do not know
+  WHICH capability this is, and an unknown capability has earned nothing. Note
+  the shape it shares with the red leg above — same defect, same fix, one file
+  apart.
+- `integration.test.ts` — the story's rung-3 write step pinned FINDING 2 below
+  at the wrong answer (`requiresConfirmation === undefined`). The router now
+  sets the flag, the pin went red on the next full run, and the assertion was
+  flipped to `true` rather than the behaviour reverted. That is a pin doing the
+  job a TODO cannot: it noticed. See §5 FINDING 2 for what is and is not fixed.
 
 Three claims in that list are worth stating on their own, because they are the
 ones the exercise was actually for:
 
-1. **No pattern decides a routing outcome.** There is no app list, no verb
-   list and no `match_threshold` anywhere in `src/`. The only thing that can
+1. **No pattern decides a routing outcome.** Stated narrowly, because the
+   sentence that stood here — "there is no app list, no verb list and no
+   `match_threshold` anywhere in `src/`" — was too wide, and the code moved
+   under it until it was false. There is no app list and no `match_threshold`;
+   `match_threshold` appears once in `src/`, inside `contract.ts`'s LAW1 note,
+   quoting the line of the spec it declines to follow. **There are two verb
+   lists, both in `src/signature.ts`, and one of them has real consequences.**
+   `VERBS` validates the enum at run time (types are stripped, so it is the
+   only thing making `sig.verb` mean anything). `verbSideEffectFloor` maps a
+   verb to an effect channel: `send`, `delete` and `pay` floor to
+   `irreversible`, everything but `read` to `write`. It is legal under
+   HARNESS-LAWS law 1 for what it decides — not what the owner meant, but what
+   a step TOUCHES — which is the seatbelt clause verbatim; and it is a FLOOR, so
+   a planner may ratchet a step stricter by declaring one and can never buy the
+   loose end back. It landed 2026-09-05 and it is why a delete confirms: built
+   the intended way, with no declaration, a delete used to come out `write` and
+   nothing on either hand ever asked. The defensible form of this claim is **no
+   pattern reads the owner's WORDS**, not "no list of strings exists", and the
+   ROUTER holds the stronger version — it reads neither an app string nor a
+   verb (`router.test.ts` scans its source for literal app comparisons and for
+   `app_hint`; `grep '\.verb' src/router.ts` is empty). The only thing that can
    put a step on the API hand is a `MatchJudge` verdict of exactly `"yes"`,
    read only through `contract.ts`'s `judgeLicensesApi`. `unclear`,
    `no-verdict`, a thrown judge, a thrown vendor and a thrown ledger all
@@ -71,9 +103,7 @@ ones the exercise was actually for:
    byte-identical, and that wording was wrong here for a week: `reason` is a
    sentence written for a person and it NAMES the app on purpose, so comparing
    it would fail on a router that is behaving perfectly. The four fields
-   compared are the ones anything downstream branches on. `match_threshold`
-   appears once in `src/`, inside `contract.ts`'s LAW1 note, quoting the line of
-   the spec it declines to follow.
+   compared are the ones anything downstream branches on.
 2. **A retrieval score cannot license a hand — but the routed proof of it
    points the SAFE way, and that is a hole.** The fixture does rank
    `GMAIL_DELETE_THREAD` (0.91) **above** `GMAIL_ARCHIVE_THREAD` (0.89) for the
@@ -105,9 +135,10 @@ ones the exercise was actually for:
 The story in `test/integration.test.ts` is the product, end to end, on the fake
 provider: a cold owner, a browser run, a nudge with earned evidence, a
 connection, three shadow reads with parity, promotion to rung 2, an API-only
-fourth read, a write refused until opt-in, an API failure that changes hands
-inside the same task, and a second failure that demotes and re-opens shadow.
-A person can read it top to bottom.
+fourth read, a write refused until opt-in and then confirmed at rung 3, a
+delete where the judge passes over the top-scored candidate, an API failure that
+changes hands inside the same task, and a second failure that demotes and
+re-opens shadow. A person can read it top to bottom.
 
 ---
 
@@ -171,10 +202,13 @@ In this order. The harness names each one as it blocks.
    token unfilled and never guesses one. The refusal is a SWEEP over the whole
    task after filling, not a list of fields: whatever a token sits in — the
    prompt, an input value however deeply nested, the expected effect, the
-   grading rubric, a field added to the file next month — an unfilled one stops
-   the run. A token in a HASHED field (the `object`, or an input KEY name) is
-   not a hole at all and exits BROKEN by name: filling it would move the
-   signature hash and file the run under a capability nothing else computes.
+   grading rubric, a key name, a field added to the file next month — an
+   unfilled one stops the run. Case does not save it either: `{{person_a}}` and
+   `{{PERSON_A}}` are one hole, reported and filled under the uppercase name, so
+   the keys above are the only spelling he ever has to write. A token in a
+   HASHED field (the `object`, or an input KEY name) is not a hole at all and
+   exits BROKEN by name: filling it would move the signature hash and file the
+   run under a capability nothing else computes.
 6. **Run it.**
 
        node --experimental-strip-types tasks/run_ten.ts
@@ -241,9 +275,10 @@ where every part was individually correct and the assembled system did nothing.
   Without it he taps the link, the vendor knows, the ladder does not, and the
   nudge he just accepted buys him nothing.
 
-Three defects are **pinned, not fixed**, in `test/integration.test.ts`. Each
-asserts what the system does today with a comment saying what it ought to do,
-so the leg goes red the day somebody fixes it.
+Three defects were **pinned, not fixed**, in `test/integration.test.ts` — each
+asserting what the system does today with a comment saying what it ought to do,
+so the leg goes red the day somebody fixes it. **One of the three (FINDING 2) is
+now fixed, and the pin is how anybody found out.** Two are still open.
 
 - **FINDING 1 — a write capability can never reach rung 3 on its own.**
   Rung 1→2 is paid for in shadow parity matches; rule 4 forbids ever shadowing
@@ -255,17 +290,40 @@ so the leg goes red the day somebody fixes it.
   pair in the same app, or the write ladder is climbed by confirmed assisted
   runs rather than by shadow. It is not a one-line change and it should not be
   made by whoever notices it next at 2am.
-- **FINDING 2 — rung 3 means "assisted, every one confirmed" and the decision
-  cannot say so.** `requiresConfirmation` is set for `irreversible` steps only,
-  so an executor reading a rung-3 write decision sends the email without
-  asking, at exactly the rung the ladder invented to make it ask.
+- **FINDING 2 — CLOSED 2026-09-05. Rung 3 means "assisted, every one
+  confirmed", and the decision now says so.** As reported,
+  `requiresConfirmation` was set for `irreversible` steps only, so an executor
+  reading a rung-3 write decision performed the write without asking, at
+  exactly the rung the ladder invented to make it ask. Two things fixed it and
+  the order matters, because **the first one nearly buried the finding**:
+  - `send` was floored to `irreversible` in `verbSideEffectFloor`
+    (`src/signature.ts`), which is right on its own merits — the browser hand
+    already gates `send` through `commitControl`, so the two hands were doing
+    observably different things for one step. But the integration story's write
+    step is a `send`, so this alone turned the pin green while the defect stood
+    for every other write verb. **The illustration this section used to give
+    stopped exhibiting the defect before the defect was fixed.** A defect that
+    loses its example is not fixed; it is unwatched.
+  - The real fix is in `src/router.ts` (~:817) and it reads the RUNG, not the
+    verb: anything `irreversible` confirms on any hand at any rung, and any
+    `write` confirms at rung 3. Rung 4 is where a write stops asking, which is
+    what "auto writes" means and why it costs three confirmed writes with a
+    verified effect to get there.
+  The leg that keeps it honest is deliberately an `update` — the write verb
+  with the least alarming name, and the one that archives somebody's mail —
+  because widening the irreversible floor again would make a `send`-shaped test
+  pass while `update` ran unasked. `router.test.ts` carries both halves ("rung 3
+  confirms an ordinary write, not only an irreversible one" and "rung 4 is where
+  an ordinary write stops asking"), and `integration.test.ts` asserts the story's
+  rung-3 write carries the flag.
 - **FINDING 3 — `account_hint` is carried, asked about, and ignored.** The
   router takes the first ACTIVE connection for the matched app. With work and
   personal Gmail both connected — normal, not an edge case — "send it from my
   personal address" runs against whichever the vendor lists first.
-  `onboarding.accountChoice` is written, tested, correct, and called by
-  nothing. It is not wired because it returns `must-ask` whenever accounts are
-  untagged, `ConnectedApp` has no `kind` column, and no screen exists that
+  `onboarding.accountChoice` is written, tested, correct, and reachable as
+  `hands.onboarding.accountChoice` — and invoked by nothing: the router never
+  reads `account_hint` at all. It is not wired because it returns `must-ask`
+  whenever accounts are untagged, `ConnectedApp` has no `kind` column, and no screen exists that
   would ever ask — so wiring it today would take the API hand out entirely, a
   guard that guards nothing by being infinitely strict. **The fix is a column
   plus a one-time question, in that order.** This is the highest-risk unwired
@@ -299,21 +357,49 @@ in six agents' return values.
    reports the API hand as free.
 5. **`ConnectNudge` has no ask counter and no decline counter,** so "a second
    decline is never-again" and "re-ask once" are unimplementable against the
-   type as written. They survive today only because the in-memory table stores
-   whole objects. **On D1 they are two columns somebody has to add**, and
-   without them the feature becomes nagware while every test still passes.
-   Pinned by a round-trip test.
+   type as written. `onboarding.ts` widens the row instead — `NudgeRecord
+   extends ConnectNudge` with optional `asks` and `declines` — and it survives
+   today only because the in-memory table stores whole objects. **On D1 they are
+   two columns somebody has to add**, and without them the feature becomes
+   nagware while every test still passes. What is actually pinned, in
+   `onboarding.test.ts`, is the full ask → decline → re-ask at 14 days →
+   decline → `never-again` sequence, plus a bare-contract-row case (no counters
+   at all) proving the verdict degrades to the timestamps rather than throwing.
 6. **`ShadowRun` cannot be joined back to the pair it is evidence about** — it
    has `run_id` and `step_id` and no `user_id`/`signature_hash`/`app`.
 
-One correction that is **not** a gap: `TraceSummary.hosts` documents "eTLD+1
-only" and then gives `mail.google.com` as an example of a kept host, which is
-its own counter-example. The Observer follows the rule and drops the example,
-so Gmail, Calendar and Drive collapse to `google.com`. That decides whether
-they are one app or three in `CapabilityStats.app`, and therefore whether any
-of them ever accumulates enough runs to leave rung 0. **Somebody should settle
-it deliberately** and fix the comment; the decision is pinned by one assertion
-in `observer.test.ts`.
+One correction that is **not** a gap, and **it has been settled** — this
+paragraph used to end by asking somebody to settle it, which was already stale
+when it was written. `TraceSummary.hosts` documents "eTLD+1 only" and then gives
+`mail.google.com` as an example of a kept host, which is its own
+counter-example. The Observer follows the rule and drops the example, so Gmail,
+Calendar and Drive collapse to `google.com`. Two things settle what that costs:
+
+- `principalHost` (`src/observer.ts`) now puts **at most one** host in the
+  array, by a stated precedence — most top-level navigations, then most writes,
+  then most requests, then lexicographic so a tie breaks the same way twice. The
+  old summary listed every registrable domain the step touched, which on a
+  modern page is the app plus its CDN, its fonts, its analytics and whoever
+  bought the ad slot: a description of the PAGE, and through it of the person,
+  when the router asked one question and needs one answer. The field stays an
+  array because `contract.ts` was fixed before the parts were built.
+- The worry that the collapse "decides whether they are one app or three in
+  `CapabilityStats.app`" is **wrong as of `src/index.ts`**: `browserOutcome`
+  takes `app` from its caller and is forbidden by name from deriving it from
+  the trace, because a host→app table would not be a lookup, it would be a guess
+  about what the step MEANT written as a list of app names. Nothing routes on
+  `hosts`; it is evidence for learning.
+
+The remaining cost is stated rather than pinned: a step that genuinely touched
+two apps reports one, and on the request-count tiebreak a busy asset host can
+still win a step that had no navigation and no write. The `observer.test.ts`
+assertion this paragraph used to point at has changed shape to match — it no
+longer just checks that three Google subdomains collapse, it drives a fourth
+host (Stripe) through the same summary as the control, and asserts both halves:
+one app named, and the losing host counted but unnamed. Read here, not edited:
+`src/observer.ts` and `test/observer.test.ts` were owned by another pass on
+2026-09-05 and were being rewritten while this was written down. Re-check the
+two bullets above against the file before quoting them.
 
 ---
 
@@ -350,11 +436,16 @@ gate leg counting distinct rungs per (app, verb).
 
 ## 9. What an adversarial pass found in the instruments (2026-09-05)
 
-Four defects, all of one class: **a check that reported green while proving less
+Seven defects, all of one class: **a check that reported green while proving less
 than it claimed.** That class comes first because it is the one that lets every
 other class through — the fence, the blocker and the results document are what
-everything else in this spike is trusted on. Three are closed with legs that go
-red without the fix. The fourth is open and needs a file this pass did not own.
+everything else in this spike is trusted on. Six are closed with legs that go
+red without the fix. The seventh is open and needs a file that pass did not own.
+
+The last three were found by a SECOND adversarial pass over the first one's own
+work, which is the point of law 6: the fix for the placeholder blocker shipped
+with a hole in it and a test that could not see the hole, and nobody but another
+adversary was going to notice.
 
 - **THE FENCE DID NOT HOLD — two independent holes, both live, five legs green.**
   The specifier scanner required whitespace after the keyword
@@ -390,6 +481,61 @@ red without the fix. The fourth is open and needs a file this pass did not own.
   editing the filler. `test/run_ten.test.ts` is new and is the first test of the
   gate's key-free half; `run_ten.ts` now runs its `main()` only when it is the
   command, so that half can be imported without firing a run.
+- **THE FIXED BLOCKER WAS UPPERCASE-ONLY, AND ITS TEST COULD NOT SEE THAT.**
+  `PLACEHOLDER` was `/\{\{([A-Z0-9_]+)\}\}/g` — while a SECOND, any-case copy
+  (`PLACEHOLDER_ANY_CASE`) existed a dozen lines below and was read by the
+  hashed-field refusal alone. The gap between the two copies is exactly the hole
+  the shared-constant comment above them said could not happen: `{{person_a}}`
+  in the prompt, in `expected_effect` or in the grading rubric was not a
+  placeholder as far as the gate was concerned, so it was neither filled nor
+  swept, and the row ran against the owner's real Gmail and was SCORED against a
+  rubric naming a literal token. Mixed case is not exotic here — `makeSignature`
+  lower-cases `object`, so a hand-typed `{{PERSON_A}}` comes back out of it as
+  `{{person_a}}` with nobody choosing that. **The test could not have caught it:
+  its oracle `leftoverPlaceholders` was a character-for-character copy of the
+  pattern under test**, so the stub and the code were wrong together and the leg
+  reported clean. Both are fixed: one case-blind `PLACEHOLDER`, one `tokenName`
+  normalising to the uppercase spelling the owner is told to write in the local
+  file, `PLACEHOLDER_ANY_CASE` deleted; and the test's oracle is now
+  `/\{\{[^{}]*\}\}/g` — the adversary's question, strictly wider than the pattern
+  under test, which is the property a copy cannot have. Legs: a lower-case token
+  blocks when unanswered and fills when answered, `tokensIn` reports it in the
+  case he fills, and the hashed-field refusal is still case-blind with the second
+  regex gone.
+- **AND THE PADDED FORM `{{ PERSON_A }}` WAS INVISIBLE IN EVERY DIRECTION AT
+  ONCE.** Found by the widened oracle immediately after it was widened, which is
+  the argument for widening it. The spacing every templating language on earth
+  accepts made the token cease to exist for the harness: `tokensIn` did not list
+  it, so the owner was never asked for it; `substitute` neither filled it nor
+  reported it, so nothing blocked; and the literal `{{ PERSON_A }}` went to the
+  judge and to the GRADER. Measured before the fix, not reasoned about — a probe
+  printed `tokensIn []`, `missing []`, and the raw braces in both the prompt and
+  the rubric. `PLACEHOLDER` now tolerates the padding and FILLS it, rather than
+  merely refusing it, because the owner has an answer for that token and the run
+  can just work. **The known residual, written down rather than fixed:** a brace
+  pair the filler cannot name at all — `{{first-name}}`, `{{PERSON A}}`, `{{}}` —
+  is still neither filled nor reported. Closing it means a second, wider pattern
+  for the BLOCKER only (the floor shape: fill what is unambiguous, refuse
+  anything that still looks like a hole), and probably a BROKEN exit rather than
+  a missing-token list, since there is no key the owner could write to close one.
+  That was not built here: nobody has ever written one, and inventing a refusal
+  for a shape with no recorded instance is how a guard grows into an outage. The
+  inside of the pattern deliberately stays `[A-Za-z0-9_]` for the same reason —
+  a looser one starts reading ordinary prose as a hole.
+- **THE SWEEP THAT §5 CREDITS FOR "NOT A LIST OF FIELDS" WAS UNTESTED.** Delete
+  the sweep line and the whole suite stayed green: the test written for it
+  (`note_to_the_grader: "ask about {{PERSON_A}}"`) is reported by the deep
+  FILLER, which walks every string value at any depth, so it never reached the
+  sweep at all. A leg for `fillDeep` wearing the sweep's name. The sweep's own
+  cases are the two the filler CANNOT report, both now pinned and both verified
+  red with the sweep removed: a token in a KEY, which `fillDeep` is forbidden to
+  touch because input key names are hashed; and an answer that is ITSELF a
+  placeholder, because `String.replace` does not re-scan what a replacement
+  function returned — a half-pasted line in `ten_read_tasks.local.json` is
+  exactly what that looks like. The control beside them is that a good answer
+  carrying single braces (`Dana {Whitfield}`, `has:link {from:dana}`) still fills
+  and still runs: a sweep that refused every brace would be an outage wearing a
+  guard's name.
 - **OPEN — nobody routes the destructive direction.** See §1 claim 2. The test
   that would make that claim true is not written, and it belongs in
   `test/integration.test.ts`, which this pass did not own. What it has to do:
@@ -405,5 +551,10 @@ red without the fix. The fourth is open and needs a file this pass did not own.
   `GMAIL_ARCHIVE_THREAD`, and no decision on that signature ever carries
   `GMAIL_DELETE_THREAD` — including the run where the judge vouches for nothing,
   which must land on the browser with no tool rather than on the top score.
+  A fourth is worth having now that FINDING 2 is closed: `archive_thread` is an
+  `update`, which floors to `write`, so at rung 3 the decision must also carry
+  `requiresConfirmation: true`. That is the case the router leg deliberately
+  covers with an `update` too, and asserting it here ties the routed proof to
+  the confirmation rule rather than leaving them to be re-derived apart.
   Until that leg exists, `provider_fake.test.ts` proves the fixture is dangerous
   and nothing proves the router survives it.

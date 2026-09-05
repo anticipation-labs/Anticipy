@@ -18,6 +18,33 @@
 // the blocker is a sweep over the SERIALIZED task afterwards rather than a list
 // of fields. A blocker written as a list of fields is only ever as complete as
 // the last person who added a field to the task file.
+//
+// A SECOND ADVERSARIAL PASS FOUND THREE MORE, AND ALL THREE WERE IN THIS
+// FILE'S OWN BLIND SPOT, which is why they are called out here rather than
+// only at their legs:
+//
+//   1. The fixed blocker was UPPERCASE-ONLY, so `{{person_a}}` was still
+//      neither filled nor reported — and `makeSignature` lower-cases `object`,
+//      so mixed case is not an exotic way to author one. This file could not
+//      have caught it: its `leftoverPlaceholders` oracle was a
+//      character-for-character copy of the pattern under test, so the stub and
+//      the code were wrong in the same direction and the leg reported clean.
+//      The oracle is now deliberately WIDER than the code (`/\{\{[^{}]*\}\}/g`),
+//      which is the one property a copy cannot have.
+//   2. `{{ PERSON_A }}` — the padding every templating language accepts — was
+//      invisible in every direction at once: unlisted by `tokensIn`, unfilled,
+//      unreported, and shipped verbatim to the judge and the grader. It was
+//      found BY the widened oracle, minutes after widening it, which is the
+//      whole argument for widening it.
+//   3. The SWEEP had no leg of its own. The test written for it exercised the
+//      deep FILLER — delete the sweep and the suite stayed green. The sweep's
+//      real cases are the two the filler cannot report by construction: a token
+//      in a KEY, and an answer that is ITSELF a placeholder. Both are below,
+//      both verified red with the sweep line deleted.
+//
+// Rule for the next person adding to this file: a test whose expectation is
+// computed the same way the code computes it proves that the code is
+// self-consistent, not that it is right.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -67,11 +94,21 @@ function taskWith(over: {
   };
 }
 
-/** Everything that still looks like a placeholder, anywhere in the task. This
- *  is the adversary's view: it does not care which fields the filler knows
- *  about. */
+/** Everything that still looks like a placeholder, anywhere in the task.
+ *
+ *  THIS ORACLE IS DELIBERATELY NOT THE SOURCE'S PATTERN, and that is the whole
+ *  point of it. It used to be `/\{\{([A-Z0-9_]+)\}\}/g` — a character-for-
+ *  character copy of `run_ten.ts`'s own `PLACEHOLDER` — so it agreed with the
+ *  code about what a placeholder IS, and the two of them were wrong together:
+ *  neither could see `{{person_a}}`. A stub asserted against itself reports
+ *  100% and proves nothing. So this asks the adversary's question instead —
+ *  is there ANY brace-brace pair left in here — which is strictly wider than
+ *  the pattern under test and cannot be satisfied by copying it.
+ *
+ *  It returns the matched TEXT, not the token name, so a failure prints the
+ *  spelling that survived rather than a normalised guess at it. */
 function leftoverPlaceholders(task: TaskSpec): string[] {
-  return [...JSON.stringify(task).matchAll(/\{\{([A-Z0-9_]+)\}\}/g)].map((m) => m[1]).sort();
+  return [...JSON.stringify(task).matchAll(/\{\{[^{}]*\}\}/g)].map((m) => m[0]).sort();
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +149,117 @@ test("an UNFILLED placeholder in how_to_grade blocks the run", () => {
 });
 
 // ---------------------------------------------------------------------------
+// CASE. A placeholder is a placeholder whatever case it was typed in.
+// ---------------------------------------------------------------------------
+// The filler and the sweep shared one pattern — `[A-Z0-9_]` — while the
+// hashed-field refusal used a SECOND, any-case copy. So `{{person_a}}` in the
+// prompt or in the rubric was not a placeholder as far as the gate was
+// concerned: not filled, not reported, not blocked. The run went out to the
+// owner's real Gmail and the grader was handed a rubric naming a literal
+// `{{person_a}}`, and the gate printed a number for the row.
+//
+// Mixed case is not an exotic way to author one, either: `makeSignature`
+// lower-cases `object`, so a hand-typed {{PERSON_A}} comes back out of it as
+// {{person_a}} without anybody choosing that.
+test("a lower-case placeholder is a placeholder: filled when answered, blocking when not", () => {
+  const task = taskWith({
+    prompt: "did {{person_a}} reply?",
+    right_is: "the last mail from {{Person_A}} is shown",
+    checkable: ["every message is from {{person_a}}"],
+  });
+
+  const blocked = substitute([task], {});
+  assert.deepEqual(
+    blocked.missing,
+    ["PERSON_A"],
+    "an unanswered {{person_a}} must stop the gate; unseen, it is scored against a rubric naming a token",
+  );
+
+  // THE CONTROL. A blocker that refuses everything is an outage, not a guard:
+  // the same token, answered, must fill in every case it was typed in and
+  // leave nothing behind.
+  const filled = substitute([task], { PERSON_A: "Dana Whitfield" });
+  assert.deepEqual(filled.missing, []);
+  assert.deepEqual(leftoverPlaceholders(filled.tasks[0]), []);
+  assert.equal(filled.tasks[0].prompt, "did Dana Whitfield reply?");
+  assert.equal(filled.tasks[0].how_to_grade.right_is, "the last mail from Dana Whitfield is shown");
+  assert.equal(filled.tasks[0].how_to_grade.checkable_from_the_response[0], "every message is from Dana Whitfield");
+});
+
+// Found by the wider oracle above, which is the reason for widening it: a
+// human writing `{{ PERSON_A }}` — the spacing every templating language on
+// earth accepts — was invisible in EVERY direction at once. `tokensIn` did not
+// list it, so the owner was never asked for it; `substitute` did not fill it
+// and did not report it, so nothing blocked; and the literal went to the judge
+// and to the GRADER. Same defect as the lower-case one, one variant over, and
+// the only reason it is a separate leg is that it is a separate character
+// class.
+//
+// The filler tolerates the padding rather than the blocker merely refusing it,
+// because the owner has an answer for this token and the run can just work. It
+// stays narrow: the inside must still be one word of `[A-Za-z0-9_]`, so this is
+// not a step towards matching anything between two braces.
+test("a placeholder padded with spaces is filled, and unanswered it blocks", () => {
+  const task = taskWith({
+    prompt: "did {{ PERSON_A }} reply?",
+    right_is: "the last mail from {{  person_a  }} is shown",
+  });
+
+  assert.deepEqual(tokensIn([task]), ["PERSON_A"], "the owner is never asked for a token nobody lists");
+
+  const blocked = substitute([task], {});
+  assert.deepEqual(
+    blocked.missing,
+    ["PERSON_A"],
+    "unanswered, it must stop the gate — it used to sail through to the grader verbatim",
+  );
+
+  const filled = substitute([task], { PERSON_A: "Dana Whitfield" });
+  assert.deepEqual(filled.missing, []);
+  assert.deepEqual(leftoverPlaceholders(filled.tasks[0]), []);
+  assert.equal(filled.tasks[0].prompt, "did Dana Whitfield reply?");
+  assert.equal(filled.tasks[0].how_to_grade.right_is, "the last mail from Dana Whitfield is shown");
+});
+
+test("tokensIn reports a lower-case token, in the case the owner is asked to fill", () => {
+  // The owner is told to write PERSON_A in ten_read_tasks.local.json. If this
+  // reported `person_a` he would fill a key nothing looks up, the run would be
+  // refused for a token he can see with his own eyes in the file, and the only
+  // way out would be guessing at the case.
+  const task = taskWith({ prompt: "did {{person_a}} reply?", expected_effect: "mail from {{Person_B}} is listed" });
+  assert.deepEqual(tokensIn([task]), ["PERSON_A", "PERSON_B"]);
+});
+
+test("a lower-case placeholder in a HASHED field is still refused by name", () => {
+  // The refusal was already case-blind, through a second copy of the pattern
+  // that the filler did not share. That copy is gone; this is the leg that
+  // says deleting it did not take the case-blindness with it.
+  const doc = JSON.parse(readFileSync(TASKS_FILE, "utf8"));
+  const victim = doc.tasks[0];
+  const sig = makeSignature({
+    app_hint: victim.signature.app_hint,
+    verb: victim.signature.verb,
+    object: "the calendar of {{person_a}}",
+    inputs: victim.signature.inputs,
+    expected_effect: victim.signature.expected_effect,
+    side_effect: victim.signature.side_effect,
+    account_hint: victim.signature.account_hint,
+  });
+  doc.tasks[0] = { ...victim, signature: { ...sig } };
+
+  const dir = mkdtempSync(join(tmpdir(), "two-hands-tasks-"));
+  const file = join(dir, "ten_read_tasks.json");
+  try {
+    writeFileSync(file, JSON.stringify(doc));
+    assert.throws(() => loadTasks(file), /hashed field/);
+    assert.throws(() => loadTasks(file), /PERSON_A/,
+      "reported in the case he fills, not the case makeSignature happened to leave it in");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // THE EXPECTED EFFECT — the field the judge AND the grader are both shown.
 // ---------------------------------------------------------------------------
 test("a placeholder in the expected effect is filled and, unanswered, blocks the run", () => {
@@ -148,23 +296,80 @@ test("a placeholder nested inside an input value is filled, not just a top-level
 // ---------------------------------------------------------------------------
 // THE SWEEP — the blocker must not be a list of fields.
 // ---------------------------------------------------------------------------
-test("nothing that still looks like a placeholder survives substitution unreported", () => {
-  // A field no filler was written for. The next person to add a line to
-  // ten_read_tasks.json adds one of these, and the blocker has to see it
-  // without being edited — otherwise the fence is only as wide as the last
-  // author's memory.
+test("a field no filler was written for is still filled and still blocks", () => {
+  // The next person to add a line to ten_read_tasks.json adds one of these,
+  // and the harness has to cope without being edited — otherwise the fence is
+  // only as wide as the last author's memory.
+  //
+  // NOTE what this proves and what it does NOT. The deep FILLER walks every
+  // string value at any depth, so it is the filler, not the sweep, that
+  // reports this one: delete the sweep and this test stays green. It is a leg
+  // for `fillDeep`, and it was the only leg the sweep had. The two tests below
+  // are the sweep's own, and they are the ones that go red without it.
   const task = { ...taskWith({}), note_to_the_grader: "ask about {{PERSON_A}}" } as unknown as TaskSpec;
 
-  const { tasks, missing } = substitute([task], {});
+  const { missing } = substitute([task], {});
   assert.deepEqual(
     missing,
     ["PERSON_A"],
-    "the blocker must sweep the whole task after filling, not consult a list of fields it knows",
+    "the filler must walk the whole task, not consult a list of fields it knows",
   );
 
   const filled = substitute([task], { PERSON_A: "Dana" });
   assert.deepEqual(filled.missing, []);
   assert.deepEqual(leftoverPlaceholders(filled.tasks[0]), []);
+});
+
+test("THE SWEEP: an answer that is itself a placeholder does not walk through", () => {
+  // The filler cannot see this one BY CONSTRUCTION. `String.replace` does not
+  // re-scan what a replacement function returned, so the token is consumed,
+  // `missing` never hears about it, and a literal `{{PERSON_B}}` is now in the
+  // prompt and in the rubric with every field the filler knows about reporting
+  // clean. Only a pass over the FINISHED task can catch it.
+  //
+  // Not hypothetical: `ten_read_tasks.local.json` is hand-written at 2am by
+  // the one person who knows the names, and a half-pasted line is what a
+  // half-pasted line looks like.
+  const task = taskWith({ prompt: "did {{PERSON_A}} reply?", right_is: "the mail from {{PERSON_A}} is shown" });
+
+  const { tasks, missing } = substitute([task], { PERSON_A: "{{PERSON_B}}" });
+  assert.deepEqual(
+    missing,
+    ["PERSON_B"],
+    "the blocker must ask the finished task, not the fields the filler walked past",
+  );
+  assert.deepEqual(leftoverPlaceholders(tasks[0]), ["{{PERSON_B}}", "{{PERSON_B}}"]);
+});
+
+test("THE SWEEP: a placeholder in a KEY is reported, because the filler is forbidden to touch keys", () => {
+  // `fillDeep` leaves keys alone on purpose — input key names are in the
+  // signature hash, so filling one would key the run to a capability nothing
+  // else computes. The consequence is that a token in ANY key is invisible to
+  // the filler, and this one is outside the hashed fields so `loadTasks`'s
+  // refusal never sees it either. The sweep is the only thing left.
+  const task = { ...taskWith({}), notes: { "{{PERSON_A}}": "who to ask about" } } as unknown as TaskSpec;
+
+  const { missing } = substitute([task], { PERSON_A: "Dana" });
+  assert.deepEqual(
+    missing,
+    ["PERSON_A"],
+    "answered or not, a token in a key cannot be filled — it has to be reported, never silently shipped",
+  );
+});
+
+test("THE SWEEP does not refuse a perfectly good answer that happens to carry braces", () => {
+  // THE CONTROL. A sweep that fired on any brace would make the feature
+  // unreachable for anyone whose name, channel or search string has one in it,
+  // and an outage dressed as a guard is the failure this pass is here to
+  // avoid. Only a brace-brace PAIR is a placeholder.
+  const task = taskWith({ prompt: "did {{PERSON_A}} reply?", right_is: "the search {{SLACK_SEARCH}} is used" });
+  const { tasks, missing } = substitute([task], {
+    PERSON_A: "Dana {Whitfield}",
+    SLACK_SEARCH: "has:link {from:dana}",
+  });
+  assert.deepEqual(missing, [], "single braces are text, not a hole");
+  assert.deepEqual(leftoverPlaceholders(tasks[0]), []);
+  assert.equal(tasks[0].prompt, "did Dana {Whitfield} reply?");
 });
 
 // ---------------------------------------------------------------------------

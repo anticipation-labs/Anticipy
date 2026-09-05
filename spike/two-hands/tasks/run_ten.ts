@@ -619,19 +619,22 @@ export function loadTasks(tasksFile: string = TASKS_FILE): LoadedTasks {
     // whether a tool does a step about "{{PERSON_A}}". Neither is a
     // measurement, so the file is refused with the reason named.
     //
-    // Both spellings of the field, and case-blind. makeSignature lower-cases
-    // the object, so a hand-written {{PERSON_A}} reads as {{person_a}} once it
-    // has been through it — and the task file stores the normalised form, so
-    // which of the two a token turns up in depends only on how the entry was
-    // authored. A check that saw one spelling and not the other would be a
-    // check that passes on half the ways of committing the mistake.
+    // Both spellings of the field. makeSignature lower-cases the object, so a
+    // hand-written {{PERSON_A}} reads as {{person_a}} once it has been through
+    // it — and the task file stores the normalised form, so which of the two a
+    // token turns up in depends only on how the entry was authored. A check
+    // that saw one spelling and not the other would be a check that passes on
+    // half the ways of committing the mistake. The case-blindness this needs
+    // now lives in PLACEHOLDER itself, which is what the filler and the sweep
+    // read too; it used to be a second regex only this line had, and the gap
+    // between the two copies is the hole described at PLACEHOLDER.
     const hashedText = [
       String(entry.signature?.object ?? ""),
       rebuilt.object,
       ...Object.keys(entry.signature?.inputs ?? {}),
       ...Object.keys(rebuilt.inputs ?? {}),
     ].join(" ");
-    const inHash = [...new Set([...hashedText.matchAll(PLACEHOLDER_ANY_CASE)].map((m) => m[1].toUpperCase()))];
+    const inHash = [...new Set(placeholdersIn(hashedText))];
     if (inHash.length > 0) {
       throw new TaskFileBroken(
         `${entry.id}: {{${inHash.join("}}, {{")}}} sits in a hashed field (the object, or an input KEY name); ` +
@@ -657,9 +660,38 @@ export function loadTasks(tasksFile: string = TASKS_FILE): LoadedTasks {
   return { tasks, tokens: tokensIn(tasks) };
 }
 
-/** The gate's placeholder syntax, written once. The filler and the blocker read
- *  the same constant on purpose: two copies of this regex is how a hole gets
- *  filled by one and reported by neither.
+/** The gate's placeholder syntax, written once. The filler, the blocker and
+ *  the hashed-field refusal read the same constant on purpose: two copies of
+ *  this regex is how a hole gets filled by one and reported by neither.
+ *
+ *  IT IS CASE-BLIND, and there used to be two of these. The filler and the
+ *  sweep shared `[A-Z0-9_]` while the hashed-field refusal kept a second,
+ *  any-case copy for itself. The gap between the two copies is exactly the
+ *  hole the shared-constant comment above says cannot happen: `{{person_a}}`
+ *  in the prompt, in `expected_effect` or in the grading rubric was not a
+ *  placeholder as far as the gate was concerned, so it was neither filled nor
+ *  reported — the run went out to the owner's real Gmail and the GRADER was
+ *  handed a rubric naming a literal `{{person_a}}`, and the gate printed a
+ *  score for that row. Mixed case is not an exotic way to author one either:
+ *  `makeSignature` lower-cases `object`, so a hand-typed {{PERSON_A}} comes
+ *  back out of it as {{person_a}} without anyone choosing that.
+ *
+ *  IT TOLERATES PADDING — `{{ PERSON_A }}` — for the same reason and from the
+ *  same defect. Every templating language a person has ever met accepts those
+ *  spaces, and before this the padded form was invisible in EVERY direction at
+ *  once: `tokensIn` did not list it, so the owner was never asked for it;
+ *  `substitute` neither filled nor reported it, so nothing blocked; and the
+ *  literal reached the judge and the grader. The padding is tolerated rather
+ *  than merely refused because the owner HAS an answer for that token and the
+ *  run can simply work.
+ *
+ *  The inside stays one word of `[A-Za-z0-9_]`. This is not a step towards
+ *  matching anything between two braces: a pattern that loose starts reading
+ *  ordinary prose as a hole, and a gate that refuses on prose gets deleted by
+ *  the next person in a hurry. The KNOWN residual is a brace pair the filler
+ *  cannot name at all (`{{first-name}}`, `{{PERSON A}}`, `{{}}`): it is not
+ *  filled and not reported, because there is no key the owner could write to
+ *  close it — see RESULTS.md §9.
  *
  *  Shared as one `/g` object safely, and only because of how it is used:
  *  `String.replace` resets `lastIndex` to 0 on a global regex and leaves it
@@ -667,16 +699,22 @@ export function loadTasks(tasksFile: string = TASKS_FILE): LoadedTasks {
  *  `.exec()` on this object would leave state behind and the next scan would
  *  start mid-string — the shape where a check skips the very text it exists to
  *  read. Do not add one. */
-const PLACEHOLDER = /\{\{([A-Z0-9_]+)\}\}/g;
+const PLACEHOLDER = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
 
-function placeholdersIn(text: string): string[] {
-  return [...text.matchAll(PLACEHOLDER)].map((m) => m[1]);
+/** One spelling for a token, everywhere it is compared, reported or looked up.
+ *
+ *  Uppercase because that is the spelling the owner is told to write in
+ *  `ten_read_tasks.local.json` (RESULTS.md §3 step 5). Normalising anywhere
+ *  else would make `{{person_a}}` a hole he cannot close: the harness would ask
+ *  him for `person_a`, the answer he already wrote under `PERSON_A` would not
+ *  be found, and the only way out would be guessing at the case. */
+function tokenName(raw: string): string {
+  return raw.toUpperCase();
 }
 
-/** The same shape, case-blind, for the one check that has to see a token AFTER
- *  makeSignature has lower-cased the field it sits in. Nothing fills these —
- *  finding one is a refusal. */
-const PLACEHOLDER_ANY_CASE = /\{\{([A-Za-z0-9_]+)\}\}/g;
+function placeholdersIn(text: string): string[] {
+  return [...text.matchAll(PLACEHOLDER)].map((m) => tokenName(m[1]));
+}
 
 /** Every {{TOKEN}} anywhere in the task list.
  *
@@ -723,21 +761,36 @@ function fillDeep<T>(value: T, fill: (text: string) => string): T {
  *  then score the answer against a rubric about a person who does not exist,
  *  and report a number for it.
  *
- *  Two changes keep that shut. The filler walks the whole task rather than a
- *  list of fields, and the blocker is a SWEEP over the serialized result: if
- *  anything anywhere still looks like a placeholder after filling, the run is
- *  refused, whether or not this function knew the field existed. */
+ *  Three changes keep that shut. The filler walks the whole task rather than a
+ *  list of fields; `PLACEHOLDER` is case-blind, so a hand-typed `{{person_a}}`
+ *  is the same hole as `{{PERSON_A}}`; and the blocker is a SWEEP over the
+ *  serialized result: if anything anywhere still looks like a placeholder after
+ *  filling, the run is refused, whether or not this function knew the field
+ *  existed.
+ *
+ *  The sweep earns its place on the two cases the filler CANNOT report, and
+ *  both have legs in `test/run_ten.test.ts`: a token in a KEY, which `fillDeep`
+ *  is forbidden to touch because input key names are hashed; and an answer that
+ *  is ITSELF a placeholder, because `String.replace` does not re-scan what a
+ *  replacement function returned. In both the filler finishes reporting
+ *  nothing missing while a literal `{{TOKEN}}` sits in the text a model is
+ *  about to be handed. */
 export function substitute(
   tasks: TaskSpec[],
   answers: Record<string, string>,
 ): { tasks: TaskSpec[]; missing: string[] } {
   const missing = new Set<string>();
   const fill = (text: string): string =>
-    text.replace(PLACEHOLDER, (_all, name: string) => {
+    text.replace(PLACEHOLDER, (all: string, raw: string) => {
+      const name = tokenName(raw);
       const value = answers[name];
       if (typeof value !== "string" || value.trim() === "") {
         missing.add(name);
-        return `{{${name}}}`;
+        // The ORIGINAL spelling back, unedited. Rewriting an unanswered
+        // {{person_a}} to {{PERSON_A}} would quietly change a task the owner
+        // is about to be shown the refusal for, and the sweep below reads it
+        // the same either way.
+        return all;
       }
       return value;
     });

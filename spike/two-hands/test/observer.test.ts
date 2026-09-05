@@ -13,6 +13,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   createObserver,
@@ -717,13 +719,76 @@ test("a tie between a nameable bystander and an unnameable one resolves to unkno
   assert.deepEqual(summary.hosts, []);
 });
 
+// THE OTHER HALF OF THE SHAPE RULE — the one it kept getting wrong.
+//
+// `looksLikeUnknownSuffix` used to fire on a registry-shaped label under ANY
+// two-letter TLD, and most two-letter TLDs are not organised like `.uk`: their
+// registry sells names straight at the second level, so `web.de` and `id.me`
+// are whole sites and there is no boundary above them to be unsure about. The
+// rule refused them anyway — it was not "one host lost on an unusual name", it
+// was every site whose own name happens to be a registry word, on every flat
+// namespace, which includes the whole of the `.io` / `.ai` / `.tv` / `.me`
+// generation these apps actually live on.
+const FLAT_NAMESPACE_HOSTS: ReadonlyArray<readonly [string, string]> = [
+  ["https://www.web.de/mail", "web.de"],          // one of Germany's largest mail hosts
+  ["https://www.id.me/verify", "id.me"],          // identity checks, and an app an agent would drive
+  ["https://api.store.io/orders", "store.io"],
+  ["https://www.web.tv/watch", "web.tv"],
+  ["https://help.info.nl/x", "info.nl"],
+  ["https://app.pro.ai/x", "pro.ai"],
+  ["https://a.b.name.co/x", "name.co"],
+  ["https://docs.gen.ch/x", "gen.ch"],
+];
+
+test("a site under a two-letter TLD with no registry structure keeps its name", () => {
+  for (const [url, expected] of FLAT_NAMESPACE_HOSTS) {
+    assert.equal(
+      registrableDomain(url), expected,
+      `${url}: nothing sits between "${expected}" and the registry, so there is no `
+        + "boundary to be unsure about and no reason to withhold the name",
+    );
+  }
+});
+
+test("the guard still fires where a suffix really could be missing - the control", () => {
+  // The widening above must not have turned the guard off. These are the cases
+  // it exists for: a ccTLD that really does organise its namespace, under which
+  // a registry-shaped label really might be a suffix this file's copy has not
+  // heard of. Guessing here merges a bank and a clinic into one app.
+  for (const url of [
+    "https://www.example.com.gr/x",   // Greece organises .gr; com.gr is not carried
+    "https://www.example.nhs.uk/x",   // the UK organises .uk; nhs.uk is not carried
+    "https://www.example.ac.at/x",    // Austria organises .at; ac.at is not carried
+    "https://www.example.co.it/x",    // Italy organises .it down to province codes
+  ]) {
+    assert.equal(registrableDomain(url), null, `${url}: an unknown suffix must not be guessed at`);
+  }
+});
+
 test("the rule's own cost, written down rather than discovered", () => {
-  // `.it` has no `co.it` public suffix, so `co.it` IS the registrable domain of
-  // www.example.co.it and the old code got it right. The new rule refuses to
-  // name it, because it cannot tell that case from `com.gr`. The trade: one
-  // host lost on an unusual name, against every site under an unknown ccTLD
-  // suffix silently merging into one. It is a test so the trade stays visible.
-  assert.equal(registrableDomain("https://www.example.co.it/x"), null);
+  // THE COST, RESTATED 2026-09-05 BECAUSE THE OLD SENTENCE UNDERSOLD IT BY TWO
+  // ORDERS OF MAGNITUDE. It used to read "one host lost on an unusual name",
+  // and named `co.it` as that host — which is not even an example of the cost,
+  // since Italy's registry really does carry province codes (`co.it` is Como)
+  // and withholding the name there is the rule being RIGHT.
+  //
+  // The real cost is the class below: a ccTLD that organises its namespace AND
+  // also sells names directly at the second level — `.uk` has done both since
+  // 2014, and so do `.jp`, `.pl`, `.ru` and `.es`. Under those, a company whose
+  // own name happens to be a registry word is indistinguishable from a suffix
+  // this file's copy has not heard of, and it loses its name. That is a real
+  // company per registry word per structured ccTLD, not one host.
+  //
+  // It is still the right trade — a lost name costs a missed API suggestion,
+  // a guessed one merges a bank and a clinic into a single app — but it is
+  // paid, and a test is where a price stays visible.
+  for (const url of [
+    "https://www.example.co.it/x",     // right answer, for the record: Como province
+    "https://www.store.uk/x",          // wrong answer: .uk sells at the second level too
+    "https://www.web.pl/x",            // wrong answer, same shape
+  ]) {
+    assert.equal(registrableDomain(url), null, url);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -798,6 +863,202 @@ test("the step still receiving events is never the one the cap evicts", () => {
   assert.equal(observer.steps().length, MAX_RETAINED_STEPS);
 });
 
+// ---------------------------------------------------------------------------
+// EVICTION IS A FACT ABOUT THE STEP, SO SOMEBODY HAS TO BE ABLE TO READ IT.
+// ---------------------------------------------------------------------------
+// The cap keeps the promise. What it used to do silently was destroy the
+// difference between two very different steps: one whose trace was thrown away
+// before anyone read it, and one where nothing ever happened. Both summarize to
+// zero hosts, zero counts and duration 0 — and `browserOutcome` files that as a
+// ledger row saying the browser hand did the work in no time at all. A hand
+// that looks instant is a hand the ladder prefers, so a silent eviction does
+// not merely lose a row, it TILTS the comparison the whole spike exists to
+// settle. These legs make the eviction sayable.
+
+test("an evicted step is visible as evicted, not as a step where nothing happened", () => {
+  const observer = createObserver();
+  observer.observe(req({ run_id: "run-a", step_id: "s0", url: "https://google.com/x" }));
+  for (let i = 1; i <= MAX_RETAINED_STEPS; i += 1) {
+    observer.observe(req({ run_id: "run-a", step_id: `s${i}`, url: "https://stripe.com/x" }));
+  }
+  assert.deepEqual(observer.summarize("run-a", "s0").hosts, [], "the trace really is gone");
+  assert.equal(observer.wasEvicted("run-a", "s0"), true, "and the caller can find out that it is gone");
+  assert.equal(observer.evictions, 1);
+});
+
+test("a step nobody ever observed is not reported as evicted - the control", () => {
+  // The whole value of the flag is that it separates two empty summaries. A
+  // flag that said yes to both would be a second silence wearing a name.
+  const observer = createObserver();
+  assert.equal(observer.wasEvicted("run-none", "step-none"), false);
+  assert.equal(observer.evictions, 0);
+  observer.observe(req());
+  assert.equal(observer.wasEvicted(RUN, STEP), false, "a live step is not an evicted one");
+  assert.equal(observer.evictions, 0);
+});
+
+test("a step read and released the healthy way is not reported as evicted", () => {
+  // `summarizeAndForget` is the end of a step's life that nobody needs to be
+  // told about: the trace is gone because a reader took it, not because the cap
+  // took it. Reporting that as an eviction would cry wolf on every finished
+  // step and the flag would stop being read.
+  const observer = createObserver();
+  observer.observe(req());
+  observer.summarizeAndForget(RUN, STEP);
+  assert.equal(observer.wasEvicted(RUN, STEP), false);
+  assert.equal(observer.evictions, 0);
+});
+
+test("forget releases its own run's eviction marks and leaves other runs' alone", () => {
+  // The marks are run/step ids — the caller's own labels, never a host, a count
+  // or a clock — but they are still held state, and the module's rule is that
+  // held state has an end. `forget` is that end.
+  const observer = createObserver();
+  observer.observe(req({ run_id: "run-a", step_id: "s0", url: "https://google.com/x" }));
+  observer.observe(req({ run_id: "run-b", step_id: "s0", url: "https://google.com/x" }));
+  for (let i = 1; i <= MAX_RETAINED_STEPS; i += 1) {
+    observer.observe(req({ run_id: "run-c", step_id: `s${i}`, url: "https://stripe.com/x" }));
+  }
+  assert.equal(observer.wasEvicted("run-a", "s0"), true);
+  assert.equal(observer.wasEvicted("run-b", "s0"), true);
+  observer.forget("run-a");
+  assert.equal(observer.wasEvicted("run-a", "s0"), false, "forgotten means forgotten");
+  assert.equal(observer.wasEvicted("run-b", "s0"), true, "and only for the run that was forgotten");
+  assert.equal(observer.evictions, 2, "the count is the Observer's life total and does not un-happen");
+});
+
+test("the eviction marks are capped too, so they cannot become the accumulation they warn about", () => {
+  // A mark per evicted step, kept for ever, is the same unbounded record of
+  // where the owner has been that the cap was added to prevent — one field
+  // narrower. The count survives; the individual marks do not have to.
+  const observer = createObserver();
+  for (let i = 0; i < MAX_RETAINED_STEPS * 4; i += 1) {
+    observer.observe(req({ run_id: "run-a", step_id: `s${i}`, url: "https://stripe.com/x" }));
+  }
+  assert.ok(observer.evictions >= MAX_RETAINED_STEPS * 2, "plenty was evicted");
+  assert.ok(
+    observer.markedEvictions <= MAX_RETAINED_STEPS,
+    "and the marks are bounded, however many evictions there were",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// IS THE LIFECYCLE ACTUALLY WIRED? — a red leg, not a paragraph
+// ---------------------------------------------------------------------------
+// `summarizeAndForget` is written, documented as THE CALL A FINISHED STEP
+// SHOULD USE, tested six ways above — and called by nothing the spike ships.
+// `browserOutcome` (src/index.ts) calls plain `summarize`, so every finished
+// step's trace stays in the service worker until the cap pushes it out, which
+// is the accumulation this module's header promises does not happen. And when
+// the cap does push it out, `browserOutcome` reads `duration_ms` 0 off an empty
+// summary and files a ledger row claiming the browser hand did the work
+// instantly.
+//
+// Both halves are one edit in one function, and that function is in a file this
+// pass does not own. So the wiring gets a leg, the way signature.test.ts's
+// verifySignatureHash leg did before it was closed: RED until src/index.ts
+// makes the calls, and closed by WIRING, never by softening the assertion.
+// HARNESS-LAWS law 2 names the failure one layer out — documentation that reads
+// as compliance and enforces nothing.
+
+/** The spike's own shipped source — src/ and tasks/, never test/. Being called
+ *  by a test is precisely the state this leg exists to reject. */
+function shippedSources(): string[] {
+  const out: string[] = [];
+  for (const dir of ["src", "tasks"]) {
+    const base = fileURLToPath(new URL(`../${dir}/`, import.meta.url));
+    for (const name of readdirSync(base)) {
+      if (name.endsWith(".ts")) out.push(base + name);
+    }
+  }
+  return out;
+}
+
+/**
+ * Comments and string literals replaced with spaces.
+ *
+ * A deliberate copy of the helper in signature.test.ts — test files must not
+ * import each other, because importing a suite runs it. Without it this leg
+ * passes on a source file that merely MENTIONS the call: "browserOutcome should
+ * use summarizeAndForget one day" in a comment would close the leg that exists
+ * to catch exactly that shape of compliance.
+ *
+ * It over-blanks inside `${...}` interpolations and inside a regex literal
+ * containing a quote, and that is the direction to be wrong in: over-blanking
+ * can only HIDE a call, which leaves the leg red and sends somebody to look.
+ */
+function codeOnly(source: string): string {
+  const out: string[] = [];
+  let quote: string | null = null;
+  let comment: "line" | "block" | null = null;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    const next = source[i + 1];
+    if (comment === "line") {
+      if (ch === "\n") { comment = null; out.push(ch); } else out.push(" ");
+      continue;
+    }
+    if (comment === "block") {
+      if (ch === "*" && next === "/") { comment = null; out.push("  "); i++; }
+      else out.push(ch === "\n" ? ch : " ");
+      continue;
+    }
+    if (quote !== null) {
+      if (ch === "\\") { out.push("  "); i++; continue; }
+      if (ch === quote) { quote = null; out.push(ch); continue; }
+      out.push(ch === "\n" ? ch : " ");
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") { quote = ch; out.push(ch); continue; }
+    if (ch === "/" && next === "/") { comment = "line"; out.push(" "); continue; }
+    if (ch === "/" && next === "*") { comment = "block"; out.push(" "); continue; }
+    out.push(ch);
+  }
+  return out.join("");
+}
+
+/** Shipped files that mention `name`, with the Observer's own definition of it
+ *  excluded — defining a thing is not calling it. */
+function shippedCallersOf(name: string): string[] {
+  return shippedSources().filter((f) => {
+    if (f.endsWith("/observer.ts")) return false;
+    return codeOnly(readFileSync(f, "utf8")).includes(name);
+  });
+}
+
+// BOTH DIRECTIONS WERE DRIVEN BEFORE THIS SHIPPED, against a copy of the spike
+// with the wiring planted in it — a leg that can never go green is a wall, not
+// a fence. The name in a comment leaves it RED; `summarizeAndForget` alone
+// leaves it RED (half a fix must not read as a whole one); both calls in
+// `browserOutcome` turn it GREEN.
+//
+// Planting the real fix also turned up what else the edit touches, which is
+// worth having in front of whoever makes it: `runBrowserStep` in
+// test/integration.test.ts calls `browserOutcome` and then summarizes AGAIN for
+// its assertions, so a consuming read inside `browserOutcome` hands it an empty
+// summary. Summarizing before filing the row rather than after fixes it, and
+// the whole suite is green with both changes in place.
+test("the finished-step lifecycle is wired by shipped code, not only by this file", () => {
+  // Both assertions in one leg on purpose: they are one edit to one function,
+  // and a leg that went green on half of it would leave the other half looking
+  // settled. Order is the order somebody fixing this would do them in.
+  assert.ok(
+    shippedCallersOf("summarizeAndForget").length > 0,
+    "summarizeAndForget is exported, documented as THE CALL A FINISHED STEP SHOULD USE, "
+      + "and called by nothing the spike ships. browserOutcome (src/index.ts) is the site: "
+      + "it is the one caller that KNOWS a browser step is over, and it calls plain "
+      + "summarize, so the trace it just read stays in the service worker. This leg is RED "
+      + "on purpose and closes by WIRING it, never by relaxing this assertion.",
+  );
+  assert.ok(
+    shippedCallersOf("wasEvicted").length > 0,
+    "nothing reads wasEvicted, so an evicted step still reaches the ledger as a browser "
+      + "row with ms 0 - a hand that looks instant, which is the hand the ladder prefers. "
+      + "browserOutcome (src/index.ts) must ask before it files a duration it read off an "
+      + "empty summary.",
+  );
+});
+
 test("readHost tells 'no site here' apart from 'a site we cannot name'", () => {
   // The two are different facts and they get different treatment at ingest: a
   // chrome-extension:// request is not a site and its counts are meaningless,
@@ -811,6 +1072,89 @@ test("readHost tells 'no site here' apart from 'a site we cannot name'", () => {
 });
 
 // ---------------------------------------------------------------------------
+// WHAT THE DISCLOSURE MAY PROMISE IS WHAT principalHost CAN DELIVER.
+// ---------------------------------------------------------------------------
+// The copy has now been wrong twice in the same direction, and both times the
+// sentence was written from what `principalHost` is FOR rather than from what
+// its rules DO. Only rule 1 — the most top-level navigations — structurally
+// cannot name a bystander, because a company whose font a page loads never
+// becomes the document. Rules 2, 3 and 4 can each name one, and the three tests
+// below DRIVE them, so the copy is pinned to executed behaviour rather than to
+// a description of it.
+//
+// They point both ways on purpose. If a later change narrows `principalHost` so
+// that an advert or font company can never win, these go RED — and whoever
+// narrowed it gets to make the promise stronger in the same diff, deliberately,
+// instead of the copy and the code drifting apart again in silence.
+
+test("rule 2: a company the page merely loads can take the one name, on a write", () => {
+  // A traffic-counting beacon is a POST that comes back 2xx, which is exactly
+  // what rule 2 calls "the app acting". This step read a page, so the app's own
+  // requests are all GETs and the counter outranks it. Nothing here is a bug —
+  // the router only ever learns from this field — but a disclosure that swore
+  // the name was never a tracking company would be false on this trace.
+  const summary = summarize([
+    req({ url: "https://mail.google.com/sync/i/fd" }),
+    req({ url: "https://mail.google.com/sync/i/bv" }),
+    req({ url: "https://www.google-analytics.com/g/collect", method: "POST", status: 200 }),
+  ]);
+  assert.deepEqual(summary.hosts, ["google-analytics.com"]);
+});
+
+test("rule 3: a font or advert company can take the one name on volume alone", () => {
+  // No navigation and no write — an SPA step that only read. Then the only
+  // thing left to rank on is how much noise each host made, and on a modern
+  // page the asset hosts make most of it.
+  const events: ObservedEvent[] = [req({ url: "https://www.notion.so/api/v3/loadPage" })];
+  for (let i = 0; i < 12; i += 1) {
+    events.push(req({ url: `https://fonts.gstatic.com/s/roboto-${i}.woff2` }));
+  }
+  assert.deepEqual(summarize(events).hosts, ["gstatic.com"]);
+});
+
+test("rule 4: on a dead tie the name goes to whichever sorts first, advert network included", () => {
+  // One request each. The tie-break is alphabetical so two identical traces
+  // hash the same way, and "adnxs.com" sorts before "notion.so".
+  const summary = summarize([
+    req({ url: "https://www.notion.so/api/v3/loadPage" }),
+    req({ url: "https://ads.adnxs.com/ttj" }),
+  ]);
+  assert.deepEqual(summary.hosts, ["adnxs.com"]);
+});
+
+// The sentences the copy has claimed and could not keep. They are listed by the
+// exact words that shipped, so that neither can come back by being re-typed
+// from memory. A Limited Use disclosure that UNDER-states what is collected is
+// the worst direction to be wrong in: it is the direction a reviewer, and the
+// owner, would call a false statement rather than a rough one.
+const RETIRED_DISCLOSURE_CLAIMS: readonly string[] = [
+  // Shipped until 2026-09-05. Rules 2, 3 and 4 above each name one of exactly
+  // those companies.
+  "not the advert, font and tracking companies",
+  // Shipped beside it, and false for the same reason: the one name kept is not
+  // always the site the step was working in.
+  "only the one site it was working in",
+  // Near misses of the same promise, listed so a rewrite cannot reintroduce it
+  // in different words.
+  "only the site you visited",
+  "never a company you did not visit",
+  "only the site you were on",
+];
+
+test("the disclosure copy makes no promise principalHost can break", () => {
+  const copy = normalized();
+  for (const claim of RETIRED_DISCLOSURE_CLAIMS) {
+    assert.ok(
+      !copy.includes(claim.toLowerCase()),
+      `the disclosure claims "${claim}", and the three tests above show `
+        + "principalHost naming an advert, font or traffic-counting company as the "
+        + "one site. Either the copy tells the truth or principalHost stops being "
+        + "able to do it; a promise the code can break is not a disclosure.",
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
 // THE DISCLOSURE COPY.
 // ---------------------------------------------------------------------------
 // The checklist lives HERE, not in observer.ts, on purpose: copy that declares
@@ -821,10 +1165,17 @@ test("readHost tells 'no site here' apart from 'a site we cannot name'", () => {
 const DISCLOSURE_REQUIREMENTS: ReadonlyArray<{ element: string; mustSay: readonly string[] }> = [
   { element: "what is collected: the host", mustSay: ["the site name"] },
   { element: "what is collected: counts", mustSay: ["a count of how many requests"] },
-  // Added 2026-09-05 with the one-host summary. The copy used to imply every
-  // site a page touched, which is what the code actually did; both changed.
-  { element: "what is NOT collected: the page's third parties",
-    mustSay: ["only the one site it was working in"] },
+  // Added 2026-09-05 with the one-host summary: the copy used to imply every
+  // site a page touched, and the code had stopped doing that. Rewritten the
+  // same day, because the replacement was false in the other direction — it
+  // swore the one name was never one of the page's own advert, font or
+  // traffic-counting companies, and rules 2, 3 and 4 of `principalHost` each
+  // name one. What survives is the part that IS structural (one name, never a
+  // list) plus the admission that the one name is a guess.
+  { element: "what is collected: one name, never a list",
+    mustSay: ["one site name", "never a list of every company a page talks to"] },
+  { element: "and that one name can be a company the page loads rather than the site",
+    mustSay: ["can be that company instead of the site"] },
   { element: "never collected: request and response bodies",
     mustSay: ["what you typed", "what was sent", "what came back"] },
   { element: "never collected: page titles", mustSay: ["the page title"] },

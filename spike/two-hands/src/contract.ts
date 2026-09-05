@@ -235,9 +235,21 @@ export interface Router {
 export interface TraceSummary {
   run_id: string;
   step_id: string;
-  /** AT MOST ONE registrable domain: the one site the step was working in, as
-   *  `principalHost` picks it. Never a path, a query string, a fragment or a
-   *  subdomain — `google.com`, not `mail.google.com`.
+  /** AT MOST ONE registrable domain — `principalHost`'s single best guess at
+   *  which app the step was in. Never a path, a query string, a fragment or a
+   *  subdomain: `google.com`, not `mail.google.com`.
+   *
+   *  IT IS A GUESS, AND IT CAN NAME A BYSTANDER. Do not read this field as
+   *  "the site the step was working in" — that sentence was shipped twice, is
+   *  false both times, and `test/observer.test.ts` now keeps it in
+   *  RETIRED_DISCLOSURE_CLAIMS so it cannot come back in new words. A page also
+   *  talks to advert, font, hosting and visitor-counting companies, and
+   *  principalHost's rules 2-4 can hand the name to one of them; three tests
+   *  drive exactly that and pin it. It may also be empty.
+   *
+   *  Nothing may ROUTE on this. `browserOutcome` takes the app from its caller
+   *  and is forbidden by name from deriving it here, so a bystander's name
+   *  costs a missed API suggestion and can never cost an action.
    *
    *  This doc used to say "eTLD+1 only. 'mail.google.com' is kept as the
    *  host", which was wrong twice over and is kept here as a warning. The

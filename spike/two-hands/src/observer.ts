@@ -152,25 +152,87 @@ const MULTI_LABEL_SUFFIXES: ReadonlySet<string> = new Set([
   "co.th", "in.th", "go.th", "ac.th", "co.id", "or.id", "go.id", "web.id",
   "co.kr", "or.kr", "ne.kr", "go.kr", "re.kr", "com.ph", "gov.ph",
   "com.sa", "com.eg", "com.ng", "co.ke", "com.gh",
+  // Added 2026-09-05, all for the same reason: every one of these TLDs is on
+  // FLAT_TWO_LETTER_TLDS below, and a TLD may only be called flat once the
+  // structured names its registry really does sell are carried here. Otherwise
+  // "flat" would be a licence to merge the handful of sites that do sit under a
+  // real suffix there.
+  "com.io",
+  "com.ai", "net.ai", "org.ai", "off.ai",
+  "co.me", "net.me", "org.me", "edu.me", "ac.me", "gov.me",
+  "net.co", "org.co", "edu.co", "mil.co", "nom.co",
+  "com.sh", "net.sh", "org.sh", "gov.sh", "mil.sh",
+  "co.gg", "net.gg", "org.gg",
+  "com.ly", "net.ly", "org.ly", "gov.ly", "edu.ly", "sch.ly", "med.ly", "plc.ly", "id.ly",
+  "com.fr", "asso.fr", "gouv.fr", "nom.fr", "prd.fr", "tm.fr",
+  "ac.be",
+]);
+
+// TWO-LETTER TLDS WHOSE REGISTRY SELLS AT THE SECOND LEVEL.
+//
+// The other half of the shape rule, and the half it was missing. Under `.uk` a
+// registrant buys `example.co.uk`, so a label like `co` sitting second-to-last
+// really might be a suffix. Under `.de` a registrant buys `web.de` outright:
+// there is nothing above it to be unsure about, and `looksLikeUnknownSuffix`
+// firing there is not a cautious answer, it is a wrong one.
+//
+// This is the same kind of object as the suffix list — string plumbing about
+// the shape of a NAME, never about meaning — and it has the same weakness: it
+// is hand-cut against the ICANN section of publicsuffix.org, it is behind the
+// day it was written (2026-09-05), and nothing in this session fetched it, so
+// treat it as one reader's reading of that file rather than a copy of it. Two
+// rules for editing it, because the two directions cost different things:
+//   - LEAVING a flat TLD out costs a NAME. Every site under it whose own second
+//     label happens to be a registry word is reported as unknown. That is the
+//     safe direction and it is where the list starts.
+//   - PUTTING a structured TLD in costs a WRONG name — every site under its
+//     suffixes merges into one app, which is the failure the whole list exists
+//     to prevent. So a TLD goes in only after the structured names its registry
+//     does sell are carried in MULTI_LABEL_SUFFIXES above, in the same diff.
+const FLAT_TWO_LETTER_TLDS: ReadonlySet<string> = new Set([
+  // Sold worldwide as generic names, whatever country they were issued to. This
+  // is the generation the apps this spike routes to actually live on, and the
+  // shape rule was wrong about every one of them.
+  "io", "ai", "tv", "me", "co", "sh", "gg", "ly",
+  // Registries with no second level at all: a registrant buys the name itself.
+  "de", "nl", "ch", "li", "cz", "sk", "si", "fi", "lu", "eu",
+  // Sold at the second level, with a short structured list beside it that is
+  // carried above. Canada's is its province codes (`ab.ca`, `gc.ca`), none of
+  // which is a label this rule looks for, so it needed nothing added.
+  "fr", "be", "ca",
 ]);
 
 // THE SHAPE OF A SUFFIX WE HAVE NOT HEARD OF.
 //
-// Every entry in the list above is one of these labels followed by a two-letter
-// country code. So when a hostname's last two labels have that same shape and
-// are NOT in the list, the honest reading is "this is probably a public suffix
+// Every entry in the suffix list is one of these labels followed by a
+// two-letter country code. So when a hostname's last two labels have that same
+// shape, are NOT in the list, and sit under a TLD whose registry organises a
+// second level at all, the honest reading is "this is probably a public suffix
 // the copy is missing", not "this is the site". Reporting it as the site is the
 // merge-everything-together failure; reporting it as unknown costs a name.
 //
 // This is plumbing about the shape of a NAME, not about meaning: it never reads
 // a word a human wrote and never decides which hand runs anything.
 //
-// THE COST, stated because it is real and one-directional. `.it` has no `co.it`
-// suffix, so `co.it` genuinely IS the registrable domain of www.example.co.it —
-// and this rule will refuse to name it anyway, because nothing here can tell
-// that case from `com.gr`. One host lost on an unusual name, against every site
-// under an unknown ccTLD suffix silently merging into one bucket. Pinned by the
-// test named "the rule's own cost, written down rather than discovered".
+// THE COST, RESTATED 2026-09-05 BECAUSE THE OLD PARAGRAPH UNDERSOLD IT BADLY.
+// It claimed the price was "one host lost on an unusual name" and named
+// `www.example.co.it` as that host. Both halves were wrong. `co.it` is Como
+// province and IS in the real public suffix list, so that example is the rule
+// being RIGHT; and the price was never one host. Until the FLAT_TWO_LETTER_TLDS
+// gate below, the rule fired on ANY of the labels above under ANY two-letter
+// TLD, so `web.de`, `id.me`, `store.io` and `web.tv` — real sites on registries
+// that have no second level to be unsure about — were all refused, and on those
+// TLDs the rule was wrong every single time it fired.
+//
+// WHAT IS STILL PAID, honestly, because it is not nothing. A ccTLD can organise
+// a second level AND sell directly at it: `.uk` has done both since 2014, and
+// so do `.jp`, `.pl`, `.ru` and `.es`. Under those, a company whose own name is
+// a registry word — `store.uk`, `web.pl` — is indistinguishable from a suffix
+// this copy has not heard of, and it still loses its name. That is one real
+// company per registry word per structured ccTLD, and it is still the right
+// trade: a lost name costs a missed API suggestion, a guessed one merges a bank
+// and a clinic into a single app. Pinned by the test named "the rule's own
+// cost, written down rather than discovered", which asserts all three cases.
 const SUFFIX_HEAD_LABELS: ReadonlySet<string> = new Set([
   "ac", "ad", "asn", "biz", "co", "com", "ed", "edu", "firm", "gen", "go", "gob",
   "gouv", "gov", "govt", "gr", "gv", "id", "in", "ind", "info", "lg", "ltd", "me",
@@ -183,7 +245,13 @@ const TWO_LETTER_TLD = /^[a-z]{2}$/;
 function looksLikeUnknownSuffix(labels: readonly string[]): boolean {
   const tld = labels[labels.length - 1] ?? "";
   const head = labels[labels.length - 2] ?? "";
-  return TWO_LETTER_TLD.test(tld) && SUFFIX_HEAD_LABELS.has(head);
+  if (!TWO_LETTER_TLD.test(tld)) return false;
+  // Nothing sits between a name and this registry, so there is no boundary to
+  // be unsure about and no reason to withhold the name. Without this line the
+  // rule refused `web.de` and `id.me` — whole sites, on registries with no
+  // second level — and did it every time it fired on those TLDs.
+  if (FLAT_TWO_LETTER_TLDS.has(tld)) return false;
+  return SUFFIX_HEAD_LABELS.has(head);
 }
 
 // A dotted quad is a host, not a name with a registrar inside it, so the suffix
@@ -349,14 +417,35 @@ interface StepTally {
  * that promise without depending on anybody remembering, the same way the
  * reduce-on-ingest rule keeps the URL promise without depending on a scrubber.
  *
- * THE COST. A step evicted before anyone summarized it comes back empty, and an
- * empty summary reads as "nothing happened": the browser row would be filed
- * with duration 0. Eviction is least-recently-OBSERVED, so the step currently
- * receiving events can never be the one evicted, and 64 is several times the
- * length of any agent run this spike has driven. A caller that knows a step is
- * finished should use `summarizeAndForget` and never meet the cap at all.
+ * THE COST, AND WHY IT IS NO LONGER SILENT. A step evicted before anyone
+ * summarized it comes back empty, and an empty summary is byte-identical to a
+ * step where nothing happened: `browserOutcome` reads `duration_ms` 0 off it
+ * and files a ledger row saying the browser hand did the work instantly. A hand
+ * that looks instant is the hand rule 5 prefers, so a silent eviction does not
+ * merely lose a row — it tilts the comparison the whole ladder exists to
+ * settle, in the direction of the hand that failed to report. So the cap now
+ * leaves a mark: `wasEvicted()` separates the two empty summaries and
+ * `evictions` counts them. A caller filing a duration is expected to ask.
+ *
+ * Eviction is least-recently-OBSERVED, so the step currently receiving events
+ * can never be the one evicted, and 64 is several times the length of any agent
+ * run this spike has driven. A caller that knows a step is finished should use
+ * `summarizeAndForget` and never meet the cap at all.
  */
 export const MAX_RETAINED_STEPS = 64;
+
+/**
+ * How many eviction marks are kept.
+ *
+ * The marks are run and step ids — the caller's own labels, never a host, a
+ * count or a clock — so they are not the record of where the owner has been
+ * that the cap exists to prevent. They are still held state, though, and this
+ * module's rule is that held state has an end: an unbounded set of them would
+ * be the same leak one field narrower. When a mark falls off, `evictions` still
+ * counts the eviction, so a caller can always learn that the Observer dropped
+ * SOMETHING even once it can no longer say which step.
+ */
+const MAX_EVICTION_MARKS = MAX_RETAINED_STEPS;
 
 // NUL cannot occur in either id, so this cannot collide the way a ":" join
 // would: run "a:b" step "c" and run "a" step "b:c" are different steps and must
@@ -421,13 +510,29 @@ function emptyTally(): StepTally {
  * carries no host. Sitting it out is how a step that ran in an unnameable app
  * would have been reported as having happened in the CDN that app loads.
  *
- * WHAT IT COSTS. A step that genuinely touched two apps reports one, and the
- * other app's evidence is lost; and on rule 3 a busy asset host can still win a
- * step that had no navigation and no write. Both are affordable because NOTHING
- * ROUTES ON THIS: `browserOutcome` takes the app from its caller and is
- * forbidden by name from deriving it from here (src/index.ts). The hosts field
- * is evidence for learning, and the smallest footprint that still answers
- * "which app" beats a complete list of everything the owner's page loaded.
+ * WHAT IT COSTS, IN FULL, BECAUSE THE DISCLOSURE IS WRITTEN FROM THIS
+ * PARAGRAPH. A step that genuinely touched two apps reports one, and the other
+ * app's evidence is lost. And rule 1 is the ONLY rule that cannot name a
+ * bystander — a company whose font or advert a page loads never becomes the
+ * document. Each of the other three can, and all three are ordinary traces,
+ * not edge cases:
+ *   - rule 2 — a traffic-counting beacon is a POST that comes back 2xx, so on a
+ *     step that only READ a page (all GETs) the counter has the only write and
+ *     takes the slot;
+ *   - rule 3 — with no navigation and no write, the font or advert host that
+ *     made twelve requests beats the app that made one;
+ *   - rule 4 — a dead tie sorts alphabetically, and "adnxs.com" comes before
+ *     "notion.so".
+ * All of it is affordable because NOTHING ROUTES ON THIS: `browserOutcome`
+ * takes the app from its caller and is forbidden by name from deriving it from
+ * here (src/index.ts). The hosts field is evidence for learning, and the
+ * smallest footprint that still answers "which app" beats a complete list of
+ * everything the owner's page loaded.
+ *
+ * WHAT IT DOES NOT LET YOU SAY. `disclosureCopy()` may not promise the one name
+ * is always the site the step was working in. It did, twice, and both times the
+ * sentence was read off this function's INTENT. The three rules above are
+ * driven by tests in test/observer.test.ts that the copy is pinned against.
  */
 function principalHost(hosts: ReadonlyMap<string, HostTally>): string | null {
   let bestHost: string | null = null;
@@ -451,6 +556,9 @@ function outranks(host: string, a: HostTally, otherHost: string, b: HostTally): 
 export class TraceObserver implements Observer {
   #steps = new Map<string, StepTally>();
   #paused = false;
+  /** Steps the cap threw away before anybody read them. Ids only. */
+  #evictionMarks = new Set<string>();
+  #evictions = 0;
 
   /** The pause switch the disclosure copy promises. It drops events at INGEST,
    *  not at summarize: a pause that quietly keeps recording and hides the
@@ -606,6 +714,43 @@ export class TraceObserver implements Observer {
     for (const key of this.#steps.keys()) {
       if (key.startsWith(prefix)) this.#steps.delete(key);
     }
+    // The marks are held state too, and held state has an end. `evictions`
+    // deliberately does not move: a run being forgotten does not un-happen the
+    // eviction, and a counter that could go down would let a leak hide behind
+    // a tidy-up.
+    for (const key of this.#evictionMarks) {
+      if (key.startsWith(prefix)) this.#evictionMarks.delete(key);
+    }
+  }
+
+  /**
+   * Was this step's trace thrown away by the cap before anybody read it?
+   *
+   * THE QUESTION A CALLER FILING A DURATION HAS TO ASK. An evicted step and a
+   * step where nothing happened summarize identically — no hosts, no counts,
+   * `duration_ms` 0 — and `browserOutcome` turns the second one into a ledger
+   * row claiming the browser hand finished instantly. That is not a missing
+   * row, it is a fast one, and rule 5 promotes hands that look fast.
+   *
+   * `false` is not proof of the opposite: the marks are capped
+   * (MAX_EVICTION_MARKS), so a very old eviction can itself have fallen off.
+   * `evictions` is the total that never falls off.
+   */
+  wasEvicted(runId: string, stepId: string): boolean {
+    return this.#evictionMarks.has(tallyKey(runId, stepId));
+  }
+
+  /** How many steps this Observer has dropped, ever. Monotonic on purpose —
+   *  see `forget`. */
+  get evictions(): number {
+    return this.#evictions;
+  }
+
+  /** How many evictions can still be named. Lower than `evictions` once the
+   *  marks have wrapped; exposed so a test can prove the marks are bounded
+   *  rather than trusting the constant. */
+  get markedEvictions(): number {
+    return this.#evictionMarks.size;
   }
 
   /** Which steps are currently held, for a caller summarizing a whole run.
@@ -635,8 +780,21 @@ export class TraceObserver implements Observer {
       const oldest = this.#steps.keys().next();
       if (oldest.done === true) break;
       this.#steps.delete(oldest.value);
+      this.#mark(oldest.value);
     }
     return fresh;
+  }
+
+  /** Record that a step was dropped by the cap rather than read. Oldest mark
+   *  out first, so the marks cannot become the accumulation the cap prevents. */
+  #mark(key: string): void {
+    this.#evictions += 1;
+    this.#evictionMarks.add(key);
+    while (this.#evictionMarks.size > MAX_EVICTION_MARKS) {
+      const oldest = this.#evictionMarks.values().next();
+      if (oldest.done === true) break;
+      this.#evictionMarks.delete(oldest.value);
+    }
   }
 }
 
@@ -668,15 +826,46 @@ export function createObserver(): TraceObserver {
 // promise the code above actually keeps, and test/observer.test.ts walks the
 // list one clause at a time — so a future edit that quietly drops the pause
 // sentence, or the sentence about page text, fails a test instead of shipping.
+//
+// WHY THE SECOND PARAGRAPH IS UNCOMFORTABLE, AND STAYS. This copy has been
+// wrong twice, both times by describing what `principalHost` is FOR instead of
+// what it DOES. The first version implied every site a page touched; the
+// replacement swore the one name was never one of the page's own advert, font
+// or traffic-counting companies. `principalHost` has four rules and only the
+// first — the most top-level navigations — structurally cannot name a
+// bystander. Rule 2 hands the slot to whoever made a mutating 2xx, and a
+// tracking beacon is a POST; rule 3 hands it to whoever made the most requests,
+// which on a read-only step is the font host; rule 4 breaks a tie
+// alphabetically, and "adnxs.com" sorts before "notion.so".
+//
+// Naming the app is what the whole Observer is for, and the three rules below
+// rule 1 are the only thing that names it on a single-page app, where a step
+// fires XHRs and never navigates — which is most agent steps in the tools this
+// spike is about. Deleting them to make the simpler sentence true would leave
+// the Observer able to answer "which app" only for full page loads: a guard
+// that refuses everything, and an outage in the one feature the module exists
+// for. Nothing routes on this field either, so a bystander's name costs a
+// missed API suggestion and can never cost an action. So the code keeps its
+// four rules and the COPY tells the truth about them — because a Limited Use
+// disclosure that under-states what is collected is not a rough disclosure, it
+// is a false one, and that is the direction the store and the owner both
+// read as a lie. `test/observer.test.ts` drives all three rules and fails if
+// this copy claims what they can break.
 export function disclosureCopy(): string {
   return [
     "Anticipy keeps a short note of where it went in your browser.",
     "",
-    "WHAT IT KEEPS. The site name only, and only the one site it was working in",
-    "- google.com, amazon.co.uk - plus a count of how many requests just looked",
-    "at something and how many changed something, and whether they came back",
-    "fine, refused, or broken. Not the advert, font and tracking companies whose",
-    "things a page loads while you are on it.",
+    "WHAT IT KEEPS. One site name for each thing it does - google.com,",
+    "amazon.co.uk - plus a count of how many requests just looked at something",
+    "and how many changed something, and whether they came back fine, refused,",
+    "or broken. One name, never a list of every company a page talks to.",
+    "",
+    "THAT ONE NAME IS A BEST GUESS. Usually it is the site you would see in the",
+    "address bar. But a page also talks to advert, font, hosting and",
+    "visitor-counting companies while you are on it, and when one of those does",
+    "more of the talking than the site itself, the name Anticipy keeps can be",
+    "that company instead of the site. Sometimes it keeps no name at all. It is",
+    "one name either way.",
     "",
     "WHAT IT NEVER KEEPS. What was on the page, the page title, the text on it,",
     "what you typed, what was sent, what came back, your cookies, and everything",

@@ -825,6 +825,188 @@ test("an operator's hand-set rung is not exported to strangers as evidence", asy
     "the override still stands for the pair it was applied to",
   );
 });
+// ---------------------------------------------------------------------------
+// THE INHERITANCE FLOOR — a rung a pair was GIVEN must never become a floor
+// under the rung it later EARNS.
+//
+// The four tests above settle the moment an override or a prior is written.
+// They all read the state IMMEDIATELY after `setRung`/inheritance and never
+// record another outcome, so none of them can see the leak: `#promote` used to
+// bank `max(evidence_rung, rung)`, which makes the CURRENT rung — exactly where
+// an override and an inherited prior put a number — a floor under the earned
+// one. Pass ONE more gate and the whole stack beneath it is exported to
+// strangers. What follows is that second step, in both shapes.
+// ---------------------------------------------------------------------------
+
+test("a hand-set rung does not become evidence the moment the pair passes ONE more gate", async () => {
+  // THE FAILURE THIS PREVENTS: somebody stands a write pair up at rung 3 by
+  // hand to get past the write-ladder gap (RESULTS.md FINDING 1). That pair
+  // then does what it was stood up to do — three assisted writes the verifier
+  // watched land — and passes the 3 -> 4 gate. One gate. `max()` banked rung 4,
+  // `globalRung` published it, and every stranger who connected gmail and
+  // opted into writes started at ASSISTED writes on a capability that has
+  // never once passed the parity gate or the clean-read gate.
+  const led = ledger();
+  await led.setConnection("op", APP, true);
+  await led.setWritesOptIn("op", APP, true);
+  await led.setRung("op", SIG, APP, 3);
+  assert.equal(await led.globalRung(SIG, APP), 0, "an override exports nothing when it is typed");
+
+  for (let i = 0; i < LADDER.CONFIRMED_WRITES_FOR_AUTO_WRITES; i++) {
+    await led.record(outcome({
+      user_id: "op",
+      ok: true,
+      verifierResult: "verified",
+      side_effect: "write",
+    }));
+  }
+  assert.equal(await led.rung("op", SIG, APP), 4, "the pair itself climbed, which is not the bug");
+
+  assert.equal(
+    await led.globalRung(SIG, APP),
+    1,
+    "one gate passed is one rung of credit; the three beneath it were nobody's evidence",
+  );
+
+  await led.setConnection("newbie", APP, true);
+  await led.setWritesOptIn("newbie", APP, true);
+  assert.equal(
+    await led.rung("newbie", SIG, APP),
+    1,
+    "a stranger may not be handed the rungs the override skipped",
+  );
+});
+
+test("an inherited rung does not become evidence the moment the pair passes ONE more gate", async () => {
+  // The same leak arriving through inheritance instead of an operator. The
+  // newbie is standing on the veteran's rung 2. Their own ten verified reads
+  // buy the 2 -> 3 gate — one gate, on their own evidence — and `max()` then
+  // exported rung 3 as if THEY had earned rungs 1 and 2 as well. That is a
+  // prior laundered into a measurement, and it compounds: the next user
+  // inherits from the newbie, and so on down the chain.
+  const led = ledger();
+  await veteranAtRungTwo(led);
+  await led.setConnection("newbie", APP, true);
+  await led.setWritesOptIn("newbie", APP, true);
+  assert.equal(await led.rung("newbie", SIG, APP), 2, "standing on the veteran's prior");
+
+  for (let i = 0; i < LADDER.CLEAN_READS_FOR_ASSISTED_WRITES; i++) {
+    await led.record(outcome({
+      user_id: "newbie",
+      ok: true,
+      verifierResult: "verified",
+      side_effect: "read",
+    }));
+  }
+  assert.equal(await led.rung("newbie", SIG, APP), 3, "their own reads bought the write gate");
+
+  assert.equal(
+    await led.globalRung(SIG, APP, "newbie"),
+    2,
+    "the veteran's own evidence is untouched",
+  );
+  assert.equal(
+    await led.globalRung(SIG, APP, "veteran"),
+    1,
+    "the newbie exports the one gate they passed, not the two they were lent",
+  );
+});
+
+test("CONTROL: evidence_rung still rises one rung per gate, all the way to 4", async () => {
+  // The guard above narrows what a promotion may bank. This is the leg that
+  // says it did not narrow it to nothing: a pair that walks every gate from
+  // rung 0 must still export every rung it walked, or the global prior — the
+  // whole reason the second hand is not cold-start forever — is dead.
+  const led = ledger();
+  const evidence = async (): Promise<Rung | undefined> =>
+    (await led.ladderState("veteran", SIG, APP))?.evidence_rung;
+
+  await led.setConnection("veteran", APP, true);
+  await led.noteCandidate(candidate({ user_id: "veteran", match_verdict: "yes" }));
+  assert.equal(await evidence(), 1, "0 -> 1: a candidate the judge vouched for, on a connected app");
+
+  for (let i = 0; i < LADDER.PARITY_MATCHES_FOR_API_READS; i++) {
+    await led.record(outcome({
+      user_id: "veteran",
+      ok: true,
+      parity: true,
+      verifierResult: "verified",
+    }));
+  }
+  assert.equal(await evidence(), 2, "1 -> 2: three consecutive parity matches");
+
+  await led.setWritesOptIn("veteran", APP, true);
+  for (let i = 0; i < LADDER.CLEAN_READS_FOR_ASSISTED_WRITES; i++) {
+    await led.record(outcome({
+      user_id: "veteran",
+      ok: true,
+      verifierResult: "verified",
+      side_effect: "read",
+    }));
+  }
+  assert.equal(await evidence(), 3, "2 -> 3: the opt-in and ten clean reads");
+
+  for (let i = 0; i < LADDER.CONFIRMED_WRITES_FOR_AUTO_WRITES; i++) {
+    await led.record(outcome({
+      user_id: "veteran",
+      ok: true,
+      verifierResult: "verified",
+      side_effect: "write",
+    }));
+  }
+  assert.equal(await evidence(), 4, "3 -> 4: three writes the verifier watched land");
+  assert.equal(await led.globalRung(SIG, APP), 4, "and all four rungs are on offer to strangers");
+});
+
+test("CONTROL: an override is not a life sentence — gates walked after one still bank", async () => {
+  // The other half of "a guard that refuses everything is an outage". An
+  // override zeroes what a pair may export, and the pair must be able to earn
+  // it back one gate at a time rather than being poisoned for good. Two gates
+  // walked after the override is two rungs of credit — not zero, and not the
+  // four the pair is standing on.
+  const led = ledger();
+  await led.setConnection("op", APP, true);
+  await led.setWritesOptIn("op", APP, true);
+  await led.setRung("op", SIG, APP, 2);
+
+  for (let i = 0; i < LADDER.CLEAN_READS_FOR_ASSISTED_WRITES; i++) {
+    await led.record(outcome({ user_id: "op", ok: true, verifierResult: "verified", side_effect: "read" }));
+  }
+  assert.equal(await led.globalRung(SIG, APP), 1, "one gate, one rung");
+
+  for (let i = 0; i < LADDER.CONFIRMED_WRITES_FOR_AUTO_WRITES; i++) {
+    await led.record(outcome({ user_id: "op", ok: true, verifierResult: "verified", side_effect: "write" }));
+  }
+  assert.equal(await led.rung("op", SIG, APP), 4);
+  assert.equal(await led.globalRung(SIG, APP), 2, "two gates, two rungs, and never the whole stack");
+});
+
+test("evidence_rung never exceeds the rung the pair is standing on", async () => {
+  // The invariant the promotion arithmetic rests on. `#demote` and `setRung`
+  // both clamp evidence_rung down to `rung`, and `#promote` adds one to it —
+  // which is only safe while evidence_rung <= rung. If a future writer breaks
+  // that, `evidence_rung + 1` starts exporting a rung nobody stands on, so the
+  // invariant is asserted rather than assumed.
+  const led = ledger();
+  await veteranAtRungFour(led);
+  const seen: Array<[Rung, Rung]> = [];
+  const check = async (): Promise<void> => {
+    const pair = await led.ladderState("veteran", SIG, APP);
+    assert.ok(pair, "the pair exists");
+    assert.ok(
+      pair.evidence_rung <= pair.rung,
+      `evidence_rung ${pair.evidence_rung} > rung ${pair.rung}`,
+    );
+    seen.push([pair.evidence_rung, pair.rung]);
+  };
+  await check();
+  await led.record(outcome({ user_id: "veteran", ok: false, failKind: "other" }));
+  await led.record(outcome({ user_id: "veteran", ok: false, failKind: "other" }));
+  await check();
+  await led.setRung("veteran", SIG, APP, 1);
+  await check();
+  assert.deepEqual(seen, [[4, 4], [3, 3], [1, 1]], "the clamp bites on both writers");
+});
 
 test("a new user inherits the global rung once they connect the app themselves", async () => {
   const led = ledger();
