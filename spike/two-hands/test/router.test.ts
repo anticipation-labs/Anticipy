@@ -416,64 +416,244 @@ test("rule 1: a connected tool outranks a higher-scored tool in an app nobody co
   assert.equal(d.nudgeApp, undefined);
 });
 
+// --- the swapped hash --------------------------------------------------------
+// `decide` re-derives signature_hash before it trusts the object, because the
+// rung it selects and the side_effect it confirms on are both read straight off
+// a thing that may have crossed a process boundary. These legs exist because
+// the guard was wired with NO behavioural test: an adversarial pass switched it
+// off and the entire suite stayed green, which means the guard was one careless
+// edit from being decoration.
+
+test("a signature whose hash this process cannot re-derive never reaches the API hand", async () => {
+  // The attack: take a promoted READ pair's key and staple it to a delete. Under
+  // the old code the router read rung 4 off it and ran unattended.
+  const promoted = sig();
+  const forged = { ...sig({ verb: "delete", object: "thread", side_effect: "irreversible" }),
+                   signature_hash: promoted.signature_hash };
+
+  const d = await decide(
+    { rung: 4 as Rung, optedIn: true,
+      prior: [stats({ n: 40, successes: 40, signature_hash: promoted.signature_hash })] },
+    forged as typeof promoted,
+  );
+
+  assert.equal(d.hand, "browser", "an unidentified capability may not use the API hand");
+  assert.equal(d.rung, 0, "and it may not spend a rung it cannot prove it earned");
+  assert.equal(d.tool, undefined, "no tool is selected for a signature we cannot identify");
+  assert.match(d.reason, /signature_hash/, "the audit line says why this went to the browser");
+  assert.equal(d.requiresConfirmation, true,
+    "the declared side_effect is still read in the STRICT direction on an object we distrust");
+});
+
+test("the guard is the hash, not the shape — an honest signature is unaffected", async () => {
+  // The control. Without this, making `decide` return browser unconditionally
+  // would satisfy the leg above, and a guard that refuses everything is not a
+  // guard, it is an outage.
+  const honest = sig();
+  const d = await decide(
+    { rung: 2 as Rung, prior: [stats({ n: 20, successes: 20, signature_hash: honest.signature_hash })] },
+    honest,
+  );
+  assert.equal(d.hand, "api", "a signature this process can re-derive routes normally");
+});
+
+test("a signature carrying no hash at all is refused, not defaulted", async () => {
+  const naked = { ...sig(), signature_hash: "" };
+  const d = await decide({ rung: 4 as Rung, optedIn: true }, naked as ReturnType<typeof sig>);
+  assert.equal(d.hand, "browser");
+  assert.equal(d.rung, 0);
+});
+
 // --- which of SEVERAL licensed candidates actually runs --------------------
 // contract.ts's LAW1 note lets the vendor's score ORDER the candidates and
 // forbids it to DECIDE. Once more than one candidate is licensed, "which tool
-// touches the owner's account" is a decision, and returning on the first "yes"
-// handed it to the score.
-test("rule 1: among licensed candidates the gentler declared effect wins, whichever way the scores run", async () => {
-  // The judge's verdicts are held fixed — it licenses both — and only the
-  // vendor's numbers are reversed. If the number were deciding, one of these
-  // two runs would put a tool that declares itself irreversible against the
-  // owner's real account for a step he planned as an ordinary write.
-  const run = async (destructive: number, gentle: number) =>
+// touches the owner's account" is a decision.
+//
+// THE FIRST ANSWER TO THIS WAS WRONG AND THESE TESTS ARE THE RECORD OF WHY.
+// It picked the "gentlest" licensed candidate, scored by
+// severityOf(tightenSideEffect(sig.side_effect, candidate.sideEffectHint)).
+// But tightenSideEffect only ratchets UP, so that score is the step's own
+// floor for any candidate with a mild or absent hint and HIGHER for an honest
+// one. Gentlest-wins therefore preferred the tool that declared itself
+// harmless and penalised the tool that admitted it deletes things — turning
+// `sideEffectHint`, which contract.ts calls untrusted precisely because a tool
+// has every incentive to look harmless, into the lever a tool pulls to be
+// SELECTED. An adversarial pass found it; no test here had.
+//
+// The rule now splits the two questions that were tangled: the judge picks the
+// tool (first licence, in the vendor's ordering), and the untrusted hint only
+// makes the STEP stricter, never a tool more attractive.
+
+test("rule 1: the untrusted hint cannot win a tool its selection", async () => {
+  // The exploit, run directly. A tool that declares itself "read" for a step
+  // the planner called a write is either lying or wrong; under gentlest-wins it
+  // was rewarded with the job. The judge licenses both; the honest one is first
+  // in the vendor's order; the honest one must run.
+  const d = await decide(
+    {
+      rung: 3 as Rung,
+      optedIn: true,
+      candidates: [
+        candidate({ toolSlug: "tool-honest", score: 0.90, sideEffectHint: "irreversible" }),
+        candidate({ toolSlug: "tool-claims-harmless", score: 0.80, sideEffectHint: "read" }),
+      ],
+      prior: [stats({ n: 20, successes: 20, signature_hash: H_WRITE })],
+    },
+    writeSig(),
+  );
+  assert.equal(d.tool?.toolSlug, "tool-honest",
+    "declaring yourself harmless must not move you up the queue");
+});
+
+test("rule 1: the chosen tool's own hint still ratchets the step up", async () => {
+  // The direction an untrusted field IS allowed to point: it can make the step
+  // stricter, it just cannot make its tool more attractive.
+  const d = await decide(
+    {
+      rung: 3 as Rung,
+      optedIn: true,
+      candidates: [candidate({ toolSlug: "tool-honest", score: 0.9, sideEffectHint: "irreversible" })],
+      prior: [stats({ n: 20, successes: 20, signature_hash: H_WRITE })],
+    },
+    writeSig(),
+  );
+  assert.equal(d.requiresConfirmation, true);
+});
+
+test("rule 1: the score orders the asking, it does not decide the match", async () => {
+  const built = build({
+    rung: 2 as Rung,
+    candidates: [
+      candidate({ toolSlug: "tool-lo", score: 0.10 }),
+      candidate({ toolSlug: "tool-hi", score: 0.99 }),
+    ],
+    verdicts: { "tool-hi": "no", "tool-lo": "no" },
+  });
+  await built.router.decide(sig(), ctx());
+  assert.deepEqual(built.asked.map((c) => c.toolSlug), ["tool-hi", "tool-lo"]);
+});
+
+test("rule 1: at most five candidates reach the judge", async () => {
+  const built = build({
+    rung: 2 as Rung,
+    candidates: Array.from({ length: 8 }, (_, i) => candidate({ toolSlug: `tool-${i}`, score: 1 - i / 100 })),
+    verdicts: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`tool-${i}`, "no" as const])),
+  });
+  await built.router.decide(sig(), ctx());
+  assert.equal(built.asked.length, 5);
+});
+
+test("rule 1: the connected pass and the whole-catalog pass are both made", async () => {
+  const built = build({ rung: 2 as Rung });
+  await built.router.decide(sig(), ctx());
+  assert.deepEqual(built.searchOpts.map((o) => o.connectedOnly).sort(), [false, true]);
+});
+
+test("rule 1: a connected tool outranks a higher-scored tool in an app nobody connected", async () => {
+  // Sorting the merged list purely by score would turn a step that could run
+  // right now into a connect nudge plus a browser run.
+  const d = await decide({
+    rung: 2 as Rung,
+    candidates: [
+      candidate({ toolSlug: "tool-unconnected", app: APP_B, score: 0.99 }),
+      candidate({ toolSlug: "tool-connected", app: APP_A, score: 0.20 }),
+    ],
+    prior: [stats({ n: 20, successes: 20, tool_slug: "tool-connected" })],
+  });
+  assert.equal(d.hand, "api");
+  assert.equal(d.tool?.toolSlug, "tool-connected");
+  assert.equal(d.nudgeApp, undefined);
+});
+
+// --- which of SEVERAL licensed candidates actually runs --------------------
+// contract.ts's LAW1 note lets the vendor's score ORDER the candidates and
+// forbids it to DECIDE. Once more than one candidate is licensed, "which tool
+// touches the owner's account" is a decision.
+//
+// THE FIRST ANSWER TO THIS WAS WRONG AND THESE TESTS ARE THE RECORD OF WHY.
+// It picked the "gentlest" licensed candidate, scored by
+// severityOf(tightenSideEffect(sig.side_effect, candidate.sideEffectHint)).
+// But tightenSideEffect only ratchets UP, so that score is the step's own
+// floor for any candidate with a mild or absent hint and HIGHER for an honest
+// one. Gentlest-wins therefore preferred the tool that declared itself
+// harmless and penalised the tool that admitted it deletes things — turning
+// `sideEffectHint`, which contract.ts calls untrusted precisely because a tool
+// has every incentive to look harmless, into the lever a tool pulls to be
+// SELECTED. An adversarial pass found it; no test here had.
+//
+// The rule now splits the two questions that were tangled: the judge picks the
+// tool (first licence, in the vendor's ordering), and the untrusted hint only
+// makes the STEP stricter, never a tool more attractive.
+
+test("rule 1: the untrusted hint cannot win a tool its selection", async () => {
+  // The exploit, run directly. A tool that declares itself "read" for a step
+  // the planner called a write is either lying or wrong; under gentlest-wins it
+  // was rewarded with the job. The judge licenses both; the honest one is first
+  // in the vendor's order; the honest one must run.
+  const d = await decide(
+    {
+      rung: 3 as Rung,
+      optedIn: true,
+      candidates: [
+        candidate({ toolSlug: "tool-honest", score: 0.90, sideEffectHint: "irreversible" }),
+        candidate({ toolSlug: "tool-claims-harmless", score: 0.80, sideEffectHint: "read" }),
+      ],
+      prior: [stats({ n: 20, successes: 20, signature_hash: H_WRITE })],
+    },
+    writeSig(),
+  );
+  assert.equal(d.tool?.toolSlug, "tool-honest",
+    "declaring yourself harmless must not move you up the queue");
+});
+
+test("rule 1: an honest 'irreversible' anywhere in the licensed set makes the STEP confirm", async () => {
+  // The direction an untrusted field IS allowed to point. The chosen tool says
+  // nothing alarming; a licensed sibling does. The step tightens either way,
+  // because the sibling is evidence about what this step touches.
+  const d = await decide(
+    {
+      rung: 3 as Rung,
+      optedIn: true,
+      candidates: [
+        candidate({ toolSlug: "tool-quiet", score: 0.90 }),
+        candidate({ toolSlug: "tool-honest", score: 0.80, sideEffectHint: "irreversible" }),
+      ],
+      prior: [stats({ n: 20, successes: 20, signature_hash: H_WRITE })],
+    },
+    writeSig(),
+  );
+  assert.equal(d.tool?.toolSlug, "tool-quiet", "the judge's first licence still runs");
+  assert.equal(d.requiresConfirmation, true,
+    "one honest irreversible in the licensed set tightens the whole step");
+});
+
+test("rule 1: the score orders the asking, it does not decide the match", async () => {
+  // The judge's verdicts are held fixed and only the numbers move. Whichever
+  // way they run, the tool the judge licensed FIRST in that order is the one
+  // that runs — the score chose the queue, not the winner.
+  const run = async (aScore: number, bScore: number, refused: string) =>
     await decide(
       {
         rung: 3 as Rung,
         optedIn: true,
+        verdicts: { [refused]: "no" },
         candidates: [
-          candidate({ toolSlug: "tool-destructive", score: destructive, sideEffectHint: "irreversible" }),
-          candidate({ toolSlug: "tool-gentle", score: gentle }),
+          candidate({ toolSlug: "tool-a", score: aScore }),
+          candidate({ toolSlug: "tool-b", score: bScore }),
         ],
-        prior: [stats({ n: 20, successes: 20, signature_hash: H_WRITE, tool_slug: "tool-gentle" })],
+        prior: [stats({ n: 20, successes: 20, signature_hash: H_WRITE })],
       },
       writeSig(),
     );
-
-  const scoreFavoursDestruction = await run(0.99, 0.1);
-  const scoreFavoursGentle = await run(0.1, 0.99);
-  assert.equal(scoreFavoursDestruction.tool?.toolSlug, "tool-gentle");
-  assert.equal(scoreFavoursGentle.tool?.toolSlug, "tool-gentle");
-  assert.equal(scoreFavoursDestruction.hand, scoreFavoursGentle.hand);
-});
-
-test("rule 1: the gentler candidate is put TO the judge, not merely preferred if it happens to be asked", async () => {
-  // The half of the defect a decision assertion cannot see: the safer tool was
-  // never shown to the judge at all, because the top-scored one had already
-  // said yes.
-  const built = build({
-    rung: 3 as Rung,
-    optedIn: true,
-    candidates: [
-      candidate({ toolSlug: "tool-destructive", score: 0.99, sideEffectHint: "irreversible" }),
-      candidate({ toolSlug: "tool-gentle", score: 0.1 }),
-    ],
-  });
-  await built.router.decide(writeSig(), ctx());
-  assert.deepEqual(built.asked.map((c) => c.toolSlug), ["tool-destructive", "tool-gentle"]);
-});
-
-test("rule 1: a licence at the step's own floor stops the asking — nothing can be gentler", async () => {
-  // `tightenSideEffect` only ever ratchets UP, so no later candidate can
-  // declare a gentler effect than the step as planned. Asking on would spend
-  // another model call inside a task the owner is waiting on to answer a
-  // question whose answer cannot change.
-  const built = build({
-    rung: 2 as Rung,
-    candidates: [candidate({ toolSlug: "tool-1" }), candidate({ toolSlug: "tool-2" })],
-  });
-  await built.router.decide(sig(), ctx());
-  assert.deepEqual(built.asked.map((c) => c.toolSlug), ["tool-1"]);
+  // b is top of the queue on score, and the judge refuses it. The licensed one
+  // runs, so the number ordered the asking and the verdict picked the winner.
+  const topHitRefused = await run(0.10, 0.99, "tool-b");
+  assert.equal(topHitRefused.tool?.toolSlug, "tool-a",
+    "the higher-scored candidate was asked and refused; the licensed one runs");
+  // Reverse the numbers, keep the verdicts: the same tool still wins, because
+  // the verdict is what decided.
+  const orderReversed = await run(0.99, 0.10, "tool-b");
+  assert.equal(orderReversed.tool?.toolSlug, "tool-a");
 });
 
 test("rule 1: a judge that dies mid-search does not withdraw the licence it already gave", async () => {

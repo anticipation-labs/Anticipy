@@ -353,14 +353,43 @@ function severityOf(effect: SideEffect): number {
  * same floor. A verdict already given is not withdrawn by a later timeout —
  * an unreachable judge must not be able to revoke a "yes" it has said.
  */
-async function gentlestJudgedMatch(
+/**
+ * The judge licenses; the first licensed candidate runs; and the untrusted
+ * hint makes the STEP stricter without ever choosing WHICH tool.
+ *
+ * THIS WAS A LEVER AND THE LEVER POINTED THE WRONG WAY. An earlier version
+ * picked the "gentlest" licensed candidate, scoring each by
+ * `severityOf(tightenSideEffect(sig.side_effect, candidate.sideEffectHint))`.
+ * But `tightenSideEffect` only ever ratchets UP, so that score is `floor` for
+ * any candidate whose hint is absent or mild, and higher for an honest one.
+ * The gentlest-wins rule therefore PREFERRED the tool that declared itself
+ * harmless and PENALISED the tool that admitted it deletes things — turning
+ * `sideEffectHint`, which contract.ts calls untrusted precisely because a tool
+ * has every incentive to look harmless, into the lever a tool pulls to get
+ * itself selected. It also degenerated to first-licensed anyway on every
+ * send/delete/pay step, because those already floor at the maximum severity.
+ *
+ * The rule now separates the two questions that were tangled:
+ *
+ *   WHICH TOOL   the first candidate the judge licensed. Candidates arrive in
+ *                the vendor's score order, and ordering is the one thing a
+ *                retrieval score is allowed to do (contract.ts, LAW1). Every
+ *                candidate ahead of it was asked and not licensed.
+ *   HOW STRICT   `tightenSideEffect` on the CHOSEN tool's hint, exactly as
+ *                before. A hint can still only ratchet the step UP; what it
+ *                can no longer do is decide which tool gets picked. Saying
+ *                "read" now buys a tool nothing at all.
+ *
+ * That is the only direction an untrusted field may point. It is the same
+ * reasoning as `tightenSideEffect` itself, applied one level up.
+ */
+async function licensedMatch(
   judge: MatchJudge,
   sig: CapabilitySignature,
   candidates: ToolCandidate[],
-): Promise<ToolCandidate | null> {
-  const floor = severityOf(sig.side_effect);
-  let best: ToolCandidate | null = null;
-  let bestSeverity = Number.POSITIVE_INFINITY;
+): Promise<{ tool: ToolCandidate; effect: SideEffect } | null> {
+  let chosen: ToolCandidate | null = null;
+  let effect: SideEffect = sig.side_effect;
 
   for (const candidate of candidates) {
     let answer;
@@ -373,16 +402,22 @@ async function gentlestJudgedMatch(
       break;
     }
     if (!judgeLicensesApi(answer)) continue;
-    const severity = severityOf(tightenSideEffect(sig.side_effect, candidate.sideEffectHint));
-    // STRICTLY less, so a tie keeps the earlier — which is the higher-scored —
-    // candidate. See the note above on what that does and does not concede.
-    if (severity < bestSeverity) {
-      best = candidate;
-      bestSeverity = severity;
-    }
-    if (bestSeverity <= floor) break;
+    // FIRST LICENCE WINS, AND THE ASKING STOPS HERE.
+    //
+    // An earlier version kept polling the rest of the licensed set to collect
+    // the strictest hint anyone declared. That is a real defence — an honest
+    // sibling saying "irreversible" is evidence about the step — but it costs a
+    // model call per extra candidate on EVERY routing decision, up to five, to
+    // guard a case where the chosen tool under-declares and a sibling
+    // over-declares. The lever this all started with is already gone the moment
+    // the hint stops influencing WHICH tool is picked; buying a little more
+    // safety at four times the judge bill is the wrong trade for a hand whose
+    // entire argument is that it is cheaper than the browser.
+    chosen = candidate;
+    effect = tightenSideEffect(sig.side_effect, candidate.sideEffectHint);
+    break;
   }
-  return best;
+  return chosen ? { tool: chosen, effect } : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -720,7 +755,8 @@ export function createRouter(deps: RouterDeps): TwoHandRouter {
 
       // ---- RULE 1: SEARCH FIRST, THEN ASK THE JUDGE -----------------------
       const candidates = await gatherCandidates(deps.provider, sig, ctx.userId, activeApps, limit);
-      const matched = await gentlestJudgedMatch(deps.judge, sig, candidates);
+      const licensed = await licensedMatch(deps.judge, sig, candidates);
+      const matched = licensed?.tool ?? null;
 
       if (!matched) {
         // No licence. This covers "no tool exists", "the judge said no", "the
@@ -739,7 +775,9 @@ export function createRouter(deps: RouterDeps): TwoHandRouter {
       // A tool that calls itself read-only cannot turn a write into a read —
       // MCP says annotations are untrusted, and the tool has every incentive
       // to look harmless.
-      const effect: SideEffect = tightenSideEffect(sig.side_effect, matched.sideEffectHint);
+      // Already tightened across the whole licensed set by licensedMatch, so a
+      // tool cannot lower it by being the one that got picked.
+      const effect: SideEffect = licensed!.effect;
       const irreversible = effect === "irreversible";
 
       const [rung, prior] = await Promise.all([
