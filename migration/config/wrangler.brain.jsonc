@@ -35,7 +35,8 @@
   //      running brain. Left for the cutover sequence on purpose.
   //   4. No Docker-compatible CLI on the dev machine, so no image can be
   //      built. Build it in CI, not on a laptop.
-  //   5. R2 bucket anticipy-owner-state does not exist yet.
+  //   5. [DONE 2026-09-04] R2 bucket anticipy-owner-state created. Still empty;
+  //      the one-way 31-owner state migration fills it at brain cutover.
   // ==========================================================================
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "anticipy-brain",

@@ -73,15 +73,16 @@ Suite: 147 passed / 0 failed on the Worker, 148 / 0 on production.
 
 ## The two things that must be true before cutover, and are not yet
 
-1. **ANTICIPY_AUTH_SECRET is present but EMPTY on the Worker.** The failed
-   extract (wrong DB path, `/app/pb_data/data.db` — the empty image default)
-   set it to "". `wrangler secret list` shows the name regardless of value, so
-   presence is not proof. Owner tokens are signed HS256 with `secret +
-   tokenKey`; with an empty secret the key is `"" + tokenKey`, wrong, and every
-   existing iPhone and extension token fails on the Worker — cutover logs every
-   user out at once. Re-set it: `migration/runbooks/extract_auth_secret.py
-   /pb_data/data.db` (the 17 MB volume). Matching the real secret also gives a
-   safe rollback. A cross-origin test leg goes green only once it matches.
+1. ~~**ANTICIPY_AUTH_SECRET is present but EMPTY.**~~ **FIXED 2026-09-04.** Read
+   the live `owners.authToken.secret` off the running backend container
+   (`ssh anticipy-backend`, `strings /pb_data/data.db | grep legacy_uuid` to
+   isolate the owners row — the admin UI does NOT expose the secret, and the
+   container has no sqlite3/python) and set it on the Worker (50 chars, single
+   unique value, duration 604800 matching the UI; piped, no newline, never
+   printed). Negative-path verified LIVE: a forged token is 401 on both the
+   Worker and production. Positive-path (a real PB token accepted by the Worker)
+   is the cutover-moment check — command in
+   research/2026-09-04-the-auth-secret-nobody-set.md.
 
 2. ~~**CLERK_HQ_JWT_KEY is unset.**~~ **SET this session** — piped from Railway,
    confirmed in `wrangler secret list`; clerk/exchange 400s like production.
@@ -102,12 +103,33 @@ Suite: 147 passed / 0 failed on the Worker, 148 / 0 on production.
 4. Extension release. Yours to time. `ANTICIPY_AUTH_SECRET` first.
 5. Swap the crons, atomically with the website flip. Needs Railway (Correction 2).
 6. Delete the 25 junk `owners` rows in D1 (verified safe; they own nothing).
-7. Repoint the website: `FELLOWSHIP_ORIGIN` on Vercel, Production scope, full
-   rebuild. No Vercel CLI here.
+7. Repoint the websites. TWO separate flips, and they are NOT the same shape:
+   - **Fellowship** (`anticipyfellowship.com`, Vercel project `anticipy-fellowship`):
+     `FELLOWSHIP_ORIGIN` IS a dashboard env var — a real one-line flip. But hold
+     it: the authenticated / payout `/internal/fellows/*` actions ship UNPROVEN
+     and the Pay button 404s until step 3, so flipping now breaks fellow actions.
+   - **Main app** (`www.anticipy.ai`, Vercel project `anticipy`, repo
+     `anticipation-labs/aniticipy-web`): there is NO backend-origin env var in
+     that Vercel project (checked 2026-09-04: no var matching pocket/railway/url
+     is a PB origin). The API is routed by `next.config.mjs` rewrites with a
+     HARDCODED Railway destination. So the main-app cutover is a CODE CHANGE +
+     deploy in the aniticipy-web repo — a DIFFERENT GitHub org (anticipation-labs,
+     not omize10) and NOT checked out on this machine. It cannot be done from
+     here at all; it needs that repo.
 8. brain/ onto Containers. migration/BRAIN-ON-CONTAINERS.md. Three blockers:
    `migration/workers/brain/src/index.ts` and `brain/container_entry.py` do not
    exist, and a Docker CLI this machine lacks.
-9. DNS. The zone exists and is PENDING; switch nameservers at Porkbun.
+9. DNS. Measured 2026-09-04: nameservers are still Porkbun
+   (`curitiba/fortaleza/maceio/salvador.ns.porkbun.com`), which is WHY the
+   Cloudflare zone is PENDING. www + apex point to Vercel today
+   (`cname.vercel-dns.com` / `76.76.21.21`). **HARD PREREQ before any NS switch:**
+   email is Google Workspace (`MX 1 smtp.google.com`, apex `SPF
+   v=spf1 include:_spf.google.com`, plus a google-site-verification TXT). The
+   Cloudflare zone MUST carry the MX + SPF + verification TXT + the correct
+   www/apex target BEFORE the nameservers move, or switching NS silently breaks
+   BOTH email and the website. Confirm the zone's record set first; the switch is
+   also coupled to where the site is hosted (stay on Vercel → www CNAMEs Vercel;
+   move to Cloudflare Workers via OpenNext → www points at the site Worker).
 
 ## The data-divergence fact the cutover must account for
 

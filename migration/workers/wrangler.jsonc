@@ -17,6 +17,10 @@
   // ==========================================================================
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "anticipy-api",
+  // api.anticipy.ai routes to this Worker (the iOS app + future backend origin).
+  "routes": [
+    { "pattern": "api.anticipy.ai", "custom_domain": true }
+  ],
   // Consolidated here by decision 2026-09-04. The DMG bucket that ship.sh
   // writes still lives on account 5b63e25e and has to be copied across.
   "account_id": "114587b715e702461766369b01d42fc7",

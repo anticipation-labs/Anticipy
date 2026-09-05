@@ -27,10 +27,13 @@ itself the recurring defect.
                 ANTICIPY_SERVICE_TOKEN, OPENROUTER_API_KEY, RESEND_API_KEY,
                 TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER/FROM,
                 CLERK_HQ_JWT_KEY (set this session; clerk/exchange 400s like prod)
-      SUSPECT   ANTICIPY_AUTH_SECRET EXISTS in `secret list` but was set to the
-                EMPTY STRING by the failed extract (wrong DB path). Presence in
-                the list is NOT proof — re-set it with runbooks/
-                extract_auth_secret.py and verify the cross-origin auth leg.
+      FIXED     ANTICIPY_AUTH_SECRET re-set 2026-09-04 to PocketBase's LIVE
+                owners.authToken.secret (read from /pb_data/data.db over Railway
+                SSH: 50 chars, single unique value, duration 604800 matching the
+                admin UI). Negative-path verified live: a forged token is 401 on
+                BOTH the Worker and production. Positive-path (a real PB-minted
+                token accepted by the Worker) is the cutover-moment check — it
+                needs a real login; command in the auth-secret research note.
 
     Website (separate repo, anticipation-labs/aniticipy-web)
       main        -> Vercel, live at www.anticipy.ai
@@ -193,7 +196,7 @@ cross-origin test leg that goes green only once it matches.
    no oracle, and container_entry's failure mode is silent memory loss, so both
    need a real container + R2 run before trust (research/
    2026-09-04-brain-container-code-written.md). Still blocked on: a Docker CLI
-   this machine lacks; the R2 bucket `anticipy-owner-state`; and the one-way
+   this machine lacks; the R2 bucket `anticipy-owner-state` (CREATED 2026-09-04, empty); and the one-way
    `brain/Dockerfile:14` CMD flip, which is a cutover step (it would break the
    live Railway `worker`), not a now-change.
 9. DNS. Smaller than previously recorded: the Cloudflare zone already exists and

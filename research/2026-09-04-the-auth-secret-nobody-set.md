@@ -100,6 +100,32 @@ person does not rediscover them as Worker gaps. `CLERK_HQ_JWT_KEY` was the one
 HQ credential still missing; it was SET this session (piped from Railway,
 confirmed in `wrangler secret list`, clerk/exchange 400s like prod).
 
+## Update 2026-09-04 (later) — RESOLVED: secret set to PocketBase's live value
+
+Read `owners.authToken.secret` directly off the running backend container
+(`ssh anticipy-backend`, `strings /pb_data/data.db | grep legacy_uuid` to isolate
+the owners row, extract the single `authToken` block): 50 chars, ONE unique
+value, `duration 604800` matching the admin UI's Auth duration. Set it on the
+Worker with `wrangler secret put ANTICIPY_AUTH_SECRET --name anticipy-api`
+(piped, no newline, value never written to a file or printed — only a masked
+len+sha proof). The PocketBase admin UI does NOT expose the secret anywhere
+(Options → Tokens options shows only durations + "invalidate" buttons), and the
+container has no sqlite3/python — `strings` on the raw DB was the only in-place
+read, and it keeps all customer data on the box.
+
+Negative-path verified LIVE: a forged token is rejected 401 on BOTH the Worker
+and production. Positive-path — the property that actually decides zero-logout —
+is `TestCrossOriginTokenCompatibility` in migration/spec/contract_tests.py:
+
+    BASE_URL=https://backend-production-61e0a.up.railway.app \
+    ANTICIPY_CROSS_ORIGIN=https://anticipy-api.omar-114.workers.dev \
+    ANTICIPY_TEST_EMAIL=<a test owner> ANTICIPY_TEST_PASSWORD=<their pw> \
+    python3 -m pytest migration/spec/contract_tests.py -k CrossOrigin -v
+
+It needs a real owner login (auth-with-password), so it is a cutover-window
+check — run it once before flipping traffic. It should now PASS: secret parity
+is closed here and tokenKey parity was closed at import. If it 401s, do NOT flip.
+
 ## Update 2026-09-04 — the secret now EXISTS but is EMPTY, which is worse
 
 The extract was attempted and failed against `/app/pb_data/data.db` (the 156 KB
