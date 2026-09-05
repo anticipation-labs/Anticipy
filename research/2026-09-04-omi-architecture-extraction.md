@@ -191,9 +191,24 @@ deliberately.
 The teardown calls this the part most worth copying. Having read it, that is right,
 with one correction to its arithmetic.
 
-**Nothing is born long-term.** This is enforced in the durable patch contract, not
-by convention — `memory_contracts.py:537` raises
-`"Long-term memory cannot be created directly; promote an existing Short-term item"`.
+**Nothing is born long-term — with one exception that matters.** Enforced in the
+durable patch contract rather than by convention: `memory_contracts.py:538`
+raises `"Long-term memory cannot be created directly; promote an existing
+Short-term item"`. But read the CONDITION on :537, not just the raise — it is
+`initial_tier == long_term AND ledger_schema_version != "knowledge_ledger.v1"`.
+Omi's newer knowledge-ledger rows are therefore *born durable* and never enter
+the short-term elevation loop at all (`canonical_memory_adapter.py:1142-1146`
+returns `long_term` for them outright). The invariant is real on the legacy path
+and already superseded on the new one, so anyone citing this as "Omi never
+creates long-term directly" is quoting a rule Omi's own newer schema is exempt
+from. That weakens it as a precedent for us, not strengthens it.
+
+**How to verify these citations, because they look fabricated.**
+`backend/models/` is tracked at `44941c1` but is NOT in the sparse working
+checkout, so `ls` and a worktree grep both come back empty. Read it with
+`git show HEAD:backend/models/memory_contracts.py`. A reviewer on this repo
+concluded this citation was dead by checking the worktree alone; the file is
+619 lines and the phrase is on 538.
 The intake adapter *clamps* a caller's durability intent back to short-term rather
 than trusting it (`canonical_memory_adapter.py:1142-1162`): product and API callers
 may express intent, but only the admission pipeline may create long-term rows.

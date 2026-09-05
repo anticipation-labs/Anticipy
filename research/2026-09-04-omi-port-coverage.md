@@ -5,9 +5,29 @@ system." Source reference is `2026-09-04-omi-architecture-extraction.md`; this
 file is the ledger of decisions, including the declines, because a decline that
 is not written down gets re-proposed every session.
 
-**Nothing below is Law-3 done.** The ears have been silent 89h (`done_gate` leg
-1), so every change here is repo-green and none has been observed against a
-live phone. The firmware changes are further back still: unbuilt.
+**Law-3 status, corrected 2026-09-05 00:00Z.** This file first said the ears had
+been silent 89h and that nothing here could be observed live. That was true when
+measured (~2026-09-04 16:00) and was FALSE within hours — which is exactly the
+staleness this document exists to complain about, so it is corrected here rather
+than quietly.
+
+`done_gate` leg 1 SHE HEARS YOU now PASSES. `are_the_ears_live.py`: 68 lines of
+speech in 24h, newest 0.0h ago, from **`iphone-b122`** — the build these iOS
+changes went into. The brain is processing them: of 165 transcript rows, 155 are
+stamped `ignore` and 10 `act`, with **zero** unprocessed.
+
+One reading to head off, because the gate output invites it. The control half
+reads "rows the SERVER wrote in the last 24h: 0", and beside 68 lines heard that
+looks like a dead brain. It is not. That control counts rows carrying
+`device_id="anticipy-brain"` — outbound work — and a day she correctly judged as
+all-ignore writes none. `is_the_brain_live.py` reports "keeping its promises" on
+the same data while showing 0 messages, and it would say that over a genuinely
+dead brain too, because every rule it has is an over-speaking rule. Neither
+instrument is lying; neither answers "is the brain processing". The decision
+breakdown above is the query that does.
+
+Still true: the firmware changes are further back than repo-green — unbuilt,
+unflashed, and `firmware_gate.py` reports UNPROVEN.
 
 ## The ledger
 
